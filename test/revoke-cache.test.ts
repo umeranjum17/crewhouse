@@ -2,11 +2,11 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import {  } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant } from '@byokit/pair';
 
 const root = temp('crewhouse-revoke-cache');
 const free = () => new Promise<number>((resolve) => {
@@ -24,7 +24,7 @@ const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', '
 });
 const base = `http://127.0.0.1:${port}`;
 const http = async (method: string, path: string, body?: unknown) => {
-  const response = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: response.status, body: await response.json() as any };
 };
 const until = async <T>(what: string, get: () => Promise<T | undefined | false>): Promise<T> => {

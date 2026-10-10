@@ -2,7 +2,8 @@
 // Crewhouse owns the person's screen, sealed device store and tool gates.
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { connect, providers, ConnectError, CallToolResultSchema, type Connection, type Provider, type SignIn, type Client } from '@byokit/connect';
+import { connect, providers, ConnectError, CallToolResultSchema, type Connection, type Provider, type SignIn, type Client, type OAuthClient } from '@byokit/connect';
+import { googleClientFile } from '@byokit/connect/node';
 import { osKeyringSeal, writeFileAtomic, type Keystore } from '@byokit/secrets/node';
 import type { Config } from './config.ts';
 import { tool, type CrewTool } from './engine.ts';
@@ -16,6 +17,7 @@ export const APPS: Record<string, App> = {
   drive: { ...providers.drive, google: true },
   calendar: { ...providers.calendar, google: true, warns: true, tool: calendarTool },
   gmail: { ...providers.gmail, google: true, warns: true, tool: mailTool },
+  gmailsend: { ...providers.gmail, id: 'gmailsend', name: 'Gmail sending', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'], google: true, warns: true },
   notion: { ...providers.notion }, canva: { ...providers.canva },
 };
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
@@ -64,7 +66,8 @@ type Attempt = { app: string; flow: SignIn; view: Connecting; ends: number; fini
 export class Connections {
   private redirect: string;
   private store: Keystore;
-  private googleClient?: { id: string; secret: string };
+  private googleClient?: OAuthClient;
+  private houseFile = false;
   apps: Record<string, App> = { ...APPS };
   private handles = new Map<string, { key: string; connection: Connection }>();
   private flows = new Map<string, Attempt>();
@@ -77,7 +80,7 @@ export class Connections {
 
   constructor(cfg: Config, redirect: string) {
     this.redirect = redirect; this.store = deviceStore(cfg);
-    this.ready = this.restore();
+    this.ready = this.restore(cfg.googleClient);
   }
   private app(id: string) {
     const a = this.apps[id];
@@ -85,17 +88,15 @@ export class Connections {
     return a;
   }
   private handle(id: string) {
-    const a = this.app(id), client = a.google ? this.googleClient : undefined;
-    const key = JSON.stringify([a, client]);
-    const cached = this.handles.get(id);
+    const a = this.app(id), client = a.google ? this.googleClient : undefined, key = JSON.stringify([a, client]), cached = this.handles.get(id);
     if (cached?.key === key) return cached.connection;
-    const connection = connect(a, { store: this.store, person: '1', redirectUri: this.redirect, client, clientName: 'Crewhouse', flowTimeoutMs: CONNECT_MS });
-    this.handles.set(id, { key, connection });
+    const connection = connect(a, { store: this.store, person: '1', redirectUri: this.redirect, client, clientName: 'Crewhouse', flowTimeoutMs: CONNECT_MS }); this.handles.set(id, { key, connection });
     return connection;
   }
-  private async restore() {
-    const saved = await this.store.get('google-client');
-    if (saved) this.googleClient = JSON.parse(saved);
+  private async restore(clientPath: string) {
+    // BYOKit's house Google client first: present, a Google app connects in one tap; absent, the saved key stands.
+    try { this.googleClient = await googleClientFile(clientPath) ?? undefined; } catch { /* keep the saved key */ }
+    this.houseFile = !!this.googleClient; const saved = this.googleClient ? null : await this.store.get('google-client'); if (saved) this.googleClient = JSON.parse(saved);
     for (const id of Object.keys(this.apps)) {
       try { if (await this.handle(id).connected()) this.active.add(id); }
       catch (e) { this.views.set(id, { state: 'failed', error: connectError(this.apps[id].name, e) }); }
@@ -105,18 +106,17 @@ export class Connections {
   /** Shape guidance only: the kit checks this key during the person's next sign-in, never by a made-up code. */
   async setHouseGoogle(rawId: unknown, rawSecret: unknown) {
     await this.ready;
-    const id = String(rawId ?? '').trim(), secret = String(rawSecret ?? '').trim();
-    const bad = (m: string) => Object.assign(new Error(m), { status: 400 });
+    const id = String(rawId ?? '').trim(), secret = String(rawSecret ?? '').trim(), bad = (m: string) => Object.assign(new Error(m), { status: 400 });
     if (/^GOCSPX-/.test(id)) throw bad("That's the Client secret. It goes in the second box; the first takes the Client ID, which ends in .apps.googleusercontent.com.");
     if (/\.apps\.googleusercontent\.com$/.test(secret)) throw bad("That's the Client ID again. The second box takes the Client secret, which starts with GOCSPX-.");
     if (!/^\d+-\w+\.apps\.googleusercontent\.com$/.test(id)) throw bad("That doesn't look like a Client ID. Copy it from step 4; it ends in .apps.googleusercontent.com.");
     if (!/^[\w-]{20,64}$/.test(secret)) throw bad("That doesn't look like a Client secret. Copy it from step 4; it starts with GOCSPX-.");
     for (const app of Object.keys(this.apps).filter((a) => this.apps[a].google)) await this.cancel(app);
-    await this.store.set('google-client', JSON.stringify({ id, secret }));
-    this.googleClient = { id, secret };
+    await this.store.set('google-client', JSON.stringify({ id, secret })); this.googleClient = { id, secret };
   }
   houseSteps(): Step[] | null {
-    if (!this.houseGoogle()) return null;
+    // The person's own four steps are for their own Cloud project; the crew's house client needs none of them.
+    if (!this.houseGoogle() || this.houseFile) return null;
     const accepted = this.on().some((id) => this.apps[id].google);
     return [
       { state: accepted ? 'checked' : 'said', note: accepted ? 'Google knows this setup.' : 'Checked when you connect.' },
@@ -137,14 +137,12 @@ export class Connections {
     for (const [state, f] of this.flows) if (f.app === id) { f.flow.cancel(); this.flows.delete(state); }
   }
   async cancel(id: string) {
-    this.cancelFlow(id); this.views.delete(id);
-    await this.ready;
+    this.cancelFlow(id); this.views.delete(id); await this.ready;
     await this.disconnect(id);
   }
   view(id: string) {
     for (const [state, f] of this.flows) if (f.app === id && Date.now() >= f.ends) {
-      f.flow.cancel(); this.flows.delete(state);
-      Object.assign(f.view, { state: 'failed', url: undefined, error: connectError(this.app(id).name, new ConnectError('expired')) });
+      f.flow.cancel(); this.flows.delete(state); Object.assign(f.view, { state: 'failed', url: undefined, error: connectError(this.app(id).name, new ConnectError('expired')) });
     }
     return this.views.get(id) ?? null;
   }
@@ -188,8 +186,7 @@ export class Connections {
   }
   private async sync(id: string) {
     if (await this.handle(id).connected() || !this.active.delete(id)) return;
-    this.toolCache = undefined;
-    await this.clients.get(id)?.close(); this.clients.delete(id);
+    this.toolCache = undefined; await this.clients.get(id)?.close(); this.clients.delete(id);
     this.onChange?.(id); this.onExpired?.(id);
   }
   async token(id: string): Promise<string | null> {
@@ -208,8 +205,7 @@ export class Connections {
   async disconnect(id: string) {
     await this.ready;
     this.cancelFlow(id); this.views.delete(id); this.active.delete(id); this.toolCache = undefined;
-    await this.clients.get(id)?.close(); this.clients.delete(id);
-    await this.handle(id).disconnect();
+    await this.clients.get(id)?.close(); this.clients.delete(id); await this.handle(id).disconnect();
     this.onChange?.(id);
   }
   async keepFresh() { await this.ready; for (const id of this.on()) await this.token(id).catch(() => null); }

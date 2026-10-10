@@ -1,7 +1,9 @@
 // Real HTTP profile writes on synthetic stub crews; no accounts or external services.
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
+import { join } from 'node:path';
 const { setup } = await import('./lab.ts');
 const { startServer } = await import('../src/server.ts');
 const { Store } = await import('../src/db.ts');
@@ -23,7 +25,7 @@ for (const [label, fields] of Object.entries({
   t.after(async () => { if (server.listening) await new Promise<void>((r, reject) => server.close((e) => e ? reject(e) : r())); done(); });
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = async (method: string, path: string, body?: object) => {
-    const res = await fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json' },
+    const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: res.status, body: await res.json() };
   };

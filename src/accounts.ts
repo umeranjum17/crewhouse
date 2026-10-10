@@ -14,7 +14,7 @@ const EXTRA: Record<string, Omit<Provider, 'billing'>> = {
 };
 
 /** The offered accounts, generated from the kit's own catalogue: names and how each one is billed come from there,
- *  so a new kit route lands with the bump. ChatGPT is the front door; the rest are quiet "more options" paths. */
+ *  so a new kit route lands with the bump. The sign-in card offers every one; none is the front door alone. */
 export const PROVIDERS: Record<string, Provider> = Object.fromEntries([
   ...offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name, billing }) => [key, { key, name, billing }]),
   ...Object.entries(EXTRA).map(([key, v]) => [key, { ...v, billing: 'subscription' as const }]),
@@ -36,6 +36,8 @@ type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code'; url
 export class Accounts {
   /** Which accounts are ready. Undefined means ask the engine (its own sign-in state). */
   readonly ready = new Map<string, boolean>();
+  /** An engine yes, trusted for a minute so a run starts at once; the kit checks again as it admits the run. */
+  private fresh = new Map<string, number>();
   /** States the product words come from: a sign-in that stopped working, a plan without helpers, a cooldown. */
   readonly expired = new Set<string>();
   readonly excluded = new Set<string>();
@@ -56,7 +58,10 @@ export class Accounts {
     if (this.expired.has(account) || this.excluded.has(account)) return false;
     const r = this.ready.get(account);
     if (r !== undefined) return r;
-    return this.runtime.signedIn(account).catch(() => false);
+    if ((this.fresh.get(account) ?? 0) > Date.now()) return true;
+    const yes = await this.runtime.signedIn(account).catch(() => false);
+    if (yes) this.fresh.set(account, Date.now() + 60_000);
+    return yes;
   }
   restingUntil(account: string) { return this.rests.get(account) ?? 0; }
   /** An account the person doesn't have: never signed in, or a sign-in that stopped working. */
@@ -112,7 +117,7 @@ export class Accounts {
   async logout(account: string) {
     this.views.delete(account);
     await this.runtime.signOut(account).catch(() => {});
-    this.ready.delete(account);
+    this.ready.delete(account); this.fresh.delete(account);
     this.expired.add(account);
   }
   /** The sign-in is over (either way): the card's last word is in. */

@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { api, demo, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
-import { AiMark, attempt, ChiefArt, Dots, Face, Laptop, Pill, toast, useDialogOwn } from './parts.tsx';
+import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -36,9 +36,10 @@ function Mood({ phase, app, ai }: { phase: Phase; app?: A.App; ai?: { key: strin
     : phase === 'failed' || phase === 'expired' || phase === 'unavailable' ? 'error' : 'ask';
   return (
     <div className="flow-face">
-      <span className="halo"><ChiefArt mood={mood} d={5} /></span>
-      {app && <span className="app-ic badge-ic" style={{ background: app.bg }}>{app.mark}</span>}
-      {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
+      <span className="halo"><ChiefArt mood={mood} mascot />
+        {app && <span className="app-ic badge-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
+        {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
+      </span>
       {phase === 'opening' && <Laptop />}
       {phase === 'done' && <pre className="art sparkle" aria-hidden>{'✦  ·  ✧  ·  ✦'}</pre>}
     </div>
@@ -157,13 +158,19 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
  * or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
 /** The sign-in card, in the ask-card anatomy (§4.11) with the account the crew will use as primary: whichever one is
- *  already signed in, or the front door while none is. The links a provider owns (its own site, its plans) sit under
- *  its own branch; no provider's name is written into another's card. */
+ *  already signed in, or every provider the kit offers while none is (no front door alone). The links a provider
+ *  owns (its own site, its plans) sit under its own branch; no provider's name is written into another's card. */
+/** The thread sign-in card's flag, shared with the phone header so the two cannot drift. */
+export const NEEDS_SIGNIN = 'Needs a sign-in';
 export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
-  const [noAccount, setNoAccount] = useState(false);
-  const { ai, g } = A.aiList(accounts).mine[0];
-  if (g.state === 'ready' && !g.notIncluded && signing === false) return null;
+  const [signKey, setSignKey] = useState<string | null>(null);
+  const list = A.aiList(accounts);
+  const offered = [...list.mine, ...list.more];
+  const { ai, g } = list.mine[0];
+  const signAi = offered.find((r) => r.ai.key === signKey)?.ai ?? ai;
+  // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
+  if ((!accounts || (g.state === 'ready' && !g.notIncluded)) && signing === false) return null;
   if (g.notIncluded) return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a bigger plan</div></div></div>
@@ -177,15 +184,12 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   );
   return (
     <div className="card ask">
-      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />Needs a sign-in</div></div></div>
-      <p className="ask-words">{g.recovery || <>Say yes once on {ai.name}'s page. Your job starts when you come back.</>}</p>
-      <div className="btns">
-        <button className="btn go big" onClick={() => setSigning(openTab())}><AiMark ai={ai} size={24} />Sign in with {ai.name}</button>
-        {ai.site && <button className="link" onClick={() => { setNoAccount(true); window.open(ai.site!, '_blank'); }}>No {ai.name} account? Make a free one</button>}
-        <button className="link" onClick={() => { location.hash = '#/settings'; }}>Another account? All of them are under Settings</button>
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
+      <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
+      <div className="ai-picks">
+        {offered.map(({ ai: r }) => <button key={r.key} className="btn" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>)}
       </div>
-      {noAccount && <p className="mute small">{ai.name} opened in a new tab: sign up in a few taps, then come straight back and tap Sign in.</p>}
-      {signing !== false && <SignIn ai={ai} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
+      {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );
 }
@@ -270,7 +274,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
   return (
     <div className="card ask">
       <div className="ask-head">
-        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic" style={{ background: app.bg }}>{app.mark}</span>}
+        {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
         <div className="grow"><b>{who?.name ?? helper ?? 'The crew'}</b><div className="ask-status"><i />{c.status}</div></div>
         <time className="mute small">{A.clock(c.at)}</time>
       </div>
@@ -278,10 +282,61 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
       {app.warns && <p className="warn-line">Google shows a warning for apps it hasn't reviewed — a personal app always gets it. Tap <b>Advanced</b>, then <b>Go to Crewhouse</b>.</p>}
       <div className="btns">
         <button className="btn go" onClick={() => setOpen(A.needsHouse(state, app) ? null : openTab())}>Connect {app.name}</button>
-        <button className="btn" onClick={no}>Not now</button>
+        <More title={c.words} sub={c.status} acts={[{ label: 'Not now', run: no }]} />
       </div>
       {open !== false && <ConnectApp app={app} helper={helper} state={state} tab={open} ask={c.id} onConnected={yes} onClose={() => setOpen(false)} onDone={() => setOpen(false)} />}
     </div>
+  );
+}
+
+// ---------- pairing the public app with the person's own computer ----------
+/** What to run on the computer: Crewhouse itself, then the one-use code (`./crewhouse phones code`). */
+const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
+
+/** The demo's way to the person's own crew: the few commands for their computer, one box for the code it prints (a relay
+ *  code or the long direct one, web/src/link.ts), then the two words to check there. Paired, the same installed app
+ *  opens again on their real crew. ?demo&phase=waiting|done pins a step, for review. */
+export function PairSheet({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState('');
+  const [words, setWords] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [done, setDone] = useState(false);
+  const pair = () => { setBusy(true); setProblem(''); void (async () => {
+    const link = await import('./link.ts');
+    await link.pair(text, setWords);
+    setDone(true);
+    setTimeout(() => void link.leave(), 1200);
+  })().catch((e: Error) => { setProblem(e.message); setWords(null); setBusy(false); }); };
+  const phase = pinned === 'waiting' || pinned === 'done' ? pinned : done ? 'done' : words ? 'waiting' : 'code';
+  const said = words ?? 'maple lantern';
+  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
+  return (
+    <Sheet label="Pair with your computer" onClose={onClose}>
+      <Progress at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} steps={['Your computer', 'Two words', 'Done']} />
+      <Mood phase={phase} />
+      {phase === 'code' && <>
+        <h2>Pair with your computer</h2>
+        <p className="mute">Your crew lives on your own computer. Run these there once:</p>
+        <div className="cmds">{PAIR_CMDS.split('\n').map((c) => <code className="chat-code" key={c}>{c}</code>)}</div>
+        <button className="link" onClick={() => copy(PAIR_CMDS)}>Copy these</button>
+        <p className="mute small">Already have Crewhouse? Run just the last one.</p>
+        <label className="pair-label">Paste the code it prints
+          <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the code here" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
+        {problem && <p className="pair-problem" role="alert">{problem}</p>}
+        <button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
+        <button className="link" onClick={onClose}>Not now</button>
+      </>}
+      {phase === 'waiting' && <>
+        <h2>Check these two words</h2>
+        <p className="mute">Your computer shows two words too. If they match, say yes there:</p>
+        <b className="pair-words">{said}</b>
+        <div className="cmds"><code className="chat-code">./crewhouse phones approve '{said}'</code></div>
+        <p className="mute small">Or open Crewhouse on the computer and tap Yes under Phones.</p>
+        <Pill tone="wait" live>Waiting for your computer…</Pill>
+      </>}
+      {phase === 'done' && <><h2>Paired!</h2><p>Opening your own crew…</p></>}
+    </Sheet>
   );
 }
 

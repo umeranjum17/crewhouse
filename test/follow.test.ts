@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/pair';
 process.env.CREWHOUSE_PAIR_MS = '1500'; // read when src/link.ts loads
 const { loadConfig } = await import('../src/config.ts');
 const { Store } = await import('../src/db.ts');

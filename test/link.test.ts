@@ -1,5 +1,5 @@
 // The phone link: where it listens, then pairing, the person's yes, grants, approvals and removal through the real
-// daemon, with @byokit/link's own device side as the phone. The Noise handshake and frames are the package's, tested there.
+// daemon, with @byokit/pair's own device side as the phone. The Noise handshake and frames are the package's, tested there.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
@@ -8,13 +8,13 @@ import { createServer as http1, request as http1Request } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/pair';
 import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
 import * as A from '../web/src/adapter.ts';
-import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/link';
-import { b64url } from '@byokit/link';
+import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/pair';
+import { b64url } from '@byokit/pair';
 
 test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {
   const o = { v: 1 as const, host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),
@@ -76,7 +76,30 @@ test('quiet hours hold the push and send exactly one when they end, even across 
   quiet = false;
   b.sendHeld();
   b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad']], 'one push when quiet hours end, for however much came in');
+  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
+  db.close();
+});
+
+test('the installed web app subscribes a browser push address through the relay and hears the same news', async () => {
+  const db = new Store(temp('crewhouse-web-push'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string) => calls.push(['unsubscribe', d]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }] },
+  });
+  assert.equal(link.status().vapid, 'BFx-key');
+  const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
+  await link.setWebPush({ web });
+  assert.deepEqual(calls.shift(), ['subscribe', 'web', { web }]);
+  await assert.rejects(new Link({} as any, db, async () => null).setWebPush({ web }), { status: 409 });
+  // A failed job: the browser hears the same content-free news as the phone.
+  await link.tell('e7');
+  const notify = calls.shift();
+  assert.equal(notify[0], 'notify');
+  assert.equal(notify[1].title, NEWS);
+  assert.ok(notify[1].to.includes('web'), 'the browser device is addressed');
+  await assert.rejects(link.setWebPush({ off: true }), { status: 400 });
+  assert.equal(calls.length, 0, 'a bare off reaches no browser');
   db.close();
 });
 
@@ -205,7 +228,7 @@ after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -326,6 +349,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(waiting.name, 'Inline phone');
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: 'wrong' })).status, 403);
   assert.equal((await a.req('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 403, 'phone cannot approve itself');
+  assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token }, { 'x-crewhouse': '1', authorization: '' })).status, 403, 'known pairing words and offer are not person authority');
   assert.equal((await http('POST', '/api/phones/answer', { id: waiting.id, yes: true, offer: card.token })).status, 200);
   await pairing;
   await until(async () => (await http('GET', '/api/bots/chief')).body.phoneOffer.joined === 'Inline phone');
@@ -340,9 +364,26 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   const job = (await a.req('POST', '/api/bots/reel/messages', { text: `save it [tool crew_write ${JSON.stringify({ path: outside, content: 'from the phone' })}]` })).body.task;
   const ask = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.kind === 'permission'));
   assert.match(ask.title, /Reel wants to change a file/);
+  assert.equal((await http('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' }, { 'x-crewhouse': '1', authorization: '' })).status, 403, 'the public header is not person authority');
+  assert.ok((await a.req('GET', '/api/state')).body.asks.some((x: any) => x.id === ask.id), 'a refused answer leaves the question open');
   assert.equal((await a.req('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
   await until(async () => (await http('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.id === job && x.state === 'done'));
   assert.equal(readFileSync(outside, 'utf8'), 'from the phone');
+
+  // Replay the reported attack: an unfenced bot's actual shell, not a forged test caller.
+  await http('POST', '/api/recruit', { template: 'tracer', name: 'Tracer' });
+  const tool = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input)}]`;
+  await a.req('POST', '/api/bots/tracer/messages', { text: tool('crew_write', { path: 'files/authority.md', content: 'Synthetic unsent draft for Umer' }) +
+    tool('crew_draft', { path: 'files/authority.md', channel: 'email', to: 'ada@fernwood.example', subject: 'Synthetic authority probe' }) });
+  const draft = await until(async () => (await a.req('GET', '/api/state')).body.asks.find((x: any) => x.bot === 'tracer' && x.detail.draft));
+  const attack = (await a.req('POST', '/api/bots/tracer/messages', { text: tool('bash', { command:
+    `curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -H 'x-crewhouse: 1' --data '{"answer":"allow","scope":"once"}' '${base}/api/asks/${draft.id}/answer' > files/denial.txt` }) })).body.task;
+  await until(async () => (await a.req('GET', '/api/bots/tracer')).body.tasks.find((x: any) => x.id === attack && x.state === 'done'));
+  assert.equal(readFileSync(join(root, 'crew', 'bots', 'tracer', 'files', 'denial.txt'), 'utf8'), '403');
+  assert.ok((await a.req('GET', '/api/state')).body.asks.some((x: any) => x.id === draft.id), 'the helper cannot attest to its own draft');
+  assert.ok(!(await a.req('GET', '/api/events')).body.some((x: any) => x.kind === 'draft.approved' && x.bot === 'tracer'));
+  assert.equal((await a.req('POST', `/api/asks/${draft.id}/answer`, { answer: 'allow' })).status, 200, 'the authenticated paired phone can approve');
+  assert.ok((await a.req('GET', '/api/events')).body.some((x: any) => x.kind === 'draft.approved' && x.bot === 'tracer'));
 
   // Another member cannot mint a code; the owner's view-only tablet can watch but not answer.
   const offer = (await http('POST', '/api/phones/pair', { role: 'view' })).body;
@@ -376,7 +417,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 test('a direct typed code and exact local CLI words pair once', async () => {
   await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
   const cli = (...args: string[]) => execFileSync(join(import.meta.dirname, '..', 'crewhouse'), ['phones', ...args],
-    { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port) } });
+    { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state') } });
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
   const typed = decodeTyped(offer.typed);
   assert.deepEqual(typed.urls, offer.urls);
@@ -480,7 +521,7 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
     assert.equal((await view.req('GET', '/api/state')).status, 200);
     assert.equal((await view.req('POST', '/api/bots/chief/messages', { text: 'no' })).status, 403);
     assert.equal(pushes.length, 0, 'quiet hours still hold news across the upgrade');
-    const live = new DatabaseSync(join(root, 'state', 'crew.db'));
+    const live = new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
     try {
       assert.equal(live.prepare("SELECT value FROM settings WHERE key = 'push.held.1'").get()!.value, '1');
       assert.equal(live.prepare('SELECT 1 FROM devices WHERE id = ?').get(bGrant.device.id), undefined);
@@ -504,4 +545,67 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
     assert.equal((await http('POST', '/api/house/ask', { app: 'calendar' })).status, 404);
     assert.equal((await http('POST', '/api/accounts/1/chatgpt/ask-owner')).status, 404);
   } finally { a.link.stop(); b.link.stop(); view.link.stop(); }
+});
+
+test('one browser turning notifications off leaves the other browsers addressed', async () => {
+  const db = new Store(temp('crewhouse-web-off'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  const laptop = { endpoint: 'https://fcm.example/laptop', keys: {} }, phone = { endpoint: 'https://fcm.example/phone', keys: {} };
+  await link.setWebPush({ web: laptop });
+  await link.setWebPush({ web: phone });
+  await link.setWebPush({ off: true, web: laptop });
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: laptop }], 'only the laptop\'s address is dropped');
+  await link.setWebPush({ off: true, web: phone });
+  assert.deepEqual(calls.at(-1), ['unsubscribe', 'web', { web: phone }]);
+  db.close();
+});
+
+test('a null browser address is refused by the browser and by a phone alike', async () => {
+  const db = new Store(temp('crewhouse-web-null'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async () => ({}) },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  await assert.rejects(link.setWebPush({ web: null }), { status: 409 });
+  await assert.rejects(link.setWebPush({ off: true, web: null }), { status: 400 });
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', web: null }, { id: 'pixel' }), { status: 409, body: { error: 'no relay for notifications' } });
+  assert.equal(calls.length, 0, 'nothing reaches the relay');
+  const web = { endpoint: 'https://fcm.example/phone', keys: {} };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', web }, { id: 'pixel' }), { status: 200, body: { ok: true } });
+  assert.deepEqual(calls.shift(), ['subscribe', 'pixel', { web }], 'a phone\'s browser address is still kept under the phone');
+  db.close();
+});
+
+test('a paired browser asks for the push key over the link, and off really removes its address', async () => {
+  const db = new Store(temp('crewhouse-web-off-relay'));
+  const calls: any[] = [];
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, {
+    client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]), notify: async () => ({}) },
+    relayStatus: 'online', host: { devices: () => [] },
+  });
+  // The installed PWA's own ask: the mailbox's public key, over the one op the link answers for its grant.
+  assert.deepEqual(await link.request('POST /api/push', { key: true, build: 'p9b' }, { id: 'ipad', role: 'control' }),
+    { status: 200, body: { ok: true, vapid: 'BFx-key', online: true } });
+  // Without a mailbox the key is null and online false — plain words on the device, never a broken toggle.
+  (link as any).client = undefined;
+  (link as any).relayStatus = 'off';
+  assert.deepEqual(await link.request('POST /api/push', { key: true, build: 'p9b' }, { id: 'ipad', role: 'control' }),
+    { status: 200, body: { ok: true, vapid: null, online: false } });
+  // Turning off removes this device's own address at the mailbox (under its grant id, as setWebPush does for 'web').
+  (link as any).client = { unsubscribe: async (d: string, s?: any) => calls.push(['unsubscribe', d, s]) };
+  const web = { endpoint: 'https://fcm.example/ipad', keys: {} };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true, web }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
+  assert.deepEqual(calls, [['unsubscribe', 'ipad', { web }]], 'off drops the calling device\'s own address, not another\'s');
+  (link as any).client = { unsubscribe: async () => { throw Object.assign(new Error('relay down'), { status: 503 }); } };
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true, web }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } }, 'off ends off even when the mailbox is down');
+  // Off without a browser address stays the phone app\'s person-said-no.
+  assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', off: true }, { id: 'ipad', role: 'control' }), { status: 200, body: { ok: true } });
+  assert.equal(db.get('SELECT value FROM settings WHERE key = ?', 'phone.push.ipad')?.value, 'off');
+  assert.equal(calls.length, 1, 'no second unsubscribe');
+  db.close();
 });

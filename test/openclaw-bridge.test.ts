@@ -79,8 +79,16 @@ test('the curation window: the person\'s own reviewer, its reconcile, one call w
   } finally { await f.done(); }
 });
 
-test('model-visible crew tools tell the model the required arguments', () => {
-  const tools = new Map(TOOLS.map((t) => [t.name, t as { description: string; parameters: any }]));
+test('model-visible crew tools tell the model the required arguments', async () => {
+  const f = faked();
+  let registered: typeof TOOLS;
+  try { await f.started; registered = JSON.parse(readFileSync(join(f.state, 'openclaw/plugin/tools.json'), 'utf8')).tools; }
+  finally { await f.done(); }
+  const untyped = registered.filter((t) => { const p = t.parameters as any; return p.type !== 'object' || !p.properties; }).map((t) => t.name);
+  assert.deepEqual(untyped, [], `untyped registered tools: ${untyped.join(', ')}`);
+  const tools = new Map(registered.map((t) => [t.name, t as { description: string; parameters: any }]));
+  assert.deepEqual(tools.get('crew_read')!.parameters.required, ['path']);
+  assert.deepEqual(tools.get('crew_recruit')!.parameters.required, ['template']);
   const remember = tools.get('crew_remember')!;
   assert.deepEqual(remember.parameters.required, ['text']);
   assert.equal(remember.parameters.properties.text.type, 'string');
@@ -163,53 +171,61 @@ test('resolved engine config disables silent memory flush and heartbeat without 
   } finally { await f.done(); }
 });
 
-// Exercise the kit's real installation branch, replacing only npm with an offline recorder.
-test('prepare installs and repairs the kit pin with scripts off and an isolated home; a matching engine is reused', async () => {
+// A published engine set is frozen read-only, so a temp tree holding one is made writable again before it is removed.
+function unfreeze(dir: string) {
+  chmodSync(dir, 0o700);
+  for (const entry of readdirSync(dir, { withFileTypes: true }))
+    if (entry.isDirectory()) unfreeze(join(dir, entry.name)); else chmodSync(join(dir, entry.name), 0o600);
+}
+
+// Exercise the kit's real installation branch: npm is wrapped so its call is recorded, but the pinned engine's own
+// bytes are installed, because since 0.6.2 the kit verifies the whole published tree before it trusts an install.
+test('prepare installs and repairs the kit pin with scripts off and an isolated home; a matching engine is reused', { timeout: 240_000 }, async () => {
   const state = mkdtempSync(join(tmpdir(), 'ch-install-'));
   const dir = join(state, 'engine');
   const npm = join(state, 'npm');
   const pin = fileURLToPath(new URL('.', import.meta.resolve('@byokit/openclaw/testing'))).replace(/dist\/testing\/$/, 'engine');
   writeFileSync(npm, `#!${process.execPath}
-const fs = require('node:fs'), path = require('node:path');
-const dir = process.argv.at(-1);
-fs.writeFileSync(path.join(dir, 'install.json'), JSON.stringify({ args: process.argv.slice(2), env: process.env }));
-for (const [name, pkg] of Object.entries(JSON.parse(fs.readFileSync(path.join(dir, 'package-lock.json'), 'utf8')).packages)) {
-  if (!name) continue;
-  fs.mkdirSync(path.join(dir, name), { recursive: true });
-  fs.writeFileSync(path.join(dir, name, 'package.json'), JSON.stringify({ version: pkg.version }));
-}
-const target = path.join(dir, 'node_modules/openclaw');
-fs.writeFileSync(path.join(target, 'openclaw.mjs'), '');
+const fs = require('node:fs'), path = require('node:path'), { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+const dir = args.at(-1);
+fs.writeFileSync(path.join(dir, 'install.json'), JSON.stringify({ args, env: process.env }));
+process.exit(spawnSync('npm', args, { stdio: 'inherit' }).status ?? 1);
 `);
   chmodSync(npm, 0o700);
   const runtime = new OpenClawRuntime(state, '', { engineDir: dir, npmPath: npm });
+  const setDir = () => readFileSync(join(state, 'openclaw/engine-set'), 'utf8').trim();
   try {
     await runtime.kit.prepare();
+    const installed = setDir();
     for (const file of ['package.json', 'package-lock.json'])
-      assert.equal(readFileSync(join(dir, file), 'utf8'), readFileSync(join(pin, file), 'utf8'));
-    const install = JSON.parse(readFileSync(join(dir, 'install.json'), 'utf8'));
-    assert.deepEqual(install.args, ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', dir]);
+      assert.equal(readFileSync(join(installed, file), 'utf8'), readFileSync(join(pin, file), 'utf8'));
+    assert.equal(JSON.parse(readFileSync(join(installed, 'node_modules/openclaw/package.json'), 'utf8')).version, ENGINE_VERSION);
+    const install = JSON.parse(readFileSync(join(installed, 'install.json'), 'utf8'));
+    assert.deepEqual(install.args.slice(0, 5), ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix']);
+    assert.match(String(install.args[5]), new RegExp(`^${`${dir}.sets`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\.`));
     assert.equal(install.env.HOME, join(state, 'openclaw/install-home'));
     assert.equal(install.env.npm_config_cache, join(state, 'openclaw/npm-cache'));
     assert.equal(install.env.OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL, '1');
     assert.deepEqual(Object.keys(install.env).sort(), ['HOME', 'OPENCLAW_DISABLE_BUNDLED_PLUGIN_POSTINSTALL', 'PATH', 'npm_config_cache']);
-    const lock = JSON.parse(readFileSync(join(pin, 'package-lock.json'), 'utf8'));
-    const dependency = Object.keys(lock.packages).find((p) => p && !lock.packages[p].optional && p !== 'node_modules/openclaw')!;
+    const buildInfo = 'node_modules/openclaw/dist/build-info.json';
     for (const damage of [
-      () => writeFileSync(join(dir, 'package.json'), '{}'),
-      () => writeFileSync(join(dir, 'package-lock.json'), '{}'),
-      () => rmSync(join(dir, dependency), { recursive: true }),
-      () => writeFileSync(join(dir, dependency, 'package.json'), JSON.stringify({ version: '0.0.0' })),
+      () => writeFileSync(join(installed, 'package.json'), '{}'),
+      () => writeFileSync(join(installed, buildInfo), '{}'),
     ]) {
+      // A published set is frozen read-only; damaging it on purpose is what a drift check has to survive.
+      chmodSync(installed, 0o755);
+      chmodSync(join(installed, 'package.json'), 0o644);
+      chmodSync(join(installed, buildInfo), 0o644);
       damage();
       await runtime.kit.prepare();
-      for (const file of ['package.json', 'package-lock.json'])
-        assert.equal(readFileSync(join(dir, file), 'utf8'), readFileSync(join(pin, file), 'utf8'));
-      assert.equal(JSON.parse(readFileSync(join(dir, dependency, 'package.json'), 'utf8')).version, lock.packages[dependency].version);
-      assert.equal(JSON.parse(readFileSync(join(dir, 'node_modules/openclaw/package.json'), 'utf8')).version, ENGINE_VERSION);
+      const repaired = setDir();
+      assert.equal(readFileSync(join(repaired, 'package.json'), 'utf8'), readFileSync(join(pin, 'package.json'), 'utf8'));
+      assert.notEqual(readFileSync(join(repaired, buildInfo), 'utf8'), '{}', 'the damaged engine bytes are reinstalled');
+      assert.equal(JSON.parse(readFileSync(join(repaired, 'node_modules/openclaw/package.json'), 'utf8')).version, ENGINE_VERSION);
     }
     rmSync(npm);
     await runtime.kit.prepare(); // An unavailable npm proves the matching installed engine is reused.
     assert.ok(existsSync(runtime.kit.doctorContext().entry));
-  } finally { rmSync(state, { recursive: true, force: true }); }
+  } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
 });

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -7,14 +8,14 @@ import type { Config } from './config.ts';
 import type { Store } from './db.ts';
 import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
-import { toolStatus } from './tools.ts';
+import { herdrStatus, toolStatus } from './tools.ts';
 import { PROVIDERS, provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
 import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
+import { MailSend } from './mail-send.ts';
 
-/** A sign-in result tab: one line, in Crewhouse's own words, then the tab closes itself. */
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
   `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` +
   (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
@@ -42,18 +43,12 @@ const skillWords = (message: string) => /not one of the reviewed starter skills/
   : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
   : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
   : 'That did not go through. Try again in a bit.';
-/** Weak validator: same file (size and mtime) → the browser's copy is still good and the answer is a 304. */
-const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; };
-/** Content-named bundles (scripts/build-web.mjs) never change, so they cache forever; the shell is revalidated each load. */
-const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
+const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; }, FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
 
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
-  const size = statSync(path).size;
-  const type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream';
-  const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
+  const size = statSync(path).size, type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream', range = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
   if (range) { // video seeking in the browser needs ranges
-    const start = range[1] ? Number(range[1]) : size - Number(range[2]);
-    const end = range[1] && range[2] ? Number(range[2]) : size - 1;
+    const start = range[1] ? Number(range[1]) : size - Number(range[2]), end = range[1] && range[2] ? Number(range[2]) : size - 1;
     res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1 });
     return createReadStream(path, { start, end }).pipe(res);
   }
@@ -67,8 +62,12 @@ function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
 /** HTTP + WebSocket on 127.0.0.1: the app API and the web UI. What it returns is plain words: no commands, paths or model ids. */
 export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const dist = join(cfg.repoDir, 'web', 'dist');
-  const installing = new Set<string>();
-  const teacher = new Teacher();
+  // Only the person's launcher reads this file; never serve it or give it to a bot.
+  const authorityFile = join(cfg.stateDir, 'person.key');
+  if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
+  const authority = readFileSync(authorityFile, 'utf8');
+  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
+  const installing = new Set<string>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
@@ -94,12 +93,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
     });
   };
-  // The downloaded app has no setup step: on its first runs it fetches the helpers' own tools itself, one at a time,
-  // while everything else already works. The browser, with its own Chromium, is the big one.
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
   if (packaged) void (async () => { for (const t of toolStatus(cfg).filter((x) => x.installable && !x.ready)) await install(t.id); })();
-  // A newer release, from the project's public release list, once a day and only for the downloaded app: nothing of
-  // yours is sent. You see "A new Crewhouse is ready" with its download page.
   let update: { version: string; url: string } | null = null;
   const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
   const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
@@ -111,7 +106,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (packaged || process.env.CREWHOUSE_RELEASES) { void checkUpdate(); setInterval(checkUpdate, 86_400_000).unref(); }
   const localHost = (h = '') => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   // Every paired phone uses the person's crew.
-  const link = new Link(cfg, db, (m, path, body, key) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key); });
+  const link: Link = new Link(cfg, db, (m, path, body, key, phone) => { const u = new URL(path, 'http://x'); return api(m, u.pathname, u.searchParams, body, key, phone); });
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = () => quietNow(crew.person().quiet);
@@ -124,8 +119,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!localHost(req.headers.host) || !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress ?? '')) return send(res, 403, { error: 'loopback only' });
 
       if (p.startsWith('/api/')) {
-        // Mutations need a custom header, which a cross-site page cannot send without a preflight we never allow.
-        if (req.method !== 'GET' && req.headers['x-crewhouse'] !== '1') return send(res, 403, { error: 'missing x-crewhouse header' });
+        // The public header prevents browser CSRF; it never establishes person authority.
+        if (req.method !== 'GET' && (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`)) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu to make changes.' });
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
@@ -180,12 +175,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   });
 
   /** The app API, shared by the web app (HTTP) and paired phones (the link). Every screen uses the person’s crew. */
-  async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string) {
+  async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string, phone?: string) {
     let r: RegExpMatchArray | null;
     // What is installing now, and a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
+    if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
     if (m === 'POST' && p === '/api/phones/refresh') {
@@ -222,7 +218,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return Promise.all(Object.entries(PROVIDERS).map(async ([key, pr]) => {
         const signedIn = await crew.accounts.signedIn(key);
         return { account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key), signIn: crew.accounts.view(key),
-          notIncluded: crew.accounts.notIncluded(key), work: false };
+          notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key), work: false };
       }));
     }
     // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
@@ -240,10 +236,18 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the person's apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
+    // Herdr's own row on the Apps screen: missing, installed, or answering (probed when the screen opens).
+    if (m === 'GET' && p === '/api/herdr') return herdrStatus(cfg);
+    if (p === '/api/mail' || p === '/api/mail/review') {
+      if (m === 'GET' && p === '/api/mail') return mail.status(q.get('to'));
+      if (!phone) throw Object.assign(new Error('Use your paired phone to mark organisations or approve Gmail sending.'), { status: 403 });
+      if (m === 'PUT' && p === '/api/mail') return mail.set(body.to, body, phone);
+      if (m === 'POST' && p === '/api/mail/review') return mail.review(Number(body.draft));
+      throw Object.assign(new Error('No such email action.'), { status: 404 });
+    }
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.
     if ((r = p.match(/^\/api\/task\/(\d+)\/trail$/)) && m === 'GET') {
-      const id = Number(r[1]);
-      const task = db.get('SELECT * FROM tasks WHERE id = ?', id);
+      const id = Number(r[1]), task = db.get('SELECT * FROM tasks WHERE id = ?', id);
       if (!task) throw Object.assign(new Error('no such task'), { status: 404 });
       return db.all("SELECT at, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ? ORDER BY seq", id)
         .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
@@ -294,8 +298,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return { job: disk.readJob(cfg, r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job\/draft$/)) && m === 'POST') {
-      const b = crew.botPage(r[1]).bot;
-      const idea = String(body.idea ?? '').replace(/\r/g, '').trim();
+      const b = crew.botPage(r[1]).bot, idea = String(body.idea ?? '').replace(/\r/g, '').trim();
       if (!idea || idea.length > 600) throw Object.assign(new Error('describe the job in under 600 characters'), { status: 400 });
       crew.requestChief(`Change ${b.display}'s job: ${idea}`, idea);
       return { ok: true };
@@ -313,6 +316,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.edited', null, { by: 'person', everyone: true });
       return { ok: true };
     }
+    if (p === '/api/profile' && m === 'GET') return { text: disk.readProfile(cfg), cap: disk.PROFILE_CAP };
+    if (p === '/api/profile' && m === 'PUT') { disk.writeProfile(cfg, body.text ?? ''); db.event('profile.edited', null, { by: 'person' }); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/)) && m === 'POST') {
       const e = db.get("SELECT * FROM events WHERE seq = ? AND bot = ? AND kind = 'memory.learned'", Number(r[2]), r[1]);
       if (!e) throw Object.assign(new Error('no such memory'), { status: 404 });
@@ -338,6 +343,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/soul\/reset$/)) && m === 'POST') {
       const { bot: b, soul: prev } = crew.botPage(r[1]);
+      if (/^(grok|skill)-/.test(b.template)) throw Object.assign(new Error('imported bots start over by importing again'), { status: 409 });
       disk.writeSoul(cfg, r[1], disk.templateSoul(cfg, disk.loadTemplate(cfg, b.template), b.display), 'Put back how it started');
       db.event('soul.changed', r[1], { by: 'person', reset: true, prev });
       return { soul: disk.readSoul(cfg, r[1]) };
@@ -396,12 +402,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/task\/(\d+)\/again$/)) && m === 'POST') return crew.reopen(r[1], Number(r[2])); // a review card's Start again: the same task, its findings in hand
     if (m === 'GET' && p === '/api/schedule') {
-      const text = q.get('text') ?? '';
-      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const text = q.get('text') ?? '', zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // A reminder's time may count from now ("in 20 minutes") or name today or tomorrow; the repeating parser cannot read those.
       if (/^\s*(in|today|tomorrow)\b/.test(text)) { const next = reminderAt(text); return { words: 'One time', next, first: firstRun(next), guessed: false, zone }; }
-      const when = parseSchedule(text);
-      const next = nextRun(when, Date.now());
+      const when = parseSchedule(text), next = nextRun(when, Date.now());
       // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` lets a
       // screen away from home name the time zone (and only then).
       return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone };
@@ -411,21 +415,28 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }
     // A run reports from crewd's own record (Crew.runRoutine), not from this call returning.
     if ((r = p.match(/^\/api\/routines\/(\d+)\/run$/)) && m === 'POST') { await crew.runRoutine(Number(r[1])); return { ok: true }; }
-    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') { await crew.answer(Number(r[1]), body, key); return { ok: true }; }
+    if ((r = p.match(/^\/api\/asks\/(\d+)\/answer$/)) && m === 'POST') {
+      const id = Number(r[1]), ask = db.get("SELECT * FROM asks WHERE id=? AND (state='open' OR (kind='mail' AND state='uncertain'))", id), d = JSON.parse(ask?.detail ?? '{}'), dismissing = ask?.kind === 'mail' && ask.state === 'uncertain' && body.answer === 'dismiss';
+      // The uncertain card's own acknowledgement may be cleared from either device; a send or a Tracer draft allow needs the paired phone.
+      if (!dismissing && body.answer !== 'deny' && (ask?.kind === 'mail' || (ask && ask.state === 'open' && db.get("SELECT 1 FROM bots WHERE id=? AND template='tracer'", ask.bot) && d.draft?.channel === 'email' && body.answer === 'allow')) && !phone) throw Object.assign(new Error('Approve this email on your paired phone. Nothing was sent.'), { status: 403 });
+      if (dismissing) mail.dismiss(ask!);
+      else if (ask?.kind === 'mail') { if (ask.state !== 'open') throw Object.assign(new Error('This email was already decided.'), { status: 409 }); if (body.scope && body.scope !== 'once' || body.text !== undefined) throw Object.assign(new Error('Each email needs its own unchanged, one-time approval.'), { status: 400 }); await mail.answer(ask, body.answer, phone!); }
+      else await crew.answer(id, body, key);
+      return { ok: true };
+    }
     throw Object.assign(new Error('not found'), { status: 404 });
   }
 
-  const wss = new WebSocketServer({ noServer: true });
-  const desk = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true }), desk = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {
     const origin = req.headers.origin;
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
+    if (bot && req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });
 
-  /** One socket per watching screen: desklink signaling in, desktop events out. Closing it ends the session. */
   function watch(ws: import('ws').WebSocket, bot: string) {
     const watcher = { send: (event: unknown) => { if (ws.readyState === 1) ws.send(JSON.stringify({ event })); } };
     ws.on('message', async (raw) => {

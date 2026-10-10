@@ -1,6 +1,7 @@
 // From anywhere (Option B): crewd dials out to a relay on this machine and opens no link port of its own. A phone pairs by
 // typed code through the relay, talks to crewd through it, learns the relay address, and gets content-free pushes.
 // The push service is a stand-in on this machine; nothing leaves it.
+import { readFileSync } from 'node:fs';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -8,7 +9,7 @@ import { createServer as http1 } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithCode } from '@byokit/link';
+import { DeviceLink, pairWithCode } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';
 
@@ -32,7 +33,7 @@ after(async () => { daemon.kill(); expo.close(); await relay.close(); });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(what: string, fn: () => Promise<T | undefined | false> | T | undefined | false, ms = 10_000): Promise<T> {

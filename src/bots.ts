@@ -39,8 +39,7 @@ function patchConfig(cfg: Config, id: string, patch: Partial<BotConfig>) {
 }
 
 export function setGrants(cfg: Config, id: string, tools: string[]) {
-  const known = new Set(registry(cfg).map((t) => t.id));
-  const bad = tools.filter((t) => !known.has(t));
+  const known = new Set(registry(cfg).map((t) => t.id)), bad = tools.filter((t) => !known.has(t));
   if (bad.length) throw new Error(`unknown tools: ${bad.join(', ')}`);
   patchConfig(cfg, id, { tools: [...new Set(['crew', ...tools])] });
 }
@@ -110,8 +109,7 @@ export function templateKit(cfg: Config, tpl: Template) {
 /** Granted and working on this machine. */
 export const canUse = (cfg: Config, id: string, tool: string) => botTools(cfg, id).some((t) => t.id === tool && t.granted && t.ready);
 
-export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates');
-export const botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
+export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates'), botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
 
 export function listTemplates(cfg: Config): Template[] {
   return readdirSync(templatesDir(cfg))
@@ -167,30 +165,24 @@ export function commit(dir: string, files: string[], message: string, snapshot =
 
 export const JOB_LABELS = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like'] as const;
 export type Job = { does: string; aim: string; gets: string; how: string; great: string };
-const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const;
-export const jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
+const jobKeys = ['does', 'aim', 'gets', 'how', 'great'] as const, jobPreview = (j: Job) => JOB_LABELS.map((label, i) => `### ${label}\n${j[jobKeys[i]]}`).join('\n\n');
 export const validateJob = (clean: Record<string, string>) => {
-  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('each part needs words, under 600 characters'), { status: 400 });
+  if (jobKeys.some((k) => !clean[k] || clean[k].length > 600)) throw Object.assign(new Error('job must be an object with does, aim, gets, how, great; each part needs words, under 600 characters'), { status: 400 });
   if (jobPreview(clean as Job).length > 3000) throw Object.assign(new Error('the whole job must be under 3,000 characters'), { status: 400 });
 };
 export function readJob(cfg: Config, id: string): Job {
-  const text = readFileSync(join(botDir(cfg, id), 'AGENTS.md'), 'utf8');
-  const section = text.match(/^## Your job\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1] ?? '';
-  const parts = section.split(/^### /m).slice(1);
-  const values = JOB_LABELS.map((label, i) => parts.find((p) => p.startsWith(`${label}\n`))?.slice(label.length + 1).trim() ?? (i === 0 ? section.replace(/^JOB\s*$/m, '').trim() : ''));
+  const text = readFileSync(join(botDir(cfg, id), 'AGENTS.md'), 'utf8'), section = text.match(/^## Your job\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1] ?? '', parts = section.split(/^### /m).slice(1), values = JOB_LABELS.map((label, i) => parts.find((p) => p.startsWith(`${label}\n`))?.slice(label.length + 1).trim() ?? (i === 0 ? section.replace(/^JOB\s*$/m, '').trim() : ''));
   return Object.fromEntries(jobKeys.map((k, i) => [k, values[i]])) as Job;
 }
 export function writeJob(cfg: Config, id: string, value: Job) {
   const clean = Object.fromEntries(jobKeys.map((k) => [k, String(value[k] ?? '').replace(/\r/g, '').trim()]));
   validateJob(clean);
-  const section = jobPreview(clean as Job);
-  const p = join(botDir(cfg, id), 'AGENTS.md');
+  const section = jobPreview(clean as Job), p = join(botDir(cfg, id), 'AGENTS.md');
   let text = readFileSync(p, 'utf8');
   const replacement = `## Your job\n${section}\n\n`;
   if (/^## Your job\s*$/m.test(text)) text = text.replace(/^## Your job\s*\n[\s\S]*?(?=^## |$(?![\s\S]))/m, replacement);
   else {
-    const headingEnd = text.match(/^#[^\n]*\n+/)?.[0].length ?? 0;
-    const boundary = text.indexOf('\n\n', headingEnd);
+    const headingEnd = text.match(/^#[^\n]*\n+/)?.[0].length ?? 0, boundary = text.indexOf('\n\n', headingEnd);
     text = boundary < 0 ? `${text.trimEnd()}\n\n${replacement}` : `${text.slice(0, boundary)}\n\n${replacement}${text.slice(boundary + 2)}`;
   }
   writeFileSync(p, text);
@@ -200,9 +192,10 @@ export function writeJob(cfg: Config, id: string, value: Job) {
 // ---- the soul: who the bot is, in its own file, written by the person, never by the bot ----
 export const SOUL_CAP = 2000;
 
+const readText = (p: string) => existsSync(p) ? readFileSync(p, 'utf8') : '';
+
 export function readSoul(cfg: Config, id: string) {
-  const p = join(botDir(cfg, id), 'soul.md');
-  return existsSync(p) ? readFileSync(p, 'utf8') : '';
+  return readText(join(botDir(cfg, id), 'soul.md'));
 }
 
 export function writeSoul(cfg: Config, id: string, text: string, message = 'Personality changed by the person') {
@@ -220,19 +213,16 @@ export function templateSoul(cfg: Config, tpl: Template, display: string) {
 }
 
 // ---- memory: people/1/about.md is shared by the crew; people/1/notes/<bot>.md is one helper's notes ----
-export const NOTES_CAP = 2500;
-export const ABOUT_CAP = 1500;
+export const NOTES_CAP = 2500, ABOUT_CAP = 1500;
 
 /** Which memory: one helper's notes (`bot`), or what the whole crew knows about them (`bot` null). */
 export interface Memory { bot: string | null }
 
 export const personDir = (cfg: Config) => join(cfg.crewDir, 'people', '1');
-const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md';
-const capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
+const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md', capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
 
 export function readNotes(cfg: Config, m: Memory) {
-  const p = join(personDir(cfg), memoryFile(m));
-  return existsSync(p) ? readFileSync(p, 'utf8') : '';
+  return readText(join(personDir(cfg), memoryFile(m)));
 }
 
 function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
@@ -243,8 +233,7 @@ function saveNotes(cfg: Config, m: Memory, text: string, message: string) {
   return commit(personDir(cfg), [memoryFile(m)], message);
 }
 
-const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; };
-const joinLines = (lines: string[]) => lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
+const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).replace(/\n$/, ''); return t ? t.split('\n') : []; }, joinLines = (lines: string[]) => lines.join('\n').replace(/\n*$/, '\n').replace(/^\n$/, '');
 
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
@@ -257,19 +246,16 @@ export function remember(cfg: Config, m: Memory, line: string, replaces = ''): L
   const clean = line.replace(/\s+/g, ' ').trim();
   if (!clean) throw new Error('nothing to remember');
   if (RISKY.test(clean)) throw new Error('notes are plain words about the person: no links, email addresses, file locations or commands');
-  const lines = noteLines(cfg, m);
-  const old = replaces.trim() ? lines.findIndex((l) => l.includes(replaces.trim())) : -1;
+  const lines = noteLines(cfg, m), old = replaces.trim() ? lines.findIndex((l) => l.includes(replaces.trim())) : -1;
   if (replaces.trim() && old < 0) throw new Error(`no note mentions "${replaces.trim()}"; your notes are in your prompt`);
-  const added = `- ${clean}`;
-  const removed = old >= 0 ? lines[old] : null;
+  const added = `- ${clean}`, removed = old >= 0 ? lines[old] : null;
   if (old >= 0) lines[old] = added; else lines.push(added);
   return { added, removed, commit: saveNotes(cfg, m, joinLines(lines), `Learned: ${clean}`) };
 }
 
 /** Undo one memory change: take the added line out and put back the one it replaced. Also a commit. */
 export function forget(cfg: Config, m: Memory, change: Learned) {
-  const lines = noteLines(cfg, m);
-  const i = lines.indexOf(change.added);
+  const lines = noteLines(cfg, m), i = lines.indexOf(change.added);
   if (i < 0 && !change.removed) throw new Error('that note is no longer there');
   if (i >= 0 && change.removed) lines[i] = change.removed;
   else if (i >= 0) lines.splice(i, 1);
@@ -282,14 +268,26 @@ export function writeNotes(cfg: Config, m: Memory, text: string) {
   saveNotes(cfg, m, text, 'Edited by the person');
 }
 
+// ---- profile: "About me and my work", one record per install, in every helper's job context ----
+export const PROFILE_CAP = 4000;
+const profilePath = (cfg: Config) => join(personDir(cfg), 'profile.md');
+export const readProfile = (cfg: Config) => readText(profilePath(cfg));
+export function writeProfile(cfg: Config, text: string) {
+  const clean = String(text).replace(/\r/g, '').trim();
+  if (clean.length > PROFILE_CAP) throw Object.assign(new Error(`that is longer than ${PROFILE_CAP} characters; say it shorter`), { status: 400 });
+  mkdirSync(dirname(profilePath(cfg)), { recursive: true });
+  writeFileSync(profilePath(cfg), clean ? clean + '\n' : '');
+  return commit(personDir(cfg), ['profile.md'], 'Edited by the person');
+}
+/** What one job carries: nothing when empty, the whole record otherwise (writes already cap it). */
+export const profileForPrompt = (cfg: Config) => readProfile(cfg).trim().slice(0, PROFILE_CAP);
+
 /** A bot's legacy notes.md becomes the person's, history kept in both folders;
  *  a soul still written into the job file moves into its own file. Runs at every start; a no-op once done. */
 export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, display: string) {
-  const dir = botDir(cfg, id);
-  const old = join(dir, 'notes.md');
+  const dir = botDir(cfg, id), old = join(dir, 'notes.md');
   if (existsSync(old)) {
-    const text = readFileSync(old, 'utf8');
-    const m = { bot: id };
+    const text = readFileSync(old, 'utf8'), m = { bot: id };
     if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
     rmSync(old);
     commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
@@ -304,11 +302,9 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
   if (!tpl) return;
   // Only untouched template copies may move with a release; a person's edits and uncommitted changes win.
   try {
-    const subjects = execFileSync('git', ['log', '--format=%s', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim().split('\n');
-    const dirty = execFileSync('git', ['status', '--porcelain', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim();
+    const subjects = execFileSync('git', ['log', '--format=%s', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim().split('\n'), dirty = execFileSync('git', ['status', '--porcelain', '--', 'soul.md', 'AGENTS.md'], { cwd: dir, encoding: 'utf8' }).trim();
     if (dirty || !subjects.length || subjects.some((s) => !['Joined the crew', 'Updated to the new template'].includes(s))) return;
-    const files = ['soul.md', 'AGENTS.md'].filter((f) => existsSync(join(templatesDir(cfg), tpl.id, f)));
-    const changed = files.filter((f) => readFileSync(join(dir, f), 'utf8') !== renamed(readFileSync(join(templatesDir(cfg), tpl.id, f), 'utf8'), tpl.display, display));
+    const files = ['soul.md', 'AGENTS.md'].filter((f) => existsSync(join(templatesDir(cfg), tpl.id, f))), changed = files.filter((f) => readFileSync(join(dir, f), 'utf8') !== renamed(readFileSync(join(templatesDir(cfg), tpl.id, f), 'utf8'), tpl.display, display));
     for (const f of changed) writeFileSync(join(dir, f), renamed(readFileSync(join(templatesDir(cfg), tpl.id, f), 'utf8'), tpl.display, display));
     for (const sk of tpl.skills ?? []) {
       const dest = join(dir, 'skills', sk);
@@ -339,9 +335,7 @@ export const SKILL_CAP = 4000;
 export interface SkillDraft { slug: string; says: string; steps: string; text: string }
 
 export function draftSkill(cfg: Config, id: string, p: { name?: unknown; description?: unknown; says?: unknown; steps?: unknown }): SkillDraft {
-  const one = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
-  const name = slug(one(p.name)), description = one(p.description), says = one(p.says);
-  const steps = String(p.steps ?? '').replace(/\r/g, '').trim();
+  const one = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim(), name = slug(one(p.name)), description = one(p.description), says = one(p.says), steps = String(p.steps ?? '').replace(/\r/g, '').trim();
   if (!one(p.name) || !description || !says || !steps) throw new Error('a skill needs a name, a description, what it does in the person\'s words (`says`) and its steps');
   // A skill is kept instructions, like a note: a page the bot read must not be able to plant an address in it.
   if (/https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]/i.test(`${description} ${says} ${steps}`)) throw new Error('a skill has no links or email addresses in it; describe the steps in plain words');
@@ -379,8 +373,7 @@ export function listFiles(cfg: Config, id: string, allowed?: Set<string>) {
   const walk = (d: string) => {
     if (!existsSync(d)) return;
     for (const f of readdirSync(d)) {
-      const p = join(d, f);
-      const st = statSync(p);
+      const p = join(d, f), st = statSync(p);
       if (st.isDirectory()) walk(p); else if (!allowed || allowed.has(relative(root, p))) out.push({ path: relative(root, p), size: st.size, mtime: st.mtimeMs });
     }
   };
@@ -390,8 +383,7 @@ export function listFiles(cfg: Config, id: string, allowed?: Set<string>) {
 
 /** Resolve a path inside a bot folder, refusing anything that escapes it. */
 export function insideBot(cfg: Config, id: string, p: string) {
-  const dir = botDir(cfg, id);
-  const full = resolve(dir, p);
+  const dir = botDir(cfg, id), full = resolve(dir, p);
   if (full !== dir && !full.startsWith(dir + '/')) throw new Error('path is outside the bot folder');
   return full;
 }
@@ -404,8 +396,7 @@ export function addressLine(address: string | null) {
 
 /** What the engine is told about the bot for a whole session: who it is (its soul), its job, then how Crewhouse works. */
 export function systemPrompt(cfg: Config, id: string, chief: boolean) {
-  const dir = botDir(cfg, id);
-  const persona = ['soul.md', 'AGENTS.md'].map((f) => existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8').trim() : '').filter(Boolean).join('\n\n');
+  const dir = botDir(cfg, id), persona = ['soul.md', 'AGENTS.md'].map((f) => existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8').trim() : '').filter(Boolean).join('\n\n');
   // Chief's installed job is the person's file and may predate shipped product knowledge.
   const about = chief ? readFileSync(join(templatesDir(cfg), 'chief', 'AGENTS.md'), 'utf8').match(/## About Crewhouse\n[\s\S]*?(?=\n## |$)/)?.[0] ?? '' : '';
   return `${persona}${about && !persona.includes('## About Crewhouse') ? `\n\n${about}` : ''}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +

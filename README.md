@@ -26,31 +26,25 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-night.webp" />
-    <img src="docs/screenshots/readme/home-day.webp" alt="Crewhouse's Home at desktop width: things that need you, two helpers working, today's finished work, and a list of jobs to hand the crew" width="960" />
+    <img src="docs/screenshots/readme/home-day.webp" alt="Crewhouse's Home at desktop width: Chief's thread with a draft card, a connect card and a routine card, and Scout's waiting flight order in the side rail" width="960" />
   </picture><br/>
-  <sub>Every picture here is the real app running. The person in it (Umer and his crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
+  <sub>Every picture here is the real app running. The person in it (Maya and her crew) and its messages come from the app's built-in demo, so no one's real data is shown.</sub>
 </p>
 
 ## Download
 
+There is no full release yet, so there's no packaged computer download and GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there).
+
+- **Computer (Linux):** run it from a checkout today — see [Quick start](#quick-start). From that checkout (after `./crewhouse setup`), `npm run build:web && node scripts/package.mjs` builds the two computer downloads: **`crewhouse_<version>_amd64.deb`** (about 200 MB) and a portable **`crewhouse-<version>-linux-x64.tar.gz`**. The `.deb` carries the helpers' sandbox and screens, installs under `/opt/crewhouse`, adds an app-menu entry, and starts the crew by itself when you log in. Neither file is on the releases page yet.
 - **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20261001.16.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261001.16/CREWHOUSE-APK-1.0.0-preview.20261001.16.apk) — v1.0.0-preview.20261001.16, ~90 MB, SHA-256 `bae601ad5cf62c9e226d8cced397bb9aba18bebddc41b3cf9e8a6818c21598c6`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](TRY-IT.md#3-the-phone-app)).
-- **Computer (Linux):** take the **`crewhouse_<version>_amd64.deb`** file from the [releases page](https://github.com/umeranjum17/crewhouse/releases) — about 200 MB. Three steps, no terminal:
 
-  1. **Download it** from the releases page. It lands on your Downloads page.
-  2. **Double-click the file.** Your software centre opens on it; press **Install**. It brings what the helpers need (the sandbox and their screens) with it, so there is nothing else to tick.
-  3. **Open Crewhouse from your app menu** — the same menu you install from. Chief greets you and offers three things he can take off your plate. Nothing to type, nothing to sign in to but your own AI account, right there in the chat.
-
-That is the whole path from download to hello: no terminal, no command, no path to copy anywhere. It installs itself under `/opt/crewhouse`, starts by itself when you log in, and opens its own window with no address bar.
-
-To run it from a checkout instead, see [Quick start](#quick-start).
-
-There is no full release yet, only phone-app previews, so GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there). The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
+The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
 
 ### Desktop bar (Omarchy or Waybar)
 
 The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
 
-Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix the command with `CREWHOUSE_PORT=1234` and change the click address too.
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
 
 For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
 
@@ -59,7 +53,7 @@ For Omarchy's Quickshell bar, add this command module to an existing `bar.layout
   "id": "crewhouse", "type": "command",
   "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
   "interval": 10,
-  "onClick": "xdg-open http://127.0.0.1:7711"
+  "onClick": "/absolute/path/crewhouse/crewhouse open"
 }
 ```
 
@@ -69,7 +63,7 @@ For Waybar, add `custom/crewhouse` to `modules-right` (or another module list) a
 "custom/crewhouse": {
   "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
   "return-type": "json", "interval": 10,
-  "on-click": "xdg-open http://127.0.0.1:7711"
+  "on-click": "/absolute/path/crewhouse/crewhouse open"
 }
 ```
 
@@ -88,7 +82,7 @@ Crewhouse is your personal assistant: a crew that does the work and a calm place
 Tell Chief what you need. He hands it to the helper who does that kind of work, or asks one short question when he isn't sure who that is. A job that should repeat ("weekdays 8am…") comes back as a routine card, and nothing is scheduled until you tap Start it.
 
 <p align="center">
-  <img src="docs/screenshots/readme/routine.webp" alt="Chief's chat: the person asks for Pip to plan the week's dinners every weekday morning, and Chief replies with a routine card, Every weekday at 8:00 am, with Start it, Change time and Not now" width="300" />
+  <img src="docs/screenshots/readme/routine.webp" alt="Chief's chat: the person asks for Pip to plan the week's dinners every Monday morning, and Chief replies with a routine card, Every Monday at 8:00 am, with Start it" width="300" />
 </p>
 
 ### It asks before it spends
@@ -96,12 +90,12 @@ Tell Chief what you need. He hands it to the helper who does that kind of work, 
 Helpers work in their own folders without bothering you. Anything that costs money asks every time. The card is built from what the shop's own page shows, never from the model's description of it. Sending, deleting, or opening something of yours also asks first. Some of those can get a standing "Always OK" (say, adding events to your calendar). Spending never can, and neither can acting as you on a site you signed a helper in to. Set your monthly spending cap under Settings → Money; every purchase still asks first.
 
 <p align="center">
-  <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at grocer.example: garlic, milk and rice, total $43.10, with Review order and Don't place order" width="300" />
+  <img src="docs/screenshots/readme/order.webp" alt="Scout asks to place an order at grocer.example: rice, milk and garlic, total $43.10, with Place order · $43.10 and Don't place order" width="300" />
 </p>
 
 ### Drafts, never sent behind your back
 
-When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The helper hands you the words to send yourself.
+When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The one exception is Tracer's find-clients emails, which can go from your own Gmail one at a time, each after a yes on your paired phone (see Connected apps). For everything else the helper hands you the words to send yourself.
 
 <p align="center">
   <img src="docs/screenshots/readme/draft.webp" alt="DEMO: Scout's refund email, with its recipient and subject separate from the message, marked 'Nothing is sent, send it yourself'" width="300" />
@@ -113,12 +107,14 @@ When a helper writes in your name (a reply to the clinic, a refund chase, a canc
 Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The helper describes what goes in it, and Crewhouse builds the file. You can open it right in the chat to read it, or download it.
 
 <p align="center">
-  <img src="docs/screenshots/readme/workbook.webp" alt="Scribe's monthly budget open beside the chat: three sheets, this month's plan showing what is planned, spent and left" width="760" />
+  <img src="docs/screenshots/readme/workbook.webp" alt="Scribe's monthly budget open beside the chat: the This month sheet showing what is planned, spent and left, with the Bills and Savings tabs below" width="760" />
 </p>
 
 ### A crew you can grow
 
 Each helper has a soul (who it is, written by you), a job, its own skills and tools, and notes about you. Every note it keeps is a git commit you can undo. Add a helper from a template, or describe one to Chief and approve what he suggests.
+
+Ask Chief to hire CTO to watch and nudge your terminal agents. It needs [Herdr](https://herdr.dev), installed by you, never bundled or installed by Crewhouse, and available on Crewhouse's PATH. On the computer, Settings → Your apps → Plugins shows its status: install it if missing, open Herdr once if it is not answering, then tap Retry. CTO's Tools settings let you revoke access. Looking asks first and can get a standing answer; every drive asks separately, showing the complete terminal arguments with **Yes, go ahead** / **Not now**. Terminal text read for the job goes to the helper's AI account.
 
 <p align="center">
   <img src="docs/screenshots/readme/crew.webp" alt="The crew screen: Chief, Reel, Scout, Scribe, Pip and Tracer, each with what it is doing now, and Add a helper" width="300" />
@@ -129,15 +125,15 @@ Each helper has a soul (who it is, written by you), a job, its own skills and to
 "Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your account.
 
 <p align="center">
-  <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: a box to tell Chief what should happen regularly, Your week every morning, Plan the week's dinners every Saturday, and a paused gym timetable check" width="300" />
+  <img src="docs/screenshots/readme/routines.webp" alt="The Routines screen: Your week every morning, Plan the week's dinners every Monday, a paused gym timetable check, and the box to tell Chief what should happen regularly" width="300" />
 </p>
 
 ### Sign in once, inside the app
 
-There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with…** button under his reply, naming the account the crew will think with. That account's own page opens, you say yes, and the job starts. A one-time code is the fallback. Every account the engine supports is under Settings, AI accounts ([the list](docs/supported-subscriptions.md)); each row says whether it uses a plan you already pay for or is charged to your account per use.
+There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with…** button under his reply, naming the account the crew will think with. That account's own page opens, you say yes, and the job starts. A one-time code is the fallback. Every account the engine supports is under Settings, Your AI accounts ([the list](docs/supported-subscriptions.md)); each row says whether it uses a plan you already pay for or is charged to your account per use.
 
 <p align="center">
-  <img src="docs/screenshots/readme/signin.webp" alt="Chief's chat after a first request: 'ChatGPT asks you once', with a Sign in with ChatGPT button" width="300" />
+  <img src="docs/screenshots/readme/signin.webp" alt="Chief's chat after a first request: a sign-in card saying 'Say yes once on your AI's page', listing Sign in with ChatGPT and the other AI accounts" width="300" />
 </p>
 
 ### Day and night, desk and pocket
@@ -153,7 +149,7 @@ The same app works at desktop and phone width, and switches to night colours in 
 
 - **Your personal assistant.** One install is for you and your crew of helpers. Ask in your own words, read what comes back, and tap yes when a helper needs you. No technical knowledge needed to use it.
 - **Each helper's own computer (Linux).** A helper with the Computer tool gets its own virtual display and browser, never yours. Watch it live, take the wheel (the helper pauses until you hand it back), or show it how to do a task so it can keep the steps as a skill.
-- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Google needs a one-time setup under Settings → Google setup on your computer ([docs/google-setup.md](docs/google-setup.md)).
+- **Connected apps.** Connect your Notion, Canva, Google Drive, Calendar or Gmail. A helper that needs one asks with a Connect card in the chat. Reading happens straight away; changing or sending asks first. Gmail sending is a separate connection, and each email it sends is its own card, approved on your paired phone. On the crew's own Google app a Google app connects in one tap; a computer without one needs a one-time setup under Settings → Google setup ([docs/google-setup.md](docs/google-setup.md)).
 - **Picks up after a restart.** Stop the computer mid-job, start it again, and the job carries on in the same conversation. A question waiting on you is still there.
 - **Learns how you work.** After a long job the helper can keep what it learned as a skill. You can review or forget what it kept on its page, and Settings can switch this off. Background learning stays out of your chats.
 
@@ -161,9 +157,9 @@ Existing shared installs must first update through the one-person migration rele
 
 Keep the phone app up to date alongside the computer. An older preview shows “Get the latest Crewhouse app to keep chatting.” Open Chief’s chat and tap the sentence to download the current preview.
 
-## Quick start (from source)
+## Quick start
 
-This is the developer path, for a checkout you already have. Everyone else: the `.deb` in [Download](#download) needs no terminal at all.
+This is the developer path, from source, for a checkout you already have. Everyone else: the phone app in [Download](#download) needs no terminal at all, and there's no computer download published yet.
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
 
@@ -175,10 +171,10 @@ git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse start     # starts Crewhouse and prints the address
 ```
 
-Open **http://127.0.0.1:7711**. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
+Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
 
 <p align="center">
-  <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief says Good morning, promises to ask before sending, deleting or spending, and offers three jobs" width="760" />
+  <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief greets you by name and offers three jobs to take off your plate" width="760" />
 </p>
 
 When run in a terminal, `setup` asks two things:
@@ -190,7 +186,7 @@ When run in a terminal, `setup` asks two things:
 
 Engine sign-ins use BYOKit's sealing: the stopped engine keeps `auth-store.sealed`, and the next start restores the same login. Verified legacy copies and migration archives leave no plaintext credential copy. Crewhouse opts into the kit's dual wrapping: when available, the non-interactive OS keyring and an owner-only host key both wrap the saved sign-in, so later locked starts still work without prompting. A new install without keyring access uses the host key. An older keyring-only store needs one unlocked start to upgrade; until then the app asks you to unlock your password storage and try again. There is no plaintext fallback and no `CREWHOUSE_AUTH_KEY_FILE` requirement.
 
-On Linux the kit's host key lives at `$XDG_STATE_HOME/byokit-<SHA-256 of crewhouse-engine>/host-key/` (the state root defaults to `~/.local/state`), beside the default `crewhouse/` state directory. Exclude that key directory from sealed-store backups; keep it separately for restores. Crewhouse does not copy or export it. Stop all writers before any kit-managed rotation; never edit key files yourself. Losing the original key or OS keyring makes the sealed store unrecoverable; an older build cannot open it.
+On Linux the kit's host key lives at `$XDG_STATE_HOME/byokit-<SHA-256 of crewhouse-engine>/host-key/` (the state root defaults to `~/.local/state`), beside the default `crewhouse/` state directory. Exclude that key directory from sealed-store backups; keep it separately for restores. Crewhouse does not copy or export it. Stop all writers before any kit-managed rotation; never edit key files yourself. Losing the original key or OS keyring makes the sealed store unrecoverable; an older build cannot open it. If `auth-store.sealed` cannot be read, the engine fails closed: it stays stopped, the file is left untouched, and the app shows the kit's recovery words.
 
 App connections use the pinned BYOKit connection kit and its documented sealed-store adapter, with the same dual wrapping under the separate `crewhouse-connect` service. The person's `app-signins/` folder holds ciphertext, including the setup key and refreshed grants. Keep this service's host key separate from ciphertext backups too. Old app sign-ins and setup keys are not imported; reconnect apps after upgrading.
 
@@ -204,12 +200,14 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 | `./crewhouse doctor` | Shows what's installed and what's missing, and how to add it |
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
-| `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone from the terminal |
+| `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone or the installed web app from the terminal; `code` also prints a relay code to use away from home |
 | `./crewhouse uninstall [--all] [--yes]` | Removes what Crewhouse installed |
 
 **The phone app** (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](TRY-IT.md#3-the-phone-app)), or ask Chief to add your phone. Every paired phone uses your crew; you can also add one that only watches. Quiet hours hold notifications across a restart and send one when they end. To reach the computer away from home, use Tailscale or [run your own relay](relay/README.md). There's no built-in one.
 
-Phone notifications currently use raw Expo registration, delivery and a local quiet-hours outbox: migration debt pending published BYOKit notification contracts. Content-free news, phone grant authorization and quiet-hour preferences remain Crewhouse policy. Android status uses the published `@byokit/statusbar` 0.1.0 kit; the direct iOS Live Activity integration still needs a kit.
+The installed web app (Add to Home Screen on iOS 16.4+, or install on Android) can get the same content-free news as a web push through your own relay. Turn it on under Settings, Phones, "Notifications on this device". A paired installed app has the same switch on its own Settings, under the computer's name. It needs a relay.
+
+Phone notifications currently use raw Expo registration, delivery and a local quiet-hours outbox: migration debt pending published BYOKit notification contracts. Content-free news, phone grant authorization and quiet-hour preferences remain Crewhouse policy. Android status uses the published `@byokit/statusbar` 0.1.1 kit; the direct iOS Live Activity integration still needs a kit.
 
 ## Under the hood
 
@@ -236,7 +234,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
 - **On disk:** a helper is `~/Crewhouse/bots/<id>/` (`soul.md`, `AGENTS.md` for its job, `bot.json`, `skills/`, `files/`). What the crew knows about a person is in `~/Crewhouse/people/<id>/` (`about.md` and one `notes/<helper>.md` per helper), and every change is a git commit.
 - **Tools** are curated manifests (raw installation/execution, browser SDKs and document libraries are BYOKit migration debt), one manifest per tool in `tools/<id>/tool.json`, saying what it does, its licence, and when it asks you first. Pinned tools install into Crewhouse's own folder, never globally and never with sudo. The browser is [playwright-axi](https://github.com/brycehamrick/playwright-axi) with its own Chromium. Command-line programs that use your own sign-in are typed tools, never shell.
 - **Helpers' screens** (`src/desktop.ts`, desktop/streaming infrastructure is BYOKit migration debt) are one Xvfb display and one Chromium per helper, streamed to you with [desklink](https://www.npmjs.com/package/@desklink/host). DevTools goes over a pipe that crewd relays at a secret loopback path, so no other helper's shell can reach it.
-- **Routing** a message to Chief uses [`@byokit/decide`](https://www.npmjs.com/package/@byokit/decide): rules for the obvious cases, then the person's own AI. The phone link and relay use [`@byokit/link`](https://www.npmjs.com/package/@byokit/link) and [`@byokit/relay`](https://www.npmjs.com/package/@byokit/relay).
+- **Routing** a message to Chief uses [`@byokit/decide`](https://www.npmjs.com/package/@byokit/decide): rules for the obvious cases, then the person's own AI. The phone link and relay use [`@byokit/pair`](https://www.npmjs.com/package/@byokit/pair) and [`@byokit/relay`](https://www.npmjs.com/package/@byokit/relay).
 - **Settings by environment:** `CREWHOUSE_STATE_DIR`, `CREWHOUSE_CREW_DIR`, `CREWHOUSE_TOOLS_DIR`, `CREWHOUSE_PORT` (default 7711), `CREWHOUSE_MAX_CONCURRENT` (default 3), `CREWHOUSE_RELAY`, and `CREWHOUSE_ENGINE=stub` (the scripted test model).
 
 </details>

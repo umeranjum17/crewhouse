@@ -15,3 +15,25 @@ Font License 1.1 (see web/fonts/OFL.txt).
 The AI account marks in web/src/logos.ts come from Simple Icons (CC0 1.0) and,
 for Grok, Lobe Icons (MIT License, Copyright (c) 2023 LobeHub). The marks are
 trademarks of their owners, shown only to name the account being signed in to.
+
+The app and plugin logos in web/marks/ are each product's own official brand
+asset, shown unmodified only to name the app or plugin, and remain trademarks
+of their owners. No open-source licence is granted for them; each is used under
+its owner's brand guidelines.
+
+- drive.png, calendar.png, gmail.png — Google Workspace product logos from
+  Google's own product-logo assets, used under Google's Brand Resource Center
+  terms (https://about.google/brand-resource-center/). Trademarks of Google LLC.
+  - drive.png:    https://fonts.gstatic.com/s/i/productlogos/drive_2020q4/v8/web-512dp/logo_drive_2020q4_color_2x_web_512dp.png
+  - calendar.png: https://fonts.gstatic.com/s/i/productlogos/calendar_2020q4/v8/web-512dp/logo_calendar_2020q4_color_2x_web_512dp.png
+  - gmail.png:    https://fonts.gstatic.com/s/i/productlogos/gmail_2020q4/v8/web-512dp/logo_gmail_2020q4_color_2x_web_512dp.png
+- notion.png — Notion's official app icon, from Notion
+  (https://www.notion.com/front-static/logo-ios.png), used under Notion's brand
+  guidelines (https://www.notion.so/brand). Trademark of Notion Labs, Inc.
+- canva.png — Canva's official app icon, from Canva
+  (https://static.canva.com/domain-assets/canva/static/images/android-192x192-2.png),
+  used under Canva's brand guidelines (https://www.canva.com/brand/). Trademark
+  of Canva Pty Ltd.
+- herdr.png — Herdr's own mark, from Herdr (https://herdr.dev/assets/logo.png);
+  the light background was made transparent so the mark sits on the tile. No
+  other change. Used under Herdr's terms. Trademark of its owner.

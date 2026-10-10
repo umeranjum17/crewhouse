@@ -1,10 +1,12 @@
-// The thin adapter: crewd's state in, plain words out. Every screen reads these view models and nothing raw,
-// so the engine underneath can change (docs/ui-contract.md) without the screens changing, and nothing technical
-// (commands, file paths, model names, percentages, raw prompts) can reach a person. test/ui.test.ts holds this.
+// The thin adapter: crewd's state in, view models out. Every screen reads these view models and nothing raw,
+// so the engine underneath can change (docs/ui-contract.md) without the screens changing. Crewhouse's own
+// status lines read in plain words (no commands, paths, model names, percentages or raw prompts);
+// a chat answer reads as written. test/ui.test.ts holds this.
 import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
+import { relayTyped } from './typed.ts';
 import { PALS, type Kind, type Mood } from './art.ts';
 
 export type Helper = {
@@ -32,6 +34,8 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  campaign?: { ready: boolean; poster?: FileView };
+  mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
@@ -58,12 +62,14 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   about?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
-export type App = { id: string; name: string; mark: string; bg: string; on: boolean; does: string; warns?: boolean };
+export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
 
 // ---------- words ----------
+/** "8:02 pm": the time alone (a phone's day line carries it, "Today 8:02 pm"). */
+export const timeOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 export const clock = (t: number) => {
   const d = new Date(t);
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const time = timeOf(t);
   if (d.toDateString() === new Date().toDateString()) return time;
   return Math.abs(t - Date.now()) < 6 * 86_400_000 ? `${d.toLocaleDateString([], { weekday: 'short' })} ${time}` : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 };
@@ -110,23 +116,17 @@ export function pretty(path: string) {
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
 export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
 
-/** Crewd's own check on a suggested change, as a person reads it: did it pass, what the check actually found, when, and
- *  whether a newer run overturned an older verdict. Nothing at all when no check ever ran on this change. */
-export type Review = { task: number; ok: boolean; why: string; when: number; runs: number; changed: boolean };
-const WHY = (d: Json) => d.passed ? 'the check failed on the old code and passes with this change'
-  : d.missingDep ? 'the check could not run: something it needs is not installed'
-  : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
-  : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
-  : 'the same check still fails after the change';
+/** Crewd's own check on a suggested change, as a person reads it: did it pass, when, and the job to start again.
+ *  What the check found and which run counts are crewd's own thread line; the card never says them a second time. */
+export type Review = { task: number; ok: boolean; when: number };
 
-/** Every check crewd has run, newest verdict for each suggested change, keyed `bot|files/x.patch`. A second run on the
- *  same change is the current one; `changed` marks a verdict a newer run overturned, so nobody acts on the stale one. */
+/** Every check crewd has run, newest verdict for each suggested change, keyed `bot|files/x.patch`. */
 export function reviews(state: Json) {
   const out = new Map<string, Review>();
   for (const e of (state.events ?? []) as Json[]) {
     if (e.kind !== 'verify.result') continue;
-    const d = (e.data ?? {}) as Json, key = `${e.bot}|${d.patch}`, prev = out.get(key);
-    out.set(key, { task: Number(d.task), ok: d.passed === true, why: WHY(d), when: at(e.at), runs: (prev?.runs ?? 0) + 1, changed: !!prev && prev.ok !== (d.passed === true) });
+    const d = (e.data ?? {}) as Json;
+    out.set(`${e.bot}|${d.patch}`, { task: Number(d.task), ok: d.passed === true, when: at(e.at) });
   }
   return out;
 }
@@ -230,18 +230,28 @@ const JSON_BLOB = new RegExp(OBJ, 'g'); // nor is a raw JSON object
 export const STUB = /\bstub [\w-]+:/;
 export const noTools = (text = '') => text.replace(TOOL_CALL, ' ').replace(JSON_BLOB, ' ').replace(TOOL_FRAGMENT, '').replace(/\s{2,}/g, ' ').trim();
 
+/** An account name in crewd's own account sentences ("sign in with Claude", "your Claude plan",
+ *  "Claude signed you out"): stashed before the machinery scrub and restored after, so the account
+ *  the crew uses keeps its name while engines and models still scrub to "the crew". */
+const ACCOUNT_NAMES = 'ChatGPT|Grok|GitHub Copilot|OpenRouter|MiniMax|Claude';
+const ACCOUNT_WORDS = new RegExp(`\\b(sign in with|your|a bigger|waiting for a) (${ACCOUNT_NAMES})( account| plan)?\\b|\\b(${ACCOUNT_NAMES}) signed you out\\b`, 'gi');
 export function plain(text = '') {
   if (STUB.test(text)) return 'On it.';
+  const kept: string[] = [];
   // Heading markers strip before noTools collapses whitespace (D23): a later heading must still sit at a line
   // start to be found — after the collapse every ### but the first survives mid-line as literal markup.
   return noTools(text.replace(/(^|\n)#{1,6}\s+/g, '$1'))
+    .replace(ACCOUNT_WORDS, (m: string) => `\0${kept.push(m) - 1}\0`)
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`([^`\n]*)`/g, (_, s: string) => (/^[\w.\-~\/]+\.[a-z0-9]{2,4}$/i.test(s) ? `“${pretty(s)}”` : /[\/\\$|]|--?\w/.test(s) ? '' : s))
     .replace(/(^|[\s(“"'])((~|\.{1,2})?\/[\w.\-~]+)+\/?(?=[\s).,;:!?”"']|$)/g, (_, pre: string, p: string) => `${pre}${/\.[a-z0-9]{2,4}$/i.test(p) ? `“${pretty(p)}”` : 'its folder'}`)
     .replace(/\bfiles\/([\w.\-]+)/g, (_, f: string) => `“${pretty(f)}”`)
-    .replace(/\b(claude(\s+code)?|anthropic|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr|mcp__\w+|crew_[a-z_]+)\b/gi, 'the crew')
+    .replace(/\b(mcp__\w+|crew_[a-z_]+)\b/gi, (tool) => tool.toLowerCase().endsWith('crew_import') ? 'the template importer' : 'the requested action')
+    .replace(/\b((?<=error from )claude|claude\s+code|(?:claude|anthropic)[:/](?:sonnet|opus|haiku)[\w.-]*|(?:(?:anthropic|claude-cli)\/)?claude-(?:(?:opus|sonnet|haiku)[\w.-]*|\d[\w.-]*)|codex|sonnet|opus|haiku|gpt-[\w.]+|herdr)\b/gi, 'the crew')
+    .replace(/(^|[.!?]\s+)the crew\b/g, '$1The crew')
     .replace(/\s{2,}/g, ' ')
-    .trim();
+    .trim()
+    .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
 export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
@@ -288,22 +298,24 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
 /** One helper, from crewd's row and its jobs (`tasks`, newest first): the seat says only what crewd holds. A working job
  *  with no news past crewd's limit has gone quiet (never "working"); a held job waits, with crewd's reason; the last job
  *  that ended badly today says so until a newer one starts. */
-export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = []): Helper {
-  const needs = b.task?.state === 'needs_you';
+export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = []): Helper {
+  const own = asks.filter((a) => a.bot === b.id);
+  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft);
+  const needs = b.task?.state === 'needs_you' && !chiefDraft;
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
   const mine = b.task ? [] : tasks.filter((t) => t.bot === b.id);
   const held = mine.find((t) => t.state === 'paused');
   const ended = ['failed', 'unsure'].includes(mine[0]?.state) && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
-  const seat: Seat = driving ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
+  const seat: Seat = driving || chiefDraft ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
     : held || b.pausedUntil ? 'waiting' : b.queued ? 'next' : ended ? 'failed' : 'free';
-  const status = driving ? 'Paused while you drive' : needs ? 'Needs you' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Waiting' : b.task ? b.task.title
     : held || b.pausedUntil ? waitWords(held?.result, held?.wake_at ?? b.pausedUntil) : b.queued ? 'Up next'
     : ended ? (ended.state === 'unsure' ? 'Not sure it worked' : "Didn't finish") : 'Free to help';
   return {
     id: b.id, name: b.display, kind: kindOf(b, crew), role: plain(b.role ?? ''), status: plain(status), computer: !!b.computer, driving,
-    mood: helperMood(b, seat, events), seat,
-    ring: needs ? 'needs' : b.task ? 'working' : '',
+    mood: chiefDraft ? 'rest' : helperMood(b, seat, events), seat,
+    ring: chiefDraft ? '' : needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
     things: deskThings(b.id, b.task ?? null),
   };
@@ -410,7 +422,7 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 export const GOOGLE_STEPS = [
   { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
   { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar” and press Enable. Do the same for “Gmail” and “Google Drive”.' },
-  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email. Under Audience press Publish app, so it says “In production”.' },
   { title: 'Make the sign-in', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
 
@@ -418,17 +430,17 @@ export const GOOGLE_STEPS = [
 export type GoogleStep = { state: 'checked' | 'said' | 'missing'; note: string };
 export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missing: 'Missing' } as const;
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
-  const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
+  if (!steps) return 'Google is on for your crew';
+  const missing = steps.findIndex((s) => s.state === 'missing');
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google sign-in saved';
+  return steps.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google sign-in saved';
 };
 
 /** The one code a phone away from home types: the short code and the pairing code, with the mailbox's own
  *  address carried inside it, so the phone knows where to look and nobody types an address. Empty when there is none. */
 export const phoneTyped = (t: Json) => {
   if (!t?.short || !t?.code) return '';
-  let at = ''; try { at = new URL(t.relay).host; } catch { at = String(t.relay ?? ''); }
-  return `${t.short}-${t.code}${at ? `@${at}` : ''}`;
+  return t.relay ? relayTyped(t.short, t.code, t.relay) : `${t.short}-${t.code}`;
 };
 
 /** Settings, Phones: whether phones reach this computer away from home, in one sentence. */
@@ -505,7 +517,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const all = crew(state);
   const now = Date.now();
   const events = (state.events ?? []) as Json[];
-  const asks = state.asks.length;
+  const pending = cards(state), asks = pending.length;
   const needs = all.find((h) => h.ring === 'needs');
   const stuck = all.find((h) => h.stuckFor > 0);
   const busy = all.filter((h) => h.ring === 'working');
@@ -517,7 +529,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const done = recent('task.done', 5 * 60_000)[0];
   const name = (id: string) => crewName(state, id);
   const line = needs ? `${needs.name} needs you`
-    : asks ? `${name(state.asks[0].bot)} needs you`
+    : asks ? `${name(pending[0].helper)} needs you`
     : busy.length === 1 ? (local.bare ? `${busy[0].name} is working` : `${busy[0].name} is on “${busy[0].status}”`)
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
     : rest || 'Keeping an eye on things';
@@ -543,7 +555,7 @@ export function zoneNote(state: Json) {
 
 /** The person's helpers. */
 export function crew(state: Json) {
-  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [])) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])) as Helper[];
 }
 
 /** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
@@ -558,25 +570,34 @@ export function preview(last: Json | null | undefined, status = '') {
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
 }
-/** What Chief last said himself, for his hero (B1): his own message, never the person's; '' when he has said nothing. */
+/** A hero line is a real sentence: bare fragments ("4."), list markers and empty lines never reach it. */
+const realSentence = (text: string): string => String(text ?? '').split(/(?<=[.!?…])\s+/)
+  .filter((p) => /[A-Za-z]/.test(p.replace(/^[\s*•\-–—\d.)\]]+/, ''))).at(-1)?.trim() ?? '';
+/** What Chief last said himself, for his hero (B1): his own message's last real sentence, never the person's;
+ *  '' when he has said nothing a hero can say. */
 export function chiefSaid(state: Json): string {
   const last = state.bots.find((b: Json) => b.id === 'chief')?.last;
-  return last && last.author !== 'person' && !last.helper && String(last.text ?? '').trim() ? preview(last) : ''; // a helper's own words are never Chief's
+  if (!last || last.author === 'person' || last.helper || !String(last.text ?? '').trim()) return ''; // a helper's own words are never Chief's
+  const said = realSentence(String(last.text));
+  return said ? preview({ ...last, text: said }) : '';
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
   const c = chief(state);
   // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
   const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
-  // The words the office uses: a row in Needs you says so, a job stopped for an answer in the chat says that.
-  const waiting = new Set(needsYou(state).map((c) => c.helper));
+  // The words the office uses (groupOf): waiting for Chief, done today, else the seat's own words.
+  const v = office(state), member = (id: string) => v.crew.find((m) => m.id === id)!;
+  const waiting = new Set(v.crew.filter(waitsOnYou).map((m) => m.id));
   const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
-    const line = waiting.has(h.id) ? SEAT_WORDS.needs : h.seat === 'chat' ? SEAT_WORDS.chat : h.seat === 'quiet' ? `Gone quiet on: ${h.status}`
+    const done = groupOf(member(h.id), v) === 'done' ? landed(member(h.id), v) : undefined;
+    const line = waiting.has(h.id) ? SEAT_WORDS.needs : done ? `Done: ${done.title || 'a job'}` : h.seat === 'chat' ? SEAT_WORDS.chat : h.seat === 'quiet' ? `Gone quiet on: ${h.status}`
       : h.seat === 'working' ? `Working on: ${h.status}` : h.seat === 'waiting' ? h.status : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: waiting.has(h.id) ? 'needs' : h.ring };
+    // An ask counts once, on Chief's row: a crew row never carries a dot for one, a draft or a suggestion alike.
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: waiting.has(h.id) ? 'needs' : h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
@@ -595,7 +616,7 @@ export function needsYou(state: Json): Card[] {
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
-  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3)
+  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3 && x.c.campaign?.ready !== false)
     .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
 }
 
@@ -621,6 +642,9 @@ export function gallery(state: Json) {
 }
 
 // ---------- asks ----------
+/** A draft's body as the card shows it: the model's hard wraps are one paragraph, so a lone newline
+ *  reads as a space and blank lines stay paragraph breaks. Copy and Edit keep the exact words. */
+export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, ' ').trim()).join('\n\n');
 /**
  * One card per open ask, in plain words. The engine's own sentence and preview when it sends them
  * (detail.words, detail.preview, detail.always, detail.app); a safe sentence of our own when it doesn't.
@@ -628,7 +652,7 @@ export function gallery(state: Json) {
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, at: a.at, reply: false };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
@@ -654,15 +678,30 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
     lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
     choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
+    return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
   if (a.kind === 'propose' && d.draft) {
     // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
     const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
+    if (campaignPath(d.draft.path)) {
+      const task = state.tasks?.find((t: Json) => t.bot === a.bot && t.files?.includes(d.draft.path));
+      const parts = task ? state.tasks.filter((t: Json) => t.root === task.root) : [];
+      const poster = campaignPoster(state, task?.root);
+      return { ...base, kind: 'ok', status: 'Nothing copied or sent', head: 'Your campaign', words: 'Review both posts and the poster. Approve makes them ready to copy; it never posts them.', preview: { body: String(d.preview?.body ?? '') },
+        campaign: { ready: !!parts.length && parts.every((t: Json) => ['done', 'failed', 'unsure'].includes(t.state)) && !state.bots.some((b: Json) => b.task?.root === task.root), poster },
+        choices: [{ label: 'Approve', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+    }
     const head = `${name} wrote your ${channel}`;
     // A draft is words to send, not a document: heading and quote marks are stripped, every word kept — the person
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
-    const body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
+    // A model that files the subject line inside the body too would show it twice (the card's subject, then the
+    // body's first line): that first line goes when it only repeats the subject, and stays when it says more.
+    const subject = plain(d.draft.subject);
+    let body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
+    const [first, ...rest] = body.split('\n');
+    if (subject && /^subject:/i.test(first) && first.replace(/^subject:\s*/i, '').trim().toLowerCase() === subject.toLowerCase()) body = rest.join('\n').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
-      draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
+      ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
@@ -681,7 +720,7 @@ export function card(a: Json, state: Json): Card {
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
   }
   const spend = !!d.spends || d.effect === 'spend';
-  const words = d.words ? plain(d.words) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
+  const words = d.words ? (d.preview?.verbatim ? String(d.words) : plain(d.words)) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
   // With no readable total there is no yes at all — the person finishes that purchase themselves.
   const order = d.order as Card['order'] | undefined;
@@ -698,18 +737,24 @@ export function card(a: Json, state: Json): Card {
   const press = d.effect === 'send' && d.press === true;
   const fill = press && d.fill === true;
   const fillLines = String(d.preview?.body ?? '').split('\n').filter(Boolean).length;
-  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : d.effect === 'send' ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
-  // "Always" is a relationship ("Always OK for Aunty Sara"), and money never gets one.
+  const message = d.effect === 'send' && !d.preview?.verbatim;
+  const choices: Choice[] = [{ label: spend ? 'OK, spend it' : fill ? (fillLines > 1 ? 'Yes, fill these in' : 'Yes, fill it in') : press ? 'Yes, press it' : message ? 'Send' : 'Yes, go ahead', body: { answer: 'allow', scope: 'once' }, primary: true }];
+  // "Always" is a relationship ("Always OK for Aunty Nisha"), and money never gets one.
   if (!spend && (d.always || d.rule)) choices.push({ label: `Always OK for ${d.always ?? name}`, body: { answer: 'allow', scope: 'always' } });
   choices.push({ label: 'Not now', body: { answer: 'deny' } });
   return {
-    ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : d.effect === 'send' ? 'Wants to send an email' : 'Needs your OK',
+    ...base, kind: spend ? 'spend' : 'ok', status: spend ? 'Wants to spend money' : fill ? 'Wants to fill in a form' : press ? 'Wants to press a button' : message ? 'Wants to send an email' : 'Needs your OK',
     evidence: fill ? 'lines' : undefined, words, choices, question,
-    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : d.effect === 'send' ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
-    preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: plain(d.preview.body ?? '') } : undefined,
+    head: spend ? `${name} needs your OK to spend` : press ? `${name} wants to act on a site` : message ? `${name}'s ${d.thing ?? 'message'} is ready to send` : `${name} would like your OK`,
+    preview: d.preview ? { head: d.preview.head ? plain(d.preview.head) : undefined, body: d.preview.verbatim ? String(d.preview.body ?? '') : plain(d.preview.body ?? '') } : undefined,
   };
 }
-export const cards = (state: Json) => state.asks.map((a: Json) => card(a, state)) as Card[];
+export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
+const campaignPath = (path: unknown) => /^files\/campaign-[^/]+\.txt$/.test(String(path));
+const campaignPoster = (state: Json, root: number | undefined): FileView | undefined => root === undefined ? undefined : state.tasks.filter((t: Json) => t.root === root).flatMap((t: Json) => (t.files ?? []).filter((p: string) => /\.png$/i.test(p)).map((p: string) => fileView(t.bot, p)))[0];
+export type CampaignOutcome = { id: number; at: number; approved: boolean; source: { bot: string; path: string; sha: string }; poster?: FileView };
+// ponytail: the current 80-event window holds recent decisions; the helper's history keeps the durable receipt.
+export const campaignOutcomes = (state: Json): CampaignOutcome[] => (state.events ?? []).filter((e: Json) => ['draft.approved', 'draft.rejected'].includes(e.kind) && campaignPath(e.data?.path)).map((e: Json) => ({ id: e.seq, at: e.at, approved: e.kind === 'draft.approved', source: { bot: e.bot, path: e.data.path, sha: e.data.sha }, poster: campaignPoster(state, state.tasks.find((t: Json) => t.id === e.data.task)?.root) }));
 
 // ---------- work and things ----------
 export function work(state: Json): Work[] {
@@ -1032,7 +1077,7 @@ export function step(e: Json): string | null {
     // crewd writes the step in plain words ("Searched the web for “school trips”", "Worked on a video").
     case 'run.tool': return d.words ? plain(d.words) : 'Worked on it';
     case 'run.allowed': return 'Went ahead, as you allowed';
-    case 'ask.opened': return 'Asked for your OK';
+    case 'ask.opened': return 'Asked Chief for an OK'; // crew never ask the person: Chief carries the ask
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
     // The receipt for a message the person answered for themselves: what it was, where it went, why it mattered,
     // and that nothing was sent by the crew. Read long after the fact, in the words of the card and the tool.
@@ -1081,21 +1126,114 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
   return out;
 }
 
+// ---------- the live line: what the one answering is doing right now ----------
+/** One row of the live line: the step in plain words and when it began (client time, for the clock). */
+export type LiveStep = { text: string; at: number };
+/** One row of the to-do list: done (it happened), doing (the current focus) or todo (an approved plan step still ahead).
+ *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
+export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
+export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
+  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
+  /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
+  heard?: number };
+const OPEN = ['queued', 'working', 'needs_you', 'paused'];
+const END: Record<string, LiveLine['state']> = { 'task.done': 'done', 'task.failed': 'failed', 'task.unsure': 'unsure' };
+/** "8 s", "1 m 05 s": the clock beside the step, counting up from real crewd times. */
+export const took = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} m ${String(s % 60).padStart(2, '0')} s`; };
+/** The approved plan's own steps ("said Go to:\n1. …"), still ahead: the person's to-do list for this job. */
+const planOf = (body: unknown): string[] => {
+  const after = String(body ?? '').split('said Go to:')[1] ?? '';
+  return after.split('\n').map((l) => /^[\s>]*\d+[.)]\s+(.+?)\s*$/.exec(l)?.[1]).filter(Boolean)
+    .map((x) => plain(x!)).filter(Boolean).slice(0, 10);
+};
+/** The newest job this thread waits on, as a to-do list: the plan-level milestones done and doing, the approved plan's
+ *  steps still to do, and the small tool calls kept for the expand. Chief's thread also follows a job it passed to a
+ *  helper, so a phone without the side column still sees the work. `sent` is a send not yet answered by any job (the
+ *  list then reads the message); `writing` maps a task whose reply is streaming to when it began; `heard` are events
+ *  pushed while the thread is open (they carry `seen`, the client time); `last` maps a task to when anything about it
+ *  last arrived, streamed words included. */
+export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
+  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number> }): LiveLine | null {
+  const evs = new Map<number, Json>();
+  for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
+  const all = [...evs.values()].sort((a, b) => a.seq - b.seq);
+  const when = (e: Json) => e.seen ?? at(e.at);
+  const mine = (bot: string, origin?: string) => bot === o.id || (o.id === 'chief' && origin === 'chief');
+  const tasks = new Map<number, Json>();
+  for (const t of o.tasks) if (mine(t.bot, t.origin)) tasks.set(t.id, t);
+  for (const e of all) if (e.kind === 'task.created' && mine(e.bot, e.data?.origin) && !tasks.has(e.data.task))
+    tasks.set(e.data.task, { id: e.data.task, bot: e.bot, origin: e.data.origin, state: 'queued', created_at: e.at });
+  const t = [...tasks.values()].sort((a, b) => b.id - a.id)[0];
+  const created = t && all.find((e) => e.kind === 'task.created' && e.data?.task === t.id);
+  if (o.sent && (!t || !created?.seen || created.seen < o.sent))
+    return { who: o.name, todos: [{ text: 'Reading your message', state: 'doing', at: o.sent }], detail: [], since: o.sent, state: 'reading' };
+  if (!t) return null;
+  const helper = t.bot !== o.id ? o.crew.find((c) => c.id === t.bot) : undefined;
+  const who = helper?.name ?? o.name;
+  const own = all.filter((e) => e.data?.task === t.id);
+  const start = created ? when(created) : at(t.created_at);
+  const title = plain(String(created?.data?.title ?? t.title ?? '')) || 'the job';
+  // Plan-level rows, each naming its object and never repeated: the model's own progress notes, deliveries and asks.
+  // The small tool calls stay out of the list, in `detail` for the expand; `task.working` only flips the state.
+  const said = new Set<string>();
+  const todos: LiveTodo[] = [];
+  const detail: LiveStep[] = [];
+  const push = (text: string, at: number) => { if (text && !said.has(text)) { said.add(text); todos.push({ text, state: 'done', at }); } };
+  // A thread from before the kit's started event (or demo data) has no admission row: keep its own first step.
+  if (!own.some((e) => e.kind === 'run.admitted')) push(helper ? `Passed to ${who}` : `Starting on “${title}”`, start);
+  let state: LiveLine['state'] = OPEN.includes(t.state) ? (t.state === 'needs_you' ? 'needs' : t.state === 'paused' ? 'waiting' : 'working') : 'done';
+  let ended: Json | undefined;
+  for (const e of own) {
+    // The engine's own first real step and its thinking, wired from the kit's RunEvents (ch-chat-live-2).
+    if (e.kind === 'run.admitted') { push(helper ? `Passed to ${who}` : `Started on “${title}”`, when(e)); continue; }
+    if (e.kind === 'run.thinking') { push('Thinking', when(e)); continue; }
+    if (e.kind === 'run.tool') { const text = step(e); if (text && detail.at(-1)?.text !== text) detail.push({ text, at: when(e) }); continue; }
+    const text = e.kind === 'task.working' ? null : e.kind === 'task.paused' ? waitWords(e.data?.result)
+      : e.kind === 'ask.answered' ? `Carrying on with “${title}”` : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
+    if (text) push(text, when(e));
+    if (e.kind === 'task.working' || e.kind === 'ask.answered') state = 'working';
+    if (e.kind === 'ask.opened') state = 'needs';
+    if (e.kind === 'task.paused') state = 'waiting';
+    if (e.kind in END) { state = END[e.kind]; ended = e; }
+  }
+  if (state === 'done' || state === 'failed' || state === 'unsure') {
+    // An end shows only when it happened while you watched; an old job is just its reply.
+    if (!ended?.seen) return null;
+    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+      count: own.filter((e) => e.kind === 'run.tool').length };
+  }
+  // Nothing narrated yet: the distinct things it tried are the list, latest last; the rest stays in the expand.
+  if (todos.length <= 1) for (const d of [...new Map(detail.map((x) => [x.text, x])).values()].slice(-4)) push(d.text, d.at);
+  const writing = o.writing.get(t.id);
+  if (state === 'working' && writing) push('Writing the answer', writing);
+  todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
+  for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
+  // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
+  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
+    heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
+}
+
 // ---------- a chat ----------
 /** Photos sent with a message ride in its text as `[photo <bot>] files/photos/…` lines: pictures, not words. */
 const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
 const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
 
 export function room(page: Json, state: Json) {
-  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [])]));
+  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])]));
   const checks = reviews(state);
+  // Crewd's own lines (a delivery, a verdict, a reopen) are notes, here exactly as in a helper's chat: one style for
+  // every line the person reads, whoever wrote it. Only a helper's or the person's own words are a bubble.
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))), at: at(m.at), author: m.author }));
+    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))), at: at(m.at), author: m.author === 'system' ? 'note' : m.author }));
 }
 
-const chatWords = (text: string) => text.replace(/```[\s\S]*?```/g, '').split('\n').map(plain).join('\n').trim();
+/** A chat answer, as written: a helper's answer to the person is never scrubbed, just as the person's own
+ *  words never are — inline code (`--branch`), bullets and emphasis stay. Only engine events still go: a tool
+ *  call or raw JSON blob is never a sentence (`noTools`, per line so the list stays a list). Crewhouse's own
+ *  status lines keep the full plain-words scrub (`plain`); the test engine's echo is still never an answer. */
+const chatWords = (text: string) => STUB.test(text) ? 'On it.' : text.split('\n').map((l) => noTools(l)).join('\n').trim();
 
 /** A Chief hand-off's ask for the person's eye: the words themselves, with any label an older hand-off wrapped them
  *  in ("The person's words verbatim: …") and their quotes off, short enough for one collapsed line. */
@@ -1165,6 +1303,12 @@ export function withoutMemory(notes = '', i: number) {
   let n = -1;
   return notes.split('\n').filter((l) => { if (!l.replace(/^[-*]\s*/, '').trim() || l.trim().startsWith('#')) return true; n++; return n !== i; }).join('\n');
 }
+
+/** About me and my work, one editable part per sentence: Chief's merged record of the person and their
+ *  work, read as plain sentences. A trailing fragment without its closing mark is a part of its own. */
+export const profileParts = (text = '') => text.split(/(?<=[.!?…])\s+/).map((p) => plain(p.trim())).filter(Boolean);
+/** The record with its parts changed, forgotten or added to: one space between sentences. */
+export const profileText = (parts: string[]) => parts.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean).join(' ');
 
 /** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
@@ -1241,7 +1385,7 @@ function lastRun(h: Json) {
 }
 
 /** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,
- *  ChatGPT first (the one front door; the rest are quiet paths). Name and billing come from the kit's own catalogue,
+ *  every one on the sign-in card (no front door alone). Name and billing come from the kit's own catalogue,
  *  so a new route lands with the bump; `MARKS` is only what the kit can't know — the tile colour, the tool a route
  *  needs installed (`cli`), and where that provider's own page lives (`site`, `plans`). Kept in step with crewd's
  *  own list by test/ui.test.ts. */
@@ -1270,7 +1414,7 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
  *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, work: '' };
+  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -1283,14 +1427,14 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
-    resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded,
+    resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
-/** Settings' account list: the accounts signed in first (or ChatGPT, the front door, while none is), every other route
- *  under "More ways to sign in". Each row's one line says where it stands in plain words; a route nobody has signed in
- *  to here is "not set up", never connected. */
+/** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
+ *  while none is), every other route under "More ways to sign in". Each row's one line says where it stands in
+ *  plain words; a route nobody has signed in to here is "not set up", never connected. */
 export function aiList(accounts: Json[] | null) {
   const rows = AIS.map((ai) => {
     const g = account(accounts, ai.key);
@@ -1304,7 +1448,8 @@ export function aiList(accounts: Json[] | null) {
     return { ai, g, says };
   });
   const mine = rows.filter((r) => r.g.state === 'ready');
-  const front = mine.length ? mine : rows.filter((r) => r.ai.key === 'chatgpt');
+  const out = rows.filter((r) => r.g.signedOut);
+  const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt');
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };
 }
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */
@@ -1319,22 +1464,36 @@ export function planName(accounts: Json[] | null) {
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
-export const signsInWith = (app: App) => ({ gmail: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
+export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
 /** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
-// v1: Drive, Calendar and Gmail on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
+/** Person-attested eligibility; internal device ids never reach a screen. */
+export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.eligibility?.name ?? ''), kind: String(s.eligibility?.kind ?? 'unknown'), stopped: s.suppressed === true, note: s.suppressed ? 'On your do-not-email list.' : s.eligibility?.kind === 'corporate' ? 'You marked this organisation corporate-eligible.' : 'Unknown organisations, sole traders and small partnerships cannot be emailed.' });
+// v1: Drive, Calendar, Gmail and Gmail sending on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
 // connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
+// Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
+// drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
 const APPS: App[] = [
-  { id: 'drive', name: 'Google Drive', mark: '▲', bg: '#fbbc04', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
-  { id: 'calendar', name: 'Google Calendar', mark: '31', bg: '#4285f4', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
-  { id: 'gmail', name: 'Gmail', mark: 'M', bg: '#ea4335', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
-  { id: 'notion', name: 'Notion', mark: 'N', bg: '#2e2a40', on: false, does: 'Helpers can read and add pages you share with them.' },
-  { id: 'canva', name: 'Canva', mark: 'C', bg: 'linear-gradient(135deg,#00c4cc,#7d2ae8)', on: false, does: 'Helpers can make designs in your Canva.' },
+  { id: 'drive', name: 'Google Drive', logo: '/marks/drive.png', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
+  { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
+  { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
+  { id: 'gmailsend', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
+  { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
+  { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
+
+/** Herdr's own row on the Apps screen: missing, installed but not answering, or answering. */
+export type HerdrSetup = { state: 'missing' | 'setup' | 'on'; says: string; howto: string };
+export const herdr = (status: Json | null): HerdrSetup | null => {
+  if (!status) return null;
+  if (status.connected) return { state: 'on', says: 'On · your terminal agents answer here', howto: '' };
+  if (status.ready) return { state: 'setup', says: 'Installed, not answering. Open Herdr once, then Retry.', howto: '' };
+  return { state: 'missing', says: 'Not installed.', howto: String(status.howto ?? '') };
+};
 
 /** One reviewed starter skill: its name, what it does, why it is in the set, what it needs, and whether it is on. */
 export type StarterSkill = { slug: string; name: string; what: string; why: string; needs: string[]; on: boolean; reviewed: boolean };
@@ -1351,10 +1510,10 @@ export const skillSearch = (results: Json[], starter: StarterSkill[]): StarterSk
 // ---------- the office ----------
 /** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in
  *  Needs you (A.needsYou), never a suggestion that lives in its chat; `second` marks another helper of a kind that
- *  came earlier in the crew, so the room and the dock can tell the two apart. */
+ *  came earlier in the crew, so the panels and the dock can tell the two apart. */
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; seat: Seat; status: string;
   step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
-/** The one state source every office surface reads: the room, its header counts, the tray, the dock or rail roster
+/** The one state source every office surface reads: the panels, the header counts, the tray, the dock or rail roster
  *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
  *  working (one waiting on you counts once, under needs, wherever they show), `done` what
  *  landed in the tray today. */
@@ -1366,14 +1525,18 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
 /** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
  *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
- *  hand-off). An older finish is just free. */
+ *  hand-off). An older finish is just free. A crew member waiting on the person—whether a row of theirs in Needs you or
+ *  a job stopped for an answer their chat holds—is Chief's to bring, so the rail says the neutral "Waiting", the panel's
+ *  own word, never "Waiting on your reply" and never Chief's own "Needs you". */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
+  // The rail's word follows the Office group (groupOf), so the row and the count line can never disagree.
+  const last = groupOf(c, v) === 'done' ? landed(c, v) : undefined;
   const seat = seatOf(c);
-  const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
-  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[seat], seat };
+  const shown: Seat = seat === 'needs' || seat === 'chat' ? 'waiting' : seat;
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
  *  free last. */
@@ -1409,17 +1572,21 @@ export function office(state: Json): OfficeView {
     kinds.add(h.kind);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, seat: h.seat, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: askFor(needs, h.id), ...(second ? { second } : {}) };
+      ask: task ? askFor(needs, h.id) : undefined, ...(second ? { second } : {}) };
   });
   const done = things(state);
   return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
-/** Needs-you rows no helper in the room holds (Chief's own, or one left by a helper since let go): Chief carries
- *  them, so every row in Needs you has a Review somewhere in the room. */
-/** Chief's state in one word, the same in the room, his profile and on the phone. */
+/** Needs-you rows no crew panel holds (Chief's own, or one left by a helper since let go): Chief carries
+ *  them, so every row in Needs you has a Review somewhere in the office. */
+/** Chief's state in one word, the same on his panel, his profile and on the phone. */
 export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
+/** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
+export const WAIT_CHIEF = 'Waiting for Chief';
+export const NO_JOB = 'No job right now';
+export const chiefHas = (view: OfficeView) => `Chief has ${view.needs.length} thing${view.needs.length === 1 ? '' : 's'} for you`;
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
@@ -1479,7 +1646,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, seat: 'failed' as const, mood: 'error' as Mood, step: step(e) ?? c.step,
         status: e.kind === 'task.unsure' ? 'Not sure it worked' : "Didn't finish" }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Waiting', step: 'Waiting for your OK' }));
     case 'ask.answered':
     case 'ask.parked': {
       // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot
@@ -1500,26 +1667,35 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
   }
 }
 
-/** What On it now says when nobody is working: who waits on you, else who is held, quiet or ended badly; the crew is
- *  free only when every one of them is. */
-export function idleLine(v: OfficeView) {
-  const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
-  const on = n(['needs', 'chat']);
-  if (on) return `Nobody is working: ${on} waiting on you.`;
-  const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
-  return rest.length ? `Nobody is working right now: ${rest.join(', ')}.` : 'Nobody is working right now. The crew is free.';
-}
-/** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
-export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask;
 /** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
  *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
-export const SEATS = 5;
-export type FloorPlan = { seats: OfficeMember[]; more: OfficeMember[] };
-/** Who stands on the office's one floor, one rule for the web and the phone (B1): five spots in the roster's order,
- *  whoever waits on you first, then working, then anything held, free last; everyone else is counted under "+N"
- *  (`more`, roster order), never drawn smaller. The rail and the dock still name the whole crew. */
-export function floorPlan(crew: OfficeMember[]): FloorPlan {
-  const order = roster(crew);
-  return { seats: order.slice(0, SEATS), more: order.slice(SEATS) };
+/** What On it now says when nobody is working: who waits for Chief (crew never wait on the person), else who is held, quiet or ended badly; the crew is
+ *  free only when every one of them is. */
+export function idleLine(v: OfficeView) {
+  const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
+  const on = v.crew.filter(waitsOnYou).length;
+  if (on) return `Nobody is working: ${on} waiting for Chief.`;
+  const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
+  return rest.length ? `Nobody is working right now: ${rest.join(', ')}.` : 'Nobody is working right now. The crew is free.';
 }
+/** A helper waiting for Chief: a job of theirs with a row in Needs you, or stopped for an answer in their chat. One with
+ *  no job is never waiting: it rests, and Chief carries its ask (office()). */
+export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask;
+/** The latest thing this helper landed today, if any. */
+export const landed = (c: OfficeMember, v: OfficeView) =>
+  v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0];
+/** Every helper lands in exactly one Office group, and the chat list says the same: waiting for Chief, at work on an
+ *  open job, done today, or resting. */
+export type Group = 'needs' | 'work' | 'done' | 'rest';
+export const groupOf = (c: OfficeMember, v: OfficeView): Group => {
+  if (waitsOnYou(c)) return 'needs';
+  const seat = seatOf(c);
+  if (seat === 'working' || seat === 'quiet') return 'work';
+  if (seat !== 'failed' && landed(c, v)) return 'done';
+  // A held helper (a sign-in, an account back later, the person at the wheel) is waiting, not resting: its rail row
+  // and On it now both say "Waiting", so the counts read the same.
+  if (seat === 'waiting') return 'needs';
+  return 'rest';
+};
+

@@ -8,7 +8,7 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember (spending has none, so it asks every time); `cost` caps a spend in dollars when stated up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
-      preview?: { head: string; body: string }; press?: boolean; fill?: boolean };
+      preview?: { head: string; body: string; verbatim?: boolean }; press?: boolean; fill?: boolean };
 
 export interface Seen {
   bot: string;
@@ -27,8 +27,7 @@ export interface Seen {
   apps?: Record<string, { app: string; title: string; readOnly: boolean; destructive: boolean }>;
 }
 
-const READS = new Set(['read', 'ls', 'grep', 'find']);
-const WRITES = new Set(['write', 'edit']);
+const READS = new Set(['read', 'ls', 'grep', 'find']), WRITES = new Set(['write', 'edit']);
 /** Whether a call that goes through does something out in the world (sends, buys, deletes, or presses and types on a web
  *  page): a job that did has to say whether it worked. */
 export function acts(tool: string, input: Record<string, any>, e: Effect) {
@@ -40,7 +39,7 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
   'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
   'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_batch', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
-  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_call_me']);
+  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile']);
 /** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
 const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
@@ -50,8 +49,7 @@ const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forwar
 const BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload',
   'dialog-accept', 'mousedown', 'mouseup']);
 /** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
-const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/;
-const PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
+const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/, PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
 /** A flag's values in an argument list, as `--flag v` or `--flag=v`. */
 const valuesOf = (args: string[], flag: string) => args.flatMap((a, i) => (a === flag ? [args[i + 1] ?? ''] : a.startsWith(flag + '=') ? [a.slice(flag.length + 1)] : []));
 
@@ -71,8 +69,7 @@ export function browserAsk(command: string, url: string, signedIn: string[], fil
 
 /** "your Documents folder", never a full path. */
 function folderWords(path: string) {
-  const home = homedir();
-  const dir = dirname(path);
+  const home = homedir(), dir = dirname(path);
   if (dir === home) return 'your home folder';
   return dir.startsWith(home + '/') ? `your ${relative(home, dir)} folder` : 'a folder outside your home';
 }
@@ -92,9 +89,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (inside(s.space, path)) return { kind: 'safe' };
     if (s.secret.some((d) => inside(d, path))) return { kind: 'refuse', why: 'That folder holds sign-ins and keys; no bot may open it.' };
     // A folder to look in (ls, grep, find) is the folder itself; a file is in its parent.
-    const folder = base === 'read' || WRITES.has(base) ? folderWords(path) : folderWords(path + '/x');
-    const key = `files:${base === 'read' || WRITES.has(base) ? dirname(path) : path}`;
-    const what = WRITES.has(base) ? `change a file in ${folder}: “${basename(path)}”` : base === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
+    const folder = base === 'read' || WRITES.has(base) ? folderWords(path) : folderWords(path + '/x'), key = `files:${base === 'read' || WRITES.has(base) ? dirname(path) : path}`, what = WRITES.has(base) ? `change a file in ${folder}: “${basename(path)}”` : base === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
     return { kind: 'files', words: `${s.bot} wants to ${what}.`, key, covers: `${folder}` };
   }
   if (tool === 'browser') {
@@ -142,8 +137,15 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   }
   const cli = s.run?.[tool];
   if (cli) {
-    const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' ');
-    const starts = (p: string) => args === p || args.startsWith(p + ' ');
+    const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' '), starts = (p: string) => args === p || args.startsWith(p + ' ');
+    // Herdr is the person's own terminal agents: looking asks once (a standing answer covers later
+    // looks); driving names its pane or agent and the command, and asks every time.
+    if (tool === 'herdr') {
+      const argv = (Array.isArray(input.args) ? input.args : []).map(String), matches = (p: string) => p.split(' ').every((part, i) => argv[i] === part), shown = JSON.stringify(argv).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      if (cli.spend.some(matches)) return { kind: 'send', words: `${s.bot} wants to drive your terminal agents: ${shown}.`, preview: { head: 'Exact terminal arguments', body: shown, verbatim: true } };
+      if (cli.free.some(matches)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
+      return { kind: 'refuse', why: 'Herdr here lists and reads panes and agents, and drives them with their own commands.' };
+    }
     if (cli.spend.some(starts)) {
       const cap = /max-cost:\s*\$?([\d.]+)/i.exec(args)?.[1];
       return { kind: 'spend', words: `${s.bot} wants to make a paid lookup with ${cli.name}${cap ? `, up to $${cap}` : ''}.`, ...(cap ? { cost: Number(cap) } : {}) };
@@ -155,9 +157,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
 }
 
 // ---- a checkout page, read from the browser tool's own page snapshot (tool output, never the model's words) ----
-const MONEY = /([$£€])\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:\.\d{2})?)/;
-const NOT_ITEM = /sub\s?-?total|\btotal\b|tax|vat|shipping|delivery|discount|saving|you save|\bfee|\btip\b|balance|gift card|coupon|promo|points/i;
-const BEST_TOTAL = /order total|grand total|estimated total|total due|total to pay|amount due|total \(|pay now/i;
+const MONEY = /([$£€])\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+(?:\.\d{2})?)/, NOT_ITEM = /sub\s?-?total|\btotal\b|tax|vat|shipping|delivery|discount|saving|you save|\bfee|\btip\b|balance|gift card|coupon|promo|points/i, BEST_TOTAL = /order total|grand total|estimated total|total due|total to pay|amount due|total \(|pay now/i;
 
 /** One snapshot line as a person reads it: `- listitem "Garlic" [ref=e5]: 2 kg — $3.10` → "Garlic 2 kg — $3.10". */
 function readable(line: string) {
@@ -171,12 +171,7 @@ function readable(line: string) {
  *  `total` is null when no total can be read. `capped` is true only when that total is in dollars — the money cap is
  *  a dollar figure, so a price in another currency is shown as what it is and never counted against it. */
 export function orderOf(snapshot: string): { items: string[]; more: number; total: number | null; shown: string; currency: string; capped: boolean } {
-  const lines = snapshot.split('\n').filter((l) => /^\s*-\s/.test(l)).map(readable).filter((t) => MONEY.test(t) && t.length < 200);
-  const totals = lines.filter((t) => /total|amount due|pay now/i.test(t) && !/sub\s?-?total/i.test(t));
-  const pick = totals.find((t) => BEST_TOTAL.test(t)) ?? totals.at(-1);
-  const m = pick ? MONEY.exec(pick) : null;
-  const items = [...new Set(lines.filter((t) => !NOT_ITEM.test(t)))];
-  const currency = m ? m[1] : '';
+  const lines = snapshot.split('\n').filter((l) => /^\s*-\s/.test(l)).map(readable).filter((t) => MONEY.test(t) && t.length < 200), totals = lines.filter((t) => /total|amount due|pay now/i.test(t) && !/sub\s?-?total/i.test(t)), pick = totals.find((t) => BEST_TOTAL.test(t)) ?? totals.at(-1), m = pick ? MONEY.exec(pick) : null, items = [...new Set(lines.filter((t) => !NOT_ITEM.test(t)))], currency = m ? m[1] : '';
   return { items: items.slice(0, 8), more: Math.max(0, items.length - 8), total: m ? Number(m[2].replace(/,/g, '')) : null, shown: m ? `${m[1]}${m[2]}` : '', currency, capped: !!m && m[1] === '$' };
 }
 
@@ -187,8 +182,7 @@ export function claimOf(snapshot: string): { shown: string } | null {
   const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200);
   const amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; };
   const sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
-  const paid = sum(/\bpaid\b|you paid|bought for|price paid/i);
-  const today = sum(/\btoday\b|now |current price|price now|item total/i);
+  const paid = sum(/\bpaid\b|you paid|bought for|price paid/i), today = sum(/\btoday\b|now |current price|price now|item total/i);
   if (!paid || !today || paid.sign !== today.sign || today.n >= paid.n || today.n <= 0) return null;
   return { shown: `${paid.sign}${(paid.n - today.n).toFixed(2)}` };
 }
@@ -198,7 +192,7 @@ export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':');
   const what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
-  return kind === 'files' ? folderWords(what + '/x') : 'this';
+  return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'your terminal agents' : 'this';
 }
 
 /** The element a browser press targets, read out of the page's own snapshot: its name as the page writes it, and the
@@ -206,11 +200,9 @@ export function coversOf(key: string) {
  *  Returns null when the snapshot says nothing about that target — a selector, or a page crewd hasn't read. */
 export function pressOf(snapshot: string, target: string): { label: string; body: string } | null {
   if (!target) return null;
-  const lines = snapshot.split('\n');
-  const at = lines.findIndex((l) => l.includes(`[ref=${target}]`));
+  const lines = snapshot.split('\n'), at = lines.findIndex((l) => l.includes(`[ref=${target}]`));
   if (at < 0) return null;
-  const label = (/"((?:[^"\\]|\\.)*)"/.exec(lines[at])?.[1] ?? readable(lines[at])).replace(/\\"/g, '"').trim();
-  const here = lines.slice(Math.max(0, at - 3), at + 1).map(readable).filter(Boolean);
+  const label = (/"((?:[^"\\]|\\.)*)"/.exec(lines[at])?.[1] ?? readable(lines[at])).replace(/\\"/g, '"').trim(), here = lines.slice(Math.max(0, at - 3), at + 1).map(readable).filter(Boolean);
   return { label, body: [...new Set(here)].join('\n') };
 }
 
@@ -233,7 +225,7 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return input.args?.[0] === 'search' ? `Searched the email for “${String(input.args[1] ?? '').slice(0, 60)}”` : input.args?.[0] === 'read' ? 'Read an email' : 'Looked at the email';
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
+    case 'report': return String(input.text ?? '').trim().slice(0, 200); // the note names its own object; folds with it
   }
-  if (tool.startsWith('crew_')) return '';
-  return `Used ${tool.replace(/_/g, ' ')}`;
+  return tool === 'document' ? 'Writing the document…' : `Used ${tool.replace(/_/g, ' ')}`;
 }

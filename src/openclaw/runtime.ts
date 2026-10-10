@@ -8,12 +8,13 @@ import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
+import { PARAMETERS } from '../engine.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
 export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = resolve(import.meta.dirname, '../..');
-/** Crewhouse account key → OpenClaw provider id. ChatGPT is the one front door; the rest are quiet options. Claude is its CLI: the kit names it claude-cli, never anthropic. */
+/** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
@@ -22,32 +23,12 @@ const AUTH_CHOICE: Record<string, string> = {
 const CODE_CHOICE: Record<string, string> = {
   chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const ME = 'm1';
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
-const args = { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false };
-const SCHEMAS: Record<string, object> = {
-  shell: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'], additionalProperties: false },
-  browser: args, calendar: args, mail: args,
-  crew_app: { type: 'object', properties: { tool: { type: 'string' }, input: { type: 'object', additionalProperties: true } }, required: ['tool'], additionalProperties: false },
-  crew_remember: { type: 'object', properties: {
-    text: { type: 'string', description: 'One short line stating the lasting preference to save.' },
-    replaces: { type: 'string', description: 'Words of an old note this corrects, if any.' },
-    everyone: { type: 'boolean', description: 'True if every helper should know it; otherwise it stays in your notes.' },
-  }, required: ['text'], additionalProperties: false },
-  crew_document: { type: 'object', properties: {
-    name: { type: 'string', description: 'Title of the finished document.' },
-    blocks: { type: 'array', description: 'Document content in order: {heading}, {text}, {bullets: [strings]} or {table: {head: [cells], rows: [[cells]]}}.',
-      items: { type: 'object', additionalProperties: true }, minItems: 1 },
-  }, required: ['name', 'blocks'], additionalProperties: false },
-  crew_report: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
-  crew_draft: { type: 'object', properties: { path: { type: 'string' }, channel: { type: 'string', enum: ['email', 'message', 'post'] }, to: { type: 'string' }, subject: { type: 'string' }, why: { type: 'string' } }, required: ['path', 'channel', 'to'], additionalProperties: false },
-  crew_batch: { type: 'object', properties: { question: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['question', 'items'], additionalProperties: false },
-};
 const ABOUT: Record<string, string> = {
-  shell: 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). Long output is cut to the last lines.',
+  shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",
@@ -56,12 +37,7 @@ const ABOUT: Record<string, string> = {
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
   crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
 };
-export const TOOLS: ToolSpec[] = ['shell', 'browser', 'calendar', 'mail', 'crew_app', 'crew_web_fetch', 'crew_web_search', 'crew_read', 'crew_write',
-  'crew_edit', 'crew_ls', 'crew_grep', 'crew_find', 'crew_connect', 'crew_outcome', 'crew_report', 'crew_batch', 'crew_deliver', 'crew_workbook', 'crew_document',
-  'crew_copy', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_add_phone', 'crew_roster',
-  'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_call_me',
-].map((name) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`,
-  parameters: SCHEMAS[name] ?? { type: 'object', additionalProperties: true } }));
+export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
 
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
@@ -106,7 +82,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
-  signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' ? stateWords(this.kit.state) : ''; }
+  signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
@@ -208,9 +184,7 @@ export class OpenClawRuntime implements AgentRuntime {
    *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
    *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
   restoreLearned(name: string, hash?: string) {
-    const dir = this.workspaceOf();
-    const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' });
-    const at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
+    const dir = this.workspaceOf(), git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' }), at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
     try { body = git(['show', `${at}:${name}/SKILL.md`]); }
     catch { throw new Error(`no learned-skill capture holds "${name}"; nothing was restored`); }
@@ -242,9 +216,7 @@ export class OpenClawRuntime implements AgentRuntime {
         const runs = await this.kit.call('cron.runs', { id: job.id }, { timeoutMs: 20_000 }).catch(() => undefined) as { entries?: { runId: string; status: string }[] } | undefined;
         if (runs?.entries?.some((e) => e.runId === kicked.runId && e.status === 'ok')) break;
       }
-      const curator = await this.kit.call('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined) as any;
-      const outcome = curator?.collectionReview ?? {};
-      const names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
+      const curator = await this.kit.call('skills.curator.status', {}, { timeoutMs: 20_000 }).catch(() => undefined) as any, outcome = curator?.collectionReview ?? {}, names = (v: any) => Array.isArray(v) ? v.map((x: any) => x?.name ?? x?.skill ?? x).filter(Boolean) : [];
       return { capture, kept: names(outcome.kept), written: names(outcome.written), dropped: names(outcome.dropped) };
     } finally { this.kit.disallowOnce(); }
   }
@@ -271,9 +243,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** Search the public skill catalog the engine's own way; while the engine is still starting this answers empty. */
   async searchSkills(query: string) {
-    const r = await this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any;
-    const items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [];
-    const on = new Set(this.starterSkills().filter((s) => s.on).map((s) => s.slug));
+    const r = await this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], on = new Set(this.starterSkills().filter((s) => s.on).map((s) => s.slug));
     return items.slice(0, 10).map((i: any) => ({ slug: String(i.slug ?? ''), owner: String(i.ownerHandle ?? i.owner ?? ''),
       summary: String(i.summary ?? i.description ?? ''), version: String(i.version ?? i.latestVersion ?? ''),
       reviewed: this.starterSkills().some((s) => s.slug === String(i.slug ?? '')),

@@ -41,16 +41,14 @@ export function bodyOf(payload: any): string {
     text = text.replace(/<(style|script)[\s\S]*?<\/\1>/gi, '').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   }
-  const lines = text.replace(/\r/g, '').split('\n');
-  const quoted = lines.findIndex((l) => /^On .+ wrote:$/.test(l.trim()) || /^-{2,} ?Original Message ?-{2,}$/i.test(l.trim()));
+  const lines = text.replace(/\r/g, '').split('\n'), quoted = lines.findIndex((l) => /^On .+ wrote:$/.test(l.trim()) || /^-{2,} ?Original Message ?-{2,}$/i.test(l.trim()));
   return (quoted >= 0 ? lines.slice(0, quoted) : lines).filter((l) => !l.startsWith('>')).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** Threads as rows: who, what, how long ago (from each thread's newest message). */
 async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
-    const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
-    const m = t.messages?.at(-1);
+    const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`), m = t.messages?.at(-1);
     return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
   }));
 }
@@ -72,19 +70,14 @@ export async function runMail(token: Token, args: string[]): Promise<string> {
   if (cmd === 'search') {
     const q = rest.join(' ').trim();
     if (!q) return bad('mail search "<gmail query>"');
-    const limit = Math.min(25, Math.max(1, Number(o.limit) || 10));
-    const list = await get(token, `/threads?${new URLSearchParams({ q, maxResults: String(limit) })}`);
+    const limit = Math.min(25, Math.max(1, Number(o.limit) || 10)), list = await get(token, `/threads?${new URLSearchParams({ q, maxResults: String(limit) })}`);
     return [table('threads', ['id', 'from', 'subject', 'age'], await rows(token, list.threads ?? [])), `total: ${list.resultSizeEstimate ?? 0}`].join('\n');
   }
   if (cmd === 'read') {
     const id = rest[0] ?? '';
     // A conversation id is Gmail's own (hex); anything else would change the address asked for.
     if (!/^[a-f0-9]{8,32}$/i.test(id)) return bad('mail read <id>, with the id from mail or mail search');
-    const t = await get(token, `/threads/${id}?format=full`);
-    const msgs: any[] = t.messages ?? [];
-    const last = msgs.at(-1);
-    const body = bodyOf(last?.payload);
-    const cut = more.includes('--full') ? FULL : CUT;
+    const t = await get(token, `/threads/${id}?format=full`), msgs: any[] = t.messages ?? [], last = msgs.at(-1), body = bodyOf(last?.payload), cut = more.includes('--full') ? FULL : CUT;
     return [`subject: ${header(msgs[0], 'Subject') || '(no subject)'}`,
       table('messages', ['from', 'age'], msgs.map((m) => ({ from: header(m, 'From').slice(0, 60), age: ageOf(Number(m.internalDate ?? 0)) }))),
       `latest: ${header(last, 'From').slice(0, 60)}`, 'body: |', ...body.slice(0, cut).split('\n').map((l) => '  ' + l),

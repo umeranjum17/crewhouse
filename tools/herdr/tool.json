@@ -1,0 +1,43 @@
+{
+  "id": "herdr",
+  "name": "Herdr (terminal agents)",
+  "provides": "See your terminal agents in Herdr and drive them: which ones are working, stuck or done, and getting them moving",
+  "kind": "cli",
+  "bins": [
+    "herdr"
+  ],
+  "license": "Proprietary (herdr.dev)",
+  "source": "system",
+  "install": {
+    "system": "Install Herdr from https://herdr.dev, then open Herdr once, in your own terminal"
+  },
+  "asks": [
+    "looking at your terminal agents: it asks once, and a standing answer covers later looks",
+    "every drive of a terminal agent: sending it text, keys or a prompt, naming the pane or agent"
+  ],
+  "grant": {
+    "default": false
+  },
+  "note": "Only the CTO role holds this. Listing and reading panes and agents asks once; driving one asks every time, naming the pane or agent and the command.",
+  "run": {
+    "free": [
+      "status",
+      "pane list",
+      "pane get",
+      "pane read",
+      "pane layout",
+      "pane process-info",
+      "agent list",
+      "agent get",
+      "agent read"
+    ],
+    "spend": [
+      "pane send-text",
+      "pane send-keys",
+      "pane run",
+      "agent prompt",
+      "agent send-keys"
+    ]
+  },
+  "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
+}

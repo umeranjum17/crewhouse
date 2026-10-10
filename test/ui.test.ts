@@ -12,11 +12,11 @@ import type { Kind } from '../web/src/art.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import * as A from '../web/src/adapter.ts';
-import { readTyped } from '../mobile/src/typed.ts';
+import { readTyped } from '../web/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
-import { api, setTransport } from '../web/src/api.ts';
+import { api, setLink, setTransport } from '../web/src/api.ts';
 import { color } from '../web/src/tokens.ts';
 import { cycle } from '../web/src/dialog.ts';
 
@@ -27,9 +27,14 @@ const PHONE_SCREENS = ['App.tsx', 'src/office.tsx', 'src/panel.tsx'].map((f) => 
 
 test('crew room lines and handoff checks hide machinery', () => {
   const s: Json = { bots: [{ id: 'scout', display: 'Scout', template: 'scout', task: null }], events: [], asks: [] };
-  const lines = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: 'See /home/alex/files/story.md and `ffmpeg -i x` from sonnet', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
-  assert.ok(!/\/home\/|ffmpeg|sonnet|files\//i.test(lines[0].text));
-  assert.equal(lines[0].files.length, 1);
+  // A chat answer reads as written: inline code and bullets stay, so the person sees what the helper said.
+  const said = A.room({ lines: [{ id: 1, bot: 'scout', author: 'bot', text: '- `--branch`: View a specific repository branch.\n- `--web`: Open the repository in a web browser.', files: [{ bot: 'scout', path: 'files/story.md' }], at: now }] }, s);
+  assert.ok(said[0].text.includes('--branch') && said[0].text.includes('--web'));
+  assert.equal(said[0].files.length, 1);
+  // Engine events still never read as sentences, whoever typed them.
+  const stripped = A.room({ lines: [{ id: 2, bot: 'scout', author: 'bot', text: 'On it [tool crew_do {"x":1}]', files: [], at: now }] }, s);
+  assert.doesNotMatch(stripped[0].text, /\[tool|\{"x"/);
+  assert.equal(stripped[0].files.length, 0);
   const c = A.card({ id: 2, bot: 'scout', kind: 'propose', at: now, detail: { pass: { files: ['story.md'] }, words: 'Scout wants to hand this to Scribe' } }, s);
   assert.deepEqual(c.choices?.map((x) => x.label), ['Hand it on', 'Not now']);
 });
@@ -101,10 +106,14 @@ test('nothing technical survives the adapter', () => {
   const h = A.chatgpt([{ account: 'chatgpt', name: 'ChatGPT', signedIn: false, signIn: { state: 'waiting', url: 'https://auth.openai.com/codex/device', code: 'AB12-CDE34' } }]);
   const views = {
     crew: A.crew(state), chief: A.chief(state), cards: A.cards(state), work: A.work(state), things: A.things(state), ideas: A.ideas(state),
-    steps: A.steps(page.trail, undefined, true), lines: A.lines(page, 'reel'), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
+    steps: A.steps(page.trail, undefined, true), memories: A.memories(page.notes), personality: A.personality(page.soul), knows: A.knows(page.skills), routines: A.routines(state), gallery: A.gallery(state),
     resting: A.resting(state), apps: A.apps(state), chatgpt: { ...h, signing: { code: h.signing?.code } },
+    profile: A.profileParts('I run a bakery. See files/plan and `make` with sonnet about it.'),
   };
   for (const [name, v] of Object.entries(views)) assert.doesNotMatch(shown(v), FORBIDDEN, name);
+  // A chat answer is the exception: it reads as written, never scrubbed — the person sees what the helper said.
+  const [reply] = A.lines(page, 'reel').filter((l) => l.from === 'them');
+  assert.match(reply.text, /`ffmpeg -i/);
   const jobView = A.jobParts({ does: 'Compare prices.', aim: 'Find a fair option.', gets: 'The person’s budget.', how: 'Check two sources.', great: 'A sourced comparison with totals.', prompt: 'You are Quill. Read /home/alex/private/AGENTS.md' });
   assert.doesNotMatch(shown(jobView), /You are|\/home\/|AGENTS\.md/, 'job view contains only the five plain recipe parts, never prompt text or paths');
   assert.equal(h.signing?.code, 'AB12-CDE34', 'the one-time code reaches the sign-in sheet');
@@ -114,6 +123,8 @@ test('nothing technical survives the adapter', () => {
   assert.deepEqual(A.aboutTraits('Reel', aboutSoul), ['Upbeat and practical', 'Loves a tidy thirty seconds'], 'the family reads traits, not instructions');
   assert.ok(!/\byou\b/i.test(A.aboutDraft('Reel', page.soul)), 'no second-person prompt text reaches the family');
   assert.equal(A.withoutMemory(A.withMemory('- One\n', 'Two'), 0), '- Two\n');
+  assert.equal(A.profileText(A.profileParts('I run a bakery. My audience is local families.')), 'I run a bakery. My audience is local families.', 'the record reads back as Chief left it');
+  assert.deepEqual(A.profileParts('Warm and plain, no closing mark'), ['Warm and plain, no closing mark'], 'a trailing fragment is a part of its own');
 });
 
 test('the account list is the one crewd really serves: every route, none made up', () => {
@@ -176,8 +187,8 @@ test('Needs you: spending and sending first, then questions; a suggestion waits 
   const rows = A.needsYou(state);
   assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question'], 'money and messages, then OKs, then questions');
   assert.ok(!rows.some((c) => /learned something/.test(c.head)), 'a proposal never sits on Home; it lives in the helper\'s chat');
-  // and the proposal's dot moves to that helper's row in the list
-  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 1, 'the unread dot carries the suggestion');
+  // and an ask counts once, on Chief: a crew row carries no dot for it, a suggestion included
+  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 0, 'no crew dot for an ask');
   assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
 });
 
@@ -278,9 +289,42 @@ test('a draft is words to send, not a document: its heading marks go, its words 
   assert.match(c.preview!.body, /Please confirm my refund\./, 'the words themselves are untouched');
 });
 
+test('a draft whose body repeats its own subject line shows it once', () => {
+  // What the real model files: the subject line inside the body too. The card already heads it.
+  const ask: Json = { id: 9, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/a.md', sha: 'abc' },
+    preview: { body: 'Subject: Trip form Friday\n\nHello,\n\nThe form is in the bag.\n\nThanks,\nUmer' } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.equal(c.draftSubject, 'Trip form Friday');
+  assert.equal(c.draftText, 'Hello,\n\nThe form is in the bag.\n\nThanks,\nUmer', 'the repeated line goes, every other word stays');
+  const other: Json = { id: 10, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/b.md', sha: 'def' },
+    preview: { body: 'Subject: something else entirely\n\nHello.' } } };
+  const d = A.card(other, { asks: [other], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.match(d.draftText ?? '', /^Subject: something else entirely/, 'a line that says more than the subject stays');
+});
+
+test("a draft card flows the model's hard wraps; Copy and Edit keep the exact words", () => {
+  // What the real model files: every sentence wrapped mid-line. The card reads it as prose.
+  const wrapped = 'Hello,\n\nThanks for the reminder about the trip form. I have it\nhere, and I will get it signed and back to you before Friday.\n\nThanks,\nUmer';
+  assert.equal(A.flowed(wrapped),
+    'Hello,\n\nThanks for the reminder about the trip form. I have it here, and I will get it signed and back to you before Friday.\n\nThanks, Umer',
+    'lone newlines read as spaces, blank lines stay paragraph breaks');
+  const ask: Json = { id: 11, bot: 'scribe', kind: 'propose', at: 1, member: 1, title: 'Scribe wrote your email.', detail: {
+    draft: { channel: 'email', to: 'the school office', subject: 'Trip form Friday', path: 'files/a.md', sha: 'abc' },
+    preview: { body: wrapped } } };
+  const c = A.card(ask, { asks: [ask], bots: [{ id: 'scribe', display: 'Scribe' }] } as any);
+  assert.equal(c.draftText, wrapped, 'Copy and Edit start from the filed words, wraps and all');
+  const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'parts.tsx'), 'utf8');
+  const card = src.slice(src.indexOf('export function AskCard'), src.indexOf('/** The approval moment'));
+  assert.match(card, /flowed\(c\.preview\.body\)/, 'the card view flows the draft body');
+  const sheet = src.slice(src.indexOf('export function AskSheet'));
+  assert.doesNotMatch(sheet, /flowed/, 'the review sheet keeps the exact words');
+});
+
 test('Home commits nothing: a row opens the review sheet, and a starter fills the box without sending', () => {
   const src = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
-  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('/** The standing'));
+  const home = src.slice(src.indexOf('function NeedsRows('), src.indexOf('function ChiefRail('));
   assert.ok(!home.includes('<AskCard'), 'ask cards with buttons sat right on Home; a row opens the sheet instead');
   assert.match(home, /needs-row/, 'the compact Needs-you rows');
   assert.match(home, /href=\{`#\/ask\/\$\{c\.id\}`\}/, 'every row opens the existing review sheet');
@@ -429,6 +473,8 @@ test('first success: starters never dead-end, and setup stays in Settings', () =
   assert.equal(half.rows[0].says, 'An AI plan the crew can think with', 'nobody signed in: no provider is named');
   const claude = [{ account: 'chatgpt', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: true }];
   assert.equal(A.homeSetup({ house: {} }, claude, null).rows[0].says, 'The crew thinks with your Claude plan', 'the plan actually in use, never ChatGPT');
+  const out = [{ account: 'chatgpt', signedIn: false }, { account: 'grok', signedIn: false }, { account: 'claude', name: 'Claude', signedIn: false, signedOut: true }];
+  assert.equal(A.aiList(out).mine[0].ai.key, 'claude', 'the sign-in card leads with the account that signed out, never the front door');
   assert.equal(A.planName(openrouter), 'OpenRouter account', 'a pay-per-use route is not called a plan');
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.doesNotMatch(web, /MemberRow|memberSetup|set me up for you/, 'Home and Hello serve one person');
@@ -488,8 +534,9 @@ test('the screens read view models only, and the mono face draws art only', () =
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
     if (!/var\(--art\)|monospace/.test(rule)) continue;
-    // Mono draws the art and the desktop's ASCII furniture (frame headers, status marks) - never reading text.
-    assert.match(rule, /(\.art\b|\.ascii\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
+    // Mono draws the art, standalone times/counts in a column (.time), and inline code chips
+    // in chat answers (.chat-code) - never other reading text.
+    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|\.chat-code\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
 });
 
@@ -499,15 +546,28 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   for (const f of ['web/src/main.tsx', 'mobile/App.tsx']) {
     const app = src(f);
     assert.match(app, /let homeMode: HomeMode = 'chat';/, `${f}: each launch starts on Chat`);
-    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chat'\], \['office', 'Office'\]\];/, `${f}: one Chat | Office switch`);
+    assert.match(app, /const HOME_MODES: \[HomeMode, string\]\[\] = \[\['chat', 'Chief'\], \['office', 'Office'\]\];/, `${f}: one Chief | Office switch`);
     assert.doesNotMatch(app, /(localStorage|AsyncStorage|SecureStore|kept\.\w+)\([^)]*homeMode/, `${f}: the view is never stored`);
     const home = app.slice(app.indexOf('function Home('));
     assert.match(home.slice(0, 2600), /<HomeBar [^>]*mode=\{mode\} pick=\{pick\} \/>/, `${f}: the switch shows in both views`);
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<ChiefHero live=\{live\} state=\{state\} \/><NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<TonightRail live=\{live\} \/>\} \/><\/div>;/, 'web Chat (B1): the top, Chief\'s hero then Needs you (the mock\'s order, both sizes) over his own thread, box and Tonight rail');
-  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{bar\}\{notes\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
+  assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
+  const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
+  assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
+  assert.match(hero, /out \? NEEDS_SIGNIN : needs \? 'Needs you'/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
+  assert.match(hero, /<div className="ch-row">[\s\S]*className="ch-name"[\s\S]*className=\{`ch-status[\s\S]*\{side\}[\s\S]*<\/div>[\s\S]*\{below\}/, 'one compact row: avatar, the name over its single status, the small switch and the gear');
+  assert.doesNotMatch(hero, /className="ch-line"/, 'exactly one status line, never a second echoing strip');
+  const flows = src('web/src/flows.tsx');
+  assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
+  assert.match(flows.slice(flows.indexOf('function AccountCard('), flows.indexOf('function AccountCard(') + 3000), /\{NEEDS_SIGNIN\}/, 'the thread card reads it from there too');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/>/, 'Needs you pinned over Chief\'s thread from the office\'s one list');
+  // Office never pins Needs you: crew never ask the person, so Chief's one "Chief has N things for you" is its only way to the asks.
+  assert.doesNotMatch(home.slice(home.indexOf("if (mode === 'chat')") + 1).slice(home.slice(home.indexOf("if (mode === 'chat')") + 1).indexOf('\n')), /NeedsPin/, 'web Office renders no Needs you pin');
+  const phoneHome = src('mobile/App.tsx').slice(src('mobile/App.tsx').indexOf('function Home('), src('mobile/App.tsx').indexOf('function ChiefSheet('));
+  assert.doesNotMatch(phoneHome, /NeedsPin|NeedsRows|pinned/, 'phone Office renders no Needs you pin');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
   const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
@@ -516,6 +576,29 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(card, /<a className="btn go" href=\{`#\/ask\/\$\{c\.id\}`\}>/, 'its yes opens the review sheet: Home commits nothing');
   assert.doesNotMatch(card, /api\.|answer\(/, 'no answer is sent from the card');
   assert.match(pin, /`See all \$\{cards\.length\}`/, 'and an exact "See all N"');
+});
+
+test("Chief's conversation is a named transcript on a desk, a conversation on a phone", async () => {
+  const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  const art = await import('../web/src/art.ts');
+  const web = src('web/src/main.tsx'), css = src('web/src/styles.css'), app = src('mobile/App.tsx');
+  const chat = web.slice(web.indexOf('function Chat('), web.indexOf('function Chat(') + 9500);
+  assert.match(chat, /className="line-by"><span className="who">/, 'every line carries its name in the open');
+  assert.doesNotMatch(chat, /<Face/, 'no faces in the transcript rows');
+  assert.doesNotMatch(chat, /consecutive/, 'no collapsing: the name repeats on every line');
+  assert.match(css, /\.card\.ask \{[^}]*border-top: 1px dashed/, 'the ask sits inline under a dashed rule, with no card chrome');
+  // ch-pwa-chat: a phone keeps the names for screen readers only, and a card shows one primary with "⋯" for the rest.
+  assert.match(css, /\.chat \.line-by \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\)/, 'a phone hides the names from sight, not from screen readers');
+  assert.match(css, /\.chat \.card\.ask \.more-act \{ display: none; \}/, 'a phone card keeps one primary in sight');
+  const phone = app.slice(app.indexOf('function Chat('), app.indexOf('function Chat(') + 12000);
+  assert.match(phone, /\{speaker\(l\)\}/, 'the phone names every line too');
+  assert.equal(art.helmet(38, 'needs', true, 0).length, 19, 'the rail helmet is the mock\'s 38-column grid');
+  assert.doesNotMatch(phone, /bubbleText/, 'no bubbles on the phone either');
+  for (const [f, head] of [['web/src/parts.tsx', 'function AskHead'], ['mobile/App.tsx', 'function AskHead']] as const) {
+    const h = src(f).slice(src(f).indexOf(head), src(f).indexOf(head) + 700);
+    assert.match(h, /askStatus|ask-status/, 'the ask keeps its Needs-you flag');
+    assert.doesNotMatch(h, /<Face|Face who/, 'but loses the face');
+  }
 });
 
 test('Home renders once: a second full Home (bd51524) put a second composer below the first', () => {
@@ -556,9 +639,35 @@ test('sign-in states reach the screens as plain states, never the engine\'s word
   const ready = row(null, { signedIn: true, notIncluded: true, work: 'sara@acme.com' });
   assert.deepEqual([ready.state, ready.notIncluded, ready.work], ['ready', true, 'sara@acme.com']);
   assert.equal(A.resting({ resting: { chatgpt: Date.now() + 3600_000 } }).startsWith('Your ChatGPT is resting until'), true);
-  assert.deepEqual(A.apps({ connections: [] }).map((a) => a.id), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook');
-  assert.ok(A.needsHouse({ house: { google: false } }, A.apps({})[1]));
-  assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({})[3]), 'Notion needs no setup');
+  assert.deepEqual(A.apps({ connections: [] }).map((a) => a.id), ['drive', 'calendar', 'gmail', 'gmailsend', 'notion', 'canva'], 'v1: no Outlook');
+  assert.ok(A.needsHouse({ house: { google: false } }, A.apps({}).find(a => a.id === 'calendar')!));
+  assert.ok(!A.needsHouse({ house: { google: false } }, A.apps({}).find(a => a.id === 'notion')!), 'Notion needs no setup');
+});
+
+test('the helmet: every app mood wears one of its four moods, and every mood looks different', async () => {
+  const art = await import('../web/src/art.ts');
+  assert.deepEqual(new Set(art.MOODS.map(art.helmetOf)), new Set(art.HELMET_MODES), 'every helmet mood is reachable');
+  assert.deepEqual(new Set((['listen', 'work', 'needs', 'pleased', 'rest'] as const).map(art.helmetOf)), new Set(art.HELMET_MODES), 'every pose lands on the helmet');
+  const seen = new Set(art.HELMET_MODES.map((m) => art.helmetText(24, m, true, 9).join('\n')));
+  assert.equal(seen.size, 3, 'here and needs-you share characters; the mood lives in the eye colour');
+  assert.notEqual(art.helmetText(12, 'here', true, 0).join('\n'), art.helmetText(12, 'here', false, 0).join('\n'), 'day inverts the ramp');
+  // Here and needs-you share characters; the mood lives in the eye colour.
+  assert.equal(art.helmetText(30, 'here', true, 0).join('\n'), art.helmetText(30, 'needs', true, 0).join('\n'));
+  assert.notEqual(art.helmetDots(20, 'here', true, 0).pal.e, art.helmetDots(20, 'needs', true, 0).pal.e);
+  assert.ok(art.helmet(24, 'rest', true, 0).flat().some((c) => c.eye && c.ch === '-'), 'rest shuts the eyes');
+  assert.ok(!art.helmet(30, 'think', true, 9).flat().some((c) => c.eye), 'think shows no eyes');
+  assert.ok(art.helmet(30, 'think', true, 9).flat().some((c) => c.scan), 'think shows the scan');
+  const { rows, pal } = art.helmetDots(20, 'needs', true, 0);
+  assert.equal(rows.length, 10, 'rows follow the columns');
+  assert.ok(rows.every((r) => r.length === 20 && /^[.es1-9]+$/.test(r)), 'dots carry only density steps, eyes and the scan');
+  assert.match(pal.e, /0a84ff/i, 'needs-you eyes wear the blue');
+  // The helmet must survive the page's own type features: no ligatures, kerning or
+  // inherited feature sets, or the day ramp's `-`/`=`/`+` runs set unevenly (PR 343 review).
+  const css = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  const artRule = (css.match(/\.art\s*\{([^}]*)\}/) ?? [])[1] ?? '';
+  assert.match(artRule, /font-variant-ligatures:\s*none/, '.art leaves ligatures off');
+  assert.match(artRule, /font-kerning:\s*none/, '.art leaves kerning off');
+  assert.match(artRule, /font-feature-settings:\s*normal/, '.art clears inherited feature sets');
 });
 
 test('the mascots: every app mood wears one of B1\'s five poses, and every pose of everyone looks different', async () => {
@@ -566,7 +675,7 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
   assert.deepEqual(new Set(art.MOODS.map(art.poseOf)), new Set(art.POSES), 'every pose is reachable');
   const chief = (p: (typeof art.POSES)[number]) => art.chiefSvg(p).replace(/ch\d+c/g, '');
   assert.equal(new Set(art.POSES.map(chief)).size, 5, 'two of Chief\'s poses look the same');
-  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the room's loop and label.
+  // A helper's face says done (a tick) or resting (eyes shut); the rest of their status is the helmet's mood and the panel's label.
   for (const k of ['reel', 'scout', 'scribe', 'tracer'] as Kind[]) assert.equal(new Set((['listen', 'pleased', 'rest'] as const).map((p) => art.beanSvg(k, p))).size, 3, k);
   // Each drawing is one SVG whose clip ids never collide on a page with many faces.
   const ids = [art.chiefSvg(), art.chiefSvg()].map((x) => x.match(/id="(\w+)"/)![1]);
@@ -584,7 +693,7 @@ test('the mascots: every app mood wears one of B1\'s five poses, and every pose 
 });
 
 test('the phone mascot set matches art.ts: everyone whole and as a head, in every pose', async () => {
-  // scripts/icons.mjs renders every B1 drawing into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
+  // scripts/icons.mjs renders the helmet into mobile/assets/pals/ at 3x, required from mobile/src/marks.ts.
   const art = await import('../web/src/art.ts');
   const files = new Map<string, [number, number]>();
   for (const p of art.POSES) for (const who of ['chief', ...Object.keys(art.PALS)]) {
@@ -604,25 +713,35 @@ test('the phone mascot set matches art.ts: everyone whole and as a head, in ever
   assert.deepEqual(wired, new Set(files.keys()), 'mobile/src/marks.ts does not require the whole set');
 });
 
-test('the phone office: one flat room, a crew whose moves run on the native driver only', () => {
-  // The room is drawn in Views on A.floorPlan, as the web's is: no pictures of a room, no isometric plan.
-  // The battery budget: no JS timer or beat moves the room (its loops are native-driver animations), moves wait for the app to be on screen, the live
-  // desktop never opens here, and the room reads the shared view model for the person.
+test('the phone office: one grouped list, helmets still, the shared view model', () => {
+  // The office is a grouped list (Needs you / At work / Done today / Resting), as the web's panels are: every helper
+  // in exactly one group, no drawn room, no floor plan, no motion at all (the think-scan shows still while working).
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
-  assert.match(office, /A\.floorPlan\(crew\)/);
-  assert.match(office, /plan\.more\.length/, 'past five, the strip says "+N" and leads to the whole crew');
-  assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling/);
+  assert.doesNotMatch(office, /floorPlan|Image|PALS\[|motion\.(Hop|Loop|Fly|Pulse|Land|Note|useAwake)/);
+  assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling|Animated/);
+  assert.match(office, /\['needs', 'work', 'done', 'rest'\]/);
+  assert.match(office, /TITLES\[g\]/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
-  assert.match(office, /motion\.useAwake\(\)/);
+  assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
+  assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
+  // Crew never ask the person: no row answers or approves; one row on top opens Chief, who carries every ask.
+  assert.doesNotMatch(office, /onAsk|Answer \$\{|Review order/);
+  assert.match(office, /view\.needs\.length > 0 && <Pressable onPress=\{onChief\}/);
+  const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
+  assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
   const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
-  assert.doesNotMatch(motion.slice(motion.indexOf('// ---------- the office')), /useNativeDriver: false/);
-  assert.match(motion, /if \(still \|\| beat == null\) \{ rest\(\); return; \}/, 'no office move starts under Reduce Motion or in the background');
+  assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   const top = home.slice(home.indexOf('function Home('), home.indexOf('function ChatList('));
-  assert.ok(top.indexOf('<HomeBar') < top.indexOf('<ChiefHero') && top.indexOf('<ChiefHero') < top.indexOf('<NeedsPin') && top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Chat: the bar, Chief\'s hero, then Needs you pinned; Office: Needs you right under the room (B1)');
-  assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
-  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the bar over Chief\'s own thread, which carries his hero and Needs you, and his box');
+  const bar = home.slice(home.indexOf('function HomeBar('), home.indexOf('function NeedsPin('));
+  const chatHead = bar.slice(bar.indexOf("if (mode === 'chat')"));
+  assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{tools}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then gear and switch on one row under it');
+  assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
+  assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
+  assert.doesNotMatch(top, /pinned|NeedsRows/, 'Office pins no Needs you: Chief\'s one row is its way to the asks');
+  assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
@@ -797,6 +916,7 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     push: A.pushWords(linkView), typed: A.phoneTyped({ short: 'K7M2QX', code: '7KQ4-M2XP-9RTH', relay: 'https://go.example.com' }),
     anywhere: A.anywhere(linkView), away: A.away({ tailnet: true, vpn: true, knock: 'timeout', reached: { tailscale: now - 3.6e6 } }),
     status: A.status(state), crewLine: A.crewLine(state),
+    profile: A.profileParts('I run a bakery for local families. My business is called Morning Loaf.'),
     bubble: [null, 'off' as const, { text: 'Friday 3pm www.x.top order', picked: '' }, { text: 'a', picked: 'a' }].flatMap((box) => A.quick({ ...state, connections: [] }, { box })).map(({ label, ask }) => ({ label, ask })),
     canned: [A.canned(state, 'status'), A.canned(state, 'details', '- Vegetarian at home'), A.secretOf('PIN 1234'), A.secretOf('www.x.top')],
   };
@@ -1331,6 +1451,13 @@ test('no raw heading markers reach the ask card or its Read-all view', () => {
   assert.ok(!A.plain('### Plan\n### Costs\nHotel\n### Next\nGo').includes('#'));
   // A hash that is not a heading is content and stays: only line-start heading markers go, never inline ones.
   assert.match(A.plain('Tag it # Fun Friday, see issue C-###-12, topic #fun'), /# Fun Friday, see issue C-###-12, topic #fun/);
+  // An account name in crewd's own account sentences keeps its name; engines and models still scrub.
+  assert.equal(A.plain('Claude signed you out. That happens after a password change.'), 'Claude signed you out. That happens after a password change.');
+  assert.equal(A.plain('The crew uses your Claude account. Sign in when you are ready.'), 'The crew uses your Claude account. Sign in when you are ready.');
+  assert.equal(A.plain('I will start the moment you sign in with Claude.'), 'I will start the moment you sign in with Claude.');
+  assert.equal(A.plain("Your Claude plan doesn't include helpers yet."), "Your Claude plan doesn't include helpers yet.");
+  assert.equal(A.plain('Stopped on an error from claude: 529 overloaded'), 'Stopped on an error from the crew: 529 overloaded');
+  assert.equal(A.plain('Done! I ran it with Claude Code.'), 'Done! I ran it with the crew.');
   // The phone sheet renders this same view model verbatim (mobile/App.tsx), so the web assertion is the phone's too.
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(app, /\{c\.preview\.body\}/);
@@ -1354,11 +1481,30 @@ test('a thread never shows a tool call or raw JSON, whoever typed it', () => {
   assert.equal(ls[1].text, 'I could do that — shall I?');
 });
 
+test('inline code stays visible in a chat answer: flags keep their names and their bullets', () => {
+  // The helper's own words, as the stub engine saved them: two bullets naming --branch and --web.
+  const producer = '- `--branch`: View a specific repository branch.\n- `--web`: Open the repository in a web browser.';
+  const [line] = A.lines({ messages: [{ id: 150, author: 'bot', text: producer }] }, 'scout');
+  assert.equal(line.text, producer, 'the answer reads as written, never scrubbed');
+  // What the bubble renders: one list, two items, each keeping its flag name as code.
+  const lists = chatTokens(line.text).filter((t: any) => t.type === 'list') as any[];
+  assert.equal(lists.length, 1, 'the bullets still render as one list');
+  const [list] = lists;
+  assert.equal(list.items.length, 2, 'both bullets still render as a list');
+  assert.deepEqual(list.items.map((item: any) => item.tokens[0].tokens.filter((x: any) => x.type === 'codespan').map((x: any) => x.text)),
+    [['--branch'], ['--web']], 'both flag names reach the screen');
+});
+
 test('a patch is only ever a suggested change, never a fix, wherever the app words it', () => {
   assert.equal(A.step({ kind: 'file.delivered', data: { path: 'files/support/7/suggested.patch' } }), 'Suggested a change for the maintainer to review: “Suggested”');
   assert.equal(A.step({ kind: 'file.delivered', data: { path: 'files/notes.txt' } }), 'Made “Notes”');
-  const [card] = A.lines({ messages: [{ id: 1, author: 'system', text: 'Delivered files/support/7/suggested.patch: Suggested change (for the maintainer to review): passed its own check' }] }, 'desk');
-  assert.deepEqual([card.text, card.files.length, card.files[0].name], ['Suggested change (for the maintainer to review): passed its own check', 1, 'Suggested']);
+  const [card] = A.lines({ messages: [{ id: 1, author: 'system', text: 'Delivered files/support/7/suggested.patch: Suggested change (for the maintainer to review)' }] }, 'desk');
+  assert.deepEqual([card.text, card.files.length, card.files[0].name], ['Suggested change (for the maintainer to review)', 1, 'Suggested']);
+  // One style for a line the person reads: crewd's own words are a note in a helper's chat and in the crew room alike,
+  // so the same line never reads as a bubble with somebody's face on it in one and plain words in the other.
+  const verdict = 'The suggested change did not pass its own check — the same check still fails after the change.';
+  const [said] = A.room({ lines: [{ id: 1, bot: 'desk', author: 'system', text: verdict }] }, { bots: [{ id: 'desk', display: 'Desk' }], events: [] });
+  assert.deepEqual([said.author, said.text], ['note', verdict], 'crewd names the work in plain words, so no path reaches the screen to be mangled');
 });
 
 test('the week under the share is a third in words, never a number', () => {
@@ -1475,7 +1621,7 @@ test('a delivered workbook is a card in the chat, and opens as a read-only sheet
   assert.match(panel, /role="dialog" aria-modal aria-label=\{f\.name\}/, 'the panel is a dialog the keyboard belongs to');
   assert.match(panel, /<nav className="wb-tabs"[\s\S]{0,160}setTab\(i\)/, 'sheet tabs');
   assert.ok(panel.indexOf('<nav className="wb-tabs"') > panel.indexOf('<SheetTable s={s} />'), 'the tabs sit under the sheet, as in its own program');
-  assert.match(panel, /className="btn" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
+  assert.match(panel, /className="btn go" href=\{f\.url\}[^>]*>Download</, 'Download hands over the file');
 
   // The card's peek and the panel's grid, rendered for real: letters over the columns, the file's own row numbers
   // (a gap where a blank row was skipped), a tint for each role, and a four-by-four corner on the card.
@@ -1747,7 +1893,7 @@ test('the office moves on live events; the refresh stays the source of truth', (
   const v2 = A.officeEvent(v, { seq: 22, at: OTN, kind: 'run.tool', bot: 'pip', data: { task: 51, words: 'Reading the renewal letter' } });
   assert.equal(v2.crew.find((c) => c.id === 'pip')!.step, 'Reading the renewal letter');
   assert.equal(A.officeEvent(v, { seq: 23, at: OTN, kind: 'run.tool', bot: 'ghost', data: { task: 1, words: 'Hi' } }), v);
-  assert.equal(A.officeEvent(v, { seq: 24, at: OTN, kind: 'reply.partial', bot: 'scout', data: {} }), v, 'a kind the room does not draw leaves it alone');
+  assert.equal(A.officeEvent(v, { seq: 24, at: OTN, kind: 'reply.partial', bot: 'scout', data: {} }), v, 'a kind the panels do not draw leaves it alone');
   // Done: the jump, and the thing into the tray.
   v = A.officeEvent(v, { seq: 25, at: OTN, kind: 'task.done', bot: 'reel', data: { task: 41, title: "Mum's birthday video", result: 'Ninety seconds of photos, with a gentle piano song.' } });
   const done = v.crew.find((c) => c.id === 'reel')!;
@@ -1758,7 +1904,7 @@ test('the office moves on live events; the refresh stays the source of truth', (
   // A question, then its answer.
   let u = A.office(officeState());
   u = A.officeEvent(u, { seq: 26, at: OTN, kind: 'ask.opened', bot: 'pip', data: { task: 51 } });
-  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Needs you']);
+  assert.deepEqual([u.crew.find((c) => c.id === 'pip')!.ring, u.crew.find((c) => c.id === 'pip')!.status], ['needs', 'Waiting']);
   assert.equal(u.counts.needs, 2, 'the count waits for the refresh to bring the actual Needs-you row');
   assert.equal(A.seatOf(u.crew.find((c) => c.id === 'pip')!), 'chat', 'and so does Review');
   u = A.officeEvent(u, { seq: 27, at: OTN, kind: 'ask.answered', bot: 'pip', data: { task: 51, answer: 'allow' } });
@@ -1815,7 +1961,7 @@ test('a desk shows the job\'s first looks from its task, never a raw path', () =
   assert.doesNotMatch(h.things.map((f) => f.name).join(' '), /files\/|\.png/i, 'names are said, not pathed');
 });
 
-test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the page leaves the old desk, the pen clears the tray', () => {
+test('J5 repairs stay in: the night look paints first, the job row is never cut to one line, the panels read one state', () => {
   const read = (...p: string[]) => readFileSync(join(import.meta.dirname, '..', ...p), 'utf8');
   const html = read('web', 'index.html'), main = read('web', 'src', 'main.tsx'), css = read('web', 'src', 'styles.css'), office = read('web', 'src', 'office.tsx');
   // The look is set before the first paint, by the same rule useLook keeps after (a night viewer never sees a day frame).
@@ -1827,48 +1973,60 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.doesNotMatch(css, /^\.jobs \{ padding/m, 'the old .jobs inset is gone');
   assert.match(css, /^\.jobs \.list-row \{ gap: 10px; padding: 10px 12px; \}/m);
   assert.match(main, /j\.says && <span className="small mute clamp">/, 'a job row\'s line wraps to two lines, never an ellipsis on one');
-  // The hand-off page leaves from where the desk was before the room re-laid them, not from their new spot by the tray.
-  assert.match(office, /const was = seen\.current, from = desks\.current;\s*seen\.current = live;\s*desks\.current = spritesIn\(box\.current\);/);
-  assert.match(office, /const got = A\.handedIn\(was, live\);\s*if \(got\.length\) handOff\(box\.current, got, from\)/, 'who handed in comes from the done list');
-  // 144: the start is measured in the room's current layout (every resize and the switch to wide, whose first layout is
-  // measured unpainted), and the page lands in the tray box on the floor, whole until it lands, not the floating label.
-  assert.match(office, /new ResizeObserver\(\(\[en\]\) => \{ setWide\(en\.contentRect\.width >= 560\); desks\.current = spritesIn\(el\); \}\)/);
-  assert.match(office, /useEffect\(\(\) => \{ desks\.current = spritesIn\(box\.current\); \}, \[wide\]\);/);
-  assert.match(office, /querySelector\('\.o-traybox > path'\)/); assert.doesNotMatch(office, /querySelector\('\.o-tray rect'\)/);
-  // 152: the page reaches the mouth whole (offset .72), settles in, and fades only after .88; the box is drawn in front.
-  assert.match(office, /\{ transform: at\(0, 1\), opacity: 1, offset: \.72 \}/); assert.match(office, /\{ transform: at\(\.35, \.92\), opacity: 1, offset: \.88 \}/);
-  assert.ok(office.indexOf('<TrayBox x={trayX}') > office.indexOf('{order.map((m) => m === \'chief\''), 'the tray box is drawn after (in front of) every figure');
-  assert.match(office, /left=\{bubble\} y=\{tight \? G \+ 7 : Y\(G - 64\)\} below=\{tight\}/, 'the Tray bubble sits low over its box, clear of every ink; a packed row captions it under the box');
-  assert.match(office, /H = tight \? G \+ 27 : 210/, 'the floor band grows by the caption only in a packed row');
-  assert.doesNotMatch(office, /HIGH/, 'no raised, detached bubble');
-  // 155: the caption's top clears every foot shadow and its pointer stands in the box's own column, outside the label.
-  assert.match(office, /<path className="o-pointer" d=\{`M\$\{x - 4\} \$\{y \+ 1\}L\$\{x\} \$\{G \+ 1\.2\}/);
-  // 147/148: a crowded row packs its desks (compact) before it scales, all five standing; the page is
-  // drawn at the figures' size on both sides.
-  assert.match(office, /it\.tray \? \[15, 20\] : it\.st === 'chief' \? \[32, 26\] : TIGHT\[it\.st\]/, 'a packed row reserves only the box, no bubble width');
-  // 172: the packed box stands just right of Chief, and the floor keeps one scale whatever its states.
-  assert.match(office, /items\.splice\(sts\.indexOf\('chief'\) \+ 1, 0, \{ m: 'tray', st: 'tray', tray: true \}\);/);
-  assert.match(office, /const span = Math\.max\(cur, 54 \* \(order\.length - 1\) \+ 93\), s = Math\.min\(1, W \/ span\)/);
-  // 162/163: the box on clear floor beside whoever finished (34 left of them, their station 55), the bubble clear of ink
-  // and furniture; a floor of five always takes the compact ones (no swap at a finish), a smaller row only when full.
-  assert.match(office, /const full = order\.length > 5 \? undefined : layAt\(order, sts, trayText, false\);\n\s*if \(full && full\.s >= 1\) return full;\n\s*const compact = layAt\(order, sts, trayText, true\);\n\s*return compact\.s < 1 \? packed\(order, sts\) : compact;/, 'a crowded row packs before it scales');
-  assert.match(office, /off = 34;/); assert.match(office, /it\.tray && it\.st === 'done' \? \[55, pad\.done\[1\]\]/);
-  assert.match(office, /compact && p\?\.st === 'chief' && \(it\.st === 'monitor' \|\| it\.st === 'failed'\)\) l = Math\.max\(l, 33\)/);
-  assert.match(office, /return at\(\[INK, FOOT\]\) \?\? at\(\[INK\]\) \?\? ideal;/);
-  // 169: Scout and Chief stand still through a finish on a floor of five (it starts at the left edge), the compact screen
-  // and Scribe's pen clear Chief's cue, and the desk room keeps to its picture (no floor band under the row).
-  assert.match(office, /const x0 = compact && order\.length > 5 && s >= 1 \? 180 - W \/ 2 : 180 - \(total \* s\) \/ 2/);
-  assert.match(office, /if \(p\?\.st === 'chief' && it\.st === 'writing'\) l = Math\.max\(l, 33\);/);
-  assert.match(office, /const c = tight \? x \+ 3 : x \+ 33;/); assert.match(office, /monitor: \[-14, 20\], failed: \[-14, 20\]/);
-  assert.match(read('web', 'src', 'styles.css'), /\.office-main \.o-room \{ flex: 0 1 auto; min-height: 0; \}/);
-  assert.match(office, /needs: \[26, 28\], monitor: \[26, 28\], failed: \[26, 28\]/); assert.match(office, /data-scale=\{s\.toFixed\(3\)\}/);
-  assert.doesNotMatch(office, /MOCK|floorPlan\(crew, /, 'no seat cap below five for size');
-  assert.match(office, /getScreenCTM\(\)\?\.a \?\? 1\) \* Number\(room\.dataset\.scale \?\? 1\), pw = 14 \* k, ph = 18 \* k/);
-  assert.match(read('mobile', 'src', 'office.tsx'), /width: u\(14\), height: u\(18\)/);
-  assert.match(read('mobile', 'src', 'office.tsx'), /dx=\{u\(318 - from\)\} dy=\{u\(28\)\} sink=\{u\(10\)\}/, 'the phone page drops into its floor box');
-  assert.match(read('mobile', 'src', 'motion.ts'), /inputRange: \[0, 0\.88, 1\], outputRange: \[1, 1, 0\]/);
-  // The phone's page flies on the same truth, the helper's done count, from where they stood before the re-lay.
-  assert.match(read('mobile', 'src', 'office.tsx'), /const n = view\.done\.filter\(\(d\) => d\.helper === m\.id\)\.length, from = fromOf\(m\.id, n, x\);\s*return <motion\.Fly beat=\{n\}/);
-  // Scribe's pen is held in the left hand: the Tray bubble floats over the right of that desk.
-  assert.match(office, /<g transform=\{`translate\(\$\{2 \* x\} 0\) scale\(-1 1\)`\}><path className="o-pen"/);
+  // No drawn room anywhere: no floor plan, no room tokens, no room markup or styles.
+  assert.doesNotMatch(office, /floorPlan|o-room|o-cell|o-strip|o-tag|SpritesIn|handOff|TrayBox|<svg/);
+  assert.doesNotMatch(read('web', 'src', 'tokens.ts'), /room/);
+  assert.doesNotMatch(css, /\.o-room|\.o-cell|\.o-strip|\.o-tag|\.o-sheet|\.o-tray|\.o-flyer|\.o-sprite|\.o-cap|\.o-ask|r-wall|r-edge/);
+  // Chief first, then the whole crew in roster order: nobody capped, nobody counted under "+N".
+  assert.match(office, /<ChiefPanel live=\{live\} \/>/);
+  assert.match(office, /\{A\.roster\(live\.crew\)\.map\(\(c\) => <HelperPanel/);
+  // Phone width renders the grouped list instead of the panels, helmets still.
+  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} \/>/);
+  assert.match(office, /<PalArt kind=\{c\.kind\} mood=\{c\.mood\} d=\{6\} name=\{c\.name\} \/>/, 'grouped rows draw the still helmet, no live scan');
+  assert.match(css, /\.grow-row \{ display: flex; gap: 12px; padding: 12px 2px; border-top: 1px solid var\(--line\); \}/);
+  // Each panel: the helmet, the current line, one meta line, the last three timed steps, the one action.
+  assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
+  assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
+  assert.match(office, /action=\{file \? <PreviewCard f=\{file\} \/> : null\}/, 'a crew panel holds at most its finished file, never an ask');
+  assert.match(office, /action=\{live\.needs\.length > 0 && <ToChief live=\{live\} \/>\}/, 'Chief carries the asks in one action');
+  // No crew panel answers or approves, and no generic Review anywhere in the office.
+  assert.doesNotMatch(office, /AskButton|answer\(|>Review…<\/a>/);
+  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} \/>/);
+  // Office header: the slim bar (title, count line, switch, settings), the title on phone width only.
+  assert.match(main, /<h1 className="office-title">Office<\/h1>/);
+  assert.match(main, /\{summaryOf\(ctx\.live\)\}/, 'one count line from the office view');
+  assert.match(css, /@media \(min-width: 900px\) \{ \.office-title \{ display: none; \} \}/);
+  // The grid scrolls past six instead of shrinking: three columns on a desk, groups below 900 px.
+  assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);
+});
+test("Chief's hero shows his last real sentence; the sign-in card offers every provider", async () => {
+  const chief = (text: string, extra = {}) => ({ bots: [{ id: 'chief', last: { author: 'bot', text, at: now }, ...extra }] });
+  assert.equal(A.chiefSaid(chief('4.')), '', 'a bare fragment never reaches the hero');
+  assert.equal(A.chiefSaid(chief('Reel is on it.')), 'Reel is on it.');
+  assert.equal(A.chiefSaid(chief('All done. 4.')), 'All done.', 'the last real sentence wins');
+  assert.equal(A.chiefSaid(chief('- Buy milk')), '- Buy milk', 'a list line is real content');
+  assert.equal(A.chiefSaid(chief('What is 2+2?', { last: { author: 'person', text: 'hi', at: now } })), '', "never the person's words");
+  const unsigned = A.AIS.map((a) => ({ account: a.key, signedIn: false }));
+  const dir = mkdtempSync(join(process.cwd(), 'test/.card-'));
+  try {
+    await build({ entryPoints: ['web/src/flows.tsx'], outfile: join(dir, 'flows.mjs'), bundle: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'error' });
+    const { AccountCard } = await import(join(dir, 'flows.mjs'));
+    const card = renderToStaticMarkup(createElement(AccountCard, { accounts: unsigned, onReady: () => {} }));
+    assert.equal((card.match(/Sign in with /g) ?? []).length, 6, 'every provider, never ChatGPT alone');
+    assert.match(card, /Sign in with Claude/, 'the kit list carries Claude too');
+    assert.doesNotMatch(card, /under Settings/, 'no other account hides under Settings');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the paired installed app keeps notifications: its key and address go over the link', async () => {
+  // Last in the file on purpose: setLink below stays set for the process, and nothing follows.
+  const calls: string[] = [];
+  setTransport((method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ vapid: 'BFx-key', relayStatus: 'online' }); });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true }, 'on the computer itself, the key comes from the Phones screen\'s own call');
+  setLink({ name: 'your computer', call: (method, path) => { calls.push(`${method} ${path}`); return Promise.resolve({ ok: true, vapid: 'BFx-key', online: true }); },
+    subscribe: () => () => {}, desktop: (() => ({})) as any, unpair: async () => {} });
+  assert.deepEqual(await api.pushKey(), { vapid: 'BFx-key', ready: true });
+  assert.deepEqual(calls, ['GET /api/phones/link', 'POST /api/push'], 'paired, only the one op crewd answers for the calling device');
+  await api.push({ web: { endpoint: 'https://fcm.example/ipad', keys: {} } });
+  assert.deepEqual(calls.at(-1), 'POST /api/push', 'the address goes back the same way');
 });

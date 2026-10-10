@@ -3,7 +3,7 @@
 // First run also makes crewd start by itself at login (a systemd user service), so after a reboot it is simply there.
 //   --no-open   start and wait, but open no window (tests)
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -91,4 +91,7 @@ p{margin:0 0 1rem;color:var(--ink2)}
   }
 }
 
-if (!process.argv.includes('--no-open')) show(url);
+if (!process.argv.includes('--no-open')) {
+  const { loadConfig } = await import(join(app, 'src', 'config.ts'));
+  show(`${url}/#person=${readFileSync(join(loadConfig().stateDir, 'person.key'), 'utf8')}`);
+}

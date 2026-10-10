@@ -102,7 +102,7 @@ after(() => { try { chmodSync(join(home, 'quarantined'), 0o700); } catch {} daem
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const api = async (method: string, path: string, body?: unknown) =>
-  (await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined })).json();
+  (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(state, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined })).json();
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn().catch(() => undefined); if (v) return v; }
   throw new Error('timed out');

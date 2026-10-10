@@ -62,19 +62,17 @@ export class StubRuntime implements AgentRuntime {
   async signOut() {}
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     if (!this.host) throw new Error('Stub not started');
-    this.specs.set(spec.key, spec);
+    this.specs.set(spec.key, spec); on({ type: 'started' });
     const said = spec.message;
     let result = '';
-    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '';
-    const scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined;
-    const seen = calls(said + (scripted ?? ''));
+    const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '', scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined, seen = calls(said + (scripted ?? ''));
     if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'I’ll start by checking the next step.' });
     for (const { name, input } of seen) {
       on({ type: 'tool', name, phase: 'start' });
       const gate = await this.host.gate(spec, name, input);
       if (!gate.allow) { result = gate.reason; continue; }
       result = await this.host.call(spec, name, input, new AbortController().signal);
-      on({ type: 'tool', name, phase: 'end', ok: true });
+      on({ type: 'tool', name, phase: 'end' });
       this.transcripts.set(spec.key, `${this.transcript(spec.key)}${name}: ${result}\n`);
     }
     if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
@@ -88,7 +86,7 @@ export class StubRuntime implements AgentRuntime {
       text = 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';
     text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? text;
     if (/ask permission/i.test(said)) {
-      text = await new Promise<string>((resolve) => this.holds.set(spec.key, (reply) => resolve(reply || text)));
+      text = await new Promise<string>((resolve) => { on({ type: 'thinking' }); this.holds.set(spec.key, (reply) => resolve(reply || text)); });
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished
     }
     on({ type: 'usage', tokens: Math.max(1, Math.round((said.length + text.length) / 4)) });

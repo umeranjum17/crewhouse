@@ -1,0 +1,24 @@
+{
+  "surface": "web Home > Chat with Chief header at 390x844 (real crewd, stub engine)",
+  "before": {
+    "note": "the switch was nested in the avatar's right text column, not a full-width row below; two status elements said the same thing",
+    "statusElements": ["ch-status work|At work", "ch-line|All quiet."],
+    "modeFullWidthBelowRow": false,
+    "headerSharesRightColumnWithAvatar": true
+  },
+  "after": {
+    "viewportH": 844,
+    "heroHeight": 103,
+    "row": { "x": 16, "y": 26, "w": 358, "h": 42 },
+    "art": { "x": 16, "y": 26, "w": 50, "h": 42 },
+    "name": { "x": 76, "y": 34, "w": 54, "h": 26 },
+    "status": { "x": 140, "y": 38, "w": 61, "h": 18 },
+    "gear": { "x": 334, "y": 27, "w": 40, "h": 40 },
+    "mode": { "x": 16, "y": 76, "w": 358, "h": 40 },
+    "statusText": "At work",
+    "statusElements": ["ch-status work|At work"],
+    "modeBelowRow": true,
+    "modeFullWidth": true,
+    "artCenteredOnNameDeltaPx": 0
+  }
+}

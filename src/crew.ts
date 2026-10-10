@@ -2,15 +2,14 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
-import { Type } from 'typebox';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
-import { bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
+import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
@@ -59,9 +58,14 @@ const STOPPED = 'Stopped by you.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
 const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
+/** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. One run, one sentence. */
+const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check'
+  : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed'
+    : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
+    : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
+    : 'the same check still fails after the change'}`;
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
-const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA');
-const monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
+const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA'), monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
 /** The shortest a routine may repeat: faster checks would use up the person's AI. */
 export const MIN_EVERY = 15;
 
@@ -69,8 +73,7 @@ export const MIN_EVERY = 15;
 const SLEPT_MS = 60_000;
 const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
-const ALL_CLEAR = 'ALL-CLEAR';
-const ALL_CLEAR_RESULT = 'All clear';
+const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
@@ -84,14 +87,13 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
-const sha = (s: string) => createHash('sha256').update(s).digest('hex');
-const DRAFT_CAP = 20_000;
+const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
-const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
+export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
 /** A URL is context for a job, never its name. */
@@ -114,26 +116,14 @@ export function relayResult(reply: string, note = '') {
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
-  // Only complete sentences fit for a headline; never apply short(), which adds a cut-off ellipsis.
-  // A semicolon joins what are really two headlines, so split there too: the stale half must not ride along.
-  // The helper's own first full sentence leads, in its voice; its delivery note stands in when the reply has none.
+  // Prefer a full sentence or delivery note; never relay stale work-in-progress clauses.
   for (const source of [reply, note.length < 140 ? note : '']) {
     const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [];
     const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && s.split(' ').length > 2 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
     if (full) return `${full.replace(/[.!?;][”"']?$/, '').trim()}.`;
   }
-  return 'The result is ready.';
-}
-
-export function chiefFirst(body: string) {
-  const url = /https?:\/\/[^\s]+/i.exec(body)?.[0];
-  if (url) { try { return `Looking at ${new URL(url).hostname.replace(/^www\./, '')} now.`; } catch { /* malformed address */ } }
-  if (/\b(market|marketing|promote|launch)\b/i.test(body)) return "I'll work out the next step for your app.";
-  if (/\b(dinner|meal)\b/i.test(body)) return "I'll put together a dinner plan.";
-  if (/\b(remind|reminder)\b/i.test(body)) return "I'll work out the reminder and when it should run.";
-  if (/\b(research|look into|find out|what do people say)\b/i.test(body)) return "I'll check the question and what evidence would help.";
-  if (/\b(calendar|meetings?|inbox|emails?|mail)\b/i.test(body)) return /\b(calendar|meetings?)\b/i.test(body) ? 'Checking your calendar.' : 'Checking your email.';
-  return "I'll look into that now.";
+  const opening = tidy(reply).split(/(?<=[.!?;])\s+|\n+/).map((s) => s.trim()).find((s) => /[\p{L}\p{N}]/u.test(s) && !STALE_PROGRESS.test(s));
+  return opening ? `${short(opening, 159).replace(/…$/, '')}…` : 'The result is ready.';
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
@@ -202,7 +192,7 @@ interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<strin
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
-  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>;
+  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[] }
 
@@ -270,8 +260,8 @@ export class Crew {
       if (!this.db.get('SELECT 1 FROM people WHERE id = 1')) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
-      // A suggestion (a skill to keep, a new personality) belongs to no running task, so it waits for its answer across restarts.
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind != 'propose' AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
+      // A suggestion (a skill to keep, a new personality) or an email waiting for its send belongs to no running task, so it waits for its answer across restarts.
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE state = 'open' AND kind NOT IN ('propose', 'mail') AND (task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE state IN ('working', 'needs_you')))");
       this.db.run("UPDATE bots SET state = 'off'");
       this.db.event('system.started', null, {});
       // Chats were unread-less before: an existing install starts with everything already seen.
@@ -434,9 +424,7 @@ export class Crew {
   /** Ideas are promises a hired bot can keep (tools granted and ready here, apps connected), shown with what they wait on;
    *  unhired templates offer up to 3 goal rows needing nothing, tagged with the template to hire (docs/ui-contract.md). */
   private ideas() {
-    const on = new Set(this.connections.on());
-    const house = this.connections.houseGoogle();
-    const hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template));
+    const on = new Set(this.connections.on()), house = this.connections.houseGoogle(), hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template));
     const rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
       const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
       // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
@@ -475,6 +463,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
+    if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
@@ -504,7 +493,7 @@ export class Crew {
       tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
-      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id").map((a) => this.askView(a)),
+      asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
       resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
@@ -628,10 +617,7 @@ export class Crew {
       thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
       history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
         .map((e) => {
-          const d = JSON.parse(e.data);
-          const t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined;
-          const line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined;
-          const made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", d.task);
+          const d = JSON.parse(e.data), t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined, line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined, made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", d.task);
           return { at: e.at, kind: e.kind, ...d, state: t?.state,
             ...(t?.state === 'paused' || t?.state === 'failed' || t?.state === 'unsure' ? { reason: t.result } : {}),
             ...(t?.result === ALL_CLEAR_RESULT ? { clear: true } : {}),
@@ -664,10 +650,7 @@ export class Crew {
     const schedule = String(b.schedule ?? '').trim();
     if (!schedule && !on) throw Object.assign(new Error('say when it should run, or what should start it'), { status: 400 });
     const at = once ? reminderAt(schedule) : null; // a reminder is a moment, not a repeating schedule
-    const when = schedule && !once ? paced(parseSchedule(schedule)) : null;
-    const brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null;
-    const first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, '');
-    const name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(once ? body : first, once ? 160 : 60));
+    const when = schedule && !once ? paced(parseSchedule(schedule)) : null, brain = b.model ? disk.brainKey(disk.parseBrain(b.model)) : null, first = body.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), name = String(b.name ?? '').trim().slice(0, 60) || (watch && !b.task ? new URL(watch).hostname.replace(/^www\./, '') : short(once ? body : first, once ? 160 : 60));
     return { bot, watch, body, when, at, on, brain, first, name, quiet: yes(b.quiet) || !!watch };
   }
 
@@ -697,9 +680,7 @@ export class Crew {
       routine: { bot: plan.bot.id, once: 1, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name },
       preview: { head: 'A reminder', body: `At ${firstRun(plan.at)}\n${plan.name}` },
     });
-    const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '';
-    const what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`;
-    const start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
+    const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '', what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`, start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
     // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
     const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [];
     const lines = [...start, ...ask, what,
@@ -826,7 +807,7 @@ export class Crew {
         this.dispatch();
         return;
       }
-      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in with .+|a .+ plan with helpers\.)$/.test(open.result ?? '')) return why === 'now' ? this.retryPaused(r, open, 'routine.now', why) : this.retryPausedWhenSignedIn(r, open, why);
+      if (open.state === 'paused' && open.wake_at == null && /^Waiting for (you to sign in( with .+)?\.|a .+ plan with helpers\.)$/.test(open.result ?? '')) return why === 'now' ? this.retryPaused(r, open, 'routine.now', why) : this.retryPausedWhenSignedIn(r, open, why);
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
@@ -913,13 +894,7 @@ export class Crew {
     const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, '');
     const name = (id: string) => this.bot(id)?.display ?? id;
     const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
-    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT);
-    const ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since);
-    const failed = ended('failed'), unsure = ended('unsure');
-    const asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id");
-    const learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since);
-    const soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000);
-    const lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
+    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     if (done.length) lines.push(`- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.`);
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     if (unsure.length) lines.push(`- Not sure it worked: ${list(unsure.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -986,9 +961,7 @@ export class Crew {
     if (hello) {
       // Hello goal taps hire their helper when the person's account supports it.
       try {
-        const t = disk.loadTemplate(this.cfg, bot ?? '');
-        const hired = this.bots().find((b) => b.template === t.id)?.id;
-        const brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
+        const t = disk.loadTemplate(this.cfg, bot ?? ''), hired = this.bots().find((b) => b.template === t.id)?.id, brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
         if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person').id;
       } catch { /* Chief */ }
     }
@@ -1033,6 +1006,17 @@ export class Crew {
     return b;
   }
 
+  /** Seat a helper whose folder already exists: the name check, its row, and the crew's hello. */
+  private seat(id: string, display: string, role: string, template: string, color: string) {
+    if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
+    this.db.tx(() => {
+      this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, display, role, template, color, randomBytes(16).toString('hex'), Date.now());
+      this.say(id, 'system', `${display} joined the crew (${role.toLowerCase()}).`);
+    });
+    return this.bot(id)!;
+  }
+
   /** The person or Chief can recruit a helper. */
   recruit(template: string, name: string | undefined, by: string) {
     const tpl = disk.loadTemplate(this.cfg, template);
@@ -1040,11 +1024,19 @@ export class Crew {
     const display = (name || tpl.display).trim().slice(0, 32);
     const id = disk.slug(display);
     if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
-    this.db.tx(() => {
-      this.addBot(tpl, display, id, by);
-      this.say(id, 'system', `${display} joined the crew (${tpl.role.toLowerCase()}).`);
-    });
-    return this.bot(id)!;
+    disk.createBotFolder(this.cfg, id, tpl, display);
+    return this.seat(id, display, tpl.role, template, tpl.color);
+  }
+
+  async importGrok(slug: string, name?: string, skill?: string, source?: string, list = false, category?: string) {
+    const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
+    if (list) return mod.listAny(category);
+    const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
+    const was = this.bot(pre.id) ?? this.bots().find((b) => b.template === pre.template), id = was?.id ?? pre.id;
+    if (was && id === pre.id && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
+    mod.writePlanned({ crewDir: this.cfg.crewDir, id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
+    if (was) this.db.run('UPDATE bots SET display = ?, role = ?, color = ? WHERE id = ?', pre.display, pre.plan.role, pre.plan.color, id); else this.seat(id, pre.display, pre.plan.role, pre.template, pre.plan.color);
+    return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
   // ---- work ----
@@ -1122,10 +1114,7 @@ export class Crew {
       this.say(CHIEF, 'person', own + r.shown, null);
       return { task: r.task };
     }
-    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF)?.text as string | undefined;
-    const earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined;
-    const body = earlier ? `${earlier}\n${text}` : text;
-    const to = await route({ text, earlier }, helpers);
+    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF)?.text as string | undefined, earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined, body = earlier ? `${earlier}\n${text}` : text, to = await route({ text, earlier }, helpers);
     // A spreadsheet the rules miss goes straight to Scribe, hired silently when the person's account can run helpers.
     const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
@@ -1191,7 +1180,6 @@ export class Crew {
       if (link.key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${link.key}`, JSON.stringify({ task: id, shown }));
       return id;
     });
-    if (bot === CHIEF) this.db.live('reply.partial', CHIEF, { task: id, text: chiefFirst(body) });
     queueMicrotask(() => this.dispatch());
     return { task: id, shown };
   }
@@ -1238,9 +1226,7 @@ export class Crew {
   private alert() { this.db.event('alert', null); }
 
   private prompt(task: Row) {
-    const who = task.origin === 'person' ? this.called() : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin;
-    const r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine);
-    const routine = r?.name;
+    const who = task.origin === 'person' ? this.called() : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin, r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine), routine = r?.name;
     // A quiet check-in only speaks up when something needs the person.
     const quiet = r?.quiet ? `\n\n[Crewhouse] This is a check-in. If nothing needs ${who}, reply exactly ${ALL_CLEAR} and nothing else.` : '';
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
@@ -1255,13 +1241,11 @@ export class Crew {
     const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
     const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
-    // The crew by name only: crew_roster already lists roles, busy state and recruitable templates on demand,
-    // so the standing prompt need not carry them (and their staleness) on every turn.
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
+return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
   }
 
   /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */
@@ -1272,13 +1256,11 @@ export class Crew {
         files: files.map((f) => String(f.path).replace(/^files\//, '')).filter((p) => !p.startsWith('photos/')).slice(0, 3) }; });
   }
 
-  /** How to address the person, what the whole crew knows about them, and this bot's own notes on them: read at the start of
-   *  every task, so a correction lands at once. The files stay at people/1. */
+  /** Read the person's shared context and this helper's notes anew for each task. */
   private memory(id: string) {
-    const on = disk.botConfig(this.cfg, id).memory !== false;
-    const about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '';
-    const notes = on ? disk.readNotes(this.cfg, { bot: id }).trim() : '';
+    const on = disk.botConfig(this.cfg, id).memory !== false, about = on ? disk.readNotes(this.cfg, { bot: null }).trim() : '', notes = on ? disk.readNotes(this.cfg, { bot: id }).trim() : '', profile = disk.profileForPrompt(this.cfg);
     return `[Crewhouse] ${disk.addressLine(this.person().address)}` +
+      `${profile ? `\nAbout me and my work (write in this voice, for this audience):\n${profile}` : ''}` +
       `${about ? `\nWhat the whole crew knows about the person:\n${about}` : ''}` +
       `${notes ? `\nYour notes (what you have learned about how they like your work):\n${notes}` : ''}\n\n`;
   }
@@ -1352,13 +1334,9 @@ export class Crew {
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
   private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
-    const space = disk.botDir(this.cfg, bot.id);
-    const conf = disk.botConfig(this.cfg, bot.id);
-    const g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id });
-    const net = this.netOf(bot.id);
-    const l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
+    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
-    if (g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
+    if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
     const apps = await this.connections.tools();
     l.apps = apps.effects;
@@ -1412,6 +1390,7 @@ export class Crew {
   private turn(botId: string, l: Live, text: string, images?: { type: 'image'; data: string; mimeType: string }[]) {
     const task = this.activeTask(botId);
     if (!task) return;
+    if (this.busy.has(botId)) { l.pending = [l.pending, text].filter(Boolean).join('\n'); return; }
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId);
@@ -1430,18 +1409,18 @@ export class Crew {
   private systemPromptFor(botId: string, l: Live) {
     const skills = disk.listSkills(this.cfg, botId);
     const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
-      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
     return disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
   }
 
-  /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return;
-    if (e.type === 'text') {
+    if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
+    else if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
-      this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text).slice(0, 280) });
+      this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text) });
     }
     else if (e.type === 'usage' && e.tokens) {
       this.db.run('UPDATE tasks SET tokens = tokens + ? WHERE id = ?', Math.round(e.tokens), l.task);
@@ -1453,8 +1432,12 @@ export class Crew {
 
   private settled(botId: string, task: Row, l: Live, end: RunEnd) {
     if (this.stopped) return; // a turn cut short by shutdown settles after the store has closed
-    this.busy.delete(botId);
     if (this.live.get(botId) !== l) return; // replaced or reset
+    this.busy.delete(botId);
+    if (l.pending && (end.ok || 'aborted' in end)) {
+      const text = l.pending; delete l.pending;
+      return this.turn(botId, l, text);
+    }
     if (end.ok) {
       void this.recordLearned(botId, l).catch(() => {});
       return this.finish(botId, end.text); // a rest expires by its own time; a success never clears one early
@@ -1476,8 +1459,6 @@ export class Crew {
       this.setTask(task, 'failed', `${name} couldn't finish this one. Try again.`);
       return this.dispatch();
     }
-    // The account hit its limit, needs signing in again, or its plan doesn't include helpers: rest or flag it, and the
-    // task continues in its own session on the next account, conversation and all.
     if (end.kind === 'resting') {
       const until = end.until ?? Date.now() + 60 * 60_000;
       this.accounts.rest(l.account, until);
@@ -1504,41 +1485,37 @@ export class Crew {
     return undefined;
   }
 
-  /** Every account this task could use is resting: wait for the earliest. None usable yet (never signed in, signed out,
-   *  or a plan without helpers): the task waits for this person's own account, nobody else's, and starts by itself once
-   *  they sign in. The app shows the sign-in (or the plan's options) right under these words. */
+  /** Nothing usable yet: the task waits for this person's own sign-in and starts by itself once they sign in. */
   private pause(task: Row, choices: disk.Brain[]) {
-    const name = PROVIDERS[choices[0]?.provider]?.name ?? 'ChatGPT';
-    const who = this.bot(task.bot)!.display;
+    // The copy names the blocked plan, the task's pick, or an account the person has — never an unchosen default.
+    // Else the words stay plain, naming no provider at all.
+    const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? (task.brain ? choices[0]?.provider : undefined) ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? PROVIDERS[key]?.name ?? key : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
     // Only accounts the person has: a resting one wakes up; one never signed in doesn't.
     const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean);
-    let wake: number | null, state: string, words: string, voice: string;
+    let wake: number | null = null, state: string, words: string, voice: string;
     if (!rests.length) {
       const handoff = this.handoffs.get(task.id) ?? '';
       this.handoffs.delete(task.id);
-      const plan = choices.some((b) => this.accounts.notIncluded(b.provider));
-      const first = !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id);
-      wake = null;
-      state = plan ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in with ${name}.`;
-      words = plan ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine. ${name} Plus includes it.`
-        : /sign in again/.test(handoff) ? `${name} signed you out. That happens after a password change. Sign in again and the crew picks up where it left off.`
-        : first && task.bot === CHIEF ? `The crew uses your ${name} account. Sign in when you're ready and I'll start.`
-        : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in with ${name}.`;
+      state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
+      words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
+        : /sign in again/.test(handoff) ? `${name ? `${name} signed you out` : 'You were signed out'}. That happens after a password change. Sign in again and the crew picks up where it left off.`
+        : task.bot === CHIEF && !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id) ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
+        : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';
     } else {
       wake = Math.min(...rests);
-      const why = choices.length === 1 ? `Your ${name} is resting until ${clock(wake)}` : `All your AI accounts are resting until ${clock(wake)}`;
-      state = `${why}.`;
-      words = `${why}. ${choices.length === 1 ? `${who} will finish this then` : "I'll pick this up then"}.`;
+      state = `All your AI accounts are resting until ${clock(wake)}.`;
+      words = `${state} I'll pick this up then.`;
       voice = 'system';
     }
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', state);
-      // One waiting line per words: another job pausing on the same account state would say it again. Only this
-      // bot's own last system line counts; what the person or another helper said in between changes nothing.
-      const said = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'system' ORDER BY id DESC LIMIT 1", task.bot)?.text;
-      if (said !== (voice === 'bot' ? cleanReply(words) : words)) this.say(task.bot, voice, words, task.id);
+      // One waiting line per words, judged by this bot's own last line in that voice (what others said in between
+      // changes nothing): Chief says his once per wait, notes the next ask in other words, then holds quietly (Main1325).
+      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', task.bot, voice)?.text;
+      const noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = voice === 'bot' && last === cleanReply(words);
+      if (voice === 'system' ? last !== words : last !== noted) this.say(task.bot, voice, again ? noted : words, task.id);
     });
   }
 
@@ -1596,7 +1573,7 @@ export class Crew {
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       const unchecked = this.unchecked(task);
       if (unchecked || (said ? !said.worked : task.acted)) {
-        this.setTask(task, 'unsure', unchecked ? `I suggested a change (${unchecked}) for the maintainer to review, but it wasn't seen to fail before it and pass after it. Check it before you use it.`
+        this.setTask(task, 'unsure', unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
@@ -1634,7 +1611,7 @@ export class Crew {
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
           }
           // crew_app carries connected app tools and granted command tools; the policy still checks each call.
-          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot).run, name)
+          const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot, this.live.get(run.bot)!.grants).run, name)
             : this.toolAllowed(run.bot, name);
           if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
           const result = await this.gate(run.bot, name, input);
@@ -1654,7 +1631,6 @@ export class Crew {
         try {
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) {
-          // A refused tool is a result the model reads and adapts to, never a crashed run.
           ok = false;
           text = `error: ${String(e?.message ?? e).slice(0, 300)}`;
         }
@@ -1708,22 +1684,21 @@ export class Crew {
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     if (NATIVE_TOOLS.has(name)) return !this.netOf(botId);
-    if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files');
-    if (name === 'bash') return grants.includes('files') && sandboxReady();
+    if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
+    if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
     if (name === 'browser') return !!l.browserTool;
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
     if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
     if (name.startsWith('crew_')) return this.crewTools(botId).some((t) => t.name === name);
-    // Command-line tools that need the person's own sign-in (a kit tool's run grant).
     return registry(this.cfg).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);
   }
 
   // ---- the gate: every tool call, before it runs ----
-  /** What the policy needs to know about a bot right now. */
-  private seen(botId: string) {
+  /** Policy classifies configured tools; offering/admission narrows them to the live run's installed grants. */
+  private seen(botId: string, tools?: string[]) {
     const conf = disk.botConfig(this.cfg, botId);
-    const granted = new Set(conf.tools ?? []);
+    const granted = new Set(tools ?? conf.tools ?? []);
     return {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
@@ -1736,9 +1711,7 @@ export class Crew {
   /** A call that goes through and acts out in the world marks its job: that job must now say whether it worked, and an
    *  earlier "it worked" no longer covers it. */
   private async gate(botId: string, tool: string, input: Record<string, any>, s = this.seen(botId)) {
-    const e = effectOf(tool, input, s);
-    const r = await this.decide(botId, tool, input, e);
-    const task = !r && acts(tool, input, e) && this.activeTask(botId);
+    const e = effectOf(tool, input, s), r = await this.decide(botId, tool, input, e), task = !r && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? 'a web page';
       try { if (tool === 'browser') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
@@ -1839,10 +1812,7 @@ export class Crew {
    *  carries the person's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
    *  into asks wherever it is, and its card lists every line it will fill in. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
-    const l = this.live.get(botId);
-    const name = this.bot(botId)?.display ?? botId;
-    const host = this.hostOf(l?.page) || 'a site';
-    const value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
+    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
     // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
     const pending = value === null ? l?.fills ?? [] : [];
     if (pending.length) {
@@ -1900,7 +1870,6 @@ export class Crew {
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
   async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
-    // A replayed phone answer lands here when the first one acted but its reply never shipped: already settled, same key.
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
     const detail = JSON.parse(ask.detail || '{}');
@@ -1925,14 +1894,10 @@ export class Crew {
     }
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '';
-    const shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once';
-    const held = this.holds.get(askId);
-    const task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once', held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
-      // Counted when the person says yes, at its most: the cap holds even if the tool spent less.
       if (body.answer === 'allow' && detail.checkout && ask.task_id) this.checkouts.set(ask.bot, { task: ask.task_id, ...detail.checkout });
       if (body.answer === 'allow' && detail.effect === 'spend' && detail.cost) this.db.event('money.spent', ask.bot, { amount: detail.cost, month: monthOf(), ask: askId });
       if (scope === 'task') this.taskGrants.set(ask.task_id, [...(this.taskGrants.get(ask.task_id) ?? []), detail.key]);
@@ -1940,7 +1905,7 @@ export class Crew {
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
       if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
@@ -1950,20 +1915,19 @@ export class Crew {
     if (change) this.requestChief(`[Crewhouse] ${this.called()} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
       `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, change);
     if (ask.kind === 'propose') return;
-    if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(ask.bot)?.task === task.id) {
-      // Connected: the app's tools arrive with a fresh session, so the task picks up in its own conversation with them.
-      this.close(ask.bot);
+    if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(task.bot)?.task === task.id) {
+      // Connected: the app's tools arrive with a fresh session; the task's own bot resumes here even when Chief asked.
+      this.close(task.bot);
       this.handoffs.set(task.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
       this.connected.add(task.id);
       this.setTask(task, 'queued');
       return this.dispatch();
     }
-    // Parked: the turn already ended with a "wait", so the answer is the next prompt into the same session.
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
-    const l = this.live.get(ask.bot);
-    if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    this.turn(ask.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your request ("${ask.title}"): ` +
-      (body.answer === 'allow' ? 'allowed. Go ahead and continue the task.' : 'not now. Continue without it, or explain what you need.'));
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) return;
+    const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect') ORDER BY id", task.id);
+    this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
   /** "Chief, call me Umer": for the person. */
@@ -1984,8 +1948,8 @@ export class Crew {
 
   // ---- the crew tools: how a bot reports, delivers and remembers, and how Chief runs the crew ----
   private crewTools(botId: string): CrewTool[] {
-    const tool = (name: string, description: string, params: Record<string, any>, fn: (p: any) => unknown): CrewTool => ({
-      name, description, parameters: Type.Object(params),
+    const tool = (name: keyof typeof PARAMETERS, description: string, fn: (p: any) => unknown): CrewTool => ({
+      name, description, parameters: name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
     });
     const task = () => this.activeTask(botId)?.id;
@@ -1993,37 +1957,37 @@ export class Crew {
     const own = [
       tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
         'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
-        { app: Type.String() }, (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
+        (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
       tool('crew_outcome', 'Before you end a job that did something outside your own space (booked, sent, bought, posted, pressed a button on a ' +
         'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
         'or number, the sent message, the event read back), and `seen` names it. Otherwise false, and `seen` says in plain words what you did ' +
         'and what the person should check ("I pressed Book, but the page didn\'t show a confirmation. Worth checking your email for one."). ' +
         'Not sure is an honest answer; a job that acted and says nothing counts as not sure.',
-        { worked: Type.Boolean(), seen: Type.String() }, (p) => {
+        (p) => {
           const seen = clean(p.seen, 400);
           if (!seen) throw new Error('say what you saw, or what the person should check');
           const id = task();
           if (id) this.db.run('UPDATE tasks SET outcome = ? WHERE id = ?', JSON.stringify({ worked: p.worked === true, seen }), id);
         }),
-      tool('crew_report', 'A one-line progress note the person sees.', { text: Type.String() }, (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
-      tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', { path: Type.String(), note: Type.Optional(Type.String()) }, (p) => this.deliver(botId, p.path, p.note)),
+      tool('crew_report', 'A one-line progress note the person sees.', (p) => { this.db.event('task.progress', botId, { task: task(), text: clean(p.text, 200) }); }),
+      tool('crew_deliver', 'Register a finished file (a path in your folder, usually under files/).', (p) => this.deliver(botId, p.path, p.note)),
       tool('crew_workbook', 'Make a real spreadsheet the person can use straight away (.xlsx), in your files/, and deliver it. `name` is the title; '
         + '`sheets` is [{ name, columns: [{ header, width?, options? }], rows: [[cell, …], …] }]. `options` on a column makes it a dropdown; a cell that '
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
         + 'least one example row that shows the person how to fill it in.',
-        { name: Type.String(), sheets: Type.Any() }, (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
+        (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
       tool('crew_batch', 'Research several items at once (up to 24) against the one `question`: `items` is the list, each a short name. ' +
         'Each item is researched in parallel and you get back one JSON array of {item, ok, text}. Put every answer — with a source column — into a single crew_workbook, delivered once. ' +
         'A batch item answers its own item only; it cannot start another batch.',
-        { question: Type.String(), items: Type.Array(Type.String()) }, (p) =>
+        (p) =>
           this.batch(botId, String(p.question ?? ''), Array.isArray(p.items) ? p.items.map(String) : [])),
       tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
         + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
         + 'They read it right in Crewhouse on the web and on their phone, so one finished document is enough — never a shorter companion copy of it.',
-        { name: Type.String(), blocks: Type.Any() }, (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
+        (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
-        { from: Type.String(), to: Type.String() }, (p) => {
+        (p) => {
           const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
           if (!existsSync(from)) throw new Error(`no file at ${p.from}`);
           mkdirSync(dirname(String(p.to)), { recursive: true });
@@ -2032,7 +1996,7 @@ export class Crew {
         }),
       tool('crew_remember', 'Save a lasting preference of the person (one short line). `replaces`: words of an old note this corrects. ' +
         '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
-        { text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }, (p) => {
+        (p) => {
           if (disk.botConfig(this.cfg, botId).memory === false) throw new Error('memory is off for this bot; the person turned it off');
           const everyone = p.everyone === true;
           const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
@@ -2042,7 +2006,7 @@ export class Crew {
         '`channel`: what you really wrote, because the card says “wrote your …” in that word: `email`, `message` (a text, a chat, a reply on a site, words for a form) or `post` (ONE public post on their own social account, never a form or an inbox). `to`: the actual recipient name/address or site, NEVER a job title. `subject`: required for email, separate from the body; a post has none. '
         + '`why`: the person\'s own line this draft answers, copied word for word from what you remember about them; leave it out when no line fits, because the card quotes them and drops anything else — never your note about the draft, and never an address. '
         + '`link`: the https page the person opens to paste or send these words. Whenever they name a page to open, paste into or send from, it belongs here and nowhere else: the card\'s yes then copies the words and opens that page for them.',
-        { path: Type.String(), channel: Type.Union(['email', 'message', 'post'].map((x) => Type.Literal(x))), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }, (p) => {
+        (p) => {
           const full = disk.insideBot(this.cfg, botId, String(p.path ?? ''));
           if (!existsSync(full)) throw new Error(`no file at ${p.path}`);
           const text = readFileSync(full, 'utf8').trim(), to = clean(p.to, 80), channel = String(p.channel), subject = clean(p.subject, 160), link = String(p.link ?? '').trim(), said = clean(p.why, 160).toLowerCase(), mine = `${disk.readNotes(this.cfg, { bot: null })}\n${disk.readNotes(this.cfg, { bot: botId })}`.split('\n').map((l) => clean(l.replace(/^[-*]\s*/, ''), 160).toLowerCase()); // what the crew remembers the person saying
@@ -2056,11 +2020,11 @@ export class Crew {
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
         'fresh copy seeded with the dependencies your checkout already has installed. A check that failed before only on a missing module proves nothing, and a patch you deliver unproven ends as not sure.',
-        { repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }, (p) => this.verify(botId, p)),
+        (p) => this.verify(botId, p)),
       tool('crew_learn', 'Ask to keep a skill when the person explicitly says to follow a way of working from now on (even the first time), or when you have done the same kind of job at least twice. Never propose one for an ordinary one-off job. ' +
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
         'The person sees a card; it becomes one of your skills only if they say yes.',
-        { name: Type.String(), description: Type.String(), says: Type.String(), steps: Type.String() }, (p) => {
+        (p) => {
           const d = disk.draftSkill(this.cfg, botId, p);
           const b = this.bot(botId)!;
           return this.propose(botId, `${b.display} would like to remember how to do this: ${d.says}`,
@@ -2074,29 +2038,34 @@ export class Crew {
         'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
         'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
-        { when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()) },
         (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch })));
       const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
       if (!others) return own;
       return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
         'Pass finished files from your files/ with `files`; the person can watch the work in The crew.',
-        { bot: Type.String(), task: Type.String(), files: Type.Optional(Type.Array(Type.String())) }, (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
+        (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     const accounts = Object.keys(PROVIDERS).join(', ');
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
-      tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', {}, () => this.addPhone()),
-      tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', {}, () => ({
+      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
+        if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
+        if (!String(p.text ?? '').trim()) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, String(p.text));
+        this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task() });
+      }),
+      tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
+      tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id), does: disk.readJob(this.cfg, x.id).does,
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),
         templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role, knows: t.skills ?? [] })),
       })),
-      tool('crew_recruit', 'Recruit a bot from a template.', { template: Type.String(), name: Type.Optional(Type.String()) },
+      tool('crew_recruit', 'Recruit a bot from a template.',
         (p) => { const n = this.recruit(p.template, p.name, CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
+      tool('crew_import', 'List categories with counts and three plain-title examples with `list: true`; `category` lists only that category in full (no hire); for a goal propose one fit with a reason, import on one yes. Otherwise bring a template onto the crew: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
+        (p) => { if (typeof p.input === 'string') p = JSON.parse(p.input); if (!p || typeof p !== 'object' || Array.isArray(p)) throw fail('use list: true, or a template slug or skill name'); return this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined, String(p.source ?? ''), p.list === true || p.list === 'true', p.category ? String(p.category) : undefined); }),
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
-        { bot: Type.String(), task: Type.String(), title: Type.Optional(Type.String()), account: Type.Optional(Type.String()), steps: Type.Optional(Type.Array(Type.String())) },
         (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
         'Set `once` for a one-off reminder they asked for ("remind me Friday 9am to pack the sports kit"): `when` is then the moment in their words ("Friday 9:00", "tomorrow 8am", "in 20 minutes"), `task` is what to remind them about, and it goes to them once, in your chat, without a helper. ' +
@@ -2104,13 +2073,12 @@ export class Crew {
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +
         'schedule and wakes the bot only when it changed, and `task` says what matters ("tell me if the price drops below $900"). ' +
         'The person sees a card with the cadence and first run; nothing runs until they start it.',
-        { bot: Type.String(), when: Type.Optional(Type.String()), on: Type.Optional(Type.String()), task: Type.String(), name: Type.Optional(Type.String()), account: Type.Optional(Type.String()), quiet: Type.Optional(Type.Boolean()), watch: Type.Optional(Type.String()), once: Type.Optional(Type.Boolean()) },
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, model: p.account, quiet: p.quiet, watch: p.watch, once: p.once })),
-      tool('crew_routines', 'The routines and when each runs next.', {}, () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
-      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', {}, () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
+      tool('crew_routines', 'The routines and when each runs next.', () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
+      tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
-        { bot: Type.String(), text: Type.String() }, (p) => {
+        (p) => {
           const b = this.bot(String(p.bot ?? '').toLowerCase());
           if (!b) throw fail(`no bot called ${p.bot}; see crew_roster`, 404);
           const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
@@ -2119,10 +2087,10 @@ export class Crew {
           return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
         }),
-      tool('crew_create', 'Take on a helper for a job no one on the crew does yet, when the person asks for someone ("I need someone to…") or a job will come round again, or change a helper\'s job when they ask ("Penny should also…"). Adapt first: when a crew member\'s work is close, `bot` is that helper and `job` is its whole job from now on; only when no one and no template fits, a new one with `name` (a short friendly first name) ' +
-        'and `personality` (a few short plain lines, "You are Pip. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great); ' +
+      tool('crew_create', 'Take on a helper for a job no one on the crew does yet, when the person asks for someone ("I need someone to…") or a job will come round again, or change a helper\'s job when they ask ("Penny should also…"). A vague ask gets plain-words questions first, in chat and never on this card: at most three (what it does, what good looks like, its first job) across two turns, then build the card from the answers; an already-specific ask, or "just do it", skips the questions. Adapt first: when a crew member\'s work is close, `bot` is that helper and `job` is its whole job from now on; only when no one and no template fits, a new one with `name` (a short friendly first name) ' +
+        'and `personality` (a few short plain lines, "You are Pip. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; ' +
         '`first`: the person\'s request, its first job once they say yes. The person sees a short card and decides; nothing changes until then.',
-        { bot: Type.Optional(Type.String()), name: Type.Optional(Type.String()), role: Type.String(), job: Type.Object({ does: Type.String(), aim: Type.String(), gets: Type.String(), how: Type.String(), great: Type.String() }), personality: Type.Optional(Type.String()), first: Type.Optional(Type.String()) }, (p) => {
+        (p) => {
           const was = p.bot ? this.bot(String(p.bot).toLowerCase()) : undefined;
           if (p.bot && (!was || was.id === CHIEF)) throw fail(`no helper called ${p.bot}; see crew_roster`, 404);
           const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), first = p.first ? String(p.first).slice(0, 2000) : undefined;
@@ -2136,23 +2104,24 @@ export class Crew {
           return this.propose(CHIEF, was ? `Shall ${name} take this on?` : `Shall I take on ${name}?`, { create: { bot: was?.id, name, role, job, soul, first },
             preview: { head: name, body: [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first ? `First job: ${short(first, 120)}` : ''].filter(Boolean).join('\n') } });
         }),
-      tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', { how: Type.String() }, (p) => { this.setAddress(String(p.how ?? '')); }),
+      tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
 
-  /** Files handed from one helper's files/ to another's, resolved and checked: only real files, still inside. */
-  private handFiles(from: string, files: string[]) {
-    const base = realpathSync(join(disk.botDir(this.cfg, from), 'files'));
-    return files.map((f) => {
-      const full = disk.insideBot(this.cfg, from, f);
-      if (!realpathSync(full).startsWith(base + '/') || !statSync(full).isFile()) throw fail('pass only files from your files/');
-      return { full, name: f.slice('files/'.length) };
+  private handFiles(from: string, files: unknown) {
+    const expected = 'use files: an array, JSON-string array or one path from your files/ (relative or your own absolute path), at most twenty existing files';
+    if (typeof files === 'string') { try { files = JSON.parse(files); } catch { files = [files]; } }
+    if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail(expected);
+    const dir = disk.botDir(this.cfg, from), base = join(realpathSync(dir), 'files');
+    return files.map((f: string) => {
+      let full = resolve(dir, f);
+      if (!full.startsWith(join(dir, 'files') + '/') && !full.startsWith(base + '/')) throw fail(`outside your files/: ${f}; ${expected}`);
+      try { full = realpathSync(full); } catch { throw fail(`missing file: ${f}; ${expected}`); }
+      if (!full.startsWith(base + '/') || !statSync(full).isFile()) throw fail(`outside your files/ or not a file: ${f}; ${expected}`);
+      return { full, name: relative(base, full) };
     });
   }
-
-  /** A helper hands the next step to another, for the person. Three hand-offs from one request at most, so two
-   *  helpers can't pass a job back and forth for ever. Chief is not handed work: the person talks to him. */
-  private pass(from: string, to: string, text: string, files: string[] = []) {
+  private pass(from: string, to: string, text: string, files: unknown = []) {
     const task = this.activeTask(from);
     const b = this.bot(to);
     if (!task) throw fail('pass work on while you are working on a task');
@@ -2160,19 +2129,16 @@ export class Crew {
     if (!text.trim()) throw fail('say what they should do');
     const hops = (task.hops ?? 0) + 1;
     if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
-    if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail('pass up to twenty files');
-    const checked = this.handFiles(from, files);
-    const detail = { to, text: text.trim(), files: files.slice(), root: task.root ?? task.id, parent: task.id, hops };
+    const checked = this.handFiles(from, files), paths = checked.map((f) => `files/${f.name}`);
+    const detail = { to, text: text.trim(), files: paths, root: task.root ?? task.id, parent: task.id, hops };
     if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
-      `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${files.length ? `, with ${files.map((f) => basename(f)).join(', ')}` : ''}`,
+      `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${paths.length ? `, with ${paths.map((f) => basename(f)).join(', ')}` : ''}`,
       { pass: detail, preview: { head: `${this.bot(from)!.display} → ${b.display}`, body: text.trim() } });
     return this.handOn(from, detail, checked);
   }
 
   private handOn(from: string, d: Row, checked?: { full: string; name: string }[]) {
-    const files = checked ?? this.handFiles(from, d.files as string[]);
-    const dest = join(disk.botDir(this.cfg, d.to), 'files', `from-${from}`);
-    const paths = files.map((f) => `files/from-${from}/${f.name}`);
+    const files = checked ?? this.handFiles(from, d.files as string[]), dest = join(disk.botDir(this.cfg, d.to), 'files', `from-${from}`), paths = files.map((f) => `files/from-${from}/${f.name}`);
     for (let i = 0; i < files.length; i++) {
       const target = join(dest, files[i].name);
       mkdirSync(dirname(target), { recursive: true });
@@ -2256,8 +2222,10 @@ export class Crew {
     const a = this.connections.apps[app];
     if (!a) throw fail(`no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
-    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", botId, app))
-      this.openAsk(botId, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
+    // Google is Chief's to ask: the person talks only to Chief about it, never to the helper that needs it.
+    const owner = a.google ? CHIEF : botId;
+    if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", owner, app))
+      this.openAsk(owner, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
   }
 
@@ -2279,18 +2247,12 @@ export class Crew {
     const before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
     const missingDep = /Cannot find (?:package|module)|ERR_MODULE_NOT_FOUND/.test(before.tail), passed = before.code !== 0 && after.code === 0 && !missingDep; // red on a missing module proves nothing: a patch that deletes the import would pass it
-    const ev = this.db.event('verify.result', botId, { task, patch: patch.slice(space.length + 1), sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
-    // A run that overturns an earlier one says so in the thread, so the newest word on a change is the current verdict.
-    const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, ev.data.patch, ev.seq);
-    if (was && JSON.parse(String(was.data)).passed !== passed) this.say(botId, 'system', `Re-checked ${ev.data.patch}: ${passed ? 'it passes now' : 'it does not pass'}. This run is the current one.`, task ?? null);
+    const rel = patch.slice(space.length + 1);
+    const ev = this.db.event('verify.result', botId, { task, patch: rel, sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    // One verdict line per check run, and one that overturns an older says so: the newest word is the current verdict.
+    const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, rel, ev.seq);
+    this.say(botId, 'system', `The suggested change ${verdictWords(ev.data)}${was && JSON.parse(String(was.data)).passed !== passed ? '. An earlier check said otherwise; this run is the current one' : ''}.`, task ?? null);
     return { passed, missingDep, before: { exit: before.code, tail: before.tail }, after: { exit: after.code, tail: after.tail } };
-  }
-
-  /** What crewd's own check last said about a suggested change, as the file is now; '' when none ever ran on it. */
-  private verdict(botId: string, full: string) {
-    const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.sha') = ? ORDER BY seq DESC LIMIT 1", botId, sha(readFileSync(full, 'utf8'))); if (!v) return '';
-    const d = JSON.parse(String(v.data));
-    return d.passed ? ': passed its own check' : `: its own check did not pass — ${d.missingDep ? 'the check could not run: something it needs is not installed' : d.after === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : d.before === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
   }
 
   /** The person reopens a finished job from its review card: the same task and session, the check's own verdict in the handoff. */
@@ -2298,7 +2260,8 @@ export class Crew {
     const t = this.db.get('SELECT * FROM tasks WHERE id = ? AND bot = ?', id, botId);
     if (!t || !['done', 'failed', 'unsure'].includes(String(t.state))) throw Object.assign(new Error(t ? 'that job is still going' : 'no such job'), { status: t ? 409 : 404 });
     const v = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1", t.id); this.db.run('UPDATE tasks SET result = NULL WHERE id = ?', t.id);
-    this.handoffs.set(t.id, `The person asked you to start this again, because it ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'} its own check`);
+    // The handoff is handed to the helper and said into the person's thread alike: written for the person, never as an instruction to the helper.
+    this.handoffs.set(t.id, `You asked for this job to start again, and its own check ${v && JSON.parse(String(v.data)).passed ? 'passed' : 'did not pass'}`);
     this.setTask(t, 'queued'); this.dispatch();
     return { ok: true };
   }
@@ -2440,13 +2403,10 @@ export class Crew {
   private deliver(botId: string, path: string, note?: string) {
     const full = disk.insideBot(this.cfg, botId, String(path ?? ''));
     if (!existsSync(full)) throw new Error(`no file at ${path}`);
-    const rel = full.slice(disk.botDir(this.cfg, botId).length + 1);
-    const active = this.activeTask(botId);
-    const task = active?.id;
+    const rel = full.slice(disk.botDir(this.cfg, botId).length + 1), active = this.activeTask(botId), task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
-    // A patch is only ever a suggested change for the maintainer to review, and a check that did not pass is said out loud.
-    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)${this.verdict(botId, full)}` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
+    this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
   }
 
@@ -2562,7 +2522,7 @@ export class Crew {
     this.close(id);
     this.db.tx(() => {
       for (const t of this.db.all("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you')", id)) this.setTask(t, 'failed', why);
-      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open'", id);
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE bot = ? AND state = 'open' AND kind != 'mail'", id);
       this.db.run("UPDATE bots SET state = 'off' WHERE id = ?", id);
     });
   }

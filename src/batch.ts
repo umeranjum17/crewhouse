@@ -10,4 +10,3 @@ export function subMessage(question: string, item: string) {
   return `[Crewhouse] Research this one item and nothing else: ${item}\n${question}\n` +
     'Answer in a few short lines, each claim with its source. End with one line "Sources: ..." naming the pages you read.';
 }
-

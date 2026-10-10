@@ -37,7 +37,9 @@ const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).ma
 // at a time. Ubuntu CI bounds each file's whole process group: 295 seconds plus five to stop its children.
 const bounded = process.env.CI === 'true' && process.platform === 'linux';
 const LIGHT_CONCURRENCY = 2;
-const isGateway = (file) => /new OpenClawRuntime|measure-firstwords/.test(readFileSync(file, 'utf8')); // the first-words harness builds its gateway in the script, not the test
+// A file that boots a gateway through the shared migrate fixtures counts too: its boots starve the same way.
+// The first-words harness builds its gateway in the script, not the test, and starves there as well.
+const isGateway = (file) => /new OpenClawRuntime|migrate-house|measure-firstwords/.test(readFileSync(file, 'utf8'));
 const isBrowser = (file) => /browserBin|taskBrowser|ownedBrowser|Xvfb/.test(readFileSync(file, 'utf8'));
 const runOne = (file) => new Promise((resolve) => {
   const t0 = Date.now();

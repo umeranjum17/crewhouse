@@ -7,7 +7,7 @@ import {  } from 'node:fs';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { promisify } from 'node:util';
-import { DeviceLink, Host, keyPair, pairWithCode } from '@byokit/link';
+import { DeviceLink, Host, keyPair, pairWithCode } from '@byokit/pair';
 import { RelayClient, type RelayStatus } from '@byokit/relay';
 import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';

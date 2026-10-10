@@ -3,7 +3,7 @@
 // to the person.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ITEMS, subMessage } from '../src/batch.ts';
+import { MAX_ITEMS, MAX_PARALLEL, subMessage } from '../src/batch.ts';
 import { setup, settled, task } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;

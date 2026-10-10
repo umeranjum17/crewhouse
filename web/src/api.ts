@@ -2,19 +2,39 @@
 export type Json = any;
 
 
-/** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots. */
-export const demo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+// The private launcher hands authority through a fragment, never an HTTP URL or response.
+const launched = typeof location !== 'undefined' && /^#person=([a-f0-9]{64})$/.exec(location.hash)?.[1];
+if (launched) { sessionStorage.setItem('crewhouse.person', launched); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
+const person = () => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('crewhouse.person') ?? '' : '';
+
+/** Is crewd serving this page itself? It answers loopback only (src/server.ts's guard), so a loopback origin, or the
+ *  launcher's own person fragment, means a real backend is right here. A public static host is neither. */
+const localTransport = typeof location !== 'undefined' && (/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname ?? '') || !!launched);
+
+/** `?demo` runs the screens on a personal assistant demo (web/src/demo.ts): for design review and screenshots.
+ *  With no explicit choice the app boots in demo only when it has no backend of its own: the published static shell
+ *  (a public host, not crewd's loopback) opens straight into demo, while crewd's own pages stay real. `?real` forces a
+ *  backend even on the public shell. A device grant kept on the public shell makes it the paired app (`setLink`). */
+const search = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+export let demo = !!search && (search.has('demo') || (!search.has('real') && !localTransport));
+/** The public shell with no `?demo` asked for: at boot it looks for a device grant (web/src/link.ts `resume`). */
+export const pairable = demo && !search!.has('demo');
 
 /** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */
 export type Transport = (method: string, path: string, body?: Json) => Promise<Json>;
 let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
 
+/** The encrypted link, once this browser is paired (web/src/link.ts): every call, the live events and a bot's screen. */
+export type Link = { name: string; call: Transport; subscribe: typeof subscribe; desktop: typeof desktopSignaling; unpair: () => Promise<void> };
+export let paired: Link | null = null;
+export function setLink(l: Link) { paired = l; demo = false; setTransport(l.call); }
+
 async function http(method: string, path: string, body?: Json) {
   if (demo) return (await import('./demo.ts')).demoCall(method, path, body);
   const res = await fetch(path, {
     method,
-    headers: { 'content-type': 'application/json', 'x-crewhouse': '1' },
+    headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${person()}` },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
@@ -27,6 +47,9 @@ export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status 
 
 export const api = {
   state: () => call('GET', '/api/state'),
+  mailStatus: (to: string) => call('GET', `/api/mail?to=${encodeURIComponent(to)}`),
+  mailMark: (to: string, body: Json) => call('PUT', '/api/mail', { to, ...body }),
+  mailReview: (draft: number) => call('POST', '/api/mail/review', { draft }),
   room: (before?: number) => call('GET', `/api/room${before ? `?before=${before}` : ''}`),
   bot: (id: string, around?: number) => call('GET', `/api/bots/${id}${around ? `?around=${around}` : ''}`),
   /** The person has read this chat up to now: its unread dot goes. */
@@ -57,6 +80,9 @@ export const api = {
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   about: () => call('GET', '/api/about'),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
+  /** About me and my work: the record every helper reads before a job for them. */
+  profile: () => call('GET', '/api/profile'),
+  setProfile: (text: string) => call('PUT', '/api/profile', { text }),
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */
   job: (id: string, parts: Json) => call('PUT', `/api/bots/${id}/job`, parts),
   draftJob: (id: string, idea: string) => call('POST', `/api/bots/${id}/job/draft`, { idea }),
@@ -115,9 +141,19 @@ export const api = {
   phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
   /** Codes to type on the phone instead of scanning, through the relay. */
   phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
+  /** Web push for the installed app: the mailbox's key to subscribe with, and the address handed back (or `{off}`).
+   *  Paired, the ask goes over the link (`POST /api/push {key}`) — never /api/phones/link, which the computer refuses. */
+  pushKey: async (): Promise<{ vapid: string | null; ready: boolean }> => {
+    if (paired) { const k = await call('POST', '/api/push', { key: true }); return { vapid: k.vapid ?? null, ready: k.online === true && !!k.vapid }; }
+    const s = await call('GET', '/api/phones/link');
+    return { vapid: s.vapid, ready: s.relayStatus === 'online' && !!s.vapid };
+  },
+  push: (body: Json) => call('POST', '/api/push', body),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
+  /** Herdr's setup state for its own row on the Apps screen: missing, installed, or answering. */
+  herdr: () => call('GET', '/api/herdr'),
   answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string; remind?: boolean }) => call('POST', `/api/asks/${ask}/answer`, body),
   skills: () => call('GET', '/api/skills'),
   skillSearch: (q: string) => call('GET', `/api/skills/search?q=${encodeURIComponent(q)}`),
@@ -126,38 +162,45 @@ export const api = {
 
 const wsBase = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
 
-/**
- * desklink's `Signaling` for one bot's screen, over its own socket to crewd. crewd picks the display and the
- * permissions; closing the socket ends the session.
- */
-export function desktopSignaling(bot: string) {
-  const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`);
-  const open = new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('could not reach Crewhouse')); });
+/** desklink's `Signaling` over a carrier of crewd's desktop messages, one JSON each way: `connect` opens it, calls `hear`
+ *  with each message and `lost` when it ends. crewd picks the display and the permissions; closing it ends the session. */
+export function lineSignaling(connect: (hear: (msg: Json) => void, lost: () => void) => Promise<{ send: (msg: Json) => unknown; close: () => void }>) {
   const pending = new Map<number, { resolve: (v: Json) => void; reject: (e: Error) => void }>();
   const handlers = new Set<(e: Json) => void>();
   let next = 1;
-  ws.onmessage = (m) => {
-    const msg = JSON.parse(m.data);
+  const opened = connect((msg) => {
     if (msg.event) return handlers.forEach((h) => h(msg.event));
     const p = pending.get(msg.id);
     pending.delete(msg.id);
     if (msg.error) p?.reject(Object.assign(new Error(msg.error.message), { code: msg.error.code }));
     else p?.resolve(msg.result);
-  };
-  ws.onclose = () => { for (const p of pending.values()) p.reject(new Error('lost touch with Crewhouse')); pending.clear(); };
+  }, () => { for (const p of pending.values()) p.reject(new Error('lost touch with Crewhouse')); pending.clear(); });
   return {
     async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
-      await open;
+      const c = await opened;
       const id = next++;
-      return new Promise<T>((resolve, reject) => { pending.set(id, { resolve, reject }); ws.send(JSON.stringify({ id, method, params })); });
+      return new Promise<T>((resolve, reject) => { pending.set(id, { resolve, reject }); Promise.resolve(c.send({ id, method, params })).catch(reject); });
     },
     subscribe(handler: (e: Json) => void) { handlers.add(handler); return () => { handlers.delete(handler); }; },
-    close() { ws.close(); },
+    close() { void opened.then((c) => c.close(), () => {}); },
   };
 }
 
+/** One bot's screen over its own socket to crewd, or over the link once paired. */
+export function desktopSignaling(bot: string): ReturnType<typeof lineSignaling> {
+  if (paired) return paired.desktop(bot);
+  return lineSignaling((hear, lost) => new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${wsBase()}/ws/desktop/${bot}`, `crewhouse-person.${person()}`);
+    ws.onopen = () => resolve({ send: (m) => ws.send(JSON.stringify(m)), close: () => ws.close() });
+    ws.onerror = () => reject(new Error('could not reach Crewhouse'));
+    ws.onmessage = (m) => hear(JSON.parse(m.data));
+    ws.onclose = lost;
+  }));
+}
+
 /** Live events; reconnects forever. Returns a stop function. */
-export function subscribe(onEvent: (e: Json) => void) {
+export function subscribe(onEvent: (e: Json) => void): () => void {
+  if (paired) return paired.subscribe(onEvent);
   if (demo) { let stop = () => {}; void import('./demo.ts').then((m) => { stop = m.demoLive(onEvent); }); return () => stop(); }
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {

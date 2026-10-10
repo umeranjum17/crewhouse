@@ -15,8 +15,7 @@ export type DocumentSpec = { name: string; blocks: BlockSpec[] };
 const MAX = { blocks: 300, bullets: 50, rows: 200, cols: 12, text: 8000, parts: 150 };
 
 /** The writer is CommonJS-shaped and only worth loading for the seconds it is used. */
-const docx = () => import('docx').then((m: any) => m.default ?? m);
-const words = (v: Cell) => String(v ?? '').replace(/\r?\n/g, ' ').slice(0, MAX.text);
+const docx = () => import('docx').then((m: any) => m.default ?? m), words = (v: Cell) => String(v ?? '').replace(/\r?\n/g, ' ').slice(0, MAX.text);
 
 /** Write a document the person can open and edit: real headings, real lists, a table with a bold header row. */
 export async function buildDocument(file: string, spec: DocumentSpec) {
@@ -33,8 +32,7 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
       return b.bullets.slice(0, MAX.bullets).map((t: any) => new Paragraph({ text: words(t), bullet: { level: 0 } }));
     }
     if (b?.table && Array.isArray(b.table.head)) {
-      const dataRows = (Array.isArray(b.table.rows) ? b.table.rows : []).slice(0, MAX.rows);
-      const head = b.table.head.slice(0, MAX.cols).map((h: Cell) => new TableCell({ children: [cell(h, true)] }));
+      const dataRows = (Array.isArray(b.table.rows) ? b.table.rows : []).slice(0, MAX.rows), head = b.table.head.slice(0, MAX.cols).map((h: Cell) => new TableCell({ children: [cell(h, true)] }));
       const rows = [
         new TableRow({ tableHeader: true, children: head }),
         ...dataRows.map((r: Cell[]) => new TableRow({ children: r.slice(0, MAX.cols).map((c) => new TableCell({ children: [cell(c)] })) })),
@@ -64,8 +62,7 @@ export async function readDocument(file: string) {
   const JSZip = (await import('jszip')).default;
   const { xml2js } = await import('xml-js');
   const xml = await import('node:fs').then(async (fs) => {
-    const zip = await JSZip.loadAsync(fs.readFileSync(file));
-    const inner = zip.file('word/document.xml');
+    const zip = await JSZip.loadAsync(fs.readFileSync(file)), inner = zip.file('word/document.xml');
     if (!inner) throw new Error('no such document');
     return inner.async('string');
   });
@@ -85,8 +82,7 @@ export async function readDocument(file: string) {
     walk(tc.elements, (p) => { if (p.name === 'w:p') { const r = runs(p); if (r.text) out.push(r.text); } });
     return out.join(' ');
   };
-  const root = await xml2js(xml, {}) as any;
-  const parts: Part[] = [];
+  const root = await xml2js(xml, {}) as any, parts: Part[] = [];
   const push = (p: Part) => { if (parts.length < MAX.parts) parts.push(p); };
   const body = root?.elements?.[0]?.elements?.find((e: any) => e.type === 'element' && e.name === 'w:body');
   walk(body?.elements, (el) => {
@@ -102,8 +98,7 @@ export async function readDocument(file: string) {
       return;
     }
     if (el.name !== 'w:p') return;
-    const style = (el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements?.find((e: any) => e.name === 'w:pStyle')?.attributes?.['w:val'] ?? '';
-    const list = JSON.stringify((el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements ?? []).includes('"w:numPr"');
+    const style = (el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements?.find((e: any) => e.name === 'w:pStyle')?.attributes?.['w:val'] ?? '', list = JSON.stringify((el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements ?? []).includes('"w:numPr"');
     const { text, bold } = runs(el);
     if (!text) return;
     if (HEADING.test(style)) push({ kind: 'heading', text });

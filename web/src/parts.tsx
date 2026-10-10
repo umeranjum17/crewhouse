@@ -1,4 +1,5 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
+import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
@@ -6,15 +7,16 @@ import { canHear, hear } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
+import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, mdPlain, pageWords, sheetWords, workbook, type Card, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
   : t.type === 'em' ? <em key={i}>{mdInline(t.tokens)}</em>
   : t.type === 'link' && safeLink(t.href) ? <a className="chat-link" key={i} href={safeLink(t.href)} target="_blank" rel="noopener noreferrer">{mdInline(t.tokens)}</a>
-  : t.type === 'codespan' ? <span key={i}>{t.text}</span>
+  : t.type === 'codespan' ? <code className="chat-code" key={i}>{t.text}</code>
   : t.type === 'br' ? <br key={i} />
   : t.type === 'html' ? t.raw : t.tokens ? <span key={i}>{mdInline(t.tokens)}</span> : t.text ?? t.raw);
 /** Markdown blocks from the same tokens: headings, paragraphs, task lists with read-only ticks, tables. */
@@ -29,13 +31,14 @@ const mdBlocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === '
 export function ChatText({ text }: { text: string }) {
   const [more, setMore] = useState(false);
   const long = text.length > 700 || text.split('\n').length > 10;
-  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
+  // A cut inside a list item drops that item, so the fold never ends on an empty or half-cut bullet.
+  const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '').replace(/\n[ \t]*(?:[-*+]|\d+[.)])(?:[ \t][^\n]*)?$/, '') : text;
   return <div className="chat-md">{mdBlocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
 }
 
 // ---------- toasts ----------
 const listeners = new Set<(m: string) => void>();
-/** A short line at the bottom of the screen: "Sent", "Connecting apps comes with the next update". */
+/** A short line at the foot of the screen: "Sent", "Connecting apps comes with the next update". */
 export const toast = (m: string) => listeners.forEach((l) => l(m));
 export function Toasts() {
   const [m, setM] = useState('');
@@ -45,7 +48,15 @@ export function Toasts() {
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return m ? <div className="toast" role="status">{m}</div> : null;
+  return m ? <Toast>{m}</Toast> : null;
+}
+/** Every toast sits in one place, never over the words: just above the box you type in where the screen has one,
+ *  else in a bar along the foot of the screen, with room left below the page so its end clears the bar. */
+function Toast({ children }: { children: ReactNode }) {
+  const [, moved] = useState(0); // a toast still up when the screen changes moves to the new screen's place
+  useEffect(() => { const f = () => requestAnimationFrame(() => moved((n) => n + 1)); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f); }, []);
+  const dock = Array.from(document.querySelectorAll<HTMLElement>('.dock')).find((d) => d.offsetParent);
+  return dock ? createPortal(<div className="toast" role="status">{children}</div>, dock) : <div className="toast foot" role="status">{children}</div>;
 }
 /** Run an action; a failure becomes a friendly toast, never a stack trace. `quiet` leaves the word to the caller —
  *  the composer, whose failed send keeps the words on screen with a Retry instead. */
@@ -151,27 +162,46 @@ export function Ink({ svg, w, h = w, label, className = '' }: { svg: string; w: 
   return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} height={h} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
 
-/** Chief, head and shoulders (`whole` for all of him). `d` keeps the old 14-dot footprint, so callers keep their size.
- *  `hero` marks the one face on screen that lives: it shows the 170 ms change-blink. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean }) {
+/** Chief, head and shoulders (`whole` for all of him, the mock rail's 38-column grid). `d` keeps the old 14-dot footprint,
+ *  so callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink,
+ *  and the think-scan while he works. */
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
-  const m = flash ? 'blink' : mood, pose = art.poseOf(m), w = d * 14;
-  const svg = useMemo(() => whole ? art.chiefSvg(pose, { wave: hero, night }) : art.headSvg('chief', pose, night), [pose, whole, hero, night]);
-  return <Ink svg={svg} w={w} h={whole ? w * 1.25 : w} label="Chief" className={`pose-${pose}`} />;
+  const mode = art.helmetOf(flash ? 'blink' : mood);
+  const beat = useTicker(140, !!hero && mode === 'think');
+  const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
+  // The phone header's mascot (Main1804/1808, as Muse heads a thread): the helmet drawn smooth, a character, not a pixel icon.
+  const pal = night ? color.night : color.day;
+  if (mascot) return <Ink className="helmet" w={52} h={48} label="Chief" svg={art.helmetSoft(mode, { night, beat, eye: mode === 'needs' ? pal.pink : mode === 'rest' ? pal.mute : undefined, scan: pal.pink })} />;
+  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
+    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
+  </pre>;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
-  const pose = art.poseOf(mood);
-  const svg = useMemo(() => art.headSvg(kind, pose), [kind, pose]);
-  return <Ink svg={svg} w={d * 12} label={name} className={`pose-${pose}`} />;
+export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean; live?: boolean }) {
+  const mode = art.helmetOf(mood);
+  // A working helper's scan line moves (the Office panels pass live); every other helmet is still, and Reduce Motion
+  // runs none (useTicker). The eyes still light blue when needed, shut at rest: that is the mood, not motion.
+  const beat = useTicker(140, !!live && mode === 'think');
+  const cells = useMemo(() => art.helmet(14, mode, night, beat), [mode, beat]);
+  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} role="img" aria-label={name ?? kind}>{
+    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
+  </pre>;
 }
 
-/** A round face: Chief or a pal, with a ring when it's working or needs you. */
+/** A round face: Chief or a helper, with a ring when it's working or needs you. The helmet is drawn
+ *  as rects (art.helmetSvg: the same cells, eyes and scan as the chat's text helmet), because text
+ *  glyphs shrink to noise below ~9px and these faces sit at 20-64px. */
 export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
   const chief = who === 'chief';
-  const soft = chief ? (night ? '#2A2622' : '#EEF1F6') : art.PALS[who.kind].soft;
+  // The disc stays neutral in both themes: the board leaves pastel colour out. Night tints the
+  // raised surface faintly and seats Chief on warm dark; day seats every face on the raised surface.
+  const soft = night ? (chief ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].soft} 16%, var(--solid))`) : color.day.surface;
+  const mode = art.helmetOf(chief ? chiefMood : who.mood);
+  const svg = useMemo(() => art.helmetSvg(24, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined }), [mode]);
+  const w = Math.round(size * 0.82);
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size, background: night && !chief ? `color-mix(in srgb, ${soft} 16%, var(--solid))` : soft }}>
-      {chief ? <ChiefArt d={size * .74 / 14} mood={chiefMood} /> : <PalArt kind={who.kind} mood={who.mood} d={size * .74 / 12} name={who.name} crisp={size < 96} />}
+    <span className={`face ${ring}`} style={{ width: size, height: size, background: soft }}>
+      <Ink svg={svg} w={w} h={Math.round(w / 2)} label={chief ? 'Chief' : who.name} />
     </span>
   );
 }
@@ -252,7 +282,7 @@ export function Splash({ done: ready }: { done: boolean }) {
 /** A finished job, said once: a calm toast with a way in — never a full-screen party. Gone within 4 s. */
 export function Celebrate({ title, href, onDone }: { title: string; href: string; onDone: () => void }) {
   useEffect(() => { const x = setTimeout(onDone, 4000); return () => clearTimeout(x); }, [onDone]);
-  return <div className="toast celebrate-toast" role="status">✓ {title} · <a href={href} onClick={onDone}>Open</a></div>;
+  return <Toast>✓ {title} · <a href={href} onClick={onDone}>Open</a></Toast>;
 }
 
 // ---------- small things ----------
@@ -270,15 +300,14 @@ export function ReviewCard({ f }: { f: FileView }) {
     setBusy(true);
     try { await api.again(bot, r.task); dispatchEvent(new HashChangeEvent('hashchange')); } finally { setBusy(false); }
   };
+  // What the check found, and which run counts, are already the thread's own line right above this card.
+  // The card says it once more would be twice: the verdict, when, and the way back.
   return <div className={`review ${r.ok ? 'ok' : 'bad'}`} role={r.ok ? undefined : 'alert'}>
     <b>{r.ok ? 'Its check passed' : 'Its check did not pass'}</b>
-    <span>{plainEnd(r.why)}</span>
-    {r.changed ? `An earlier check said the opposite, so this ${clock(r.when)} one counts.` : `Checked ${clock(r.when)}.`}
-    {r.runs > 1 && <span className="small mute">Checked {r.runs} times; the last one, at {clock(r.when)}, is the current one.</span>}
+    {`Checked ${clock(r.when)}.`}
     {!r.ok && <button className="btn go" disabled={busy} onClick={again}>{busy ? 'Starting again…' : 'Start it again'}</button>}
   </div>;
 }
-const plainEnd = (s: string) => `${s.replace(/[.!]$/, '')}.`;
 
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
@@ -318,8 +347,12 @@ const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
 /** The line under a file's name: what kind of thing it is, and how much is in it. */
 function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
   const kind = f.kind === 'page' ? 'Document' : 'Spreadsheet';
-  const count = book ? book.sheets.length : doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
-  return count ? `${kind} · ${book ? sheetWords(count) : pageWords(count)}` : kind;
+  if (book) {
+    const rows = book.sheets.reduce((n, s) => n + (s.total || s.rows.length), 0);
+    return rows ? `${kind} · ${rows === 1 ? '1 row' : `${rows} rows`}` : kind;
+  }
+  const count = doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
+  return count ? `${kind} · ${pageWords(count)}` : kind;
 }
 
 /** A page's peek: its first heading that is not the title said twice, over a grey line for each of the next few parts,
@@ -432,7 +465,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
         <header className="wb-head">
           <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
           <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
-          <a className="btn" href={f.url} target="_blank" rel="noreferrer">Download</a>
+          <a className="btn go" href={f.url} target="_blank" rel="noreferrer">Download</a>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
@@ -538,7 +571,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
 }
 
 // ---------- asks ----------
-const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -561,8 +594,38 @@ const splitAmount = (l: string): [string, string] => {
 /** The ask's evidence in the sunken block (§4.4): an order's lines with the total above a hairline, a form's or a
  *  job's label-over-value lines, a draft's to/subject/body, Chief's routine confirmation lines, or exactly what
  *  goes out. Long bodies clamp until `open`; `readAll` is the card's or the sheet's own way of opening them. */
+function CampaignPosts({ text, approved = false }: { text: string; approved?: boolean }) {
+  const [copied, setCopied] = useState(-1), [error, setError] = useState('');
+  const parts = text.split('\n\n---\n\n');
+  const copy = async (text: string, i: number) => {
+    try { if (!navigator.clipboard) throw new Error('Copy is unavailable here. Select the post text to copy it.'); await navigator.clipboard.writeText(text); setCopied(i); setError(''); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not copy. Select the post text to copy it.'); }
+  };
+  return <div className="ev">{parts.map((part, i) => { const at = part.indexOf('\n'); return <section key={i}><b className="ev-to">{at < 0 ? '' : part.slice(0, at)}</b><div className="ev-body">{at < 0 ? part : part.slice(at + 1)}</div>{approved && parts.length === 2 && at > 0 && <button className="btn" aria-label={`Copy ${part.slice(0, at)}`} onClick={() => void copy(part.slice(at + 1), i)}>{copied === i ? 'Copied' : 'Copy post'}</button>}</section>; })}{error && <p role="alert">{error}</p>}</div>;
+}
+
+export function CampaignReceipt({ outcome: c }: { outcome: CampaignOutcome }) {
+  const [text, setText] = useState(''), [error, setError] = useState('');
+  useEffect(() => {
+    if (!c.approved) return;
+    let active = true;
+    void api.document(c.source.bot, c.source.path).then(async (d) => {
+      const text = String(d.text ?? '').trim();
+      const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((x) => x.toString(16).padStart(2, '0')).join('');
+      if (hash !== c.source.sha) throw new Error('This is no longer the campaign you approved. Ask Chief for a fresh draft.');
+      if (active) setText(text);
+    }).catch((e) => active && setError(e?.status ? 'Could not read the approved campaign. Ask Chief to check its file.' : e.message));
+    return () => { active = false; };
+  }, [c.approved, c.source.bot, c.source.path, c.source.sha]);
+  return <div className="card ask campaign"><div className="ask-head"><b>Chief</b></div><p>{c.approved ? 'Campaign approved. Ready to copy; nothing was sent.' : 'Campaign put aside. Nothing was copied or sent.'}</p>
+    {error && <p role="alert">{error}</p>}{c.approved && !text && !error && <p role="status">Opening your approved posts…</p>}{text && <CampaignPosts text={text} approved />}
+    {c.approved && c.poster && <><Media f={c.poster} big /><a className="btn" href={c.poster.url} download={c.poster.name}>Save poster</a></>}
+  </div>;
+}
+
 function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: ReactNode }) {
   const body = c.preview?.body ?? '';
+  if (c.campaign) return <><CampaignPosts text={body} />{c.campaign.poster ? <Media f={c.campaign.poster} big /> : <p>The poster is not ready here yet.</p>}</>;
   if (c.review) return <div className="ev">{body.split('\n').map((l, i) => {
     const [text, amount] = splitAmount(l);
     return <div key={i} className={`order-row${/^Total/.test(l) ? ' total' : ''}`}>{amount ? <><span className="grow">{text}</span><span>{amount}</span></> : text}</div>;
@@ -573,6 +636,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   })}</div>;
   if (c.evidence === 'draft') {
     return <div className="ev">
+      {c.mailFrom && <div className="ev-to">From {c.mailFrom}</div>}
       {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
       {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
       {c.draftWhy && <div className="ev-quiet">Because you said “{c.draftWhy}”</div>}
@@ -588,13 +652,11 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   return null;
 }
 
-/** The ask card's head: the asker's face and name, the status line with the pink dot, the time on the right. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
 function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
   return <div className="ask-head">
-    {c.helper === 'chief' ? <Face who="chief" size={28} /> : who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : null}
     <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
-    <time className="mute small">{clock(c.at)}</time>
   </div>;
 }
 
@@ -609,13 +671,38 @@ function useDraftEdit(c: Card) {
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
     box: words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
     yes: (body: Json) => {
-      if (c.evidence !== 'draft') return body;
+      if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
       void navigator.clipboard?.writeText(text).catch(() => { /* the person pastes from the card itself */ });
       if (c.draftLink) window.open(c.draftLink, '_blank', 'noopener');
       return changed ? { ...body, text } : body;
     },
   };
+}
+
+type MoreAct = { label: string; run: () => unknown; pressed?: boolean; cls?: string };
+/** A card's other choices: in its row on a desk; on a phone they wait behind "⋯", which opens a bottom sheet with
+ *  the card's title on top and one full-width row per choice, so a card shows one primary (Main1774). */
+export function More({ title, sub, acts }: { title: string; sub?: string; acts: (MoreAct | false | null | undefined)[] }) {
+  const [open, setOpen] = useState(false);
+  const shown = acts.filter((a): a is MoreAct => !!a);
+  if (!shown.length) return null;
+  return <>
+    {shown.map((a) => <button key={a.label} className={`btn more-act${a.cls ? ` ${a.cls}` : ''}`} aria-pressed={a.pressed} onClick={() => void a.run()}>{a.label}</button>)}
+    <button className="btn more-dots" aria-label="More choices" aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name="more" size={20} /></button>
+    {open && createPortal(<MoreSheet title={title} sub={sub} acts={shown} onClose={() => setOpen(false)} />, document.body)}
+  </>;
+}
+
+function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string; acts: MoreAct[]; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
+  return <div className="scrim" onClick={onClose}>
+    <div ref={box} className="sheet more-sheet" role="dialog" aria-modal aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className="more-head"><b>{title}</b>{sub && <span>{sub}</span>}</div>
+      {acts.map((a) => <button key={a.label} className="more-row" onClick={() => { onClose(); void a.run(); }}>{a.label}</button>)}
+    </div>
+  </div>;
 }
 
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
@@ -628,7 +715,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
-  const remind = !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  const remind = !c.mailSend && !c.campaign && !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
@@ -639,11 +726,14 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
+  const routine = c.kind === 'routine' ? c.lines : undefined;
+  const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
   return (
-    <div className="card ask">
+    <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
-      <p className="ask-words">{question}</p>
-      {edit.box || <AskEvidence c={c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />}
+      {!routine && <p className="ask-words">{question}</p>}
+      {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {c.kind === 'routine' ? (
         <>
@@ -654,9 +744,10 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           {when !== null && preview?.bad && <div className="mute small routine-note">I didn't catch that time. Try “every Monday 9:00”.</div>}
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
-            <button className="btn" aria-pressed={when !== null} onClick={() => { setWhen(when === null ? c.schedule || '' : null); }}>{when === null ? 'Change time' : 'Keep the time'}</button>
-            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            <More title={title} sub={sub} acts={[
+              { label: when === null ? 'Change time' : 'Keep the time', pressed: when !== null, run: () => setWhen(when === null ? c.schedule || '' : null) },
+              deny && { label: deny.label, run: () => act(deny.body) },
+              remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
           </div>
         </>
       ) : c.kind === 'plan' ? (
@@ -667,9 +758,10 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
           </form>}
           <div className="btns">
             {change === null && <button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>}
-            <button className="btn" aria-pressed={change !== null} onClick={() => setChange(change === null ? '' : null)}>{change === null ? 'Change it' : 'Keep the plan'}</button>
-            {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+            <More title={title} sub={sub} acts={[
+              { label: change === null ? 'Change it' : 'Keep the plan', pressed: change !== null, run: () => setChange(change === null ? '' : null) },
+              deny && { label: deny.label, run: () => act(deny.body) },
+              remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
           </div>
         </>
       ) : c.reply ? (
@@ -680,19 +772,22 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
       ) : c.review ? (
         <div className="btns">
           <a className="btn go" href={`#/ask/${c.id}`}>Review order</a>
-          {deny && <button className="btn ghost" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
+          <More title={title} sub={sub} acts={[
+            deny && { label: deny.label, cls: 'ghost', run: () => act(deny.body) },
+            remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
         </div>
       ) : yes ? (
         <div className="btns">
-          <button className="btn go" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
-          {edit.can && <button className="btn" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
-          {remind && <button className="btn ghost" onClick={() => act(remind)}>Remind me tomorrow</button>}
-          {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
+          <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
+          <More title={title} sub={sub} acts={[
+            edit.can && { label: edit.editing ? 'Use the original' : 'Edit', pressed: edit.editing, run: edit.toggle },
+            deny && { label: deny.label, run: () => act(deny.body) },
+            remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) },
+            always && { label: always.label, cls: 'ghost always', run: () => act(always.body) }]} />
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
+      {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
       {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
     </div>
   );
@@ -712,7 +807,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
   const rest = c.choices.filter((x) => x !== yes && x.body.scope !== 'always');
-  const remind = rest.find((x) => x.label === 'Not now' && x.body.answer === 'deny');
+  const remind = !c.mailSend && rest.find((x) => x.label === 'Not now' && x.body.answer === 'deny');
   const always = c.choices.find((x) => x.body.scope === 'always');
   const edit = useDraftEdit(c);
   return (
@@ -727,10 +822,11 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         <div className="approve-btns">
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
           {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" onClick={() => act(x.body)}>{x.label}</button>)}
-          {yes && <button className="btn go big" disabled={edit.empty} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body)}>{x.label}</button>)}
+          {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
         </div>
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
+        {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
         {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
       </div>
     </div>

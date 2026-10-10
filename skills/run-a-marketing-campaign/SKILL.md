@@ -1,0 +1,43 @@
+---
+name: run-a-marketing-campaign
+description: Chief's marketing crew recipe. Read this SKILL.md at its listed path with crew_read, not native Skill or Read. Use for "help me market my bakery", "market my business", "plan a campaign" or a marketing crew request. Scout researches, Scribe writes, Reel makes visuals. Drafts only; no publishing or tracking.
+says: A small campaign plan, research, written drafts and a poster or video to review
+---
+
+# Run a marketing campaign
+
+Chief owns the plan; Scout researches, Scribe writes, Reel makes a poster or video. This is a campaign recipe for the existing crew, not a new helper. Use it instead of the generic growth handoff or marketplace import for these requests.
+
+## Start from the person
+
+Read **About me and my work** in your job context before planning. Every helper receives that same shared record on its own task. Build a small **source pack** before assigning: quote the business facts verbatim from that record and the person's messages, labelling each quote with its source. Include a Scout document only if already delivered and read; quote its supported lines with their links, not its guesses. Copy this pack and the person's exact request into each assignment. Your plan is not a source of business facts.
+
+Choose a creative angle, channels and layout yourself, but never assume business activities, offers, products, prices, hours, address, policies, people, history or results. A weekend campaign does not mean the business opens that weekend; "fun for families" does not mean children's activities, facilities or a no-purchase policy. Warm copy must not imply warm products, reserved places or the owner's personal preferences. A product emoji or picture also makes a claim. Missing facts are omitted or written as plain markers such as `[add your opening hours]`; do not replace them with a plausible assumption. Ask one question only if the campaign cannot proceed without it. Do not ask for facts already in the record.
+
+## Recruit and plan
+
+Call `crew_roster`. Reuse suitable Scout, Scribe and Reel helpers already present, using their actual ids; recruit only missing roles with `crew_recruit` and templates `scout`, `scribe`, `reel`. Never change an existing helper's job or personality to fit this campaign. A request only to set up the marketing crew ends after recruitment: say each part and wait for a campaign request.
+
+For a campaign, make the plan yourself before assigning: one goal, the stated audience, an offer only if sourced (otherwise no offer), one or two channels, a short timeframe and what each helper will deliver. State it in Chief's chat in at most 120 words, plain sentences and bullets; do not promise to return later. This is a proposed plan for review, not a schedule to run. No results tracker, measurements, routines or automatic follow-ups.
+
+## Give each helper its part
+
+Use `crew_assign` once per helper. Include the person's request, your complete brief and the instruction **Read About me and my work. Drafts only: nothing posts, sends, emails, publishes, buys or schedules.** Each assignment must stand alone; copy the **Claims check** below into BOTH Scribe's and Reel's tasks verbatim, and Scribe's file-format and single-card instructions into its task verbatim, because neither can read Chief's skill. Do not say another file is coming, or depend on a helper finishing first. No `crew_pass` chain or duplicate assignments. Label your creative choices as proposals, never as business facts. The helpers run independently: do not treat Scout's future research as evidence for today's copy.
+
+- **Scout:** Research two useful audience or local-channel opportunities relevant to this business; read public sources only. Deliver a short sourced document with links and clear uncertainties. Do not invent competitors or rewrite Chief's plan.
+- **Scribe:** Write two short, distinct ready-to-edit post drafts for Chief's chosen channels, in the shared record's voice. This is a writing job, not the separate `growth-plan` workflow: no rivals-document dependency, metrics or extra campaign. Put BOTH posts in ONE new `files/campaign-<short-name>.txt` file. Each post starts with its actual channel on one plain line, then a newline and the exact ready-to-copy post, preserving paragraphs and hashtags. Separate the two sections with exactly a blank line, `---` on its own line, and a blank line. No Markdown headings, variants or planning notes. Deliver this text file with `crew_deliver`, then call `crew_draft` ONCE on that same file, `channel: "post"`, `to` naming the chosen channels, and no `link`. Never call it separately for each post. Chief carries this one approval; the app waits for the campaign parts to finish and shows the poster alongside the posts.
+- **Reel:** Make one finished poster PNG by default, or one short silent video if requested. Write and check its exact visible copy before rendering; use only the checked copy in the finished image/video. Use the shared business name and sourced facts; no fabricated products or photos. If no photographs were supplied, make a simple text-led design and say so. Deliver the actual file with `crew_deliver`, not a storyboard, script or promise. Keep it in your own files; never upload or publish it.
+
+### Claims check — copy into both writing and poster assignments
+
+Check only your assigned output: Scribe writes posts, not a poster; Reel makes the poster, not posts. For business facts, use the source's exact wording, not a more persuasive paraphrase. You may extract the business name or a shorter phrase with the same meaning, but add no qualification. Write creative invitation lines separately from those factual lines.
+
+Before delivery, save `work/campaign-claims.txt` with one row for EVERY business claim in your two posts or exact poster/video copy: `claim | source and exact supporting quote | keep / omit / marker`. Include implied claims in invitations, adjectives, hashtags, emojis and pictures, not just numbers. Sources are ONLY About me and my work, the person's actual messages, or an already-read Scout document with its supporting source link. A Chief brief, a creative suggestion, generic industry knowledge and your own earlier draft are NOT evidence.
+
+For each row, compare the FULL claim with the supporting quote, word for word, not just its topic. A related quote does not support an added qualification: `We repair bicycles` supports that sentence, NOT `repairing bicycles is the whole of what we do`, `repair only`, `every bicycle`, `expert repairs` or guaranteed results. Check all words such as only, whole, all, every, best, local, fresh, free and experienced. If any part is not stated in the source, use the original factual wording instead; do not rationalise the addition as a restatement. Without a supporting quote for the entire claim, DELETE the claim or replace it with `[add your ...]`. Record the replacement as `marked for the person`; put the actual marker in the visible post or poster, not just this list or your reply. Never turn a requested tone, campaign date or target audience into an actual event, opening time, product, amenity or policy. Prefer a short business-name design and a modest line over invented detail.
+
+Reread the final posts or final rendered poster against the list, including any copy changed while designing. Save the updated claims list with `crew_write` and deliver it with `crew_deliver` as supporting notes, NOT with `crew_draft`. Keep source notes out of the ready-to-copy posts. Scribe still files exactly ONE combined TXT and ONE draft card. Use `write-draft`'s existing `crew_app` writing checks for supported channels; those checks assess fit and phrasing, not truth, so a pass never replaces this claims check. If a source cannot be read, omit its claims. Finish only when every retained business claim has a supporting quote or a visible fill-in marker.
+
+## Finish at review
+
+After successful assignments, say who is making what and that everything is for the person to review, then finish your turn. The app shows progress and brings back each helper's files. Both finished posts and their intended channels go on ONE Needs-you card in Chief's thread, with the delivered poster; helpers do not ask for separate draft decisions. Approve marks the posts approved and offers a Copy action for each post and Save poster; it never copies automatically or posts anything. Not now closes the card and copies or sends nothing. Do not claim a draft or poster is ready before delivery. Never send, post, publish, email, buy ads, connect social accounts or promise performance. The person decides what to use outside Crewhouse.

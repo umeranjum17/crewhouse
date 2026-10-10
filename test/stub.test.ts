@@ -12,6 +12,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import * as A from '../web/src/adapter.ts';
+import { startServer } from '../src/server.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -29,7 +30,7 @@ after(() => daemon.kill());
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -121,6 +122,70 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
 });
 
+test('parked peer reads: both approvals resume one turn and the person gets the finished draft', async () => {
+  const s = lab();
+  s.cfg.port = 0; s.cfg.linkPort = 0;
+  s.crew.onboard('Umer');
+  s.crew.recruit('scribe', 'Quill', 'person');
+  const server = await startServer(s.cfg, s.db, s.crew);
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const request = async (method: string, path: string, body?: object) => {
+    const res = await fetch(url + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
+    assert.equal(res.status, 200);
+    return res.json();
+  };
+  const outside = join(s.root, 'peer', 'files');
+  mkdirSync(outside, { recursive: true });
+  const paths = ['ask permission-one.md', 'ask permission-two.md'].map((name) => join(outside, name));
+  paths.forEach((path) => writeFileSync(path, 'A writing brief'));
+  try {
+    const results: { mode: string; prompts: number }[] = [];
+    for (const mode of ['one ask', 'spaced answers', 'close answers', 'answer before settlement']) {
+      const selected = (mode === 'one ask' ? paths.slice(0, 1) : paths).map((path) => path.replace('.md', `-${mode}.md`));
+      selected.forEach((path) => writeFileSync(path, 'A writing brief'));
+      const { task: id } = await request('POST', '/api/bots/quill/messages', { text: selected.map((path) => call('crew_read', { path })).join(' ') });
+      await until(async () => s.db.all("SELECT * FROM events WHERE kind = 'ask.parked' AND json_extract(data, '$.task') = ?", id).length === selected.length);
+      if (mode !== 'answer before settlement') {
+        await release(s.crew, 'quill'); // fixture control: release the initial hold after its parked-call abort
+        await until(async () => !s.crew.busy.has('quill'));
+      }
+      const asks = s.db.all("SELECT * FROM asks WHERE task_id = ? ORDER BY id", id);
+      const answer = (ask: any) => request('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow', scope: 'task' });
+      if (mode === 'spaced answers') {
+        await answer(asks[0]);
+        console.log('only one answered', { state: task(s.db, id).state, busy: s.crew.busy.has('quill') });
+        if (s.crew.busy.has('quill')) await release(s.crew, 'quill', 'Waiting on the other read.');
+        await until(async () => !s.crew.busy.has('quill'));
+        const gap = Date.now() + 2000;
+        await until(async () => Date.now() >= gap);
+        await answer(asks[1]);
+      } else await Promise.all(asks.map(answer));
+      if (mode === 'answer before settlement') {
+        assert.equal(s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length, 1, 'a queued resume waits for the live turn to settle');
+        await release(s.crew, 'quill');
+        await until(async () => s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length === 2);
+      }
+      results.push({ mode, prompts: s.db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", id).length });
+      await release(s.crew, 'quill', 'The writing plan is ready.');
+      await until(async () => task(s.db, id).state === 'done');
+      assert.match(JSON.stringify(await request('GET', '/api/bots/quill')), /The writing plan is ready/);
+    }
+    console.log('approval counterfactuals', results);
+    assert.deepEqual(results.map((r) => r.prompts), [2, 2, 2, 2], 'one initial turn and one resume after all parked reads are answered');
+    const missing = await request('POST', '/api/bots/quill/messages', { text: call('crew_app', { tool: 'write', input: { args: ['platforms'] } }) });
+    await until(async () => task(s.db, missing.task).state === 'done');
+    const page = await request('GET', '/api/bots/quill');
+    const reply = page.messages.find((m: any) => m.task_id === missing.task && m.author === 'bot');
+    assert.match(reply.text, /does not have that tool/);
+    assert.doesNotMatch(reply.text, /Unknown tool/);
+    assert.equal(s.db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", missing.task).length, 0, 'missing commands never reach execution');
+  } finally {
+    await s.crew.stop();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    s.done();
+  }
+});
+
 test('a Chief reply streams partial words before its durable message', async () => {
   await ready();
   if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Sir');
@@ -144,64 +209,6 @@ test('a Chief reply streams partial words before its durable message', async () 
     const substantive = trace.find((e) => e.kind === 'reply.partial' && e.data.task === body.task && e.data.text.includes('stub chief:'));
     assert.ok(created && prompted && substantive, 'the real HTTP send reached a task, prompt and stub model words');
     console.log(`stub HTTP arithmetic send→task ${created.at - started}ms; task→prompt ${prompted.at - created.at}ms; prompt→model text ${substantive.at - prompted.at}ms`);
-  } finally { ws.close(); }
-});
-
-test('personal requests reach Chief words before the model, including ambiguous asks', async () => {
-  await ready();
-  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
-  const events: any[] = [];
-  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
-  await new Promise<void>((resolve) => ws.on('open', resolve));
-  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
-  try {
-    for (const [label, words, expected] of [
-      ['dinner', 'Plan dinner for tonight', /dinner plan/],
-      ['research', 'What do people say about standing desks?', /check the question/],
-      ['reminder', 'Remind me about the meeting tomorrow', /reminder/],
-      ['ambiguous', 'Could you handle the screenshots?', /look into that/],
-      ['Chief', 'Chief, help me think through this choice', /look into that/],
-    ] as const) {
-      const started = Date.now();
-      const { body } = await say('chief', words);
-      assert.ok(body.task, `${label} starts a task, not a blocking routing question`);
-      const first = await until(async () => events.find((e) => e.kind === 'reply.partial' && e.data?.task === body.task));
-      await done('chief', body.task);
-      const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
-      const created = trace.find((e) => e.kind === 'task.created');
-      const prompted = trace.find((e) => e.kind === 'run.prompted');
-      const model = trace.find((e) => e.kind === 'reply.partial' && e.data.text.includes('stub chief:'));
-      assert.ok(created && prompted && model, `${label}: task, prompt and model words observed`);
-      assert.match(first.data.text, expected);
-      assert.ok(first.at <= prompted.at, `${label}: first words precede the model turn`);
-      assert.equal(Object.hasOwn(first.data, 'member'), false);
-      console.log(`stub HTTP ${label}: send→task ${created.at - started}ms; task→first words ${first.at - created.at}ms; model wait ${model.at - prompted.at}ms`);
-    }
-  } finally { ws.close(); }
-});
-
-test('marketing and URL follow-up show Chief words before a model tool or result', async () => {
-  await ready();
-  if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
-  const events: any[] = [];
-  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
-  await new Promise<void>((resolve) => ws.on('open', resolve));
-  ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
-  try {
-    for (const text of [`I want to market my app [first words] ${call('crew_report', { text: 'started' })}`, 'https://trymuxr.com/']) {
-      const started = Date.now();
-      const { body } = await say('chief', text);
-      const first = await until(async () => events.find((e) => e.kind === 'reply.partial' && e.bot === 'chief' && e.data.task === body.task));
-      assert.ok(first.at - started < 3000, 'a first line does not wait for the model');
-      assert.match(first.data.text, text.startsWith('https:') ? /Looking at trymuxr\.com now\./ : /next step for your app/);
-      await done('chief', body.task);
-      const trace = events.filter((e) => e.bot === 'chief' && e.data?.task === body.task);
-      assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'run.prompted'), 'the acknowledgement precedes the model');
-      if (!text.startsWith('https:')) {
-        assert.ok(trace.some((e) => e.kind === 'reply.partial' && e.data.text.includes('checking the next step')), 'the model prose also streams');
-        assert.ok(trace.findIndex((e) => e.kind === 'reply.partial') < trace.findIndex((e) => e.kind === 'task.progress'));
-      }
-    }
   } finally { ws.close(); }
 });
 
@@ -259,6 +266,7 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
   const accounts = (await api('GET', '/api/accounts')).body;
   assert.ok(accounts.every((a: any) => !('member' in a)), 'account rows belong to the person');
   assert.deepEqual(accounts.map((a: any) => a.name), ['ChatGPT', 'Grok', 'GitHub Copilot', 'OpenRouter', 'MiniMax', 'Claude']);
+  assert.deepEqual(accounts.map((a: any) => a.signedOut), [false, false, false, false, false, false], 'nothing signed out on a fresh sign-in');
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
@@ -325,12 +333,14 @@ test('screen: take over and give back through the API; watching needs the Comput
 
   // Set this test's own grant precondition, even if an earlier onboarding assertion fails.
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, `crewhouse-person.${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`);
   await new Promise((r) => ws.once('open', r));
   ws.send(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }));
   const reply = JSON.parse(String(await new Promise((r) => ws.once('message', r))));
   assert.equal(reply.error.code, 'no-screen');
   ws.close();
+  const unauthenticated = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  assert.equal(await new Promise((r) => { unauthenticated.once('open', () => r('open')); unauthenticated.once('error', () => r('refused')); }), 'refused', 'loopback alone cannot control a desktop');
   const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });

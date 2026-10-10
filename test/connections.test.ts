@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, task, until } from './lab.ts';
 
@@ -296,12 +296,12 @@ test('Google setup saves a sealed key without pretending it was verified; typed 
 
 test("Google: one service per connection, only after its one-time setup; Google's own failures said plainly", async () => {
   const { crew, done } = googleLab();
-  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
+  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'gmailsend', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
   // Before setup: you is sent to Google's "OAuth client not found" page.
   await assert.rejects(crew.connections.connect('calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
   assert.match(crew.connections.list().find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
   await house(crew);
-  assert.deepEqual(crew.connections.list().filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail'], 'Drive shows no unverified-app warning');
+  assert.deepEqual(crew.connections.list().filter((c: any) => c.warns).map((c: any) => c.app), ['calendar', 'gmail', 'gmailsend'], 'Drive shows no unverified-app warning');
 
   // One scope per request, and the household app's own client.
   let url = new URL(await start(crew, 'calendar'));
@@ -322,6 +322,32 @@ test("Google: one service per connection, only after its one-time setup; Google'
   assert.match(await back(crew, url.toString(), { code: 'good' }), /^Google Calendar is connected/);
   assert.deepEqual(crew.snapshot().connections, ['calendar']);
   assert.equal(crew.connections.connected('gmail'), false, 'Calendar is not Gmail');
+  done();
+});
+
+test('the house Google client: present, a Google app connects in one tap with no paste; a loose or absent file leaves the saved key', async () => {
+  const { cfg, crew, done } = googleLab();
+  const write = (mode: number) => { writeFileSync(cfg.googleClient, JSON.stringify({ installed: { client_id: gid('123-house'), client_secret: SECRET } })); chmodSync(cfg.googleClient, mode); };
+  // The file alone switches Google on: nothing for the person to paste.
+  write(0o600);
+  const fresh = new Connections(cfg, 'http://127.0.0.1:9911/connect/callback');
+  for (const id of ['drive', 'calendar', 'gmail']) fresh.apps[id] = crew.connections.apps[id];
+  await fresh.ready;
+  assert.equal(fresh.houseGoogle(), true, 'the house file switches Google on by itself');
+  assert.equal(fresh.houseSteps(), null, 'no Cloud-console steps for the crew’s own app');
+  const url = new URL((await fresh.connect('calendar')).url!);
+  assert.equal(url.searchParams.get('client_id'), gid('123-house'), 'the house client, with no setup of your own');
+  assert.equal(url.searchParams.get('client_secret'), null, 'the secret never rides in the URL');
+  await fresh.stop();
+  // A file other users can read is refused: setup stands, and the saved key is still there when the file goes.
+  write(0o644);
+  const loose = new Connections(cfg, 'http://127.0.0.1:9911/connect/callback');
+  await loose.ready;
+  assert.equal(loose.houseGoogle(), false, 'a world-readable key is not trusted');
+  await loose.stop();
+  rmSync(cfg.googleClient);
+  await house(crew);
+  assert.equal(crew.connections.houseGoogle(), true, 'the saved key is the fallback when the file is gone');
   done();
 });
 
@@ -350,6 +376,25 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   await crew.answer(crew.snapshot().asks.find((a: any) => a.kind === 'connect')!.id, { answer: 'deny' });
   await settled(db, w);
   assert.equal(task(db, w).state, 'done');
+  done();
+});
+
+test("a Google app a helper needs is Chief who asks, and the helper's own task carries on once it is connected", async () => {
+  const { db, crew, done } = googleLab();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  await house(crew);
+  const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"calendar"}]', 'chief').task;
+  await until('asked', () => task(db, t).state === 'needs_you');
+  const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
+  assert.equal(ask.bot, 'chief', 'Chief asks, never the helper that needs it');
+  assert.deepEqual(ask.detail, { app: 'calendar', words: 'Let Quill use your Google Calendar' });
+  google.ticked = 'https://www.googleapis.com/auth/calendar.events';
+  await yes(crew, 'calendar');
+  await crew.answer(ask.id, { answer: 'allow' });
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'quill' AND text = 'Google Calendar is connected now. Quill carries on.'"), "the helper's own task resumes");
   done();
 });
 

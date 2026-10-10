@@ -1,49 +1,16 @@
-// The gateway-upgrade migration (spec §6), through the real entry points on the real pinned engine:
-// a preserved sign-in survives the upgrade (import, the gateway confirms it, then crewhouse's copy retires),
-// and a failed import leaves the original intact and recoverable — a retry succeeds without a second login.
+// The gateway-upgrade migration (spec §6), part 1: recognition and repair —
+// the canonical auth route, the config fence on an existing gateway, a retired
+// import repaired through doctor, and an old engine login sealed across restart.
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
-import { createHash, generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { startModelStub } from './openclaw-stub.ts';
 import { faked } from './kit-fake.ts';
-import { KeystoreError, osKeyringSeal } from '@byokit/secrets';
-import { Accounts } from '../src/accounts.ts';
-
-const legacyAuth = (extra: Record<string, unknown> = {}) => JSON.stringify({
-  'openai-codex': { type: 'oauth', provider: 'openai-codex', access: 'a-preserved', refresh: 'r-preserved', expires: Date.now() + 30 * 86_400_000 },
-  ...extra,
-}, null, 2);
-
-async function house() {
-  const root = mkdtempSync(join(tmpdir(), 'crewhouse-migrate-'));
-  const stateDir = join(root, 'state');
-  const legacy = join(root, 'people', '1', 'engine', 'auth.json');
-  mkdirSync(join(legacy, '..'), { recursive: true });
-  const runtime = new OpenClawRuntime(stateDir);
-  const stop = async () => { try { if (existsSync(join(stateDir, 'openclaw'))) await runtime.stop(); } finally { rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); } };
-  return { root, stateDir, legacy, runtime, stop };
-}
-
-const host = { tools: () => [], gate: async () => ({ allow: true }) as const, call: async () => 'done' };
-
-function sealed(stateDir: string) {
-  const engine = join(stateDir, 'openclaw');
-  const file = readFileSync(join(engine, 'auth-store.sealed'));
-  assert.equal(file.subarray(0, 4).toString(), 'BKS1');
-  assert.ok(!file.includes(Buffer.from('a-preserved')), 'credentials never appear in the sealed bytes');
-  for (const dir of ['state', 'home']) assert.ok(!existsSync(join(engine, dir)), `${dir} plaintext is gone`);
-}
-function retired(legacy: string) {
-  for (const path of [legacy, `${legacy}.moved-to-engine`, `${legacy}.moved-to-engine.sealed`])
-    assert.ok(!existsSync(path), 'confirmed credential sources are gone');
-  assert.equal(readFileSync(`${legacy}.moved-to-engine.canonicalized`, 'utf8'), '', 'only an empty marker remains');
-}
+import { host, house, legacyAuth, retired, sealed } from './migrate-house.ts';
 
 test('ChatGPT uses the canonical gateway auth provider for status, logout and migration confirmation', async () => {
   const { legacy, stop } = await house();
@@ -153,182 +120,16 @@ test('an existing engine login and migration archives seal on prepare, restore a
     const good = readFileSync(snapshot), tampered = Buffer.from(good);
     tampered[tampered.length - 1] ^= 1;
     writeFileSync(snapshot, tampered);
-    await assert.rejects(runtime.start(host), /authenticated/, 'tampering fails before restoring credentials');
-    assert.ok(!existsSync(join(engine, 'state')));
+    // Kit 0.8.0+ fails closed on an unreadable sealed store: nothing is reset or kept aside, the bad bytes stay
+    // exactly as they are, and the person is told to restore the key or a backup (0.6.3 quarantined and reset).
+    await assert.rejects(runtime.start(host), (e: any) => e.code === 'auth-store-unreadable');
+    assert.equal(runtime.kit.state.phase, 'failed');
+    assert.equal(runtime.kit.state.why, 'auth-store-unreadable', 'tampering is reported as an unreadable store, never silently reset');
+    assert.equal(await runtime.signedIn('chatgpt'), false, 'the old engine login never returns from bad bytes');
+    assert.deepEqual(readFileSync(snapshot), tampered, 'the bad bytes stay in place, unchanged');
+    assert.equal(readdirSync(engine).filter((name) => name.startsWith('auth-store.sealed.')).length, 0, 'no quarantine copy is made');
     writeFileSync(snapshot, good);
     await runtime.start(host);
     assert.equal(await runtime.signedIn('chatgpt'), true, 'repairing the sealed snapshot preserves the login');
   } finally { if (!existsSync(join(stateDir, 'openclaw/auth-store.sealed'))) await old.stop(); await stop(); await stub.close(); }
-});
-
-test('a preserved sign-in survives the upgrade, a failed import stays recoverable', { timeout: 600_000 }, async () => {
-  // The upgrade: crewhouse's copy is retired only after the gateway itself reports the member signed in.
-  {
-    const { stateDir, legacy, runtime, stop } = await house();
-    const stub = await startModelStub();
-    try {
-      writeFileSync(legacy, legacyAuth());
-      assert.equal(await runtime.migrate(legacy), true, 'the import ran once the engine was in place');
-      sealed(stateDir);
-      assert.ok(existsSync(legacy), 'crewhouse\u2019s copy is not retired before the gateway confirms the import');
-      await runtime.start(host);
-      assert.equal(await runtime.confirm(legacy), true, 'the gateway reports the preserved sign-in');
-      assert.ok(!existsSync(legacy), 'only a confirmed import retires crewhouse\u2019s copy');
-      retired(legacy);
-      assert.equal(await runtime.signedIn('chatgpt'), true, 'the gateway reports the canonical provider signed in — no second login asked');
-      const db = new DatabaseSync(join(runtime.stateDir, 'openclaw/state/agents/m1/agent/openclaw-agent.sqlite'));
-      const stored = JSON.parse((db.prepare('SELECT store_json FROM auth_profile_store').get() as { store_json: string }).store_json).profiles;
-      db.close();
-      assert.deepEqual(Object.keys(stored), ['openai:default']);
-      assert.equal(stored['openai:default'].provider, 'openai');
-      assert.equal(stored['openai:default'].access, 'a-preserved');
-      assert.equal(stored['openai:default'].refresh, 'r-preserved');
-      const config = await runtime.kit.call('config.get', {}) as any;
-      assert.equal(config.config.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
-      assert.deepEqual(config.config.agents.defaults.modelPolicy.allow, [], 'other members’ models remain selectable');
-      await runtime.configureModelProvider(stub.url, 'stub-m1');
-      const end = await runtime.run({ key: 'agent:m1:crewhouse:chief:migration', bot: 'chief', task: 1,
-        account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
-      assert.ok(end.ok && end.text.includes('Hello'), JSON.stringify(end));
-      assert.ok(stub.calls.length > 0, 'real agent RPC reached the local scripted model');
-      await runtime.stop();
-      sealed(stateDir);
-      await runtime.start(host);
-      assert.equal(await runtime.signedIn('chatgpt'), true, 'the sealed store restores the same sign-in');
-      const resumed = await runtime.run({ key: 'agent:m1:crewhouse:chief:restored', bot: 'chief', task: 2,
-        account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
-      assert.ok(resumed.ok && resumed.text.includes('Hello'), JSON.stringify(resumed));
-    } finally { await stop(); await stub.close(); }
-  }
-  // A failed import (the engine was never up to confirm) leaves the original intact; the retry then succeeds.
-  {
-    const { legacy, runtime, stop } = await house();
-    try {
-      writeFileSync(legacy, legacyAuth());
-      await runtime.migrate(legacy);
-      assert.equal(await runtime.confirm(legacy), false, 'nothing is confirmed while the gateway is down');
-      assert.ok(existsSync(legacy), 'the original sign-in survives a failed import');
-      await runtime.start(host);
-      assert.equal(await runtime.confirm(legacy), true, 'the retry succeeds');
-      assert.equal(await runtime.signedIn('chatgpt'), true, 'still the one preserved sign-in, never a second login');
-    } finally { await stop(); }
-  }
-  // A doctor run that imports nothing (an auth the engine cannot read) is never a confirmed migration.
-  {
-    const { legacy, runtime, stop } = await house();
-    try {
-      writeFileSync(legacy, JSON.stringify({ openai: { type: 'nonsense', provider: 'openai' } }));
-      await runtime.migrate(legacy);
-      await runtime.start(host);
-      assert.equal(await runtime.confirm(legacy), false, 'an import that never lands is not confirmed');
-      assert.ok(existsSync(legacy), 'the original sign-in is intact when the import fails');
-      assert.ok(!existsSync(`${legacy}.moved-to-engine`), 'nothing was retired');
-      await runtime.stop();
-      sealed(runtime.stateDir);
-      writeFileSync(legacy, legacyAuth());
-      assert.equal(await runtime.migrate(legacy), true, 'a failed import is retried through the kit');
-      await runtime.start(host);
-      assert.equal(await runtime.confirm(legacy), true, 'the repaired source imports without signing in again');
-      retired(legacy);
-    } finally { await stop(); }
-  }
-});
-
-test('an upgraded house starts: its device identity and old plugin folder carry over', { timeout: 240_000 }, async () => {
-  const { stateDir, runtime, stop } = await house();
-  try {
-    // What the previous engine adapter left in every existing state: its own identity file shape and plugin path.
-    const engine = join(stateDir, 'openclaw');
-    mkdirSync(engine, { recursive: true });
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-    writeFileSync(join(engine, 'device.json'), JSON.stringify({
-      deviceId: createHash('sha256').update(publicKey.export({ type: 'spki', format: 'der' }).subarray(-32)).digest('hex'),
-      publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }), privateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }),
-    }), { mode: 0o600 });
-    writeFileSync(join(engine, 'openclaw.json'), JSON.stringify({ plugins: { load: { paths: [join(stateDir, 'gone/src/openclaw/plugin')] }, allow: ['crewhouse'] } }));
-    await runtime.kit.prepare();
-    const config = JSON.parse(readFileSync(join(engine, 'openclaw.json'), 'utf8'));
-    assert.deepEqual(config.plugins.load.paths, [join(engine, 'plugin')], 'only the bridge plugin loads; the old folder is gone');
-    await runtime.start(host);
-    const health = await runtime.kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
-    assert.ok(health.ok && health.plugins.loaded.includes('crewhouse'));
-  } finally { await stop(); }
-});
-
-test('a locked keyring-only login gives recovery words, retries and upgrades to dual wrap', { timeout: 240_000 }, async () => {
-  const { root, stateDir, legacy } = await house();
-  const entries = new Map<string, string>();
-  let locked = false;
-  const keyring = {
-    get(name: string) { if (locked) throw new KeystoreError('unavailable', 'Locked'); return entries.get(name) ?? null; },
-    set(name: string, value: string) { entries.set(name, value); },
-    delete(name: string) { return entries.delete(name); },
-  };
-  const service = 'test-keyring-upgrade';
-  const old = new OpenClawRuntime(stateDir, '', { authSeal: osKeyringSeal({ service, keyring, fallback: false }) });
-  const runtime = new OpenClawRuntime(stateDir, '', { authSeal: osKeyringSeal({ service, keyring, dualWrap: true, stateDir: join(root, 'keys') }) });
-  const accounts = new Accounts(runtime);
-  const snapshot = join(stateDir, 'openclaw/auth-store.sealed');
-  try {
-    writeFileSync(legacy, legacyAuth());
-    await old.migrate(legacy);
-    const original = readFileSync(snapshot);
-    assert.equal(original[4], 1);
-    locked = true;
-    await runtime.kit.prepare();
-    assert.equal(runtime.kit.state.phase, 'locked');
-    await runtime.start(host);
-    assert.equal(runtime.kit.state.phase, 'locked');
-    assert.match(accounts.view('chatgpt')!.error!, /Unlock.*try again/);
-    await accounts.login('chatgpt');
-    await accounts.finished('chatgpt');
-    assert.deepEqual(readFileSync(snapshot), original, 'a locked retry preserves the original');
-    sealed(stateDir);
-    locked = false;
-    await accounts.login('chatgpt');
-    await accounts.finished('chatgpt');
-    assert.equal(await accounts.signedIn('chatgpt'), true, 'retry restores the login without a new wizard');
-    await runtime.stop();
-    sealed(stateDir);
-    assert.equal(readFileSync(snapshot)[4], 3);
-    locked = true;
-    await runtime.start(host);
-    assert.equal(await runtime.signedIn('chatgpt'), true, 'the host wrap works after locking again');
-  } finally { await runtime.stop(); rmSync(root, { recursive: true, force: true }); }
-});
-
-test('a refused start preserves the live gateway and offers a kit retry without signing in again', { timeout: 240_000 }, async () => {
-  const { stateDir, legacy, runtime, stop } = await house();
-  const retry = new OpenClawRuntime(stateDir);
-  const accounts = new Accounts(retry);
-  const engine = join(stateDir, 'openclaw');
-  try {
-    writeFileSync(legacy, legacyAuth());
-    await runtime.migrate(legacy);
-    await runtime.start(host);
-    assert.equal(await runtime.signedIn('chatgpt'), true);
-    const guards = ['gateway.pid', 'auth-store.lock/pid', 'auth-store.sealed'];
-    const before = guards.map((file) => readFileSync(join(engine, file)));
-    const intact = async () => {
-      guards.forEach((file, i) => assert.deepEqual(readFileSync(join(engine, file)), before[i], file));
-      assert.ok(existsSync(join(engine, 'state/agents/m1/agent/openclaw-agent.sqlite')));
-      assert.equal(await runtime.signedIn('chatgpt'), true, 'the live owner keeps its login');
-    };
-    await assert.rejects(retry.start(host), { code: 'engine-already-running' });
-    assert.equal(retry.kit.state.why, 'engine-already-running');
-    assert.match(accounts.view('chatgpt')!.error!, /in use.*other session stops/);
-    await intact();
-    await accounts.login('chatgpt');
-    await accounts.finished('chatgpt');
-    await retry.stop();
-    await intact();
-    await assert.rejects(retry.start(host), { code: 'engine-already-running' });
-    await runtime.stop();
-    sealed(stateDir);
-    await accounts.login('chatgpt');
-    await accounts.finished('chatgpt');
-    assert.equal(await accounts.signedIn('chatgpt'), true, 'retry restores the saved login without a wizard');
-    await retry.stop();
-    sealed(stateDir);
-  } finally { accounts.stop(); await retry.stop(); await stop(); }
 });

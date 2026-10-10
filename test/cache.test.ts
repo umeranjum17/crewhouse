@@ -3,11 +3,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
+import type { Json } from '../web/src/api.ts';
 
 const repo = join(import.meta.dirname, '..');
 const build = (web: string) => spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), web], { encoding: 'utf8' });
@@ -30,6 +32,20 @@ test('a changed build gets new bundle names, and the built shell points at them'
   const fresh = shell();
   assert.ok(css && !fresh.includes(css), 'the css reference changed with the content');
   assert.ok(fresh.includes(bundleRef(fresh, 'styles')!), 'the shell references the new bundle');
+
+  // A file the worker precaches under its own name (the manifest) changes content: the worker itself must change too,
+  // so the installed copy gets a new cache and re-precaches it.
+  const worker = () => readFileSync(join(web, 'dist', 'sw.js'), 'utf8');
+  const before = worker();
+  writeFileSync(join(web, 'manifest.webmanifest'), readFileSync(join(web, 'manifest.webmanifest'), 'utf8').replace('"name"', '"name "'));
+  assert.equal(build(web).status, 0);
+  assert.notEqual(worker(), before, 'a changed precached file gives the worker a new cache name');
+  // A file the precache leaves out (a launch screen) still versions the worker: the digest covers every shipped file.
+  const mid = worker();
+  const splash = join(web, 'splash', readdirSync(join(web, 'splash'))[0]);
+  writeFileSync(splash, Buffer.concat([readFileSync(splash), Buffer.from([0])]));
+  assert.equal(build(web).status, 0);
+  assert.notEqual(worker(), mid, 'a changed non-precached file still gives the worker a new cache name');
 });
 
 test('crewd serves the shell with no-cache and an ETag, and hashed bundles as immutable', async () => {
@@ -58,5 +74,93 @@ test('crewd serves the shell with no-cache and an ETag, and hashed bundles as im
     const bundle = await fetch(`${base}/${js}`);
     assert.equal(bundle.status, 200);
     assert.match(bundle.headers.get('cache-control') ?? '', /immutable/);
+    // The home-screen app: every launch screen the shell links and every picture its manifest names is served.
+    const manifest = await (await fetch(base + '/manifest.webmanifest')).json();
+    const assets = [...html.matchAll(/apple-touch-startup-image" href="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(assets.length, 26, 'one launch screen per device size, day and night');
+    assets.push(...[...manifest.icons, ...manifest.screenshots, ...manifest.shortcuts.flatMap((s: Json) => s.icons)].map((i: Json) => i.src));
+    // A missing file would come back as the shell itself (the app's own routes), so the type is what tells.
+    for (const src of assets) assert.match((await fetch(base + src)).headers.get('content-type') ?? '', /^image\//, src);
+    // The service worker is served from the same tree, revalidated every load.
+    const sw = await fetch(`${base}/sw.js`);
+    assert.equal(sw.status, 200);
+    assert.match(sw.headers.get('content-type') ?? '', /javascript/);
+    assert.match(sw.headers.get('cache-control') ?? '', /no-cache/, 'the worker is revalidated, so an update ships');
   } finally { daemon.kill(); }
+});
+
+const ORIGIN = 'http://127.0.0.1:4173';
+const reqOf = (path: string) => ({ url: ORIGIN + path, method: 'GET', mode: 'navigate' });
+/** Runs a built worker in a stub service-worker global: `network` answers its fetches, and the handles fire its install,
+ *  fetch and push events and show what it stored and notified. */
+function runWorker(source: string, network: (url: string) => Promise<Response>) {
+  const listeners = new Map<string, (e: any) => void>();
+  const stored = new Map<string, Response>();
+  const shown: Array<[string, any]> = [];
+  const badged: Array<number | undefined> = [];
+  const key = (r: string | { url: string }) => typeof r === 'string' ? r : new URL(r.url).pathname;
+  const caches = {
+    open: async () => ({
+      addAll: async (urls: string[]) => { for (const u of urls) stored.set(u, await network(u)); },
+      put: async (r: string | { url: string }, res: Response) => { stored.set(key(r), res); },
+    }),
+    match: async (r: string | { url: string }) => stored.get(key(r))?.clone(),
+    keys: async () => [],
+    delete: async () => false,
+  };
+  const self = {
+    location: { origin: ORIGIN }, addEventListener: (type: string, cb: (e: any) => void) => listeners.set(type, cb),
+    skipWaiting: async () => {}, clients: { claim: async () => {}, matchAll: async () => [], openWindow: async () => {} },
+    registration: { showNotification: async (title: string, o: any) => { shown.push([title, o]); }, setAppBadge: async (n?: number) => { badged.push(n); } }, navigator: {},
+  };
+  vm.runInNewContext(source, { self, caches, fetch: (r: string | { url: string }) => network(key(r)), Response, URL });
+  const dispatch = async (type: string, e: Record<string, unknown> = {}) => {
+    const waits: Promise<unknown>[] = [];
+    let answer: Promise<Response> | undefined;
+    listeners.get(type)!({ ...e, waitUntil: (p: Promise<unknown>) => { waits.push(p); }, respondWith: (p: Promise<Response>) => { answer = p; } });
+    await Promise.all(waits);
+    return answer && await answer;
+  };
+  return { dispatch, stored, shown, badged };
+}
+
+test('the built worker precaches the shell, refreshes it only from the app shell, and shows the news push', async () => {
+  assert.equal(build(join(repo, 'web')).status, 0);
+  const html = readFileSync(join(repo, 'web', 'dist', 'index.html'), 'utf8');
+  const js = bundleRef(html, 'main')!, css = bundleRef(html, 'styles')!;
+  const page = (text: string, cache: string) => new Response(text, { headers: { 'content-type': 'text/html', 'cache-control': cache } });
+  let online = true, version = 'v1';
+  const net = async (url: string) => {
+    if (!online) throw new TypeError('offline');
+    if (url === '/connect/callback') return page('Connected.', 'no-store');
+    return url === '/' ? page(`app ${version}`, 'no-cache') : new Response('asset');
+  };
+  const worker = runWorker(readFileSync(join(repo, 'web', 'dist', 'sw.js'), 'utf8'), net);
+
+  await worker.dispatch('install');
+  for (const asset of ['/', `/${js}`, `/${css}`, '/manifest.webmanifest']) assert.ok(worker.stored.has(asset), `install precaches ${asset}`);
+  // The install downloads the app shell alone: launch screens, install-sheet shots, the notify glyph's source svg and
+  // the font licences are served but never precached.
+  for (const asset of worker.stored.keys()) assert.ok(!/^\/(?:splash|shots)\//.test(asset) && !asset.endsWith('.txt') && asset !== '/notify.svg', `not precached: ${asset}`);
+  assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1');
+
+  // The sign-in tab returns to /connect/callback: its result page is answered, and the cached shell stays the app.
+  assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/connect/callback') }))!.text(), 'Connected.');
+  assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1', 'a result page never replaces the shell');
+
+  // A reachable app-shell navigation answers from the network; the stored shell stays the install-time copy.
+  version = 'v2';
+  assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/') }))!.text(), 'app v2');
+  assert.equal(await worker.stored.get('/')!.clone().text(), 'app v1', 'navigation never rewrites the shell');
+
+  // Offline, a cold navigation is answered by the precached app, never a browser error.
+  online = false;
+  assert.equal(await (await worker.dispatch('fetch', { request: reqOf('/chief') }))!.text(), 'app v1');
+
+  // The push is content-free: a fixed notification, whatever the payload says.
+  await worker.dispatch('push', { data: { json: () => ({ title: 'Something private' }) } });
+  assert.equal(worker.shown.length, 1);
+  assert.equal(worker.shown[0][0], 'Crewhouse has news');
+  assert.equal(worker.shown[0][1].tag, 'crewhouse');
+  assert.deepEqual(worker.badged, [undefined], 'the icon gets a plain dot, not a count');
 });

@@ -1,7 +1,7 @@
 // The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
-// room is flat 2D with no 3D library anywhere, its motion is calm CSS loops that ask for no frame and stop off screen,
-// Reduce Motion runs none at all, and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer the
-// room's two labels (the one Needs you pill and the Tray bubble) sit inside it, clear of each other and of every figure.
+// panels are flat with no 3D library anywhere, their only motion is the working helmet's scan line (still otherwise,
+// none under Reduce Motion), and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer
+// every panel sits clear of the others, nothing clips, counts agree with A.office, and the grid scrolls past six.
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,7 +16,7 @@ import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
-import { floorPlan, type OfficeMember } from '../web/src/adapter.ts';
+import type { OfficeMember } from '../web/src/adapter.ts';
 import type { Json } from '../web/src/api.ts';
 
 const repo = join(import.meta.dirname, '..');
@@ -37,21 +37,7 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
   assert.equal({ ...pkg.dependencies, ...pkg.devDependencies }.three, undefined);
 });
 
-test('one floor: five spots in roster order, whoever waits on you first, everyone else counted', () => {
-  const who = (i: number, ring: OfficeMember['ring'], extra: Partial<OfficeMember> = {}): OfficeMember => ({ id: `h${i}`, name: `H${i}`, kind: 'pip', mood: 'idle', ring,
-    seat: ring === 'needs' ? 'chat' : ring || 'free', status: '', step: '', steps: [], things: [], ...extra });
-  const crew = Array.from({ length: 30 }, (_, i) => who(i, i % 4 === 3 ? 'needs' : i % 4 === 1 ? 'working' : ''));
-  const p = floorPlan(crew);
-  assert.equal(p.seats.length, 5, 'the floor never grows');
-  assert.ok(p.seats.every((c) => c.ring === 'needs'), 'whoever waits on you stands first');
-  assert.deepEqual(p.seats.map((c) => c.id), crew.filter((c) => c.ring === 'needs').slice(0, 5).map((c) => c.id), "in the crew's own order");
-  assert.equal(p.seats.length + p.more.length, 30, 'everyone is drawn or counted under +N');
-  const few = floorPlan([who(0, 'working'), who(1, '', { seat: 'waiting' }), who(2, 'needs'), who(3, '')]);
-  assert.deepEqual(few.seats.map((c) => c.id), ['h2', 'h0', 'h1', 'h3'], 'needs you, working, held, free last');
-  assert.equal(few.more.length, 0);
-});
-
-test('office truth: the room, its counts, the tray, the roster and Needs you read one state', () => {
+test('office truth: the panels, their counts, the tray, the roster and Needs you read one state', () => {
   const now = Date.now(), min = 60_000;
   const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
   const task = (id: number, bot: string, state: string) => ({ id, bot, title: `Job ${id}`, state, files: [] });
@@ -79,7 +65,7 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.equal(v.counts.needs, 2, 'Reel\'s question and Chief\'s; the suggestion is not counted');
   assert.equal(v.crew.find((c) => c.id === 'scribe')!.ask, undefined, 'no Review for a suggestion');
   assert.deepEqual(A.chiefAsks(v).map((c) => c.id), [12], 'Chief carries his own row');
-  // every Needs-you row has exactly one Review holder in the room
+  // every Needs-you row has exactly one Review holder in the office
   const holders = v.needs.map((c) => (v.crew.find((m) => m.ask?.id === c.id) ? 1 : 0) + (A.chiefAsks(v).includes(c) ? 1 : 0));
   assert.deepEqual(holders, [1, 1]);
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
@@ -89,8 +75,11 @@ test('office truth: the room, its counts, the tray, the roster and Needs you rea
   assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
-  assert.equal(chats.get('reel'), 'Needs you');
-  assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');
+  assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
+  assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
+  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
+  assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
   assert.equal(answered.counts.needs, 1);
@@ -191,69 +180,58 @@ async function browse() {
     window.requestAnimationFrame = (f) => { n.raf++; const id = ask((t) => { n.pending.delete(id); f(t); }); n.pending.add(id); return id; };
     window.cancelAnimationFrame = (id) => { n.pending.delete(id); drop(id); };
   })()` });
-  const open = async (query: string) => { await send('Page.navigate', { url: `${base}/?${query}` }); };
+  const open = async (query: string, path = '/') => { await send('Page.navigate', { url: `${base}${path}?${query}` }); };
   return { send, run, open };
 }
 
 
 /** Measuring that nothing happens needs a window, so this one is a measurement, not a wait. */
-const WINDOW_MS = 2000;
-const room = "!!document.querySelector('.o-room .o-cell')";
-/** Home opens on Chat; the room is the Office view, one tap away. */
+const WINDOW_MS = 600;
+/** Home opens on Chat; Office is one tap away on the Chat | Office switch (found by its word, not its mode). */
 const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
-  await until('the Chat | Office switch', () => b.run("!!document.querySelector('.home-mode [data-mode=office]')"), 30_000);
-  await b.run("document.querySelector('.home-mode [data-mode=office]').click()");
-  await until('the room', () => b.run(room), 30_000);
+  await until('the Chat | Office switch', () => b.run("[...document.querySelectorAll('.home-mode [role=tab]')].some((e) => /office/i.test(e.textContent))"), 30_000);
+  await b.run("[...document.querySelectorAll('.home-mode [role=tab]')].find((e) => /office/i.test(e.textContent)).click()");
+  await until('the office rows', () => b.run("!!document.querySelector('.office .panel, .office .grow-row')"), 30_000);
 };
 
-// What runs: CSS loops only (never a frame callback), each inside the room, and how many are playing.
-const loops = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
-  const on = document.getAnimations().filter((a) => a.playState === 'running');
-  return { raf: __o.raf, running: on.length, css: on.filter((a) => a.constructor.name === 'CSSAnimation').length,
-    outside: on.filter((a) => !a.effect?.target?.closest?.('.o-room')).length,
-    // a loop that never ends, other than the thread's own loading skeleton (main's, gone once the thread has loaded)
-    forever: on.filter((a) => a.effect?.getComputedTiming().iterations === Infinity && !a.effect?.target?.closest?.('.skeleton')).length,
-    names: on.map((a) => (a.animationName ?? a.constructor.name) + ' on ' + (a.effect?.target?.getAttribute?.('class') ?? a.effect?.target?.tagName ?? '?') + ' (' + a.effect?.getComputedTiming().iterations + ')'),
-    working: [...document.querySelectorAll('.o-cell[data-seat=working] .o-sprite')].length };
+// What moves: the working helmets' scan lines only (a 140 ms re-render, never a frame callback or a CSS loop).
+const helmets = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
+  const on = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations === Infinity);
+  const panels = [...document.querySelectorAll('.office .panel')];
+  return { loops: on.length, panels: panels.length,
+    think: panels.filter((p) => p.querySelector('.helmet')?.dataset.mode === 'think').length,
+    art: panels.map((p) => p.querySelector('.helmet')?.textContent ?? '') };
 })()`);
 
-test('the office keeps the battery budget: calm CSS loops while it shows, none off screen or with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
+test('the office keeps the battery budget: a scan line while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
-    // Chat by default: no room, so nothing of the office runs.
-    await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-    // What plays as Chat opens is the page's own entrances (each finite) and, while Chief's thread loads, main's loading
-    // skeleton; once the thread is in, nothing runs, and any other loop that never ends fails here.
-    const opening = await loops(b);
-    t.diagnostic(`${demo}: Chat at first paint runs ${opening.running}: ${opening.names.join('; ') || 'nothing'}`);
-    assert.equal(opening.forever, 0, `${demo}: nothing in Chat loops but the loading skeleton (${opening.names.join('; ')})`);
-    await until(`${demo}: Chat to be still once the thread has loaded`, async () => !(await b.run("!!document.querySelector('.skeleton')")) && (await loops(b)).running === 0, 10_000);
+    await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
     await toOffice(b);
-    await until('the room to settle', () => b.run('window.__o.pending.size === 0'), 15_000);
-    const q0 = await loops(b);
+    const q0 = await helmets(b);
+    t.diagnostic(`${demo}: ${q0.panels} panels, ${q0.think} thinking`);
+    assert.equal(q0.loops, 0, `${demo}: no looping animation in the office`);
     await new Promise((r) => setTimeout(r, WINDOW_MS));
-    const q1 = await loops(b);
-    assert.equal(q1.raf, q0.raf, `${demo}: no frame asked for`);
-    assert.equal(q1.running, q1.css, `${demo}: every move is a CSS loop`);
-    assert.equal(q1.outside, 0, `${demo}: and every loop is in the room`);
-    if (q1.working) assert.ok(q1.running > 0, `${demo}: someone working is seen working`);
-    // Scrolled out of view, the room's loops hold still.
-    await b.run("document.querySelector('.o-room').classList.add('off')");
-    assert.equal((await loops(b)).running, 0, `${demo}: off screen, nothing plays`);
+    const q1 = await helmets(b);
+    const moved = q0.art.filter((a: string, i: number) => a !== q1.art[i]).length;
+    assert.equal(moved, q1.think, `${demo}: exactly the thinking helmets move (${moved} of ${q1.panels})`);
+    if (demo === 'calm') assert.equal(q1.think, 0, 'calm: nobody works, every helmet still');
+    else assert.ok(q1.think > 0, 'office: someone working is seen working');
   }
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await b.open('demo=office&day');
   await toOffice(b);
-  assert.equal((await loops(b)).running, 0, 'Reduce Motion: nothing animates, every pose and count is the end state');
+  const r0 = await helmets(b);
+  await new Promise((r) => setTimeout(r, WINDOW_MS));
+  assert.deepEqual((await helmets(b)).art, r0.art, 'Reduce Motion: every helmet still, even at work');
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
-// Each demo house (web/src/demo.ts) and its crew size. Every house has something waiting on you (?demo keeps Tracer's
-// question after a crewN swap), so the room shows its one pill.
-const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['after', 5], ['b1', 5], ['b1after', 5]];
-test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a computer, nothing covers anything, the one pill is real, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+// Each demo house and its crew size.
+const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['calm', 5], ['finished', 5]];
+test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is clear and whole, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
@@ -261,133 +239,216 @@ test('at 1, 5, 12 and 30 crew and in the B1 mock\'s house, on a phone and a comp
     for (const [demo, n] of HOUSES) {
       for (const theme of ['day', 'night']) {
         await b.open(`demo=${demo}&${theme}`);
-        // Each launch opens on Chat: no room drawn, and the pinned Needs you and Chief's box are on the first screen.
-        await until('Chief\'s box', () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+        await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+        // Each launch opens on Chat: no room drawn, no pinned card in the conversation, and the thread with Chief's box on the first screen.
+        await until('a thread line', () => b.run("document.querySelectorAll('.home-chat .lines .line').length > 0"), 30_000);
         const first = await b.run(`(() => {
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
-          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.needs-pin .needs-row')), box: seen(document.querySelector('.home-chat .composer')),
-            all: document.querySelector('.needs-pin .section-head .link')?.textContent ?? '', rows: document.querySelectorAll('.needs-pin .needs-row').length };
+          const lines = [...document.querySelectorAll('.home-chat .lines .line')];
+          const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
+          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
         })()`);
         const lead = `${demo} ${theme} at ${width}, first open`;
         assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
-        assert.ok(first.pin && first.box, `${lead}: one pinned Needs you row and Chief's box on the first screen`);
-        assert.equal(first.rows, 1, `${lead}: one pinned row`);
+        assert.equal(first.pin, false, `${lead}: no pinned card in the conversation (the ask sits inline)`);
+        assert.ok(first.thread && first.box, `${lead}: the conversation and Chief's box on the first screen`);
+        // Where the demo has an ask, the pinned row's replacement is the inline ask itself: its words in the thread, on screen.
+        if (first.asks.length) assert.ok(first.asks.some((a: { text: string; on: boolean }) => a.on && a.text.length > 40), `${lead}: the inline ask carries its words on the first screen (${first.asks.map((a: { text: string }) => JSON.stringify(a.text.slice(0, 60))).join(' | ')})`);
         // A long thread leaves the page scrolled to its end; Office must still open on its room.
         await b.run('scrollTo(0, document.documentElement.scrollHeight)');
         await toOffice(b);
+        // Phone width renders the grouped list, a desk the panels; the slim header's count line reads on both.
         const m = await b.run(`(() => {
-          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.o-room'));
-          const bar = box(document.querySelector('.home-top')).bottom;
-          const cards = [...document.querySelectorAll('.o-tag')].map(box);
-          const sprites = [...document.querySelectorAll('.o-sprite')].map(box);
+          const narrow = innerWidth < 900;
+          const units = [...document.querySelectorAll(narrow ? '.office .grow-row' : '.office .panel')];
+          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.office'));
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
-          const out = cards.filter((x) => x.left < st.left - 1 || x.right > st.right + 1 || x.top < st.top - 1 || x.bottom > st.bottom + 1).length;
-          const els = [...document.querySelectorAll('.o-tag')], sps = [...document.querySelectorAll('.o-sprite')];
-          const say = (e, r) => (e.closest('[data-id]')?.dataset.id ?? 'chief') + ' ' + e.getAttribute('class') + ' ' + Math.round(r.top) + '-' + Math.round(r.bottom) + ' x' + Math.round(r.left) + '-' + Math.round(r.right);
+          const rects = units.map(box);
           const pairs = [];
-          cards.forEach((a, i) => cards.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(els[i + 1 + j], c)); }));
-          cards.forEach((a, i) => sprites.forEach((c, j) => { if (hit(a, c)) pairs.push(say(els[i], a) + ' x ' + say(sps[j], c)); }));
-          const over = pairs.length;
-          // a strip name or word wider than its cell is clipped
-          const clipped = [...document.querySelectorAll('.o-cap b, .o-cap > span')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
-          const pills = [...document.querySelectorAll('.o-pill')].map((a) => a.getAttribute('href'));
-          const stat = Number(document.querySelector('.home-meta .m-needs')?.dataset.n), busy = Number(document.querySelector('.home-meta .m-working')?.dataset.n);
-          const pinned = parseInt(document.querySelector('.needs-pin .count')?.textContent ?? '0', 10);
-          const all = document.querySelector('.needs-pin .section-head .link')?.textContent ?? '';
-          const names = (q) => [...document.querySelectorAll(q)].map((e) => e.textContent);
-          const onIt = names('.feed .working .on-card .grow > b'), waits = names('.side-row:has(.side-seat.needs, .side-seat.chat) > b');
-          // Home has no tab bar (B1): on a computer the rail's Chief count is the badge, on a phone the pinned count is
-          const badge = parseInt(document.querySelector('.side-nav[href="#/"] .side-count')?.textContent ?? (innerWidth < 900 ? String(pinned) : '0'), 10);
-          const more = Number(document.querySelector('.o-more')?.dataset.more ?? 0);
-          // 152/153: the tray box stands on the floor in front of everyone (what is drawn at its middle is the box), the Tray
-          // bubble's tail is over it and close above it (a packed row: the caption's pointer close under it, in the floor
-          // band), and the label covers no ink: a pen, the z's, a screen.
-          const packedRow = document.querySelector('.o-room')?.dataset.tight === 'true';
-          const tb = document.querySelector('.o-traybox > path')?.getBoundingClientRect(), tt = document.querySelector('a.o-tray > path, .o-pointer')?.getBoundingClientRect();
-          const bub = document.querySelector('a.o-tray rect')?.getBoundingClientRect(), unit = document.querySelector('.o-art').getScreenCTM().a;
-          const inked = bub ? [...document.querySelectorAll('.o-pen, .o-zz, .o-mon')].map(box).filter((c) => hit(bub, c)).length : -1;
-          // 162: the box covers no part of any figure (their drawn parts, not the soft foot shadow under them), and the whole
-          // label, tail too, rests on no furniture: a desk, a note, a screen, a lamp's glow.
-          const part = (e) => (e.getAttribute('class') ?? e.tagName) + ' of ' + (e.closest('[data-id]')?.dataset.id ?? 'chief');
-          const boxed = tb ? [...document.querySelectorAll('.o-sprite *')].filter((e) => !/^(g|svg|defs|clipPath|mask|linearGradient|radialGradient|stop)$/.test(e.tagName) && !e.closest('defs, clipPath, mask') && !(e.tagName === 'ellipse' && e.getAttribute('filter')))
-            .filter((e) => hit(tb, box(e))).map(part) : ['no box'];
-          const lab = document.querySelector('a.o-tray')?.getBoundingClientRect();
-          const furn = lab ? [...document.querySelectorAll('.o-desk, .o-note, .o-mon, ellipse[fill*="lamp"]')].filter((e) => hit(lab, box(e))).map(part) : ['no label'];
-          const tray = tb && tt ? { onTop: !!document.elementFromPoint(tb.left + tb.width / 2, tb.top + tb.height * 0.6)?.closest('.o-traybox'), over: tt.left + tt.width / 2 >= tb.left && tt.left + tt.width / 2 <= tb.right,
-            gap: (packedRow ? tt.top - tb.bottom : tb.top - tt.bottom) / unit, below: tt.top >= tb.bottom - 1, inked, boxed, furn } : null;
-          return { pairs, seen: st.height > 0 && st.top >= bar - 1 && st.top < innerHeight - 40, out, over, clipped, pills, stat, badge, busy, onIt, waits, pinned, all,
-            seated: document.querySelectorAll('.o-cell .o-sprite').length - 1, more: more || 0, caps: document.querySelectorAll('.o-strip .o-cap:not(.o-more)').length,
-            tray2: tray, scale: Number(document.querySelector('.o-room')?.dataset.scale), tight: document.querySelector('.o-room')?.dataset.tight === 'true', roster: document.querySelectorAll('.side-row').length, tray: document.querySelector('.o-tray')?.getAttribute('aria-label') ?? null };
+          rects.forEach((a, i) => rects.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(i + ' x ' + (i + 1 + j)); }));
+          const out = rects.filter((r) => r.left < st.left - 1 || r.right > st.right + 1).length;
+          const clipped = units.flatMap((p) => [...p.querySelectorAll('b, .p-line, .p-meta, .p-steps span, .btn')])
+            .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
+          const names = units.map((p) => p.getAttribute('aria-label'));
+          const line = document.querySelector('.office-counts')?.textContent ?? '';
+          const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|resting)/g)].map((x) => Number(x[1]));
+          const officePins = document.querySelectorAll('.needs-pin').length;
+          const onCards = document.querySelectorAll('.office-main .on-card').length;
+          const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
+          const chiefGlows = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs'));
+          const chiefRests = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.rest'));
+          const chiefWorks = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.work'));
+          const work = units.filter((p) => p.querySelector('.p-state.work')).length;
+          const done = units.filter((p) => p.querySelector('.p-state.done')).length;
+          const rest = units.filter((p) => p.querySelector('.p-state.rest')).length;
+          const modes = [...new Set(units.map((p) => p.querySelector('.helmet')?.dataset.mode))];
+          const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const memberWords = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim());
+          const chiefWord = units.filter((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim())[0];
+          const crewUnits = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? ''));
+          const crewActs = crewUnits.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
+          const crewText = crewUnits.map((p) => p.innerText);
+          const waitRows = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => [p.querySelector('.p-line')?.textContent, p.querySelector('.p-meta')?.textContent]);
+          const doneText = crewUnits.filter((p) => p.querySelector('.p-state.done')).map((p) => p.innerText);
+          const pinnedTop = document.querySelector('.home-office .home-top');
+          const topH = pinnedTop ? pinnedTop.getBoundingClientRect().height : 0, topNotes = pinnedTop ? pinnedTop.querySelectorAll('.card, .nudge').length : 0;
+          const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
+          const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
+          // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
+          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge')]);
+          const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
+          const officeText = document.querySelector('.office')?.innerText ?? '';
+          const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
+          const office = document.querySelector('.office-main > .office');
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, officeText, chatRows, grouped, groups,
+            scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
+            cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
+        m.pinned = first.chatPin;
         try {
-        assert.ok(m.seen, `${at}: Office opens on its room, below the bar and on screen, not just somewhere on the page`);
-        assert.equal(m.out, 0, `${at}: every card inside the room`);
-        assert.equal(m.over, 0, `${at}: no card covers another card or a sprite: ${m.pairs.join('; ')}`);
-        assert.equal(m.clipped, 0, `${at}: no label in the room is cut off`);
-        assert.equal(m.pills.length, m.badge > 0 ? 1 : 0, `${at}: one Needs you pill while anything waits on you, none otherwise`);
-        assert.ok(m.pills.every((h: string) => /^#\/(ask|h)\/\w+/.test(h)), `${at}: the pill opens a real question or chat (${m.pills})`);
-        assert.equal(m.stat, m.badge, `${at}: the header's count is the Needs-you badge`);
-        assert.equal(m.pinned, m.badge, `${at}: the pinned Needs you counts the same rows`);
-        if (m.badge > 1) assert.equal(m.all, `See all ${m.badge}`, `${at}: "See all N" is exact`);
-        assert.equal(m.seated + m.more, n, `${at}: everyone is in the room or counted under "+N"`);
-        assert.ok(m.seated <= 5, `${at}: the room never stands more than five helpers`);
-        assert.equal(m.caps, m.seated + 1, `${at}: the strip names everyone standing in the room, Chief too`);
-        if (!mobile) {
-          assert.equal(m.roster, n, `${at}: the rail names the whole crew`);
-          assert.equal(m.busy, m.onIt.length, `${at}: the header's working count is On it now`);
-          assert.deepEqual(m.onIt.filter((x: string) => m.waits.includes(x)), [], `${at}: one state per helper: waiting is never also on it now`);
-        }
-        if (n === 30) assert.ok(m.more > 0, `${at}: a big crew is counted under "+N"`);
-        // Mock size (147, 148, 152): a row the stage holds is at scale 1; one it does not first packs its desks and only then
-        // scales. Five waiting on you is the tightest ordinary row: all five stand, packed, at the floor's one scale 0.953
-        // before and after Reel finishes (172), the box just right of Chief and the Tray caption under it in the floor band.
-        assert.ok(m.tight || m.scale === 1, `${at}: a row that is not packed stands at the mock's own scale (${m.scale})`);
-        assert.ok(m.scale >= 0.89, `${at}: no row of five shrinks past the packed five-waiting row (${m.scale})`);
-        if (demo === 'office' || demo === 'after') assert.deepEqual([m.seated, m.more, m.tight, m.scale], [5, 0, true, 0.953], `${at}: five on the floor, packed at one scale, nobody under "+N"`);
-        if (demo === 'b1' || demo === 'b1after') assert.deepEqual([m.seated, m.scale, m.tight], [5, 1, false], `${at}: the B1 house stands all five at the mock's own spacing and scale`);
-        assert.ok(m.tray2?.onTop, `${at}: the tray box is on the floor in front of everyone, never behind a desk or a body (${JSON.stringify(m.tray2)})`);
-        assert.ok(m.tray2.over && m.tray2.gap >= 0 && m.tray2.gap <= 40, `${at}: the Tray label's pointer is on the box and close to it (${JSON.stringify(m.tray2)})`);
-        assert.equal(m.tray2.below, m.tight, `${at}: the caption sits under the box exactly when the row is packed`);
-        assert.equal(m.tray2.inked, 0, `${at}: the Tray bubble covers no pen, z or screen`);
-        assert.deepEqual(m.tray2.boxed, [], `${at}: the tray box stands on clear floor, in front of no figure`);
-        assert.deepEqual(m.tray2.furn, [], `${at}: the Tray label rests on no desk, note, screen or lamp`);
-        // The B1 mock's own state, exactly: 1 needs you, 2 working, Tracer's list the one page in the tray.
-        if (demo === 'b1') assert.deepEqual([m.stat, m.busy, m.tray], [1, 2, 'Your tray: 1 done today'], `${at}: the mock's counts`);
+          // Needs you is pinned over Chief's thread only: the Office reaches the asks through Chief's one action.
+          assert.equal(m.officePins, 0, `${at}: Office renders no Needs you pin`);
+          assert.deepEqual(m.nums.length, 4, `${at}: the header counts needs, work, done and resting (${m.nums})`);
+          assert.deepEqual([...new Set(m.names)].length, m.units, `${at}: nobody twice, nobody missing`);
+          assert.equal(m.out, 0, `${at}: every row inside the office column`);
+          assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
+          assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
+          assert.equal(m.nums[0], m.memberNeeds, `${at}: the header's waiting count is the waiting crew rows`);
+          assert.equal(m.nums[1], m.onCards, `${at}: the header's working count is On it now`);
+          assert.equal(m.nums[1], m.work - (m.chiefWorks ? 1 : 0), `${at}: the at-work count is the working rows`);
+          assert.equal(m.nums[2], m.done, `${at}: the done count is the done rows`);
+          // Chief's own resting panel is not a crew row.
+          assert.equal(m.nums[3], m.rest - (m.chiefRests ? 1 : 0), `${at}: the resting count is the resting rows`);
+          // Needs-you rows no crew row holds ride on Chief's: his panel glows exactly when rows are left over.
+          // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
+          if (width < 900) assert.ok(m.memberNeeds <= m.pinned, `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.pinned} rows)`);
+          else assert.equal(m.chiefGlows, m.pinned > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.pinned} rows, ${m.memberNeeds} on crew panels)`);
+          // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
+          assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
+          if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
+          // Crew never ask the person: no crew panel or row answers or approves, or leads with the ask's head; a waiting one
+          // waits for Chief, and Chief's one action carries every ask (Needs you's count) to his thread.
+          assert.deepEqual(m.crewActs, [], `${at}: no crew panel or row has an answer or approve button`);
+          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order/i.test(x)), `${at}: no crew panel or row carries the ask (${m.crewText.join(' | ')})`);
+          // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
+          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting row is its job, then "Waiting for Chief"; one with no job rests (${JSON.stringify(m.waitRows)})`);
+          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
+          // Nobody in the Office is said to need the person or ask them for an OK: crew wait for Chief, Chief carries the asks.
+          assert.doesNotMatch(m.officeText, /\w needs you|your OK/, `${at}: no crew member asks the person in the Office`);
+          // On it now's idle line uses the rows' words and the header's waiting count.
+          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || m.idle === `Nobody is working: ${m.nums[0]} waiting for Chief.`), `${at}: On it now says the header's ${m.nums[0]} wait for Chief (${m.idle})`);
+          // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
+          const chat = new Map<string, { line: string; dot: boolean }>(m.chatRows.map(([name, line, dot]: [string, string, boolean]) => [name, { line, dot }]));
+          for (const [name, g] of m.grouped as [string, string][]) {
+            const row = chat.get(name);
+            if (!row) continue;
+            if (g === 'Waiting') assert.equal(row.line, 'Waiting', `${at}: ${name} waits in the Office and in Chats`);
+            if (g === 'Done today') assert.match(row.line, /^Done: /, `${at}: ${name} is done in the Office and in Chats`);
+            if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
+          }
+          // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
+          assert.equal(m.topNotes, 0, `${at}: no card or nudge pinned over the Office`);
+          assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
+          assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
+          if (width < 900) {
+            assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
+            const order = ['Waiting', 'At work', 'Done today', 'Resting'];
+            assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
+            assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
+          } else {
+            assert.equal(m.units, n + 1, `${at}: Chief plus every helper has a panel`);
+            assert.equal(m.cols, 3, `${at}: three columns on a desk`);
+          }
+          if (n === 30) assert.ok(m.scroll, `${at}: thirty rows scroll past six, on the page or in the column`);
+          assert.ok(m.modes.every((x: string) => ['here', 'needs', 'think', 'rest'].includes(x)), `${at}: helmets wear only their four moods (${m.modes})`);
+          assert.ok(m.words.every((w: string) => !/session|terminal|console|pane|live|split|shell|tmux|command|prompt|cursor/i.test(w)), `${at}: no terminal words in the state words (${m.words.join(' | ')})`);
         } catch (e) {
-          // 155: a failed case leaves its evidence, the frame as drawn and every sprite's and label's box, in the job's dir.
           const dir = process.env.OFFICE_SHOTS;
           if (dir) {
             mkdirSync(dir, { recursive: true });
             const name = `grid-fail-${demo}-${theme}-${width}`;
             writeFileSync(join(dir, `${name}.png`), Buffer.from((await b.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
-            writeFileSync(join(dir, `${name}.json`), JSON.stringify(await b.run(`[...document.querySelectorAll('.o-room .o-sprite, .o-room .o-tag, .o-room .o-traybox, .o-room .o-pointer, .o-room svg svg')].map((e) => {
-              const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
-              return { cls: e.getAttribute('class'), tag: e.tagName, box: [r.left, r.top, r.right, r.bottom].map(Math.round), w: cs.width, h: cs.height, attrs: [e.getAttribute('width'), e.getAttribute('height')] };
-            })`), null, 1));
+            writeFileSync(join(dir, `${name}.json`), JSON.stringify(m, null, 1));
           }
           throw e;
         }
       }
     }
-    // The furniture is scenery: a tap on a desk lands on its seat and opens that helper.
-    await b.open('demo=crew5&day');
-    await toOffice(b);
-    // A computer commits its wide room asynchronously (a ResizeObserver flips wide after the first narrow layout), so a
-    // desk point sampled on the narrow frame misses the desk once the wide frame lands. Wait until the room's committed
-    // wide mode matches its measured content width before sampling, then press that frozen point.
-    await until('the room\'s wide mode to match its measured width', () => b.run("(() => { const e = document.querySelector('.o-room'), s = getComputedStyle(e); const content = e.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight); return e.classList.contains('wide') === (content >= 560); })()"), 5000);
-    // A real click (SVG has no .click()) at the desk's centre, and the sheet that opens is that desk's helper.
-    const desk = await b.run("(() => { const d = document.querySelector('.o-cell[data-seat] .o-desk'); d.scrollIntoView({ block: 'center' }); const r = d.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, who: d.closest('.o-cell').getAttribute('aria-label') }; })()");
-    for (const type of ['mousePressed', 'mouseReleased']) await b.send('Input.dispatchMouseEvent', { type, x: desk.x, y: desk.y, button: 'left', clickCount: 1 });
-    await until('the helper\'s panel', () => b.run("!!document.querySelector('.o-sheet')"), 5000);
-    const sheet = await b.run("document.querySelector('.o-sheet').getAttribute('aria-label')");
-    assert.ok(sheet && desk.who.startsWith(sheet), `a tap on a desk opens that desk's helper: "${sheet}" for "${desk.who}"`);
-    // "+N" leads to the whole crew.
-    await b.open('demo=crew30&day');
-    await toOffice(b);
-    await b.run("document.querySelector('.o-more').click()");
-    await until('the crew page', () => b.run("location.hash === '#/crew'"), 5000);
+    // Day draws day art and night draws night art: the same helmets differ between the two.
+    const art: string[] = [];
+    for (const theme of ['day', 'night']) {
+      await b.open(`demo=crew5&${theme}`);
+      await toOffice(b);
+      art.push(await b.run("[...document.querySelectorAll('.office .helmet')].map((h) => h.textContent).join('\\n')"));
+    }
+    assert.notEqual(art[0], art[1], `day and night draw different helmets at ${width}`);
+  }
+});
+
+
+test('your crew reads whole: every face is the drawn helmet, and no row overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const rows = `(() => [...document.querySelectorAll('.crew-row')].map((row) => {
+    const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+    const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
+    const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
+    return { faces: row.querySelectorAll('.face img.ink').length + (row.querySelector('.face.add') ? 1 : 0), kids: kids.length, overlap, clip };
+  }))()`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await b.open(`demo=crew5&${theme}#/crew`);
+    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
+    const found = await b.run(rows), at = `${theme} ${w}`;
+    assert.ok(found.length > 3, `${at}: the crew lists every helper (${found.length} rows)`);
+    for (const [i, f] of found.entries()) {
+      assert.equal(f.faces, 1, `${at} row ${i}: one drawn helmet face`);
+      assert.ok(!f.overlap, `${at} row ${i}: name, role and status never overlap`);
+      assert.ok(!f.clip, `${at} row ${i}: nothing spills past the row`);
+    }
+  }
+  // Only Chief says "Needs you" (Main: one person, one Chief): a crew member waiting on the person reads "Waiting", on the
+  // crew page and on the desk rail beside Chief. `?demo` is the mixed crew whose Tracer waits on the person.
+  for (const theme of ['day', 'night']) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await b.open(`demo&${theme}#/crew`);
+    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
+    const page = await b.run("[...document.querySelectorAll('.crew-row .status-word')].map((e) => e.textContent)"), at = `${theme} crew page`;
+    assert.ok(!page.includes('Needs you'), `${at}: no crew row says "Needs you" (${page.join(' | ')})`);
+    assert.ok(page.includes('Waiting'), `${at}: a waiting crew member says "Waiting" (${page.join(' | ')})`);
+    await b.open(`demo&${theme}`);
+    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 3"), 30_000);
+    const rail = await b.run("[...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent)"), atRail = `${theme} rail`;
+    assert.ok(!rail.includes('Needs you'), `${atRail}: no crew rail row says "Needs you" (${rail.join(' | ')})`);
+    assert.equal(await b.run("document.querySelector('.side-status')?.textContent"), 'Needs you', `${atRail}: Chief still says "Needs you"`);
+  }
+});
+
+test('the desk rail summary under Chief counts the same status its rows show', { skip: !bin && 'no Chromium here' }, async () => {
+  // The rail's count line is the Office's own summary (summaryOf, from A.groupOf); so it must equal the rail rows'
+  // own status. The old ad-hoc line counted every non-working, non-ask member as "resting" (the reported bug: the
+  // summary said "1 resting" while the member's row said "Waiting"). This fails on that line.
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  // The rail's own words, mapped to the four Office groups the summary counts.
+  const group = (w: string) => w.startsWith('Done') ? 'done'
+    : w === 'Waiting' ? 'waiting'
+    : w === 'Working' || w === 'Gone quiet' ? 'at work'
+    : 'resting';
+  for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
+    await b.open(`demo=${demo}&day#/crew`);
+    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+    const r = await b.run(`(() => {
+      const words = [...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent.trim());
+      const sub = document.querySelector('.side-sub')?.textContent ?? '';
+      const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|resting)/g)].map((x) => [x[2], Number(x[1])]));
+      return { words, nums };
+    })()`);
+    const counted: Record<string, number> = { waiting: 0, 'at work': 0, done: 0, resting: 0 };
+    for (const w of r.words as string[]) counted[group(w)]++;
+    assert.deepEqual(r.nums, counted, `${demo}: the rail summary is the rows' own status (${JSON.stringify(r)})`);
   }
 });
 
@@ -416,5 +477,127 @@ test('a routine\'s switch keeps its knob inside the track, clear of its On or Pa
     const g = await b.run(gap), at = `${theme} ${w} text ${scale}x`;
     assert.ok(g.inTrack >= 0, `${at}: the knob ends ${-g.inTrack}px past its track`);
     assert.ok(g.toWords > 0, `${at}: the knob covers "${g.words}" by ${-g.toWords}px`);
+  }
+});
+
+test('a stepper\'s step labels split only between words, never mid-word, at the narrowest phones and text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  // A word that spans two line boxes is a mid-word break: find every word whose own Range reports more than one rect.
+  const broken = `(() => { const out = []; for (const li of document.querySelectorAll('.progress li')) {
+    const tn = [...li.childNodes].find((n) => n.nodeType === 3); if (!tn) continue;
+    const re = /\\S+/g; let m; while ((m = re.exec(tn.textContent))) {
+      const r = document.createRange(); r.setStart(tn, m.index); r.setEnd(tn, m.index + m[0].length);
+      if (r.getClientRects().length > 1) out.push(m[0]);
+    }
+  } return out; })()`;
+  for (const [w, h] of [[320, 800], [360, 800], [390, 844]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: true });
+    await b.open('demo&sheet=signin&phase=waiting&night#/settings');
+    await until('the three steps', () => b.run("document.querySelectorAll('.progress li').length === 3"), 30_000);
+    await b.run("document.querySelectorAll('.progress li').forEach((li) => { li.style.fontSize = (parseFloat(getComputedStyle(li).fontSize) * 1.3) + 'px'; }), 0");
+    const split = await b.run(broken), at = `${w}px text 1.3x`;
+    assert.deepEqual(split, [], `${at}: no step word breaks mid-word (${split.join(', ')})`);
+    const over = await b.run('document.documentElement.scrollWidth - document.documentElement.clientWidth');
+    assert.equal(over, 0, `${at}: the page never scrolls sideways`);
+  }
+});
+
+test('things, routines and helper details read Term: shared tiles, one blue primary, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  // Old-style markers: the pastel file chip and the coral result link. Their Term replacements carry the rows.
+  const markers = `(() => ({ chips: document.querySelectorAll('.file-chip').length,
+    coral: document.querySelectorAll('.link.pink').length,
+    tiles: [...document.querySelectorAll('.thing-list .o-ic, .detail .o-ic')].map((e) => e.textContent),
+    primary: [...document.querySelectorAll('.routine .btn.go, .wb-panel .btn.go')].map((e) => e.textContent),
+    rows: [...document.querySelectorAll('.thing-list .row-item, .routine, .detail .list-row')].map((row) => {
+      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+      const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
+      const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
+      const cut = [...row.querySelectorAll('b')].some((e) => e.scrollWidth > e.clientWidth + 1);
+      return { overlap, clip, cut };
+    }) }))()`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo&${theme}#/things`);
+    await until('the things rows', () => b.run("document.querySelectorAll('.thing-list .row-item').length > 0"), 30_000);
+    let m = await b.run(markers);
+    assert.equal(m.chips, 0, `${at} things: no old file chips`);
+    assert.ok((m.tiles as string[]).length > 0 && (m.tiles as string[]).every((t) => t.trim().length > 0), `${at} things: every file row wears its extension tile`);
+    await b.open(`demo&${theme}#/routines`);
+    await until('the routine rows', () => b.run("document.querySelectorAll('.routine').length > 0"), 30_000);
+    m = await b.run(markers);
+    assert.equal(m.coral, 0, `${at} routines: no coral result link`);
+    assert.ok(((m.primary as string[]).some((t) => /Do it now|Download/.test(t ?? ''))), `${at} routines: one filled-blue primary per row`);
+    await b.open(`demo&${theme}#/h/scribe/details`);
+    await until("scribe's files", () => b.run("document.querySelectorAll('.detail .list-row').length > 0"), 30_000);
+    m = await b.run(markers);
+    assert.equal(m.chips, 0, `${at} helper details: no old file chips`);
+    assert.ok(m.tiles.length > 0, `${at} helper details: finished work wears the shared tile`);
+    for (const [i, r] of m.rows.entries()) {
+      assert.ok(!r.overlap, `${at} row ${i}: never overlaps`);
+      assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);
+      assert.ok(!r.cut, `${at} row ${i}: names read in full`);
+    }
+  }
+});
+
+test('first run and the Share sheet read Term: helmet faces, shared tiles, no bubble, one blue primary, words in full', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const look = `(() => { const W = innerWidth, sp = document.querySelector('.speech'), st = sp && getComputedStyle(sp);
+    const boxes = (sel) => [...document.querySelectorAll(sel)].map((row) => {
+      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+      return { overlap: kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1)),
+        clip: r.left < -1 || r.right > W + 1 || kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1) }; });
+    return { ideas: document.querySelectorAll('.idea').length, tiles: document.querySelectorAll('.idea > .o-ic').length,
+      bubble: !!st && (parseFloat(st.borderTopWidth) > 0 || st.backgroundColor !== 'rgba(0, 0, 0, 0)'),
+      chips: document.querySelectorAll('.share .chip').length, primary: document.querySelectorAll('.share .btn.go').length,
+      faces: document.querySelectorAll('.share .line-by .face img.ink').length,
+      cut: [...document.querySelectorAll('.share .said, .idea b')].some((e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1),
+      rows: boxes('.idea, .share .line, .share-acts') }; })()`;
+  const shared = new URLSearchParams({ title: 'Dentist appointment', text: 'Dr Patel, Thursday 14 November at 10:30, Harley Street Dental Practice, please arrive 10 minutes early' });
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo=hello&${theme}`);
+    await until('the first-run ideas', () => b.run("document.querySelectorAll('.idea').length > 0"), 30_000);
+    let m = await b.run(look);
+    assert.equal(m.tiles, m.ideas, `${at} hello: every idea wears the shared tile`);
+    assert.ok(!m.bubble, `${at} hello: Chief's greeting is plain words, not a speech bubble`);
+    await b.open(`demo&${theme}&${shared}`, '/share');
+    await until('the share sheet', () => b.run("document.querySelectorAll('.share-acts .btn').length > 0"), 30_000);
+    m = await b.run(look);
+    assert.equal(m.chips, 0, `${at} share: no old chips`);
+    assert.equal(m.primary, 1, `${at} share: one filled-blue primary`);
+    assert.equal(m.faces, 1, `${at} share: Chief speaks with his drawn helmet`);
+    assert.ok(!m.cut, `${at}: what was shared and every idea read in full`);
+    for (const [i, r] of m.rows.entries()) assert.ok(!r.overlap && !r.clip, `${at} row ${i}: nothing overlaps or spills`);
+  }
+});
+
+test('a phone card is one primary and ⋯: the sheet names the card and its rows read at 15px; a desk keeps its buttons', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const shown = (sel: string) => `[...document.querySelectorAll('${sel}')].filter((e) => e.getClientRects().length)`;
+  for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const at = `${theme} ${w}`;
+    await b.open(`demo&${theme}`);
+    await until('a card in Chief\'s thread', () => b.run("!!document.querySelector('.chat .lines .card.ask .btns')"), 30_000);
+    const m = await b.run(`({ dots: ${shown('.chat .lines .more-dots')}.length, acts: ${shown('.chat .lines .more-act')}.length })`);
+    if (!mobile) { assert.equal(m.dots, 0, `${at}: a desk shows no ⋯`); assert.ok(m.acts > 0, `${at}: a desk keeps every choice inline`); continue; }
+    assert.ok(m.dots > 0 && m.acts === 0, `${at}: the other choices sit behind ⋯`);
+    await b.run(`${shown('.chat .lines .more-dots')}[0].click()`);
+    await until('the ⋯ sheet, settled', () => b.run("!!document.querySelector('.more-sheet .more-row') && !document.querySelector('.more-sheet').getAnimations().length"), 10_000);
+    const s = await b.run(`(() => { const head = document.querySelector('.more-head b'), rows = [...document.querySelectorAll('.more-row')];
+      return { head: head?.textContent ?? '', rows: rows.map((r) => { const q = r.getBoundingClientRect();
+        return { font: parseFloat(getComputedStyle(r).fontSize), h: q.height, inside: q.left >= -1 && q.right <= innerWidth + 1 && q.bottom <= innerHeight + 1 }; }) }; })()`);
+    assert.ok(s.head.trim(), `${at}: the sheet names its card`);
+    for (const [i, r] of s.rows.entries()) assert.ok(r.font >= 15 && r.h >= 48 && r.inside, `${at} row ${i}: 15px, a full tap height, on screen`);
+    await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await until('the sheet to close', () => b.run("!document.querySelector('.more-sheet')"), 10_000);
   }
 });

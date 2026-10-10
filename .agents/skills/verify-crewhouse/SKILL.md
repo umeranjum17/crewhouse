@@ -51,14 +51,17 @@ is stub) plus `curl -fsS "http://127.0.0.1:$PORT/"` returning HTML.
 
 ## Drive
 
-**HTTP (the app's own consumer path).** Every non-GET needs the header `x-crewhouse: 1`
-(403 otherwise — same-origin CSRF guard). The canonical journey, from `test/stub.test.ts`:
+**HTTP (the app's own consumer path).** Follow the authority contract in
+[`docs/ui-contract.md`](../../../docs/ui-contract.md).
+Read the capability only from your own `$LAB/state/person.key`; never from the owner's
+install. The canonical journey, from `test/stub.test.ts`:
 
 ```bash
-B="http://127.0.0.1:$PORT"; H='-H content-type:application/json -H x-crewhouse:1'
+B="http://127.0.0.1:$PORT"; PERSON=$(<"$LAB/state/person.key")
+H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON") # never log the capability
 curl -fsS "$B/api/state"                                   # person.name "Owner", bots list with chief
-curl -fsS -X POST $H -d '{"address":"Sir"}' "$B/api/onboard"   # then /api/state shows person.address "Sir"
-curl -fsS -X POST $H -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"
+curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"   # then /api/state shows person.address "Sir"
+curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"
 # poll GET /api/bots/chief until the bot reply appears:
 #   stub chief: done with "The person says: I need a demo video"
 ```
@@ -69,7 +72,11 @@ tool calls written into the message: `[tool crew_recruit {"template":"reel","nam
 one `All done.` line; see `features/recruit-assign.md`). SQLite truth lives at
 `$LAB/state/crew.db` (read-only probe: `node -e 'new (require("node:sqlite").DatabaseSync)(process.argv[1],{readOnly:true})…'`).
 
-**UI (browser).** Open `http://127.0.0.1:$PORT/` with the fleet's browser tool
+**UI (browser).** Bootstrap only your owned browser with the private launcher URL
+`http://127.0.0.1:$PORT/#person=<contents of $LAB/state/person.key>`; the app removes the
+fragment and keeps authority in that tab's sessionStorage. Subsequent themed loads use
+the same tab. No API read or public page may mint or return this capability.
+Open with the fleet's browser tool
 (`chrome-devtools-axi` with `CHROME_DEVTOOLS_AXI_SESSION=<task-name>` — the default session
 is shared across lanes; any CDP harness works, as `test/office.test.ts` shows). First run
 shows the Hello screen (person's name, three ideas); picking one onboards and opens Chief's
@@ -86,16 +93,22 @@ every screen with no crewd — fine for pure-UI layout checks, never a substitut
 drive. Anything a person sees also owes the Review evidence set below.
 
 **Real model words** (a proof of what Chief or a helper actually says) need the real engine
-and a signed-in account: run the same launch without `CREWHOUSE_ENGINE=stub`, with HOME/XDG
-under `/home/umer/lab-tmp/crewhouse-retained/home` and `CREWHOUSE_STATE_DIR`/`CREW_DIR`/`TOOLS_DIR`
-pointing at its `run/state`, `run/crew`, `run/tools` (never a copy; one lane at a time, under
-the heavy lock; its `start.sh`/`stop.sh` do this, on port 7751), `PATH=/usr/bin:/bin` and `MISE_OFFLINE=1` (a shell PATH leaks into the
-sealed engine home and can make the reseal too big to boot), and stop it with TERM to crewd and
-its children, waiting for `auth-store.sealed` to replace the plaintext state. `GET /api/accounts`
-shows `signedIn: true` once the engine is ready. A `Codex error: The usage limit has been
-reached` or `asking us to slow down` in `run/state/logs/openclaw.log` means the account rests:
-wait it out, never sign in again. That home carries earlier lanes' chat history
-and notes, which reach Chief's prompt; say so beside any answer it gives.
+and a signed-in account: run the same isolated launch without `CREWHOUSE_ENGINE=stub`.
+For Claude proofs hold `/home/umer/firstmate/config/fm-cred-lock.sh` for the entire engine
+lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
+`PATH=/home/umer/.local/bin:/usr/bin:/bin`, `MISE_OFFLINE=1`. After the log says
+`crewd engine ready`, symlink only the dedicated test credential
+`/home/umer/lab-tmp/claude-test-cred/home/.claude/.credentials.json` into
+`$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
+Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
+Claude CLI preflight before sending; select `["claude"]` with `PUT /api/bots/chief/models`.
+A positive preflight does not witness a successful turn: the CLI may fail to refresh an
+expired OAuth session. If the turn parks, inspect its terminal failure in the engine log,
+retain pre/post results and stop; never infer admission from missing crewd tool events.
+This route is hosted, not a scripted provider.
+Stop crewd with TERM and await its exit before releasing the lock.
+Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
+Quota errors mean the account rests: report the bound, never mint another sign-in.
 
 ## Evidence
 
@@ -106,6 +119,20 @@ the *action*); capture the action and the resulting state (the reply message and
 row, not just a final screen); verify side effects where the feature has them (files under
 `$LAB/crew/bots/<bot>/files/`, rows in `crew.db`); label anything the stub cannot prove
 (no real model words, no real sign-in) as a stub-engine result.
+
+## Person authority (shared ingress)
+
+Run the real paired-phone journey with `node --test test/link.test.ts` under an isolated
+HOME/XDG/TMPDIR. It pairs a control phone with Noise, asks for a synthetic unsent draft,
+then drives an unfenced Tracer shell's exact public-header HTTP approval attack: expect
+403, the ask still open and no `draft.approved` event. Answer through the paired phone:
+expect 200 and the event. Pairing approval itself also requires the private computer
+capability; a phone cannot approve itself, and a view-only grant cannot write.
+For the original `probe-person-authority.mjs`, adjust only the owned repo/evidence/scratch
+paths and legitimate setup calls to use the owned `person.key`; leave the shell's forged
+POST without authority. Wait for its recorded shell result, then witness denial and the
+unchanged ask, rather than waiting for the old success event. Never send real mail.
+This is API-only proof: no changed screen, screenshots or motion required.
 
 ## Review evidence (fleet standard)
 
@@ -120,12 +147,12 @@ silent.
 
 Crewhouse is a personal assistant for **one** person. No screen, capture or reply may speak
 as if several people share it — the word list lives in
-`scripts/personal-voice.mjs` (`TERMS`). The check runs automatically at the top of every
+`.agents/skills/verify-crewhouse/scripts/personal-voice.mjs` (`TERMS`). The check runs automatically at the top of every
 `scripts/screens.sh` capture, and by hand anywhere else:
 
 ```bash
-node scripts/personal-voice.mjs               # the copy surfaces: demo seed, screens, prompts
-node scripts/personal-voice.mjs --self-test    # its negative test (see below)
+node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs               # copy sources
+node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs --self-test    # negative test
 ```
 
 It scans the **rendered copy and the producers**: `web/src/demo.ts` (the seed and the
@@ -151,6 +178,11 @@ FM_HOME=${FM_HOME:-$HOME/.treehouse/firstmate}          # the supervising firstm
 EV=$FM_HOME/evidence/<task-name>/<change-slug>          # stable: named in the PR, survives cleanup
 mkdir -p "$EV/screens" "$EV/motion"
 ```
+
+For the custom-hire journey, use the verified native browser capture and recording recipe in
+[`features/recruit-assign.md`](features/recruit-assign.md): the `screens.sh` and `record.mjs`
+helpers below are absent at this revision. That recipe needs neither helper and retains
+all four theme/width captures plus the approval recording.
 
 **Four captures per changed screen** — `scripts/screens.sh <dest> <slug> <url> [extra-query]`
 drives the app's own theme switch (`?day` / `?night`, `useLook` in `web/src/main.tsx`; the OS
@@ -205,14 +237,14 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 
 - `scripts/screens.sh <dest> <slug> <url> [query]` — the four design-bar captures of one
   changed screen (dark and light, 1440 and 390), after the mandatory personal-voice check.
-- `scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
+- `node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
   (one person, one assistant) over the demo seed, the screens and the prompts: exit 0 clean /
   1 a hit to fix at the producer / 2 could not run. `--self-test` is its negative test.
 - `SERIAL=<emulator> node scripts/phone-ui.mjs texts | tap '<regex>' [n] | shot <png>` — the phone driven by what
   is on screen (uiautomator), for the bubble recipe.
 - `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
   a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
-- `node scripts/phone-pair.mjs --out <dir> [--serial …] [--base …] [--apk …] [--runs n]
+- `node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs --out <dir> --state <owned-state-dir> [--serial …] [--base …] [--apk …] [--runs n]
   [--record]` — the native pairing proof (`features/phone-pairing.md`): the phone's camera
   reads the live code, the computer confirms, the phone reaches "You're in"; screenshots, an
   mp4 and `timings.json`.

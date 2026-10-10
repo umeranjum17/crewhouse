@@ -146,6 +146,19 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
   assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
   assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
+  // Herdr drives the person's own terminal agents: looking asks once (a standing answer covers later
+  // looks); driving names its pane or agent and the command, and asks every time.
+  const herd = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'tools', 'herdr', 'tool.json'), 'utf8'));
+  assert.deepEqual([herd.source, herd.bins, herd.grant], ['system', ['herdr'], { default: false }], 'a user-installed binary, never bundled, held only by its role');
+  const hs = { ...s, run: { herdr: { name: herd.name, ...herd.run } } };
+  const look = effectOf('herdr', { args: ['pane', 'list'] }, hs) as any;
+  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Maya wants to look at your terminal agents.', 'herdr:look'], 'reads ask once, under a standing answer');
+  assert.equal(coversOf(look.key), 'your terminal agents');
+  const drive = effectOf('herdr', { args: ['agent', 'prompt', 'reviewer', 'ship it'] }, hs) as any;
+  assert.deepEqual([drive.kind, drive.key], ['send', undefined], 'drives ask every time: no standing key');
+  assert.match(drive.words, /prompt.*reviewer/, 'the card names the agent and the command');
+  assert.match((effectOf('herdr', { args: ['pane', 'run', 'w1:p1', 'pytest'] }, hs) as any).words, /run.*w1:p1/, 'the card names the pane and the command');
+  assert.equal(effectOf('herdr', { args: ['server', 'stop'] }, hs).kind, 'refuse', 'anything else is refused');
   assert.equal(effectOf('browser', { args: ['click', 'e1'] }, s).kind, 'send');
   assert.equal(effectOf('browser', { args: ['snapshot', '--query', 'inbox'] }, s).kind, 'safe');
   // The browser's own reach: only web pages, its own space for files, and crewd's choice of browser and session.
@@ -515,8 +528,8 @@ test('limits: a limit rests that account and the task carries on in the same con
   await settled(db, d);
   assert.equal(task(db, d).state, 'paused');
   assert.equal(task(db, d).wake_at, null, 'no time to wake: it waits for the sign-in');
-  assert.equal(task(db, d).result, 'Waiting for you to sign in with Grok.');
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in with Grok.');
+  assert.equal(task(db, d).result, 'Waiting for you to sign in.');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in.');
   // A second job waiting on the same sign-in says the same sentence: the thread says it once, not twice.
   const e = crew.assign('scout', 'and one more', 'chief').task;
   await settled(db, e);
@@ -1052,7 +1065,13 @@ test('routing: explicit helpers are direct; uncertain requests start Chief witho
   assert.equal(task(db, a).body, 'Reel, make a 10 second demo of the signup screen');
   assert.equal(chiefSaid(), 'Reel is on it.');
   await settled(db, a);
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, 'The result is ready.', 'an incomplete helper reply is not cut into a headline');
+  assert.equal(chiefSaid(), relayResult(task(db, a).result), 'an incomplete helper reply carries its own opening');
+  const long = 'I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can wait until next month without an extra charge.';
+  assert.equal(relayResult(long), 'I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can…');
+  assert.equal(relayResult('- Water bill due Friday\n- Dentist bill due Friday\n- Phone bill due next month'), 'Water bill due Friday…');
+  assert.equal(relayResult('Scout is preparing the report;\n- Water bill due Friday'), 'Water bill due Friday…');
+  assert.equal(relayResult('*** — …'), 'The result is ready.');
+  assert.equal(relayResult(''), 'The result is ready.');
 
   // "@Scout" anywhere is a rule too: the person's AI (here set to say Reel) is never asked.
   const m = (await crew.post('chief', 'could you look into standing desks for me @Scout [route reel]'))!.task;
@@ -1177,6 +1196,12 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
   const pip = { name: 'Pip', role: 'Finds you a flat in Phuket', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  // Malformed model arguments must explain the five-part object, not merely refuse the hire.
+  const { task: malformed } = (await crew.post('chief', `please ${create({ ...pip, job: 'Keep my bills in order' })}`))!;
+  await settled(db, malformed);
+  assert.match(lastSaid(db, 'chief')!, /job.*object.*does.*aim.*gets.*how.*great/);
+  assert.equal(crew.snapshot().asks.length, 0);
+  assert.equal(crew.bot('pip'), undefined);
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
@@ -1239,6 +1264,51 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.equal(next.origin, 'chief');
   await settled(db, next.id);
   assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', next.id)!.result), 'its first result comes back in Chief\'s chat');
+  done();
+});
+
+test('Chief interviews a vague ask before hiring: questions first, the card built from the answers; a specific "just do it" goes straight to the card', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
+  // The model-visible rule, everywhere Chief reads it: the crew_create description and his own template.
+  const seen = (crew as any).crewTools('chief').find((t: any) => t.name === 'crew_create')!;
+  assert.match(seen.description, /at most three/);
+  assert.match(seen.description, /just do it/);
+  assert.match(seen.description, /never does/);
+  assert.match(readFileSync(join(crew['cfg'].repoDir, 'templates', 'chief', 'AGENTS.md'), 'utf8'), /Vague ask: questions first, then the card/);
+  const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  // A vague ask: Chief asks in plain words (the stub holds his turn; the release is his questions). No card, no helper.
+  const { task: t } = (await crew.post('chief', 'I need someone to help with my garden, ask permission'))!;
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'Happy to take someone on for the garden. Three quick questions: what would they look after? What does good look like? And what should they do first?');
+  await settled(db, t);
+  assert.equal(card(), undefined);
+  assert.equal(crew.bot('fern'), undefined);
+  assert.match(lastSaid(db, 'chief')!, /what should they do first\?/);
+  // The answers: Chief builds the card from them; yes hires Fern with the answers in her job, and starts the first job.
+  const fern = { name: 'Fern', role: 'Looks after your garden', job: { does: 'Waters the plants and weeds the beds, nothing else in the garden.', aim: 'Nothing dies.', gets: 'Photos of the beds when something looks wrong.', how: 'Waters weekly, weeds monthly, never sprays or prunes without asking.', great: 'Every plant alive at a glance; for example, no wilted pots this week.' }, personality: 'You are Fern. Patient, green-fingered and brief.', first: 'Clear the brambles' };
+  const { task: t2 } = (await crew.post('chief', `They would water the plants and weed the beds; good means nothing dies; first clear the brambles ${create(fern)}`))!;
+  // The earlier hold words stay in this chat's history, so later turns hold again: the tool call above already ran; release the turn.
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'I have put Fern on a card; take a look.');
+  await settled(db, t2);
+  assert.ok(card(), 'the answers become a card');
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.equal(disk.readJob(crew['cfg'], 'fern').aim, 'Nothing dies.');
+  assert.match(disk.readJob(crew['cfg'], 'fern').how, /never sprays/);
+  const first = db.get("SELECT * FROM tasks WHERE bot = 'fern'")!;
+  assert.equal(first.body, 'Clear the brambles');
+  await settled(db, first.id);
+  // The skip path: an already-specific "just do it" files the card in the same turn, with no question turn.
+  const shed = { bot: 'fern', role: 'Looks after your garden and shed', job: { ...fern.job, does: 'Waters the plants, weeds the beds and keeps the shed tidy.' }, first: 'Tidy the shed' };
+  const { task: t3 } = (await crew.post('chief', `Just do it: Fern should also keep the shed tidy ${create(shed)}`))!;
+  await holding(crew, 'chief');
+  await release(crew, 'chief', 'I have put the shed on a card; take a look.');
+  await settled(db, t3);
+  assert.match(card()!.title, /Shall Fern take this on/);
+  await crew.answer(card()!.id, { answer: 'deny' });
+  assert.equal(crew.bot('fern')!.role, 'Looks after your garden');
   done();
 });
 
