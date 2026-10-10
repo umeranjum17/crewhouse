@@ -34,6 +34,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | pwa-pair | [pwa-pair.md](pwa-pair.md) | The demo's Pair card: a relay or direct code pairs the installed app through @byokit/pair, the two words match the computer's, the same app reloads on real data over the link, and Unpair goes back to the demo |
 | pwa-resume | [pwa-resume.md](pwa-resume.md) | The installed app's cold relaunch returns to the last place (thread or screen), per mode; a named link/shortcut wins; a deleted thread falls back to Home; the offline shell still opens; proven on the iPad simulator's real Safari home-screen app |
 | find-clients-send | [find-clients-send.md](find-clients-send.md) | Paired-phone-only corporate attestation, suppression and one exact Gmail review; local/helper approvals refused; stop before Send |
+| mail-watch | [mail-watch.md](mail-watch.md) | Chief's Gmail watch: only new mail is noticed, one quiet notice in the Dot shape with a thread link, silence on nothing new |
 
 ## Proof and skip reporting
 

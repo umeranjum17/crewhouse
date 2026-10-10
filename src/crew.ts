@@ -14,7 +14,8 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger, reminderAt, timeOf } from './routines.ts';
+import { describe, describeTrigger, firstRun, hhmm, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
+import { newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -681,7 +682,7 @@ export class Crew {
     });
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '', what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`, start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
     // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
-    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${timeOf(plan.when)}?`] : [];
+    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [];
     const lines = [...start, ...ask, what,
       plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
       ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
@@ -734,6 +735,12 @@ export class Crew {
   /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
    *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
   schedule(now = Date.now()) {
+    // The mail watch: while Gmail is connected Chief keeps one quiet routine; the model reads the new mail named in each run and says only what needs the person.
+    if (this.connections.connected('gmail') && !this.db.get('SELECT 1 FROM routines WHERE mailwatch = 1'))
+      this.db.run("INSERT INTO routines (bot, name, schedule, body, quiet, mailwatch, next_at, created_at, kind) VALUES (?, 'Mail watch', 'every 2 hours', ?, 1, 1, ?, ?, 'task')",
+        CHIEF, 'Look at the new mail below with the mail tool and decide whether anything in it needs the person. Stay silent about newsletters, receipts, promos and anything that can wait. ' +
+        'If something needs them, say it in one short message: the fact; its date or deadline; what is not confirmed yet; one thing they can do; and one link to the source mail (the thread link given).',
+        nextRun(parseSchedule('every 2 hours'), now), Date.now());
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND (next_at <= ? OR trigger IS NOT NULL)", now)) {
       if (r.trigger) { try { if ('file' in parseTrigger(r.trigger)) this.checkInbox(r); } catch (e) { console.error('trigger', r.id, e); } }
       if ((!r.schedule && r.kind === 'task') || r.next_at > now) continue; // trigger-only: no time; wake triggers fire from slept(); a once reminder or an ask carry their time in next_at
@@ -804,7 +811,7 @@ export class Crew {
       this.db.event('routine.skipped', r.bot, { routine: r.id, name: r.name, why: 'overlap', task: r.last_task });
       return;
     }
-    if (r.watch) return this.check(r, why);
+    if (r.watch || r.mailwatch) return this.check(r, why);
     const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
     this.db.tx(() => {
       this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id);
@@ -843,6 +850,17 @@ export class Crew {
       this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, watch, ...(task ? { task } : {}) });
     });
     try {
+      // The mail watch: only threads newer than the cursor start one quiet task; the first look is the baseline.
+      if (r.mailwatch) {
+        if (!this.connections.connected('gmail')) return seen('signed-out');
+        const after = Number(JSON.parse(r.cursor ?? 'null') ?? 0);
+        const fresh = await newThreads(() => this.connections.token('gmail'), after).catch(() => null);
+        if (!fresh) return seen('unreachable');
+        this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(fresh.length ? Math.max(...fresh.map((m) => m.at)) : Date.now()), r.id);
+        if (r.cursor == null || !fresh.length) return seen(r.cursor == null ? 'started' : 'same');
+        const lines = fresh.map((m) => `• ${m.subject} — ${m.from} (https://mail.google.com/mail/u/0/#inbox/${m.id})`).join('\n');
+        return seen('mail', this.addTask(r.bot, `${r.body}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r).task);
+      }
       let now: string;
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
       catch { this.outage(r, true); return seen('unreachable'); }
@@ -853,9 +871,8 @@ export class Crew {
       writeFileSync(file, now);
       if (before === null) return seen('started');
       if (before === now) return seen('same');
-      const { task } = this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
-        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r);
-      seen('changed', task);
+      seen('changed', this.addTask(r.bot, `${r.body}\n\n[Crewhouse] The page you watch (${r.watch}) changed since the last check.\n${changed(before, now)}`,
+        why === 'now' ? 'routine.now' : 'routine', r.brain ?? undefined, r).task);
     } finally { this.checking.delete(r.id); }
   }
 
@@ -1230,7 +1247,7 @@ export class Crew {
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
     const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-    return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}`;
+return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
   }
 
   /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */

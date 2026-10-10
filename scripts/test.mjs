@@ -38,7 +38,8 @@ const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).ma
 const bounded = process.env.CI === 'true' && process.platform === 'linux';
 const LIGHT_CONCURRENCY = 2;
 // A file that boots a gateway through the shared migrate fixtures counts too: its boots starve the same way.
-const isGateway = (file) => /new OpenClawRuntime|migrate-house/.test(readFileSync(file, 'utf8'));
+// The first-words harness builds its gateway in the script, not the test, and starves there as well.
+const isGateway = (file) => /new OpenClawRuntime|migrate-house|measure-firstwords/.test(readFileSync(file, 'utf8'));
 const isBrowser = (file) => /browserBin|taskBrowser|ownedBrowser|Xvfb/.test(readFileSync(file, 'utf8'));
 const runOne = (file) => new Promise((resolve) => {
   const t0 = Date.now();

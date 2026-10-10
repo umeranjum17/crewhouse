@@ -40,8 +40,8 @@ export function whenOf(e: Pick<Event, 'start' | 'end' | 'allDay'>) {
 }
 
 /** A TOON table; a value with a comma, quote or leading space is quoted. */
-export function table(name: string, fields: string[], rows: Record<string, string>[]) {
-  const cell = (v: string) => (/[,"\\]|^\s|\s$|^$/.test(v) ? JSON.stringify(v) : v);
+export function table(name: string, fields: string[], rows: Record<string, string | number>[]) {
+  const cell = (v: string | number) => (/[,"\\]|^\s|\s$|^$/.test(String(v)) ? JSON.stringify(v) : v);
   return [`${name}[${rows.length}]{${fields.join(',')}}:`, ...rows.map((r) => '  ' + fields.map((f) => cell(r[f] ?? '')).join(','))].join('\n');
 }
 
