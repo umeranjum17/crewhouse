@@ -122,9 +122,10 @@ function GroupRow({ c, live, jobTitle }: { c: A.OfficeMember; live: A.OfficeView
   const g = groupOf(c, live);
   const done = landed(c, live);
   const glow = glowOf(c, live);
-  const line = A.waitsOnYou(c) ? jobTitle || c.step || A.WAIT_CHIEF : g === 'done' && done!.summary ? done!.summary : c.status;
+  const line = A.waitsOnYou(c) ? jobTitle || c.step || A.NO_JOB : g === 'done' && done!.summary ? done!.summary : c.status;
+  // A done row says what it finished, never a waiting status.
   const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle
-    : c.status;
+    : g === 'done' ? done!.title : c.status;
   const meta = meta0 === line ? '' : meta0;
   return (
     <article className="grow-row" aria-label={`${c.name}: ${line}`}>
@@ -164,9 +165,9 @@ function HelperPanel({ c, live, job, role }: { c: A.OfficeMember; live: A.Office
   const done = landed(c, live);
   const glow = glowOf(c, live);
   // Done leads with the finished work itself, as the board does; waiting leads with what it is on; anything else its line.
-  const line = A.waitsOnYou(c) ? job?.title || c.step || A.WAIT_CHIEF : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
+  const line = A.waitsOnYou(c) ? job?.title || c.step || A.NO_JOB : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? job.title
-    : glow.cls === 'done' ? c.status : c.status || role || '';
+    : glow.cls === 'done' ? done!.title : c.status || role || '';
   const meta = meta0 === line ? '' : meta0;
   const file = !c.ask && c.things[0] ? c.things[0] : undefined;
   // The scan follows the helmet's own mood (at work even while holding a question), never the seat.

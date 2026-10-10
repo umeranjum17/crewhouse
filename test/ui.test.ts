@@ -553,7 +553,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{bar\}\{notes\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
   assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
@@ -563,7 +563,11 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   const flows = src('web/src/flows.tsx');
   assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
   assert.match(flows.slice(flows.indexOf('function AccountCard('), flows.indexOf('function AccountCard(') + 3000), /\{NEEDS_SIGNIN\}/, 'the thread card reads it from there too');
-  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/>/, 'Needs you pinned over Chief\'s thread from the office\'s one list');
+  // Office never pins Needs you: crew never ask the person, so Chief's one "Chief has N things for you" is its only way to the asks.
+  assert.doesNotMatch(home.slice(home.indexOf("if (mode === 'chat')") + 1).slice(home.slice(home.indexOf("if (mode === 'chat')") + 1).indexOf('\n')), /NeedsPin/, 'web Office renders no Needs you pin');
+  const phoneHome = src('mobile/App.tsx').slice(src('mobile/App.tsx').indexOf('function Home('), src('mobile/App.tsx').indexOf('function ChiefSheet('));
+  assert.doesNotMatch(phoneHome, /NeedsPin|NeedsRows|pinned/, 'phone Office renders no Needs you pin');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
   const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
@@ -736,8 +740,7 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{tools}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then gear and switch on one row under it');
   assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
   assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
-  assert.ok(top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Office: Needs you right under the grouped list');
-  assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
+  assert.doesNotMatch(top, /pinned|NeedsRows/, 'Office pins no Needs you: Chief\'s one row is its way to the asks');
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 

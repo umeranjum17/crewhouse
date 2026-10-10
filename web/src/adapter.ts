@@ -1575,6 +1575,7 @@ export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' :
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
 /** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
 export const WAIT_CHIEF = 'Waiting for Chief';
+export const NO_JOB = 'No job right now';
 export const chiefHas = (view: OfficeView) => `Chief has ${view.needs.length} thing${view.needs.length === 1 ? '' : 's'} for you`;
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
