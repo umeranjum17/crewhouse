@@ -36,6 +36,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | pwa-resume | [pwa-resume.md](pwa-resume.md) | The installed app's cold relaunch returns to the last place (thread or screen), per mode; a named link/shortcut wins; a deleted thread falls back to Home; the offline shell still opens; proven on the iPad simulator's real Safari home-screen app |
 | find-clients-send | [find-clients-send.md](find-clients-send.md) | Paired-phone-only corporate attestation, suppression and one exact Gmail review; local/helper approvals refused; stop before Send |
 | mail-watch | [mail-watch.md](mail-watch.md) | Chief's Gmail watch: only new mail is noticed, one quiet notice in the Dot shape with a thread link, silence on nothing new |
+| routine-history | [routine-history.md](routine-history.md) | A watch or check-in says what it waits for on its card and Routines row; beside Do it now the last run (nothing new / told you / didn't finish, with the cause) and up to five recent runs; Do it now holds Running… until the new result lands |
 
 ## Proof and skip reporting
 
