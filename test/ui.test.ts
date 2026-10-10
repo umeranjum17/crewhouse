@@ -501,8 +501,13 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   assert.equal(A.atHome('the home computer')[1], A.awake('the home computer'));
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   assert.equal([...web.matchAll(/A\.atHome\(/g)].length, 3, 'Hello and Settings both quote it; nobody paraphrases it');
-  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>\{A\.atHome\(\)\[2\]\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the condition right after where the helpers live");
-  assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small">\{A\.atHome\(undefined, A\.planName\(accounts\)\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style');
+  assert.match(web, /<ul className="promises">\s+<li>[^<]+<\/li>\s+<li>\{A\.atHome\(\)\[1\]\}<\/li>\s+<li>\{A\.atHome\(\)\[2\]\}<\/li>\s+<li>\{A\.keptWhere\}<\/li>\s+<li>[^<]+<\/li>\s+<\/ul>/, "it sits in Hello's promises, the condition right after where the helpers live");
+  assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small"><b>\{A\.trust\.home\}\.<\/b> \{A\.atHome\(undefined, A\.planName\(accounts\)\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style, led by the trust line');
+  // The trust story where the fear is: true words (README: no Crewhouse server, no telemetry; every memory row has Forget).
+  assert.doesNotMatch(`${A.trust.kept} ${A.trust.home} ${A.keptWhere}`, FORBIDDEN);
+  assert.match(web, /<p className="trust small">\{\[A\.trust\.kept, A\.trust\.home\]/, 'Hello links both under the ideas');
+  assert.match(web, /getElementById\('about-you'\)[^\n]+\{A\.trust\.kept\}/, 'Settings links what the crew remembers to About you');
+  assert.match(web, /id="about-you">About you</, 'About you is the anchor');
   assert.match(web, /<b>Reach it away from home<\/b>\s+<p className="mute small">\{A\.awake\(\)\}<\/p>\s+<p className="mute small">\{A\.anywhere\(link\)\.words\}<\/p>/, 'pairing a phone repeats the condition');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 2, 'the phone quotes it at first run and on This phone');

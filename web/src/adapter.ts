@@ -107,6 +107,12 @@ export const atHome = (home = 'this computer', plan = 'AI plan') => [
   awake(home),
   `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
 ];
+/** The trust story where the fear is, two links on Hello and Settings. `kept`: everything remembered about the person
+ *  (About you, About me and my work, each helper's notes) shows line by line with Forget beside it. `home`: there is
+ *  no Crewhouse server and no telemetry (README); `atHome` says what does leave. */
+export const trust = { kept: 'What the crew remembers (see or forget any line)', home: 'Runs on this computer, nothing sent to us' };
+/** Hello's promise behind `trust.kept`: before the first job there is nothing to show, so it says where it will be. */
+export const keptWhere = 'Everything the crew remembers about you shows in Settings, where you can forget any line.';
 
 /** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". */
 export function pretty(path: string) {

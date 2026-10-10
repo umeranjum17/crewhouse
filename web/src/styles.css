@@ -1305,6 +1305,10 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .hello .how > summary::-webkit-details-marker { display: none; }
 .hello .how .promises { margin-top: 10px; padding: 0 4px; background: none; border: 0; border-radius: 0; font-size: 13px; gap: 6px; color: var(--mute); }
 .hello .how .promises li { grid-template-columns: 14px 1fr; gap: 8px; }
+/* The trust story where the fear is: two quiet underlined links (Hello under the ideas, Settings under its title). */
+.hello .trust { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 14px; margin: 10px 0 0; }
+.trust .link, .link.trust { margin: 0; font-size: 13px; text-align: left; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.settings > .link.trust { display: block; padding: 0 0 6px; }
 .ai-picks .btn { justify-content: flex-start; gap: 10px; text-align: left; }
 .ai-picks .btn > svg:last-child { color: var(--mute); }
 .ai-picks .btn.go > svg:last-child { color: inherit; }
