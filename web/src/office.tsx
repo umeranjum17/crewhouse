@@ -137,8 +137,11 @@ function ChiefPanel({ live }: { live: A.OfficeView }) {
     .sort((a, b) => b.at - a.at);
   const glow: Glow = A.chiefAsks(live).length ? { word: 'Needs you', cls: 'needs' }
     : live.chief.mood === 'work' ? { word: 'At work', cls: 'work' } : { word: 'Resting', cls: 'rest' };
+  // Chief's own line names who "needs you"; in the Office crew only wait for him, so his panel says how many do.
+  const waiting = crew.filter(A.waitsOnYou).length;
+  const line = live.chief.mood !== 'ask' ? live.chief.line : waiting ? `${waiting} waiting for Chief` : 'Has something for you';
   return (
-    <Panel name="Chief" href="#/chief" mood={live.chief.mood} chief line={live.chief.line}
+    <Panel name="Chief" href="#/chief" mood={live.chief.mood} chief line={line}
       meta={recent.length ? `Talking with you since ${A.clock(Math.min(...recent.map((r) => r.at)))}` : 'Runs your crew'}
       steps={recent.slice(0, 3)} glow={glow} think={live.chief.mood === 'work'} action={live.needs.length > 0 && <ToChief live={live} />} />
   );

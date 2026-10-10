@@ -1076,7 +1076,7 @@ export function step(e: Json): string | null {
     // crewd writes the step in plain words ("Searched the web for “school trips”", "Worked on a video").
     case 'run.tool': return d.words ? plain(d.words) : 'Worked on it';
     case 'run.allowed': return 'Went ahead, as you allowed';
-    case 'ask.opened': return 'Asked for your OK';
+    case 'ask.opened': return 'Asked Chief for an OK'; // crew never ask the person: Chief carries the ask
     case 'ask.answered': return `You said ${ANSWER[d.answer] ?? (/always/.test(d.answer) ? 'always OK' : /task/.test(d.answer) ? 'yes for this job' : 'what to do')}`;
     // The receipt for a message the person answered for themselves: what it was, where it went, why it mattered,
     // and that nothing was sent by the crew. Read long after the fact, in the words of the card and the tool.

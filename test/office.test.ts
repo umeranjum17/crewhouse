@@ -296,9 +296,10 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
           const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge')]);
           const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
+          const officeText = document.querySelector('.office')?.innerText ?? '';
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, chatRows, grouped, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, officeText, chatRows, grouped, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
@@ -332,6 +333,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
           assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting row is its job, then "Waiting for Chief"; one with no job rests (${JSON.stringify(m.waitRows)})`);
           assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
+          // Nobody in the Office is said to need the person or ask them for an OK: crew wait for Chief, Chief carries the asks.
+          assert.doesNotMatch(m.officeText, /\w needs you|your OK/, `${at}: no crew member asks the person in the Office`);
           // On it now's idle line uses the rows' words and the header's waiting count.
           assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || m.idle === `Nobody is working: ${m.nums[0]} waiting for Chief.`), `${at}: On it now says the header's ${m.nums[0]} wait for Chief (${m.idle})`);
           // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
