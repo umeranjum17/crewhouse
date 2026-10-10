@@ -14,6 +14,7 @@ import { PROVIDERS as ROUTES } from '@byokit/accounts';
 import * as A from '../web/src/adapter.ts';
 import { readTyped } from '../web/src/typed.ts';
 import { askOf } from '../mobile/src/ask.ts';
+import { crewPill } from '../mobile/src/crew-status.ts';
 import { draftOf, keepDraft, sent } from '../web/src/draft.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import { api, setLink, setTransport } from '../web/src/api.ts';
@@ -756,6 +757,39 @@ test('your crew page reads the rail status: one rule for every row', () => {
   assert.doesNotMatch(crew, /member\.get\(h\.id\)!/, 'a member missing across a refresh falls back, never crashes');
   assert.match(crew, /r\.seat === 'done' \? 'Done' : r\.word/, 'a done row reads Done, as the rail does');
   assert.doesNotMatch(crew, /<span>\{h\.status\}<\/span>/, 'the helper status is only a refresh-gap fallback, never the row rule');
+});
+
+test('the phone crew list reads the rail status: one rule for every pill', () => {
+  // The phone Crew screen's pill is the web rail's own (crewPill: A.railWord, from A.groupOf). A second
+  // rule here showed Reel's job with a green dot while the rail said Waiting. A member missing from the
+  // office view across a refresh (added or leaving) falls back to the helper's own words rather than
+  // crashing; that fallback is the only place the raw status may appear.
+  const min = 60_000;
+  const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
+  const state: Json = {
+    person: { id: 1, name: 'Umer' }, resting: {}, templates: [], ideas: [],
+    bots: [bot('chief'),
+      bot('reel', { task: { id: 41, bot: 'reel', title: "Mum's birthday video", state: 'working' } }),
+      bot('scout', { task: { id: 42, bot: 'scout', title: 'Flights to Larkspur', state: 'working' } })],
+    asks: [{ id: 12, bot: 'reel', task_id: 41, kind: 'question', at: now - 2 * min, detail: { question: 'Include the baby photos?' } }],
+    tasks: [], events: [],
+  };
+  const view = A.office(state);
+  // Reel waits on the person while Scout works: the old pill read Reel's job with a green dot.
+  assert.equal(A.crew(state).find((h) => h.id === 'reel')!.status, "Mum's birthday video", 'the fixture disagrees, as the demo crew did');
+  for (const h of A.crew(state)) {
+    const m = view.crew.find((c) => c.id === h.id)!;
+    const r = A.railWord(m, view);
+    assert.deepEqual(crewPill(h, view),
+      { word: r.seat === 'done' ? 'Done' : r.word, tone: r.seat === 'working' || r.seat === 'done' ? 'ok' : 'off' },
+      `${h.id}: the phone pill reads the rail word and dot`);
+  }
+  const ghost = { ...A.crew(state)[0], id: 'ghost' };
+  assert.deepEqual(crewPill(ghost, view), { word: "Mum's birthday video", tone: 'ok' }, 'a member missing across a refresh falls back to its own words, never crashes');
+  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
+  const pill = app.slice(app.indexOf('function HelperPill('), app.indexOf('function NeedsRows('));
+  assert.match(pill, /crewPill\(/, 'the phone pill reuses the shared rail helper, never a second status rule');
+  assert.doesNotMatch(pill, /\{h\.status\}/, 'the helper status is only a refresh-gap fallback, never the pill rule');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
