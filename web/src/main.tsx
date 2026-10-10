@@ -1040,13 +1040,14 @@ function RoutineRow({ r, h, act, refresh }: { r: Json; h: Helper | undefined; ac
     return () => clearTimeout(t);
   }, [when]);
   const save = async () => { if (await act(() => api.routine(r.id, { schedule: when!.trim() }), 'Time changed')) setWhen(null); };
-  const [asked, setAsked] = useState(false), pressed = useRef(false);
-  const last = r.runs[0], running = asked || last?.tone === 'running';
+  // After a press the button reads "Running…" until a run newer than the last one at the press is on the row.
+  const [asked, setAsked] = useState<number | null>(null), pressed = useRef(false);
+  const last = r.runs[0], running = (asked !== null && (last?.t ?? 0) <= asked) || last?.tone === 'running';
   // crewd's own words say why a run could not start ("The last run of … is still going."); anything else is the usual toast.
   const run = async () => {
-    setAsked(true); pressed.current = true;
-    await attempt(() => api.runRoutine(r.id).catch((e) => { if (e?.status !== 409) throw e; toast(e.message); }));
-    setAsked(false); refresh();
+    setAsked(last?.t ?? 0); pressed.current = true;
+    try { await api.runRoutine(r.id); } catch (e: any) { setAsked(null); if (e?.status === 409) toast(e.message); else await attempt(() => Promise.reject(e)); }
+    refresh();
   };
   return (
     <div className={`card routine ${r.paused ? 'paused' : ''}`}>

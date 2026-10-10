@@ -1385,7 +1385,7 @@ function runOf(h: Json, reminder = false) {
     : h.watch === 'same' ? ['none', 'Nothing new']
     : h.clear ? ['none', h.watch === 'changed' ? 'The page changed, nothing worth telling you' : 'Nothing new']
     : result ? ['told', reminder ? 'Reminded you' : 'Told you'] : ['none', 'Done'];
-  return { at: clock(h.at), tone, words, result };
+  return { at: clock(h.at), t: Number(h.at), tone, words, result };
 }
 
 /** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,
