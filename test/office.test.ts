@@ -287,7 +287,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const crewUnits = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? ''));
           const crewActs = crewUnits.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
           const crewText = crewUnits.map((p) => p.innerText);
-          const waitMeta = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => p.querySelector('.p-meta')?.textContent);
+          const waitMeta = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => [...p.querySelectorAll('.p-line, .p-meta')].at(-1)?.textContent);
           const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');

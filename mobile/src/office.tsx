@@ -79,7 +79,7 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
   const done = landed(c, v);
   const g = groupOf(c, v);
   // Done leads with the finished work itself, as the web panels do; waiting leads with what it is on.
-  const line = A.waitsOnYou(c) ? jobTitle || c.step || c.status : g === 'done' && done!.summary ? done!.summary : c.status;
+  const line = A.waitsOnYou(c) ? jobTitle || c.step || A.WAIT_CHIEF : g === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle : c.status;
   const meta = meta0 === line ? '' : meta0;
   return (

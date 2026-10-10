@@ -122,7 +122,7 @@ function GroupRow({ c, live, jobTitle }: { c: A.OfficeMember; live: A.OfficeView
   const g = groupOf(c, live);
   const done = landed(c, live);
   const glow = glowOf(c, live);
-  const line = A.waitsOnYou(c) ? jobTitle || c.step || c.status : g === 'done' && done!.summary ? done!.summary : c.status;
+  const line = A.waitsOnYou(c) ? jobTitle || c.step || A.WAIT_CHIEF : g === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle
     : c.status;
   const meta = meta0 === line ? '' : meta0;
@@ -164,7 +164,7 @@ function HelperPanel({ c, live, job, role }: { c: A.OfficeMember; live: A.Office
   const done = landed(c, live);
   const glow = glowOf(c, live);
   // Done leads with the finished work itself, as the board does; waiting leads with what it is on; anything else its line.
-  const line = A.waitsOnYou(c) ? job?.title || c.step || c.status : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
+  const line = A.waitsOnYou(c) ? job?.title || c.step || A.WAIT_CHIEF : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
   const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? job.title
     : glow.cls === 'done' ? c.status : c.status || role || '';
   const meta = meta0 === line ? '' : meta0;
