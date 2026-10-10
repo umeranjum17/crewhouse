@@ -1307,6 +1307,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .hello .how .promises li { grid-template-columns: 14px 1fr; gap: 8px; }
 .ai-picks .btn { justify-content: flex-start; gap: 10px; text-align: left; }
 .ai-picks .btn > svg:last-child { color: var(--mute); }
+.ai-picks .btn.go > svg:last-child { color: inherit; }
+.more-ways .ai-picks { margin-top: 4px; }
 @media (max-width: 899px) {
   .hello { padding-top: 24px; }
   .hello-brand { display: none; }

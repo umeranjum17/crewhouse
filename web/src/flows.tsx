@@ -157,18 +157,19 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
  * In a chat, right under Chief's line, while the crew can't think yet: the sign-in,
  * or, for a plan without helpers, the ways forward. Taps: Sign in (1), her account (2), Continue (3).
  */
-/** The sign-in card, in the ask-card anatomy (§4.11) with the account the crew will use as primary: whichever one is
- *  already signed in, or every provider the kit offers while none is (no front door alone). The links a provider
- *  owns (its own site, its plans) sit under its own branch; no provider's name is written into another's card. */
+/** The sign-in card, in the ask-card anatomy (§4.11): one recommended account as the one button (`A.aiList`'s first:
+ *  the account this computer was signed in to, else ChatGPT), every other provider the kit offers one tap away under
+ *  "Use another account". The links a provider owns (its own site, its plans) sit under its own branch; no
+ *  provider's name is written into another's card. */
 /** The thread sign-in card's flag, shared with the phone header so the two cannot drift. */
 export const NEEDS_SIGNIN = 'Needs a sign-in';
 export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [signKey, setSignKey] = useState<string | null>(null);
   const list = A.aiList(accounts);
-  const offered = [...list.mine, ...list.more];
-  const { ai, g } = list.mine[0];
-  const signAi = offered.find((r) => r.ai.key === signKey)?.ai ?? ai;
+  const [{ ai, g }, ...others] = [...list.mine, ...list.more];
+  const pick = (r: typeof ai, cls: string) => <button key={r.key} className={cls} onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>;
+  const signAi = others.find((r) => r.ai.key === signKey)?.ai ?? ai;
   // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
   if ((!accounts || (g.state === 'ready' && !g.notIncluded)) && signing === false) return null;
   if (g.notIncluded) return (
@@ -186,9 +187,11 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
       <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
-      <div className="ai-picks">
-        {offered.map(({ ai: r }) => <button key={r.key} className="btn" onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>)}
-      </div>
+      <div className="ai-picks">{pick(ai, 'btn go')}</div>
+      <details className="more-ways">
+        <summary><span className="grow">Use another account</span><span className="ai-stack">{others.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>
+        <div className="ai-picks">{others.map(({ ai: r }) => pick(r, 'btn'))}</div>
+      </details>
       {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
   );

@@ -1435,7 +1435,8 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
 /** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
- *  while none is), every other route under "More ways to sign in". Each row's one line says where it stands in
+ *  while none is), every other route under "More ways to sign in". The sign-in card's one recommended account is the
+ *  first of these: the account this computer was signed in to, else ChatGPT. Each row's one line says where it stands in
  *  plain words; a route nobody has signed in to here is "not set up", never connected. */
 export function aiList(accounts: Json[] | null) {
   const rows = AIS.map((ai) => {
