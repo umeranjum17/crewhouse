@@ -1,13 +1,13 @@
 // Crewhouse, direction C "Pocket Pals" with A's night mode and ASCII moments. Every screen reads the adapter's
 // plain-words view models (adapter.ts), never crewd's raw rows.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
 import { api, demo, pairable, paired, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, useListen, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
@@ -38,6 +38,8 @@ let moved = false; // this session has navigated inside the app, so Back has som
 const back = () => { if (moved && history.length > 1) history.back(); else go('#/'); };
 /** ?splash keeps the boot splash up, for design review. */
 const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/room' : `#/h/${id}`);
+/** Chief's own trail (his learned notes, each with Undo): his page is Home now, so Home carries the link. */
+const CHIEF_TRAIL = '#/h/chief/did';
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
@@ -220,12 +222,14 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
   const gear = <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>;
   const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
-  const tools = <div className="home-tools">{gear}{seg}</div>;
+  // Chief's own trail (his learned notes with Undo) stays reachable now his page is Home (Main2036).
+  const did = <a className="link home-did" href={CHIEF_TRAIL}>What happened</a>;
+  const tools = <div className="home-tools">{did}{gear}{seg}</div>;
   // A phone header is one block (Term): the hero carries the gear top-right and the switch below its lines.
   // While the computer is out of reach its own words win; the sign-in wait rides along otherwise.
   const phone = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 899px)').matches;
   if (mode === 'chat') return phone
-    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} side={gear} below={seg} /></header>
+    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} side={gear} below={<>{seg}{did}</>} /></header>
     : <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
   return (
@@ -361,9 +365,11 @@ type HomeMode = 'chat' | 'office';
 const HOME_MODES: [HomeMode, string][] = [['chat', 'Chief'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
 
-function Home(ctx: Ctx) {
+function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
   const { state, live, refresh, tick, accounts } = ctx;
   const [mode, setMode] = useState(homeMode);
+  // `#/chief` is Home with Chief's chat open: the same screen as `#/`, never a second one (Main2036).
+  useEffect(() => { if (ctx.chat) { homeMode = 'chat'; setMode('chat'); } }, [ctx.chat]);
   // On a phone Chief's thread holds the page scrolled to its newest line; the other view starts at its top, or Office
   // opens scrolled past its room.
   const pick = (m: HomeMode) => { homeMode = m; setMode(m); scrollTo(0, 0); };
@@ -383,7 +389,7 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{bar}{notes}<NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{bar}{notes}<NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero m={ctx.m} rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
   // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (
     <div className="home home-office">
@@ -497,6 +503,10 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       </div></>}
   </div>;
 }
+/** A crew message's card: the connect prompt for an app, or the ask's own card. */
+function cardFor(c: A.Card, h: Helper | undefined, state: Json, refresh: () => void) {
+  return c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />;
+}
 function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
@@ -541,13 +551,37 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   const box = useRef<HTMLDivElement>(null);
+  // Whether the thread is at its newest line, so a line arriving while the person reads up never yanks them down.
+  const pinned = useRef(true);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+  // A new chat opens at its own newest line, whatever the last thread was left at.
+  useEffect(() => { pinned.current = true; }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
-  // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096).
+  // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096); a new
+  // line follows only while the person is still at the bottom (Main2036). A card that grows after it lands (a form
+  // opening, an image loading) moves the bottom too, so the box is watched for its own size changes, not just renders.
   useEffect(() => {
     if (around) return;
     const el = box.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const stick = () => { if (pinned.current) el.scrollTop = el.scrollHeight; };
+    stick();
+    const raf = requestAnimationFrame(stick);
+    const ro = new ResizeObserver(stick);
+    const seen = new WeakSet<Element>();
+    const watch = () => { for (const c of Array.from(el.children)) if (!seen.has(c)) { seen.add(c); ro.observe(c); } };
+    watch();
+    const mo = new MutationObserver(() => { watch(); stick(); });
+    mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'class', 'style'] });
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); };
   }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial, quiet]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
@@ -568,6 +602,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { if (newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [newest, b?.unread, id, refresh]);
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
   const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
+  // Each ask's card sits at the end of the turn that raised it, before the next message the person sent (A.cardSlots).
+  const slots = A.cardSlots(lines, cards);
   const last = lines.at(-1);
   const send = async (t: string) => {
     setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
@@ -598,18 +634,19 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
           ? <ChiefIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />
           : <HelperIdeas state={state} chat={id} picked={() => setSeed((n) => n + 1)} />)}
         {lines.map((l, i) => {
-          // A card raised after this line; never inside the person's own line, where it would shrink to their side.
           const speaker = l.helper ? A.crew(state).find((x) => x.id === l.helper) : undefined;
-          const here = cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />);
-          return start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <div key={l.id} className="line-wrap">{dayOf(l.at)}
+          // A card raised earlier in this turn shows above this line: the ask that ends a turn sits after its reply.
+          const before = (slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh));
+          const wrap = <div className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}`}>
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {l.files.map((f) => <Media key={f.url} f={f} big />)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
-            {l.from !== 'me' && here}
-          </div>{l.from === 'me' && here}</div>;
+          </div></div>;
+          const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
+          return <Fragment key={l.id}>{before}{shown ? null : wrap}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
@@ -617,7 +654,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {ln && <LiveRow ln={ln} quiet={quiet} gone={gone} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
-        {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
+        {slots.tail.map((c) => cardFor(c, h, state, refresh))}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
@@ -679,18 +716,6 @@ function Room(ctx: Ctx) {
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
       <div className="dock"><div className="room-to" role="group" aria-label="Message"><span className="small mute">To</span><button className={`chip${target === 'chief' ? ' on' : ''}`} aria-pressed={target === 'chief'} onClick={() => setTo('chief')}><Face who="chief" size={20} />Chief</button>{helpers.map((h) => <button key={h.id} className={`chip${target === h.id ? ' on' : ''}`} aria-pressed={target === h.id} onClick={() => setTo(h.id)}><Face who={h} size={20} />{h.name}</button>)}</div><Composer placeholder={`Message ${target === 'chief' ? 'Chief' : helpers.find((h) => h.id === target)?.name ?? 'the crew'}…`} onSend={send} {...typeInto('room')} /></div>
     </div></div>;
-}
-
-function ChiefPage(ctx: Ctx & { m?: string }) {
-  const { mood: _mood } = A.chief(ctx.state, chiefLocal(ctx, useListen()));
-  return (
-    <div className="page chat-page">
-      <header className="chat-head sticky-top"><a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><Face who="chief" size={32} />
-        <div className="grow"><b>Chief</b><div className="mute small sub">Runs the crew and answers to you</div></div>
-        <button className="link" onClick={() => go('#/h/chief/did')}>What happened</button></header>
-      <Chat {...ctx} id="chief" m={ctx.m} />
-    </div>
-  );
 }
 
 // ---------- the crew ----------
@@ -1625,6 +1650,9 @@ function App() {
   const stranded = !!ctx && here.view === 'helper' && !!here.id && here.id !== 'chief'
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
   useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
+  // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL (Main2036). An anchored
+  // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
+  useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
   const splash = <Splash done={!!ctx || offline} />;
   if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
@@ -1655,8 +1683,7 @@ function App() {
         </aside>
         <main className="main">
           {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
-          {v.view === 'home' && <Home {...ctx} />}
-          {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
+          {(v.view === 'home' || v.view === 'chief') && <Home {...ctx} chat={v.view === 'chief'} m={v.m} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}

@@ -1027,7 +1027,9 @@ export function jobs(state: Json): Job[] {
 /** Under a job row, whose job it is: the template's own short `line` ("Scout checks the unclaimed-money lists"), else the
  *  first sentence of its promise ("Scout · I'll search …"), empty when that only repeats the ask. */
 function promiseLine(state: Json, i: Json) {
-  const name = i.bot === 'chief' || !i.bot ? 'Chief' : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? i.bot;
+  // A job offered before its helper is hired names the template's plain name, never its raw id ("Reel", not "reel").
+  const name = i.bot === 'chief' || !i.bot ? 'Chief'
+    : state.bots?.find((x: Json) => x.id === i.bot)?.display ?? state.templates?.find((t: Json) => t.id === i.bot)?.display ?? i.bot;
   if (i.line) return `${name} ${plain(i.line)}`;
   const first = (/^.*?[.!?](?=\s|$)/s.exec(plain(i.promise ?? '')) ?? [plain(i.promise ?? '')])[0].trim();
   const [a, b] = [first, plain(i.ask ?? '')].map((w) => w.toLowerCase().replace(/[.!?\s]+$/, ''));
@@ -1255,21 +1257,23 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = photos(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(PHOTO, '').trim();
+    // Every line carries its time: notes and cards are placed among the messages by when they happened (Main2036).
+    const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
-      if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [] };
+      if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [], at: at0 };
       const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`.
       const card = /\.(xlsx|docx)$/i.test(f[1]);
-      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`))], choices: [] };
+      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`))], choices: [], at: at0 };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
-    if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [] };
+    if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [], at: at0 };
     // Chief's hand-off to a helper: one short collapsed line in the person's own words — never the label Chief's
     // instructions once wrapped the ask in ("The person's words verbatim: …") — with the result and the full words
     // (Show details) behind it.
-    if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief',
+    if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief', at: at0,
       text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(m.helper ? { helper: String(m.helper) } : {}),
@@ -1277,16 +1281,34 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   }).filter((l: Line) => l.text || l.files.length);
 }
 
-/** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in the tray — only from a done
- *  task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread began. */
+/** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in Your things — only from a
+ *  done task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread
+ *  began. The note goes before the first line that came later, so a newer message is never above it (Main2036). */
 export function trayNotes(state: Json, lines: Line[]): Line[] {
   const first = lines.find((l) => l.at)?.at;
   if (!first) return lines;
   const notes = things(state).filter((t) => t.helper !== 'chief' && t.files.length && at(t.at) >= first)
-    .map((t): Line => ({ id: -t.id, from: 'note', by: t.helper, text: `${crewName(state, t.helper)} finished ${t.title || 'a job'} · it's in your tray`, files: [], choices: [], at: at(t.at) }));
+    .map((t): Line => ({ id: -t.id, from: 'note', by: t.helper, text: `${crewName(state, t.helper)} finished ${t.title || 'a job'} · it's in Your things`, files: [], choices: [], at: at(t.at) }));
   const out = [...lines];
-  for (const n of notes.sort((a, b) => a.at! - b.at!)) { const i = out.findLastIndex((l) => (l.at ?? 0) <= n.at!); out.splice(i + 1, 0, n); }
+  for (const n of notes.sort((a, b) => a.at! - b.at!)) {
+    // Equal times keep the note after the earlier line, as before; the first strictly later line ends its run.
+    const i = out.findIndex((l) => l.at !== undefined && l.at > n.at!);
+    out.splice(i < 0 ? out.length : i, 0, n);
+  }
   return out;
+}
+
+/** Where each ask's card falls in the thread (Main2036): a card belongs to the turn that raised it, so it shows after
+ *  the reply and before the next message the person sent; a card with no later message follows the whole thread. Placing
+ *  by the ask's own time alone floated the proposal card above the sentence that announced it. */
+export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
+  const before = new Map<number, Card[]>();
+  const tail: Card[] = [];
+  for (const c of [...cards].sort((a, b) => a.at - b.at)) {
+    const i = lines.findIndex((l) => l.from === 'me' && l.at !== undefined && l.at > c.at);
+    if (i < 0) tail.push(c); else before.set(i, [...(before.get(i) ?? []), c]);
+  }
+  return { before, tail };
 }
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't
