@@ -187,8 +187,8 @@ test('Needs you: spending and sending first, then questions; a suggestion waits 
   const rows = A.needsYou(state);
   assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question'], 'money and messages, then OKs, then questions');
   assert.ok(!rows.some((c) => /learned something/.test(c.head)), 'a proposal never sits on Home; it lives in the helper\'s chat');
-  // and the proposal's dot moves to that helper's row in the list
-  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 1, 'the unread dot carries the suggestion');
+  // and an ask counts once, on Chief: a crew row carries no dot for it, a suggestion included
+  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 0, 'no crew dot for an ask');
   assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
 });
 

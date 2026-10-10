@@ -585,15 +585,18 @@ export function chats(state: Json): Chat[] {
   const c = chief(state);
   // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
   const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
-  // The words the office uses: a row in Needs you says so, a job stopped for an answer in the chat says that.
-  const waiting = new Set(needsYou(state).map((c) => c.helper));
+  // The words the office uses (groupOf): waiting for Chief, done today, else the seat's own words.
+  const v = office(state), member = (id: string) => v.crew.find((m) => m.id === id)!;
+  const waiting = new Set(v.crew.filter(waitsOnYou).map((m) => m.id));
   const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id);
     // Working or waiting on the person says more than the last line did.
-    const line = waiting.has(h.id) ? SEAT_WORDS.needs : h.seat === 'chat' ? SEAT_WORDS.chat : h.seat === 'quiet' ? `Gone quiet on: ${h.status}`
+    const done = groupOf(member(h.id), v) === 'done' ? landed(member(h.id), v) : undefined;
+    const line = waiting.has(h.id) ? SEAT_WORDS.needs : done ? `Done: ${done.title || 'a job'}` : h.seat === 'chat' ? SEAT_WORDS.chat : h.seat === 'quiet' ? `Gone quiet on: ${h.status}`
       : h.seat === 'working' ? `Working on: ${h.status}` : h.seat === 'waiting' ? h.status : preview(b.last, h.role);
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: (b.unread ?? 0) + (suggested.has(h.id) && !(b.unread ?? 0) ? 1 : 0), ring: waiting.has(h.id) ? 'needs' : h.ring };
+    // An ask counts once, on Chief's row: a crew row never carries a dot for one, a draft or a suggestion alike.
+    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: waiting.has(h.id) ? 'needs' : h.ring };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
@@ -1562,7 +1565,7 @@ export function office(state: Json): OfficeView {
     kinds.add(h.kind);
     return { id: h.id, name: h.name, kind: h.kind, mood: h.mood, ring: h.ring, seat: h.seat, status: h.status,
       step: (b.step && step(b.step)) || (w && !w.waiting ? 'Getting started…' : ''), steps: now, things: made,
-      ask: askFor(needs, h.id), ...(second ? { second } : {}) };
+      ask: task ? askFor(needs, h.id) : undefined, ...(second ? { second } : {}) };
   });
   const done = things(state);
   return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
@@ -1664,11 +1667,25 @@ export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.do
  *  free only when every one of them is. */
 export function idleLine(v: OfficeView) {
   const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
-  const on = n(['needs', 'chat']);
+  const on = v.crew.filter(waitsOnYou).length;
   if (on) return `Nobody is working: ${on} waiting for Chief.`;
   const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
   return rest.length ? `Nobody is working right now: ${rest.join(', ')}.` : 'Nobody is working right now. The crew is free.';
 }
-/** A helper waiting on you: a row in Needs you, or a job stopped for an answer in their chat. */
+/** A helper waiting for Chief: a job of theirs with a row in Needs you, or stopped for an answer in their chat. One with
+ *  no job is never waiting: it rests, and Chief carries its ask (office()). */
 export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask;
+/** The latest thing this helper landed today, if any. */
+export const landed = (c: OfficeMember, v: OfficeView) =>
+  v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0];
+/** Every helper lands in exactly one Office group, and the chat list says the same: waiting for Chief, at work on an
+ *  open job, done today, or resting. */
+export type Group = 'needs' | 'work' | 'done' | 'rest';
+export const groupOf = (c: OfficeMember, v: OfficeView): Group => {
+  if (waitsOnYou(c)) return 'needs';
+  const seat = seatOf(c);
+  if (seat === 'working' || seat === 'quiet') return 'work';
+  if (seat !== 'failed' && landed(c, v)) return 'done';
+  return 'rest';
+};
 

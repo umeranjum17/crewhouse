@@ -1,4 +1,4 @@
-// The office as a grouped list (Term look): Needs you / At work / Done today / Resting, every helper in exactly
+// The office as a grouped list (Term look): Waiting / At work / Done today / Resting, every helper in exactly
 // one group. Each row shows the helmet in its mood, the current line and one meta line. Crew never ask the person: a
 // waiting row says what it is on and "Waiting for Chief", and one row on top opens Chief, who carries every ask. Tapping
 // a row opens that helper's desk. Every word and count comes from the one
@@ -13,31 +13,15 @@ import { color } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 
 type Look = typeof color.day;
-const today = () => new Date().setHours(0, 0, 0, 0);
-/** The latest thing this helper landed today, if any. */
-const landed = (c: A.OfficeMember, v: A.OfficeView) =>
-  v.done.filter((t) => t.helper === c.id && t.at >= today()).sort((a, b) => b.at - a.at)[0];
+const { landed, groupOf } = A;
 
-type Group = 'needs' | 'work' | 'done' | 'rest';
+type Group = A.Group;
 const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
 /** The Office count line the phone header reads: waiting crew, at work, done today and resting — the same words as the
- *  groups (only Chief says "Needs you"). The member buckets partition the crew; the waiting number counts every crew
- *  member waiting on the person. */
+ *  groups (A.groupOf; only Chief says "Needs you"), so the counts are the rows. */
 export const summaryOf = (v: A.OfficeView): string => {
-  const needy = v.crew.filter(A.waitsOnYou);
-  const work = v.crew.filter((c) => !A.waitsOnYou(c) && ['working', 'quiet'].includes(A.seatOf(c)));
-  const done = v.crew.filter((c) => !A.waitsOnYou(c) && !['working', 'quiet', 'failed'].includes(A.seatOf(c)) && landed(c, v));
-  const rest = v.crew.length - needy.length - work.length - done.length;
-  return `${needy.length} waiting · ${work.length} at work · ${done.length} done · ${rest} resting`;
-};
-
-/** Every helper lands in exactly one group: waiting on you, at work on an open job, done today, or resting. */
-const groupOf = (c: A.OfficeMember, v: A.OfficeView): Group => {
-  if (A.waitsOnYou(c)) return 'needs';
-  const seat = A.seatOf(c);
-  if (seat === 'working' || seat === 'quiet') return 'work';
-  if (seat !== 'failed' && landed(c, v)) return 'done';
-  return 'rest';
+  const n = (g: Group) => v.crew.filter((c) => groupOf(c, v) === g).length;
+  return `${n('needs')} waiting · ${n('work')} at work · ${n('done')} done · ${n('rest')} resting`;
 };
 
 /** The helmet as dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot opacity. The

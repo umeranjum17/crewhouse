@@ -76,7 +76,7 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
   assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
-  assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');
+  assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
   assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
   assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
   // Live events move every count together.
@@ -293,9 +293,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const topH = pinnedTop ? pinnedTop.getBoundingClientRect().height : 0, topNotes = pinnedTop ? pinnedTop.querySelectorAll('.card, .nudge').length : 0;
           const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
           const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
+          // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
+          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge')]);
+          const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, chatRows, grouped, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
@@ -327,9 +330,19 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.deepEqual(m.crewActs, [], `${at}: no crew panel or row has an answer or approve button`);
           assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order/i.test(x)), `${at}: no crew panel or row carries the ask (${m.crewText.join(' | ')})`);
           // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
-          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && meta === 'Waiting for Chief'), `${at}: a waiting row is job, then "Waiting for Chief" (${JSON.stringify(m.waitRows)})`);
+          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting row is its job, then "Waiting for Chief"; one with no job rests (${JSON.stringify(m.waitRows)})`);
           assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
-          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || / waiting for Chief\.$/.test(m.idle)), `${at}: On it now says crew wait for Chief (${m.idle})`);
+          // On it now's idle line uses the rows' words and the header's waiting count.
+          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || m.idle === `Nobody is working: ${m.nums[0]} waiting for Chief.`), `${at}: On it now says the header's ${m.nums[0]} wait for Chief (${m.idle})`);
+          // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
+          const chat = new Map<string, { line: string; dot: boolean }>(m.chatRows.map(([name, line, dot]: [string, string, boolean]) => [name, { line, dot }]));
+          for (const [name, g] of m.grouped as [string, string][]) {
+            const row = chat.get(name);
+            if (!row) continue;
+            if (g === 'Waiting') assert.equal(row.line, 'Waiting', `${at}: ${name} waits in the Office and in Chats`);
+            if (g === 'Done today') assert.match(row.line, /^Done: /, `${at}: ${name} is done in the Office and in Chats`);
+            if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
+          }
           // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
           assert.equal(m.topNotes, 0, `${at}: no card or nudge pinned over the Office`);
           assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);

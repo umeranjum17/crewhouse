@@ -15,10 +15,7 @@ import { ChiefArt, PalArt, PreviewCard } from './parts.tsx';
 const ears = new Set<(e: Json) => void>();
 export const hear = (e: Json) => ears.forEach((f) => f(e));
 
-const today = () => new Date().setHours(0, 0, 0, 0);
-/** The latest thing this helper landed today, if any. */
-const landed = (c: A.OfficeMember, v: A.OfficeView) =>
-  v.done.filter((t) => t.helper === c.id && t.at >= today()).sort((a, b) => b.at - a.at)[0];
+const { landed, groupOf } = A;
 
 /** The panel's state word, in the board's own sentence case. */
 export type Glow = { word: string; cls: 'needs' | 'work' | 'quiet' | 'failed' | 'done' | 'rest' };
@@ -48,14 +45,10 @@ export function useOffice(state: Json, offline = false): A.OfficeView | null {
 }
 
 /** The Office count line both headers read: waiting crew, at work, done today and resting — the same words as the
- *  board's groups (only Chief says "Needs you"). The member buckets partition the crew; the waiting number counts every
- *  crew member waiting on the person (the pinned Needs you counts the ask rows, not these). */
+ *  board's groups (A.groupOf; only Chief says "Needs you"), so the counts are the rows. */
 export const summaryOf = (v: A.OfficeView): string => {
-  const needy = v.crew.filter(A.waitsOnYou);
-  const work = v.crew.filter((c) => !A.waitsOnYou(c) && ['working', 'quiet'].includes(A.seatOf(c)));
-  const done = v.crew.filter((c) => !A.waitsOnYou(c) && !['working', 'quiet', 'failed'].includes(A.seatOf(c)) && landed(c, v));
-  const rest = v.crew.length - needy.length - work.length - done.length;
-  return `${needy.length} waiting · ${work.length} at work · ${done.length} done · ${rest} resting`;
+  const n = (g: Group) => v.crew.filter((c) => groupOf(c, v) === g).length;
+  return `${n('needs')} waiting · ${n('work')} at work · ${n('done')} done · ${n('rest')} resting`;
 };
 
 /** Phone width renders the grouped list, as the board's phone frame does: headings with dashed rules, rows with the
@@ -92,17 +85,8 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
   );
 }
 
-type Group = 'needs' | 'work' | 'done' | 'rest';
+type Group = A.Group;
 const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
-/** Every helper lands in exactly one group: waiting on you, at work on an open job, done today, or resting. */
-const groupOf = (c: A.OfficeMember, v: A.OfficeView): Group => {
-  if (A.waitsOnYou(c)) return 'needs';
-  const seat = A.seatOf(c);
-  if (seat === 'working' || seat === 'quiet') return 'work';
-  if (seat !== 'failed' && landed(c, v)) return 'done';
-  return 'rest';
-};
-
 function Groups({ live, titles }: { live: A.OfficeView; titles: Map<string, string> }) {
   const groups = (['needs', 'work', 'done', 'rest'] as Group[])
     .map((g) => [g, live.crew.filter((c) => groupOf(c, live) === g)] as const).filter(([, rows]) => rows.length);
