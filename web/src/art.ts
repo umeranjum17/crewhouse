@@ -247,8 +247,13 @@ export const TABS: Record<Tab, Bitmap> = {
 };
 
 // ── ASCII moments ──
+/** The star that marks text drawn in the proportional system font — the starter chips, the Apps ▸ Skills row and
+ *  the phone's idea button and empty-list ornament: U+2605, a glyph every platform font carries. The four-point
+ *  sparkle it replaces (U+2726, ✦) is NOT in the iOS system font, which draws a missing-glyph box for it on iPad;
+ *  the monospace .art moments (the boot plasma, confetti, the done sparkle) keep U+2726, which monospace draws. */
+export const STAR = '★';
 /** The quiet mark beside an empty list, and the one ornament the ASCII moments share. */
-export const ORNAMENT = '·  ✦  ·';
+export const ORNAMENT = `·  ${STAR}  ·`;
 const SHADOW: Record<string, string[]> = {
   C: [' ██████╗', '██╔════╝', '██║     ', '██║     ', '╚██████╗', ' ╚═════╝'],
   R: ['██████╗ ', '██╔══██╗', '██████╔╝', '██╔══██╗', '██║  ██║', '╚═╝  ╚═╝'],
