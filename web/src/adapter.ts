@@ -59,7 +59,10 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** Chief's full assignment in a helper's chat, behind Show details: the line itself stays one short ask. */
   detail?: string;
   /** What a delivered workbook or document holds, said once: the web's card says it itself, the phone shows these. */
-  about?: string };
+  about?: string;
+  /** A memory the crew just kept, announced in this chat as "Saved: …": `memory` is a `memory.learned` event's seq
+   *  (Undo takes it back through crewd); `saved` is a sentence added to the record (Undo drops it from there). */
+  memory?: number; saved?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
@@ -107,8 +110,8 @@ export const atHome = (home = 'this computer', plan = 'AI plan') => [
   awake(home),
   `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
 ];
-/** The trust story where the fear is. `kept`: everything remembered about the person (About you, About me and my
- *  work, each helper's notes) shows line by line with Forget beside it. `home`: there is no Crewhouse server and no
+/** The trust story where the fear is. `kept`: everything remembered about the person (the one Memory section,
+ *  each helper's notes) shows line by line with Forget beside it. `home`: there is no Crewhouse server and no
  *  telemetry (README); `atHome` says what does leave. Settings says both; Hello says them as one plain line. */
 export const trust = {
   kept: 'What the crew remembers (see or forget any line)', home: 'Runs on this computer, nothing sent to us',
@@ -1337,6 +1340,23 @@ export function slotMap<T extends { at: number }>(lines: Line[], items: T[]): { 
 }
 export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
   return slotMap(lines, cards);
+}
+
+/** The memory the crew just kept, announced once each in its chat as "Saved: …" with the way to take it back, after the
+ *  turn that kept it. `memory.learned` carries its own undo on crewd; `profile.edited` a sentence that is still in the
+ *  record (dropping it is what its Undo does, so a removed sentence's note never comes back). `msgs` is the page's raw
+ *  messages, so a note sits after its own turn's reply rather than between the ask and the answer. */
+export function savedNotes(events: Json[], lines: Line[], record?: string, msgs: Json[] = []): Line[] {
+  const out = [...lines], notes: Line[] = [], kept = record === undefined ? null : new Set(profileParts(record));
+  const replyAt = new Map<number, number>();
+  for (const m of msgs) if (m.author === 'bot' && m.task_id != null) replyAt.set(Number(m.task_id), Number(m.at) || 0);
+  const when = (e: Json) => { const r = replyAt.get(Number(e.data?.task)); return r !== undefined && r > 0 ? at(r) : at(e.at); };
+  for (const e of events) {
+    if (e.kind === 'memory.learned' && !e.undone && e.data?.text) notes.push({ id: -(1e9 + Number(e.seq)), from: 'note', text: `Saved: ${plain(String(e.data.text))}`, files: [], choices: [], at: when(e), memory: Number(e.seq) });
+    if (e.kind === 'profile.edited' && Array.isArray(e.data?.added)) (e.data.added as string[]).forEach((s, i) => { const line = plain(s); if (!line || (kept && !kept.has(line))) return; const note = { id: -(2e9 + Number(e.seq) * 10 + i), from: 'note' as const, text: `Saved: ${line}`, files: [], choices: [], at: when(e), saved: line }; const was = notes.findIndex((n) => n.saved === line); if (was >= 0) notes[was] = note; else notes.push(note); });
+  }
+  for (const n of notes.sort((a, b) => (a.at ?? 0) - (b.at ?? 0))) { const i = out.findLastIndex((l) => (l.at ?? 0) <= (n.at ?? 0)); out.splice(i + 1, 0, n); }
+  return out;
 }
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't

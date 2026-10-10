@@ -6,6 +6,7 @@
 // ?demo=b1 (the B1 mocks' crew), ?demo=paper (Scout's reply to the clinic as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
 // ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=finished (the quiet just after a job lands),
+// ?demo=saved (a keeping just landed: one "Saved:" line with Undo in Chief's chat),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // ?demo=live (Scout part way down Saturday's dinner plan, live under Chief's thread).
@@ -122,6 +123,8 @@ if (variant === 'finished') {
   for (const b of bots) Object.assign(b, { task: null, step: undefined });
   events.push(ev(24, 1, 'task.done', 'reel', { task: 41, title: "Mum's birthday video", result: "A one-minute video for Mum, with the piano song and her title." }));
 }
+// ?demo=saved: Chief just kept a memory, so his chat shows one "Saved: …" line with an Undo that takes it back.
+if (variant === 'saved') events.push(ev(26, 1, 'memory.learned', 'chief', { task: 40, text: 'Prefers weekend plans before Thursday', added: '- Prefers weekend plans before Thursday', removed: null }));
 // ?demo=crew1, crew5, crew12, crew30: the office at that many helpers. Scribe needs you at crew1;
 // larger crews add working helpers, questions and free desks.
 const many = /^crew(\d+)$/.exec(variant);
@@ -522,8 +525,8 @@ export function demoLive(hear: (e: Json) => void) {
 let calls = 0;
 // About me and my work: the record every helper reads before a job, as Chief last left it.
 let profile = 'I run a bakery for my neighbourhood. My business is called Morning Loaf. I write in a warm, plain voice.';
-// About you: what the whole crew knows about the person, changeable through the same GET/PUT the app calls.
-let about = '- Vegetarian\n- Lives in Larkspur\n- Prefers weekend plans before Thursday';
+// What the whole crew knows about the person (GET/PUT /api/about), the person's own lines.
+let aboutNotes = '- Vegetarian\n- Lives in Larkspur\n- Prefers weekend plans before Thursday';
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
@@ -588,11 +591,14 @@ export async function demoCall(method: string, path: string, body?: Json) {
     '',
     'The shop day is on your calendar for Saturday morning. Anything ticked was already in the cupboard.',
   ].join('\n') } : doc;
-  if (method === 'GET' && path === '/api/about') return { notes: about };
-  if (method === 'PUT' && path === '/api/about') { about = String(body?.text ?? ''); return { ok: true }; }
+  if (method === 'GET' && path === '/api/about') return { notes: aboutNotes };
+  if (method === 'PUT' && path === '/api/about') { aboutNotes = String(body?.text ?? ''); return { ok: true }; }
   // About me and my work: the record every helper reads before a job (GET/PUT /api/profile).
   if (method === 'GET' && path === '/api/profile') return { text: profile, cap: 4000 };
   if (method === 'PUT' && path === '/api/profile') { profile = String(body?.text ?? ''); return { ok: true }; }
+  // Take back a memory the crew just kept (?demo=saved): the "Saved:" line and its Undo.
+  const undo = /^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/.exec(path);
+  if (method === 'POST' && undo) { const i = events.findIndex((e) => e.kind === 'memory.learned' && e.seq === Number(undo[2])); if (i >= 0) events.splice(i, 1); pages[undo[1]].trail = events.filter((e) => e.bot === undo[1]); return { ok: true }; }
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };

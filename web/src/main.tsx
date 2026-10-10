@@ -521,7 +521,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
-  const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
+  const base = A.lines(page, id, state);
+  const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
   const waiting = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
@@ -616,6 +617,12 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     return ok;
   };
   const name = h?.name ?? 'Chief';
+  // Take back a memory the crew just kept: crewd's own undo for a note, or drop the sentence from the shared record.
+  const undoMemory = (l: A.Line) => attempt(async () => {
+    if (l.memory !== undefined) await api.undoMemory(id, l.memory);
+    else if (l.saved) { const p = await api.profile(); await api.setProfile(A.profileText(A.profileParts(p.text ?? '').filter((x) => x !== l.saved))); }
+    void load(); refresh();
+  }, 'Undone');
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
   const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
   // Lines that arrive while you watch rise in; the thread you open with is simply there.
@@ -644,7 +651,9 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
             ...(slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh)),
             ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} />),
           ];
-          const wrap = <div className="line-wrap">{dayOf(l.at)}
+          const wrap = l.memory !== undefined || l.saved
+            ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
+            : <div className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}`}>
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
@@ -983,61 +992,55 @@ function AboutMe({ id, name, page, reload }: { id: string; name: string; page: J
   );
 }
 
-/** What the whole crew knows about this person: every helper reads it before a job for them. */
-function AboutYou({ tick }: { tick: number }) {
+/** Memory: one place for what the crew knows about this person — what Chief noted about them and their work, and the
+ *  lines the whole crew keeps. Every helper reads it before a job for them; every line can be forgotten, and each
+ *  Forget leaves a "Forgotten" row with an Undo that puts the exact line back. */
+function Memory({ tick }: { tick: number }) {
   const [notes, setNotes] = useState<string | null>(null);
-  const load = useCallback(() => api.about().then((a) => setNotes(a.notes ?? '')).catch(() => {}), []);
-  useEffect(() => { void load(); }, [load, tick]);
-  if (notes === null) return null;
-  return (
-    <>
-      <div className="label" id="about-you">About you</div>
-      <p className="mute small">What the whole crew knows about you. Every helper reads it before a job for you.</p>
-      <MemoryList notes={notes} save={async (t) => { await api.setAbout(t); await load(); }}
-        empty="Nothing yet. Tell Chief things like “I'm vegetarian” and the whole crew will know." placeholder="For example: I'm vegetarian" />
-    </>
-  );
-}
-
-/** About me and my work: what your helpers know about you and your work. Every helper reads it before a
- *  job for you; each sentence is its own part to change or forget, with a line to add one. The next job
- *  already reads what you save here. */
-function AboutWork({ tick }: { tick: number }) {
   const [got, setGot] = useState<{ text: string; cap: number } | null>(null);
-  const load = useCallback(() => api.profile().then((p) => setGot({ text: p.text ?? '', cap: p.cap ?? 4000 })).catch(() => {}), []);
+  const load = useCallback(async () => {
+    const [a, p] = await Promise.all([api.about().catch(() => ({ notes: '' })), api.profile().catch(() => ({ text: '', cap: 4000 }))]);
+    setNotes(a.notes ?? ''); setGot({ text: p.text ?? '', cap: p.cap ?? 4000 });
+  }, []);
   useEffect(() => { void load(); }, [load, tick]);
-  const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState('');
-  if (got === null) return null;
-  const parts = A.profileParts(got.text);
-  const save = (next: string[], ok: string) => attempt(async () => { await api.setProfile(A.profileText(next)); await load(); setEditing(null); setDraft(''); setAdding(''); }, ok);
-  const left = got.cap - A.profileText(editing === null ? [...parts, adding] : parts.map((p, i) => (i === editing ? draft : p))).length;
+  // Every row's Forget leaves a "Forgotten" row where it was, with an Undo that puts it back exactly for a short while.
+  const [undone, setUndone] = useState<{ kind: 'part' | 'crew'; prev: string; at: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  if (notes === null || got === null) return null;
+  const mine = A.memories(notes), parts = A.profileParts(got.text);
+  const forget = (kind: 'part' | 'crew', i: number) => void attempt(async () => {
+    const prev = kind === 'crew' ? notes : got.text;
+    await (kind === 'crew' ? api.setAbout(A.withoutMemory(notes, i)) : api.setProfile(A.profileText(parts.filter((_, j) => j !== i))));
+    await load();
+    if (timer.current) clearTimeout(timer.current);
+    setUndone({ kind, prev, at: i });
+    timer.current = setTimeout(() => setUndone(null), 12_000);
+  });
+  const putBack = () => { const back = undone; if (timer.current) clearTimeout(timer.current); setUndone(null); if (back) void attempt(async () => { await (back.kind === 'crew' ? api.setAbout(back.prev) : api.setProfile(back.prev)); await load(); }); };
+  const add = () => void attempt(async () => { await api.setProfile(A.profileText([...parts, adding])); await load(); setAdding(''); }, 'Remembered');
+  const left = got.cap - A.profileText([...parts, adding]).length;
   const over = left < 0;
   const hint = over ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : '';
+  const forgotten = <div key="undo" className="row-item forgotten"><span className="grow">Forgotten</span><button className="link" onClick={putBack}>Undo</button></div>;
+  const partRows = parts.map((p, i) => <div key={`work-${i}`} className="row-item profile-part"><span className="grow">{p}</span>
+    <button className="link" onClick={() => forget('part', i)}>Forget</button></div>);
+  if (undone?.kind === 'part') partRows.splice(Math.min(undone.at, partRows.length), 0, forgotten);
+  const crewRows = mine.map((m, i) => <div key={`you-${i}`} className="row-item memory-you"><span className="grow">{m}</span>
+    <button className="link" onClick={() => forget('crew', i)}>Forget</button></div>);
+  if (undone?.kind === 'crew') crewRows.splice(Math.min(undone.at, crewRows.length), 0, forgotten);
   return (
     <>
-      <div className="label">About me and my work</div>
-      <p className="mute small">What your helpers know about you and your work. Every helper reads it before a job for you.</p>
-      {parts.length ? <div className="card list profile-parts">{parts.map((p, i) => editing === i ? (
-        <div key={i} className="row-item profile-part"><span className="grow">
-          <textarea className="input profile-edit" rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="This part in your words" autoFocus />
-          {!!hint && <div className={`small ${over ? 'bad' : 'mute'}`}>{hint}</div>}
-          <div className="btns">
-            <button className="btn go" disabled={!draft.trim() || over} onClick={() => save(parts.map((q, j) => (j === i ? draft : q)), 'Saved')}>Save</button>
-            <button className="btn ghost" onClick={() => { setEditing(null); setDraft(''); }}>Cancel</button>
-          </div></span></div>
-      ) : (
-        <div key={i} className="row-item profile-part"><span className="grow">{p}</span>
-          <button className="link" onClick={() => { setDraft(p); setEditing(i); }}>Change</button>
-          <button className="link" onClick={() => save(parts.filter((_, j) => j !== i), 'Forgotten')}>Forget</button></div>
-      ))}</div>
-        : editing === null ? <div className="card empty">Nothing yet. Tell Chief about yourself and your work, and the whole crew will know.</div> : null}
+      <div className="label" id="memory">Memory</div>
+      <p className="mute small">What the crew knows about you and your work. Every helper reads it before a job for you.</p>
+      {(parts.length || mine.length) ? <div className="card list memory-lines">{partRows}{crewRows}</div>
+        : <div className="card empty">Nothing yet. Tell Chief about yourself and your work, and the whole crew will know.</div>}
       <div className="row add-row"><input className="input grow profile-add" value={adding} onChange={(e) => setAdding(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && adding.trim() && !over) void save([...parts, adding], 'Remembered'); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' && adding.trim() && !over) add(); }}
         placeholder="Something about you or your work" aria-label="Something about you or your work" />
-        <button className="btn" disabled={!adding.trim() || over} onClick={() => save([...parts, adding], 'Remembered')}>Add</button></div>
-      {!!(adding.trim() && hint && editing === null) && <div className={`small ${over ? 'bad' : 'mute'}`}>{hint}</div>}
+        <button className="btn" disabled={!adding.trim() || over} onClick={add}>Add</button></div>
+      {!!(adding.trim() && hint) && <div className={`small ${over ? 'bad' : 'mute'}`}>{hint}</div>}
     </>
   );
 }
@@ -1312,7 +1315,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
       <p className="mute small"><b>{A.trust.home}.</b> {A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
-      <button className="link trust" onClick={() => document.getElementById('about-you')?.scrollIntoView({ behavior: 'smooth' })}>{A.trust.kept}</button>
+      <button className="link trust" onClick={() => document.getElementById('memory')?.scrollIntoView({ behavior: 'smooth' })}>{A.trust.kept}</button>
       {demo && <PairRow />}
       {/* Paired: notifications ride the person's mailbox like at home — the switch lives here, since crewd refuses
           the Phones screen over the link. `relay` is asked over the link too, so no refused call and no dead toggle. */}
@@ -1324,8 +1327,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
 
       <div className="label">You</div>
       <You state={state} act={act} plan={A.planName(accounts)} />
-      <AboutYou tick={tick} />
-      <AboutWork tick={tick} />
+      <Memory tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />

@@ -11,7 +11,9 @@ first message.
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
-- `trust-links` — Settings (under its title) says "What the crew remembers (see or forget any line)" and "Runs on this computer, nothing sent to us"; Hello (under the ideas) says one plain line, "Runs on this computer. See or forget anything the crew remembers." (`A.trust`). On Hello it opens How it works, whose promises include where memory lives (`A.keptWhere`); Settings leads the runs-at-home line with the second and links the first to About you (`#about-you`).
+- `trust-links` — Settings (under its title) says "What the crew remembers (see or forget any line)" and "Runs on this computer, nothing sent to us"; Hello (under the ideas) says one plain line, "Runs on this computer. See or forget anything the crew remembers." (`A.trust`). On Hello it opens How it works, whose promises include where memory lives (`A.keptWhere`); Settings leads the runs-at-home line with the second and links the first to the one Memory section (`#memory`).
+- `memory-one-section` — Settings shows one "Memory" section (label `#memory`) with one description, listing both what Chief noted about the person and their work (`profileParts`, `.profile-part`, Change/Forget) and the whole crew's own lines (`memories`, `.memory-you`, Forget) in one card (`.memory-lines`), with one Add row (`.profile-add`).
+- `memory-saved-line` — when the crew keeps a memory (a helper's `crew_remember`, or Chief's `crew_profile`), that chat shows one `Saved: <the line>` note with an Undo (`.saved-undo`); Undo removes it (crewd's `POST /api/bots/:id/memory/:seq/undo`, or dropping the sentence from the record) and the line does not come back.
 - `shared-profile` — Chief saves directly stated personal/work facts from onboarding and chat with `crew_profile`; the complete merged record stays under 4000 characters and his reply says plainly what he noted.
 
 ## How to get to it (user POV)
@@ -35,7 +37,8 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Drive](../SKILL.md#drive).
 
 - **Hello.** Click the trust line (the `.hello > .trust-line`, text `A.trust.hello`); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
-- **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#about-you` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget.
+- **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#memory` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget (`.profile-part` and `.memory-you`).
+- **Memory (one section, saved line).** Settings shows the one `#memory` section with both stores' lines. In a chat, keep a memory — a helper's `crew_remember` lands `memory.learned`; Chief's `crew_profile` lands `profile.edited {added}` — and eval the chat has one `.saved-undo` row reading `Saved: <the line>`; click it and eval the line is gone from the chat and from the record.
 - **Evidence.** `scripts/screens.sh` for Hello (fresh) and `#/settings` (seeded), `scripts/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
 
 ## Shared profile (real-model words)
@@ -53,16 +56,16 @@ every shot. These web widths do not prove native Expo UI. `test/crew-profile.tes
 pins the HTTP onboarding/chat dispatch and over-cap preservation on the scripted runtime;
 it does not prove model judgment or plain model words.
 
-The screenshot/recording helpers mentioned in SKILL.md are absent. When using the
-fleet-required `chrome-devtools-axi`, use its own task-scoped session, `emulate --viewport`,
-`open <base>/?day` / `open <base>/?night`, `eval` for visible text/geometry, and
-`screenshot <EV>/<name>.png`. Record real browser frames from that same session's CDP
-`Page.startScreencast` (acknowledge frames, retain timestamps), then mux with ffmpeg.
-Do not substitute demo copy or injected messages for the actual Chief reply.
-Stop every owned daemon/engine by its recorded port before releasing the credential lock.
-`node scripts/personal-voice.mjs` and its self-test are also absent at this revision;
-report them as unperformed rather than claiming a clean scan. Inspect the actual note's
-plain, single-person wording in the retained replies and all four captures.
+The helpers in SKILL.md exist at this revision: `scripts/screens.sh` for the four design-bar
+captures and `scripts/record.mjs` for one motion recording of an interaction (a CDP
+`Page.startScreencast` muxed with ffmpeg), plus `scripts/personal-voice.mjs` and its
+`--self-test`. Drive with the fleet-required `chrome-devtools-axi` in its own task-scoped
+session (`emulate --viewport`, `open <base>/?day` / `open <base>/?night`, `eval` for visible
+text/geometry, `screenshot <EV>/<name>.png`), or any CDP harness that opens the app tab with
+the private `#person=` capability. Do not substitute demo copy or injected messages for the
+actual Chief reply. Stop every owned daemon/engine by its recorded port before releasing the
+credential lock. Inspect the actual note's plain, single-person wording in the retained
+replies and all four captures.
 
 ## Published template catalogue (real-model words)
 

@@ -64,9 +64,6 @@ async function browse() {
 
 const parts = () => `[...document.querySelectorAll('.profile-part')].map((el) => el.querySelector('.grow')?.textContent?.trim() ?? '')`;
 const press = (i: number, what: string) => `[...[...document.querySelectorAll('.profile-part')][${i}].querySelectorAll('button')].find((x) => x.textContent === ${JSON.stringify(what)}).click()`;
-const setText = (sel: string, text: string) => `(() => { const t = document.querySelector(${JSON.stringify(sel)});
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-  setter.call(t, ${JSON.stringify(text)}); t.dispatchEvent(new Event('input', { bubbles: true })); })()`;
 const setInput = (sel: string, text: string) => `(() => { const t = document.querySelector(${JSON.stringify(sel)});
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
   setter.call(t, ${JSON.stringify(text)}); t.dispatchEvent(new Event('input', { bubbles: true })); })()`;
@@ -76,7 +73,7 @@ test('the app is built', () => {
   assert.ok(readdirSync(dist).some((f) => f.endsWith('.js')));
 });
 
-test('About me and my work shows the record, and each part can be changed, forgotten and added to', { skip: !bin && 'no Chromium here' }, async () => {
+test('the one Memory record: a sentence can be forgotten with an Undo, and added to', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.open('demo=calm&day#/settings');
   await until('the record in plain parts', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
@@ -85,53 +82,77 @@ test('About me and my work shows the record, and each part can be changed, forgo
     'My business is called Morning Loaf.',
     'I write in a warm, plain voice.',
   ]);
-  // Change the first part: the edited words show, and survive a reload (the PUT reached the record).
-  await b.run(press(0, 'Change'));
-  await until("the part's own box", () => b.run("!!document.querySelector('textarea.profile-edit')"), 10_000);
-  await b.run(setText('textarea.profile-edit', 'I run a bakery for local families in Lahore.'));
-  await b.run(press(0, 'Save'));
-  await until('the changed part', () => b.run(`(${parts()})[0]`).then((p: string) => p === 'I run a bakery for local families in Lahore.'), 10_000);
-  // Leave and come back: the section reads the record again, so the edited words prove the PUT landed.
+  // Forget the middle sentence: a "Forgotten" row with an Undo sits where it was, and the record loses it.
+  await b.run(press(1, 'Forget'));
+  await until('the Forgotten row', () => b.run(`!!document.querySelector('.memory-lines .forgotten')`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+  ]);
+  // Leave and come back: the section reads the record afresh, so the shorter record proves the Forget landed.
   await b.run(`location.hash = '#/';`);
   await b.run(`location.hash = '#/settings';`);
-  await until('the record after leaving and coming back', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
+  await until('the shorter record after leaving and coming back', () => b.run(`document.querySelectorAll('.profile-part').length === 2`), 30_000);
   assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
-    'My business is called Morning Loaf.',
+    'I run a bakery for my neighbourhood.',
     'I write in a warm, plain voice.',
   ]);
-  // Forget the middle part, then add one back: the record follows along.
-  await b.run(press(1, 'Forget'));
-  await until('two parts left', () => b.run(`document.querySelectorAll('.profile-part').length === 2`), 10_000);
-  assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
-    'I write in a warm, plain voice.',
-  ]);
+  // Add a sentence back: it lands at the end of the record.
   await b.run(setInput('.profile-add', 'My regulars order the almond croissants.'));
   await b.run(`[...document.querySelectorAll('.add-row button')].find((x) => x.textContent === 'Add' && x.closest('.add-row').querySelector('.profile-add')).click()`);
   await until('the added part', () => b.run(`document.querySelectorAll('.profile-part').length === 3`), 10_000);
   assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+    'My regulars order the almond croissants.',
+  ]);
+  // Forget it, then Undo puts the exact sentence back where it was.
+  await b.run(press(2, 'Forget'));
+  await until('the Forgotten row again', () => b.run(`!!document.querySelector('.memory-lines .forgotten')`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+  ]);
+  await b.run(`document.querySelector('.memory-lines .forgotten button').click()`);
+  await until('the sentence back', () => b.run(`!document.querySelector('.memory-lines .forgotten') && document.querySelectorAll('.profile-part').length === 3`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
     'I write in a warm, plain voice.',
     'My regulars order the almond croissants.',
   ]);
 });
 
-// "About you" memory lines (web/src/main.tsx MemoryList): Forget leaves a "Forgotten" row with an Undo that
-// puts the exact line back. Driven on the built app, through GET/PUT /api/about the app itself calls.
-test('About you: Forget offers an Undo that puts the line back exactly', { skip: !bin && 'no Chromium here' }, async () => {
+// Memory (ch-ux-memory-one-section): one section for what the crew knows, not two near-identical ones, with the
+// whole crew's own lines and Chief's record listed together and either one forgettable; a crew line's Forget offers
+// an Undo that puts the exact line back. Driven in real Chromium.
+test('one Memory section lists both records, and a crew line can be forgotten and put back', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.open('demo=calm&day#/settings');
-  const lines = () => `[...document.querySelectorAll('#about-you + p + .card.list .row-item .grow')].map((x) => x.textContent)`;
-  await until('About you lines', () => b.run(`(${lines()}).length >= 3`), 30_000);
-  const before = await b.run(lines());
-  assert.deepEqual(before, ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
-  // Forget the middle line: it goes, and a "Forgotten" row with Undo sits where it was.
-  await b.run(`[...document.querySelectorAll('#about-you + p + .card.list .row-item')][1].querySelector('button').click()`);
-  await until('the Forgotten row', () => b.run("!!document.querySelector('#about-you + p + .card.list .row-item.forgotten')"), 10_000);
-  assert.deepEqual(await b.run(lines()), ['Vegetarian', 'Forgotten', 'Prefers weekend plans before Thursday']);
+  await until('the one Memory section', () => b.run(`document.getElementById('memory')?.textContent === 'Memory'`), 30_000);
+  await until('both lists in one card', () => b.run(`document.querySelectorAll('.memory-lines .profile-part').length === 3 && document.querySelectorAll('.memory-lines .memory-you').length === 3`), 30_000);
+  const you = `[...document.querySelectorAll('.memory-you .grow')].map((el) => el.textContent.trim())`;
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'My business is called Morning Loaf.',
+    'I write in a warm, plain voice.',
+  ]);
+  // Forget the middle crew line: a "Forgotten" row with an Undo sits where it was.
+  await b.run(`[...document.querySelectorAll('.memory-you')][1].querySelector('button').click()`);
+  await until('the Forgotten row', () => b.run(`!!document.querySelector('.memory-lines .row-item.forgotten')`), 10_000);
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Prefers weekend plans before Thursday']);
   // Undo puts the exact line back, in its place.
-  await b.run("document.querySelector('#about-you + p + .card.list .row-item.forgotten button').click()");
-  await until('the line back', () => b.run(`!document.querySelector('#about-you + p + .card.list .row-item.forgotten') && (${lines()}).length === 3`), 10_000);
-  assert.deepEqual(await b.run(lines()), before);
+  await b.run(`document.querySelector('.memory-lines .row-item.forgotten button').click()`);
+  await until('the line back', () => b.run(`!document.querySelector('.memory-lines .row-item.forgotten') && document.querySelectorAll('.memory-you').length === 3`), 10_000);
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
+});
+
+// A kept memory is announced once in the chat as "Saved: …" with an Undo that takes it back, and never repeats.
+test('a saved memory shows one Saved: line with an Undo that takes it back', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=saved&day#/chief');
+  await until('the one Saved line', () => b.run(`document.querySelectorAll('.saved-undo').length === 1`), 30_000);
+  assert.match(await b.run(`document.querySelector('.saved-undo').closest('.card.answered').textContent`), /Saved: Prefers weekend plans before Thursday/);
+  await b.run(`document.querySelector('.saved-undo').click()`);
+  await until('the line gone after Undo', () => b.run(`document.querySelectorAll('.saved-undo').length === 0`), 10_000);
 });

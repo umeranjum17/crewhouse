@@ -718,9 +718,10 @@ function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string;
   </div>;
 }
 
-/** What an answered card leaves in the thread: one small plain line — what was done and when — where the card was. */
-export function AnsweredCard({ line }: { line: string }) {
-  return <div className="card answered" role="status">{line}</div>;
+/** What an answered card leaves in the thread: one small plain line — what was done and when — where the card was.
+ *  A kept memory's own line carries the way to take it back as an inline text button on the same line. */
+export function AnsweredCard({ line, undo }: { line: string; undo?: () => void }) {
+  return <div className="card answered" role="status">{line}{undo && <> <button className="link saved-undo" onClick={undo}>Undo</button></>}</div>;
 }
 
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
