@@ -77,7 +77,7 @@ const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
 /** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
-  'skill.learned', 'skill.removed', 'soul.changed', 'draft.approved', 'draft.rejected'];
+  'skill.learned', 'skill.removed', 'soul.changed', 'draft.approved', 'draft.rejected', 'profile.edited'];
 
 /** Whether the person's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
 export function quietNow(quiet: string | null | undefined, at = new Date()) {
@@ -937,7 +937,7 @@ export class Crew {
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the person.
-      notes: disk.readNotes(this.cfg, { bot: id }),
+      notes: disk.readNotes(this.cfg, { bot: id }), profile: disk.readProfile(this.cfg),
       notesCap: disk.NOTES_CAP,
       soul: disk.readSoul(this.cfg, id),
       soulCap: disk.SOUL_CAP,
@@ -2051,9 +2051,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
     return [...chiefTools,
       tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
+        const was = disk.readProfile(this.cfg), text = String(p.text ?? '').trim();
         if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
-        if (!String(p.text ?? '').trim()) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, String(p.text));
-        this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task() });
+        if (!text) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, text); this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task(), added: text.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter((s) => s && !was.includes(s)) });
       }),
       tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', () => ({

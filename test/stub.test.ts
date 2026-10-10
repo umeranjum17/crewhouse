@@ -750,3 +750,24 @@ test('one chat end to end on the stub: excel request, one question, bookings, th
   assert.equal(view.sheets[0].nums.length, view.sheets[0].rows.length, 'every row has a number');
   done();
 });
+
+// ch-ux-memory-one-section: Chief remembering with crew_profile records the facts it added on the trail, so the
+// chat can announce them once as "Saved: …" with an Undo, and the next job reads the saved record.
+test('chief remembers with crew_profile: the save lands on the trail and in the record', async () => {
+  await ready();
+  const t = (await say('chief', `note this ${call('crew_profile', { text: 'I run Morning Loaf bakery. My voice is warm and plain.' })}`)).body.task;
+  await done('chief', t);
+  const page = (await api('GET', '/api/bots/chief')).body;
+  const edit = page.trail.find((e: any) => e.kind === 'profile.edited' && e.data?.added?.length);
+  assert.ok(edit, 'the save is on the trail, so the chat can show it');
+  assert.deepEqual(edit.data.added, ['I run Morning Loaf bakery.', 'My voice is warm and plain.']);
+  assert.equal((await api('GET', '/api/profile')).body.text.trim(), 'I run Morning Loaf bakery. My voice is warm and plain.');
+  // The adapter turns the trail into exactly one "Saved:" line per added fact, each with a way to take it back.
+  const saved = A.savedNotes(page.trail, []).filter((l: any) => l.text.startsWith('Saved:'));
+  assert.deepEqual(saved.map((l: any) => l.text), ['Saved: I run Morning Loaf bakery.', 'Saved: My voice is warm and plain.']);
+  assert.deepEqual(saved.map((l: any) => l.saved), ['I run Morning Loaf bakery.', 'My voice is warm and plain.']);
+  // Undo drops the sentence from the record; the "Saved:" line is the record, not history, so it goes with it and never returns.
+  await api('PUT', '/api/profile', { text: 'I run Morning Loaf bakery.' });
+  const kept = A.savedNotes(page.trail, [], 'I run Morning Loaf bakery.').filter((l: any) => l.text.startsWith('Saved:'));
+  assert.deepEqual(kept.map((l: any) => l.text), ['Saved: I run Morning Loaf bakery.']);
+});

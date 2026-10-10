@@ -117,21 +117,37 @@ test('About me and my work shows the record, and each part can be changed, forgo
   ]);
 });
 
-// "About you" memory lines (web/src/main.tsx MemoryList): Forget leaves a "Forgotten" row with an Undo that
-// puts the exact line back. Driven on the built app, through GET/PUT /api/about the app itself calls.
-test('About you: Forget offers an Undo that puts the line back exactly', { skip: !bin && 'no Chromium here' }, async () => {
+// Memory (ch-ux-memory-one-section): one section for what the crew knows, not two near-identical ones, with the
+// whole crew's own lines and Chief's record listed together and either one forgettable; a crew line's Forget offers
+// an Undo that puts the exact line back. Driven in real Chromium.
+test('one Memory section lists both records, and a crew line can be forgotten and put back', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.open('demo=calm&day#/settings');
-  const lines = () => `[...document.querySelectorAll('#about-you + p + .card.list .row-item .grow')].map((x) => x.textContent)`;
-  await until('About you lines', () => b.run(`(${lines()}).length >= 3`), 30_000);
-  const before = await b.run(lines());
-  assert.deepEqual(before, ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
-  // Forget the middle line: it goes, and a "Forgotten" row with Undo sits where it was.
-  await b.run(`[...document.querySelectorAll('#about-you + p + .card.list .row-item')][1].querySelector('button').click()`);
-  await until('the Forgotten row', () => b.run("!!document.querySelector('#about-you + p + .card.list .row-item.forgotten')"), 10_000);
-  assert.deepEqual(await b.run(lines()), ['Vegetarian', 'Forgotten', 'Prefers weekend plans before Thursday']);
+  await until('the one Memory section', () => b.run(`document.getElementById('memory')?.textContent === 'Memory'`), 30_000);
+  await until('both lists in one card', () => b.run(`document.querySelectorAll('.memory-lines .profile-part').length === 3 && document.querySelectorAll('.memory-lines .memory-you').length === 3`), 30_000);
+  const you = `[...document.querySelectorAll('.memory-you .grow')].map((el) => el.textContent.trim())`;
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'My business is called Morning Loaf.',
+    'I write in a warm, plain voice.',
+  ]);
+  // Forget the middle crew line: a "Forgotten" row with an Undo sits where it was.
+  await b.run(`[...document.querySelectorAll('.memory-you')][1].querySelector('button').click()`);
+  await until('the Forgotten row', () => b.run(`!!document.querySelector('.memory-lines .row-item.forgotten')`), 10_000);
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Prefers weekend plans before Thursday']);
   // Undo puts the exact line back, in its place.
-  await b.run("document.querySelector('#about-you + p + .card.list .row-item.forgotten button').click()");
-  await until('the line back', () => b.run(`!document.querySelector('#about-you + p + .card.list .row-item.forgotten') && (${lines()}).length === 3`), 10_000);
-  assert.deepEqual(await b.run(lines()), before);
+  await b.run(`document.querySelector('.memory-lines .row-item.forgotten button').click()`);
+  await until('the line back', () => b.run(`!document.querySelector('.memory-lines .row-item.forgotten') && document.querySelectorAll('.memory-you').length === 3`), 10_000);
+  assert.deepEqual(await b.run(you), ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
+});
+
+// A kept memory is announced once in the chat as "Saved: …" with an Undo that takes it back, and never repeats.
+test('a saved memory shows one Saved: line with an Undo that takes it back', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=saved&day#/chief');
+  await until('the one Saved line', () => b.run(`document.querySelectorAll('.saved-undo').length === 1`), 30_000);
+  assert.match(await b.run(`document.querySelector('.saved-undo').closest('.line').textContent`), /Saved: Prefers weekend plans before Thursday/);
+  await b.run(`document.querySelector('.saved-undo').click()`);
+  await until('the line gone after Undo', () => b.run(`document.querySelectorAll('.saved-undo').length === 0`), 10_000);
 });

@@ -506,8 +506,8 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   // The trust story where the fear is: true words (README: no Crewhouse server, no telemetry; every memory row has Forget).
   assert.doesNotMatch(`${A.trust.kept} ${A.trust.home} ${A.trust.hello} ${A.keptWhere}`, FORBIDDEN);
   assert.match(web, /<button className="link trust-line" onClick=\{showHow\}>\{A\.trust\.hello\}<\/button>/, 'Hello says it as one plain line under the ideas');
-  assert.match(web, /getElementById\('about-you'\)[^\n]+\{A\.trust\.kept\}/, 'Settings links what the crew remembers to About you');
-  assert.match(web, /id="about-you">About you</, 'About you is the anchor');
+  assert.match(web, /getElementById\('memory'\)[^\n]+\{A\.trust\.kept\}/, 'Settings links what the crew remembers to the one Memory section');
+  assert.match(web, /id="memory">Memory</, 'the Memory section is the anchor');
   assert.match(web, /<b>Reach it away from home<\/b>\s+<p className="mute small">\{A\.awake\(\)\}<\/p>\s+<p className="mute small">\{A\.anywhere\(link\)\.words\}<\/p>/, 'pairing a phone repeats the condition');
   const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.equal([...app.matchAll(/A\.atHome\('the home computer'\)/g)].length, 2, 'the phone quotes it at first run and on This phone');

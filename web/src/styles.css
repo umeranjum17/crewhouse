@@ -1324,7 +1324,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* The trust story where the fear is: Settings' quiet underlined link under its title (Hello's is a plain .link). */
 .link.trust { margin: 0; font-size: 13px; text-align: left; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
 .settings > .link.trust { display: block; padding: 0 0 6px; }
-.hello .how, #about-you { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
+.hello .how, #memory { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
 .ai-picks .btn { justify-content: flex-start; gap: 10px; text-align: left; }
 .ai-picks .btn > svg:last-child { color: var(--mute); }
 .ai-picks .btn.go > svg:last-child { color: inherit; }
