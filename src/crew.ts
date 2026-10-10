@@ -14,7 +14,7 @@ import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
-import { describe, describeTrigger, firstRun, hhmm, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
+import { describe, describeTrigger, firstRun, hhmm, looksFor, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
 import { newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
@@ -614,7 +614,7 @@ export class Crew {
     return this.db.all('SELECT * FROM routines ORDER BY kind, id').map(({ brain, ...r }): Row => ({
       ...r, words: r.schedule && r.kind !== 'remind' ? describe(parseSchedule(r.schedule)) : '',
       on: r.trigger ? describeTrigger(parseTrigger(r.trigger), this.bot(r.bot)?.display ?? r.bot) : '',
-      thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null,
+      thinks: brain ? disk.brainName(disk.parseBrain(brain)) : null, looks: r.quiet ? looksFor(r.body) : '',
       history: this.db.all("SELECT seq, at, kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? ORDER BY seq DESC LIMIT 8", r.id)
         .map((e) => {
           const d = JSON.parse(e.data), t = d.task ? this.db.get('SELECT state, result FROM tasks WHERE id = ?', d.task) : undefined, line = d.task ? this.db.get("SELECT id FROM messages WHERE task_id = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", d.task) : undefined, made = d.task && this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", d.task);
@@ -684,7 +684,7 @@ export class Crew {
     // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
     const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [];
     const lines = [...start, ...ask, what,
-      plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs',
+      (plan.quiet && looksFor(p.task)) || (plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs'),
       ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
     const words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {

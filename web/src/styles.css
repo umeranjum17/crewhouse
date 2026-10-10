@@ -91,6 +91,14 @@ b { font-weight: 600; }
 .file-chip { width: 36px; height: 40px; flex: none; display: grid; place-items: center; background: var(--soft); border-radius: 6px; color: var(--ok); font-size: 10px; font-weight: 600; }
 .routine-footnote { margin: 12px 4px 0; }
 .routine-switch { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 12px; }
+.routine-run { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-top: 12px; }
+.routine-last-wrap { flex: 1 1 200px; min-width: 0; color: var(--ink2); line-height: 1.4; }
+.routine-last { border-radius: 4px; }
+.routine-last.landed { animation: landed 1.6s var(--ease); }
+@keyframes landed { from { background: var(--soft-accent); } to { background: transparent; } }
+.routine-runs { margin-top: 10px; }
+.routine-runs summary { width: fit-content; color: var(--mute); cursor: pointer; }
+.routine-runs ol { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; color: var(--ink2); }
 
 /* art */
 .art { font-family: var(--art); line-height: 1; white-space: pre; margin: 0; letter-spacing: 0; font-kerning: none; font-variant-ligatures: none; font-feature-settings: normal; }

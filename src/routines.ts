@@ -68,7 +68,9 @@ export function describe(s: Schedule) {
     : `Every ${s.days.map((x) => NAMES[x]).join(', ').replace(/, ([^,]*)$/, ' and $1')}`;
   return `${days} at ${hhmm(s.at)}`;
 }
-
+/** What a watch or quiet check-in waits for, from a task phrased the way crew_routine asks ("tell me if the price drops
+ *  below $900"): "Tells you if the price drops below $900". '' when the task names no condition. */
+export const looksFor = (task = '') => (/^(?:please\s+)?(?:tell|let|alert|notify|warn)\s+(?:me|the person)(?:\s+know)?\s+((?:if|when|once|as soon as)\s.+?)[.!]?$/i.exec(String(task).trim().split(/\n|(?<=[.!?])\s/)[0])?.[1] ?? '').replace(/^./, (c) => `Tells you ${c}`);
 
 /** The first run in words, naming its day unless it is today: "Thu 8:00 am", so it never reads as some other day. */
 export function firstRun(at: number, now = Date.now()) {
@@ -114,6 +116,4 @@ export function parseTrigger(text: string): Trigger {
 }
 
 /** The trigger back in plain words; `who` is the helper's display name, whose inbox the file trigger watches. */
-export function describeTrigger(t: Trigger, who: string) {
-  return 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';
-}
+export const describeTrigger = (t: Trigger, who: string) => 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';

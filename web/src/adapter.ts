@@ -1351,11 +1351,8 @@ export function routines(state: Json, bot?: string) {
     return {
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: one ? 'One time' : plain(r.words ?? ''), on: one ? '' : plain(r.on ?? ''), paused: r.state === 'paused',
     next: one ? (r.next_at ? `at ${moment(Number(r.next_at))}` : r.last_at ? `reminded ${clock(Number(r.last_at))}` : '') : r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest', remind: one, reminded: one && !r.next_at,
-    quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '',
-    last: r.history?.[0] ? lastRun(r.history[0]) : '',
-    // Where the last run ended up: the thing it made, else its line in the helper's chat. A skipped run has neither.
-    result: r.history?.[0]?.state === 'done' && r.history[0].thing ? { thing: r.history[0].thing } : r.history?.[0]?.state === 'done' && r.history[0].msg ? { msg: r.history[0].msg } : null,
-    changes: (r.history ?? []).filter((h: Json) => h.watch === 'changed').length,
+    quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '', looks: plain(r.looks ?? ''),
+    runs: (r.history ?? []).slice(0, 5).map((h: Json) => runOf(h, one)), // newest first
   };
   });
 }
@@ -1372,18 +1369,23 @@ function nextAt(at: number) {
   if (d.toDateString() === today.toDateString()) return clock(at);
   return Math.abs(at - today.getTime()) < 6 * 86_400_000 ? d.toLocaleDateString([], { weekday: 'short' }) : `${d.toLocaleDateString([], { weekday: 'short' })}, ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
 }
-/** A routine's latest run in words; a watch says whether the page changed. */
-function lastRun(h: Json) {
-  const at = clock(h.at);
-  if (h.state === 'paused') return h.reason?.includes('share of your AI today') ? "Waiting until tomorrow: today's share for background jobs is used up. Tap Do it now to run it anyway." : `Waiting: ${plain(h.reason ?? 'the crew cannot start yet')}`;
-  if (h.kind === 'routine.skipped') return `Didn't start ${at}: another run is still in progress`;
-  if (h.state === 'failed' || h.state === 'unsure') return `Didn't finish: ${plain(h.reason ?? 'please try again')}`;
-  if (h.task && h.state !== 'done') return `Waiting for a result from ${at}`;
-  if (h.watch === 'same') return `Checked ${at}, no change`;
-  if (h.watch === 'started') return `Started watching ${at}`;
-  if (h.watch === 'unreachable') return `Couldn't open the page ${at}; I'll try again next time`;
-  if (h.watch === 'changed') return `Changed ${at}${h.clear ? ", nothing you'd want to hear about" : ''}`;
-  return `Last ran ${at}${h.clear ? ', all clear' : ''}`;
+/** One run of a routine: when, and what came of it in plain words — nothing new, told you, or why it didn't work.
+ *  `tone` is `none`, `told`, `bad` or `running`; `result` is where it ended up: the thing it made, else its line in the
+ *  chat. A skipped or failed run has neither. */
+function runOf(h: Json, reminder = false) {
+  const result = h.state === 'done' && h.thing ? { thing: h.thing } : h.state === 'done' && h.msg ? { msg: h.msg } : !h.task && h.message ? { msg: h.message } : null;
+  const [tone, words] = h.state === 'paused' ? ['bad', h.reason?.includes('share of your AI today') ? "Waiting until tomorrow: today's share for background jobs is used up. Tap Do it now to run it anyway." : `Waiting: ${plain(h.reason ?? 'the crew cannot start yet')}`]
+    : h.kind === 'routine.skipped' ? ['bad', h.why === 'daily' ? "Didn't run: today's is already in Chief's chat" : "Didn't start: the last run was still going"]
+    : h.state === 'failed' || h.state === 'unsure' ? ['bad', `Didn't finish: ${plain(h.reason ?? 'please try again')}`]
+    : h.state === 'needs_you' ? ['running', 'Waiting for your OK']
+    : h.task && h.state !== 'done' ? ['running', 'Running now']
+    : h.watch === 'unreachable' ? ['bad', "Couldn't open the page. I'll try again next time"]
+    : h.watch === 'signed-out' ? ['bad', "Gmail isn't connected"]
+    : h.watch === 'started' ? ['none', 'Started watching. Nothing to compare yet']
+    : h.watch === 'same' ? ['none', 'Nothing new']
+    : h.clear ? ['none', h.watch === 'changed' ? 'The page changed, nothing worth telling you' : 'Nothing new']
+    : result ? ['told', reminder ? 'Reminded you' : 'Told you'] : ['none', 'Done'];
+  return { at: clock(h.at), tone, words, result };
 }
 
 /** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,

@@ -308,8 +308,8 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.equal(chief().length, 1, 'a member-free share event still suppresses the next notice that day');
     assert.equal(db.all("SELECT 1 FROM events WHERE kind = 'share.reached'").length, 1);
     const parked = crew.routines().find((x) => x.id === r.id)!.history[0];
-    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
-    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting until tomorrow/);
+    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Told you/);
+    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Waiting until tomorrow/);
     assert.equal(parked.state, 'paused');
     assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.done' AND json_extract(data, '$.task') = ?", t.id)!.n, 0, 'no completion event for the phone');
     assert.equal(A.work(crew.snapshot()).some((w) => w.title === 'Deal check'), false, 'Home does not claim parked work is running');
@@ -318,14 +318,14 @@ test('the crew\'s share: routines wait for tomorrow once it is used up, what the
     assert.equal(state(db, t.id), 'done');
     assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'task.done' AND json_extract(data, '$.task') = ?", t.id)!.n, 1);
     assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
-    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+    assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Told you/);
     assert.equal(chief().length, 1);
 
     // A fresh Do it now also goes ahead above the share; no claim of completion while queued.
     crew.runRoutine(r.id);
     const direct = db.get('SELECT * FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!;
     assert.equal(direct.origin, 'routine.now');
-    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+    assert.doesNotMatch(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Told you/);
     await settled(db, direct.id);
     assert.equal(state(db, direct.id), 'done');
 
@@ -384,7 +384,7 @@ test('Do it now recovers a sign-in-parked routine once signed in, and refuses ho
   await settled(db, t.id);
   assert.equal(state(db, t.id), 'paused');
   assert.match(db.get('SELECT result FROM tasks WHERE id = ?', t.id)!.result, /Waiting for you to sign in/);
-  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Waiting for you to sign in/);
+  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Waiting for you to sign in/);
 
   // Still signed out: the tap retries the same task rather than stacking or silently skipping, and it waits again.
   crew.runRoutine(r.id);
@@ -400,7 +400,7 @@ test('Do it now recovers a sign-in-parked routine once signed in, and refuses ho
   await settled(db, t.id);
   assert.equal(state(db, t.id), 'done', 'the parked task runs once the account is back');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', r.id)!.n, 1);
-  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last, /Last ran/);
+  assert.match(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words, /Told you/);
   done();
 });
 
@@ -499,6 +499,8 @@ test('watches: crewd reads the page, says nothing and uses no AI while it is the
     await settled(db, t.id);
     assert.equal(state(db, t.id), 'done');
     assert.deepEqual(crew.routines().find((x) => x.id === r.id)!.history.map((h: any) => h.watch), ['changed', 'unreachable', 'same', 'started']);
+    assert.deepEqual(A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs.map((x: any) => x.words),
+      ['Told you', "Couldn't open the page. I'll try again next time", 'Nothing new', 'Started watching. Nothing to compare yet'], 'the Routines page reads each run, newest first');
   } finally { site.close(); }
   done();
 });
@@ -542,9 +544,9 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
   crew.runRoutine(r.id);
   await timeOut(db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id);
   assert.match(lastSaid(db, 'chief')!, /^Reel couldn't finish “Deal check”\. Took longer than an hour, so I stopped it\. It will try again .*\.$/);
-  const last = A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.last;
+  const last = A.routines(crew.snapshot()).find((x: any) => x.id === r.id)!.runs[0].words;
   assert.match(last, /^Didn't finish: Took longer than an hour, so I stopped it\.$/);
-  assert.doesNotMatch(last, /Last ran|token|engine/);
+  assert.doesNotMatch(last, /Told you|token|engine/);
 
   const { task: t } = (await crew.post('reel', 'ask permission: make the card'))!;
   await timeOut(t);
