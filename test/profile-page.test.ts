@@ -122,6 +122,18 @@ test('the one Memory record: a sentence can be forgotten with an Undo, and added
   ]);
 });
 
+// ch-ux-name-not-owner: after Hello the stored name is still crewd's default 'Owner' (only what Chief calls you is
+// set), so the desk rail footer must say that address and never "Owner". Driven in real Chromium at desk width.
+test('the rail footer shows what Chief calls you, never the stored default "Owner"', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=ownerdefault#/');
+  await until('the rail footer', () => b.run(`document.querySelector('.side-me')?.textContent`), 30_000);
+  const me = await b.run(`document.querySelector('.side-me').textContent`);
+  assert.match(me, /Umer/, 'the footer says what Chief calls you');
+  assert.doesNotMatch(me, /Owner/, 'the stored default never reaches the person');
+  assert.equal(await b.run(`document.querySelector('.side-me .me-av').textContent`), 'U', 'the avatar carries the same initial');
+});
+
 // Memory (ch-ux-memory-one-section): one section for what the crew knows, not two near-identical ones, with the
 // whole crew's own lines and Chief's record listed together and either one forgettable; a crew line's Forget offers
 // an Undo that puts the exact line back. Driven in real Chromium.

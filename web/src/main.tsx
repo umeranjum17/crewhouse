@@ -76,7 +76,7 @@ function useAccounts(poll: number, tick = 0) {
  */
 function Hello({ state, refresh, night }: Ctx) {
   const me = state.person;
-  const named = me.name && me.name !== 'Owner' ? me.name : '';
+  const named = A.displayName(me);
   const [address, setAddress] = useState<string>(me.address || named);
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
@@ -1454,10 +1454,10 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
 }
 
 /** The person's own settings in one card: their name, what Chief calls them, quiet hours and the crew's share of
- *  their AI. The stored default name "Owner" reads as no name yet, as it does on Hello. */
+ *  their AI. The stored default name "Owner" reads as no name yet, as it does on Hello (`A.realName`/`A.displayName`). */
 function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknown>, ok?: string) => unknown; plan: string }) {
   const m = state.person;
-  const named = m.name && m.name !== 'Owner' ? m.name : '';
+  const named = A.realName(m), display = A.displayName(m);
   const [name, setName] = useState(named);
   const [address, setAddress] = useState(m.address ?? '');
   useEffect(() => setName(named), [named]);
@@ -1467,8 +1467,8 @@ function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknow
   return (
     <div className="card person">
       <div className="row">
-        <span className="initial">{(named || m.address || 'You')[0]}</span>
-        <div className="grow"><b>{named || m.address || 'You'}</b>
+        <span className="initial">{(display || 'You')[0]}</span>
+        <div className="grow"><b>{display || 'You'}</b>
           <div className="mute small">{m.address ? `Chief calls you “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
       </div>
       <label className="field">Your name
@@ -1690,7 +1690,7 @@ function App() {
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
   const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Apps', 'apps', 0]];
   const railOn = (h: string) => (h === '#/' ? ['home', 'chief'].includes(v.view) : h === `#/${v.view}`);
-  const me = String(ctx.state.person?.name ?? '').trim(), quiet = A.quietLine(ctx.state.person);
+  const me = A.displayName(ctx.state.person), quiet = A.quietLine(ctx.state.person);
   return (
     <>
       {splash}
