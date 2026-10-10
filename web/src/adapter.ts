@@ -78,6 +78,15 @@ export const clock = (t: number) => {
 };
 const at = (t: number | string) => (typeof t === 'number' ? (t < 1e12 ? t * 1000 : t) : Date.parse(t));
 export const greeting = (h = new Date().getHours()) => (h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening');
+/** The person's own name, or '' until they set one: crewd seeds the row with the default 'Owner', which means no name yet. */
+export function realName(person: Json): string {
+  const name = String(person?.name ?? '').trim();
+  return name === 'Owner' ? '' : name;
+}
+/** What to call the person on screen: their real name if they set one, else what Chief calls them (their address), else ''. */
+export function displayName(person: Json): string {
+  return realName(person) || String(person?.address ?? '').trim();
+}
 /** The person's quiet hours in Home's words ("Quiet from 11 pm", "Quiet until 7 am"); '' when they have none. */
 export function quietLine(person: Json): string {
   const q = String(person?.quiet ?? '');
@@ -982,7 +991,7 @@ export function canned(state: Json, kind: 'status' | 'details', notes = '') {
     const needs = homeCounts(state).needs;
     return [crewLine(state) || 'Nobody is on a job right now.', needs ? `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.` : ''].filter(Boolean).join(' ');
   }
-  const name = String(state.person?.name ?? '').trim();
+  const name = displayName(state.person);
   const lines = notes.split('\n').map((l) => plain(l.replace(/^\s*[-*]\s*/, ''))).filter(Boolean);
   return [name ? `You're ${name}.` : '', lines.length ? `What the crew knows about you:\n${lines.map((l) => `• ${l}`).join('\n')}` : 'The crew knows nothing else about you yet. Pick some words in any app, tap me and choose Remember this.'].filter(Boolean).join('\n');
 }

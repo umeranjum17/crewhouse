@@ -8,6 +8,7 @@
 // ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=finished (the quiet just after a job lands),
 // ?demo=saved (a keeping just landed: one "Saved:" line with Undo in Chief's chat),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
+// ?demo=ownerdefault (just after Hello: the stored name is still 'Owner', only the address is set).
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // ?demo=live (Scout part way down Saturday's dinner plan, live under Chief's thread).
 // ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
@@ -241,6 +242,10 @@ if (fresh) {
   Object.assign(bots[0], { last: null, unread: 0 });
   Object.assign(state, { bots: bots.slice(0, 1), room: {}, tasks: [], ideas: freshHire, asks: [], events: [], routines: state.routines.slice(0, 1) });
 }
+
+// ?demo=ownerdefault: the moment just after Hello — the stored name is still the default 'Owner' and the only name
+// set is what Chief calls them ('Umer'), so nothing on screen may ever read "Owner".
+if (variant === 'ownerdefault') Object.assign(state.person, { name: 'Owner', address: 'Umer' });
 
 // ?demo=unknown puts an order crewd couldn't price on Scout's card instead: no yes, the person finishes it themselves.
 const first = "Plan this week's dinners, with a shopping list";
