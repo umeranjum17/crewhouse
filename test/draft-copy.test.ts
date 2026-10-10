@@ -148,3 +148,13 @@ test('a draft with a link: both ask surfaces read Copy and open, copy the words 
   assert.deepEqual(said.copied, [BODY], 'the draft\'s own words, not the edit');
   assert.deepEqual(said.opened, [LINK]);
 });
+
+test('an answered card leaves a receipt line in the thread, and the card is gone', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=chase&day');
+  await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+  await pressYes(b, '');
+  await until('the receipt in the thread', () => b.run("!!document.querySelector('.home-chat .lines .card.answered')"), 10_000);
+  assert.match(await b.run("document.querySelector('.home-chat .lines .card.answered').textContent"), /^Copied: .+ · \d{1,2}:\d{2} (am|pm)$/);
+  assert.equal(await b.run("!!document.querySelector('.home-chat .lines .card.ask')"), false, 'the answered card itself is gone');
+});

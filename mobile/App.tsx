@@ -1081,6 +1081,11 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   );
 }
 
+/** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). */
+function AnsweredRow({ line }: { line: string }) {
+  return <T tone="mute" style={[s.small, { paddingLeft: 70, marginTop: -2 }]}>{line}</T>;
+}
+
 /** The approval moment, mirroring web/src/parts.tsx AskSheet (§4.4): who, the status, exactly what goes out, and
  *  the choices — full-width buttons, the primary above its way out; a checkout reviews the whole order here, and an
  *  order without a readable total offers no yes at all. */
@@ -1490,6 +1495,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const b = state.bots.find((x: Json) => x.id === id);
   const trail = b?.task && page ? A.steps(page.trail ?? [], b.task.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
+  const receipts = A.answeredReceipts(state).filter((r) => r.helper === id);
   const last = lines.at(-1);
   const name = h?.name ?? 'Chief';
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
@@ -1558,6 +1564,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
                 {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
                 {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
                 {cards.filter((c) => lines.findLastIndex((x) => (x.at ?? 0) <= c.at) === i).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+                {receipts.filter((r) => lines.findLastIndex((x) => (x.at ?? 0) <= r.at) === i).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} />)}
               </View>
             </View>}
           </View></motion.Rise></View>
@@ -1567,6 +1574,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {ln && <LiveLine ln={ln} go={go} />}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
+        {receipts.filter((r) => !lines.length || lines.every((x) => (x.at ?? 0) > r.at)).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} />)}
       </ScrollView>
       {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}

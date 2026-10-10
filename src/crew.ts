@@ -494,6 +494,8 @@ export class Crew {
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
+      // Recently answered cards, so the thread keeps a receipt of what was agreed to (ch-ux-approval-receipts).
+      answered: this.db.all("SELECT * FROM asks WHERE state = 'answered' AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 40").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's resting AI accounts, only while a job waits on them (pause(); docs/ui-contract.md). */
       resting: this.db.get("SELECT 1 FROM tasks WHERE state = 'paused' AND result LIKE 'All your AI accounts are resting%'") ? Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)) : {},
