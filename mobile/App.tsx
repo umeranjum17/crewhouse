@@ -33,6 +33,7 @@ import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords,
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
 import { Office, summaryOf, useOffice } from './src/office';
+import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 
@@ -133,11 +134,18 @@ function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.
     </View>
   );
 }
-function Pill({ tone = 'ok', children }: { tone?: 'ok' | 'wait' | 'off'; children: ReactNode }) {
+/** The dot colour for a tone: the app's own ok green, wait pink, off grey, plus the crew rail's
+ *  colours (danger red, amber, ink, and work — the rail's hollow ink ring). */
+function pillDot(t: Look, tone: 'ok' | 'wait' | 'off' | 'danger' | 'amber' | 'ink' | 'work') {
+  if (tone === 'work') return { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: t.ink };
+  const c = tone === 'wait' ? t.wait : tone === 'off' ? t.line : tone === 'danger' ? t.danger : tone === 'amber' ? t.amber : tone === 'ink' ? t.ink : t.ok;
+  return { backgroundColor: c };
+}
+function Pill({ tone = 'ok', children }: { tone?: 'ok' | 'wait' | 'off' | 'danger' | 'amber' | 'ink' | 'work'; children: ReactNode }) {
   const t = useLook();
   return (
     <View style={[s.pill, { backgroundColor: t.solid }]}>
-      <View style={[s.pillDot, { backgroundColor: tone === 'wait' ? t.wait : tone === 'off' ? t.line : t.ok }]} />
+      <View style={[s.pillDot, pillDot(t, tone)]} />
       <Text style={[s.pillText, { color: t.ink }]} numberOfLines={1}>{children}</Text>
     </View>
   );
@@ -1121,8 +1129,14 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
 // What this phone kept says how things were, not how they are: while the computer is out of reach, nobody claims to be busy.
 const OUT = 'Out of reach for now';
 const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
-function HelperPill({ h, offline }: { h: A.Helper; offline: boolean }) {
-  return offline ? <Pill tone="off">{OUT}</Pill> : <Pill tone={h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off'}>{h.status}</Pill>;
+// The crew list's status word and dot are the web rail's own (crewPill: A.railWord, from A.groupOf):
+// the same per-member status the rail rows and the Office header read, so the phone can never
+// disagree with them. A member missing from the office view across a refresh falls back to the
+// helper's own words rather than crashing, never a second status rule.
+function HelperPill({ h, offline, view }: { h: A.Helper; offline: boolean; view?: A.OfficeView | null }) {
+  if (offline) return <Pill tone="off">{OUT}</Pill>;
+  const p = crewPill(h, view ?? null);
+  return <Pill tone={p.tone}>{p.word}</Pill>;
 }
 
 /** Needs you as one compact list: a number, the face, the subject, one plain line; a row opens the review sheet.
@@ -1648,16 +1662,20 @@ function Room(ctx: Ctx) {
 }
 
 // ---------- the crew ----------
+// The office view is built from these same helpers (useOffice: A.office moved by live events, as the
+// web crew page's live), so a member is only missing across a refresh: then the row falls back to the
+// helper's own words rather than crashing, never a second status rule.
 function Crew(ctx: Ctx) {
   const { state, go } = ctx;
+  const view = useOffice(state, ctx.offline, OUT);
   const t = useLook();
-  const chief = chiefNow(state, ctx.offline);
+  const chief = chiefPill(view, ctx.offline, OUT);
   const row = (key: string, face: ReactNode, name: string, role: string, status: ReactNode, route: Route) => <Pressable key={key} onPress={() => go(route)} style={{ minHeight: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderColor: t.line }}>
     {face}<View style={{ flex: 1, minWidth: 0 }}><T style={s.b}>{name}</T><T tone="mute" style={s.small} lines={1}>{role}</T></View>{status}
   </Pressable>;
   return <Page title="Your crew" lead="Everyone answers to Chief." back={['Home', () => go({ view: 'home' }, true)]}><Card>
-    {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.mood === 'rest' ? 'off' : 'ok'}>{chief.line}</Pill>, { view: 'chief' })}
-    {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} />, { view: 'helper', id: h.id }))}
+    {row('chief', <Face who="chief" size={44} />, 'Chief', 'Runs the crew and answers to you', <Pill tone={chief.tone}>{chief.word}</Pill>, { view: 'chief' })}
+    {A.crew(state).map((h) => row(h.id, <Face who={h} size={44} />, h.name, h.role, <HelperPill h={h} offline={ctx.offline} view={view} />, { view: 'helper', id: h.id }))}
     {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12 }}><View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: t.line, alignItems: 'center', justifyContent: 'center' }}><T tone="mute">+</T></View><T style={{ flex: 1 }}>Add a helper</T><T tone="mute">›</T></Pressable>}
   </Card></Page>;}
 
