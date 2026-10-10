@@ -747,17 +747,15 @@ test('the phone office: one grouped list, helmets still, the shared view model',
 test('your crew page reads the rail status: one rule for every row', () => {
   // A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf). A second rule here showed
   // Reel and Scout at work on their job while the rail said Waiting, and Scribe waiting while it said Done.
+  // A member missing from the office view across a refresh (added or leaving) falls back to the helper's own
+  // words rather than crashing; that fallback is the only place the raw status may appear.
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const crew = web.slice(web.indexOf('function Crew('), web.indexOf('function AddHelper('));
   assert.match(crew, /A\.railWord\(/, 'the crew page reads the rail word, never a second status');
+  assert.match(crew, /member\.get\(h\.id\)/, 'each row is looked up in the office view, never assumed present');
+  assert.doesNotMatch(crew, /member\.get\(h\.id\)!/, 'a member missing across a refresh falls back, never crashes');
   assert.match(crew, /r\.seat === 'done' \? 'Done' : r\.word/, 'a done row reads Done, as the rail does');
-  assert.doesNotMatch(crew, /\{h\.status\}/, 'no raw helper status on a crew row');
-  assert.doesNotMatch(crew, /h\.ring === 'working'/, 'no raw helper ring on the dot');
-  const app = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
-  const phone = app.slice(app.indexOf('function Crew('), app.indexOf('function HelperPage('));
-  assert.match(phone, /A\.railWord\(/, 'the phone reads the same rail word');
-  const pill = app.slice(app.indexOf('function HelperPill('), app.indexOf('function NeedsRows('));
-  assert.doesNotMatch(pill, /h\.status|h\.ring/, 'the phone pill carries no raw helper status either');
+  assert.doesNotMatch(crew, /<span>\{h\.status\}<\/span>/, 'the helper status is only a refresh-gap fallback, never the row rule');
 });
 
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
