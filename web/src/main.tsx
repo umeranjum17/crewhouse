@@ -82,7 +82,7 @@ function Hello({ state, refresh, night }: Ctx) {
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
   const how = useRef<HTMLDetailsElement>(null);
   // Both trust links open How it works, where the promises are: Settings isn't there until the first job.
-  const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+  const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
     if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return false; }
