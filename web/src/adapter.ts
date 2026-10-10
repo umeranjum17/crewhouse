@@ -497,7 +497,7 @@ export function resting(state: Json) {
   if (!r.length) return '';
   const when = clock(Math.min(...r.map(([, t]) => t)));
   const ai = AIS.find((a) => a.key === r[0][0]);
-  return r.length === 1 && ai ? `Your ${ai.name} is resting until ${when}` : `The crew is resting until ${when}`;
+  return r.length === 1 && ai ? `Your ${ai.name} is resting until ${when}` : `Your AI accounts are resting until ${when}`;
 }
 
 /**
@@ -532,6 +532,8 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const stuck = all.find((h) => h.stuckFor > 0);
   const busy = all.filter((h) => h.ring === 'working'), own = state.bots.find((b: Json) => b.id === 'chief')?.task;
   const rest = resting(state);
+  // His own job held on the accounts: the rest line says why, never the echo of a turn that just finished.
+  const held = rest && (state.tasks ?? []).some((t: Json) => t.bot === 'chief' && (t.state === 'paused' || t.state === 'queued'));
   const recent = (kind: string, ms = 30 * 60_000) => events.filter((e) => e.kind === kind && now - at(e.at) < ms).sort((a, b) => at(b.at) - at(a.at));
   const botOf = (id: string) => state.bots.find((b: Json) => b.id === id);
   const failure = recent('task.failed').concat(recent('task.unsure'))
@@ -549,7 +551,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
     : stuck ? { mood: 'worried', line: `${stuck.name} has gone quiet`, tone: 'wait', rank: 4 }
     : local.signedOut ? { mood: 'worried', line: 'Waiting for your sign-in', tone: 'wait', rank: 4 }
     : needs || asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
-    : done && own?.state !== 'working' ? { mood: 'happy', line: `${name(String(done.bot))} finished ${local.bare ? 'a job' : `“${plain(done.data?.title ?? '') || 'a job'}”`}`, tone: 'ok', rank: 6 }
+    : done && !own && !held ? { mood: 'happy', line: `${name(String(done.bot))} finished ${local.bare ? 'a job' : `“${plain(done.data?.title ?? '') || 'a job'}”`}`, tone: 'ok', rank: 6 }
     : busy.length || own?.state === 'working' ? { mood: 'work', line, tone: 'ok', rank: 7 }
     : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
     : { mood: 'idle', line: 'Keeping an eye on things', tone: 'ok', rank: 9 };
@@ -594,19 +596,17 @@ export function chiefSaid(state: Json): string {
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
-  const c = chief(state);
-  // A helper's suggestion ("learned something", Chief has a suggestion) lives in its chat; its row carries the dot.
-  const suggested = new Set((state.asks as Json[]).filter((a) => a.kind === 'propose').map((a) => a.bot as string));
-  // The words the office uses (groupOf): waiting for Chief, done today, else the seat's own words.
+  // The words the office uses (statusOf): waiting for Chief, at work on a job, done today, else the last line. An ask
+  // counts once, on Chief's row (his ring), never as an unread dot.
   const v = office(state), member = (id: string) => v.crew.find((m) => m.id === id)!;
   const waiting = new Set(v.crew.filter(waitsOnYou).map((m) => m.id));
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, c.line), at: at(bot('chief').last?.at ?? 0) || 0, unread: (bot('chief').unread ?? 0) + (suggested.has('chief') && !(bot('chief').unread ?? 0) ? 1 : 0), ring: c.mood === 'ask' ? 'needs' : '' };
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '' };
   const rest = crew(state).map((h): Chat => {
-    const b = bot(h.id);
+    const b = bot(h.id), s = statusOf(member(h.id), v);
     // Working or waiting on the person says more than the last line did.
-    const done = groupOf(member(h.id), v) === 'done' ? landed(member(h.id), v) : undefined;
-    const line = waiting.has(h.id) ? SEAT_WORDS.needs : done ? `Done: ${done.title || 'a job'}` : h.seat === 'chat' ? SEAT_WORDS.chat : h.seat === 'quiet' ? `Gone quiet on: ${h.status}`
-      : h.seat === 'working' ? `Working on: ${h.status}` : h.seat === 'waiting' ? h.status : preview(b.last, h.role);
+    const done = s.group === 'done' ? landed(member(h.id), v) : undefined;
+    const line = waiting.has(h.id) ? s.word : done ? `${s.word}: ${done.title || 'a job'}` : s.group === 'work' ? `${s.word}: ${h.status}`
+      : s.group === 'wait' ? h.status : preview(b.last, h.role);
     // An ask counts once, on Chief's row: a crew row never carries a dot for one, a draft or a suggestion alike.
     return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: waiting.has(h.id) ? 'needs' : h.ring };
   }).sort((a, b) => b.at - a.at);
@@ -618,17 +618,17 @@ export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) / 60_000); return m >= 0 && m < 60 ? `${Math.max(1, m)}m` : clock(t); };
 
 /** Home's Needs you, one compact list: spending and sending first, then questions, newest first inside each group.
- *  A draft for the person to send belongs here; a plain suggestion or an app connection stays in its helper's chat — nothing to act on from Home itself. */
+ *  Every card waiting for the person's yes in Chief's thread belongs here (a draft, a routine, a plan, a hire, his
+ *  suggestion); a helper's own suggestion or app connection stays in its helper's chat — nothing to act on from Home. */
 export function needsYou(state: Json): Card[] {
-  const rank = (a: Json) => {
+  const rank = (a: Json, c: Card) => {
     const d = a.detail ?? {};
-    if (a.kind === 'propose') return d.draft ? 1 : 3; // a draft needs the person's yes; other suggestions live in the chat
-    if (a.kind === 'connect' || d.app) return 3;
+    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return d.draft ? 1 : c.helper === 'chief' ? 2 : 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
-  return (state.asks as Json[]).map((a) => ({ a, c: card(a, state) })).filter((x) => rank(x.a) < 3 && x.c.campaign?.ready !== false)
-    .sort((x, y) => rank(x.a) - rank(y.a) || y.c.at - x.c.at).map((x) => x.c);
+  return (state.asks as Json[]).map((a) => { const c = card(a, state); return { c, r: rank(a, c) }; }).filter((x) => x.r < 3 && x.c.campaign?.ready !== false)
+    .sort((x, y) => x.r - y.r || y.c.at - x.c.at).map((x) => x.c);
 }
 
 /** What Search found: lines from the member's chats (with the line to land on) and finished things (with the result). */
@@ -673,7 +673,7 @@ export function card(a: Json, state: Json): Card {
   }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
-    // stays off Home like every suggestion, and nothing runs until the person starts it.
+    // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
     const note = zoneNote(state);
     const one = !!d.routine.once; // a one-off reminder: the same card, in the words a reminder uses
     return { ...base, kind: 'routine', status: one ? 'A reminder' : 'A new routine', head: one ? 'A reminder' : 'A new routine', words: plain(d.words ?? a.title),
@@ -1528,10 +1528,10 @@ export const skillSearch = (results: Json[], starter: StarterSkill[]): StarterSk
 export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; ring: Helper['ring']; seat: Seat; status: string;
   step: string; steps: Step[]; things: FileView[]; ask?: Card; second?: boolean };
 /** The one state source every office surface reads: the panels, the header counts, the tray, the dock or rail roster
- *  and Needs you. `needs` is Needs you itself; `counts.needs` is its length, `working` the helpers whose seat is
- *  working (one waiting on you counts once, under needs, wherever they show), `done` what
- *  landed in the tray today. */
-export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]; needs: Card[];
+ *  and Needs you. `needs` is Needs you itself; `counts.needs` is what waits on the person's yes in Chief's thread (Needs
+ *  you's rows and each helper gone quiet), `working` the helpers whose seat is working, `done` what landed in the tray
+ *  today. `lead` is Chief's own seat, from his own job alone. */
+export type OfficeView = { chief: ChiefView; lead: Seat; crew: OfficeMember[]; done: Thing[]; needs: Card[];
   counts: { needs: number; working: number; done: number } };
 
 /** Where a helper is, in one word the whole office agrees on (helper()): a row of theirs in Needs you, a job stopped for
@@ -1544,18 +1544,41 @@ export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
 export const stuckIn = (crew: Helper[], id: string) => crew.filter((x) => x.stuckFor > 0 && (x.id === id || id === 'chief'));
 /** A live line whose member is past crewd's quiet limit reads the rail's "Gone quiet", never "still working". */
 export const goneQuiet = (ln: LiveLine | null, crew: Helper[], id: string) => ln?.state === 'working' && !!crew.find((x) => x.id === (ln.helper ?? id))?.stuckFor;
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
-/** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
- *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
- *  hand-off). An older finish is just free. A crew member waiting on the person—whether a row of theirs in Needs you or
- *  a job stopped for an answer their chat holds—is Chief's to bring, so the rail says the neutral "Waiting", the panel's
- *  own word, never "Waiting on your reply" and never Chief's own "Needs you". */
-export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
-  // The rail's word follows the Office group (groupOf), so the row and the count line can never disagree.
-  const last = groupOf(c, v) === 'done' ? landed(c, v) : undefined;
+/** The one word for each state, on every screen: Chief's header, the rail, the live line, the Office (panels, groups,
+ *  header counts), Chats and the phone. Only Chief says "Needs you"; "resting" is only ever an account's word. */
+export const WORDS = { needs: 'Needs you', work: 'At work', quiet: 'Gone quiet', wait: 'Waiting', next: 'Up next', done: 'Done',
+  failed: "Didn't finish", unsure: 'Not sure', free: 'Free' } as const;
+/** Every member lands in exactly one group, which the header counts and the Office lists read: waiting (for Chief, or
+ *  held), at work, done today, or free. `needs` is Chief's alone and is counted on him, never as a member. */
+export type Group = 'needs' | 'wait' | 'work' | 'done' | 'free';
+export const GROUP_TITLES: Record<Exclude<Group, 'needs'>, string> = { wait: 'Waiting', work: 'At work', done: 'Done today', free: 'Free' };
+/** One member's status: its word, its group and the rail's seat class (a finish today is `done`). */
+export type Status = { word: string; group: Group; seat: Seat | 'done' };
+/** A helper's status (the rail, the panel, the phone's list and pill, the crew page and Chats all read it). A crew member
+ *  waiting on the person is Chief's to bring, so it reads the neutral "Waiting", never Chief's own "Needs you"; held
+ *  work waits too, and outranks an earlier finish; a free helper whose latest job landed today reads "Done". */
+export function statusOf(c: OfficeMember, v: OfficeView): Status {
   const seat = seatOf(c);
-  const shown: Seat = seat === 'needs' || seat === 'chat' ? 'waiting' : seat;
-  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
+  if (waitsOnYou(c) || seat === 'waiting') return { word: WORDS.wait, group: 'wait', seat: 'waiting' };
+  if (seat === 'working' || seat === 'quiet') return { word: seat === 'quiet' ? WORDS.quiet : WORDS.work, group: 'work', seat };
+  if (seat === 'next') return { word: WORDS.next, group: 'wait', seat };
+  if (seat === 'failed') return { word: c.status === 'Not sure it worked' ? WORDS.unsure : WORDS.failed, group: 'free', seat };
+  return landed(c, v) ? { word: WORDS.done, group: 'done', seat: 'done' } : { word: WORDS.free, group: 'free', seat: 'free' };
+}
+/** Chief's status, from his own job and the asks he carries: "Needs you" while anything in his thread waits on the
+ *  person's yes, else his own job's word ("At work", "Waiting" while it is held), else "Free" — never a helper's work. */
+export function chiefStatus(v: OfficeView): Status {
+  if (v.counts.needs) return { word: WORDS.needs, group: 'needs', seat: 'needs' };
+  const s = v.lead;
+  return s === 'working' || s === 'quiet' || s === 'next' ? { word: s === 'quiet' ? WORDS.quiet : WORDS.work, group: 'work', seat: s === 'next' ? 'working' : s }
+    : s === 'free' || s === 'failed' ? { word: WORDS.free, group: 'free', seat: 'free' } : { word: WORDS.wait, group: 'wait', seat: 'waiting' };
+}
+/** The count line under Chief on the rail and in the Office header: every member once, Chief too, by the group of the
+ *  word they show; Chief's "Needs you" is his badge, not a count. */
+export function summaryOf(v: OfficeView) {
+  const groups = [chiefStatus(v).group, ...v.crew.map((c) => statusOf(c, v).group)];
+  const n = (g: Group) => groups.filter((x) => x === g).length;
+  return `${n('wait')} waiting · ${n('work')} at work · ${n('done')} done · ${n('free')} free`;
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
  *  free last. */
@@ -1566,7 +1589,7 @@ export const roster = (crew: OfficeMember[]) => SEAT_ORDER.flatMap((k) => crew.f
 /** The question that matters most comes first: money, then anything sent in the person's name, then the rest. */
 export const askRank = (c: Card) => (c.kind === 'spend' ? 0 : c.kind === 'ok' ? 1 : 2);
 const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) =>
-  ({ needs: needs.length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= midnight()).length });
+  ({ needs: needs.length + crew.filter((c) => c.seat === 'quiet').length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= midnight()).length });
 /** The member's Needs-you row: the first in Needs you's own order. */
 const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
 export function office(state: Json): OfficeView {
@@ -1594,23 +1617,19 @@ export function office(state: Json): OfficeView {
       ask: task ? askFor(needs, h.id) : undefined, ...(second ? { second } : {}) };
   });
   const done = things(state);
-  return { chief: chief(state), crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
+  const lead = raw.get('chief');
+  return { chief: chief(state), lead: lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? []).seat : 'free', crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
-/** Needs-you rows no crew panel holds (Chief's own, or one left by a helper since let go): Chief carries
- *  them, so every row in Needs you has a Review somewhere in the office. */
-/** Chief's state in one word, the same on his panel, his profile and on the phone. */
-export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
-export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
 /** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
 export const WAIT_CHIEF = 'Waiting for Chief';
 export const NO_JOB = 'No job right now';
-export const chiefHas = (view: OfficeView) => `Chief has ${view.needs.length} thing${view.needs.length === 1 ? '' : 's'} for you`;
+export const chiefHas = (view: OfficeView) => `Chief has ${view.counts.needs} thing${view.counts.needs === 1 ? '' : 's'} for you`;
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
   const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, seat: 'waiting' as const, ask: undefined, status: line, step: '', steps: [] }));
-  return { ...view, chief: { ...view.chief, mood: 'rest', line }, crew, needs: [], counts: { ...tally(crew, [], view.done) } };
+  return { ...view, chief: { ...view.chief, mood: 'rest', line }, lead: 'waiting', crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only
@@ -1689,32 +1708,19 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
 /** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
  *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
-/** What On it now says when nobody is working: who waits for Chief (crew never wait on the person), else who is held, quiet or ended badly; the crew is
- *  free only when every one of them is. */
+/** What On it now says when no helper is at work: who waits for Chief (crew never wait on the person), else who is held,
+ *  quiet or ended badly; the helpers are free only when every one of them is. */
 export function idleLine(v: OfficeView) {
   const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
   const on = v.crew.filter(waitsOnYou).length;
-  if (on) return `Nobody is working: ${on} waiting for Chief.`;
+  if (on) return `No helper is at work: ${on} waiting for Chief.`;
   const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
-  return rest.length ? `Nobody is working right now: ${rest.join(', ')}.` : 'Nobody is working right now. The crew is free.';
+  return rest.length ? `No helper is at work right now: ${rest.join(', ')}.` : 'No helper is at work right now. Every helper is free.';
 }
-/** A helper waiting for Chief: a job of theirs with a row in Needs you, or stopped for an answer in their chat. One with
- *  no job is never waiting: it rests, and Chief carries its ask (office()). */
-export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask;
+/** A helper waiting for Chief: a job of theirs with a row in Needs you, stopped for an answer in their chat, or holding a
+ *  draft Chief's card carries (helper()). One with no job is never waiting: it rests, and Chief carries its ask (office()). */
+export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask || c.status === WAIT_CHIEF;
 /** The latest thing this helper landed today, if any. */
 export const landed = (c: OfficeMember, v: OfficeView) =>
   v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0];
-/** Every helper lands in exactly one Office group, and the chat list says the same: waiting for Chief, at work on an
- *  open job, done today, or resting. */
-export type Group = 'needs' | 'work' | 'done' | 'rest';
-export const groupOf = (c: OfficeMember, v: OfficeView): Group => {
-  if (waitsOnYou(c)) return 'needs';
-  const seat = seatOf(c);
-  if (seat === 'working' || seat === 'quiet') return 'work';
-  if (seat !== 'failed' && landed(c, v)) return 'done';
-  // A held helper (a sign-in, an account back later, the person at the wheel) is waiting, not resting: its rail row
-  // and On it now both say "Waiting", so the counts read the same.
-  if (seat === 'waiting') return 'needs';
-  return 'rest';
-};
-
+export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v).group;

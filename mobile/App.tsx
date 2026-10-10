@@ -32,7 +32,7 @@ import { askOf, sharedOf } from './src/ask';
 import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, useBubbleEdge, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
 import { island } from './src/island';
-import { Office, summaryOf, useOffice } from './src/office';
+import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
@@ -1129,7 +1129,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
 // What this phone kept says how things were, not how they are: while the computer is out of reach, nobody claims to be busy.
 const OUT = 'Out of reach for now';
 const chiefNow = (state: Json, offline: boolean) => (offline ? { mood: 'rest' as const, line: OUT } : A.chief(state));
-// The crew list's status word and dot are the web rail's own (crewPill: A.railWord, from A.groupOf):
+// The crew list's status word and dot are the web rail's own (crewPill: A.statusOf):
 // the same per-member status the rail rows and the Office header read, so the phone can never
 // disagree with them. A member missing from the office view across a refresh falls back to the
 // helper's own words rather than crashing, never a second status rule.
@@ -1180,7 +1180,7 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
   return (
     <View style={{ gap: 6 }}>
       <T style={[s.serif, { fontSize: 28, lineHeight: 32 }]}>Office</T>
-      <T tone="ink2" style={s.small}>{summaryOf(view)}</T>
+      <T tone="ink2" style={s.small}>{A.summaryOf(view)}</T>
       {tools}
     </View>
   );
@@ -1237,16 +1237,16 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
  *  that line — then the Chief | Office switch as its own full-width row under it. The crew faces live in Office. */
 function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
   const t = useLook();
-  const needs = live.needs.length > 0;
-  const resting = !needs && live.chief.mood === 'rest';
+  // Chief's one status, the rail's own (A.chiefStatus): the dot is pink while he needs you, green at work, else grey.
+  const st = A.chiefStatus(live), needs = st.group === 'needs';
   return (
     <View accessibilityLabel="Chief" style={{ gap: 8 }}>
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
         <ChiefArt mood={live.chief.mood} size={56} whole />
         <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
         <View style={[s.row, { gap: 6, flexShrink: 1, minWidth: 0 }]}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : resting ? t.line2 : t.green }} />
-          <T numberOfLines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</T>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : st.group === 'work' ? t.green : t.line2 }} />
+          <T numberOfLines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
         </View>
         <View style={{ flex: 1 }} />
         {gear}
@@ -1261,7 +1261,7 @@ function OnItNow({ view }: { view: A.OfficeView }) {
   const t = useLook();
   const working = view.crew.filter((c) => A.seatOf(c) === 'working');
   return <View style={{ gap: 8 }}>
-    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} working`}</T></View>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><Label>On it now</Label><T tone="mute" style={s.small}>{`${working.length} at work`}</T></View>
     {working.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{working.map((c) => <View key={c.id} style={[s.listRow, { flexBasis: '47%', flexGrow: 1, minWidth: 0, borderWidth: 1, borderColor: t.line, borderRadius: 16, backgroundColor: t.solid }]}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={34} /><View style={{ flex: 1, minWidth: 0 }}><T style={s.b} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.step || c.status}</T></View>
     </View>)}</View> : <Card><T tone="ink2">{A.idleLine(view)}</T></Card>}
@@ -1324,7 +1324,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
   const crew = A.crew(state);
   const computers = desktopAvailable ? view.crew.filter((c) => crew.find((h) => h.id === c.id)?.computer) : [];
   const made = A.things(state).slice(0, 4);
-  const word = offline ? OUT : A.chiefWord(view);
+  const word = offline ? OUT : A.chiefStatus(view).word;
   const to = (r: Route) => { onClose(); go(r); };
   const row = (key: string, label: string, sub: string, onPress: () => void, end: ReactNode = <T tone="mute">›</T>, face?: ReactNode) =>
     <Pressable key={key} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${sub}`} style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
@@ -1381,7 +1381,7 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.waitsOnYou(c) ? A.SEAT_WORDS[A.seatOf(c)] : c.ring === 'working' ? 'Working' : c.status}</Pill>}</View>
+          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.statusOf(c, view).word}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
             <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
@@ -1574,8 +1574,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   );
 }
 
-const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
-  done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
+const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, working: A.WORDS.work, needs: A.WORDS.needs, waiting: A.WORDS.wait,
+  done: A.WORDS.done, failed: A.WORDS.failed, unsure: A.WORDS.unsure };
 /** The live line under a thread, the same adapter web chat reads: who is on it, a clock counting up
  *  from crewd's own event times, and the job as a to-do list — done, doing, still to do — with the small
  *  tool calls behind the expand. At the end, one quiet line with how long it took. A job passed to a helper

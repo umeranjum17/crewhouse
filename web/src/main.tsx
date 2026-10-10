@@ -11,7 +11,7 @@ import { AiMark, AskCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate,
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
-import { hear, Office, summaryOf, useOffice } from './office.tsx';
+import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
@@ -216,7 +216,7 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
 function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: HomeMode) => void }) {
   const n = ctx.live.counts, quiet = A.quietLine(ctx.state.person);
   const needs = <span className="m-needs" data-n={n.needs}><i />{n.needs ? `${n.needs} ${n.needs === 1 ? 'needs' : 'need'} you` : 'Nothing needs you'}</span>;
-  const busy = <span className="m-working" data-n={n.working}><i />{n.working} working</span>;
+  const busy = <span className="m-working" data-n={n.working}><i />{n.working} at work</span>;
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
   const gear = <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>;
   const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
@@ -231,7 +231,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   return (
     <header className="home-bar office-bar">
       <h1 className="office-title">Office</h1>
-      <div className="home-meta office-counts" data-needs={n.needs} data-working={n.working}>{summaryOf(ctx.live)}</div>
+      <div className="home-meta office-counts" data-needs={n.needs} data-working={n.working}>{A.summaryOf(ctx.live)}</div>
       {tools}
     </header>
   );
@@ -243,7 +243,7 @@ const tonight = (d = new Date()) => <h2 className="feed-head">{d.getHours() >= 1
 /** On it now (B1): a card per helper at work, their face, name and the step they are on; honest when nobody is. */
 function OnItNow({ live }: { live: A.OfficeView }) {
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
-  return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} working</span></div>
+  return <section className="home-section working" aria-label="On it now"><div className="section-head"><span className="label">On it now</span><span className="small mute">{working.length} at work</span></div>
     {working.length ? <div className="on-cards">{working.map((c) => <a key={c.id} className="list-row on-card" href={hrefOf(c.id)}>
       <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={30} /><span className="grow"><b className="clamp1">{c.name}</b><span className="small">{c.step || c.status}</span></span>
     </a>)}</div> : <Empty>{A.idleLine(live)}</Empty>}
@@ -313,14 +313,14 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
 function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView; state: Json; signedOut?: boolean; side?: ReactNode; below?: ReactNode }) {
   const chief = signedOut ? A.chief(state, { signedOut: true }) : live.chief;
   // The phone header's own status: a sign-in wait first — the thread card's own flag, said once here and never the
-  // green "At work" — then the standing state.
-  const needs = live.needs.length > 0, out = !!signedOut, resting = !needs && !out && chief.mood === 'rest';
+  // green "At work" — then Chief's one status, the rail's own (A.chiefStatus).
+  const s = A.chiefStatus(live), out = !!signedOut, needs = s.group === 'needs';
   return (
     <section className="chief-hero" aria-label="Chief">
       <div className="ch-row">
         <span className="ch-art"><ChiefArt mood={chief.mood} hero mascot /></span>
         <h2 className="ch-name">Chief</h2>
-        <p className={`ch-status${out || needs ? '' : resting ? ' rest' : ' work'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : needs ? 'Needs you' : resting ? 'Resting' : 'At work'}</span></p>
+        <p className={`ch-status${out || needs ? '' : s.group === 'work' ? ' work' : ' rest'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : s.word}</span></p>
         {side}
       </div>
       {below}
@@ -632,8 +632,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   );
 }
 
-const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', working: 'At work', needs: 'Needs you', waiting: 'Waiting',
-  done: 'Done', failed: "Didn't finish", unsure: 'Not sure it worked' };
+const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, working: A.WORDS.work, needs: A.WORDS.needs, waiting: A.WORDS.wait,
+  done: A.WORDS.done, failed: A.WORDS.failed, unsure: A.WORDS.unsure };
 /** The live line under a thread: who is on it, a clock counting up, and the job as a to-do list — done, doing, still
  *  to do — with the small tool calls kept behind the expand. At the end, one quiet line with how long it took.
  *  A job passed to a helper links to that helper's chat. */
@@ -642,7 +642,7 @@ const QUIET_MS = 4000;
 function LiveRow({ ln, quiet, gone }: { ln: A.LiveLine; quiet: boolean; gone: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
-  const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : gone ? A.SEAT_WORDS.quiet : LIVE_WORD[ln.state];
+  const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : gone ? A.WORDS.quiet : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
@@ -694,7 +694,7 @@ function ChiefPage(ctx: Ctx & { m?: string }) {
 }
 
 // ---------- the crew ----------
-// A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf): the same per-member
+// A crew row's status word and dot are the rail's own (A.statusOf): the same per-member
 // status the rail rows and the Office header read, so the page can never disagree with them. The row keeps
 // the member's role line; the job title is not a second status.
 function Crew(ctx: Ctx) {
@@ -709,8 +709,8 @@ function Crew(ctx: Ctx) {
       // (added or leaving between the snapshot and the live events): then the row falls back to the
       // helper's own words rather than crashing, never a second status rule.
       const m = member.get(h.id);
-      const r = m ? A.railWord(m, live) : null;
-      const word = r ? (r.seat === 'done' ? 'Done' : r.word) : h.status;
+      const r = m ? A.statusOf(m, live) : null;
+      const word = r ? r.word : h.status;
       const green = r ? r.seat === 'working' || r.seat === 'done' : h.ring === 'working';
       return <a key={h.id} className="row-item crew-row" href={hrefOf(h.id)}><Face who={h} size={44} ring={h.ring} /><span className="grow"><b>{h.name}</b><span className="mute small">{h.role}</span></span><span className="status-word"><i className={green ? 'working' : ''} /><span>{word}</span></span></a>;
     })}
@@ -1538,21 +1538,21 @@ function useLook() {
  *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
 function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
   const chats = new Map(A.chats(state).map((c) => [c.id, c]));
-  const word = signedOut ? NEEDS_SIGNIN : A.chiefWord(live);
-  // The crew summary is the office's own count line (summaryOf): the same per-member status the rail rows and
-  // the Office header read (A.groupOf), so a member that shows "Waiting" is never counted as "resting".
-  const sub = summaryOf(live);
+  const word = signedOut ? NEEDS_SIGNIN : A.chiefStatus(live).word;
+  // The crew summary is the office's own count line (A.summaryOf): every member once, Chief too, by the status the
+  // rail rows and the Office read, so a row that shows "Free" is counted as free.
+  const sub = A.summaryOf(live);
   const crew = A.crew(state);
   const sched = A.routines(state).filter((r: Json) => !r.paused).slice(0, 4);
   const schedWho = (h: string) => (h === 'chief' ? 'Chief' : crew.find((x) => x.id === h)?.name ?? 'Chief');
   return (
     <div className="side-crew">
       <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} d={7} whole /></span><b>Chief</b></a>
-      <div className={`side-status${word === 'Needs you' || signedOut ? ' needs' : ''}`}><i />{word}</div>
+      <div className={`side-status${word === A.WORDS.needs || signedOut ? ' needs' : ''}`}><i />{word}</div>
       {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
-        const r = A.railWord(h, live), c = chats.get(h.id);
+        const r = A.statusOf(h, live), c = chats.get(h.id);
         // A crew member waiting on the person is Chief's to bring (waitsOnYou): the row carries no badge for it;
         // the ask reaches the person through Chief's own chat. The seat class is namespaced (`seat-…`) so a seat
         // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
@@ -1560,7 +1560,7 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
           {(c?.unread ?? 0) > 0 && !A.waitsOnYou(h) && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
-          <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
+          <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.word}</span></span>
         </a>;
       })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
@@ -1616,8 +1616,8 @@ function App() {
   const live = useOffice(state, offline);
   const ctx: Ctx | null = useMemo(() => (state && live ? { state, live, tick, refresh, night, offline, accounts } : null), [state, live, tick, refresh, night, offline, accounts]);
 
-  // The home-screen icon mirrors the count of what Needs you shows (web/src/pwa.ts).
-  const badge = ctx?.live.needs.length;
+  // The home-screen icon carries Chief's count of what waits on the person's yes (web/src/pwa.ts), as his rail badge does.
+  const badge = ctx?.live.counts.needs;
   useEffect(() => { if (badge !== undefined) setBadge(badge); }, [badge]);
   // A place whose thread has since been deleted opens Home instead, with no error (web/src/resume.ts). The check is
   // the same one HelperPage uses to tell "still here" from "left the crew".
@@ -1632,7 +1632,7 @@ function App() {
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
-  const asks = ctx.live.needs.length;
+  const asks = ctx.live.counts.needs;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
