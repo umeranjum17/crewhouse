@@ -66,8 +66,13 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     return r.result.value;
   };
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  // Both of Chief's phone threads: Home's chat (under the Getting set up bar) and his own page.
-  for (const route of ['#/', '#/chief']) {
+  // `#/chief` and `#/` are one Chief screen now (Main2036): the bare chief link lands on Home's own URL, the same
+  // thread the route below drives. An anchored `#/chief/m<id>` keeps its hash (its own test below).
+  await send('Page.navigate', { url: `${base}/?demo=longthread&night#/chief` });
+  await until('the redirect', () => run("location.hash === '#/' && document.readyState === 'complete'"), 30_000);
+  await until('Home\'s one Chief screen', () => run("!!document.querySelector('.home-chat')"), 30_000);
+  assert.equal(await run("!!document.querySelector('.home-chat')"), true, '#/chief opens Home\'s one Chief screen');
+  for (const route of ['#/']) {
     await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
     await until('the new route', () => run(`location.hash === '${route}' && document.readyState === 'complete'`), 30_000);
     // Signed out, so the thread ends on the sign-in card with every provider's button; "Use another account" opened,
@@ -76,6 +81,9 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     await run("(document.querySelector('.chat .card.ask .more-ways > summary').click(), true)");
     await until('every account shown', () => run("document.querySelector('.chat .card.ask .more-ways').open"), 30_000);
     await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
+    // It opens at its latest line (Main2036), and the sign-in card's own form growing after it lands keeps it there.
+    await until('the thread at its newest line', () => run(`(() => { const el = document.querySelector('.chat .lines');
+      return el && el.scrollHeight - el.scrollTop - el.clientHeight <= 2; })()`), 10_000);
 
     // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
     const scrollThread = (f: number) => run(`(() => {

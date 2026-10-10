@@ -221,6 +221,32 @@ const helmets = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
     art: panels.map((p) => p.querySelector('.helmet')?.textContent ?? '') };
 })()`);
 
+// The thread keeps time (Main2036): the finished line and the proposal card land where they happened — the note
+// before a later message, the card after the sentence that raised it and before the person's next message.
+test('the thread keeps time: a finished note and a proposal card fall where they happened', () => {
+  const now = Date.now();
+  const line = (id: number, from: 'me' | 'them', at: number, text: string): A.Line => ({ id, from, text, files: [], choices: [], at });
+  const lines = [line(1, 'me', now - 1000, 'Ask'), line(2, 'them', now - 900, 'Reply'), line(3, 'me', now - 100, 'Later')];
+  const state: Json = {
+    bots: [{ id: 'chief', display: 'Chief' }, { id: 'scout', display: 'Scout' }],
+    templates: [{ id: 'reel', display: 'Reel' }], ideas: [],
+    tasks: [{ id: 9, bot: 'scout', title: 'Three stories', state: 'done', result: 'Three stories worth telling.', updated_at: now - 500, files: ['files/stories.pdf'] }],
+  };
+  // The finished notice belongs between the reply and the later message, and says "Your things".
+  const withNote = A.trayNotes(state, lines);
+  assert.deepEqual(withNote.map((l) => l.id), [1, 2, -9, 3], 'the finished note sits where it happened, before the later message');
+  assert.match(withNote[2].text, /· it's in Your things$/, "the notice uses the app's own name for Your things");
+  // A card raised in the reply's turn shows after that reply, before the person's next message — never above it.
+  const order: string[] = [];
+  const slots = A.cardSlots(lines, [{ id: 5, helper: 'chief', at: now - 950 } as A.Card]);
+  lines.forEach((l, i) => { for (const c of slots.before.get(i) ?? []) order.push(`card${c.id}`); order.push(`line${l.id}`); });
+  for (const c of slots.tail) order.push(`card${c.id}`);
+  assert.deepEqual(order, ['line1', 'line2', 'card5', 'line3'], 'the proposal card follows its reply, before the next message');
+  // A job offered before its helper is hired names the plain template, never its raw id.
+  const offered = A.jobs({ ...state, ideas: [{ bot: 'reel', group: 'goal', ask: 'Make a video', promise: 'A short video from your photos.', hire: 'reel' }] } as Json);
+  assert.equal(offered[0].says, 'Reel · A short video from your photos.', "a hand-me-a-job row shows the helper's plain name, not its raw id");
+});
+
 test('the office keeps the battery budget: a scan line while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
