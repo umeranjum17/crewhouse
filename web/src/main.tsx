@@ -243,7 +243,7 @@ function OnItNow({ live }: { live: A.OfficeView }) {
   </section>;
 }
 
-/** Needs you, pinned in both views: its first row, and every row behind an exact "See all N". */
+/** Needs you, pinned over Chief's thread: its first row, and every row behind an exact "See all N". */
 function NeedsPin({ state, cards, flat }: { state: Json; cards: A.Card[]; flat?: boolean }) {
   const [all, setAll] = useState(false);
   // "Not now" moves a card behind the others on this screen only: the question stays open and counted until answered.
@@ -348,7 +348,8 @@ const PairRow = () => <div className="card nudge pair-row"><span className="grow
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty">{children}</div>;
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
- *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+ *  the pinned Needs you. Office is the optional view of the same state, with Chief's box but no Needs you: crew never ask
+ *  the person, so Office's one way to the asks is Chief's "Chief has N things for you" (office.tsx). */
 type HomeMode = 'chat' | 'office';
 const HOME_MODES: [HomeMode, string][] = [['chat', 'Chief'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
@@ -362,8 +363,10 @@ function Home(ctx: Ctx) {
   const g = A.account(accounts);
   const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const waiting = live.crew.filter(A.waitsOnYou).length;
-  const top = <>
-    <HomeBar ctx={ctx} mode={mode} pick={pick} />
+  const bar = <HomeBar ctx={ctx} mode={mode} pick={pick} />;
+  // The nudges under the bar: over Chief's thread they stay with it; in Office only the bar stays put and these scroll
+  // with the rows, so no pinned block hides half a row.
+  const notes = <>
     {demo && <PairRow />}
     {/* Chief's thread shows its own sign-in card and resting line; Office shows them here. */}
     {mode === 'office' && <AccountCard accounts={accounts} onReady={refresh} />}
@@ -373,16 +376,15 @@ function Home(ctx: Ctx) {
     {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
   </>;
   // Chat: Chief's own thread, its box and (on a wide desk) its side column of who is on what.
-  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{top}<NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
-  // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (Needs you,
-  // On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
+  if (mode === 'chat') return <div className="page chat-page home-chat"><div className="home-top">{bar}{notes}<NeedsPin state={state} cards={live.needs} flat /></div><Chat {...ctx} id="chief" hero rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
+  // Office (B1): the greeting and the room with its strip in the middle; Tonight down the right on a computer (On it now, chats, a job to hand over, Chief's box), and under the room on a phone.
   return (
     <div className="home home-office">
       <div className="office-main">
-        <div className="home-top">{top}</div>
-        <Office state={state} live={live} night={ctx.night} onDone={refresh} />
+        <div className="home-top">{bar}</div>
+        {notes}
+        <Office state={state} live={live} night={ctx.night} />
         <div className="phone-only">
-          <NeedsPin state={state} cards={live.needs} />
           <OnItNow live={live} />
           <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
         </div>
@@ -390,7 +392,6 @@ function Home(ctx: Ctx) {
       <aside className="feed desk-only" aria-label="What's going on">
         <div className="feed-list">
           {tonight()}
-          <NeedsPin state={state} cards={live.needs} />
           <OnItNow live={live} />
           <Chats state={state} refresh={refresh} desk />
           <JobList state={state} few refresh={refresh} />

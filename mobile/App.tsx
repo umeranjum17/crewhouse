@@ -1255,16 +1255,16 @@ function OnItNow({ view }: { view: A.OfficeView }) {
 }
 
 /** Home opens on Chat every time the app starts (kept in memory only, never stored): Chief's thread under the bar and
- *  the pinned Needs you. Office is the optional view of the same state; neither view hides Needs you or Chief's box. */
+ *  the pinned Needs you. Office is the optional view of the same state, with Chief's box but no Needs you: crew never ask
+ *  the person, so Office's one way to the asks is Chief's "Chief has N things for you" (office.tsx). */
 type HomeMode = 'chat' | 'office';
 const HOME_MODES: [HomeMode, string][] = [['chat', 'Chief'], ['office', 'Office']];
 let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx) {
   const t = useLook();
-  const { state, go, refresh, canAct, offline, open } = ctx;
+  const { state, go, refresh, canAct, offline } = ctx;
   const view = useOffice(state, offline, OUT);
-  const needs = view.needs;
   const chief = chiefNow(state, offline);
   const [mode, setMode] = useState(homeMode);
   const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
@@ -1272,9 +1272,8 @@ function Home(ctx: Ctx) {
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   const [profile, setProfile] = useState(false);
-  // The bar stays put over Chief's thread; in Office it scrolls with the room, Needs you under it, so the whole room
-  // fits between the bar and Chief's box.
-  const pinned = mode === 'office' && needs.length > 0 && <View><Label count={needs.length}>Needs you</Label><ScrollView style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line, maxHeight: 280, flexGrow: 0 }]} nestedScrollEnabled><NeedsRows state={state} cards={needs} open={open} few={1} /></ScrollView></View>;
+  // The bar stays put over Chief's thread; in Office it scrolls with the room, so the whole room fits between the bar
+  // and Chief's box.
   const top = <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 10 }}>
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
@@ -1285,9 +1284,8 @@ function Home(ctx: Ctx) {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={{ margin: -16, marginBottom: 0 }}>{top}</View>
         <View onLayout={(e) => setRoom(e.nativeEvent.layout.width)} style={[s.office, { backgroundColor: t.soft, borderColor: t.line }]}>
-          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} jobs={A.work(state)} onChief={() => setProfile(true)} onDesk={(c) => setDesk({ c, state })} onAsk={open} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
+          {room > 0 && <Office view={view} night={t.night} offline={offline} width={room - 2} jobs={A.work(state)} onChief={() => go({ view: 'chief' })} onDesk={(c) => setDesk({ c, state })} onTray={() => go({ view: 'things' })} onCrew={() => go({ view: 'crew' })} />}
         </View>
-        {pinned}
         <OnItNow view={view} />
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>

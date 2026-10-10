@@ -187,8 +187,8 @@ test('Needs you: spending and sending first, then questions; a suggestion waits 
   const rows = A.needsYou(state);
   assert.deepEqual(rows.map((c) => c.kind), ['spend', 'ok', 'question'], 'money and messages, then OKs, then questions');
   assert.ok(!rows.some((c) => /learned something/.test(c.head)), 'a proposal never sits on Home; it lives in the helper\'s chat');
-  // and the proposal's dot moves to that helper's row in the list
-  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 1, 'the unread dot carries the suggestion');
+  // and an ask counts once, on Chief: a crew row carries no dot for it, a suggestion included
+  assert.equal(A.chats(state).find((c) => c.id === 'reel')?.unread, 0, 'no crew dot for an ask');
   assert.equal(A.chats(state).find((c) => c.id === 'scout')?.unread, 0, 'nobody else\'s dot moves');
 });
 
@@ -553,7 +553,7 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   }
   const web = src('web/src/main.tsx');
   const home = web.slice(web.indexOf('function Home('), web.indexOf('/** The standing'));
-  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{top\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
+  assert.match(home, /if \(mode === 'chat'\) return <div className="page chat-page home-chat"><div className="home-top">\{bar\}\{notes\}<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/><\/div><Chat \{\.\.\.ctx\} id="chief" hero rail=\{<ChiefRail state=\{state\} live=\{live\} refresh=\{refresh\} \/>\} \/><\/div>;/, 'web Chief: the top (a phone renders the hero block from its bar) and Needs you over his own thread, box and the ask + doing rail');
   assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
@@ -563,7 +563,11 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   const flows = src('web/src/flows.tsx');
   assert.match(flows, /export const NEEDS_SIGNIN = 'Needs a sign-in';/, 'one flag for the thread card and the phone header');
   assert.match(flows.slice(flows.indexOf('function AccountCard('), flows.indexOf('function AccountCard(') + 3000), /\{NEEDS_SIGNIN\}/, 'the thread card reads it from there too');
-  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\}( flat)? \/>/, 'Needs you pinned from the office\'s one list');
+  assert.match(home, /<NeedsPin state=\{state\} cards=\{live\.needs\} flat \/>/, 'Needs you pinned over Chief\'s thread from the office\'s one list');
+  // Office never pins Needs you: crew never ask the person, so Chief's one "Chief has N things for you" is its only way to the asks.
+  assert.doesNotMatch(home.slice(home.indexOf("if (mode === 'chat')") + 1).slice(home.slice(home.indexOf("if (mode === 'chat')") + 1).indexOf('\n')), /NeedsPin/, 'web Office renders no Needs you pin');
+  const phoneHome = src('mobile/App.tsx').slice(src('mobile/App.tsx').indexOf('function Home('), src('mobile/App.tsx').indexOf('function ChiefSheet('));
+  assert.doesNotMatch(phoneHome, /NeedsPin|NeedsRows|pinned/, 'phone Office renders no Needs you pin');
   assert.match(home, /<div className="feed-ask"><Composer/, 'Office keeps Chief\'s box on a desk');
   assert.match(home, /<div className="dock phone-only"><Composer/, 'and on a phone');
   const pin = web.slice(web.indexOf('function NeedsPin('), web.indexOf('function NeedsPin(') + 1400);
@@ -721,8 +725,9 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(office, /A\.officeEvent\(/);
   assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
   assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
-  // A question's button wears the ask's own words (its yes, or its flow's label), never a generic one.
-  assert.match(office, /const label = !c\.ask \? '' : simple \? yes!\.label : c\.ask\.reply/);
+  // Crew never ask the person: no row answers or approves; one row on top opens Chief, who carries every ask.
+  assert.doesNotMatch(office, /onAsk|Answer \$\{|Review order/);
+  assert.match(office, /view\.needs\.length > 0 && <Pressable onPress=\{onChief\}/);
   const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
   assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
@@ -735,8 +740,7 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.ok(chatHead.indexOf('<ChiefHero') > 0 && chatHead.indexOf('{tools}') > chatHead.indexOf('<ChiefHero'), 'Chat header: the hero, then gear and switch on one row under it');
   assert.match(top, /hero=\{<><\/>}/, 'the thread carries an empty hero slot (tray lines keep flowing)');
   assert.doesNotMatch(top, /NeedsPin/, 'no pinned card in the conversation; the ask sits inline');
-  assert.ok(top.indexOf('<Office') < top.lastIndexOf('{pinned}'), 'Office: Needs you right under the grouped list');
-  assert.match(top, /few=\{1\}/, 'one pinned row in Office, and "See all N" for the rest');
+  assert.doesNotMatch(top, /pinned|NeedsRows/, 'Office pins no Needs you: Chief\'s one row is its way to the asks');
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
@@ -1977,20 +1981,17 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /<ChiefPanel live=\{live\} \/>/);
   assert.match(office, /\{A\.roster\(live\.crew\)\.map\(\(c\) => <HelperPanel/);
   // Phone width renders the grouped list instead of the panels, helmets still.
-  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} onDone=\{onDone\} \/>/);
+  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} \/>/);
   assert.match(office, /<PalArt kind=\{c\.kind\} mood=\{c\.mood\} d=\{6\} name=\{c\.name\} \/>/, 'grouped rows draw the still helmet, no live scan');
   assert.match(css, /\.grow-row \{ display: flex; gap: 12px; padding: 12px 2px; border-top: 1px solid var\(--line\); \}/);
   // Each panel: the helmet, the current line, one meta line, the last three timed steps, the one action.
   assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
   assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
-  assert.match(office, /action=\{c\.ask \? <AskButton c=\{c\.ask\} name=\{c\.name\} onDone=\{onDone\} \/>/, 'a question\'s own yes and no');
-  // Only a needs-you row carries a button, and it wears the ask's own words: its yes, or its flow's label.
-  assert.match(office, /const label = yes\?\.label \?\? \(c\.reply \? `Answer \$\{name\}…` : c\.review \? 'Review order' : 'Review…'\);/);
-  assert.doesNotMatch(office, />Review…<\/a>/, 'no generic Review anywhere in the office');
-  assert.match(office, /: file \? <PreviewCard f=\{file\} \/> : null/, 'a finished file opens from the panel');
-  // The ask's yes answers exactly as the thread does, then the office refreshes.
-  assert.match(read('web', 'src', 'parts.tsx'), /export const answer = \(c: Card, body: Json\)/);
-  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} onDone=\{refresh\} \/>/);
+  assert.match(office, /action=\{file \? <PreviewCard f=\{file\} \/> : null\}/, 'a crew panel holds at most its finished file, never an ask');
+  assert.match(office, /action=\{live\.needs\.length > 0 && <ToChief live=\{live\} \/>\}/, 'Chief carries the asks in one action');
+  // No crew panel answers or approves, and no generic Review anywhere in the office.
+  assert.doesNotMatch(office, /AskButton|answer\(|>Review…<\/a>/);
+  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} \/>/);
   // Office header: the slim bar (title, count line, switch, settings), the title on phone width only.
   assert.match(main, /<h1 className="office-title">Office<\/h1>/);
   assert.match(main, /\{summaryOf\(ctx\.live\)\}/, 'one count line from the office view');

@@ -76,7 +76,7 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
   assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
-  assert.equal(chats.get('scribe'), A.SEAT_WORDS.chat, 'the chat list says what the rail says');
+  assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
   assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
   assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
   // Live events move every count together.
@@ -245,7 +245,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
           const lines = [...document.querySelectorAll('.home-chat .lines .line')];
           const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
-          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
+          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
         })()`);
         const lead = `${demo} ${theme} at ${width}, first open`;
         assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
@@ -271,7 +271,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const names = units.map((p) => p.getAttribute('aria-label'));
           const line = document.querySelector('.office-counts')?.textContent ?? '';
           const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|resting)/g)].map((x) => Number(x[1]));
-          const pinned = Number(document.querySelector('.office-main .needs-pin .count')?.textContent ?? 0);
+          const officePins = document.querySelectorAll('.needs-pin').length;
           const onCards = document.querySelectorAll('.office-main .on-card').length;
           const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
           const chiefGlows = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs'));
@@ -284,15 +284,30 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
           const memberWords = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim());
           const chiefWord = units.filter((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim())[0];
-          const acts = units.flatMap((p) => [...p.querySelectorAll('.btn')]).map((e) => e.textContent);
+          const crewUnits = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? ''));
+          const crewActs = crewUnits.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
+          const crewText = crewUnits.map((p) => p.innerText);
+          const waitRows = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => [p.querySelector('.p-line')?.textContent, p.querySelector('.p-meta')?.textContent]);
+          const doneText = crewUnits.filter((p) => p.querySelector('.p-state.done')).map((p) => p.innerText);
+          const pinnedTop = document.querySelector('.home-office .home-top');
+          const topH = pinnedTop ? pinnedTop.getBoundingClientRect().height : 0, topNotes = pinnedTop ? pinnedTop.querySelectorAll('.card, .nudge').length : 0;
+          const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
+          const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
+          // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
+          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge')]);
+          const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
+          const officeText = document.querySelector('.office')?.innerText ?? '';
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, acts, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, officeText, chatRows, grouped, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
+        m.pinned = first.chatPin;
         try {
+          // Needs you is pinned over Chief's thread only: the Office reaches the asks through Chief's one action.
+          assert.equal(m.officePins, 0, `${at}: Office renders no Needs you pin`);
           assert.deepEqual(m.nums.length, 4, `${at}: the header counts needs, work, done and resting (${m.nums})`);
           assert.deepEqual([...new Set(m.names)].length, m.units, `${at}: nobody twice, nobody missing`);
           assert.equal(m.out, 0, `${at}: every row inside the office column`);
@@ -311,7 +326,30 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
           assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
           if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
-          assert.ok(m.acts.every((a: string) => a !== 'Review…'), `${at}: every action wears its ask's own label (${m.acts.join(' | ')})`);
+          // Crew never ask the person: no crew panel or row answers or approves, or leads with the ask's head; a waiting one
+          // waits for Chief, and Chief's one action carries every ask (Needs you's count) to his thread.
+          assert.deepEqual(m.crewActs, [], `${at}: no crew panel or row has an answer or approve button`);
+          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order/i.test(x)), `${at}: no crew panel or row carries the ask (${m.crewText.join(' | ')})`);
+          // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
+          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting row is its job, then "Waiting for Chief"; one with no job rests (${JSON.stringify(m.waitRows)})`);
+          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
+          // Nobody in the Office is said to need the person or ask them for an OK: crew wait for Chief, Chief carries the asks.
+          assert.doesNotMatch(m.officeText, /\w needs you|your OK/, `${at}: no crew member asks the person in the Office`);
+          // On it now's idle line uses the rows' words and the header's waiting count.
+          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || m.idle === `Nobody is working: ${m.nums[0]} waiting for Chief.`), `${at}: On it now says the header's ${m.nums[0]} wait for Chief (${m.idle})`);
+          // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
+          const chat = new Map<string, { line: string; dot: boolean }>(m.chatRows.map(([name, line, dot]: [string, string, boolean]) => [name, { line, dot }]));
+          for (const [name, g] of m.grouped as [string, string][]) {
+            const row = chat.get(name);
+            if (!row) continue;
+            if (g === 'Waiting') assert.equal(row.line, 'Waiting', `${at}: ${name} waits in the Office and in Chats`);
+            if (g === 'Done today') assert.match(row.line, /^Done: /, `${at}: ${name} is done in the Office and in Chats`);
+            if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
+          }
+          // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
+          assert.equal(m.topNotes, 0, `${at}: no card or nudge pinned over the Office`);
+          assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
+          assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
           if (width < 900) {
             assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
             const order = ['Waiting', 'At work', 'Done today', 'Resting'];
