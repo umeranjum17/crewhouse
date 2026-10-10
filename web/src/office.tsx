@@ -78,7 +78,7 @@ export function Office({ state, live, night }: { state: Json; live: A.OfficeView
 }
 
 function Groups({ live, titles }: { live: A.OfficeView; titles: Map<string, string> }) {
-  // Chief sits in his own group like everyone the count line counts; while he needs you his one action stands for him.
+  // Chief sits in his own group like everyone the count line counts.
   const cs = A.chiefStatus(live);
   const groups = (Object.keys(A.GROUP_TITLES) as (keyof typeof A.GROUP_TITLES)[])
     .map((g) => [g, live.crew.filter((c) => groupOf(c, live) === g)] as const).filter(([g, rows]) => rows.length || g === cs.group);
@@ -123,11 +123,11 @@ function GroupRow({ c, live, jobTitle }: { c: A.OfficeMember; live: A.OfficeView
 function ChiefRow({ live }: { live: A.OfficeView }) {
   const glow = chiefGlow(live);
   return (
-    <article className="grow-row" aria-label={`Chief: ${live.chief.line}`}>
+    <article className="grow-row" aria-label={`Chief: ${A.officeLine(live)}`}>
       <ChiefArt mood={live.chief.mood} d={6} />
       <div className="grow">
         <div className="gr-top"><a href="#/chief"><b>Chief</b></a><span className={`p-state ${glow.cls}`}><i />{glow.word}</span></div>
-        <p className="p-line">{live.chief.line}</p>
+        <p className="p-line">{A.officeLine(live)}</p>
       </div>
     </article>
   );
@@ -135,7 +135,7 @@ function ChiefRow({ live }: { live: A.OfficeView }) {
 /** Chief's state word and glow: hot only while he needs you; his own job held for an account reads plainly. */
 const chiefGlow = (live: A.OfficeView): Glow => {
   const s = A.chiefStatus(live);
-  return { word: s.word, cls: s.group === 'needs' ? 'needs' : s.group === 'work' ? 'work' : 'rest' };
+  return { word: s.word, cls: s.seat === 'needs' ? 'needs' : s.group === 'work' ? 'work' : 'rest' };
 };
 
 /** Chief's one action: every ask, counted, opening Chief, who carries them. */
@@ -148,11 +148,8 @@ function ChiefPanel({ live }: { live: A.OfficeView }) {
   const recent = [...live.done.map((t) => ({ at: t.at, text: `${crew.find((m) => m.id === t.helper)?.name ?? 'The crew'} finished ${t.title || 'a job'}` }))]
     .sort((a, b) => b.at - a.at);
   const glow = chiefGlow(live);
-  // Chief's own line names who "needs you"; in the Office crew only wait for him, so his panel says how many do.
-  const waiting = crew.filter(A.waitsOnYou).length;
-  const line = live.chief.mood !== 'ask' ? live.chief.line : waiting ? `${waiting} waiting for Chief` : 'Has something for you';
   return (
-    <Panel name="Chief" href="#/chief" mood={live.chief.mood} chief line={line}
+    <Panel name="Chief" href="#/chief" mood={live.chief.mood} chief line={A.officeLine(live)}
       meta={recent.length ? `Talking with you since ${A.clock(Math.min(...recent.map((r) => r.at)))}` : 'Runs your crew'}
       steps={recent.slice(0, 3)} glow={glow} think={live.chief.mood === 'work'} action={live.counts.needs > 0 && <ToChief live={live} />} />
   );

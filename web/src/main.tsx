@@ -314,7 +314,7 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   const chief = signedOut ? A.chief(state, { signedOut: true }) : live.chief;
   // The phone header's own status: a sign-in wait first — the thread card's own flag, said once here and never the
   // green "At work" — then Chief's one status, the rail's own (A.chiefStatus).
-  const s = A.chiefStatus(live), out = !!signedOut, needs = s.group === 'needs';
+  const s = A.chiefStatus(live), out = !!signedOut, needs = s.seat === 'needs';
   return (
     <section className="chief-hero" aria-label="Chief">
       <div className="ch-row">

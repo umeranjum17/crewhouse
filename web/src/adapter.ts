@@ -1548,10 +1548,10 @@ export const goneQuiet = (ln: LiveLine | null, crew: Helper[], id: string) => ln
  *  header counts), Chats and the phone. Only Chief says "Needs you"; "resting" is only ever an account's word. */
 export const WORDS = { needs: 'Needs you', work: 'At work', quiet: 'Gone quiet', wait: 'Waiting', next: 'Up next', done: 'Done',
   failed: "Didn't finish", unsure: 'Not sure', free: 'Free' } as const;
-/** Every member lands in exactly one group, which the header counts and the Office lists read: waiting (for Chief, or
- *  held), at work, done today, or free. `needs` is Chief's alone and is counted on him, never as a member. */
-export type Group = 'needs' | 'wait' | 'work' | 'done' | 'free';
-export const GROUP_TITLES: Record<Exclude<Group, 'needs'>, string> = { wait: 'Waiting', work: 'At work', done: 'Done today', free: 'Free' };
+/** Every member lands in exactly one group, which the header counts and the Office lists read: waiting (for Chief, on
+ *  the person, or held), at work, done today, or free. */
+export type Group = 'wait' | 'work' | 'done' | 'free';
+export const GROUP_TITLES: Record<Group, string> = { wait: 'Waiting', work: 'At work', done: 'Done today', free: 'Free' };
 /** One member's status: its word, its group and the rail's seat class (a finish today is `done`). */
 export type Status = { word: string; group: Group; seat: Seat | 'done' };
 /** A helper's status (the rail, the panel, the phone's list and pill, the crew page and Chats all read it). A crew member
@@ -1566,15 +1566,20 @@ export function statusOf(c: OfficeMember, v: OfficeView): Status {
   return landed(c, v) ? { word: WORDS.done, group: 'done', seat: 'done' } : { word: WORDS.free, group: 'free', seat: 'free' };
 }
 /** Chief's status, from his own job and the asks he carries: "Needs you" while anything in his thread waits on the
- *  person's yes, else his own job's word ("At work", "Waiting" while it is held), else "Free" — never a helper's work. */
+ *  person's yes (counted with the waiting), else his own job's word ("At work", "Waiting" while it is held), else "Free" — never a helper's work. */
 export function chiefStatus(v: OfficeView): Status {
-  if (v.counts.needs) return { word: WORDS.needs, group: 'needs', seat: 'needs' };
+  if (v.counts.needs) return { word: WORDS.needs, group: 'wait', seat: 'needs' };
   const s = v.lead;
   return s === 'working' || s === 'quiet' || s === 'next' ? { word: s === 'quiet' ? WORDS.quiet : WORDS.work, group: 'work', seat: s === 'next' ? 'working' : s }
     : s === 'free' || s === 'failed' ? { word: WORDS.free, group: 'free', seat: 'free' } : { word: WORDS.wait, group: 'wait', seat: 'waiting' };
 }
+/** Chief's line in the Office: his own, except while he needs you, where crew only wait for him: how many do. */
+export function officeLine(v: OfficeView) {
+  const waiting = v.crew.filter(waitsOnYou).length;
+  return v.chief.mood !== 'ask' ? v.chief.line : waiting ? `${waiting} waiting for Chief` : 'Has something for you';
+}
 /** The count line under Chief on the rail and in the Office header: every member once, Chief too, by the group of the
- *  word they show; Chief's "Needs you" is his badge, not a count. */
+ *  word they show; Chief's "Needs you" counts as waiting. */
 export function summaryOf(v: OfficeView) {
   const groups = [chiefStatus(v).group, ...v.crew.map((c) => statusOf(c, v).group)];
   const n = (g: Group) => groups.filter((x) => x === g).length;

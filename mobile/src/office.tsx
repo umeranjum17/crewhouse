@@ -78,9 +78,9 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
 
 /** Chief's grouped row: his one status and his line; a tap opens his thread. */
 function ChiefRow({ view, t, night, onChief }: { view: A.OfficeView; t: Look; night: boolean; onChief: () => void }) {
-  const st = A.chiefStatus(view), col = st.group === 'work' ? t.green : t.mute;
+  const st = A.chiefStatus(view), col = st.seat === 'needs' ? t.pink : st.group === 'work' ? t.green : t.mute;
   return (
-    <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={`Chief: ${view.chief.line}`}
+    <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={`Chief: ${A.officeLine(view)}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
       <Helmet mood={view.chief.mood} night={night} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -88,7 +88,7 @@ function ChiefRow({ view, t, night, onChief }: { view: A.OfficeView; t: Look; ni
           <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, fontWeight: '600', color: t.ink, flex: 1 }}>Chief</Text>
           <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: col }}>{st.word}</Text>
         </View>
-        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{view.chief.line}</Text>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{A.officeLine(view)}</Text>
       </View>
     </Pressable>
   );
@@ -115,7 +115,7 @@ export function Office({ view, night, offline, width, jobs, onChief, onDesk, onT
   const t = night ? color.night : color.day;
   const titles = useMemo(() => new Map((jobs ?? []).map((w) => [w.helper, w.title])), [jobs]);
   void offline; void width; void onTray; void onCrew;
-  // Chief sits in his own group like everyone the count line counts; while he needs you his one row stands for him.
+  // Chief sits in his own group like everyone the count line counts.
   const cs = A.chiefStatus(view);
   const groups = (Object.keys(A.GROUP_TITLES) as Group[]).map((g) => [g, view.crew.filter((c) => groupOf(c, view) === g)] as const)
     .filter(([g, rows]) => rows.length || g === cs.group);

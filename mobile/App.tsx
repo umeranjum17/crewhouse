@@ -1238,7 +1238,7 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
 function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
   const t = useLook();
   // Chief's one status, the rail's own (A.chiefStatus): the dot is pink while he needs you, green at work, else grey.
-  const st = A.chiefStatus(live), needs = st.group === 'needs';
+  const st = A.chiefStatus(live), needs = st.seat === 'needs';
   return (
     <View accessibilityLabel="Chief" style={{ gap: 8 }}>
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>

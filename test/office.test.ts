@@ -79,9 +79,9 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.deepEqual(rail(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
   assert.deepEqual(rail(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
   assert.equal(A.chiefStatus(v).word, 'Needs you', 'only Chief says "Needs you"');
-  // One status per member: the count line counts each member once by the word it shows, Chief too unless he needs you.
+  // One status per member: the count line counts each member once by the word it shows, Chief too ("Needs you" waits).
   assert.deepEqual(v.crew.map((c) => A.statusOf(c, v).word), ['At work', 'Waiting', 'Waiting', "Didn't finish", 'Waiting', 'Up next', 'Free']);
-  assert.equal(A.summaryOf(v), '4 waiting · 1 at work · 0 done · 2 free');
+  assert.equal(A.summaryOf(v), '5 waiting · 1 at work · 0 done · 2 free');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
   assert.equal(answered.counts.needs, 1);
@@ -146,6 +146,7 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.match(A.chief(heldState).line, /resting until/, "a waiting Chief's line says why, never the echo of a turn that just finished");
   const routine = { ...state, events: [], bots: [bot('chief'), bot('scout')], tasks: [], asks: [{ id: 20, bot: 'chief', kind: 'propose', at: now, detail: { routine: { schedule: 'every day 9:00' }, words: 'Check flights daily?' } }] };
   assert.deepEqual([A.needsYou(routine).map((c) => c.kind), A.chiefStatus(A.office(routine)).word, A.chats(routine)[0].ring], [['routine'], 'Needs you', 'needs']);
+  assert.equal(A.summaryOf(A.office(routine)), '1 waiting · 0 at work · 0 done · 1 free', 'Chief waiting on your yes counts once, as waiting (S5)');
   // A new job is only queued until crewd starts it: the event does not claim work.
   assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');
 });
@@ -330,10 +331,10 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
           // One status per member: the header counts every member once by the word its row shows, Chief too (his
-          // "Needs you" is his badge, not a count). Phone width lists only the crew, so Chief is at most one more.
-          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' ? 0 : w === 'At work' || w === 'Gone quiet' ? 1 : w === 'Needs you' ? -1 : 3;
+          // "Needs you" counts as waiting).
+          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' || w === 'Gone quiet' ? 1 : 3;
           const seen = [0, 0, 0, 0];
-          for (const w of m.words as string[]) if (groupOf(w) >= 0) seen[groupOf(w)]++;
+          for (const w of m.words as string[]) seen[groupOf(w)]++;
           const extra = m.nums.map((x: number, i: number) => x - seen[i]);
           assert.deepEqual(m.nums, seen, `${at}: the header counts the rows' own words, Chief's too (${extra}: ${m.words.join(' | ')})`);
           assert.equal(m.onCards, m.work - (m.chiefWorks ? 1 : 0), `${at}: On it now shows the crew at work`);
@@ -369,7 +370,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
           assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
           if (width < 900) {
-            assert.equal(m.units, n + (m.chiefWord && m.chiefWord !== 'Needs you' ? 1 : 0), `${at}: every helper has exactly one grouped row, and Chief one in his group unless his one action stands for him`);
+            assert.equal(m.units, n + (m.chiefWord ? 1 : 0), `${at}: every helper has exactly one grouped row, and Chief one in his group`);
             const order = ['Waiting', 'At work', 'Done today', 'Free'];
             assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
             assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
@@ -451,7 +452,7 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   // The rail's own words, mapped to the four Office groups the summary counts.
   const group = (w: string) => w.startsWith('Done') ? 'done'
-    : w === 'Waiting' || w === 'Up next' ? 'waiting'
+    : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 'waiting'
     : w === 'At work' || w === 'Gone quiet' ? 'at work'
     : 'free';
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
@@ -460,7 +461,7 @@ test('the desk rail summary under Chief counts the same status its rows show', {
     const r = await b.run(`(() => {
       const words = [...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent.trim());
       const chief = document.querySelector('.side-status')?.textContent.trim() ?? '';
-      if (chief !== 'Needs you') words.push(chief);
+      words.push(chief);
       const sub = document.querySelector('.side-sub')?.textContent ?? '';
       const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|free)/g)].map((x) => [x[2], Number(x[1])]));
       return { words, nums };
