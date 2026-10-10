@@ -340,7 +340,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .composer:focus-within { border-color: var(--line2); }
 .composer textarea { flex: 1; border: 0; background: transparent; resize: none; padding: 9px 0; font-size: 16px; outline: none; max-height: 160px; field-sizing: content; }
 /* A send that didn't go through stays with its words until the Retry works. */
-.composer:has(.send-failed) { flex-wrap: wrap; border-radius: 22px; }
+.composer:has(.send-failed), .composer:has(.send-away) { flex-wrap: wrap; border-radius: 22px; }
 .send-failed { flex-basis: 100%; font-size: 13.5px; font-weight: 700; color: var(--pink-ink); padding: 8px 12px 2px; }
 .send-away { flex-basis: 100%; font-size: 13.5px; font-weight: 600; color: var(--ink2); padding: 8px 12px 2px; }
 .send[aria-disabled] { opacity: .45; cursor: default; }
@@ -1502,3 +1502,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .pair-code { font: 500 15px/1.5 var(--ui); letter-spacing: .02em; }
 .flow .pair-problem { color: var(--danger); }
 .pair-words { font: 800 26px/1.2 var(--ui); padding: 12px 20px; background: var(--soft); border-radius: 16px; }
+
+/* A held ("Reconnecting…") or failed ("Not sent") send's line is its own row above the words at every width: the
+   phone chat's one-row composer and the feed boxes would otherwise squeeze the words and the line side by side. */
+.home-chat .composer.has-bar:has(.send-away), .home-chat .composer.has-bar:has(.send-failed),
+.home-office .composer.has-bar:has(.send-away), .home-office .composer.has-bar:has(.send-failed),
+.chat .dock .composer:has(.send-away), .chat .dock .composer:has(.send-failed) { flex-wrap: wrap; }
