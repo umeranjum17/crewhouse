@@ -309,7 +309,7 @@ export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: J
   const ended = ['failed', 'unsure'].includes(mine[0]?.state) && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
   const seat: Seat = driving || chiefDraft ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
     : held || b.pausedUntil ? 'waiting' : b.queued ? 'next' : ended ? 'failed' : 'free';
-  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Needs you' : b.task ? b.task.title
+  const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Waiting' : b.task ? b.task.title
     : held || b.pausedUntil ? waitWords(held?.result, held?.wake_at ?? b.pausedUntil) : b.queued ? 'Up next'
     : ended ? (ended.state === 'unsure' ? 'Not sure it worked' : "Didn't finish") : 'Free to help';
   return {
@@ -1128,7 +1128,7 @@ export type LiveStep = { text: string; at: number };
 /** One row of the to-do list: done (it happened), doing (the current focus) or todo (an approved plan step still ahead).
  *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
 export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
-export type LiveLine = { who: string; helper?: string; todos: LiveTodo[]; detail: LiveStep[]; since: number;
+export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
   state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
   /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
   heard?: number };
@@ -1191,7 +1191,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
-    return { who, helper: helper?.id, todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
   // Nothing narrated yet: the distinct things it tried are the list, latest last; the rest stays in the expand.
@@ -1201,7 +1201,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
   for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
   // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
-  return { who, helper: helper?.id, todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
+  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
     heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
 }
 
@@ -1517,14 +1517,16 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Needs you', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
 /** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
  *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
- *  hand-off). An older finish is just free. */
+ *  hand-off). An older finish is just free. A crew member waiting on the person reads the neutral "Waiting", never
+ *  Chief's own "Needs you": only Chief says that, and the ask itself reaches the person through him. */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
   const seat = seatOf(c);
-  const last = seat === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
-  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: seat === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[seat], seat };
+  const shown: Seat = seat === 'needs' ? 'waiting' : seat;
+  const last = shown === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
+  return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
  *  free last. */
@@ -1630,7 +1632,7 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
       return touch(String(e.bot), (c) => ({ ...c, ring: '' as const, seat: 'failed' as const, mood: 'error' as Mood, step: step(e) ?? c.step,
         status: e.kind === 'task.unsure' ? 'Not sure it worked' : "Didn't finish" }));
     case 'ask.opened':
-      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Needs you', step: 'Waiting for your OK' }));
+      return touch(String(e.bot), (c) => ({ ...c, ring: 'needs' as const, seat: 'chat' as const, mood: 'ask' as Mood, status: 'Waiting', step: 'Waiting for your OK' }));
     case 'ask.answered':
     case 'ask.parked': {
       // The row leaves Needs you at once; the helper goes back to the last step the refresh knew, since the snapshot

@@ -1335,7 +1335,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
           {computers.map((c) => {
             const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
             return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
-              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Needs you' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
+              <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Waiting' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
           })}
           {made.length > 0 && <Label>Outputs</Label>}
           {made.map((m) => row(String(m.id), m.title, `From ${crew.find((h) => h.id === m.helper)?.name ?? 'the crew'}`, () => to({ view: 'helper', id: m.helper })))}
@@ -1575,20 +1575,22 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   const beat = motion.useBeat(360, reduce);
   const [openDetail, setOpenDetail] = useState(false);
   const open = ln.helper ? <Pressable onPress={() => go({ view: 'helper', id: ln.helper })} accessibilityRole="link" hitSlop={8}><T style={[s.small, s.b]}>Open {ln.who}'s chat ›</T></Pressable> : null;
+  // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
+  const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : LIVE_WORD[ln.state];
   if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
     <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-      <T tone="mute" style={s.small}>{ln.helper ? `${ln.who} · ` : ''}{LIVE_WORD[ln.state]} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
+      <T tone="mute" style={s.small}>{ln.helper ? `${ln.who} · ` : ''}{word} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
       {open}
     </View>
   </View></View>;
   const doing = ln.todos.find((x) => x.state === 'doing');
-  return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${LIVE_WORD[ln.state]}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
+  return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${word}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
     <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
       <View style={[s.row, { gap: 6 }]}>
         <View style={[s.statusDot, { backgroundColor: ln.state === 'needs' ? t.pink : ln.state === 'waiting' ? t.line : t.ok, opacity: reduce ? 0.6 : beat % 2 === 0 ? 1 : 0.35 }]} />
-        <T style={[s.small, s.b, { flexShrink: 1 }]}>{LIVE_WORD[ln.state]}</T>
+        <T style={[s.small, s.b, { flexShrink: 1 }]}>{word}</T>
         <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>
       </View>
       {ln.todos.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
