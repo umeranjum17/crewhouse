@@ -1,4 +1,4 @@
-// The phone link: @byokit/link's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
+// The phone link: @byokit/pair's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
 // opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
 // pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
 // is where it listens, what a phone may not do, and the person at the computer saying yes.
@@ -7,7 +7,7 @@ import { createServer, type Server } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, parseV1Offer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/link';
+import { Host, keyPair, keyPairFrom, parseV1Offer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
 import type { Config } from './config.ts';
@@ -288,7 +288,7 @@ export class Link {
   desk?: Desk;
   /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
    *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
-  private desktop(s: import('@byokit/link').LinkStream, args: any, g: Grant) {
+  private desktop(s: import('@byokit/pair').LinkStream, args: any, g: Grant) {
     if (!currentPhone(args)) return s.end(UPDATE_APP);
     const bot = String(args?.bot ?? '');
     if (s.op !== 'desktop' || !/^[a-z0-9-]+$/.test(bot) || !this.desk) return s.end('not-supported');

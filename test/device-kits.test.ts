@@ -5,7 +5,7 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { b64url, hostId, type DeviceGrant } from '@byokit/link';
+import { b64url, hostId, type DeviceGrant } from '@byokit/pair';
 import { qrMatrix } from '@byokit/ui-core/link';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';

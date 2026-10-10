@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant } from '@byokit/link';
+import { DeviceLink, pairWithOffer, type DeviceGrant } from '@byokit/pair';
 
 const root = temp('crewhouse-revoke-cache');
 const free = () => new Promise<number>((resolve) => {

@@ -1,7 +1,7 @@
-// The installed web app's end of the link, as the phone's (mobile/src/link.ts): @byokit/link's device side, its grant
+// The installed web app's end of the link, as the phone's (mobile/src/link.ts): @byokit/pair's device side, its grant
 // sealed in this browser's IndexedDB. Paired, the link carries every call, the live events and a bot's screen
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
-import { DeviceLink, LinkError, browserDeviceStore, decodeOffer, offerText, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/link';
+import { DeviceLink, LinkError, browserDeviceStore, decodeOffer, offerText, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';

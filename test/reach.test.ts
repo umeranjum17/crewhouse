@@ -9,7 +9,7 @@ import { createServer as http1 } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithCode } from '@byokit/link';
+import { DeviceLink, pairWithCode } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { NEWS, startRelay } from '../relay/main.ts';
 
