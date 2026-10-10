@@ -172,6 +172,9 @@ textarea.input { resize: vertical; }
 .row-item:first-child { border-top: 0; }
 /* The ask sits inline in the thread: no card, a dashed rule above it; the name and flag, the words, then two buttons. */
 .card.ask { background: none; border: 0; border-top: 1px dashed var(--line2); border-radius: 0; padding: 14px 0 0; margin-top: 16px; max-width: 640px; }
+/* An answered card's receipt: one small muted line in the thread where the card was, never a card. */
+.card.answered { background: none; border: 0; border-radius: 0; padding: 0; margin: 6px 0 0 74px; max-width: 440px; color: var(--mute); font: 400 13px/18px var(--ui); }
+.row-item.forgotten { color: var(--mute); }
 .ask-head { display: flex; gap: 10px; align-items: center; }
 .ask-head .grow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
 .ask-head b { font-weight: 600; color: var(--pink-ink); }

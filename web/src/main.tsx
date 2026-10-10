@@ -7,7 +7,7 @@ import { api, demo, pairable, paired, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen } from './screen.tsx';
@@ -604,6 +604,9 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
   // Each ask's card sits at the end of the turn that raised it, before the next message the person sent (A.cardSlots).
   const slots = A.cardSlots(lines, cards);
+  const receipts = page ? A.answeredReceipts(state).filter((r) => r.helper === id) : [];
+  // An answered card leaves a receipt in the same slot its card showed (A.slotMap).
+  const receiptSlots = A.slotMap(lines, receipts);
   const last = lines.at(-1);
   const send = async (t: string) => {
     setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
@@ -636,7 +639,11 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {lines.map((l, i) => {
           const speaker = l.helper ? A.crew(state).find((x) => x.id === l.helper) : undefined;
           // A card raised earlier in this turn shows above this line: the ask that ends a turn sits after its reply.
-          const before = (slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh));
+          // An answered card's receipt keeps the same slot its card showed (A.slotMap).
+          const before = [
+            ...(slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh)),
+            ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} />),
+          ];
           const wrap = <div className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}`}>
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
@@ -655,6 +662,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
+        {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
@@ -860,13 +868,27 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
 /** A list of remembered lines with Forget, and a line to add one: a helper's notes on you, or what the whole crew knows about you. */
 function MemoryList({ notes, save, empty, placeholder }: { notes: string; save: (text: string) => Promise<unknown>; empty: string; placeholder: string }) {
   const [adding, setAdding] = useState('');
+  // Forget leaves a "Forgotten" row where the line was, with an Undo that puts it back exactly, for a short while.
+  const [undo, setUndo] = useState<{ prev: string; at: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const list = A.memories(notes);
   const add = () => adding.trim() && attempt(async () => { await save(A.withMemory(notes, adding)); setAdding(''); }, 'Remembered');
+  const forget = (i: number) => void attempt(async () => {
+    const prev = notes; await save(A.withoutMemory(notes, i));
+    if (timer.current) clearTimeout(timer.current);
+    setUndo({ prev, at: i });
+    timer.current = setTimeout(() => setUndo(null), 12_000);
+  }, undefined);
+  // The in-row Undo is the only way back: putting the line back is its own feedback, so no second control appears.
+  const putBack = () => { const back = undo; if (timer.current) clearTimeout(timer.current); setUndo(null); if (back) void attempt(() => save(back.prev)); };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const rows = list.map((m, i) => <div key={`m${i}`} className="row-item"><span className="grow">{m}</span>
+    <button className="link" onClick={() => forget(i)}>Forget</button></div>);
+  if (undo) rows.splice(Math.min(undo.at, rows.length), 0, <div key="undo" className="row-item forgotten"><span className="grow">Forgotten</span>
+    <button className="link" onClick={putBack}>Undo</button></div>);
   return (
     <>
-      {list.length ? <div className="card list">{list.map((m, i) => <div key={i} className="row-item"><span className="grow">{m}</span>
-        <button className="link" onClick={() => attempt(() => save(A.withoutMemory(notes, i)), 'Forgotten')}>Forget</button></div>)}</div>
-        : <div className="card empty">{empty}</div>}
+      {rows.length ? <div className="card list">{rows}</div> : <div className="card empty">{empty}</div>}
       <div className="row add-row"><input className="input grow" value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={placeholder} aria-label="Something to remember" />
         <button className="btn" disabled={!adding.trim()} onClick={add}>Add</button></div>
     </>

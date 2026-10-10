@@ -208,6 +208,8 @@ const state = {
         order: { shown: '$43.10', known: true, dollars: true } } }]
     : firstRun || variant === 'calm' || variant.startsWith('voice-') ? []
     : variant === 'building' ? asks.filter((a) => a.bot !== 'scribe') : asks,
+  // Answered cards, so a demo answer leaves the same receipt the real app does (web/src/adapter.ts answeredReceipts).
+  answered: [],
   events,
   resting: variant === 'resting' ? { chatgpt: now + 95 * min } : {},
   routines: [
@@ -520,6 +522,8 @@ export function demoLive(hear: (e: Json) => void) {
 let calls = 0;
 // About me and my work: the record every helper reads before a job, as Chief last left it.
 let profile = 'I run a bakery for my neighbourhood. My business is called Morning Loaf. I write in a warm, plain voice.';
+// About you: what the whole crew knows about the person, changeable through the same GET/PUT the app calls.
+let about = '- Vegetarian\n- Lives in Larkspur\n- Prefers weekend plans before Thursday';
 export async function demoCall(method: string, path: string, body?: Json) {
   // "offline": the home computer never answers; "lost": it answers once, then goes quiet.
   if (variant === 'offline' || (variant === 'lost' && calls++ > 0)) throw new TypeError('Failed to fetch');
@@ -528,6 +532,12 @@ export async function demoCall(method: string, path: string, body?: Json) {
   const scr = /^\/api\/bots\/([a-z0-9-]+)\/screen$/.exec(path);
   if (method === 'GET' && scr) return { pages: variant === 'wheeled' && scr[1] === 'scout' ? ['shop.example', 'mail.example'] : [] };
   if (method === 'POST' && /^\/api\/bots\/([a-z0-9-]+)\/forget$/.test(path)) return { ok: true };
+  // Answering a card closes it and moves it into the receipts the thread keeps (answeredReceipts).
+  if (method === 'POST' && /^\/api\/asks\/(\d+)\/answer$/.test(path)) {
+    const id = Number(path.split('/')[3]), i = (state.asks as Json[]).findIndex((a: Json) => a.id === id);
+    if (i >= 0) (state.answered as Json[]).push({ ...(state.asks as Json[]).splice(i, 1)[0], answer: body?.answer === 'deny' ? 'not now' : 'allowed once', answered_at: Date.now() });
+    return { ok: true };
+  }
   if (method === 'GET' && path.startsWith('/api/room')) return { lines: [
     { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
     { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a community garden, and a night market.', at: now - 4 * min },
@@ -578,7 +588,8 @@ export async function demoCall(method: string, path: string, body?: Json) {
     '',
     'The shop day is on your calendar for Saturday morning. Anything ticked was already in the cupboard.',
   ].join('\n') } : doc;
-  if (method === 'GET' && path === '/api/about') return { notes: '- Vegetarian\n- Lives in Larkspur\n- Prefers weekend plans before Thursday' };
+  if (method === 'GET' && path === '/api/about') return { notes: about };
+  if (method === 'PUT' && path === '/api/about') { about = String(body?.text ?? ''); return { ok: true }; }
   // About me and my work: the record every helper reads before a job (GET/PUT /api/profile).
   if (method === 'GET' && path === '/api/profile') return { text: profile, cap: 4000 };
   if (method === 'PUT' && path === '/api/profile') { profile = String(body?.text ?? ''); return { ok: true }; }

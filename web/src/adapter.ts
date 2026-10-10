@@ -761,6 +761,29 @@ export function card(a: Json, state: Json): Card {
   };
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
+/** The action an answered card leaves in the thread, in one plain past-tense word. */
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered' };
+/** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
+ *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
+function receiptWhat(c: Card): string {
+  const subject = c.draftSubject?.trim();
+  if (subject) return subject;
+  const first = (c.draftText ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  const words = first.split(/\s+/).filter(Boolean);
+  return words.length ? words.slice(0, 8).join(' ') + (words.length > 8 ? '…' : '') : '';
+}
+/** A receipt per recently answered card: one plain line, "Copied: Refund for order 98765 · 9:12 pm". The card itself is
+ *  gone, but the thread still shows what the person agreed to and when. A dismissed mail acknowledgement leaves nothing. */
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string }[] {
+  return (state.answered ?? []).flatMap((a: Json) => {
+    if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
+    const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
+    const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
+      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+    const what = c.evidence === 'draft' ? receiptWhat(c) : '';
+    return [{ id: a.id, helper: c.helper, at: a.answered_at, line: `${word}${what ? `: ${what}` : ''} · ${timeOf(a.answered_at)}` }];
+  });
+}
 const campaignPath = (path: unknown) => /^files\/campaign-[^/]+\.txt$/.test(String(path));
 const campaignPoster = (state: Json, root: number | undefined): FileView | undefined => root === undefined ? undefined : state.tasks.filter((t: Json) => t.root === root).flatMap((t: Json) => (t.files ?? []).filter((p: string) => /\.png$/i.test(p)).map((p: string) => fileView(t.bot, p)))[0];
 export type CampaignOutcome = { id: number; at: number; approved: boolean; source: { bot: string; path: string; sha: string }; poster?: FileView };
@@ -1301,14 +1324,19 @@ export function trayNotes(state: Json, lines: Line[]): Line[] {
 /** Where each ask's card falls in the thread (Main2036): a card belongs to the turn that raised it, so it shows after
  *  the reply and before the next message the person sent; a card with no later message follows the whole thread. Placing
  *  by the ask's own time alone floated the proposal card above the sentence that announced it. */
-export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
-  const before = new Map<number, Card[]>();
-  const tail: Card[] = [];
-  for (const c of [...cards].sort((a, b) => a.at - b.at)) {
+/** Where each timed item sits in the thread: before the person's next line after it, else in the tail. Shared by
+ *  open cards and the receipts an answered card leaves (main.tsx), so a receipt keeps its card's slot. */
+export function slotMap<T extends { at: number }>(lines: Line[], items: T[]): { before: Map<number, T[]>; tail: T[] } {
+  const before = new Map<number, T[]>();
+  const tail: T[] = [];
+  for (const c of [...items].sort((a, b) => a.at - b.at)) {
     const i = lines.findIndex((l) => l.from === 'me' && l.at !== undefined && l.at > c.at);
     if (i < 0) tail.push(c); else before.set(i, [...(before.get(i) ?? []), c]);
   }
   return { before, tail };
+}
+export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
+  return slotMap(lines, cards);
 }
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't

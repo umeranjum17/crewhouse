@@ -589,7 +589,7 @@ test("Chief's conversation is a named transcript on a desk, a conversation on a 
   const src = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
   const art = await import('../web/src/art.ts');
   const web = src('web/src/main.tsx'), css = src('web/src/styles.css'), app = src('mobile/App.tsx');
-  const chat = web.slice(web.indexOf('function Chat('), web.indexOf('function Chat(') + 9500);
+  const chat = web.slice(web.indexOf('function Chat('), web.indexOf('function Chat(') + 10500);
   assert.match(chat, /className="line-by"><span className="who">/, 'every line carries its name in the open');
   assert.doesNotMatch(chat, /<Face/, 'no faces in the transcript rows');
   assert.doesNotMatch(chat, /consecutive/, 'no collapsing: the name repeats on every line');

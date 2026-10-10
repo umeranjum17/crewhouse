@@ -116,3 +116,22 @@ test('About me and my work shows the record, and each part can be changed, forgo
     'My regulars order the almond croissants.',
   ]);
 });
+
+// "About you" memory lines (web/src/main.tsx MemoryList): Forget leaves a "Forgotten" row with an Undo that
+// puts the exact line back. Driven on the built app, through GET/PUT /api/about the app itself calls.
+test('About you: Forget offers an Undo that puts the line back exactly', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=calm&day#/settings');
+  const lines = () => `[...document.querySelectorAll('#about-you + p + .card.list .row-item .grow')].map((x) => x.textContent)`;
+  await until('About you lines', () => b.run(`(${lines()}).length >= 3`), 30_000);
+  const before = await b.run(lines());
+  assert.deepEqual(before, ['Vegetarian', 'Lives in Larkspur', 'Prefers weekend plans before Thursday']);
+  // Forget the middle line: it goes, and a "Forgotten" row with Undo sits where it was.
+  await b.run(`[...document.querySelectorAll('#about-you + p + .card.list .row-item')][1].querySelector('button').click()`);
+  await until('the Forgotten row', () => b.run("!!document.querySelector('#about-you + p + .card.list .row-item.forgotten')"), 10_000);
+  assert.deepEqual(await b.run(lines()), ['Vegetarian', 'Forgotten', 'Prefers weekend plans before Thursday']);
+  // Undo puts the exact line back, in its place.
+  await b.run("document.querySelector('#about-you + p + .card.list .row-item.forgotten button').click()");
+  await until('the line back', () => b.run(`!document.querySelector('#about-you + p + .card.list .row-item.forgotten') && (${lines()}).length === 3`), 10_000);
+  assert.deepEqual(await b.run(lines()), before);
+});

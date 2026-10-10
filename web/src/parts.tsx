@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -716,6 +716,11 @@ function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string;
       {acts.map((a) => <button key={a.label} className="more-row" onClick={() => { onClose(); void a.run(); }}>{a.label}</button>)}
     </div>
   </div>;
+}
+
+/** What an answered card leaves in the thread: one small plain line — what was done and when — where the card was. */
+export function AnsweredCard({ line }: { line: string }) {
+  return <div className="card answered" role="status">{line}</div>;
 }
 
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the

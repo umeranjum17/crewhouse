@@ -277,6 +277,10 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
   assert.equal((await api('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
   await done('reel', w);
   assert.equal(readFileSync(outside, 'utf8'), 'plan');
+  // The answered card stays in the thread as a receipt: crewd keeps it (state.answered) and the adapter words it.
+  const st = (await api('GET', '/api/state')).body;
+  assert.ok(st.answered.find((a: any) => a.id === ask.id)?.answered_at, 'the answered ask is kept, not dropped');
+  assert.match(A.answeredReceipts(st).find((r: any) => r.id === ask.id)!.line, /^Allowed · \d{1,2}:\d{2} (am|pm)$/);
 });
 
 test('connecting an app, as the app screen asks for it: not yet, or the app\'s own page', async () => {
