@@ -163,7 +163,7 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
   // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
   assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);
-  assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^The crew is resting until /);
+  assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^Your AI accounts are resting until /);
 });
 
 test('asks become plain cards: money never gets "always", a blocked terminal becomes a question', () => {
@@ -563,7 +563,8 @@ test('Home opens on Chat at every launch, with Office one tap away and never sto
   assert.match(web.slice(web.indexOf('function HomeBar('), web.indexOf('function NeedsPin(')), /<ChiefHero live=\{ctx\.live\} state=\{ctx\.state\} signedOut=\{chiefLocal\(ctx\)\.signedOut && !ctx\.offline\} side=\{gear\} below=\{seg\} \/>/, 'the phone header is one block: hero with gear top-right, switch below its lines, carrying the sign-in the thread reads');
   const hero = web.slice(web.indexOf('function ChiefHero('), web.indexOf('function ChiefHero(') + 2200);
   assert.match(hero, /A\.chief\(state, \{ signedOut: true \}\)/, 'the phone header reads Chief from the same table as the thread, with the sign-in');
-  assert.match(hero, /out \? NEEDS_SIGNIN : needs \? 'Needs you'/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
+  assert.match(hero, /A\.chiefStatus\(live\)/, "the phone header is Chief's one status, the rail's own: idle he is never green");
+  assert.match(hero, /out \? NEEDS_SIGNIN : s\.word/, 'signed out with a job queued: the thread card\'s flag, never the green "At work"');
   assert.match(hero, /<div className="ch-row">[\s\S]*className="ch-name"[\s\S]*className=\{`ch-status[\s\S]*\{side\}[\s\S]*<\/div>[\s\S]*\{below\}/, 'one compact row: avatar, the name over its single status, the small switch and the gear');
   assert.doesNotMatch(hero, /className="ch-line"/, 'exactly one status line, never a second echoing strip');
   const flows = src('web/src/flows.tsx');
@@ -720,23 +721,23 @@ test('the phone mascot set matches art.ts: everyone whole and as a head, in ever
 });
 
 test('the phone office: one grouped list, helmets still, the shared view model', () => {
-  // The office is a grouped list (Needs you / At work / Done today / Resting), as the web's panels are: every helper
+  // The office is a grouped list (Waiting / At work / Done today / Free), as the web's panels are: every helper
   // in exactly one group, no drawn room, no floor plan, no motion at all (the think-scan shows still while working).
   const office = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'office.tsx'), 'utf8');
   assert.doesNotMatch(office, /floorPlan|Image|PALS\[|motion\.(Hop|Loop|Fly|Pulse|Land|Note|useAwake)/);
   assert.doesNotMatch(office, /setInterval|setTimeout|useBeat|requestAnimationFrame|DesktopView|desktopSignaling|Animated/);
-  assert.match(office, /\['needs', 'work', 'done', 'rest'\]/);
-  assert.match(office, /TITLES\[g\]/);
+  assert.match(office, /Object\.keys\(A\.GROUP_TITLES\)/, "the adapter's own groups, in its order");
+  assert.match(office, /A\.GROUP_TITLES\[g\]/);
   assert.match(office, /A\.office\(state\)/);
   assert.match(office, /A\.officeEvent\(/);
   assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
-  assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
+  assert.doesNotMatch(office, /summaryOf = |TITLES = /, 'no count line or group words of its own: the adapter owns them');
   // Crew never ask the person: no row answers or approves; one row on top opens Chief, who carries every ask.
   assert.doesNotMatch(office, /onAsk|Answer \$\{|Review order/);
-  assert.match(office, /view\.needs\.length > 0 && <Pressable onPress=\{onChief\}/);
+  assert.match(office, /view\.counts\.needs > 0 && <Pressable onPress=\{onChief\}/);
   const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
-  assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
+  assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{A\.summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
   const motion = readFileSync(join(import.meta.dirname, '..', 'mobile', 'src', 'motion.ts'), 'utf8');
   assert.doesNotMatch(motion, /Hop|Pulse|Land|Loop|Note|Fly|useOnBeat/, 'no room loops left');
   const home = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
@@ -751,21 +752,20 @@ test('the phone office: one grouped list, helmets still, the shared view model',
 });
 
 test('your crew page reads the rail status: one rule for every row', () => {
-  // A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf). A second rule here showed
+  // A crew row's status word and dot are the rail's own (A.statusOf). A second rule here showed
   // Reel and Scout at work on their job while the rail said Waiting, and Scribe waiting while it said Done.
   // A member missing from the office view across a refresh (added or leaving) falls back to the helper's own
   // words rather than crashing; that fallback is the only place the raw status may appear.
   const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
   const crew = web.slice(web.indexOf('function Crew('), web.indexOf('function AddHelper('));
-  assert.match(crew, /A\.railWord\(/, 'the crew page reads the rail word, never a second status');
+  assert.match(crew, /A\.statusOf\(/, 'the crew page reads the rail word, never a second status');
   assert.match(crew, /member\.get\(h\.id\)/, 'each row is looked up in the office view, never assumed present');
   assert.doesNotMatch(crew, /member\.get\(h\.id\)!/, 'a member missing across a refresh falls back, never crashes');
-  assert.match(crew, /r\.seat === 'done' \? 'Done' : r\.word/, 'a done row reads Done, as the rail does');
   assert.doesNotMatch(crew, /<span>\{h\.status\}<\/span>/, 'the helper status is only a refresh-gap fallback, never the row rule');
 });
 
 test('the phone crew list reads the rail status: one rule for every pill', () => {
-  // The phone Crew screen's pill is the web rail's own (crewPill: A.railWord, from A.groupOf), word and dot.
+  // The phone Crew screen's pill is the web rail's own (crewPill: A.statusOf), word and dot.
   // A second rule here showed Reel's job with a green dot while the rail said Waiting, a quiet helper grey
   // where the rail paints it red, and Chief with a helper's line instead of the rail's own. A member missing
   // from the office view across a refresh (added or leaving) falls back to the helper's own words, never a
@@ -786,8 +786,8 @@ test('the phone crew list reads the rail status: one rule for every pill', () =>
   assert.equal(A.crew(state).find((h) => h.id === 'reel')!.status, "Mum's birthday video", 'the fixture disagrees, as the demo crew did');
   for (const h of A.crew(state)) {
     const m = view.crew.find((c) => c.id === h.id)!;
-    const r = A.railWord(m, view);
-    assert.deepEqual(crewPill(h, view), { word: r.seat === 'done' ? 'Done' : r.word, tone: railTone(r.seat) },
+    const r = A.statusOf(m, view);
+    assert.deepEqual(crewPill(h, view), { word: r.word, tone: railTone(r.seat) },
       `${h.id}: the phone pill reads the rail word and its own dot`);
   }
   // The dot colour is the rail's own seat colour (styles.css .side-seat.seat-*), never a second rule.
@@ -796,8 +796,8 @@ test('the phone crew list reads the rail status: one rule for every pill', () =>
     { working: 'work', quiet: 'danger', failed: 'danger', next: 'amber', waiting: 'off', free: 'off', done: 'ink' });
   const scout = A.crew(state).find((h) => h.id === 'scout')!;
   assert.equal(crewPill(scout, view).tone, 'danger', "a quiet helper takes the rail's red dot, not grey");
-  // Chief's row is the rail's own Chief line and dot (A.chiefWord / .side-status), never a helper's line.
-  assert.deepEqual(chiefPill(view, false, 'Out'), { word: A.chiefWord(view), tone: A.chiefWord(view) === 'Needs you' ? 'wait' : 'off' });
+  // Chief's row is the rail's own Chief line and dot (A.chiefStatus / .side-status), never a helper's line.
+  assert.deepEqual(chiefPill(view, false, 'Out'), { word: A.chiefStatus(view).word, tone: A.chiefStatus(view).word === 'Needs you' ? 'wait' : 'off' });
   const asked = A.office({ ...state, asks: [...state.asks, { id: 13, bot: 'chief', kind: 'question', at: now, detail: { question: 'Which font?' } }] });
   assert.deepEqual(chiefPill(asked, false, 'Out'), { word: 'Needs you', tone: 'wait' }, 'only Chief says Needs you, on the pink dot');
   // A member missing across a refresh falls back to its own words, never crashes.
@@ -1223,7 +1223,7 @@ test('Chief\'s box answers who is on what and what the crew knows about you itse
 });
 
 test('who is on what: one plain line from state alone, resting included, no model', () => {
-  assert.equal(A.crewLine(state), `Reel needs you. Scout is on “Flights”. The crew is resting until ${A.clock(now + 3600_000)}.`);
+  assert.equal(A.crewLine(state), `Reel needs you. Scout is on “Flights”. Your AI accounts are resting until ${A.clock(now + 3600_000)}.`);
   const st = { ...state, resting: {}, bots: [bot('chief', { task: { id: 9, title: 'Plan dinners', state: 'working' } }), bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, controls: 'person' }),
     bot('scribe', { task: { id: 7, title: 'Post', state: 'working' }, stuck: true, quietSince: now - 9 * 60_000 }), bot('reel', { pausedUntil: now + 600_000 }), bot('tracer')] };
   assert.equal(A.crewLine(st), `Chief is on “Plan dinners”. Scout waits while you drive. Scribe has gone quiet. Reel is waiting until ${A.clock(now + 600_000)}.`);
@@ -1481,8 +1481,8 @@ test('a routine offered by Chief is a confirmation card: lines, Start it / Not n
   const [line, note] = [A.card(away.asks[0], away).lines!.at(-1), A.zoneNote(away)];
   if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Karachi') { assert.equal(note, ''); }
   else { assert.match(note, /^Times follow the home computer's clock \(Asia\/Karachi\)\.$/); assert.equal(line, note); }
-  // Stays off Home like every suggestion, and the last run links out.
-  assert.equal(A.needsYou(s).length, 0);
+  // Waits on the person's yes in Chief's thread like a draft (S5), and the last run links out.
+  assert.equal(A.needsYou(s).length, 1);
   const rs = { routines: [{ id: 2, bot: 'reel', name: 'Weekly demo', words: 'Every Monday at 9:00', next_at: now, state: 'on', kind: 'task',
     history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, thing: 7, msg: 21 }] }] };
   assert.deepEqual(A.routines(rs)[0].runs[0].result, { thing: 7 }, 'the last run opens the thing it made');
@@ -2061,13 +2061,13 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
   assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
   assert.match(office, /action=\{file \? <PreviewCard f=\{file\} \/> : null\}/, 'a crew panel holds at most its finished file, never an ask');
-  assert.match(office, /action=\{live\.needs\.length > 0 && <ToChief live=\{live\} \/>\}/, 'Chief carries the asks in one action');
+  assert.match(office, /action=\{live\.counts\.needs > 0 && <ToChief live=\{live\} \/>\}/, 'Chief carries the asks in one action');
   // No crew panel answers or approves, and no generic Review anywhere in the office.
   assert.doesNotMatch(office, /AskButton|answer\(|>Review…<\/a>/);
   assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} \/>/);
   // Office header: the slim bar (title, count line, switch, settings), the title on phone width only.
   assert.match(main, /<h1 className="office-title">Office<\/h1>/);
-  assert.match(main, /\{summaryOf\(ctx\.live\)\}/, 'one count line from the office view');
+  assert.match(main, /\{A\.summaryOf\(ctx\.live\)\}/, 'one count line from the office view');
   assert.match(css, /@media \(min-width: 900px\) \{ \.office-title \{ display: none; \} \}/);
   // The grid scrolls past six instead of shrinking: three columns on a desk, groups below 900 px.
   assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);

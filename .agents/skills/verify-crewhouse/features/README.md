@@ -19,6 +19,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper; assignment, wrap-up and long/bullet-only relay openings; real Marketing crew recipe, shared profile and Chief's read-only skill admission |
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |
 | crew-list | [crew-list.md](crew-list.md) | The crew rail and `#/crew`: only Chief says "Needs you"; a crew member waiting on the person reads "Waiting" |
+| status-one-source | [status-one-source.md](status-one-source.md) | One status per member from the adapter: Chief idle reads Free (never green At work), no member "Resting", every card needing a yes counts on Chief, a relayed result leaves no unread badge; the same words and counts on header, rail, live line, Office, Chats, phone and iPad |
 | bubble-write-it-here | [bubble-write-it-here.md](bubble-write-it-here.md) | On the release APK: Chief's bubble over another app's box, Write it here, and the action it offers (Copy or Put it in) |
 | ai-accounts-view | [ai-accounts-view.md](ai-accounts-view.md) | Settings' AI-accounts card: who is ready, resting, or plan-less, without any sign-in |
 | account-rests | [account-rests.md](account-rests.md) | An account limit: after a failover no standing "resting" line or Office strip and Chief reads "At work"; with every account resting Chief says once when work starts again, and it resumes with no ask |

@@ -536,8 +536,8 @@ export class Crew {
   }
 
   // ---- chats: each thread's last line and what the person hasn't seen ----
-  /** Lines that make a thread unread: the bot's and Chief's words, anything in Chief's thread, and a helper's delivered files. */
-  private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %')";
+  /** Lines that make a thread unread: the bot's and Chief's words, anything in Chief's thread, a helper's delivered files; never a finished job Chief handed on (his thread relayed it). */
+  private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %') AND (bot = 'chief' OR task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE origin = 'chief' AND state = 'done'))";
   private speaker = (m: Row) => m.author === 'bot' && m.task_id ? this.db.get("SELECT bot FROM tasks t WHERE id = ? AND bot != ? AND NOT EXISTS (SELECT 1 FROM tasks o WHERE COALESCE(o.root, o.id) = COALESCE(t.root, t.id) AND o.id != t.id)", m.task_id, CHIEF)?.bot : undefined;
   private chat(bot: string) {
     const mine = 'bot = ?';

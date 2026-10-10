@@ -1,4 +1,4 @@
-// The office as a grouped list (Term look): Waiting / At work / Done today / Resting, every helper in exactly
+// The office as a grouped list (Term look): Waiting / At work / Done today / Free, every helper in exactly
 // one group. Each row shows the helmet in its mood, the current line and one meta line. Crew never ask the person: a
 // waiting row says what it is on and "Waiting for Chief", and one row on top opens Chief, who carries every ask. Tapping
 // a row opens that helper's desk. Every word and count comes from the one
@@ -15,14 +15,7 @@ import { onLive } from './link';
 type Look = typeof color.day;
 const { landed, groupOf } = A;
 
-type Group = A.Group;
-const TITLES: Record<Group, string> = { needs: 'Waiting', work: 'At work', done: 'Done today', rest: 'Resting' };
-/** The Office count line the phone header reads: waiting crew, at work, done today and resting — the same words as the
- *  groups (A.groupOf; only Chief says "Needs you"), so the counts are the rows. */
-export const summaryOf = (v: A.OfficeView): string => {
-  const n = (g: Group) => v.crew.filter((c) => groupOf(c, v) === g).length;
-  return `${n('needs')} waiting · ${n('work')} at work · ${n('done')} done · ${n('rest')} resting`;
-};
+type Group = keyof typeof A.GROUP_TITLES;
 
 /** The helmet as dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot opacity. The
  *  think-scan shows centred while working (a fixed beat); nothing animates. */
@@ -43,15 +36,14 @@ function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: numbe
 
 /** The row's state word, in the board's own sentence case. */
 function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
-  const g = groupOf(c, v);
+  const st = A.statusOf(c, v), g = st.group;
   const done = g === 'done' ? landed(c, v) : undefined;
-  const word = g === 'needs' ? 'Waiting' : g === 'work' ? (A.seatOf(c) === 'quiet' ? 'Gone quiet' : 'At work')
-    : done ? `✓ Done ${A.clock(done.at)}` : A.seatOf(c) === 'failed' ? "Didn't finish" : '○ Resting';
-  const col = g === 'needs' ? t.pink : g === 'work' ? (A.seatOf(c) === 'quiet' ? t.amber : t.green)
+  const word = done ? `✓ ${st.word} ${A.clock(done.at)}` : g === 'free' && st.seat === 'free' ? `○ ${st.word}` : st.word;
+  const col = g === 'wait' ? t.pink : g === 'work' ? (A.seatOf(c) === 'quiet' ? t.amber : t.green)
     : A.seatOf(c) === 'failed' ? t.danger : g === 'done' ? t.ink : t.mute;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-      {(g === 'needs' || g === 'work') && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: col }} />}
+      {(g === 'wait' || g === 'work') && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: col }} />}
       <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: col }}>{word}</Text>
     </View>
   );
@@ -84,6 +76,24 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
   );
 }
 
+/** Chief's grouped row: his one status and his line; a tap opens his thread. */
+function ChiefRow({ view, t, night, onChief }: { view: A.OfficeView; t: Look; night: boolean; onChief: () => void }) {
+  const st = A.chiefStatus(view), col = st.seat === 'needs' ? t.pink : st.group === 'work' ? t.green : t.mute;
+  return (
+    <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={`Chief: ${A.officeLine(view)}`}
+      style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
+      <Helmet mood={view.chief.mood} night={night} size={52} />
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, fontWeight: '600', color: t.ink, flex: 1 }}>Chief</Text>
+          <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: col }}>{st.word}</Text>
+        </View>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{A.officeLine(view)}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 /** One group: its name over a dashed rule, then its rows. */
 function Group({ title, t, children }: { title: string; t: Look; children: ReactNode }) {
   return (
@@ -105,15 +115,18 @@ export function Office({ view, night, offline, width, jobs, onChief, onDesk, onT
   const t = night ? color.night : color.day;
   const titles = useMemo(() => new Map((jobs ?? []).map((w) => [w.helper, w.title])), [jobs]);
   void offline; void width; void onTray; void onCrew;
-  const groups = (['needs', 'work', 'done', 'rest'] as Group[]).map((g) => [g, view.crew.filter((c) => groupOf(c, view) === g)] as const)
-    .filter(([, rows]) => rows.length);
+  // Chief sits in his own group like everyone the count line counts.
+  const cs = A.chiefStatus(view);
+  const groups = (Object.keys(A.GROUP_TITLES) as Group[]).map((g) => [g, view.crew.filter((c) => groupOf(c, view) === g)] as const)
+    .filter(([g, rows]) => rows.length || g === cs.group);
   return (
     <View>
-      {view.needs.length > 0 && <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={A.chiefHas(view)}
+      {view.counts.needs > 0 && <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={A.chiefHas(view)}
         style={{ alignSelf: 'flex-start', marginTop: 14, marginHorizontal: 14, backgroundColor: t.pink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16 }}>
         <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{A.chiefHas(view)}</Text>
       </Pressable>}
-      {groups.map(([g, rows]) => <Group key={g} title={TITLES[g]} t={t}>
+      {groups.map(([g, rows]) => <Group key={g} title={A.GROUP_TITLES[g]} t={t}>
+        {g === cs.group && <ChiefRow view={view} t={t} night={night} onChief={onChief} />}
         {rows.map((c) => <Row key={c.id} c={c} v={view} t={t} night={night} jobTitle={titles.get(c.id)} onDesk={onDesk} />)}
       </Group>)}
     </View>
