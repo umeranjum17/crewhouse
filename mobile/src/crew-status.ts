@@ -1,4 +1,4 @@
-// The phone crew list's status word and dot: the web rail's own (A.railWord, from A.groupOf), so the
+// The phone crew list's status word and dot: the web rail's own (A.statusOf, A.chiefStatus), so the
 // phone and the web rail agree for the same member — same word and same dot colour. The dot colours
 // mirror the rail's own seat classes (web/src/styles.css `.side-seat.seat-*`: working a hollow ink
 // ring, done ink, quiet/failed red, next amber, waiting/free grey) and Chief's own line
@@ -23,17 +23,16 @@ export const railTone = (seat: A.Seat | 'done'): CrewPillTone =>
 
 export function crewPill(h: A.Helper, view: A.OfficeView | null): { word: string; tone: CrewPillTone } {
   const m = view?.crew.find((c) => c.id === h.id);
-  const r = m && view ? A.railWord(m, view) : null;
+  const r = m && view ? A.statusOf(m, view) : null;
   if (!r) return { word: h.status, tone: h.ring === 'needs' ? 'wait' : h.ring ? 'ok' : 'off' };
-  // The word is the rail's (a finished today reads Done, as the web crew page does); the dot is the
-  // rail's own seat colour, so both screens read the same.
-  return { word: r.seat === 'done' ? 'Done' : r.word, tone: railTone(r.seat) };
+  // The word is the rail's; the dot is the rail's own seat colour, so both screens read the same.
+  return { word: r.word, tone: railTone(r.seat) };
 }
 
-/** Chief's row is the rail's Chief line (A.chiefWord) with the rail's own dot (`.side-status`: grey,
+/** Chief's row is the rail's Chief line (A.chiefStatus) with the rail's own dot (`.side-status`: grey,
  *  pink only for Needs you), never a helper's line. */
 export function chiefPill(view: A.OfficeView, offline: boolean, away: string): { word: string; tone: CrewPillTone } {
   if (offline) return { word: away, tone: 'off' };
-  const word = A.chiefWord(view);
-  return { word, tone: word === 'Needs you' ? 'wait' : 'off' };
+  const word = A.chiefStatus(view).word;
+  return { word, tone: word === A.WORDS.needs ? 'wait' : 'off' };
 }

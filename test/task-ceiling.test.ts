@@ -62,7 +62,7 @@ test('a helper gone quiet: Chief asks, the live line agrees with the rail, and S
   db.run('UPDATE tasks SET updated_at = updated_at - 600000 WHERE id = ?', task);
   let state = crew.snapshot(), team = A.crew(state), v = A.office(state);
   const scout = () => v.crew.find((c) => c.id === 'scout')!;
-  assert.equal(A.railWord(scout(), v).word, 'Gone quiet');
+  assert.equal(A.statusOf(scout(), v).word, 'Gone quiet');
   assert.deepEqual(A.stuckIn(team, 'chief').map((x) => x.id), ['scout'], '(a) Stop / Take over / Leave it is in Chief\'s thread');
   assert.deepEqual(A.stuckIn(team, 'scout').map((x) => x.id), ['scout'], 'and in Scout\'s own');
   const ln = A.liveLine({ id: 'scout', name: 'Scout', crew: team, tasks: state.tasks, events: state.events, heard: [], writing: new Map() });
@@ -76,6 +76,6 @@ test('a helper gone quiet: Chief asks, the live line agrees with the rail, and S
   assert.deepEqual(said, ['I stopped Scout\'s “ask permission to find flights for next week”, as you asked. Anything made so far is kept, and your next message carries on.'], '(c) one plain line');
   assert.equal(alerts(), before, 'the person pressed Stop: no alert');
   state = crew.snapshot(); team = A.crew(state); v = A.office(state);
-  assert.deepEqual([A.railWord(scout(), v).word, A.groupOf(scout(), v)], ['Free', 'rest'], 'the rail and the office counts agree: free, resting');
+  assert.deepEqual([A.statusOf(scout(), v).word, A.groupOf(scout(), v)], ['Free', 'free'], 'the rail and the office counts agree: free');
   assert.deepEqual(A.stuckIn(team, 'chief'), [], 'nothing left to ask about');
 });

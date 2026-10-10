@@ -64,10 +64,8 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.deepEqual(v.needs.map((c) => c.id), A.needsYou(state).map((c) => c.id), 'Needs you is the office\'s own list');
   assert.equal(v.counts.needs, 2, 'Reel\'s question and Chief\'s; the suggestion is not counted');
   assert.equal(v.crew.find((c) => c.id === 'scribe')!.ask, undefined, 'no Review for a suggestion');
-  assert.deepEqual(A.chiefAsks(v).map((c) => c.id), [12], 'Chief carries his own row');
-  // every Needs-you row has exactly one Review holder in the office
-  const holders = v.needs.map((c) => (v.crew.find((m) => m.ask?.id === c.id) ? 1 : 0) + (A.chiefAsks(v).includes(c) ? 1 : 0));
-  assert.deepEqual(holders, [1, 1]);
+  assert.deepEqual(v.needs.filter((c) => v.crew.some((m) => m.ask?.id === c.id)).map((c) => c.id), [10], 'Reel holds its own row');
+  assert.equal(A.chiefHas(v), 'Chief has 2 things for you', 'Chief carries every row, his own too');
   assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
   assert.equal(v.counts.working, 1);
   assert.equal(v.counts.done, 1, 'the tray holds today\'s');
@@ -77,9 +75,13 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
   assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
   assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
-  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
-  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
-  assert.equal(A.chiefWord(v), 'Needs you', 'only Chief says "Needs you"');
+  const rail = (c: A.OfficeMember, v2: A.OfficeView) => { const st = A.statusOf(c, v2); return { word: st.word, seat: st.seat }; };
+  assert.deepEqual(rail(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
+  assert.deepEqual(rail(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
+  assert.equal(A.chiefStatus(v).word, 'Needs you', 'only Chief says "Needs you"');
+  // One status per member: the count line counts each member once by the word it shows, Chief too ("Needs you" waits).
+  assert.deepEqual(v.crew.map((c) => A.statusOf(c, v).word), ['At work', 'Waiting', 'Waiting', "Didn't finish", 'Waiting', 'Up next', 'Free']);
+  assert.equal(A.summaryOf(v), '5 waiting · 1 at work · 0 done · 2 free');
   // Live events move every count together.
   const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
   assert.equal(answered.counts.needs, 1);
@@ -91,11 +93,12 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   const done = A.officeEvent(v, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
   assert.equal(done.counts.done, 2);
   // The rail says a free helper's latest job landed (Main590 6); a newer seat replaces it.
-  assert.deepEqual(A.railWord(done.crew.find((c) => c.id === 'scout')!, done), { word: 'Done: Job 1', seat: 'done' });
-  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'scout')!, v), { word: 'Working', seat: 'working' }, 'working beats an earlier finish');
-  assert.deepEqual(A.railWord(v.crew.find((c) => c.id === 'h7')!, v), { word: 'Free', seat: 'free' }, 'nothing landed: just free');
+  assert.deepEqual(rail(done.crew.find((c) => c.id === 'scout')!, done), { word: 'Done', seat: 'done' });
+  assert.equal(A.chats(state).find((c) => c.id === 'scout')!.line, 'At work: Job 1', 'Chats say the same word');
+  assert.deepEqual(rail(v.crew.find((c) => c.id === 'scout')!, v), { word: 'At work', seat: 'working' }, 'working beats an earlier finish');
+  assert.deepEqual(rail(v.crew.find((c) => c.id === 'h7')!, v), { word: 'Free', seat: 'free' }, 'nothing landed: just free');
   const again = A.officeEvent(done, { kind: 'task.working', bot: 'scout', data: { title: 'Job 4' } });
-  assert.equal(A.railWord(again.crew.find((c) => c.id === 'scout')!, again).word, 'Working', 'a new job replaces the cue');
+  assert.equal(A.statusOf(again.crew.find((c) => c.id === 'scout')!, again).word, 'At work', 'a new job replaces the cue');
   assert.equal(done.counts.working, 0);
   // The hand-off follows the done list, not the helper's things: the demo hears file.delivered and task.done in one
   // commit, and task.done empties the desk, so a things-grew diff saw nothing and no page ever flew (J5 at 4ab7e00).
@@ -113,15 +116,16 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   // "Today" and "yesterday" are measured from the clock's midnight, not from now: run at 01:40, "three hours ago"
   // is yesterday, and the job that ended badly today would read as free. (main's fixture, flake found on this branch.)
   const today = new Date().setHours(0, 0, 0, 0);
-  const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.railWord(v2.crew[0], v2).word });
+  const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.statusOf(v2.crew[0], v2).word });
   // A job with no news past crewd's limit has gone quiet: never shown, or counted, as working.
   const quiet = crew([bot('scout', { task: task(1, 'scout', 'working'), stuck: true, quietSince: now - 9 * min })]);
   assert.deepEqual([one(quiet), quiet.counts.working], [{ seat: 'quiet', word: 'Gone quiet' }, 0]);
-  assert.equal(A.idleLine(quiet), 'Nobody is working right now: 1 gone quiet.', 'the crew is not called free');
+  assert.equal(A.idleLine(quiet), 'No helper is at work right now: 1 gone quiet.', 'the crew is not called free');
+  assert.deepEqual([quiet.counts.needs, A.chiefStatus(quiet).word], [1, 'Needs you'], "the Stop card waits on Chief's yes, counted once on him");
   // A job held for a sign-in waits, in crewd's own words, rather than reading free.
   const signin = crew([bot('scout')], [{ id: 2, bot: 'scout', title: 'Flights', state: 'paused', wake_at: null, result: 'Waiting for you to sign in with ChatGPT.' }]);
   assert.deepEqual([one(signin), signin.crew[0].status], [{ seat: 'waiting', word: 'Waiting' }, 'Waiting for you to sign in with ChatGPT']);
-  assert.equal(A.idleLine(signin), 'Nobody is working right now: 1 waiting.');
+  assert.equal(A.idleLine(signin), 'No helper is at work right now: 1 waiting.');
   const share = crew([bot('scout', { pausedUntil: now + hour })], [{ id: 2, bot: 'scout', title: 'Digest', state: 'paused', wake_at: now + hour, result: 'Waiting for tomorrow: the crew has had its share of your AI today.' }]);
   assert.equal(share.crew[0].status, 'Waiting for tomorrow');
   assert.equal(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } }).crew[0].status,
@@ -130,7 +134,19 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: today + hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today }]);
   assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
   const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: today - hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today - 2 * hour, files: [] }]);
-  assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'Nobody is working right now. The crew is free.']);
+  assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'No helper is at work right now. Every helper is free.']);
+  // Chief's status is his own job's, never a helper's: idle he is free (S1), at work only on his own job, waiting while
+  // it is held; a routine he offers waits on the person's yes like a draft (S5).
+  assert.deepEqual([A.chiefStatus(old).word, A.summaryOf(old)], ['Free', '0 waiting · 0 at work · 0 done · 2 free']);
+  const own = A.office({ ...state, asks: [], events: [], bots: [bot('chief', { task: task(5, 'chief', 'working') }), bot('scout')], tasks: [] });
+  assert.deepEqual([A.chiefStatus(own).word, A.summaryOf(own)], ['At work', '0 waiting · 1 at work · 0 done · 1 free']);
+  const held = A.office({ ...state, asks: [], events: [], bots: [bot('chief'), bot('scout')], tasks: [{ id: 6, bot: 'chief', title: 'Plans', state: 'paused', wake_at: now + hour, result: 'All your AI accounts are resting.' }] });
+  assert.deepEqual([A.chiefStatus(held).word, A.summaryOf(held)], ['Waiting', '1 waiting · 0 at work · 0 done · 1 free']);
+  const heldState = { ...state, asks: [], resting: { chatgpt: now + hour }, events: [{ seq: 1, kind: 'task.done', bot: 'chief', at: now, data: { title: 'hi' } }], bots: [bot('chief'), bot('scout')], tasks: [{ id: 6, bot: 'chief', title: 'Plans', state: 'paused', wake_at: now + hour }] };
+  assert.match(A.chief(heldState).line, /resting until/, "a waiting Chief's line says why, never the echo of a turn that just finished");
+  const routine = { ...state, events: [], bots: [bot('chief'), bot('scout')], tasks: [], asks: [{ id: 20, bot: 'chief', kind: 'propose', at: now, detail: { routine: { schedule: 'every day 9:00' }, words: 'Check flights daily?' } }] };
+  assert.deepEqual([A.needsYou(routine).map((c) => c.kind), A.chiefStatus(A.office(routine)).word, A.chats(routine)[0].ring], [['routine'], 'Needs you', 'needs']);
+  assert.equal(A.summaryOf(A.office(routine)), '1 waiting · 0 at work · 0 done · 1 free', 'Chief waiting on your yes counts once, as waiting (S5)');
   // A new job is only queued until crewd starts it: the event does not claim work.
   assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');
 });
@@ -271,7 +287,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
             .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
           const names = units.map((p) => p.getAttribute('aria-label'));
           const line = document.querySelector('.office-counts')?.textContent ?? '';
-          const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|resting)/g)].map((x) => Number(x[1]));
+          const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|free)/g)].map((x) => Number(x[1]));
           const officePins = document.querySelectorAll('.needs-pin').length;
           const onCards = document.querySelectorAll('.office-main .on-card').length;
           const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
@@ -309,17 +325,19 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
         try {
           // Needs you is pinned over Chief's thread only: the Office reaches the asks through Chief's one action.
           assert.equal(m.officePins, 0, `${at}: Office renders no Needs you pin`);
-          assert.deepEqual(m.nums.length, 4, `${at}: the header counts needs, work, done and resting (${m.nums})`);
+          assert.deepEqual(m.nums.length, 4, `${at}: the header counts waiting, at work, done and free (${m.nums})`);
           assert.deepEqual([...new Set(m.names)].length, m.units, `${at}: nobody twice, nobody missing`);
           assert.equal(m.out, 0, `${at}: every row inside the office column`);
           assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
-          assert.equal(m.nums[0], m.memberNeeds, `${at}: the header's waiting count is the waiting crew rows`);
-          assert.equal(m.nums[1], m.onCards, `${at}: the header's working count is On it now`);
-          assert.equal(m.nums[1], m.work - (m.chiefWorks ? 1 : 0), `${at}: the at-work count is the working rows`);
-          assert.equal(m.nums[2], m.done, `${at}: the done count is the done rows`);
-          // Chief's own resting panel is not a crew row.
-          assert.equal(m.nums[3], m.rest - (m.chiefRests ? 1 : 0), `${at}: the resting count is the resting rows`);
+          // One status per member: the header counts every member once by the word its row shows, Chief too (his
+          // "Needs you" counts as waiting).
+          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' || w === 'Gone quiet' ? 1 : 3;
+          const seen = [0, 0, 0, 0];
+          for (const w of m.words as string[]) seen[groupOf(w)]++;
+          const extra = m.nums.map((x: number, i: number) => x - seen[i]);
+          assert.deepEqual(m.nums, seen, `${at}: the header counts the rows' own words, Chief's too (${extra}: ${m.words.join(' | ')})`);
+          assert.equal(m.onCards, m.work - (m.chiefWorks ? 1 : 0), `${at}: On it now shows the crew at work`);
           // Needs-you rows no crew row holds ride on Chief's: his panel glows exactly when rows are left over.
           // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
           if (width < 900) assert.ok(m.memberNeeds <= m.pinned, `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.pinned} rows)`);
@@ -337,12 +355,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Nobody in the Office is said to need the person or ask them for an OK: crew wait for Chief, Chief carries the asks.
           assert.doesNotMatch(m.officeText, /\w needs you|your OK/, `${at}: no crew member asks the person in the Office`);
           // On it now's idle line uses the rows' words and the header's waiting count.
-          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || m.idle === `Nobody is working: ${m.nums[0]} waiting for Chief.`), `${at}: On it now says the header's ${m.nums[0]} wait for Chief (${m.idle})`);
+          assert.ok(!/on you/.test(m.idle) && (!/^No helper is at work:/.test(m.idle) || m.idle === `No helper is at work: ${m.memberNeeds} waiting for Chief.`), `${at}: On it now says the ${m.memberNeeds} waiting rows wait for Chief (${m.idle})`);
           // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
           const chat = new Map<string, { line: string; dot: boolean }>(m.chatRows.map(([name, line, dot]: [string, string, boolean]) => [name, { line, dot }]));
           for (const [name, g] of m.grouped as [string, string][]) {
             const row = chat.get(name);
-            if (!row) continue;
+            if (!row || name === 'Chief') continue;
             if (g === 'Waiting') assert.equal(row.line, 'Waiting', `${at}: ${name} waits in the Office and in Chats`);
             if (g === 'Done today') assert.match(row.line, /^Done: /, `${at}: ${name} is done in the Office and in Chats`);
             if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
@@ -352,8 +370,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
           assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
           if (width < 900) {
-            assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
-            const order = ['Waiting', 'At work', 'Done today', 'Resting'];
+            assert.equal(m.units, n + (m.chiefWord ? 1 : 0), `${at}: every helper has exactly one grouped row, and Chief one in his group`);
+            const order = ['Waiting', 'At work', 'Done today', 'Free'];
             assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
             assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
           } else {
@@ -434,26 +452,28 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   // The rail's own words, mapped to the four Office groups the summary counts.
   const group = (w: string) => w.startsWith('Done') ? 'done'
-    : w === 'Waiting' ? 'waiting'
-    : w === 'Working' || w === 'Gone quiet' ? 'at work'
-    : 'resting';
+    : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 'waiting'
+    : w === 'At work' || w === 'Gone quiet' ? 'at work'
+    : 'free';
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     await b.open(`demo=${demo}&day#/crew`);
     await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
     const r = await b.run(`(() => {
       const words = [...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent.trim());
+      const chief = document.querySelector('.side-status')?.textContent.trim() ?? '';
+      words.push(chief);
       const sub = document.querySelector('.side-sub')?.textContent ?? '';
-      const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|resting)/g)].map((x) => [x[2], Number(x[1])]));
+      const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|free)/g)].map((x) => [x[2], Number(x[1])]));
       return { words, nums };
     })()`);
-    const counted: Record<string, number> = { waiting: 0, 'at work': 0, done: 0, resting: 0 };
+    const counted: Record<string, number> = { waiting: 0, 'at work': 0, done: 0, free: 0 };
     for (const w of r.words as string[]) counted[group(w)]++;
     assert.deepEqual(r.nums, counted, `${demo}: the rail summary is the rows' own status (${JSON.stringify(r)})`);
   }
 });
 
 test('your crew page reads the rail status: every row matches its rail row', { skip: !bin && 'no Chromium here' }, async () => {
-  // The Your crew page's status word and dot are the rail's own (A.railWord, from A.groupOf). This fails on a
+  // The Your crew page's status word and dot are the rail's own (A.statusOf). This fails on a
   // second status rule (the reported bug: Reel and Scout showed their job with a green dot while the rail said
   // Waiting, and Scribe said "Waiting for Chief" while the rail said Done).
   const b = await browse();

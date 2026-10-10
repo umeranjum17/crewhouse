@@ -634,7 +634,7 @@ test('a built ask reaches the helper while the thread keeps the person’s own w
   assert.deepEqual(A.things({ tasks: mine.tasks.filter((t: any) => t.bot === 'scribe') }), [], 'nothing was made');
   const state = (await api('GET', '/api/state')).body;
   const view = A.office({ ...state, tasks: mine.tasks });
-  assert.equal(A.railWord(view.crew.find((c) => c.id === 'scribe')!, view).word, 'Free', 'the rail never says Done for a job with nothing to show');
+  assert.equal(A.statusOf(view.crew.find((c) => c.id === 'scribe')!, view).word, 'Free', 'the rail never says Done for a job with nothing to show');
 });
 
 test('room API: a message starts and rejoins the person’s room job', async () => {

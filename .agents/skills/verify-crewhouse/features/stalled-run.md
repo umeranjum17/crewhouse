@@ -12,7 +12,7 @@ Before that bound, a helper with no news past `CREWHOUSE_STUCK_MS` (3 minutes) r
 live line says the same word (never "at work · still working"). Only Chief asks the person: the Stop / Take over /
 Leave it card sits in Chief's thread for every helper gone quiet (`A.stuckIn`), and in that helper's own. Stop gets one
 plain line from Chief ("I stopped Scout's “…”, as you asked. Anything made so far is kept, and your next message carries
-on.", no alert), and the helper reads "Free" on the rail, counted as resting in the office summary.
+on.", no alert), and the helper reads "Free" on the rail, counted as free in the office summary.
 
 ## Gate
 
@@ -21,7 +21,7 @@ the task ends `failed` with nobody pressing Stop, Chief's line appears exactly o
 next message to Chief is prompted, carries the line, and finishes. Fails on the old code (the task never settles).
 The second test there backdates a held Scout turn past the quiet limit and reads crewd's own snapshot through the
 adapter: Stop card in Chief's thread and Scout's, the live line "Gone quiet" like the rail, then `resetBot` gives one
-Chief line, no alert, and Scout "Free" / resting.
+Chief line, no alert, and Scout "Free" on the rail and in the summary.
 
 ## Drive (real crewd, stub engine)
 
