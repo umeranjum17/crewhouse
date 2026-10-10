@@ -1366,7 +1366,7 @@ export class Crew {
     this.live.delete(botId);
     this.busy.delete(botId);
     l.browser?.end();
-    void this.runtime.abort(l.key).catch(() => {});
+    try { void this.runtime.abort(l.key).catch(() => {}); } catch { /* the engine may already be gone (a restart or a drop); the run is over, so there is nothing to stop */ }
   }
 
   /** One turn: the prompt goes into the run's session, and when it settles the reply (or the account's error) is handled. */
