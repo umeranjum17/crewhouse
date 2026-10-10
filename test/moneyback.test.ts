@@ -66,12 +66,13 @@ test('a helper asks for its own check-in: a watch when the page can be read, a q
   await until('the card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'"));
   let card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
   assert.match(JSON.parse(card.detail).preview.body, /Keeps an eye on shop\.example/);
-  assert.match(JSON.parse(card.detail).preview.body, /Tells you only when the page changes/);
+  assert.match(JSON.parse(card.detail).preview.body, /Tells you when it goes under \$999\.00, the price paid/, 'the card says what the watch waits for');
   assert.equal(db.get("SELECT COUNT(*) AS n FROM routines WHERE bot = 'scout' AND kind = 'task'")!.n, 0, 'nothing runs until the person says yes');
   await crew.answer(card.id, { answer: 'allow' });
   await settled(db, task);
   let r = db.get("SELECT * FROM routines WHERE bot = 'scout' AND kind = 'task'")!;
   assert.equal(r.quiet, 1, 'a watch is a quiet check-in');
+  assert.equal(crew.routines().find((x: any) => x.id === r.id)!.looks, 'Tells you when it goes under $999.00, the price paid', 'and so does the Routines page');
   assert.equal(r.member, 1, 'and it belongs to the person the job was for');
 
   // The price is drawn with JavaScript, so the watch can't see it: the same helper asks for a quiet routine it reads itself.

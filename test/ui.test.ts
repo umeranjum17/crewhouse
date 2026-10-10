@@ -1439,8 +1439,7 @@ test('watches and hand-offs read as plain words, with only the page\'s host', ()
     watch: 'https://www.rentals.example.com/phuket?max=900&sort=new', history: [{ at: Date.now(), kind: 'routine.fired', watch: 'same' }, { at: Date.now() - 9e5, kind: 'routine.fired', watch: 'changed', task: 3 }] }] };
   const [r] = A.routines(s);
   assert.equal(r.watching, 'rentals.example.com');
-  assert.match(r.last, /^Checked .*, no change$/);
-  assert.equal(r.changes, 1);
+  assert.deepEqual(r.runs.map((x: any) => x.words), ['Nothing new', 'Running now'], 'each run in plain words, newest first');
   assert.doesNotMatch(shown(r), /phuket\?|https?:/);
   const [l] = A.lines({ messages: [{ id: 1, author: 'reel', text: 'find three songs' }] }, 'scout');
   assert.deepEqual([l.from, l.text], ['note', 'Reel asked: find three songs']);
@@ -1486,11 +1485,11 @@ test('a routine offered by Chief is a confirmation card: lines, Start it / Not n
   assert.equal(A.needsYou(s).length, 0);
   const rs = { routines: [{ id: 2, bot: 'reel', name: 'Weekly demo', words: 'Every Monday at 9:00', next_at: now, state: 'on', kind: 'task',
     history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, thing: 7, msg: 21 }] }] };
-  assert.deepEqual(A.routines(rs)[0].result, { thing: 7 }, 'the last run opens the thing it made');
+  assert.deepEqual(A.routines(rs)[0].runs[0].result, { thing: 7 }, 'the last run opens the thing it made');
   const said = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.fired', state: 'done', task: 7, msg: 21 }] }] };
-  assert.deepEqual(A.routines(said)[0].result, { msg: 21 }, 'or lands on its line in the helper\'s chat');
+  assert.deepEqual(A.routines(said)[0].runs[0].result, { msg: 21 }, 'or lands on its line in the helper\'s chat');
   const skipped = { routines: [{ ...rs.routines[0], history: [{ at: now, kind: 'routine.skipped', why: 'overlap' }] }] };
-  assert.equal(A.routines(skipped)[0].result, null, 'a skipped run has no result to see');
+  assert.equal(A.routines(skipped)[0].runs[0].result, null, 'a skipped run has no result to see');
 });
 
 test('Chief-learned memories can be undone from his own page: the same trail, the same endpoint', async () => {

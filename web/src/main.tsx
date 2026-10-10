@@ -1025,14 +1025,18 @@ function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   return (
     <>
-      {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((x) => x.id === r.helper)} act={act} />)}
+      {list.map((r: Json) => <RoutineRow key={r.id} r={r} h={crew.find((x) => x.id === r.helper)} act={act} refresh={refresh} />)}
       {!list.length && <div className="card empty">Nothing set up yet.</div>}
     </>
   );
 }
 
-/** One routine: its time line is tappable (the same field Chief's card uses), its last run can be seen. */
-function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: () => Promise<unknown>, ok?: string) => Promise<boolean> }) {
+/** Where a run ended up: the thing it made, else its line in the chat. */
+const runHref = (r: Json, res: Json) => res.thing ? `#/things/t${res.thing}` : r.helper === 'chief' ? `#/chief/m${res.msg}` : `#/h/${r.helper}/m${res.msg}`;
+
+/** One routine: its time line is tappable (the same field Chief's card uses); what it waits for, its last run beside
+ *  Do it now, and its recent runs can be seen. Do it now reads "Running…" until the run's result lands on the row. */
+function RoutineRow({ r, h, act, refresh }: { r: Json; h: Helper | undefined; act: (fn: () => Promise<unknown>, ok?: string) => Promise<boolean>; refresh: () => void }) {
   const [when, setWhen] = useState<string | null>(null); // null: the time line; a string: editing it
   const [preview, setPreview] = useState<Json>(null);
   useEffect(() => {
@@ -1041,6 +1045,15 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
     return () => clearTimeout(t);
   }, [when]);
   const save = async () => { if (await act(() => api.routine(r.id, { schedule: when!.trim() }), 'Time changed')) setWhen(null); };
+  // After a press the button reads "Running…" until a run newer than the last one at the press is on the row.
+  const [asked, setAsked] = useState<number | null>(null), pressed = useRef(false);
+  const last = r.runs[0], running = (asked !== null && (last?.t ?? 0) <= asked) || last?.tone === 'running';
+  // crewd's own words say why a run could not start ("The last run of … is still going."); anything else is the usual toast.
+  const run = async () => {
+    setAsked(last?.t ?? 0); pressed.current = true;
+    try { await api.runRoutine(r.id); } catch (e: any) { setAsked(null); if (e?.status === 409) toast(e.message); else await attempt(() => Promise.reject(e)); }
+    refresh();
+  };
   return (
     <div className={`card routine ${r.paused ? 'paused' : ''}`}>
       <div className="row">
@@ -1050,7 +1063,7 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
           {when === null ? <button className="link line-when" onClick={() => setWhen(r.remind ? 'in 20 minutes' : r.when || '')}>
             {[r.on, r.watching ? `Keeps an eye on ${r.watching}` : '', r.when].filter(Boolean).join(' · ')}{r.paused ? ' · paused' : r.next ? ` · ${r.remind ? '' : 'next '}${r.next}` : ''}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
           </button> : <div className="mute small">Moving it — save a new time below, or cancel.</div>}
-          {r.last && <div className="mute small">{r.last}{r.result && <> · <a className="link" href={r.result.thing ? `#/things/t${r.result.thing}` : `#/h/${r.helper}/chat/m${r.result.msg}`}>See result</a></>}</div>}
+          {r.looks && <div className="mute small">{r.looks}</div>}
         </div>
       </div>
       {when !== null && <form className="row" onSubmit={(e) => { e.preventDefault(); if (when.trim() && preview && !preview.bad) void save(); }}>
@@ -1060,8 +1073,15 @@ function RoutineRow({ r, h, act }: { r: Json; h: Helper | undefined; act: (fn: (
       </form>}
       {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}.</div>}
       {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
+      <div className="routine-run">
+        <button className="btn go" onClick={run} disabled={!!r.reminded || running}>{r.reminded ? 'Already reminded' : running ? 'Running…' : 'Do it now'}</button>
+        <span className="routine-last-wrap" aria-live="polite">{last && <span key={last.at + last.words} className={`small routine-last${pressed.current ? ' landed' : ''}`}>Last run {last.at} · {last.words}{last.result && <> · <a className="link" href={runHref(r, last.result)}>See result</a></>}</span>}</span>
+      </div>
+      {r.runs.length > 1 && <details className="routine-runs">
+        <summary className="small">Recent runs</summary>
+        <ol>{r.runs.map((x: Json, i: number) => <li key={i} className="small"><span className="mute">{x.at}</span> {x.words}{x.result && <> · <a className="link" href={runHref(r, x.result)}>See result</a></>}</li>)}</ol>
+      </details>}
       <div className="btns">
-        <button className="btn go" onClick={() => act(() => api.runRoutine(r.id), 'Asked to run')} disabled={!!r.reminded}>{r.reminded ? 'Already reminded' : 'Do it now'}</button>
         <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /><span>{r.paused ? 'Paused' : 'On'}</span></label>        {!r.digest && !r.watching && !r.remind && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
         {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
       </div>
