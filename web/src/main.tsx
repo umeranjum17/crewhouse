@@ -1513,10 +1513,14 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
         const r = A.railWord(h, live), c = chats.get(h.id);
+        // A crew member waiting on the person is Chief's to bring (waitsOnYou): the row carries no badge for it;
+        // the ask reaches the person through Chief's own chat. The seat class is namespaced (`seat-…`) so a seat
+        // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
+        // over the nav).
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
-          {(c?.unread ?? 0) > 0 && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
-          <span className={`side-seat ${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
+          {(c?.unread ?? 0) > 0 && !A.waitsOnYou(h) && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
+          <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.seat === 'done' ? 'Done' : r.word}</span></span>
         </a>;
       })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}

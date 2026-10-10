@@ -1521,14 +1521,15 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting on your reply', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
+export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
 /** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
  *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a
- *  hand-off). An older finish is just free. A crew member waiting on the person reads the neutral "Waiting", never
- *  Chief's own "Needs you": only Chief says that, and the ask itself reaches the person through him. */
+ *  hand-off). An older finish is just free. A crew member waiting on the person—whether a row of theirs in Needs you or
+ *  a job stopped for an answer their chat holds—is Chief's to bring, so the rail says the neutral "Waiting", the panel's
+ *  own word, never "Waiting on your reply" and never Chief's own "Needs you". */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
   const seat = seatOf(c);
-  const shown: Seat = seat === 'needs' ? 'waiting' : seat;
+  const shown: Seat = seat === 'needs' || seat === 'chat' ? 'waiting' : seat;
   const last = shown === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
   return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
 }
