@@ -64,9 +64,6 @@ async function browse() {
 
 const parts = () => `[...document.querySelectorAll('.profile-part')].map((el) => el.querySelector('.grow')?.textContent?.trim() ?? '')`;
 const press = (i: number, what: string) => `[...[...document.querySelectorAll('.profile-part')][${i}].querySelectorAll('button')].find((x) => x.textContent === ${JSON.stringify(what)}).click()`;
-const setText = (sel: string, text: string) => `(() => { const t = document.querySelector(${JSON.stringify(sel)});
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-  setter.call(t, ${JSON.stringify(text)}); t.dispatchEvent(new Event('input', { bubbles: true })); })()`;
 const setInput = (sel: string, text: string) => `(() => { const t = document.querySelector(${JSON.stringify(sel)});
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
   setter.call(t, ${JSON.stringify(text)}); t.dispatchEvent(new Event('input', { bubbles: true })); })()`;
@@ -76,7 +73,7 @@ test('the app is built', () => {
   assert.ok(readdirSync(dist).some((f) => f.endsWith('.js')));
 });
 
-test('About me and my work shows the record, and each part can be changed, forgotten and added to', { skip: !bin && 'no Chromium here' }, async () => {
+test('the one Memory record: a sentence can be forgotten with an Undo, and added to', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.open('demo=calm&day#/settings');
   await until('the record in plain parts', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
@@ -85,33 +82,41 @@ test('About me and my work shows the record, and each part can be changed, forgo
     'My business is called Morning Loaf.',
     'I write in a warm, plain voice.',
   ]);
-  // Change the first part: the edited words show, and survive a reload (the PUT reached the record).
-  await b.run(press(0, 'Change'));
-  await until("the part's own box", () => b.run("!!document.querySelector('textarea.profile-edit')"), 10_000);
-  await b.run(setText('textarea.profile-edit', 'I run a bakery for local families in Lahore.'));
-  await b.run(press(0, 'Save'));
-  await until('the changed part', () => b.run(`(${parts()})[0]`).then((p: string) => p === 'I run a bakery for local families in Lahore.'), 10_000);
-  // Leave and come back: the section reads the record again, so the edited words prove the PUT landed.
+  // Forget the middle sentence: a "Forgotten" row with an Undo sits where it was, and the record loses it.
+  await b.run(press(1, 'Forget'));
+  await until('the Forgotten row', () => b.run(`!!document.querySelector('.memory-lines .forgotten')`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+  ]);
+  // Leave and come back: the section reads the record afresh, so the shorter record proves the Forget landed.
   await b.run(`location.hash = '#/';`);
   await b.run(`location.hash = '#/settings';`);
-  await until('the record after leaving and coming back', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
+  await until('the shorter record after leaving and coming back', () => b.run(`document.querySelectorAll('.profile-part').length === 2`), 30_000);
   assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
-    'My business is called Morning Loaf.',
+    'I run a bakery for my neighbourhood.',
     'I write in a warm, plain voice.',
   ]);
-  // Forget the middle part, then add one back: the record follows along.
-  await b.run(press(1, 'Forget'));
-  await until('two parts left', () => b.run(`document.querySelectorAll('.profile-part').length === 2`), 10_000);
-  assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
-    'I write in a warm, plain voice.',
-  ]);
+  // Add a sentence back: it lands at the end of the record.
   await b.run(setInput('.profile-add', 'My regulars order the almond croissants.'));
   await b.run(`[...document.querySelectorAll('.add-row button')].find((x) => x.textContent === 'Add' && x.closest('.add-row').querySelector('.profile-add')).click()`);
   await until('the added part', () => b.run(`document.querySelectorAll('.profile-part').length === 3`), 10_000);
   assert.deepEqual(await b.run(parts()), [
-    'I run a bakery for local families in Lahore.',
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+    'My regulars order the almond croissants.',
+  ]);
+  // Forget it, then Undo puts the exact sentence back where it was.
+  await b.run(press(2, 'Forget'));
+  await until('the Forgotten row again', () => b.run(`!!document.querySelector('.memory-lines .forgotten')`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
+    'I write in a warm, plain voice.',
+  ]);
+  await b.run(`document.querySelector('.memory-lines .forgotten button').click()`);
+  await until('the sentence back', () => b.run(`!document.querySelector('.memory-lines .forgotten') && document.querySelectorAll('.profile-part').length === 3`), 10_000);
+  assert.deepEqual(await b.run(parts()), [
+    'I run a bakery for my neighbourhood.',
     'I write in a warm, plain voice.',
     'My regulars order the almond croissants.',
   ]);
@@ -147,7 +152,7 @@ test('a saved memory shows one Saved: line with an Undo that takes it back', { s
   const b = await browse();
   await b.open('demo=saved&day#/chief');
   await until('the one Saved line', () => b.run(`document.querySelectorAll('.saved-undo').length === 1`), 30_000);
-  assert.match(await b.run(`document.querySelector('.saved-undo').closest('.line').textContent`), /Saved: Prefers weekend plans before Thursday/);
+  assert.match(await b.run(`document.querySelector('.saved-undo').closest('.card.answered').textContent`), /Saved: Prefers weekend plans before Thursday/);
   await b.run(`document.querySelector('.saved-undo').click()`);
   await until('the line gone after Undo', () => b.run(`document.querySelectorAll('.saved-undo').length === 0`), 10_000);
 });

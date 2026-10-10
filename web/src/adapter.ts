@@ -1342,14 +1342,18 @@ export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, C
   return slotMap(lines, cards);
 }
 
-/** The memory the crew just kept, announced once each in its chat as "Saved: …" with the way to take it back, placed by
- *  their time among the messages. `memory.learned` carries its own undo on crewd; `profile.edited` a sentence that is still
- *  in the record (dropping it is what its Undo does, so a removed sentence's note never comes back). */
-export function savedNotes(events: Json[], lines: Line[], record?: string): Line[] {
+/** The memory the crew just kept, announced once each in its chat as "Saved: …" with the way to take it back, after the
+ *  turn that kept it. `memory.learned` carries its own undo on crewd; `profile.edited` a sentence that is still in the
+ *  record (dropping it is what its Undo does, so a removed sentence's note never comes back). `msgs` is the page's raw
+ *  messages, so a note sits after its own turn's reply rather than between the ask and the answer. */
+export function savedNotes(events: Json[], lines: Line[], record?: string, msgs: Json[] = []): Line[] {
   const out = [...lines], notes: Line[] = [], kept = record === undefined ? null : new Set(profileParts(record));
+  const replyAt = new Map<number, number>();
+  for (const m of msgs) if (m.author === 'bot' && m.task_id != null) replyAt.set(Number(m.task_id), Number(m.at) || 0);
+  const when = (e: Json) => { const r = replyAt.get(Number(e.data?.task)); return r !== undefined && r > 0 ? at(r) : at(e.at); };
   for (const e of events) {
-    if (e.kind === 'memory.learned' && !e.undone && e.data?.text) notes.push({ id: -(1e9 + Number(e.seq)), from: 'note', text: `Saved: ${plain(String(e.data.text))}`, files: [], choices: [], at: at(e.at), memory: Number(e.seq) });
-    if (e.kind === 'profile.edited' && Array.isArray(e.data?.added)) (e.data.added as string[]).forEach((s, i) => { const line = plain(s); if (!line || (kept && !kept.has(line))) return; const note = { id: -(2e9 + Number(e.seq) * 10 + i), from: 'note' as const, text: `Saved: ${line}`, files: [], choices: [], at: at(e.at), saved: line }; const was = notes.findIndex((n) => n.saved === line); if (was >= 0) notes[was] = note; else notes.push(note); });
+    if (e.kind === 'memory.learned' && !e.undone && e.data?.text) notes.push({ id: -(1e9 + Number(e.seq)), from: 'note', text: `Saved: ${plain(String(e.data.text))}`, files: [], choices: [], at: when(e), memory: Number(e.seq) });
+    if (e.kind === 'profile.edited' && Array.isArray(e.data?.added)) (e.data.added as string[]).forEach((s, i) => { const line = plain(s); if (!line || (kept && !kept.has(line))) return; const note = { id: -(2e9 + Number(e.seq) * 10 + i), from: 'note' as const, text: `Saved: ${line}`, files: [], choices: [], at: when(e), saved: line }; const was = notes.findIndex((n) => n.saved === line); if (was >= 0) notes[was] = note; else notes.push(note); });
   }
   for (const n of notes.sort((a, b) => (a.at ?? 0) - (b.at ?? 0))) { const i = out.findLastIndex((l) => (l.at ?? 0) <= (n.at ?? 0)); out.splice(i + 1, 0, n); }
   return out;
