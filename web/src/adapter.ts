@@ -1660,12 +1660,12 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
 /** Who handed a finished job to the tray between two views: a done row the earlier view lacked. The done list is what
  *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
-/** What On it now says when nobody is working: who waits on you, else who is held, quiet or ended badly; the crew is
+/** What On it now says when nobody is working: who waits for Chief (crew never wait on the person), else who is held, quiet or ended badly; the crew is
  *  free only when every one of them is. */
 export function idleLine(v: OfficeView) {
   const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
   const on = n(['needs', 'chat']);
-  if (on) return `Nobody is working: ${on} waiting on you.`;
+  if (on) return `Nobody is working: ${on} waiting for Chief.`;
   const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
   return rest.length ? `Nobody is working right now: ${rest.join(', ')}.` : 'Nobody is working right now. The crew is free.';
 }

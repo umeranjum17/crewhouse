@@ -292,9 +292,10 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const pinnedTop = document.querySelector('.home-office .home-top');
           const topH = pinnedTop ? pinnedTop.getBoundingClientRect().height : 0, topNotes = pinnedTop ? pinnedTop.querySelectorAll('.card, .nudge').length : 0;
           const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
+          const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
@@ -328,6 +329,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
           assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && meta === 'Waiting for Chief'), `${at}: a waiting row is job, then "Waiting for Chief" (${JSON.stringify(m.waitRows)})`);
           assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
+          assert.ok(!/on you/.test(m.idle) && (!/^Nobody is working:/.test(m.idle) || / waiting for Chief\.$/.test(m.idle)), `${at}: On it now says crew wait for Chief (${m.idle})`);
           // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
           assert.equal(m.topNotes, 0, `${at}: no card or nudge pinned over the Office`);
           assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
