@@ -171,7 +171,7 @@ git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse start     # starts Crewhouse and prints the address
 ```
 
-Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link. Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
+Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link (an iPad or phone installs the web app from its own https address: [The installed web app](#the-installed-web-app)). Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
 
 <p align="center">
   <img src="docs/screenshots/readme/hello.webp" alt="The first screen after install: Chief greets you by name and offers three jobs to take off your plate" width="760" />
@@ -201,9 +201,22 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
 | `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone or the installed web app from the terminal; `code` also prints a relay code to use away from home |
+| `./crewhouse phones web [off]` | Serves the installed web app at this computer's Tailscale https address and prints it |
 | `./crewhouse uninstall [--all] [--yes]` | Removes what Crewhouse installed |
 
 **The phone app** (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](TRY-IT.md#3-the-phone-app)), or ask Chief to add your phone. Every paired phone uses your crew; you can also add one that only watches. Quiet hours hold notifications across a restart and send one when they end. To reach the computer away from home, use Tailscale or [run your own relay](relay/README.md). There's no built-in one.
+
+### The installed web app
+
+An iPad or phone can install Crewhouse's web app and use your crew from its Home Screen. The app pairs only on an https page (the browser seals its key with crypto that plain http doesn't offer), so it is served at this computer's own [Tailscale](https://tailscale.com/download) name, with a real certificate:
+
+1. Install Tailscale on this computer and on the iPad or phone, signed in to the same tailnet, with HTTPS certificates turned on for it (Tailscale's admin console, DNS).
+2. On the computer, run `./crewhouse phones web`. It prints the address, `https://<computer>.<tailnet>.ts.net:7713` (the phone link's port plus one).
+3. On the iPad, open that address in Safari, tap Share, then **Add to Home Screen** (keep **Open as Web App** on).
+4. Open Crewhouse from the Home Screen and tap **Pair — yes, let's go**. Paste the code from `./crewhouse phones code`.
+5. Check that the app shows the same two words as `./crewhouse phones pending`, then run `./crewhouse phones approve '<two words>'`.
+
+The direct code works from this page: the app dials the link at its own https address first. A relay code works from it only when your relay is served over https. `./crewhouse phones web off` stops serving the address.
 
 The installed web app (Add to Home Screen on iOS 16.4+, or install on Android) can get the same content-free news as a web push through your own relay. Turn it on under Settings, Phones, "Notifications on this device". A paired installed app has the same switch on its own Settings, under the computer's name. It needs a relay.
 

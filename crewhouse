@@ -159,6 +159,8 @@ case "${1:-}" in
     fi
     autostart_off
     stop_crewd || true
+    # The installed web app's https address (./crewhouse phones web), when Tailscale still serves this link.
+    ! tailscale serve status --json 2>/dev/null | grep -F >/dev/null "\"http://127.0.0.1:${CREWHOUSE_LINK_PORT:-7712}\"" || tailscale serve --https=$((${CREWHOUSE_LINK_PORT:-7712} + 1)) off
     remove "$STATE"
     remove "$TOOLS"
     rmdir "$(dirname "$TOOLS")" 2>/dev/null || true
@@ -181,7 +183,21 @@ NODE
   phones)
     # Local HTTP client; reads the same config and private capability as the launcher.
     action="${2:-}"; shift 2 || true
-    case "$action" in code|pending|approve) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words>' >&2; exit 2 ;; esac
+    case "$action" in code|pending|approve|web) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words> | web [off]' >&2; exit 2 ;; esac
+    if [ "$action" = web ]; then
+      # The installed web app pairs only on an https page (the browser seals its grant with crypto that plain http lacks).
+      # Tailscale serves the phone link, which serves the app too, at this computer's tailnet name with a real certificate.
+      link=${CREWHOUSE_LINK_PORT:-7712}; port=$((link + 1))
+      command -v tailscale >/dev/null || { echo 'The installed web app needs Tailscale on this computer and on the iPad or phone: https://tailscale.com/download' >&2; exit 1; }
+      if [ "${1:-}" = off ]; then exec tailscale serve --https="$port" off; fi
+      name=$(tailscale status --json | node -e 'let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => console.log(JSON.parse(s).Self?.DNSName?.replace(/\.$/, "") ?? ""))')
+      [ -n "$name" ] || { echo 'Tailscale is not signed in here. Run: tailscale up' >&2; exit 1; }
+      tailscale serve --bg --https="$port" "http://127.0.0.1:$link" >/dev/null || exit 1
+      echo "On the iPad or phone (signed in to the same Tailscale), open this in Safari or Chrome and add it to the Home Screen:"
+      echo "  https://$name:$port"
+      echo "Open it from the Home Screen, tap Pair, and paste the code from ./crewhouse phones code. Turn this off with ./crewhouse phones web off."
+      exit
+    fi
     [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }
     node --input-type=module - "$action" "$*" <<'NODE'
 import { readFileSync } from 'node:fs';

@@ -1,15 +1,16 @@
-// The public web app's whole pairing journey in a real browser: the built shell served from a public-style origin
-// (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens in demo with its Pair
-// button; a relay code pastes in, the page shows the same two words the computer asks about, and on yes the same page
-// opens on crewd's real data over the link (web/src/link.ts). A reload stays paired, Unpair goes back to the demo and
-// the computer forgets the device, and the long direct code pairs too. Needs a Chromium on PATH (skipped without one).
+// The public web app's whole pairing journey in a real browser: the built shell served by crewd's phone link at a
+// public-style origin (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens in demo
+// with its Pair button; a relay code pastes in, the page shows the same two words the computer asks about, and on yes
+// the same page opens on crewd's real data over the link (web/src/link.ts). A reload stays paired, Unpair goes back to
+// the demo and the computer forgets the device, and the long direct code pairs too. Needs a Chromium on PATH (skipped
+// without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, statSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
@@ -25,24 +26,10 @@ const root = temp('pwa-pair');
 const free = () => new Promise<number>((r) => { const s: Server = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 
 test('the public demo app pairs by a relay code or a direct code, opens on real data, and unpairs back to the demo', { skip: !bin && 'no Chromium on PATH' }, async () => {
-  // A copy of the web tree, so the checkout's own dist stays as its last real build (as test/office.test.ts does).
-  cpSync(join(repo, 'web'), join(root, 'web'), { recursive: true, filter: (s) => !/[/\\]dist([/\\]|$)/.test(s) });
-  symlinkSync(join(repo, 'src'), join(root, 'src'), 'dir');
-  const built = spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), join(root, 'web')], { encoding: 'utf8' });
-  assert.equal(built.status, 0, built.stderr);
-  const dist = join(root, 'web', 'dist');
-  const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
-  const web = createServer((q, s) => {
-    const p = decodeURIComponent(new URL(q.url ?? '/', 'http://x').pathname).replace(/\.\.+/g, '');
-    const f = join(dist, p === '/' ? 'index.html' : p);
-    if (!existsSync(f) || !statSync(f).isFile()) { s.writeHead(404); return s.end(); }
-    s.writeHead(200, { 'content-type': types[extname(f)] ?? 'application/octet-stream' }); s.end(readFileSync(f));
-  });
-  await new Promise<void>((r) => web.listen(0, '127.0.0.1', r));
-  const shell = `http://crewhouse.localhost:${(web.address() as AddressInfo).port}/`;
-
+  // The app as the installed web app opens it: from crewd's own link port (`./crewhouse phones web` publishes that).
+  if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) assert.equal(spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs')]).status, 0);
   const relay = await startRelay({ port: 0, dataDir: join(root, 'relay'), signup: 'open' });
-  const port = await free(), linkPort = await free(), base = `http://127.0.0.1:${port}`;
+  const port = await free(), linkPort = await free(), base = `http://127.0.0.1:${port}`, shell = `http://crewhouse.localhost:${linkPort}/`;
   const daemon = spawn(process.execPath, [join(repo, 'src', 'main.ts')], {
     env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort), CREWHOUSE_LINK_HOST: '127.0.0.1',
       CREWHOUSE_RELAY: relay.url, CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
@@ -52,7 +39,7 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
   let ws: WebSocket | undefined;
-  after(async () => { ws?.close(); daemon.kill(); web.close(); await relay.close(); await browser.close(); });
+  after(async () => { ws?.close(); daemon.kill(); await relay.close(); await browser.close(); });
 
   const http = async (method: string, path: string, body?: unknown) => {
     const res = await fetch(base + path, { method, headers: { 'x-crewhouse': '1', 'content-type': 'application/json', authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}` }, body: body ? JSON.stringify(body) : undefined });

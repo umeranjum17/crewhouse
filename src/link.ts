@@ -3,7 +3,7 @@
 // pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
 // is where it listens, what a phone may not do, and the person at the computer saying yes.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -194,7 +194,7 @@ export class Link {
     const want = new Set(this.hosts()), before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
     await Promise.all([...want].filter((h) => !this.servers.has(h)).map((host) => new Promise<void>((resolve) => {
-      const s = createServer((_req, res) => { res.writeHead(404).end(); });
+      const s = createServer((req, res) => this.page(req, res));
       s.on('upgrade', (req, socket, head) => {
         if (!req.url?.startsWith('/link')) return socket.destroy();
         this.wss.handleUpgrade(req, socket, head, (ws) => this.wss.emit('connection', ws));
@@ -286,6 +286,8 @@ export class Link {
   relayUrl() { return this.relay && this.host ? linkUrl(this.relay, this.host.id) : ''; }
   /** Set by the server: what a phone's desktop stream talks to. */
   desk?: Desk;
+  /** Set by the server: the web app, which the link's own address serves (README, "The installed web app"). */
+  page: (req: IncomingMessage, res: ServerResponse) => void = (_req, res) => { res.writeHead(404).end(); };
   /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
    *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
   private desktop(s: import('@byokit/pair').LinkStream, args: any, g: Grant) {

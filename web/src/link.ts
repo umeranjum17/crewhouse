@@ -28,11 +28,15 @@ export async function pair(text: string, onWords: (w: string) => void) {
     throw e instanceof TypeError ? new Error("Could not reach your computer's relay. Check it is on and try again.") : e;
   }), t.code, o);
   // A direct code dials the computer's own addresses, so off its network it can't get through; the relay's code can.
-  else grant = await pairWithOffer(offerText(decodeOffer(t.text)), o).catch((e) => {
+  // This page's own address goes first: the computer's link serves the app (`./crewhouse phones web`), and an https page
+  // may dial only wss. A wrong host fails the handshake, so any other page loses nothing.
+  else grant = await pairWithOffer(offerText(withOwn(decodeOffer(t.text))), o).catch((e) => {
     throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the second code the command printed instead.`) : e;
   });
   await store.save(grant);
 }
+
+const withOwn = (offer: ReturnType<typeof decodeOffer>) => ({ ...offer, urls: [`${location.origin.replace(/^http/, 'ws')}/link`, ...offer.urls].slice(0, 8) });
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 export async function unpair(link: DeviceLink) {
