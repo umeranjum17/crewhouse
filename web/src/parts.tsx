@@ -525,9 +525,13 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
 }
 
+/** How long a send may wait unanswered before the box says the words are held, not gone. */
+const HOLD_MS = 4000;
+
 /**
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
- * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts).
+ * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts). A send the computer hasn't
+ * answered in a few seconds says so ("Reconnecting…"), so a stall never looks like a dead button.
  */
 /** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (not available yet, and it says so), a
  *  starter or two that fill the box without sending, then the mic and send. */
@@ -536,6 +540,7 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [held, setHeld] = useState(false);
   const [focused, setFocused] = useState(false);
   const hold = useRef<any>(null);
   const hear = (on: boolean, words: string) => { // he listens while focused with words, 1.5 s after it ends
@@ -547,16 +552,24 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
   const send = async () => {
     const t = text.trim();
     if (!t || busy || away) return;
-    setBusy(true);
+    setBusy(true); setFailed(false); setHeld(false);
+    // The words leave the box the moment you send: the thread echoes them right away (and marks them sending), so
+    // they are never in the box and the thread at once. A send that comes back failed puts them straight back with
+    // a Retry, so nothing typed is lost.
+    setText(''); if (chat) keepDraft(chat, '');
+    // A send still unanswered after HOLD_MS is held, not dead: say so while the same request stays in flight, so Retry
+    // is only ever offered once it has settled and can never send the words twice.
+    const stall = setTimeout(() => setHeld(true), HOLD_MS);
     let ok = false;
     try { ok = !!(await onSend(t)); } catch { ok = false; }
-    setBusy(false);
-    if (ok) { setText(''); setFailed(false); hear(focused, ''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+    clearTimeout(stall);
+    setBusy(false); setHeld(false);
+    if (ok) { hear(focused, ''); } else { setText(t); setFailed(true); if (chat) sent(chat, false, t); }
   };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {away ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
-        : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+      {away || held ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
+        : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
