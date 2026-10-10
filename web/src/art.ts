@@ -247,8 +247,11 @@ export const TABS: Record<Tab, Bitmap> = {
 };
 
 // ── ASCII moments ──
+/** The star that marks a starter idea and the ASCII moments: U+2605, a glyph every platform font carries. The
+ *  four-point sparkle (U+2726, ✦) is NOT in the iOS system font, which draws a missing-glyph box for it on iPad. */
+export const STAR = '★';
 /** The quiet mark beside an empty list, and the one ornament the ASCII moments share. */
-export const ORNAMENT = '·  ✦  ·';
+export const ORNAMENT = `·  ${STAR}  ·`;
 const SHADOW: Record<string, string[]> = {
   C: [' ██████╗', '██╔════╝', '██║     ', '██║     ', '╚██████╗', ' ╚═════╝'],
   R: ['██████╗ ', '██╔══██╗', '██████╔╝', '██╔══██╗', '██║  ██║', '╚═╝  ╚═╝'],
@@ -264,7 +267,7 @@ export const BANNER: string[] = [0, 1, 2, 3, 4, 5].map((y) => [...'CREWHOUSE'].m
 
 /** A slow plasma of glyphs behind the splash (Ghostty's living ASCII). */
 export function field(t: number, w = 72, h = 48) {
-  const ch = '    ..·:+*✦';
+  const ch = `    ..·:+*${STAR}`;
   let s = '';
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -285,7 +288,7 @@ export function laptop(t: number) {
 
 /** One frame of an ASCII confetti burst: glyphs fall from the top, rows are strings. */
 export function confetti(t: number, w = 40, h = 16) {
-  const glyphs = '✦*·°+✧♥';
+  const glyphs = `${STAR}*·°+✧♥`;
   const rows = Array.from({ length: h }, () => Array(w).fill(' '));
   for (let i = 0; i < 38; i++) {
     const x = (i * 17 + Math.round(Math.sin(t / 3 + i) * 2)) % w;

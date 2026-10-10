@@ -41,7 +41,7 @@ function Mood({ phase, app, ai }: { phase: Phase; app?: A.App; ai?: { key: strin
         {ai && <span className="badge-ic ai-badge"><AiMark ai={ai} size={38} /></span>}
       </span>
       {phase === 'opening' && <Laptop />}
-      {phase === 'done' && <pre className="art sparkle" aria-hidden>{'✦  ·  ✧  ·  ✦'}</pre>}
+      {phase === 'done' && <pre className="art sparkle" aria-hidden>{`${art.STAR}  ·  ✧  ·  ${art.STAR}`}</pre>}
     </div>
   );
 }

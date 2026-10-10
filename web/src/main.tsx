@@ -438,7 +438,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
 /** The starters live in Chief's empty chat: a tap fills the box with the words, it never sends. */
 function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
   return <><p className="ideas-intro">I can bring in Scout for research, Scribe for writing or Reel for videos.</p><div className="chips center">{A.ideas(state).map((i: Json) => (
-    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>
+    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>{art.STAR} {i.label}</button>
   ))}</div></>;
 }
 
@@ -447,7 +447,7 @@ function HelperIdeas({ state, chat, picked }: { state: Json; chat: string; picke
   const rows = A.ideas(state).filter((i: Json) => i.bot === chat).slice(0, 3); // three starters; the rest wait in Hand me a job
   if (!rows.length) return null;
   return <div className="chips center">{rows.map((i: Json) => (
-    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>✦ {i.label}</button>
+    <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>{art.STAR} {i.label}</button>
   ))}</div>;
 }
 
@@ -1434,7 +1434,7 @@ function Apps({ state, refresh }: Ctx) {
       </div></>}
       <div className="card row"><span className="o-ic" aria-hidden>↗</span>
         <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
-      <a className="card row" href="#/skills"><span className="o-ic" aria-hidden>✦</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
+      <a className="card row" href="#/skills"><span className="o-ic" aria-hidden>{art.STAR}</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
       <p className="mute small center">Connecting opens the app's own sign-in page. That's all.</p>
       {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
     </div>
