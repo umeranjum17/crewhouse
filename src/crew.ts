@@ -444,12 +444,10 @@ export class Crew {
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
       thinks: this.thinks(b.id), controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'),
       // The active task carries its delivered files for the office desk: own output first, handed-over inputs marked.
-      live: this.liveState(b.id), task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
+      live: !this.live.get(b.id) ? 'off' : this.busy.has(b.id) ? 'working' : 'idle', task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
       pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
   }
-
-  private liveState(id: string) { return !this.live.get(id) ? 'off' : this.busy.has(id) ? 'working' : 'idle'; }
 
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
   private task({ brain, session, tokens: _, ...t }: Row) {
@@ -462,7 +460,7 @@ export class Crew {
   private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
-    if (a.kind === 'connect') return { ...a, detail: { app: d.app, words: d.words } };
+    if (a.kind === 'connect' || a.kind === 'signin') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
@@ -1398,25 +1396,18 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId); l.news = Date.now();
-    const spec: RunSpec = {
-      key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}),
-      cwd: disk.botDir(this.cfg, botId), system: this.systemPromptFor(botId, l), message: text,
-      ...(images?.length ? { images } : {}),
-      thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
-    };
-    void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
-      (end) => this.settled(botId, task, l, end),
-      (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
-  }
-
-  /** The bot's own words and job, its skills listed by name, and the connected app's tools it may call. */
-  private systemPromptFor(botId: string, l: Live) {
+    // The bot's own words and job, its skills listed by name, and the connected app's tools it may call.
     const skills = disk.listSkills(this.cfg, botId);
     const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
-    return disk.systemPrompt(this.cfg, botId, botId === CHIEF)
+    const system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
+    const spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
+      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
+    void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
+      (end) => this.settled(botId, task, l, end),
+      (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
   }
 
   private onEvent(botId: string, l: Live, e: RunEvent) {
@@ -1560,7 +1551,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const task = this.activeTask(botId);
     const text = cleanReply(reply.trim());
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id);
     const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
       if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
@@ -1906,7 +1897,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id)) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
       if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
@@ -1925,9 +1916,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       return this.dispatch();
     }
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
-    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect')", task.id)) return;
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id)) return;
     const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect') ORDER BY id", task.id);
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin') ORDER BY id", task.id);
     this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
@@ -2035,6 +2026,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (botId !== CHIEF) {
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
+      own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
+        'The person sees a Sign in card, signs in on your screen themselves and taps Done; never type a password or code. End your turn with one short line; you are resumed when they are done.', (p) => this.askSignin(botId, String(p.site ?? ''))));
       own.push(tool('crew_routine', 'Offer the person a recurring check of your own: the same task on a schedule, which nothing runs until they say ' +
         'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
@@ -2228,6 +2221,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", owner, app))
       this.openAsk(owner, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
     return { asked: true, note: 'The person sees a Connect card now. End your turn with one short line; you will be told when they answer.' };
+  }
+
+  /** A helper needs a site's sign-in: one card in Chief's thread naming the site. Its button takes the wheel; Done (giveBack) answers it. */
+  private askSignin(botId: string, site: string) {
+    if (!disk.canUse(this.cfg, botId, 'computer')) throw fail(`${this.bot(botId)!.display} has no computer to sign in on`);
+    const u = URL.parse(/^https?:\/\//i.test(site) ? site : `https://${site}`), host = /^https?:$/.test(u?.protocol ?? '') ? u!.hostname : '';
+    if (!host) throw fail("give the site's address, like example.com");
+    if (!this.db.get("SELECT 1 FROM asks WHERE kind = 'signin' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), `Sign in to ${host}`, { bot: botId, host, origin: u!.origin }, 'signin');
+    return { asked: true, note: 'The person sees a Sign in card now. End your turn with one short line; you will be told when they hand your screen back.' };
   }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
@@ -2479,9 +2481,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.db.event('desktop.takeover', botId, { task: task?.id ?? null });
       if (task) this.say(botId, 'system', `You have the controls. ${bot.display} is paused until you give them back.`, task.id);
     });
-    this.live.get(botId)?.browser?.release();
     const l = this.live.get(botId);
-    if (l) void this.runtime.abort(l.key).catch(() => {});
+    if (l) { l.browser?.release(); void this.runtime.abort(l.key).catch(() => {}); }
   }
 
   /** The person hands the controls back; the bot resumes its task with a note of what they did.
@@ -2490,22 +2491,21 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   async giveBack(botId: string, note = '', keep?: string[]) {
     const bot = this.needBot(botId);
     if (!this.held.has(botId)) throw fail(`${bot.display} already has the controls`, 409);
-    let kept: string[] = [];
-    if (keep?.length) {
-      const tabs = await this.desktops.pages(botId);
-      const bad = keep.find((h) => !tabs.includes(h));
-      if (bad) throw Object.assign(new Error(`${bot.display}'s screen has no tab on ${bad}`), { status: 400 });
-      disk.setSignedIn(this.cfg, botId, [...(disk.botConfig(this.cfg, botId).signedIn ?? []), ...keep]);
-      kept = keep;
-    }
+    // Done on a sign-in card: its site is kept as signed in (its presses ask), beside any the person ticked.
+    const asks = this.db.all("SELECT * FROM asks WHERE kind = 'signin' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId), hosts = asks.map((a) => String(JSON.parse(a.detail).host));
+    const tabs = keep?.length ? await this.desktops.pages(botId) : [], bad = keep?.find((h) => !tabs.includes(h));
+    if (bad) throw Object.assign(new Error(`${bot.display}'s screen has no tab on ${bad}`), { status: 400 });
+    const kept = [...new Set([...keep ?? [], ...hosts])];
+    if (kept.length) disk.setSignedIn(this.cfg, botId, [...(disk.botConfig(this.cfg, botId).signedIn ?? []), ...kept]);
     this.held.delete(botId);
     await this.desktops.revokeControl(botId);
-    const did = clean(note, 500);
-    const task = this.activeTask(botId);
+    const did = clean(note, 500), task = this.activeTask(botId);
     this.db.tx(() => {
       this.db.event('desktop.giveback', botId, { task: task?.id ?? null, note: did });
       if (kept.length) this.db.event('signin.kept', botId, { hosts: kept });
       if (task) this.say(botId, 'system', `You gave the controls back${did ? `: ${did}` : '.'}`, task.id);
+      for (const a of asks) this.db.run("UPDATE asks SET state = 'answered', answer = 'signed in', answered_at = ? WHERE id = ?", Date.now(), a.id);
+      if (asks.length && task?.state === 'needs_you') this.setTask(task, this.live.get(botId) ? 'working' : 'queued');
     });
     const l = this.live.get(botId);
     if (task && l) {
@@ -2546,7 +2546,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     this.db.event('signin.forgot', botId, { host });
   }
 
-  /** The engine session a bot is working in, for tests. */
   /** The run's live state, for tests and the room. */
   sessionOf(botId: string) { return this.live.get(botId); }
 }

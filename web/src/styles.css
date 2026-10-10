@@ -460,6 +460,17 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
 .app .mute { font-weight: 500; font-size: 12px; }
 .screen-idle { height: 100%; display: grid; place-items: center; background: var(--soft); color: var(--mute); font-weight: 700; border-radius: 16px; }
 .nudge-line { color: var(--ink2); font-size: 14.5px; }
+/* A site sign-in (J8): the site's own icon on its card, and the helper's screen over the whole window with one Done. */
+.site-ic { width: 32px; height: 32px; border-radius: 9px; flex: none; display: inline-grid; place-items: center; background: #fff; color: #1D1B18; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); overflow: hidden; }
+.site-ic img { width: 20px; height: 20px; object-fit: contain; }
+.signin-full { position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; background: var(--bg); }
+.signin-bar { display: flex; gap: 12px; align-items: center; padding: calc(10px + var(--top)) 16px 10px; border-bottom: 1px solid var(--line); }
+.signin-bar .grow { display: flex; flex-direction: column; min-width: 0; }
+.signin-bar b { font-size: 17px; line-height: 22px; overflow-wrap: anywhere; }
+.signin-bar .small { color: var(--ink2); font-size: 13px; line-height: 18px; }
+.signin-stage { flex: 1; min-height: 0; padding: 8px; }
+.signin-stage > [role="img"] { background: transparent !important; } /* the page colour around the fitted picture, not black */
+.signin-foot { display: flex; gap: 12px; align-items: center; padding: 6px 16px calc(10px + env(safe-area-inset-bottom, 0px)); min-height: 48px; }
 
 /* toast, offline */
 /* One place for every toast (parts.tsx Toast): first in the dock, above the box you type in, or a bar along the foot. */

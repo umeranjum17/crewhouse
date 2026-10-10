@@ -37,7 +37,7 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
  *  crew's file tools are NOT here: a write outside the bot's folder asks, exactly as it always did. */
 const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
-  'crew_connect', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
+  'crew_connect', 'crew_signin', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
   'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_batch', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
   'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile']);
 /** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
@@ -225,6 +225,7 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return input.args?.[0] === 'search' ? `Searched the email for “${String(input.args[1] ?? '').slice(0, 60)}”` : input.args?.[0] === 'read' ? 'Read an email' : 'Looked at the email';
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
+    case 'signin': return `Asked you to sign in to ${host(/^https?:/i.test(input.site) ? input.site : `https://${input.site}`)}`;
     case 'report': return String(input.text ?? '').trim().slice(0, 200); // the note names its own object; folds with it
   }
   return tool === 'document' ? 'Writing the document…' : `Used ${tool.replace(/_/g, ' ')}`;

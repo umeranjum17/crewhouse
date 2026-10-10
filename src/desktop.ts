@@ -129,6 +129,8 @@ export class Desktops {
     const bin = browserBin();
     if (!bin) return;
     d.devtools?.close();
+    const prefs = join(botDir, 'browser', 'Default', 'Preferences'); // it never offers to keep a password: a sign-in lives in cookies only
+    mkdirSync(join(prefs, '..'), { recursive: true }); writeFileSync(prefs, JSON.stringify({ ...(() => { try { return JSON.parse(readFileSync(prefs, 'utf8')); } catch { return {}; } })(), credentials_enable_service: false }));
     const child = spawn(bin, [
       // Last flag wins, so these beat a distro wrapper's own flags (for example a Wayland default).
       '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
@@ -271,8 +273,7 @@ export class Desktops {
         }
       });
     } catch { /* no browser to read: an empty list, nothing to tick */ }
-    const hosts = [...out.filter((o) => o.on), ...out.filter((o) => !o.on)].map((o) => o.host).filter(Boolean);
-    return [...new Set(hosts)];
+    return [...new Set([...out.filter((o) => o.on), ...out.filter((o) => !o.on)].map((o) => o.host).filter(Boolean))];
   }
 
   /** Clear both site origins on this bot's page session; missing context or acknowledgment retains the marker. */
@@ -280,8 +281,7 @@ export class Desktops {
     return this.withPipe(bot, async (call) => {
       const { targetInfos } = await call('Target.getTargets');
       const page = targetInfos?.find((t: { type: string }) => t.type === 'page');
-      if (!page) return false;
-      const { sessionId } = await call('Target.attachToTarget', { targetId: page.targetId, flatten: true });
+      const sessionId = page && (await call('Target.attachToTarget', { targetId: page.targetId, flatten: true }))?.sessionId;
       if (!sessionId) return false;
       try {
         for (const scheme of ['https', 'http']) if (!await call('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }, sessionId)) return false;
