@@ -1398,10 +1398,10 @@ export class Crew {
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
   }
 
-  /** Only assistant prose is visible; tool arguments and reasoning never ride the live feed. */
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return;
-    if (e.type === 'text') {
+    if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
+    else if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
       this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text) });
     }

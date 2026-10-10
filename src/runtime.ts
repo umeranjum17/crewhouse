@@ -14,10 +14,10 @@ export interface RunSpec extends RunRef {
   thinking?: 'low'; builtins: string[];
 }
 export type RunEvent =
+  | { type: 'started' | 'thinking' }
   | { type: 'text'; text: string }
-  | { type: 'tool'; name: string; phase: 'start' | 'end'; ok?: boolean; ms?: number }
-  | { type: 'usage'; tokens: number }
-  | { type: 'learned'; skill: string; id: string };
+  | { type: 'tool'; name: string; phase: 'start' | 'end' }
+  | { type: 'usage'; tokens: number };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; error?: string };

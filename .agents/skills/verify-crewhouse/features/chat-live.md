@@ -1,7 +1,9 @@
 # The chat never goes quiet: live line, handoff mirror, toasts and the bubble
 
-From the send to the reply a thread changes at least once a second: "Reading your message" at once, then crewd's own
-steps ("Starting on it", "Passed to Scout", each tool step in plain words) under one quiet line with the clock counting
+From the send to the reply a thread changes at least once a second: "Reading your message" at once, then the engine's
+own steps — its admission and thinking wired from the kit's RunEvents (`run.admitted` "Started on it"/"Passed to
+Scout", `run.thinking` "Thinking"; `src/openclaw/runtime.ts` passes them, `Crew.onEvent` records them, never a local
+guess) and each tool step in plain words — under one quiet line with the clock counting
 up ("Scout · at work · 12 s · Open chat ›"), and "Done · 14 s · 3 steps" at the end (Chief's own reply done in under a
 second shows none). The engine can send nothing for tens of seconds while the model writes a big file, so a working
 run with no event for 4 s says so on its live line, beside its one clock ("Chief · at work · 27 s · still working"; streamed
@@ -21,7 +23,9 @@ when no route is usable (expired sign-in, quota), say "not proven" with the caus
 
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
 Chromium at 1440 and 390, a held Chief turn and a job passed to Scout; it fails if the visible thread sits still for
-over a second (one frame of timer jitter allowed). In the Chief turn it also waits for "Chief · at work · N s · still
+over a second (one frame of timer jitter allowed), and it fails if the live line skips the engine's own first steps —
+it requires the admission row (`/Started on/`, `/Passed to Scout/`) and `/Thinking/` while the turn is held. In the
+Chief turn it also waits for "Chief · at work · N s · still
 working" (at least 4 s after the task's last event, in sight inside the thread's scrolling box, one clock in the live
 line), emits crewd's own `run.tool` event (`db.event`) and expects "still working" gone. Mutation times are captured before reading `innerText`, whose
 forced-layout cost must not be charged to the preceding still stretch. It still requires changed visible words:
@@ -31,7 +35,9 @@ checking the old `src`/`web` out over the new and running it again.
 
 **Real engine (the proof that counts).** crewd as SKILL.md says, with Claude's test credential linked into the engine
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
-Then per message: `node .agents/skills/verify-crewhouse/scripts/chat-probe.mjs $BASE $EV/<run> "<words>" 390 844 '/?night#/'` (and 1440 900, `?day`).
+Then per message: `node .agents/skills/verify-crewhouse/scripts/chat-probe.mjs "$BASE" "$EV/<run>" "<words>" 390 844 "/?night#person=$PERSON"` (and 1440 900, `?day`). The probe opens its own Chromium with a fresh
+profile, so the `#person=<person.key>` fragment is the only way it gets write authority — without it the app echoes
+the message locally but crewd never makes the task (the probe then records an empty run).
 It writes `changes.json` (every change to the thread, timed in the page: `longestStillMs` until the end line is the
 number), `screen.jsonl` (rows carry the 160-character `lines` preview plus `linesFull` with
 each of the last four thread lines whole — likewise `asideFull`/`heroFull` beside the capped

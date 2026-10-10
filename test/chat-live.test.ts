@@ -91,6 +91,9 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     console.log(`${width} ${bot}: longest still screen ${gap} ms (${seen.length} changes)`);
     assert.ok(gap <= GAP_MS + FRAME_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
     assert.match(await screen(), expect, `${width}: the live line says who is on it`);
+    // The engine's own started and thinking events reach the line, not a local guess: the admission row (from the
+    // kit's `started`) and the thinking row (from its `thinking`) both show while the turn is held (ch-chat-live-2).
+    assert.match(await screen(), /Thinking/, `${width}: the live line shows the engine's own thinking step`);
     // The to-do list names its object and never repeats a bare label; the small steps stay behind the expand.
     assert.doesNotMatch(await screen(), /Working on it|Worked in its own space/, `${width}: no bare repeated label on screen`);
     if (bot === 'scout') {

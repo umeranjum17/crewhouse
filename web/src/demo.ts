@@ -287,6 +287,7 @@ if (variant === 'live') {
   Object.assign(bots.find((b) => b.id === 'scout')!, { task: job, step: { kind: 'task.progress', at: now - min, data: { text: 'Check reviews and a table at 7:30' } } });
   state.tasks.unshift(job);
   events.push(ev(30, 2, 'task.created', 'scout', { task: 47, title: job.title, origin: 'chief' }),
+    ev(30.5, 1.8, 'run.admitted', 'scout', { task: 47 }),
     ev(31, 1.5, 'task.progress', 'scout', { task: 47, text: 'Look for places near home open Saturday evening' }),
     ev(32, 1, 'task.progress', 'scout', { task: 47, text: 'Check reviews and a table at 7:30' }));
   const [hi, saturday, , weekday, pip] = pages.chief.messages;
