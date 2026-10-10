@@ -81,7 +81,7 @@ function Hello({ state, refresh, night }: Ctx) {
   const [prompt, setPrompt] = useState('Ask Chief anything'); // the open line below the ideas turns the box to the person's own chore
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
   const how = useRef<HTMLDetailsElement>(null);
-  // Both trust links open How it works, where the promises are: Settings isn't there until the first job.
+  // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
   const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
@@ -104,7 +104,7 @@ function Hello({ state, refresh, night }: Ctx) {
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
       <button className="link put-off" onClick={() => { setPrompt("What have you been putting off?"); document.querySelector<HTMLTextAreaElement>('.hello-ask textarea')?.focus(); }}>Or tell Chief something you've been putting off</button>
-      <p className="trust small">{[A.trust.kept, A.trust.home].map((w) => <button key={w} className="link" onClick={showHow}>{w}</button>)}</p>
+      <button className="link" onClick={showHow}>{A.trust.hello}</button>
       <details className="how" ref={how}><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>

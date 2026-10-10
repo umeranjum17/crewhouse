@@ -11,7 +11,7 @@ first message.
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
-- `trust-links` — Hello (under the ideas) and Settings (under its title) say "What the crew remembers (see or forget any line)" and "Runs on this computer, nothing sent to us" (`A.trust`). On Hello both open How it works, whose promises include where memory lives (`A.keptWhere`); Settings leads the runs-at-home line with the second and links the first to About you (`#about-you`).
+- `trust-links` — Settings (under its title) says "What the crew remembers (see or forget any line)" and "Runs on this computer, nothing sent to us"; Hello (under the ideas) says one plain line, "Runs on this computer. See or forget anything the crew remembers." (`A.trust`). On Hello it opens How it works, whose promises include where memory lives (`A.keptWhere`); Settings leads the runs-at-home line with the second and links the first to About you (`#about-you`).
 - `shared-profile` — Chief saves directly stated personal/work facts from onboarding and chat with `crew_profile`; the complete merged record stays under 4000 characters and his reply says plainly what he noted.
 
 ## How to get to it (user POV)
@@ -34,7 +34,7 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 
 Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Drive](../SKILL.md#drive).
 
-- **Hello.** Click `.hello .trust button` (either); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
+- **Hello.** Click the trust line (the `.hello > button.link` whose text is `A.trust.hello`); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
 - **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#about-you` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget.
 - **Evidence.** `scripts/screens.sh` for Hello (fresh) and `#/settings` (seeded), `scripts/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
 
