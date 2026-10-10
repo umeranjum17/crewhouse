@@ -2068,7 +2068,7 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   // The grid scrolls past six instead of shrinking: three columns on a desk, groups below 900 px.
   assert.match(css, /@media \(min-width: 900px\) \{ \.panels \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \} \}/);
 });
-test("Chief's hero shows his last real sentence; the sign-in card offers every provider", async () => {
+test("Chief's hero shows his last real sentence; the sign-in card recommends one and keeps every provider", async () => {
   const chief = (text: string, extra = {}) => ({ bots: [{ id: 'chief', last: { author: 'bot', text, at: now }, ...extra }] });
   assert.equal(A.chiefSaid(chief('4.')), '', 'a bare fragment never reaches the hero');
   assert.equal(A.chiefSaid(chief('Reel is on it.')), 'Reel is on it.');
@@ -2081,9 +2081,14 @@ test("Chief's hero shows his last real sentence; the sign-in card offers every p
     await build({ entryPoints: ['web/src/flows.tsx'], outfile: join(dir, 'flows.mjs'), bundle: true, platform: 'node', format: 'esm', packages: 'external', logLevel: 'error' });
     const { AccountCard } = await import(join(dir, 'flows.mjs'));
     const card = renderToStaticMarkup(createElement(AccountCard, { accounts: unsigned, onReady: () => {} }));
-    assert.equal((card.match(/Sign in with /g) ?? []).length, 6, 'every provider, never ChatGPT alone');
+    assert.equal((card.match(/Sign in with /g) ?? []).length, 6, 'every provider stays on the card');
+    assert.equal((card.match(/class="btn go"/g) ?? []).length, 1, 'one recommended account, one decision');
+    assert.match(card, /class="btn go"[^]*?Sign in with ChatGPT[^]*?<details class="more-ways"><summary>[^]*?Use another account/, 'first run: ChatGPT first, the rest one tap away');
     assert.match(card, /Sign in with Claude/, 'the kit list carries Claude too');
     assert.doesNotMatch(card, /under Settings/, 'no other account hides under Settings');
+    const out = unsigned.map((a) => a.account === 'claude' ? { ...a, signedOut: true } : a);
+    const again = renderToStaticMarkup(createElement(AccountCard, { accounts: out, onReady: () => {} }));
+    assert.match(again, /class="btn go"[^]*?Sign in with Claude[^]*?Use another account/, 'the account this computer had comes first');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

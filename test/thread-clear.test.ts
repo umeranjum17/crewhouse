@@ -70,8 +70,11 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
   for (const route of ['#/', '#/chief']) {
     await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
     await until('the new route', () => run(`location.hash === '${route}' && document.readyState === 'complete'`), 30_000);
-    // Signed out, so the thread ends on the sign-in card with every provider's button.
+    // Signed out, so the thread ends on the sign-in card with every provider's button; "Use another account" opened,
+    // its tallest form.
     await until('the sign-in card', () => run("[...document.querySelectorAll('.chat .card.ask .btn')].filter((e) => /^Sign in/.test(e.textContent.trim())).length >= 6"), 30_000);
+    await run("(document.querySelector('.chat .card.ask .more-ways > summary').click(), true)");
+    await until('every account shown', () => run("document.querySelector('.chat .card.ask .more-ways').open"), 30_000);
     await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
 
     // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
