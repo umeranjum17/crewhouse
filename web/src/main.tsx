@@ -104,7 +104,7 @@ function Hello({ state, refresh, night }: Ctx) {
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
       <button className="link put-off" onClick={() => { setPrompt("What have you been putting off?"); document.querySelector<HTMLTextAreaElement>('.hello-ask textarea')?.focus(); }}>Or tell Chief something you've been putting off</button>
-      <button className="link" onClick={showHow}>{A.trust.hello}</button>
+      <button className="link trust-line" onClick={showHow}>{A.trust.hello}</button>
       <details className="how" ref={how}><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>

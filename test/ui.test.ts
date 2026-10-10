@@ -505,7 +505,7 @@ test('the runs-at-home line is said once, in the same plain words, in all three 
   assert.match(web, /<h1>Settings<\/h1>\s+<p className="mute small"><b>\{A\.trust\.home\}\.<\/b> \{A\.atHome\(undefined, A\.planName\(accounts\)\)\.join\(' '\)\}<\/p>/, 'Settings says it under the title, in the quiet style, led by the trust line');
   // The trust story where the fear is: true words (README: no Crewhouse server, no telemetry; every memory row has Forget).
   assert.doesNotMatch(`${A.trust.kept} ${A.trust.home} ${A.trust.hello} ${A.keptWhere}`, FORBIDDEN);
-  assert.match(web, /<button className="link" onClick=\{showHow\}>\{A\.trust\.hello\}<\/button>/, 'Hello says it as one plain line under the ideas');
+  assert.match(web, /<button className="link trust-line" onClick=\{showHow\}>\{A\.trust\.hello\}<\/button>/, 'Hello says it as one plain line under the ideas');
   assert.match(web, /getElementById\('about-you'\)[^\n]+\{A\.trust\.kept\}/, 'Settings links what the crew remembers to About you');
   assert.match(web, /id="about-you">About you</, 'About you is the anchor');
   assert.match(web, /<b>Reach it away from home<\/b>\s+<p className="mute small">\{A\.awake\(\)\}<\/p>\s+<p className="mute small">\{A\.anywhere\(link\)\.words\}<\/p>/, 'pairing a phone repeats the condition');

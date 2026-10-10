@@ -809,7 +809,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .hello > * { animation: rise 420ms var(--ease) both; }
 .hello > .halo { animation-name: pop; animation-delay: 60ms; }
 .hello > .speech { animation-delay: 140ms; }
-.hello > .plate, .hello > .ideas, .hello > .put-off { animation-delay: 300ms; }
+.hello > .plate, .hello > .ideas, .hello > .put-off, .hello > .trust-line { animation-delay: 300ms; }
 .hello > .how { animation-delay: 380ms; }
 .idea { transition: border-color 120ms var(--ease), transform 160ms var(--ease), box-shadow 160ms var(--ease); }
 .idea:hover { border-color: var(--line2); box-shadow: var(--e1); }

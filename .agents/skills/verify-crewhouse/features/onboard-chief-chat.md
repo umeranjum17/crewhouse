@@ -34,7 +34,7 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 
 Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Drive](../SKILL.md#drive).
 
-- **Hello.** Click the trust line (the `.hello > button.link` whose text is `A.trust.hello`); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
+- **Hello.** Click the trust line (the `.hello > .trust-line`, text `A.trust.hello`); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
 - **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#about-you` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget.
 - **Evidence.** `scripts/screens.sh` for Hello (fresh) and `#/settings` (seeded), `scripts/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
 
