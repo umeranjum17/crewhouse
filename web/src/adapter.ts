@@ -306,7 +306,8 @@ export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: J
   const driving = b.controls === 'person';
   const mine = b.task ? [] : tasks.filter((t) => t.bot === b.id);
   const held = mine.find((t) => t.state === 'paused');
-  const ended = ['failed', 'unsure'].includes(mine[0]?.state) && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
+  // A job the person stopped didn't end badly: they asked, and Chief said so; the helper is free again.
+  const ended = ['failed', 'unsure'].includes(mine[0]?.state) && mine[0].result !== 'Stopped by you.' && at(mine[0].updated_at) >= midnight() ? mine[0] : null;
   const seat: Seat = driving || chiefDraft ? 'waiting' : needs ? 'chat' : stuck ? 'quiet' : b.task ? 'working'
     : held || b.pausedUntil ? 'waiting' : b.queued ? 'next' : ended ? 'failed' : 'free';
   const status = driving ? 'Paused while you drive' : chiefDraft ? 'Waiting for Chief' : needs ? 'Waiting' : b.task ? b.task.title
@@ -1525,6 +1526,11 @@ export type OfficeView = { chief: ChiefView; crew: OfficeMember[]; done: Thing[]
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'quiet' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
+/** Who has Stop / Take over / Leave it in this thread: a helper gone quiet in its own, and every one in Chief's (only
+ *  Chief asks the person). */
+export const stuckIn = (crew: Helper[], id: string) => crew.filter((x) => x.stuckFor > 0 && (x.id === id || id === 'chief'));
+/** A live line whose member is past crewd's quiet limit reads the rail's "Gone quiet", never "still working". */
+export const goneQuiet = (ln: LiveLine | null, crew: Helper[], id: string) => ln?.state === 'working' && !!crew.find((x) => x.id === (ln.helper ?? id))?.stuckFor;
 export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiting', working: 'Working', quiet: 'Gone quiet', failed: "Didn't finish", next: 'Up next', waiting: 'Waiting', free: 'Free' };
 /** The rail's word for one helper, short enough for the rail: its seat (the panel and the chat say what a hold waits for),
  *  except that a free helper whose latest job landed today says which (Main590 6: the rail shows Reel done after a

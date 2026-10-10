@@ -524,7 +524,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const ticking = !!ln && ln.took === undefined;
   // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
-  const quiet = ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
+  const gone = A.goneQuiet(ln, crewNames, id);
+  const quiet = !gone && ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
   useEffect(() => {
     if (!ticking) return;
@@ -607,11 +608,11 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
-        {ln && <LiveRow ln={ln} quiet={quiet} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} gone={gone} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
-        {h && <Stuck h={h} refresh={refresh} />}
+        {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
       </div>
@@ -632,10 +633,10 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: 'On it', worki
  *  A job passed to a helper links to that helper's chat. */
 const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 const QUIET_MS = 4000;
-function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
+function LiveRow({ ln, quiet, gone }: { ln: A.LiveLine; quiet: boolean; gone: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
-  const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : LIVE_WORD[ln.state];
+  const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : gone ? A.SEAT_WORDS.quiet : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
