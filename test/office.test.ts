@@ -135,6 +135,8 @@ test('office truth: the panels, their counts, the tray, the roster and Needs you
   assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
   const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: today - hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today - 2 * hour, files: [] }]);
   assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'No helper is at work right now. Every helper is free.']);
+  const fin = crew([bot('scout')], [{ id: 4, bot: 'scout', title: 'Flights', state: 'done', result: 'Two fares.', updated_at: now, files: [] }]);
+  assert.deepEqual([A.summaryOf(fin), A.idleLine(fin)], ['0 waiting · 0 at work · 1 done · 1 free', 'No helper is at work right now: 1 done.'], 'On it now never calls a done helper free');
   // Chief's status is his own job's, never a helper's: idle he is free (S1), at work only on his own job, waiting while
   // it is held; a routine he offers waits on the person's yes like a draft (S5).
   assert.deepEqual([A.chiefStatus(old).word, A.summaryOf(old)], ['Free', '0 waiting · 0 at work · 0 done · 2 free']);

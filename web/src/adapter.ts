@@ -1714,12 +1714,12 @@ export function officeEvent(view: OfficeView, e: Json): OfficeView {
  *  the tray counts, so the hand-off follows it, however the events were grouped into commits. */
 export const handedIn = (was: OfficeView, now: OfficeView) => [...new Set(now.done.filter((t) => !was.done.some((w) => w.id === t.id)).map((t) => t.helper))];
 /** What On it now says when no helper is at work: who waits for Chief (crew never wait on the person), else who is held,
- *  quiet or ended badly; the helpers are free only when every one of them is. */
+ *  quiet, ended badly or done today (the count line's own groups); the helpers are free only when every one of them is. */
 export function idleLine(v: OfficeView) {
   const n = (k: Seat[]) => v.crew.filter((c) => k.includes(seatOf(c))).length;
   const on = v.crew.filter(waitsOnYou).length;
   if (on) return `No helper is at work: ${on} waiting for Chief.`;
-  const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"]] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
+  const rest = ([[n(['waiting', 'next']), 'waiting'], [n(['quiet']), 'gone quiet'], [n(['failed']), "didn't finish"], [v.crew.filter((c) => groupOf(c, v) === 'done').length, 'done']] as const).filter(([k]) => k).map(([k, w]) => `${k} ${w}`);
   return rest.length ? `No helper is at work right now: ${rest.join(', ')}.` : 'No helper is at work right now. Every helper is free.';
 }
 /** A helper waiting for Chief: a job of theirs with a row in Needs you, stopped for an answer in their chat, or holding a
