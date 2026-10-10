@@ -721,8 +721,9 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(office, /A\.officeEvent\(/);
   assert.match(office, /helmetDots\(cols, mode, night, mode === 'think' \? 12 : 0\)/, 'the scan shows still while working, and only there');
   assert.match(office, /export const summaryOf = \(v: A\.OfficeView\): string/, 'one count line from the office view');
-  // A question's button wears the ask's own words (its yes, or its flow's label), never a generic one.
-  assert.match(office, /const label = !c\.ask \? '' : simple \? yes!\.label : c\.ask\.reply/);
+  // Crew never ask the person: no row answers or approves; one row on top opens Chief, who carries every ask.
+  assert.doesNotMatch(office, /onAsk|Answer \$\{|Review order/);
+  assert.match(office, /view\.needs\.length > 0 && <Pressable onPress=\{onChief\}/);
   const appHome = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(appHome, /<T style=\{\[s\.serif, \{ fontSize: 28, lineHeight: 32 \}\]\}>Office<\/T>/, 'Office is a slim title, not the greeting');
   assert.match(appHome, /<T tone="ink2" style=\{s\.small\}>{summaryOf\(view\)}<\/T>/, 'then the count line, then the switch');
@@ -1977,20 +1978,17 @@ test('J5 repairs stay in: the night look paints first, the job row is never cut 
   assert.match(office, /<ChiefPanel live=\{live\} \/>/);
   assert.match(office, /\{A\.roster\(live\.crew\)\.map\(\(c\) => <HelperPanel/);
   // Phone width renders the grouped list instead of the panels, helmets still.
-  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} onDone=\{onDone\} \/>/);
+  assert.match(office, /if \(useNarrow\(\)\) return \(\s*<section className="office" aria-label="The office">\s*<Groups live=\{live\} titles=\{titles\} \/>/);
   assert.match(office, /<PalArt kind=\{c\.kind\} mood=\{c\.mood\} d=\{6\} name=\{c\.name\} \/>/, 'grouped rows draw the still helmet, no live scan');
   assert.match(css, /\.grow-row \{ display: flex; gap: 12px; padding: 12px 2px; border-top: 1px solid var\(--line\); \}/);
   // Each panel: the helmet, the current line, one meta line, the last three timed steps, the one action.
   assert.match(office, /steps=\{c\.steps\.slice\(-3\)\}/);
   assert.match(office, /<time className="time">\{A\.clock\(s\.at\)\}<\/time>/, 'times in a column read in mono, never in a sentence');
-  assert.match(office, /action=\{c\.ask \? <AskButton c=\{c\.ask\} name=\{c\.name\} onDone=\{onDone\} \/>/, 'a question\'s own yes and no');
-  // Only a needs-you row carries a button, and it wears the ask's own words: its yes, or its flow's label.
-  assert.match(office, /const label = yes\?\.label \?\? \(c\.reply \? `Answer \$\{name\}…` : c\.review \? 'Review order' : 'Review…'\);/);
-  assert.doesNotMatch(office, />Review…<\/a>/, 'no generic Review anywhere in the office');
-  assert.match(office, /: file \? <PreviewCard f=\{file\} \/> : null/, 'a finished file opens from the panel');
-  // The ask's yes answers exactly as the thread does, then the office refreshes.
-  assert.match(read('web', 'src', 'parts.tsx'), /export const answer = \(c: Card, body: Json\)/);
-  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} onDone=\{refresh\} \/>/);
+  assert.match(office, /action=\{file \? <PreviewCard f=\{file\} \/> : null\}/, 'a crew panel holds at most its finished file, never an ask');
+  assert.match(office, /action=\{live\.needs\.length > 0 && <ToChief live=\{live\} \/>\}/, 'Chief carries the asks in one action');
+  // No crew panel answers or approves, and no generic Review anywhere in the office.
+  assert.doesNotMatch(office, /AskButton|answer\(|>Review…<\/a>/);
+  assert.match(main, /<Office state=\{state\} live=\{live\} night=\{ctx\.night\} \/>/);
   // Office header: the slim bar (title, count line, switch, settings), the title on phone width only.
   assert.match(main, /<h1 className="office-title">Office<\/h1>/);
   assert.match(main, /\{summaryOf\(ctx\.live\)\}/, 'one count line from the office view');

@@ -1,9 +1,9 @@
 // The office as panels (Term look): Chief and every helper gets one panel in a 3-column grid on a desk, one
 // column on a phone-width web page. Each panel shows the helmet in its mood, the current line, one meta line, the
 // last three timed steps and the one action (the finished file). Crew never ask the person: a crew member waiting says
-// what it is on and "Waiting for Chief", and the asks reach the person once, through Chief's one action. Tapping a name opens that chat. Every word and count comes from the one A.office view Home also
-// reads (useOffice). The helmet's own moods carry the motion: a scan line while working, still otherwise, none under
-// Reduce Motion (parts.tsx).
+// what it is on and "Waiting for Chief", and the asks reach the person once, through Chief's one action. Tapping a
+// name opens that chat. Every word and count comes from the one A.office view Home also reads (useOffice). The helmet's
+// own moods carry the motion: a scan line while working, still otherwise, none under Reduce Motion (parts.tsx).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Json } from './api.ts';
 import * as A from './adapter.ts';
