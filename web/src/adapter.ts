@@ -1532,9 +1532,10 @@ export const SEAT_WORDS: Record<Seat, string> = { needs: 'Waiting', chat: 'Waiti
  *  a job stopped for an answer their chat holds—is Chief's to bring, so the rail says the neutral "Waiting", the panel's
  *  own word, never "Waiting on your reply" and never Chief's own "Needs you". */
 export function railWord(c: OfficeMember, v: OfficeView): { word: string; seat: Seat | 'done' } {
+  // The rail's word follows the Office group (groupOf), so the row and the count line can never disagree.
+  const last = groupOf(c, v) === 'done' ? landed(c, v) : undefined;
   const seat = seatOf(c);
   const shown: Seat = seat === 'needs' || seat === 'chat' ? 'waiting' : seat;
-  const last = shown === 'free' ? v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0] : undefined;
   return last ? { word: `Done: ${last.title || 'a job'}`, seat: 'done' } : { word: shown === 'failed' && c.status === 'Not sure it worked' ? 'Not sure' : SEAT_WORDS[shown], seat: shown };
 }
 /** Who comes first when there is one seat less than helpers: whoever needs you, then working, then anything held,
@@ -1692,6 +1693,9 @@ export const groupOf = (c: OfficeMember, v: OfficeView): Group => {
   const seat = seatOf(c);
   if (seat === 'working' || seat === 'quiet') return 'work';
   if (seat !== 'failed' && landed(c, v)) return 'done';
+  // A held helper (a sign-in, an account back later, the person at the wheel) is waiting, not resting: its rail row
+  // and On it now both say "Waiting", so the counts read the same.
+  if (seat === 'waiting') return 'needs';
   return 'rest';
 };
 

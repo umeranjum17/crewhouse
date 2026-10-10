@@ -1498,10 +1498,9 @@ function useLook() {
 function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
   const chats = new Map(A.chats(state).map((c) => [c.id, c]));
   const word = signedOut ? NEEDS_SIGNIN : A.chiefWord(live);
-  const working = live.crew.filter((c) => A.seatOf(c) === 'working');
-  const held = live.crew.filter((c) => c.ask).length;
-  const rest = live.crew.length - working.length - held;
-  const sub = [...(working.length ? [`${working[0].name} is at work`] : []), ...(rest > 0 ? [`${rest} resting`] : [])].join(' · ');
+  // The crew summary is the office's own count line (summaryOf): the same per-member status the rail rows and
+  // the Office header read (A.groupOf), so a member that shows "Waiting" is never counted as "resting".
+  const sub = summaryOf(live);
   const crew = A.crew(state);
   const sched = A.routines(state).filter((r: Json) => !r.paused).slice(0, 4);
   const schedWho = (h: string) => (h === 'chief' ? 'Chief' : crew.find((x) => x.id === h)?.name ?? 'Chief');

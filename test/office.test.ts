@@ -425,6 +425,33 @@ test('your crew reads whole: every face is the drawn helmet, and no row overlaps
   }
 });
 
+test('the desk rail summary under Chief counts the same status its rows show', { skip: !bin && 'no Chromium here' }, async () => {
+  // The rail's count line is the Office's own summary (summaryOf, from A.groupOf); so it must equal the rail rows'
+  // own status. The old ad-hoc line counted every non-working, non-ask member as "resting" (the reported bug: the
+  // summary said "1 resting" while the member's row said "Waiting"). This fails on that line.
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  // The rail's own words, mapped to the four Office groups the summary counts.
+  const group = (w: string) => w.startsWith('Done') ? 'done'
+    : w === 'Waiting' ? 'waiting'
+    : w === 'Working' || w === 'Gone quiet' ? 'at work'
+    : 'resting';
+  for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
+    await b.open(`demo=${demo}&day#/crew`);
+    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+    const r = await b.run(`(() => {
+      const words = [...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent.trim());
+      const sub = document.querySelector('.side-sub')?.textContent ?? '';
+      const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|resting)/g)].map((x) => [x[2], Number(x[1])]));
+      return { words, nums };
+    })()`);
+    const counted: Record<string, number> = { waiting: 0, 'at work': 0, done: 0, resting: 0 };
+    for (const w of r.words as string[]) counted[group(w)]++;
+    assert.deepEqual(r.nums, counted, `${demo}: the rail summary is the rows' own status (${JSON.stringify(r)})`);
+  }
+});
+
 test('a finished file opens beside its chat: the composer stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');

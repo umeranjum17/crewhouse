@@ -17,16 +17,15 @@ export const hear = (e: Json) => ears.forEach((f) => f(e));
 
 const { landed, groupOf } = A;
 
-/** The panel's state word, in the board's own sentence case. */
+/** The panel's state word, in the board's own sentence case. It follows the Office group (A.groupOf) — the one
+ *  per-member status the header counts and the rail rows read — so a held helper shows "Waiting", never "Resting". */
 export type Glow = { word: string; cls: 'needs' | 'work' | 'quiet' | 'failed' | 'done' | 'rest' };
 export const glowOf = (c: A.OfficeMember, v: A.OfficeView): Glow => {
-  if (A.waitsOnYou(c)) return { word: 'Waiting', cls: 'needs' };
-  const seat = A.seatOf(c);
-  if (seat === 'working') return { word: 'At work', cls: 'work' };
-  if (seat === 'quiet') return { word: 'Gone quiet', cls: 'quiet' };
-  if (seat === 'failed') return { word: "Didn't finish", cls: 'failed' };
-  if (landed(c, v)) return { word: `Done ${A.clock(landed(c, v)!.at)}`, cls: 'done' };
-  return { word: 'Resting', cls: 'rest' };
+  const g = A.groupOf(c, v), seat = A.seatOf(c);
+  if (g === 'needs') return { word: 'Waiting', cls: 'needs' };
+  if (g === 'work') return seat === 'quiet' ? { word: 'Gone quiet', cls: 'quiet' } : { word: 'At work', cls: 'work' };
+  if (g === 'done') return { word: `Done ${A.clock(landed(c, v)!.at)}`, cls: 'done' };
+  return seat === 'failed' ? { word: "Didn't finish", cls: 'failed' } : { word: 'Resting', cls: 'rest' };
 };
 
 /** The office view: the snapshot, moved by live events until the next refresh starts it again. Home reads it once
