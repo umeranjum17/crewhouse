@@ -1335,8 +1335,8 @@ function HouseGoogle({ on, steps, refresh }: { on: boolean; steps?: A.GoogleStep
   return (<>
     <div className="label" id="setup-google">Google setup</div>
     {on && !edit ? <div className="card">
-        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">Your setup so far. Check the remaining steps on Google’s pages.</div></span>
-          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>Change sign-in</button></div>
+        <div className="row"><span className="grow"><b>{A.googleHeadline(steps)}</b><div className="mute small">{steps ? 'Your setup so far. Check the remaining steps on Google’s pages.' : 'Your crew’s own Google app is ready. Connect Calendar, Gmail or Drive from any app, in one tap.'}</div></span>
+          <button className="btn" onClick={() => { setEdit(true); setStep(A.GOOGLE_STEPS.length - 1); }}>{steps ? 'Change sign-in' : 'Use my own key'}</button></div>
         {steps?.map((m, i) => <div key={i} className="row stack-row">
           <span className="grow"><b>{i + 1}. {A.GOOGLE_STEPS[i].title}</b> <span className={m.state === 'checked' ? 'ok' : m.state === 'missing' ? 'warn-line' : 'mute'}>{A.STEP_MARK[m.state]}</span><div className="mute small">{m.note}</div></span>
           {m.state === 'missing' && <a className="btn go" href={A.GOOGLE_STEPS[i].url} target="_blank" rel="noreferrer">Open Google's page</a>}

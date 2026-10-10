@@ -430,9 +430,10 @@ export const GOOGLE_STEPS = [
 export type GoogleStep = { state: 'checked' | 'said' | 'missing'; note: string };
 export const STEP_MARK = { checked: '✓ Checked', said: 'You said done', missing: 'Missing' } as const;
 export const googleHeadline = (steps?: GoogleStep[] | null) => {
-  const missing = steps?.findIndex((s) => s.state === 'missing') ?? -1;
+  if (!steps) return 'Google is on for your crew';
+  const missing = steps.findIndex((s) => s.state === 'missing');
   if (missing >= 0) return `Step ${missing + 1} is missing`;
-  return steps?.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google sign-in saved';
+  return steps.every((s) => s.state === 'checked') ? 'Google is on ✓' : 'Google sign-in saved';
 };
 
 /** The one code a phone away from home types: the short code and the pairing code, with the mailbox's own
