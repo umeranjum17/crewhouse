@@ -7,6 +7,7 @@ first message.
 ## Sub-features
 
 - `hello-screen` — first run shows the greeting screen with the person's name and three ideas.
+- `hello-open-line` — under the three ideas, "Or tell Chief something you've been putting off" focuses the ask box with the prompt "What have you been putting off?" and sends nothing; a send from the box onboards with the person's own chore as Chief's first job.
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
@@ -26,6 +27,7 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 - **Chief's page.** `curl -fsS "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
 - **Chat.** `curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
 - **UI.** Bootstrap the browser per [Drive](../SKILL.md#drive), then visit `/` in that same tab: the Hello screen shows the name field and three ideas (eval their labels and `getBoundingClientRect`); after onboarding the Chief thread shows hero + Needs-you row and the composer. Capture 1440 and 390 screenshots; at 320 record the actual wrap/scroll behavior of the longest idea label.
+- **Open line.** Click the `button "Or tell Chief something you've been putting off"`: eval `document.activeElement` is `.hello-ask textarea` with placeholder `What have you been putting off?`, and `/api/state` still shows `onboarded: 0`. Fill a name, type a chore in that box and send: the app lands on `#/chief` with the chore as the person's first message. Hello re-renders while its helmet settles, so re-snapshot right before each `chrome-devtools-axi` click/fill and treat a `STALE_REF` error as a miss, never a pass.
 
 ## Shared profile (real-model words)
 

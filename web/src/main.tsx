@@ -78,6 +78,7 @@ function Hello({ state, refresh, night }: Ctx) {
   const [address, setAddress] = useState<string>(me.address || named);
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
+  const [prompt, setPrompt] = useState('Ask Chief anything'); // the open line below the ideas turns the box to the person's own chore
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
@@ -99,6 +100,7 @@ function Hello({ state, refresh, night }: Ctx) {
       <div className="ideas">
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
+      <button className="link put-off" onClick={() => { setPrompt("What have you been putting off?"); document.querySelector<HTMLTextAreaElement>('.hello-ask textarea')?.focus(); }}>Or tell Chief something you've been putting off</button>
       <details className="how"><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
@@ -107,7 +109,7 @@ function Hello({ state, refresh, night }: Ctx) {
           <li>I'll ask before sending messages, deleting things or spending money.</li>
         </ul>
       </details>
-      <div className="hello-ask"><Composer placeholder="Ask Chief anything" onSend={(t) => pick(t)} /></div>
+      <div className="hello-ask"><Composer placeholder={prompt} onSend={(t) => pick(t)} /></div>
     </div>
   );
 }
