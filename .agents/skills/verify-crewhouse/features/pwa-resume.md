@@ -44,6 +44,28 @@ through `adb reverse tcp:$PORT tcp:$PORT` and `adb forward tcp:<n> localabstract
 This emulator crashes (SwiftShader/Vulkan) when the installed webapp is launched, so the isolated
 Chromium standalone window is the installed-PWA proof here; see the PR's evidence note.
 
+### On the iPad simulator (real Safari home-screen app)
+
+The mobile gap is closed on the Mac iOS Simulator (`fm-iPad (A16)`, iOS 26.3): a real Safari
+Add to Home Screen of the crewd origin, killed and relaunched from its icon, reopens the thread it
+was on. The iOS Simulator shares the Mac's network stack, so a server on the Mac's `127.0.0.1` is
+reachable as `http://localhost:<port>/`; when crewd runs on another host, forward it from that host
+with `ssh -R 127.0.0.1:<port>:127.0.0.1:<port> <mac>`. `localhost` is a loopback name, so the app
+boots the real local shell (not the demo) and crewd's loopback guard accepts the host.
+
+- Install: `xcrun simctl openurl <udid> http://localhost:<port>/`, then Safari ▸ Share ▸ View More
+  ▸ Add to Home Screen ▸ Add. The share sheet is a separate process, so `axe describe-ui` bound to
+  Safari does not list its items — tap them by point (`axe tap -x… -y…`).
+- Relaunch: `xcrun simctl terminate <udid> com.apple.webapp` kills the installed app; tap its icon
+  to relaunch. Capture with `xcrun simctl io <udid> screenshot`, record with
+  `xcrun simctl io <udid> recordVideo`.
+- Theme: the app follows its own look (Settings ▸ LOOK ▸ Day / Night), not the iOS colour scheme,
+  so set it in the app for the day/night pair. `xcrun simctl ui <udid> appearance` does nothing here.
+- The gone thread: the product has no delete-thread action, so the case is the same "remembered
+  place no longer resolves" the browser gate pins by storing `#/h/vanished`. Reach it on the device
+  by the helper leaving the crew — restart crewd with a fresh, still-onboarded crew so the
+  remembered `#/h/<helper>` names no member; the next home-screen launch lands Home, no error.
+
 ## Read it
 
 - `location.hash` after a cold `Page.navigate` to the origin root equals the remembered place.
@@ -55,4 +77,7 @@ Chromium standalone window is the installed-PWA proof here; see the PR's evidenc
 The cold-relaunch shot pair (thread open, then reopened), the deleted-thread fallback, the offline
 shell, 320 px, 1.3×, and day/night, on the installed app, in the folder the PR names. The demo
 route note: on the published shell the remembered route is a demo place, since the demo is that
-origin's default; paired and local modes behave the same and are keyed separately.
+origin's default; paired and local modes behave the same and are keyed separately. On the iPad
+simulator the set is the Add to Home Screen sheet, the installed launch, and for day and night the
+thread open, the relaunch on the same thread, and the gone thread's Home fallback, plus one relaunch
+recording (thread → home screen → thread).
