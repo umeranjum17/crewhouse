@@ -11,6 +11,7 @@ first message.
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
+- `trust-links` — Hello (under the ideas) and Settings (under its title) say "What the crew remembers (see or forget any line)" and "Runs on this computer, nothing sent to us" (`A.trust`). On Hello both open How it works, whose promises include where memory lives (`A.keptWhere`); Settings leads the runs-at-home line with the second and links the first to About you (`#about-you`).
 - `shared-profile` — Chief saves directly stated personal/work facts from onboarding and chat with `crew_profile`; the complete merged record stays under 4000 characters and his reply says plainly what he noted.
 
 ## How to get to it (user POV)
@@ -28,6 +29,14 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 - **Chat.** `curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
 - **UI.** Bootstrap the browser per [Drive](../SKILL.md#drive), then visit `/` in that same tab: the Hello screen shows the name field and three ideas (eval their labels and `getBoundingClientRect`); after onboarding the Chief thread shows hero + Needs-you row and the composer. Capture 1440 and 390 screenshots; at 320 record the actual wrap/scroll behavior of the longest idea label.
 - **Open line.** Click the `button "Or tell Chief something you've been putting off"`: eval `document.activeElement` is `.hello-ask textarea` with placeholder `What have you been putting off?`, and `/api/state` still shows `onboarded: 0`. Fill a name, type a chore in that box and send: the app lands on `#/chief` with the chore as the person's first message. Hello re-renders while its helmet settles, so re-snapshot right before each `chrome-devtools-axi` click/fill and treat a `STALE_REF` error as a miss, never a pass.
+
+## Trust links
+
+Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Drive](../SKILL.md#drive).
+
+- **Hello.** Click `.hello .trust button` (either); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
+- **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#about-you` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget.
+- **Evidence.** `scripts/screens.sh` for Hello (fresh) and `#/settings` (seeded), `scripts/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
 
 ## Shared profile (real-model words)
 

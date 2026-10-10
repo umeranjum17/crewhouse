@@ -15,7 +15,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 
 | ID | File | What it proves |
 |----|------|----------------|
-| onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
+| onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper; assignment, wrap-up and long/bullet-only relay openings; real Marketing crew recipe, shared profile and Chief's read-only skill admission |
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |
 | crew-list | [crew-list.md](crew-list.md) | The crew rail and `#/crew`: only Chief says "Needs you"; a crew member waiting on the person reads "Waiting" |
