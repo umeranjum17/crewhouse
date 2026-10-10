@@ -341,7 +341,8 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .composer textarea { flex: 1; border: 0; background: transparent; resize: none; padding: 9px 0; font-size: 16px; outline: none; max-height: 160px; field-sizing: content; }
 /* A send that didn't go through stays with its words until the Retry works. */
 .composer:has(.send-failed), .composer:has(.send-away) { flex-wrap: wrap; border-radius: 22px; }
-.send-failed { flex-basis: 100%; font-size: 13.5px; font-weight: 700; color: var(--pink-ink); padding: 8px 12px 2px; }
+.send-failed { flex-basis: 100%; display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink2); padding: 8px 12px 2px; }
+.send-failed > span { min-width: 0; }
 .send-away { flex-basis: 100%; font-size: 13.5px; font-weight: 600; color: var(--ink2); padding: 8px 12px 2px; }
 .send[aria-disabled] { opacity: .45; cursor: default; }
 .send { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--go); color: var(--go-ink); font: 600 17px var(--ui); flex: none; transition: transform 160ms var(--ease), background 120ms var(--ease); }
@@ -395,6 +396,9 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .chat-more { border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
+/* Your words, echoed at once but not yet answered: muted until the home computer confirms them, so a held send never
+   reads as already sent. */
+.line.me.sending .bubble-text { opacity: .6; }
 .line-wrap > .card { max-width: 440px; margin: 12px 0 0 74px; }
 .work-title { display: grid; gap: 4px; padding: 16px; }
 .work-title .small { color: var(--ink2); }

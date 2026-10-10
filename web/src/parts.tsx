@@ -548,11 +548,15 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
     if (on && words.trim()) setListen(chat, true);
     else hold.current = setTimeout(() => setListen(chat, false), 1500);
   };
-  const change = (t: string) => { setText(t); setFailed(false); setHeld(false); hear(focused, t); if (chat) keepDraft(chat, t); };
+  const change = (t: string) => { setText(t); setFailed(false); hear(focused, t); if (chat) keepDraft(chat, t); };
   const send = async () => {
     const t = text.trim();
     if (!t || busy || away) return;
     setBusy(true); setFailed(false); setHeld(false);
+    // The words leave the box the moment you send: the thread echoes them right away (and marks them sending), so
+    // they are never in the box and the thread at once. A send that comes back failed puts them straight back with
+    // a Retry, so nothing typed is lost.
+    setText(''); if (chat) keepDraft(chat, '');
     // A send still unanswered after HOLD_MS is held, not dead: say so while the same request stays in flight, so Retry
     // is only ever offered once it has settled and can never send the words twice.
     const stall = setTimeout(() => setHeld(true), HOLD_MS);
@@ -560,12 +564,12 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
     try { ok = !!(await onSend(t)); } catch { ok = false; }
     clearTimeout(stall);
     setBusy(false); setHeld(false);
-    if (ok) { setText(''); setFailed(false); hear(focused, ''); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+    if (ok) { hear(focused, ''); } else { setText(t); setFailed(true); if (chat) sent(chat, false, t); }
   };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
-        : failed && <div className="send-failed" role="alert">Not sent — it's kept here. <button type="button" className="link inline" onClick={() => void send()}>Retry</button></div>}
+        : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />

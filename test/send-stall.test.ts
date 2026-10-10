@@ -74,13 +74,15 @@ test('a stalled send says it is held, a failed one offers Retry, and Retry sends
   const line = () => run("[...document.querySelectorAll('.dock .composer .send-away, .dock .composer .send-failed')].map((e) => e.innerText).join(' ').replace(/\\s+/g, ' ').trim()");
   const words = () => run("document.querySelector('.chat .dock textarea').value");
 
-  // The send is paused and unanswered: after a few seconds the box says so, and keeps the words.
+  // The send is paused and unanswered: after a few seconds the box says so, and the words have left the box for the
+  // thread (echoed, marked sending) — held words are never shown in the box and the thread at once.
   let held: any;
   await run("document.querySelector('.chat .dock button.send').click()");
   await until('the send request held in the browser', () => (held = paused.shift()), 15_000);
   await until('the Reconnecting line', async () => /Reconnecting/.test(await line()), 20_000);
   assert.match(await line(), /Reconnecting/, 'a send the computer has not answered says the words are held');
-  assert.equal(await words(), 'Book the dentist', 'the words stay in the box while it waits');
+  assert.equal(await words(), '', 'the words have left the box for the thread while it waits');
+  assert.equal(await run("!!document.querySelector('.line.me.sending')"), true, 'the held words echo in the thread, marked sending');
 
   // The request fails: not sent, with a Retry, and the words are still there.
   await send('Fetch.failRequest', { requestId: held.requestId, errorReason: 'ConnectionFailed' });
