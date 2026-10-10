@@ -854,6 +854,9 @@ test("Chief's mood is the first matching row of the table, and the line follows 
   // 7 · on the job, even while the account rests
   const resting = { ...busyHouse, resting: { chatgpt: Date.now() + 30 * min } };
   assert.deepEqual([mood(A.chief(resting)), A.chief(resting).tone], ['work', 'ok']);
+  const own = A.chief({ ...base, bots: [bot('chief', { task: { id: 5, title: 'Plan dinners', state: 'working' } })] });
+  assert.deepEqual([own.mood, own.line], ['work', 'On “Plan dinners”'], "Chief's own job is work, never Resting");
+  assert.equal(A.chief({ ...done, bots: [bot('chief', { task: { id: 5, title: 'Plan dinners', state: 'working' } })] }).mood, 'work', 'his last job finished, the next one runs');
   // 8 · the crew rests
   const rest = A.chief({ ...base, resting: { chatgpt: Date.now() + 30 * min } });
   assert.deepEqual([rest.mood, rest.tone], ['rest', 'off']);

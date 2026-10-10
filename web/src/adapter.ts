@@ -520,7 +520,7 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
   const pending = cards(state), asks = pending.length;
   const needs = all.find((h) => h.ring === 'needs');
   const stuck = all.find((h) => h.stuckFor > 0);
-  const busy = all.filter((h) => h.ring === 'working');
+  const busy = all.filter((h) => h.ring === 'working'), own = state.bots.find((b: Json) => b.id === 'chief')?.task;
   const rest = resting(state);
   const recent = (kind: string, ms = 30 * 60_000) => events.filter((e) => e.kind === kind && now - at(e.at) < ms).sort((a, b) => at(b.at) - at(a.at));
   const botOf = (id: string) => state.bots.find((b: Json) => b.id === id);
@@ -532,14 +532,15 @@ function chiefRow(state: Json, local: ChiefLocal): ChiefView {
     : asks ? `${name(pending[0].helper)} needs you`
     : busy.length === 1 ? (local.bare ? `${busy[0].name} is working` : `${busy[0].name} is on “${busy[0].status}”`)
     : busy.length > 1 ? `${busy.map((h) => h.name).join(' and ')} are working`
+    : own?.state === 'working' ? (local.bare ? 'Chief is working' : `On “${plain(own.title)}”`)
     : rest || 'Keeping an eye on things';
   const view: ChiefView =
     failure ? { mood: 'error', line: `${name(String(failure.bot))} couldn't finish ${local.bare ? 'a job' : `“${plain(failure.data?.title ?? '') || 'its job'}”`}`, tone: 'wait', rank: 3 }
     : stuck ? { mood: 'worried', line: `${stuck.name} has gone quiet`, tone: 'wait', rank: 4 }
     : local.signedOut ? { mood: 'worried', line: 'Waiting for your sign-in', tone: 'wait', rank: 4 }
     : needs || asks ? { mood: 'ask', line, tone: 'wait', rank: 5 }
-    : done ? { mood: 'happy', line: `${name(String(done.bot))} finished ${local.bare ? 'a job' : `“${plain(done.data?.title ?? '') || 'a job'}”`}`, tone: 'ok', rank: 6 }
-    : busy.length ? { mood: 'work', line, tone: 'ok', rank: 7 }
+    : done && own?.state !== 'working' ? { mood: 'happy', line: `${name(String(done.bot))} finished ${local.bare ? 'a job' : `“${plain(done.data?.title ?? '') || 'a job'}”`}`, tone: 'ok', rank: 6 }
+    : busy.length || own?.state === 'working' ? { mood: 'work', line, tone: 'ok', rank: 7 }
     : rest ? { mood: 'rest', line: rest, tone: 'off', rank: 8 }
     : { mood: 'idle', line: 'Keeping an eye on things', tone: 'ok', rank: 9 };
   return view;

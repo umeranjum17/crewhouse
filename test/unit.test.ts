@@ -14,7 +14,7 @@ import * as A from '../web/src/adapter.ts';
 
 const { Crew, quietNow, short, cleanReply, relayResult } = await import('../src/crew.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
-const { Accounts, PROVIDERS } = await import('../src/accounts.ts');
+const { Accounts, PROVIDERS, clock } = await import('../src/accounts.ts');
 const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
@@ -498,21 +498,26 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.ok(said.some((x) => /^ChatGPT is resting until (?:[A-Z][a-z]{2} )?\d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
   const file = task(db, t).session;
   assert.match(String(file), /^agent:m1:crewhouse:scout:\d+$/, 'the same session key, reopened');
-  assert.deepEqual(crew.snapshot().resting, { chatgpt: until });
+  assert.deepEqual(crew.snapshot().resting, {}, 'Copilot finished the job: no standing "resting" while nothing waits on it');
 
-  // Every account resting: the task pauses with a wake-up time, and resumes when it passes.
+  // Every account resting: the task pauses with a wake-up time, Chief says when once, and it resumes by itself.
   const others = ['copilot', 'openrouter', 'minimax', 'claude']; // the stub counts these as signed in; Grok is not
   for (const k of others) await crew.accounts.failed(k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
-  const b = crew.assign('scout', 'look it up again', 'chief').task;
-  await settled(db, b);
+  const b = crew.assign('scout', 'look it up again', 'chief').task, b2 = crew.assign('scout', 'and this', 'chief').task;
+  await settled(db, b); await settled(db, b2);
   assert.equal(task(db, b).state, 'paused');
   assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
   assert.match(task(db, b).result, /All your AI accounts are resting until \d+:\d\d [ap]m/);
-  (crew.accounts as any).rests.clear();
-  db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', Date.now() - 1, b);
+  assert.equal(crew.snapshot().resting.chatgpt, until, 'standing state while the job waits');
+  const told = db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'All your AI%'").map((m) => m.text);
+  assert.deepEqual(told, [`All your AI accounts are resting until ${clock(task(db, b).wake_at)}. Work starts again then by itself.`], 'Chief says it once');
+  for (const k of ['chatgpt', ...others]) crew.accounts.rest(k, Date.now() - 1); // the reset time passes; nobody answers anything
+  db.run('UPDATE tasks SET wake_at = ? WHERE id IN (?, ?)', Date.now() - 1, b, b2);
   crew.dispatch();
-  await settled(db, b);
-  assert.equal(task(db, b).state, 'done');
+  await settled(db, b); await settled(db, b2);
+  assert.deepEqual([task(db, b).state, task(db, b2).state], ['done', 'done']);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks")!.n, 0, 'resumed without a new ask');
+  assert.deepEqual(crew.snapshot().resting, {});
 
   // A bot set to an account the person doesn't have carries on with one they do.
   disk.setBrains(cfg, 'scout', ['grok']);
