@@ -494,8 +494,8 @@ export class Crew {
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
-      /** The person's AI accounts that are resting now, and until when (docs/ui-contract.md). */
-      resting: Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)),
+      /** The person's resting AI accounts, only while a job waits on them (pause(); docs/ui-contract.md). */
+      resting: this.db.get("SELECT 1 FROM tasks WHERE state = 'paused' AND result LIKE 'All your AI accounts are resting%'") ? Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.restingUntil(k)]).filter(([, t]) => t)) : {},
       /** The apps the person has connected, by the app screen's own names. */
       connections: this.connections.on(),
       /** Whether Google is switched on (Calendar, Gmail and Drive need it), and its four steps as
@@ -1475,10 +1475,9 @@ export class Crew {
     const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? (task.brain ? choices[0]?.provider : undefined) ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? PROVIDERS[key]?.name ?? key : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
     // Only accounts the person has: a resting one wakes up; one never signed in doesn't.
     const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean);
+    const handoff = this.handoffs.get(task.id) ?? ''; this.handoffs.delete(task.id); // now or never: a wake-up runs on whichever account is back
     let wake: number | null = null, state: string, words: string, voice: string;
     if (!rests.length) {
-      const handoff = this.handoffs.get(task.id) ?? '';
-      this.handoffs.delete(task.id);
       state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
       words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
         : /sign in again/.test(handoff) ? `${name ? `${name} signed you out` : 'You were signed out'}. That happens after a password change. Sign in again and the crew picks up where it left off.`
@@ -1486,19 +1485,17 @@ export class Crew {
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
       voice = task.bot === CHIEF ? 'bot' : 'system';
     } else {
-      wake = Math.min(...rests);
-      state = `All your AI accounts are resting until ${clock(wake)}.`;
-      words = `${state} I'll pick this up then.`;
-      voice = 'system';
+      wake = Math.min(...rests); state = `All your AI accounts are resting until ${clock(wake)}.`; words = `${state} Work starts again then by itself.`; voice = 'bot';
     }
     this.db.tx(() => {
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', state);
-      // One waiting line per words, judged by this bot's own last line in that voice (what others said in between
-      // changes nothing): Chief says his once per wait, notes the next ask in other words, then holds quietly (Main1325).
-      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', task.bot, voice)?.text;
-      const noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = voice === 'bot' && last === cleanReply(words);
-      if (voice === 'system' ? last !== words : last !== noted) this.say(task.bot, voice, again ? noted : words, task.id);
+      // One waiting line per words, judged by the speaker's own last line in that voice: Chief says his once per wait (every
+      // account resting is his to say, whoever's job waits), notes the next ask in other words, then holds quietly (Main1325).
+      const where = wake ? CHIEF : task.bot, said = voice === 'bot' ? cleanReply(words) : words;
+      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text;
+      const noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
+      if (wake || voice === 'system' ? last !== said : last !== noted) this.say(where, voice, again ? noted : words, where === task.bot ? task.id : null);
     });
   }
 

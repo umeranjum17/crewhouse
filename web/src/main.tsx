@@ -491,7 +491,6 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
   </div>;
 }
 function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
-  const g = A.account(accounts);
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
   const [partial, setPartial] = useState('');
@@ -613,7 +612,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {cards.filter((c) => !lines.length || lines.every((x) => (x.at ?? 0) > c.at)).map((c) => c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />)}
         {h && <Stuck h={h} refresh={refresh} />}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
-        {g.state === 'ready' && !g.notIncluded && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name === 'Chief' ? "I'll" : `${name} will`} finish then.</span></div>}
+        {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
         {rail}

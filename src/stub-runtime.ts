@@ -38,6 +38,7 @@ export class StubRuntime implements AgentRuntime {
   private host?: ToolHost;
   private holds = new Map<string, (reply: string) => void>();
   private cancelled = new Set<string>();
+  private tired = new Map<string, Set<string>>(); // "hit every limit": each account rests once on that key, two minutes
   private transcripts = new Map<string, string>();
   private specs = new Map<string, RunSpec>();
   private steered = new Map<string, string>();
@@ -50,7 +51,7 @@ export class StubRuntime implements AgentRuntime {
   /** The last steer a key was given (tests read it; the engine keeps the conversation itself). */
   steerOf(key: string) { return this.steered.get(key); }
   async start(host: ToolHost) { this.host = host; }
-  async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); }
+  async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); this.tired.clear(); }
   // Grok stands in for an account that must be signed in first; the rest the person has.
   async signedIn(account: string) { return account !== 'grok'; }
   signIn(_account: string, via: 'browser' | 'code', on: (step: any) => void) {
@@ -76,8 +77,9 @@ export class StubRuntime implements AgentRuntime {
       this.transcripts.set(spec.key, `${this.transcript(spec.key)}${name}: ${result}\n`);
     }
     if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
-    if (/hit the limit/i.test(said) && spec.account === 'chatgpt')
-      return { ok: false, kind: 'resting', message: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.', until: Date.now() + 1_800_000 };
+    const every = /hit every limit/i.test(said) ? this.tired.set(spec.key, new Set()).get(spec.key) : this.tired.get(spec.key);
+    if (/hit the limit/i.test(said) && spec.account === 'chatgpt' || every && !every.has(spec.account) && every.add(spec.account))
+      return { ok: false, kind: 'resting', message: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.', until: Date.now() + (every ? 120_000 : 1_800_000) };
     if (/no helpers in plan/i.test(said) && spec.account === 'chatgpt')
       return { ok: false, kind: 'plan', message: "Your plan doesn't include this model." };
     if (/sign me out/i.test(said)) return { ok: false, kind: 'signed-out', message: '401 Unauthorized: your sign-in has expired' };
