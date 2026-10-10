@@ -80,6 +80,9 @@ function Hello({ state, refresh, night }: Ctx) {
   const input = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState('Ask Chief anything'); // the open line below the ideas turns the box to the person's own chore
   const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
+  const how = useRef<HTMLDetailsElement>(null);
+  // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
+  const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
     if (!address.trim()) { setOther(true); toast('First, what shall I call you?'); input.current?.focus(); return false; }
@@ -101,11 +104,13 @@ function Hello({ state, refresh, night }: Ctx) {
         {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
       </div>
       <button className="link put-off" onClick={() => { setPrompt("What have you been putting off?"); document.querySelector<HTMLTextAreaElement>('.hello-ask textarea')?.focus(); }}>Or tell Chief something you've been putting off</button>
-      <details className="how"><summary className="link">How it works</summary>
+      <button className="link trust-line" onClick={showHow}>{A.trust.hello}</button>
+      <details className="how" ref={how}><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
           <li>{A.atHome()[1]}</li>
           <li>{A.atHome()[2]}</li>
+          <li>{A.keptWhere}</li>
           <li>I'll ask before sending messages, deleting things or spending money.</li>
         </ul>
       </details>
@@ -939,7 +944,7 @@ function AboutYou({ tick }: { tick: number }) {
   if (notes === null) return null;
   return (
     <>
-      <div className="label">About you</div>
+      <div className="label" id="about-you">About you</div>
       <p className="mute small">What the whole crew knows about you. Every helper reads it before a job for you.</p>
       <MemoryList notes={notes} save={async (t) => { await api.setAbout(t); await load(); }}
         empty="Nothing yet. Tell Chief things like “I'm vegetarian” and the whole crew will know." placeholder="For example: I'm vegetarian" />
@@ -1239,7 +1244,8 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
     <div className="page settings">
       <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
-      <p className="mute small">{A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
+      <p className="mute small"><b>{A.trust.home}.</b> {A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
+      <button className="link trust" onClick={() => document.getElementById('about-you')?.scrollIntoView({ behavior: 'smooth' })}>{A.trust.kept}</button>
       {demo && <PairRow />}
       {/* Paired: notifications ride the person's mailbox like at home — the switch lives here, since crewd refuses
           the Phones screen over the link. `relay` is asked over the link too, so no refused call and no dead toggle. */}
