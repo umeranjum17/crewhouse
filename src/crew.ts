@@ -37,7 +37,7 @@ export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =
   /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
-const TASK_TIMEOUT_MS = 60 * 60_000;
+const TASK_TIMEOUT_MS = 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // the engine silent this long: the run has hung
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
 /** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
@@ -52,8 +52,8 @@ export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: 
 /** ponytail: one fixed guess at a day of a ChatGPT plan, weighted like its limits (cached reading is cheap); the vendors
  *  publish no allowance to read, so tune this, or read the plan's own when one is published. */
 const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
-/** A job the person stopped: they know, so it gets no failure line. */
-const STOPPED = 'Stopped by you.';
+/** A job the person stopped (they know: no alert), or one crewd stopped when it stalled: Chief says so in one line. */
+const STOPPED = 'Stopped by you.', HUNG = 'It stalled, so I stopped it.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
 const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
@@ -191,7 +191,7 @@ interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<strin
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
-  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string;
+  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[] }
 
@@ -1174,7 +1174,7 @@ export class Crew {
     }
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
-    if (state === 'failed' && result && result !== STOPPED) this.failedLine(task, result);
+    if (state === 'failed' && result) this.failedLine(task, result);
     if (state === 'unsure') this.failedLine(task, result!, true);
     if (['done', 'failed', 'unsure'].includes(state)) this.wrap(task.root ?? task.id);
   }
@@ -1196,6 +1196,8 @@ export class Crew {
   private failedLine(task: Row, result: string, unsure = false) {
     const b = this.bot(task.bot)?.display ?? task.bot;
     const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
+    const job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
+    if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, null), result === HUNG && this.alert();
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null);
       const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';
@@ -1376,7 +1378,7 @@ export class Crew {
     if (this.busy.has(botId)) { l.pending = [l.pending, text].filter(Boolean).join('\n'); return; }
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
-    this.busy.add(botId);
+    this.busy.add(botId); l.news = Date.now();
     const spec: RunSpec = {
       key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}),
       cwd: disk.botDir(this.cfg, botId), system: this.systemPromptFor(botId, l), message: text,
@@ -1399,7 +1401,7 @@ export class Crew {
   }
 
   private onEvent(botId: string, l: Live, e: RunEvent) {
-    if (this.live.get(botId) !== l) return;
+    if (this.live.get(botId) !== l) return; else l.news = Date.now(); // any word from the engine, even a streamed one, is news
     if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
     else if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
@@ -2285,7 +2287,7 @@ export class Crew {
             key: `agent:m1:crewhouse:${botId}:${task.id}:batch:${i}`, bot: botId, task: task.id,
             account: l.account, cwd: disk.botDir(this.cfg, botId), system: BATCH_SYSTEM,
             message: subMessage(q, item), builtins: [],
-          }, () => {});
+          }, () => { l.news = Date.now(); });
           if (!end.ok && 'aborted' in end) {
             answers[i] = { item, ok: false, text: 'this item was stopped before it answered.' };
           } else if (!end.ok && (end.kind === 'resting' || end.kind === 'plan')) {
@@ -2404,15 +2406,13 @@ export class Crew {
         this.curationBusy = true;
         void this.weeklyCuration().finally(() => { this.curationBusy = false; });
       }
-      for (const task of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND updated_at < ?", Date.now() - TASK_TIMEOUT_MS)) {
-        this.close(task.bot);
-        this.setTask(task, 'failed', 'Took longer than an hour, so I stopped it.');
+      for (const t of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND updated_at < ?", now - TASK_TIMEOUT_MS)) { this.close(t.bot); this.setTask(t, 'failed', 'Took longer than an hour, so I stopped it.'); }
+      for (const [bot, l] of this.live) { // a turn the engine went silent in ends itself, its files kept, and frees the bot
+        const t = this.busy.has(bot) && now - l.news! > hungMs() && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'working'", l.task);
+        if (t) { this.close(bot); this.setTask(t, 'failed', HUNG); }
       }
       this.desktops.sweep((bot) => !!this.activeTask(bot) || this.held.has(bot));
-      if (Date.now() - this.freshAt > 30 * 60_000) {
-        this.freshAt = Date.now();
-        void this.connections.keepFresh().catch((e) => console.error('keep fresh', e));
-      }
+      if (now - this.freshAt > 30 * 60_000) { this.freshAt = now; void this.connections.keepFresh().catch((e) => console.error('keep fresh', e)); }
     } catch (e) { console.error('tick', e); }
     this.dispatch();
   }
