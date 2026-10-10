@@ -744,6 +744,20 @@ test('the phone office: one grouped list, helmets still, the shared view model',
   assert.match(top, /if \(mode === 'chat'\) return <View style=\{\{ flex: 1 \}\}>\{top\}<Chat \{\.\.\.ctx\} id="chief" hero=\{/, 'Chat: the header over Chief\'s own thread, and his box');
 });
 
+test('your crew page reads the rail status: one rule for every row', () => {
+  // A crew row's status word and dot are the rail's own (A.railWord, from A.groupOf). A second rule here showed
+  // Reel and Scout at work on their job while the rail said Waiting, and Scribe waiting while it said Done.
+  // A member missing from the office view across a refresh (added or leaving) falls back to the helper's own
+  // words rather than crashing; that fallback is the only place the raw status may appear.
+  const web = readFileSync(join(import.meta.dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  const crew = web.slice(web.indexOf('function Crew('), web.indexOf('function AddHelper('));
+  assert.match(crew, /A\.railWord\(/, 'the crew page reads the rail word, never a second status');
+  assert.match(crew, /member\.get\(h\.id\)/, 'each row is looked up in the office view, never assumed present');
+  assert.doesNotMatch(crew, /member\.get\(h\.id\)!/, 'a member missing across a refresh falls back, never crashes');
+  assert.match(crew, /r\.seat === 'done' \? 'Done' : r\.word/, 'a done row reads Done, as the rail does');
+  assert.doesNotMatch(crew, /<span>\{h\.status\}<\/span>/, 'the helper status is only a refresh-gap fallback, never the row rule');
+});
+
 test("Chief's mood is the first matching row of the table, and the line follows the face", () => {
   const min = 60_000, ago = (m: number) => Date.now() - m * min;
   const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });

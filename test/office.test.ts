@@ -452,6 +452,35 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   }
 });
 
+test('your crew page reads the rail status: every row matches its rail row', { skip: !bin && 'no Chromium here' }, async () => {
+  // The Your crew page's status word and dot are the rail's own (A.railWord, from A.groupOf). This fails on a
+  // second status rule (the reported bug: Reel and Scout showed their job with a green dot while the rail said
+  // Waiting, and Scribe said "Waiting for Chief" while the rail said Done).
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
+    await b.open(`demo=${demo}&day#/crew`);
+    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
+    const r = await b.run(`(() => {
+      const page = Object.fromEntries([...document.querySelectorAll('.crew-row')].filter((row) => row.querySelector('.status-word')).map((row) => [
+        row.querySelector('.grow b')?.textContent.trim(),
+        [row.querySelector('.status-word')?.textContent.trim(), !!row.querySelector('.status-word i.working')],
+      ]));
+      const rail = Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [
+        row.querySelector('b')?.textContent.trim(),
+        [row.querySelector('.side-seat')?.textContent.trim(), !!row.querySelector('.side-seat.seat-working, .side-seat.seat-done')],
+      ]));
+      return { page, rail };
+    })()`);
+    const page = r.page as Record<string, [string, boolean]>, rail = r.rail as Record<string, [string, boolean]>;
+    assert.ok(Object.keys(rail).length > 2, `${demo}: the rail lists the crew (${JSON.stringify(rail)})`);
+    for (const [name, status] of Object.entries(rail)) {
+      assert.deepEqual(page[name], status, `${demo}: the crew page reads ${name} as the rail does (${JSON.stringify(status)})`);
+    }
+  }
+});
+
 test('a finished file opens beside its chat: the composer stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
