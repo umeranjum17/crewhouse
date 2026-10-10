@@ -1,6 +1,7 @@
 // The office as a grouped list (Term look): Needs you / At work / Done today / Resting, every helper in exactly
-// one group. Each row shows the helmet in its mood, the current line, one meta line and the one action (the ask's
-// own yes, which opens its review). Tapping a row opens that helper's desk. Every word and count comes from the one
+// one group. Each row shows the helmet in its mood, the current line and one meta line. Crew never ask the person: a
+// waiting row says what it is on and "Waiting for Chief", and one row on top opens Chief, who carries every ask. Tapping
+// a row opens that helper's desk. Every word and count comes from the one
 // A.office view Home also reads (useOffice). The helmets are still: the think-scan shows while working and nothing
 // moves, so the old animation battery budget holds with no code for it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -72,20 +73,15 @@ function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
   );
 }
 
-/** One helper's row: the helmet, the name and state, the current line, one meta line, the one action. */
-function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v: A.OfficeView; t: Look; night: boolean; jobTitle?: string;
-  onDesk: (c: A.OfficeMember) => void; onAsk: (c: A.Card) => void }) {
+/** One helper's row: the helmet, the name and state, the current line, one meta line. */
+function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.OfficeView; t: Look; night: boolean; jobTitle?: string;
+  onDesk: (c: A.OfficeMember) => void }) {
   const done = landed(c, v);
   const g = groupOf(c, v);
-  // Done leads with the finished work itself, as the web panels do; a question without a job shows its latest step.
-  const line = c.ask ? c.ask.head : g === 'done' && done!.summary ? done!.summary : c.status;
-  const meta0 = jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet' || A.waitsOnYou(c)) ? jobTitle
-    : g === 'done' ? c.status : A.waitsOnYou(c) ? c.step : c.status;
+  // Done leads with the finished work itself, as the web panels do; waiting leads with what it is on.
+  const line = A.waitsOnYou(c) ? jobTitle || c.step || c.status : g === 'done' && done!.summary ? done!.summary : c.status;
+  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle : c.status;
   const meta = meta0 === line ? '' : meta0;
-  const yes = c.ask?.choices[0];
-  const simple = !!c.ask && !!yes && !c.ask.reply && !c.ask.review && c.ask.kind !== 'routine' && c.ask.kind !== 'plan' && c.ask.evidence !== 'draft';
-  // The button wears the ask's own words (its yes, or its flow's label), never a generic one.
-  const label = !c.ask ? '' : simple ? yes!.label : c.ask.reply ? `Answer ${c.name}…` : c.ask.review ? 'Review order' : yes?.label ?? 'Review…';
   return (
     <Pressable onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
@@ -97,10 +93,6 @@ function Row({ c, v, t, night, jobTitle, onDesk, onAsk }: { c: A.OfficeMember; v
         </View>
         <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{line}</Text>
         {!!meta && <Text numberOfLines={2} style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 17, color: t.mute }}>{meta}</Text>}
-        {c.ask && <Pressable onPress={() => onAsk(c.ask!)} accessibilityRole="button" accessibilityLabel={`${label}: ${c.ask.head}`}
-          style={{ alignSelf: 'flex-start', marginTop: 8, backgroundColor: t.pink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16 }}>
-          <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{label}</Text>
-        </Pressable>}
       </View>
     </Pressable>
   );
@@ -119,20 +111,24 @@ function Group({ title, t, children }: { title: string; t: Look; children: React
   );
 }
 
-/** The grouped office. Tapping a row opens that helper's desk, a question's button its review, as before. */
-export function Office({ view, night, offline, width, jobs, onChief, onDesk, onAsk, onTray, onCrew }: {
+/** The grouped office under Chief's one row, which opens Chief. Tapping a row opens that helper's desk. */
+export function Office({ view, night, offline, width, jobs, onChief, onDesk, onTray, onCrew }: {
   view: A.OfficeView; night: boolean; offline: boolean; width: number; jobs?: A.Work[];
-  onChief: () => void; onDesk: (c: A.OfficeMember) => void; onAsk: (c: A.Card) => void; onTray: () => void; onCrew: () => void;
+  onChief: () => void; onDesk: (c: A.OfficeMember) => void; onTray: () => void; onCrew: () => void;
 }) {
   const t = night ? color.night : color.day;
   const titles = useMemo(() => new Map((jobs ?? []).map((w) => [w.helper, w.title])), [jobs]);
-  void offline; void width; void onChief; void onTray; void onCrew;
+  void offline; void width; void onTray; void onCrew;
   const groups = (['needs', 'work', 'done', 'rest'] as Group[]).map((g) => [g, view.crew.filter((c) => groupOf(c, view) === g)] as const)
     .filter(([, rows]) => rows.length);
   return (
     <View>
+      {view.needs.length > 0 && <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={A.chiefHas(view)}
+        style={{ alignSelf: 'flex-start', marginTop: 14, marginHorizontal: 14, backgroundColor: t.pink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16 }}>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{A.chiefHas(view)}</Text>
+      </Pressable>}
       {groups.map(([g, rows]) => <Group key={g} title={TITLES[g]} t={t}>
-        {rows.map((c) => <Row key={c.id} c={c} v={view} t={t} night={night} jobTitle={titles.get(c.id)} onDesk={onDesk} onAsk={onAsk} />)}
+        {rows.map((c) => <Row key={c.id} c={c} v={view} t={t} night={night} jobTitle={titles.get(c.id)} onDesk={onDesk} />)}
       </Group>)}
     </View>
   );

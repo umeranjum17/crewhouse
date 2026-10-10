@@ -1573,6 +1573,9 @@ export function office(state: Json): OfficeView {
 /** Chief's state in one word, the same on his panel, his profile and on the phone. */
 export const chiefWord = (v: OfficeView) => (chiefAsks(v).length ? 'Needs you' : v.chief.mood === 'work' ? 'Working' : 'Here');
 export const chiefAsks = (view: OfficeView) => view.needs.filter((c) => !view.crew.some((m) => m.id === c.helper));
+/** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
+export const WAIT_CHIEF = 'Waiting for Chief';
+export const chiefHas = (view: OfficeView) => `Chief has ${view.needs.length} thing${view.needs.length === 1 ? '' : 's'} for you`;
 
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {

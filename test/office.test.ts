@@ -284,10 +284,14 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
           const memberWords = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim());
           const chiefWord = units.filter((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim())[0];
-          const acts = units.flatMap((p) => [...p.querySelectorAll('.btn')]).map((e) => e.textContent);
+          const crewUnits = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? ''));
+          const crewActs = crewUnits.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
+          const crewText = crewUnits.map((p) => p.innerText);
+          const waitMeta = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => p.querySelector('.p-meta')?.textContent);
+          const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
           const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, acts, groups,
+          return { narrow, units: units.length, pairs, out, clipped, names, nums, pinned, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitMeta, toChief, groups,
             scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
             cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
         })()`);
@@ -311,7 +315,12 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
           assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
           if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
-          assert.ok(m.acts.every((a: string) => a !== 'Review…'), `${at}: every action wears its ask's own label (${m.acts.join(' | ')})`);
+          // Crew never ask the person: no crew panel or row answers or approves, or leads with the ask's head; a waiting one
+          // waits for Chief, and Chief's one action carries every ask (Needs you's count) to his thread.
+          assert.deepEqual(m.crewActs, [], `${at}: no crew panel or row has an answer or approve button`);
+          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order/i.test(x)), `${at}: no crew panel or row carries the ask (${m.crewText.join(' | ')})`);
+          assert.ok(m.waitMeta.every((x: string) => x === 'Waiting for Chief'), `${at}: a waiting crew member waits for Chief (${m.waitMeta.join(' | ')})`);
+          assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
           if (width < 900) {
             assert.equal(m.units, n, `${at}: every helper has exactly one grouped row`);
             const order = ['Waiting', 'At work', 'Done today', 'Resting'];
