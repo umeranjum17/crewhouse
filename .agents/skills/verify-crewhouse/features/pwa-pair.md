@@ -59,8 +59,11 @@ The recording is `motion/demo-pair-real-unpair.webm`.
 
 ## Limits
 
-- A direct code dials the computer's own addresses (plain `ws://` on the LAN). Chromium allows that from an https page
-  with a warning. Safari and Firefox may block it, so off the computer's network the relay code is the way in.
-  The lab proves the direct path from a `*.localhost` origin only.
+- A direct code dials the page's own origin first (`wss://<host>/link` on an https page), then the computer's own
+  addresses (plain `ws://`), which an https page may not dial. So from an https page the direct code works only when
+  the page is the computer's own link (`./crewhouse phones web`, [ipad-tailscale.md](ipad-tailscale.md)); off it, the
+  relay code over an https relay is the way in. This lab's shell is a separate `*.localhost` origin, so its own-origin
+  try fails and the computer's addresses carry the pairing; `test/pwa-pair.test.ts` loads the shell from crewd's link
+  port instead.
 - A relay-code pairing bakes only the relay address into the grant, so with the relay off that app is stranded
   offline until it unpairs; a direct-code grant carries every address (link kit behaviour, not Crewhouse's).

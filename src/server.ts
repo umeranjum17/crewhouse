@@ -43,16 +43,15 @@ const skillWords = (message: string) => /not one of the reviewed starter skills/
   : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
   : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
   : 'That did not go through. Try again in a bit.';
-const etagOf = (path: string) => { const st = statSync(path); return `W/"${st.size.toString(16)}.${Math.floor(st.mtimeMs).toString(16)}"`; }, FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
+const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
 
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
-  const size = statSync(path).size, type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream', range = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
+  const { size, mtimeMs } = statSync(path), etag = `W/"${size.toString(16)}.${Math.floor(mtimeMs).toString(16)}"`, type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream', range = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
   if (range) { // video seeking in the browser needs ranges
     const start = range[1] ? Number(range[1]) : size - Number(range[2]), end = range[1] && range[2] ? Number(range[2]) : size - 1;
     res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1 });
     return createReadStream(path, { start, end }).pipe(res);
   }
-  const etag = etagOf(path);
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag }); return res.end(); }
   res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes', etag,
     'cache-control': FRESH_BUNDLE.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache' });
@@ -110,6 +109,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   crew.phoneLink = link;
   link.desk = { signal: (bot, w, method, params, canControl) => crew.desktopSignal(bot, w, method, params, canControl), release: (w) => crew.desktops.release(w) };
   link.quiet = () => quietNow(crew.person().quiet);
+  /** The web app: a built file, else the shell for a deep link, which the browser revalidates on every load (no-cache) so
+   *  an update shows on the next visit. The phone link serves it too: that is the installed web app's own address. */
+  const shell = link.page = (req: IncomingMessage, res: ServerResponse) => {
+    const asset = join(dist, new URL(req.url ?? '/', 'http://x').pathname.replace(/\.\.+/g, '')), index = join(dist, 'index.html');
+    if (!existsSync(index)) return send(res, 503, { error: 'web UI not built: run ./crewhouse setup' });
+    sendFile(req, res, existsSync(asset) && statSync(asset).isFile() ? asset : index);
+  };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -160,15 +166,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         return sendFile(req, res, full);
       }
 
-      const asset = join(dist, p === '/' ? 'index.html' : p.replace(/\.\.+/g, ''));
-      if (existsSync(asset) && statSync(asset).isFile()) return sendFile(req, res, asset);
-      const index = join(dist, 'index.html');
-      if (!existsSync(index)) return send(res, 503, { error: 'web UI not built: run ./crewhouse setup' });
-      // A deep link serves the shell, which the browser revalidates on every load so an update shows on the next visit.
-      const etag = etagOf(index);
-      if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag }); return res.end(); }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag });
-      res.end(readFileSync(index));
+      shell(req, res);
     } catch (e: any) {
       send(res, e.status ?? 400, { error: e.message });
     }
