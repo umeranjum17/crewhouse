@@ -40,7 +40,7 @@ Crewhouse gives you a crew that does the work and one calm place to say yes. It 
 
 ## See it work
 
-<table>
+<table align="center">
   <tr>
     <td align="center" valign="top" width="50%">
       <picture>
