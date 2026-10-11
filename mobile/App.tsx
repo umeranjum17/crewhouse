@@ -322,10 +322,11 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mi
     if (away || busy || (!text.trim() && !pics.length)) return;
     const x = text.trim(), p = pics;
     setBusy(true);
+    setText(''); setPics([]); if (chat) keepDraft(chat, '');
     let ok = false;
     try { ok = !!(await onSend(x, p)); } catch { ok = false; }
     setBusy(false);
-    if (ok) { setText(''); setPics([]); if (chat) keepDraft(chat, ''); } else { setFailed(true); if (chat) sent(chat, false, text); }
+    if (!ok) { setFailed(true); setText(x); setPics(p); if (chat) { keepDraft(chat, x); sent(chat, false, x); } }
   };
   const pick = () => attempt(async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 4 - pics.length, quality: 1 });
