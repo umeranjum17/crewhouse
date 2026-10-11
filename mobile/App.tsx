@@ -857,6 +857,9 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
             {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
             {l.doc && <PhoneDocCard doc={l.doc} onOpen={() => setOpen(l.doc!)} />}
           </View>)}
+        {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
+          <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
+        </View></View>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
       </ScrollView>
       <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={send} chat="phone-only" photos={false} /></View>
