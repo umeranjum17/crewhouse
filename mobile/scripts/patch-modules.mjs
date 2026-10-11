@@ -1,5 +1,6 @@
 // Migration debt: private desktop/share/widget SDK patches belong in BYOKit-owned native integrations.
 // Existing historical repairs are idempotent; remove them when published kits own these paths.
+// Remove patches/expo-modules-jsi+57.1.1.patch when expo-modules-jsi 57.x publishes #51040.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 function patch(rel, done, edit) {
