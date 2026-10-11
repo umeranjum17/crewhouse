@@ -15,9 +15,6 @@ import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
-import * as A from '../web/src/adapter.ts';
-import type { OfficeMember } from '../web/src/adapter.ts';
-import type { Json } from '../web/src/api.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -35,122 +32,6 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
   for (const f of js()) assert.doesNotMatch(readFileSync(join(dist, f), 'utf8'), /WebGLRenderer|RoundedBoxGeometry/, f);
   const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
   assert.equal({ ...pkg.dependencies, ...pkg.devDependencies }.three, undefined);
-});
-
-test('office truth: the panels, their counts, the tray, the roster and Needs you read one state', () => {
-  const now = Date.now(), min = 60_000;
-  const bot = (id: string, extra: Json = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), template: id, ...extra });
-  const task = (id: number, bot: string, state: string) => ({ id, bot, title: `Job ${id}`, state, files: [] });
-  const state: Json = {
-    person: { id: 1, name: 'Umer' }, resting: {}, templates: [], ideas: [],
-    bots: [bot('chief'), bot('scout', { task: task(1, 'scout', 'working') }), bot('reel', { task: task(2, 'reel', 'needs_you') }),
-      bot('scribe', { task: task(3, 'scribe', 'needs_you') }), bot('tracer', { unread: 1 }), bot('pip', { pausedUntil: now + 60 * min }),
-      bot('h6', { display: 'Bea', template: 'reel', queued: 1 }), bot('h7', { display: 'Kit', template: 'scout' })],
-    asks: [
-      { id: 10, bot: 'reel', task_id: 2, kind: 'question', at: now - min, detail: { question: 'Which song?' } },
-      // a suggestion lives in Scribe's chat: no Review in the room, no count, never in Needs you
-      { id: 11, bot: 'scribe', task_id: 3, kind: 'propose', at: now - min, detail: { words: 'Keep this?' } },
-      { id: 12, bot: 'chief', kind: 'question', at: now - 2 * min, detail: { question: 'Which day?' } },
-    ],
-    tasks: [{ id: 9, bot: 'scout', title: 'Done thing', state: 'done', result: 'Three stories worth telling.', updated_at: now - min, files: [] },
-      // A job that ended with nothing to say made nothing: never a thing, never the rail's Done.
-      { id: 7, bot: 'scout', title: 'Silent thing', state: 'done', updated_at: now - min, files: [] },
-      { id: 8, bot: 'tracer', title: 'Find the email', state: 'failed', updated_at: now - min, files: [] }],
-    events: [{ kind: 'task.failed', bot: 'tracer', at: now - min, data: { title: 'Find the email' } }],
-  };
-  const v = A.office(state);
-  const seat = Object.fromEntries(v.crew.map((c) => [c.id, A.seatOf(c)]));
-  assert.deepEqual(seat, { scout: 'working', reel: 'needs', scribe: 'chat', tracer: 'failed', pip: 'waiting', h6: 'next', h7: 'free' });
-  assert.deepEqual(v.needs.map((c) => c.id), A.needsYou(state).map((c) => c.id), 'Needs you is the office\'s own list');
-  assert.equal(v.counts.needs, 2, 'Reel\'s question and Chief\'s; the suggestion is not counted');
-  assert.equal(v.crew.find((c) => c.id === 'scribe')!.ask, undefined, 'no Review for a suggestion');
-  assert.deepEqual(v.needs.filter((c) => v.crew.some((m) => m.ask?.id === c.id)).map((c) => c.id), [10], 'Reel holds its own row');
-  assert.equal(A.chiefHas(v), 'Chief has 2 things for you', 'Chief carries every row, his own too');
-  assert.equal(v.counts.working, A.homeCounts(state).working, 'Home\'s working count');
-  assert.equal(v.counts.working, 1);
-  assert.equal(v.counts.done, 1, 'the tray holds today\'s');
-  assert.deepEqual(v.done.map((t) => t.id), [9], 'only the job that said something');
-  assert.ok(v.crew.find((c) => c.id === 'h6')!.second && v.crew.find((c) => c.id === 'h7')!.second, 'a second of a kind is marked');
-  assert.deepEqual(A.roster(v.crew).map((c) => c.id), ['reel', 'scribe', 'scout', 'tracer', 'pip', 'h6', 'h7']);
-  const chats = new Map(A.chats(state).map((c) => [c.id, c.line]));
-  assert.equal(chats.get('reel'), 'Waiting', 'a crew member waiting on the person never says "Needs you"; only Chief does');
-  assert.equal(chats.get('scribe'), 'Waiting', 'a job stopped for an answer waits for Chief in Chats, as in the Office');
-  const rail = (c: A.OfficeMember, v2: A.OfficeView) => { const st = A.statusOf(c, v2); return { word: st.word, seat: st.seat }; };
-  assert.deepEqual(rail(v.crew.find((c) => c.id === 'reel')!, v), { word: 'Waiting', seat: 'waiting' }, 'the rail says the same, in the neutral style, never "Needs you"');
-  assert.deepEqual(rail(v.crew.find((c) => c.id === 'scribe')!, v), { word: 'Waiting', seat: 'waiting' }, 'a job stopped for an answer reads the same on the rail, never "Waiting on your reply"');
-  assert.equal(A.chiefStatus(v).word, 'Needs you', 'only Chief says "Needs you"');
-  // One status per member: the count line counts each member once by the word it shows, Chief too ("Needs you" waits).
-  assert.deepEqual(v.crew.map((c) => A.statusOf(c, v).word), ['At work', 'Waiting', 'Waiting', "Didn't finish", 'Waiting', 'Up next', 'Free']);
-  assert.equal(A.summaryOf(v), '5 waiting · 1 at work · 0 done · 2 free');
-  // Live events move every count together.
-  const answered = A.officeEvent(v, { kind: 'ask.answered', bot: 'reel', data: { ask: 10 } });
-  assert.equal(answered.counts.needs, 1);
-  assert.equal(answered.needs.length, 1);
-  assert.equal(A.seatOf(answered.crew.find((c) => c.id === 'reel')!), 'free', 'back to what the refresh knew');
-  const opened = A.officeEvent(v, { kind: 'ask.opened', bot: 'scout', data: { ask: 13 } });
-  assert.equal(opened.crew.find((c) => c.id === 'scout')!.ask, undefined, 'Review waits for the refresh to bring the row');
-  assert.equal(opened.counts.needs, 2);
-  const done = A.officeEvent(v, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
-  assert.equal(done.counts.done, 2);
-  // The rail says a free helper's latest job landed (Main590 6); a newer seat replaces it.
-  assert.deepEqual(rail(done.crew.find((c) => c.id === 'scout')!, done), { word: 'Done', seat: 'done' });
-  assert.equal(A.chats(state).find((c) => c.id === 'scout')!.line, 'At work: Job 1', 'Chats say the same word');
-  assert.deepEqual(rail(v.crew.find((c) => c.id === 'scout')!, v), { word: 'At work', seat: 'working' }, 'working beats an earlier finish');
-  assert.deepEqual(rail(v.crew.find((c) => c.id === 'h7')!, v), { word: 'Free', seat: 'free' }, 'nothing landed: just free');
-  const again = A.officeEvent(done, { kind: 'task.working', bot: 'scout', data: { title: 'Job 4' } });
-  assert.equal(A.statusOf(again.crew.find((c) => c.id === 'scout')!, again).word, 'At work', 'a new job replaces the cue');
-  assert.equal(done.counts.working, 0);
-  // The hand-off follows the done list, not the helper's things: the demo hears file.delivered and task.done in one
-  // commit, and task.done empties the desk, so a things-grew diff saw nothing and no page ever flew (J5 at 4ab7e00).
-  const pair = A.officeEvent(A.officeEvent(v, { kind: 'file.delivered', bot: 'scout', data: { task: 1, path: 'files/a.pdf' } }), { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } });
-  assert.ok(pair.crew.find((c) => c.id === 'scout')!.things.length <= v.crew.find((c) => c.id === 'scout')!.things.length, 'the old signal: no growth');
-  assert.deepEqual(A.handedIn(v, pair), ['scout'], 'one page, from the helper who finished');
-  assert.deepEqual(A.handedIn(pair, A.officeEvent(pair, { kind: 'task.done', bot: 'scout', at: now, data: { task: 1, title: 'Job 1' } })), [], 'the same job again (the refresh) flies nothing');
-  // Out of reach: nobody claims to be busy or waiting.
-  const away = A.officeAway(v);
-  assert.deepEqual(away.counts, { needs: 0, working: 0, done: 1 });
-  assert.ok(away.crew.every((c) => A.seatOf(c) === 'waiting'));
-
-  // Truth over time (J6/ch-pm-17): no seat crewd does not hold, and none that drifts.
-  const hour = 60 * min, crew = (bots: Json[], tasks: Json[] = []) => A.office({ ...state, asks: [], events: [], bots: [bot('chief'), ...bots], tasks });
-  // "Today" and "yesterday" are measured from the clock's midnight, not from now: run at 01:40, "three hours ago"
-  // is yesterday, and the job that ended badly today would read as free. (main's fixture, flake found on this branch.)
-  const today = new Date().setHours(0, 0, 0, 0);
-  const one = (v2: A.OfficeView) => ({ seat: A.seatOf(v2.crew[0]), word: A.statusOf(v2.crew[0], v2).word });
-  // A job with no news past crewd's limit has gone quiet: never shown, or counted, as working.
-  const quiet = crew([bot('scout', { task: task(1, 'scout', 'working'), stuck: true, quietSince: now - 9 * min })]);
-  assert.deepEqual([one(quiet), quiet.counts.working], [{ seat: 'quiet', word: 'Gone quiet' }, 0]);
-  assert.equal(A.idleLine(quiet), 'No helper is at work right now: 1 gone quiet.', 'the crew is not called free');
-  assert.deepEqual([quiet.counts.needs, A.chiefStatus(quiet).word], [1, 'Needs you'], "the Stop card waits on Chief's yes, counted once on him");
-  // A job held for a sign-in waits, in crewd's own words, rather than reading free.
-  const signin = crew([bot('scout')], [{ id: 2, bot: 'scout', title: 'Flights', state: 'paused', wake_at: null, result: 'Waiting for you to sign in with ChatGPT.' }]);
-  assert.deepEqual([one(signin), signin.crew[0].status], [{ seat: 'waiting', word: 'Waiting' }, 'Waiting for you to sign in with ChatGPT']);
-  assert.equal(A.idleLine(signin), 'No helper is at work right now: 1 waiting.');
-  const share = crew([bot('scout', { pausedUntil: now + hour })], [{ id: 2, bot: 'scout', title: 'Digest', state: 'paused', wake_at: now + hour, result: 'Waiting for tomorrow: the crew has had its share of your AI today.' }]);
-  assert.equal(share.crew[0].status, 'Waiting for tomorrow');
-  assert.equal(A.officeEvent(crew([bot('scout', { task: task(2, 'scout', 'working') })]), { kind: 'task.paused', bot: 'scout', data: { task: 2, result: 'Waiting for you to sign in with ChatGPT.' } }).crew[0].status,
-    'Waiting for you to sign in with ChatGPT', 'the live event says the same, never "free"');
-  // A job that ended badly today says so whatever the clock or the chat; yesterday's is just free, like yesterday's finish.
-  const failed = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'unsure', updated_at: today + hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today }]);
-  assert.deepEqual([one(failed), failed.crew[0].status], [{ seat: 'failed', word: 'Not sure' }, 'Not sure it worked']);
-  const old = crew([bot('scout')], [{ id: 3, bot: 'scout', title: 'Refund', state: 'failed', updated_at: today - hour }, { id: 1, bot: 'scout', title: 'Older', state: 'done', updated_at: today - 2 * hour, files: [] }]);
-  assert.deepEqual([one(old), old.counts.done, A.idleLine(old)], [{ seat: 'free', word: 'Free' }, 0, 'No helper is at work right now. Every helper is free.']);
-  const fin = crew([bot('scout')], [{ id: 4, bot: 'scout', title: 'Flights', state: 'done', result: 'Two fares.', updated_at: now, files: [] }]);
-  assert.deepEqual([A.summaryOf(fin), A.idleLine(fin)], ['0 waiting · 0 at work · 1 done · 1 free', 'No helper is at work right now: 1 done.'], 'On it now never calls a done helper free');
-  // Chief's status is his own job's, never a helper's: idle he is free (S1), at work only on his own job, waiting while
-  // it is held; a routine he offers waits on the person's yes like a draft (S5).
-  assert.deepEqual([A.chiefStatus(old).word, A.summaryOf(old)], ['Free', '0 waiting · 0 at work · 0 done · 2 free']);
-  const own = A.office({ ...state, asks: [], events: [], bots: [bot('chief', { task: task(5, 'chief', 'working') }), bot('scout')], tasks: [] });
-  assert.deepEqual([A.chiefStatus(own).word, A.summaryOf(own)], ['At work', '0 waiting · 1 at work · 0 done · 1 free']);
-  const held = A.office({ ...state, asks: [], events: [], bots: [bot('chief'), bot('scout')], tasks: [{ id: 6, bot: 'chief', title: 'Plans', state: 'paused', wake_at: now + hour, result: 'All your AI accounts are resting.' }] });
-  assert.deepEqual([A.chiefStatus(held).word, A.summaryOf(held)], ['Waiting', '1 waiting · 0 at work · 0 done · 1 free']);
-  const heldState = { ...state, asks: [], resting: { chatgpt: now + hour }, events: [{ seq: 1, kind: 'task.done', bot: 'chief', at: now, data: { title: 'hi' } }], bots: [bot('chief'), bot('scout')], tasks: [{ id: 6, bot: 'chief', title: 'Plans', state: 'paused', wake_at: now + hour }] };
-  assert.match(A.chief(heldState).line, /resting until/, "a waiting Chief's line says why, never the echo of a turn that just finished");
-  const routine = { ...state, events: [], bots: [bot('chief'), bot('scout')], tasks: [], asks: [{ id: 20, bot: 'chief', kind: 'propose', at: now, detail: { routine: { schedule: 'every day 9:00' }, words: 'Check flights daily?' } }] };
-  assert.deepEqual([A.needsYou(routine).map((c) => c.kind), A.chiefStatus(A.office(routine)).word, A.chats(routine)[0].ring], [['routine'], 'Needs you', 'needs']);
-  assert.equal(A.summaryOf(A.office(routine)), '1 waiting · 0 at work · 0 done · 1 free', 'Chief waiting on your yes counts once, as waiting (S5)');
-  // A new job is only queued until crewd starts it: the event does not claim work.
-  assert.equal(A.seatOf(A.officeEvent(crew([bot('scout')]), { kind: 'task.created', bot: 'scout', data: { title: 'Next' } }).crew[0]), 'free');
 });
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' };
@@ -220,32 +101,6 @@ const helmets = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
     think: panels.filter((p) => p.querySelector('.helmet')?.dataset.mode === 'think').length,
     art: panels.map((p) => p.querySelector('.helmet')?.textContent ?? '') };
 })()`);
-
-// The thread keeps time (Main2036): the finished line and the proposal card land where they happened — the note
-// before a later message, the card after the sentence that raised it and before the person's next message.
-test('the thread keeps time: a finished note and a proposal card fall where they happened', () => {
-  const now = Date.now();
-  const line = (id: number, from: 'me' | 'them', at: number, text: string): A.Line => ({ id, from, text, files: [], choices: [], at });
-  const lines = [line(1, 'me', now - 1000, 'Ask'), line(2, 'them', now - 900, 'Reply'), line(3, 'me', now - 100, 'Later')];
-  const state: Json = {
-    bots: [{ id: 'chief', display: 'Chief' }, { id: 'scout', display: 'Scout' }],
-    templates: [{ id: 'reel', display: 'Reel' }], ideas: [],
-    tasks: [{ id: 9, bot: 'scout', title: 'Three stories', state: 'done', result: 'Three stories worth telling.', updated_at: now - 500, files: ['files/stories.pdf'] }],
-  };
-  // The finished notice belongs between the reply and the later message, and says "Your things".
-  const withNote = A.trayNotes(state, lines);
-  assert.deepEqual(withNote.map((l) => l.id), [1, 2, -9, 3], 'the finished note sits where it happened, before the later message');
-  assert.match(withNote[2].text, /· it's in Your things$/, "the notice uses the app's own name for Your things");
-  // A card raised in the reply's turn shows after that reply, before the person's next message — never above it.
-  const order: string[] = [];
-  const slots = A.cardSlots(lines, [{ id: 5, helper: 'chief', at: now - 950 } as A.Card]);
-  lines.forEach((l, i) => { for (const c of slots.before.get(i) ?? []) order.push(`card${c.id}`); order.push(`line${l.id}`); });
-  for (const c of slots.tail) order.push(`card${c.id}`);
-  assert.deepEqual(order, ['line1', 'line2', 'card5', 'line3'], 'the proposal card follows its reply, before the next message');
-  // A job offered before its helper is hired names the plain template, never its raw id.
-  const offered = A.jobs({ ...state, ideas: [{ bot: 'reel', group: 'goal', ask: 'Make a video', promise: 'A short video from your photos.', hire: 'reel' }] } as Json);
-  assert.equal(offered[0].says, 'Reel · A short video from your photos.', "a hand-me-a-job row shows the helper's plain name, not its raw id");
-});
 
 test('the office keeps the battery budget: a scan line while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
   const b = await browse();

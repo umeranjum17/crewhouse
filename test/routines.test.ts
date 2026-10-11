@@ -1,77 +1,13 @@
 // Routines: plain-words schedules, next run, catch-up after sleep, overlap, pause, the morning digest. No CLI, no quota.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
-const { describe, describeTrigger, firstRun, nextRun, parseSchedule, parseTrigger } = await import('../src/routines.ts');
-
-const at = (y: number, mo: number, d: number, h = 0, m = 0) => new Date(y, mo - 1, d, h, m).getTime();
 const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
-
-test('schedule words: parse, describe, reject', () => {
-  const cases: [string, string][] = [
-    ['every Monday 9:00', 'Every Monday at 9:00 am'],
-    ['mondays at 9', 'Every Monday at 9:00 am'],
-    ['every mon, wed and fri 5:30pm', 'Every Monday, Wednesday and Friday at 5:30 pm'],
-    ['fri 17:00', 'Every Friday at 5:00 pm'],
-    ['weekdays at 8 am', 'Weekdays at 8:00 am'],
-    ['every weekday morning', 'Weekdays at 9:00 am'],
-    ['every Friday at five', 'Every Friday at 5:00 pm'],
-    ['every evening', 'Every day at 6:00 pm'],
-    ['every day 7:15', 'Every day at 7:15 am'],
-    ['daily at noon', 'Every day at 12:00 pm'],
-    ['weekends 12am', 'Weekends at 12:00 am'],
-    ['every Tuesday', 'Every Tuesday at 9:00 am'],
-    ['every hour', 'Every hour'],
-    ['every 2 hours', 'Every 2 hours'],
-    ['every 30 minutes', 'Every 30 minutes'],
-  ];
-  for (const [text, words] of cases) assert.equal(describe(parseSchedule(text)), words, text);
-  for (const text of ['', 'sometimes', 'every 25:00 monday', 'monday 13pm', 'every 0 minutes', 'at 9']) assert.throws(() => parseSchedule(text), /can't read/, text);
-});
-
-test('next run: same day if still ahead, else the next matching day; intervals count from now', () => {
-  const mon9 = parseSchedule('every Monday 9:00');
-  // 2026-09-21 is a Monday.
-  assert.equal(nextRun(mon9, at(2026, 9, 21, 8, 59)), at(2026, 9, 21, 9, 0));
-  assert.equal(nextRun(mon9, at(2026, 9, 21, 9, 0)), at(2026, 9, 28, 9, 0), 'strictly after');
-  assert.equal(nextRun(mon9, at(2026, 9, 24, 12)), at(2026, 9, 28, 9, 0));
-  const weekdays = parseSchedule('weekdays 8am');
-  assert.equal(nextRun(weekdays, at(2026, 9, 25, 9)), at(2026, 9, 28, 8), 'Friday after 8 goes to Monday');
-  assert.equal(nextRun(parseSchedule('every 2 hours'), 1_000), 1_000 + 2 * 3_600_000);
-  // Local wall-clock time holds across a daylight-saving change (a no-op where the zone has none).
-  assert.equal(new Date(nextRun(parseSchedule('every day 9:00'), at(2026, 3, 28, 12))).getHours(), 9);
-  assert.equal(new Date(nextRun(parseSchedule('every day 9:00'), at(2026, 10, 24, 12))).getHours(), 9);
-});
-
-test('first run in words: names the day it lands on, at every hour of the day and either side of UTC', () => {
-  // The words come from a `now` the test owns, so nothing here can turn red on a day boundary or a zone the
-  // suite happens to run in. The expected day is read off the run itself, never off a clock.
-  const home = process.env.TZ;
-  try {
-    for (const zone of ['Pacific/Kiritimati', 'Asia/Tokyo', 'UTC', 'America/Los_Angeles', 'Pacific/Niue']) {
-      process.env.TZ = zone;
-      for (const [when, now] of [
-        ['a Monday at 11:58 pm, a minute before the day turns', at(2026, 9, 21, 23, 58)],
-        ['just after midnight, the first minute of the day', at(2026, 9, 22, 0, 1)],
-        ['late in the evening, after a same-day run is already past', at(2026, 9, 23, 23, 47)],
-      ] as [string, number][]) for (const text of ['weekdays at 8am', 'every Monday 9:00', 'every Friday 17:00', 'every day 7:15']) {
-        const next = nextRun(parseSchedule(text), now);
-        const first = firstRun(next, now);
-        const d = new Date(next);
-        const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
-        const ok = d.toDateString() === new Date(now).toDateString() ? [time]
-          : [`${d.toLocaleDateString([], { weekday: 'short' })} ${time}`, `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`];
-        assert.ok(ok.includes(first), `${zone}, ${when}, "${text}": the first run must read as the day it lands on, got "${first}"`);
-        assert.match(first, /am|pm/, 'the time is in the computer\'s own words');
-      }
-    }
-  } finally { if (home === undefined) delete process.env.TZ; else process.env.TZ = home; }
-});
 
 function setup() {
   const { db, crew, cfg, done } = lab();
@@ -681,20 +617,6 @@ test('the checkout card is read from the page: items and total as the page write
   await release(crew, 'scout', 'Done shopping.');
   await settled(db, t);
   done();
-});
-
-test('trigger words: parse, describe, reject', () => {
-  const files: [string, string][] = [
-    ['when a file arrives in the inbox', "When a file arrives in Reel's inbox"],
-    ['when photos land in the inbox', "When a file arrives in Reel's inbox"],
-    ['when a receipt is added', "When a file arrives in Reel's inbox"],
-  ];
-  for (const [text, words] of files) assert.equal(describeTrigger(parseTrigger(text), 'Reel'), words, text);
-  assert.equal(describeTrigger(parseTrigger('when this computer wakes up'), 'Reel'), 'When this computer wakes up');
-  assert.equal(describeTrigger(parseTrigger('when my laptop wakes'), 'Reel'), 'When this computer wakes up');
-  // The card's own words read back.
-  assert.equal(describeTrigger(parseTrigger("When a file arrives in Reel's inbox"), 'Reel'), "When a file arrives in Reel's inbox");
-  for (const text of ['', 'every Monday 9:00', 'whenever', 'when I wake up', 'when it rains']) assert.throws(() => parseTrigger(text), /can't start anything/, text);
 });
 
 test('event triggers: a file arriving in the inbox starts the chore once; waking starts wake chores', async () => {

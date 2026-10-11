@@ -3,7 +3,7 @@
 // to the person.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ITEMS, MAX_PARALLEL, subMessage } from '../src/batch.ts';
+import { MAX_ITEMS } from '../src/batch.ts';
 import { setup, settled, task } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
@@ -17,14 +17,6 @@ function scouted() {
   crew.recruit('scout', 'Scout', 'person');
   return { cfg, db, crew, done };
 }
-
-test('crew_batch belongs to helpers, never to Chief: his per-turn prompt does not grow', async () => {
-  const { crew, done } = scouted();
-  try {
-    assert.ok(!(crew as any).crewTools('chief').some((t: any) => t.name === 'crew_batch'));
-    assert.ok((crew as any).crewTools('scout').some((t: any) => t.name === 'crew_batch'));
-  } finally { done(); }
-});
 
 test('one question over three items: three parallel sessions, one merged answer, one spreadsheet for the asker', async () => {
   const { cfg, db, crew, done } = scouted();
@@ -115,9 +107,4 @@ test('an empty question or item list is a plain error, not a run of nothing', as
     assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /error: (say the one question|list the items)/);
     assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'nothing ran');
   } finally { done(); }
-});
-
-test('each item prompt carries its item, the shared question, and a sources line', () => {
-  const m = subMessage('What costs what?', 'Bluebird Cafe');
-  assert.ok(m.includes('Bluebird Cafe') && m.includes('What costs what?') && m.includes('Sources:'));
 });

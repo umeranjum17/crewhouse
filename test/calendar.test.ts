@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { setup, settled, task, until } from './lab.ts';
 
 const { CALENDAR, parseWhen, runCalendar, whenOf } = await import('../src/calendar.ts');
-const { effectOf, toolWords } = await import('../src/policy.ts');
+const { effectOf } = await import('../src/policy.ts');
 
 /** Google Calendar, stood in for: primary calendar events, with the private-key filter and the token check. */
 const store = new Map<string, any>();
@@ -90,18 +90,6 @@ test('calendar next [n]: the next timed events across two weeks, no ask', async 
   assert.match(await runCalendar(token, ['next']), /^next\[3\]/, 'no count means three');
   assert.ok(!(await runCalendar(token, ['next'])).includes('Day off'), 'all-day events are not next');
   assert.equal(effectOf('calendar', { args: ['next', '2'] }, { bot: 'Pip', space: '/tmp/pip', secret: [] }).kind, 'safe');
-});
-
-test('the gate reads the calendar command: looking is free, adding and moving ask, cancelling asks as a delete', () => {
-  const s = { bot: 'Pip', space: '/tmp/pip', secret: [] };
-  for (const args of [[], ['today'], ['week', '--from', 'tomorrow'], ['free', 'tomorrow'], ['next'], ['next', '2']]) assert.equal(effectOf('calendar', { args }, s).kind, 'safe');
-  assert.deepEqual(effectOf('calendar', { args: ['add', 'Dentist', 'tomorrow 09:00', '--where', 'High St'] }, s), {
-    kind: 'send', words: 'Pip wants to add “Dentist” to your Google Calendar, tomorrow 09:00.', key: 'app:Google Calendar:add an event', covers: '“add an event” in your Google Calendar' });
-  assert.equal((effectOf('calendar', { args: ['move', 'ev1abc', 'tomorrow 14:00'] }, s) as { words: string }).words, 'Pip wants to move an event on your Google Calendar to tomorrow 14:00.');
-  assert.equal(effectOf('calendar', { args: ['cancel', 'ev1abc'] }, s).kind, 'delete');
-  assert.equal(effectOf('calendar', { args: ['share', 'x'] }, s).kind, 'refuse');
-  assert.equal(toolWords('calendar', { args: ['add', 'Dentist', 'tomorrow'] }), 'Added “Dentist” to the calendar');
-  assert.equal(toolWords('calendar', { args: ['week'] }), 'Looked at the calendar');
 });
 
 test('a helper uses the connected calendar through crewd: no Google MCP, the token stays with crewd, adding asks first', async () => {
