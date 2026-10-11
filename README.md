@@ -25,6 +25,8 @@
 
 <p align="center">
   <picture>
+    <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-phone-night.webp" />
+    <source media="(max-width: 600px)" srcset="docs/screenshots/readme/home-phone-day.webp" />
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-night.webp" />
     <img src="docs/screenshots/readme/home-day.webp" width="900" alt="Crewhouse on a computer: Chief's chat in the middle with a thank-you note Scribe drafted, a Google Drive connect card and a new weekly routine; the crew and their status on the left; Scout's $968 flight order waiting for a yes on the right" />
   </picture>
