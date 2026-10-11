@@ -108,11 +108,10 @@ export function cleanReply(text: string) {
   return String(text ?? '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
 }
 
-/** A relay is the answer, not a quoted chunk of the helper's raw markdown. Clauses about work still under
- *  way (a handoff note like "Scribe is preparing…" written before the next helper finished) are stale by the
- *  time the final wrap states the outcome, so they are never relayed. */
+/** A relay drops stale progress; a confirmed action keeps its complete receipt. */
 const STALE_PROGRESS = /\b(is|are)\s+(preparing|on it\b|working on|looking into|checking|getting|putting together|writing|finishing)|\bwill\s+(prepare|write|check|finish|share|send|follow up)\b/i;
-export function relayResult(reply: string, note = '') {
+export function relayResult(reply: string, note = '', acted = false) {
+  if (acted) return cleanReply(reply); // A confirmed action keeps its receipt facts, not just the opening sentence.
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
@@ -528,7 +527,7 @@ export class Crew {
       this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
-      ? `${this.bot(t.bot)?.display ?? t.bot} finished. ${relayResult(t.result || 'Done')}`
+      ? `${t.acted ? '' : `${this.bot(t.bot)?.display ?? t.bot} finished. `}${relayResult(t.result || 'Done', '', !!t.acted)}`
       : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`);
     const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
     this.say(CHIEF, 'bot', text, root);
@@ -665,7 +664,10 @@ export class Crew {
       const row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
-      if (by === CHIEF) this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${firstRun(row.next_at)}.` : ''}`, null);
+      if (by === CHIEF) {
+        this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `New routine “${plan.name}”`, null);
+        if (!plan.at) this.say(CHIEF, 'bot', `I'll have ${plan.bot.display} ${plan.body.replace(/^./, (c) => c.toLowerCase()).replace(/[.!?]+$/, '')}. ${words}.${plan.when ? ` First check: ${firstRun(row.next_at)}.` : ''} ${looksFor(plan.body)?.replace(/^Tells you/, "I'll tell you") || (plan.quiet ? "I'll bring changes back here; nothing on a quiet day." : "I'll bring the result back here each time.")}`, null);
+      }
       return row;
     });
   }
@@ -1363,7 +1365,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
         release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
       };
-      l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back',
+      l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back. After a confirmed action, capture its real result with screenshot --filename=files/photos/<name>.png, then crew_deliver that file. Never draw a substitute.',
         { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
         async (p, signal) => {
           started ??= start();
@@ -1558,8 +1560,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
-      // Done needs proof: a job that acted out in the world ends done only when the helper declared it saw it work
-      // (crew_outcome). Declared unsure, or declared nothing, it ends unsure, never done.
+      // An action ends done only with crew_outcome; no confirmation means unsure.
       const said = task.outcome ? JSON.parse(task.outcome) : null;
       const b = this.bot(botId)!;
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
@@ -1571,10 +1572,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      if (task.origin === CHIEF && !this.teamJob(task)) {
-        // The helper's own words (a question word for word) in Chief's thread, with its task: the app shows who said it.
+      if ((task.origin === CHIEF && !this.teamJob(task)) || (botId !== CHIEF && task.routine && !clear)) {
         const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
-        this.say(CHIEF, 'bot', !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean)), task.id);
+        this.say(CHIEF, 'bot', !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean), !!task.acted), task.id);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1765,7 +1765,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
     if (standing && task?.reask) this.db.run('UPDATE tasks SET reask = 0 WHERE id = ?', task.id); // acted, then restarted: this one asks
     else if (standing) {
-      this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
+      this.db.event('run.allowed', botId, { task: task?.id, words: e.words, effect: e.kind, permission: e.key });
       return undefined;
     }
     const answer = await this.ask(botId, task, e, checkout);
@@ -1773,23 +1773,21 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return answer === 'allow' ? undefined : { block: true, reason: 'The person said not now. Continue without it, or explain what you need.' };
   }
 
-  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in
-   *  dollars. crewd reads it from the page as the browser tool itself reports it; the model's words never reach it. */
+  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in dollars. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
-    const l = this.live.get(botId);
-    const name = this.bot(botId)?.display ?? botId;
-    let host = 'a shop', shop = '';
-    try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); shop = u.origin; } catch { /* no page yet */ }
+    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, site = this.siteName(l?.page, l?.snapshot);
+    let shop = '';
+    try { shop = new URL(l?.page ?? '').origin; } catch { /* no page yet */ }
     const o = orderOf(l?.snapshot ?? '');
     const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
     // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
     // anything else says so in plain words, so a capped-looking yes can never hide a different currency.
     const not$ = o.total !== null && o.currency !== '$';
-    const words = o.total === null ? `${name} wants to act on a checkout page at ${host}. I couldn't read the total on this page.`
-      : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
+    const words = o.total === null ? `${name} wants to act on a checkout page at ${site}. I couldn't read the total on this page.`
+      : `${name} wants to place this order at ${site}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
     const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
       o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
-    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
+    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${site}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
   }
 
   /** The host of a page, named the way a person would: no www, no path. */
@@ -1797,33 +1795,35 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     try { return new URL(page ?? '').hostname.replace(/^www\./, ''); } catch { return ''; }
   }
 
-  /** The card for acting as the person on a site they signed the bot in to: the button it will press, or the form line
-   *  it will fill, the host, the page's own lines around it, and the money the page shows — all read by crewd from the
-   *  page as the browser tool itself reports it, never from what the model says it was about to do. A filled line is
-   *  shown as `label: value` — the label from the page, the value from the call — since this is the one card that
-   *  carries the person's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
-   *  into asks wherever it is, and its card lists every line it will fill in. */
+  /** The site named the way a person reads it: the page's own title when the host has no name (a local shop), else the bare domain. Never an IP or raw host. */
+  private siteName(page?: string, snapshot?: string) {
+    const host = this.hostOf(page);
+    if (/\./.test(host) && !/^\d+(\.\d+){3}$/.test(host)) return host;
+    const title = ((/title:\s*"((?:[^"\\]|\\.)*)"/.exec(snapshot ?? '') ?? [])[1] ?? '').replace(/\\"/g, '"').split(/\s*[·|:]\s*|\s+[—–-]\s+/)[0].trim();
+    return (title || 'the shop').slice(0, 40);
+  }
+  /** The card for acting as the person on a site: the button or form line, the site, the page's own lines and money. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
-    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
+    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', site = this.siteName(l?.page, l?.snapshot) || host, value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
     // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
     const pending = value === null ? l?.fills ?? [] : [];
     if (pending.length) {
       const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`));
       const n = pending.length;
       return { ...e, fill: true,
-        words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${host}${signed ? ', a site you signed it in to' : ''}.`,
-        preview: { head: `What ${name} will fill in on ${host}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
+        words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${site}${signed ? ', a site you signed it in to' : ''}.`,
+        preview: { head: `What ${name} will fill in on ${site}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
     }
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
     const shown = orderOf(l?.snapshot ?? '').shown;
     const back = value === null ? claimOf(l?.snapshot ?? '') : null;
     return { ...e, ...(value !== null ? { fill: true } : {}),
-      words: value !== null ? `${name} wants to fill “${p.label}” on ${host}, a site you signed it in to.`
-        : `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
+      words: value !== null ? `${name} wants to fill “${p.label}” on ${site}, a site you signed it in to.`
+        : `${name} wants to press “${p.label}” on ${site}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
       // One plain money line first on a press, only when the page itself writes both prices (the preview clamps);
       // a filled line reads `label: value`, and the card says nothing about money it did not read.
-      preview: { head: `What ${name} will ${value !== null ? 'fill' : 'press'} on ${host}`,
+      preview: { head: `What ${name} will ${value !== null ? 'fill' : 'press'} on ${site}`,
         body: value !== null ? `${p.label}: ${value}` : back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
   }
 
@@ -1954,7 +1954,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
         'or number, the sent message, the event read back), and `seen` names it. Otherwise false, and `seen` says in plain words what you did ' +
         'and what the person should check ("I pressed Book, but the page didn\'t show a confirmation. Worth checking your email for one."). ' +
-        'Not sure is an honest answer; a job that acted and says nothing counts as not sure.',
+        'Not sure is an honest answer; a job that acted and says nothing counts as not sure. Your final reply is a short warm receipt for Chief: only observed facts (order number, what, total, card ending, shipping, delivery window and receipt destination when known), with the person\'s chosen name. Missing facts stay missing; never promise a follow-up before its routine is approved.',
         (p) => {
           const seen = clean(p.seen, 400);
           if (!seen) throw new Error('say what you saw, or what the person should check');

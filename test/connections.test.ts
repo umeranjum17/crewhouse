@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled, task, until } from './lab.ts';
+import { setup, settled, task, until, release } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
 
 const { Connections, connectError } = await import('../src/connections.ts');
 const disk = await import('../src/bots.ts');
@@ -437,6 +438,27 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   assert.equal(sure.state, 'done');
   assert.ok(!sure.alerted);
   assert.ok(!sure.lines.some((l: string) => l.startsWith('Not sure')));
+
+  // A confirmed action reaches Chief with the complete produced facts, not just its opening.
+  const facts = 'Your Dentist page is created, Umer. It is titled Dentist in your Mocknote. The app returned did create-page with that title, so the page creation is confirmed; nothing was emailed or paid for.';
+  const permittedBefore = A.answeredReceipts(crew.snapshot()).filter((r) => r.id < 0).length;
+  const receiptJob = crew.assign('quill', `Create Dentist ${book} ${outcome(true, facts)} ask permission`, 'chief').task;
+  await release(crew, 'quill', facts);
+  await settled(db, receiptJob);
+  const chief = A.lines(crew.botPage('chief'), 'chief', crew.snapshot());
+  assert.ok(chief.some((l) => l.text === facts && !l.helper), 'Chief carries every fact, without making the helper speak');
+  const allowed = A.answeredReceipts(crew.snapshot());
+  assert.equal(allowed.filter((r) => r.id < 0).length, permittedBefore + 1, 'one standing permission outcome for this task');
+  assert.ok(allowed.every((r) => r.helper === 'chief'), 'permission outcomes belong to Chief');
+  const offer = (await crew.post('quill', '[tool crew_routine {"when":"every day 9am","name":"Dentist page watch","task":"Check the Dentist page and tell me if its date changes","quiet":true}]'))!.task;
+  await settled(db, offer);
+  const ask = crew.snapshot().asks.find((a: any) => a.kind === 'propose' && a.detail.routine)!;
+  assert.ok(ask, 'the follow-up still requires a routine propose card');
+  assert.ok(!crew.routines().some((r) => r.name === 'Dentist page watch'), 'it has not silently started');
+  await crew.answer(ask.id, { answer: 'allow' });
+  const started = A.lines(crew.botPage('chief'), 'chief', crew.snapshot());
+  const event = started.findIndex((l) => l.event && l.text === 'New routine “Dentist page watch”');
+  assert.ok(event >= 0 && started[event + 1].text.includes('Dentist page') && started[event + 1].text.includes('9:00 am'), 'a centred start event precedes Chief’s actual watch and cadence');
 
   // Nothing done out in the world: done as before, nothing to declare.
   assert.equal((await job('what time is it')).state, 'done');

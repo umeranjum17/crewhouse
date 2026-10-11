@@ -53,7 +53,7 @@ export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; b
 export type DocView = { name: string; parts: DocPart[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean; forget?: string };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean;
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean; event?: boolean;
   /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
   by?: string;
   /** A helper speaking in Chief's thread (its finished job or its question, in its own words): its face and name lead. */
@@ -792,17 +792,43 @@ function receiptWhat(c: Card): string {
   const words = first.split(/\s+/).filter(Boolean);
   return words.length ? words.slice(0, 8).join(' ') + (words.length > 8 ? '…' : '') : '';
 }
+/** The action an answered permission leaves in the thread, in one plain past-tense phrase — what the person let
+ *  through, named from the card's own words ("Placed the order at shop.example"), never the model's. Empty when
+ *  there is no action to name. */
+function receiptAction(kind: string, detail: Json): string {
+  if (kind !== 'permission') return '';
+  const d = detail ?? {};
+  const site = (/ (?:at|on) (.+?)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
+  if (d.effect === 'spend') return site ? `Placed the order at ${site}` : 'Placed the order';
+  if (d.fill) return site ? `Filled in a form at ${site}` : 'Filled in a form';
+  if (d.effect === 'send') return site ? `Sent a message at ${site}` : 'Sent a message';
+  if (d.effect === 'delete') return 'Deleted something';
+  return '';
+}
 /** A receipt per recently answered card: one plain line, "Copied: Refund for order 98765 · 9:12 pm". The card itself is
- *  gone, but the thread still shows what the person agreed to and when. A dismissed mail acknowledgement leaves nothing. */
-export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string }[] {
-  return (state.answered ?? []).flatMap((a: Json) => {
+ *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
+ *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
+ *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
+  const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
-    const what = c.evidence === 'draft' ? receiptWhat(c) : '';
-    return [{ id: a.id, helper: c.helper, at: a.answered_at, line: `${word}${what ? `: ${what}` : ''} · ${timeOf(a.answered_at)}` }];
+    if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
+    const named = c.evidence === 'draft' ? receiptWhat(c) : '';
+    const action = receiptAction(String(a.kind ?? ''), a.detail ?? {});
+    return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });
+  const seen = new Set<string>();
+  const standing = (state.events ?? []).flatMap((e: Json) => {
+    const d = e.data ?? {}, key = `${e.bot}:${d.task}:${d.permission}`;
+    if (e.kind !== 'run.allowed' || !d.permission || seen.has(key) || !(['send', 'spend', 'delete'].includes(d.effect) || d.effect === 'files' && /change a file/.test(d.words))) return [];
+    seen.add(key);
+    const verb = d.effect === 'spend' ? 'Spent' : d.effect === 'delete' ? 'Deleted' : 'Sent';
+    return [{ id: -e.seq, helper: 'chief', at: at(e.at), line: `Allowed by your standing permission · ${timeOf(e.at)}`, what: `${verb} with your standing permission`, word: 'Allowed' }];
+  });
+  return [...answered, ...standing].sort((a, b) => a.at - b.at);
 }
 const campaignPath = (path: unknown) => /^files\/campaign-[^/]+\.txt$/.test(String(path));
 const campaignPoster = (state: Json, root: number | undefined): FileView | undefined => root === undefined ? undefined : state.tasks.filter((t: Json) => t.root === root).flatMap((t: Json) => (t.files ?? []).filter((p: string) => /\.png$/i.test(p)).map((p: string) => fileView(t.bot, p)))[0];
@@ -1258,8 +1284,6 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
     return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
-  // Nothing narrated yet: the distinct things it tried are the list, latest last; the rest stays in the expand.
-  if (todos.length <= 1) for (const d of [...new Map(detail.map((x) => [x.text, x])).values()].slice(-4)) push(d.text, d.at);
   const writing = o.writing.get(t.id);
   if (state === 'working' && writing) push('Writing the answer', writing);
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
@@ -1304,7 +1328,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
       const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
-      if (!f) return { id: m.id, from: 'note', text: plain(text), files: [], choices: [], at: at0 };
+      if (!f) return { id: m.id, from: 'note', text: plain(text), event: bot === 'chief' && /^New routine “/.test(text), files: [], choices: [], at: at0 };
       const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`.
@@ -1319,7 +1343,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief', at: at0,
       text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
-    return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(m.helper ? { helper: String(m.helper) } : {}),
+    return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
@@ -1330,7 +1354,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
 export function trayNotes(state: Json, lines: Line[]): Line[] {
   const first = lines.find((l) => l.at)?.at;
   if (!first) return lines;
-  const notes = things(state).filter((t) => t.helper !== 'chief' && t.files.length && at(t.at) >= first)
+  const notes = things(state).filter((t) => t.helper !== 'chief' && t.files.length && at(t.at) >= first && !t.files.every((f) => lines.some((l) => l.files.some((g) => g.url === f.url))))
     .map((t): Line => ({ id: -t.id, from: 'note', by: t.helper, text: `${crewName(state, t.helper)} finished ${t.title || 'a job'} · it's in Your things`, files: [], choices: [], at: at(t.at) }));
   const out = [...lines];
   for (const n of notes.sort((a, b) => a.at! - b.at!)) {
@@ -1357,6 +1381,16 @@ export function slotMap<T extends { at: number }>(lines: Line[], items: T[]): { 
 }
 export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
   return slotMap(lines, cards);
+}
+/** Where a muted approval outcome sits: in time order, just above the result it let through, never floated to the
+ *  bottom of the thread where it would read as if the person had allowed the follow-up instead. */
+export function receiptSlots<T extends { at: number }>(lines: Line[], receipts: T[]): { before: Map<number, T[]>; tail: T[] } {
+  const before = new Map<number, T[]>(), tail: T[] = [];
+  for (const r of [...receipts].sort((a, b) => a.at - b.at)) {
+    const i = lines.findIndex((l) => l.at !== undefined && l.at > r.at);
+    if (i < 0) tail.push(r); else before.set(i, [...(before.get(i) ?? []), r]);
+  }
+  return { before, tail };
 }
 
 /** The memory the crew just kept, announced once each in its chat as "Saved: …" with the way to take it back, after the

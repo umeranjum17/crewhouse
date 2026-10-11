@@ -456,7 +456,10 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   // The person changes the time on the card, then starts it: the routine takes the new time.
   assert.equal((await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', scope: 'once', schedule: 'every Friday 9am' })).status, 200);
   const chiefSays = (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
-  assert.ok(chiefSays.some((x: string) => /^Routine added: “Make a demo of what shipped this week” for Reel, Every Friday at 9:00 am\. First run/.test(x)));
+  const start = chiefSays.indexOf('New routine “Make a demo of what shipped this week”');
+  assert.ok(start >= 0, 'approval writes the routine-start event');
+  assert.match(chiefSays[start + 1], /^I'll have Reel make a demo of what shipped this week\. Every Friday at 9:00 am\. First check: /);
+  assert.match(chiefSays[start + 1], /I'll bring the result back here each time\.$/, 'Chief explains the actual reporting cadence right after the event');
   let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Make a demo of what shipped this week');
   assert.equal(r.words, 'Every Friday at 9:00 am');
 
