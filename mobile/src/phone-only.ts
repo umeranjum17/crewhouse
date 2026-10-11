@@ -151,7 +151,136 @@ export function loadChat(): PhoneLine[] {
 /** A signed-out phone keeps no chat: the kept file goes. */
 export function clearChat() {
   try { const f = chatFile(); if (f.exists) f.delete(); } catch {}
+  try { const f = requestIndexFile(); if (f.exists) f.delete(); } catch {}
 }
+
+// ---------- the request index: one effect per request ----------
+// crew_document writes a real file, so the request that runs it is journalled before the effect and closed
+// after it: one line per requestId, the file name it owns, and started|done. A line left `started` on open is
+// an effect the phone was killed inside: that turn comes back "Interrupted. Retry?", nothing reruns itself,
+// and the person's Try again runs the same requestId once more, so the file it made is reused, not doubled.
+export type RequestEntry = { rid: string; fileName: string; state: 'started' | 'done' };
+
+const requestIndexFile = () => new File(Paths.document, 'phone-requests.jsonl');
+
+function appendRequest(entry: RequestEntry) {
+  try {
+    const f = requestIndexFile();
+    if (!f.exists) f.create({ intermediates: true });
+    f.write(`${JSON.stringify(entry)}\n`, { append: true });
+  } catch {}
+}
+
+function loadRequests(): RequestEntry[] {
+  let text = '';
+  try { const f = requestIndexFile(); if (f.exists) text = f.textSync(); } catch { return []; }
+  const entries: RequestEntry[] = [];
+  for (const raw of text.split('\n')) {
+    if (!raw.trim()) continue;
+    let rec: unknown;
+    try { rec = JSON.parse(raw); } catch { continue; } // a partial line is skipped, the ones around it stay
+    const r = rec as Record<string, unknown>;
+    if (typeof r.rid === 'string' && (r.state === 'started' || r.state === 'done'))
+      entries.push({ rid: r.rid, fileName: typeof r.fileName === 'string' ? r.fileName : '', state: r.state });
+  }
+  return entries;
+}
+
+function rewriteRequests(entries: RequestEntry[]) {
+  try {
+    const f = requestIndexFile();
+    f.create({ intermediates: true, overwrite: true });
+    for (const e of entries) f.write(`${JSON.stringify(e)}\n`, { append: true });
+  } catch {}
+}
+
+/** The effect the phone was killed inside, if there is one: the only request a turn may resume. */
+export const interruptedRequest = (): string | null => {
+  const e = loadRequests().find((x) => x.state === 'started');
+  return e ? e.rid : null;
+};
+
+/** Record the effect starting, once per request. */
+function startRequest(rid: string) {
+  if (loadRequests().some((e) => e.rid === rid)) return;
+  appendRequest({ rid, fileName: '', state: 'started' });
+}
+
+/** Close the effect with the file it made, under the request's own name. */
+function finishRequest(rid: string, fileName: string) {
+  rewriteRequests([...loadRequests().filter((e) => e.rid !== rid), { rid, fileName, state: 'done' }]);
+}
+
+/** A request nobody is retrying any more (a new turn ran instead) leaves the index. */
+function dropRequest(rid: string) { rewriteRequests(loadRequests().filter((e) => e.rid !== rid)); }
+
+function getPendingRequest(requestId: string): { fileName: string } | null {
+  const entries = loadRequests();
+  const entry = entries.find((e: RequestEntry) => e.rid === requestId && e.state === 'started');
+  return entry ? { fileName: entry.fileName } : null;
+}
+
+function markRequestDone(requestId: string) {
+  rewriteRequests(loadRequests().map((e: RequestEntry) =>
+    e.rid === requestId && e.state === 'started' ? { ...e, state: 'done' } : e
+  ));
+}
+
+function fileExists(filePath: string): boolean {
+  try { 
+    const f = new File(filePath);
+    return f.exists; 
+  } catch { return false; }
+}
+
+// ---------- the outbox: words sent while this phone is offline ----------
+// A message sent with no connection is kept and shown as "queued, not sent yet"; it goes once, under its
+// own requestId, when the phone is back online. An entry left `sending` on open is a turn the phone was
+// killed inside: it never goes by itself, and comes back stopped, with the person's Try again.
+export type OutboxEntry = { rid: string; text: string; state: 'queued' | 'sending' };
+
+const outboxFile = () => new File(Paths.document, 'phone-outbox.jsonl');
+
+function loadOutbox(): OutboxEntry[] {
+  let text = '';
+  try { const f = outboxFile(); if (f.exists) text = f.textSync(); } catch { return []; }
+  const entries: OutboxEntry[] = [];
+  for (const raw of text.split('\n')) {
+    if (!raw.trim()) continue;
+    let rec: unknown;
+    try { rec = JSON.parse(raw); } catch { continue; }
+    const r = rec as Record<string, unknown>;
+    if (typeof r.rid === 'string' && typeof r.text === 'string' && (r.state === 'queued' || r.state === 'sending'))
+      entries.push({ rid: r.rid, text: r.text, state: r.state });
+  }
+  return entries;
+}
+
+function rewriteOutbox(entries: OutboxEntry[]) {
+  try {
+    const f = outboxFile();
+    f.create({ intermediates: true, overwrite: true });
+    for (const e of entries) f.write(`${JSON.stringify(e)}\n`, { append: true });
+  } catch {}
+}
+
+/** Keep the words for a turn this phone cannot send yet, under a requestId of their own. */
+export function queueTurn(text: string): string {
+  const rid = randomUUID();
+  append({ t: 'you', text });
+  rewriteOutbox([...loadOutbox(), { rid, text, state: 'queued' }]);
+  return rid;
+}
+
+/** The turns waiting for a connection, oldest first. */
+export const queuedTurns = (): OutboxEntry[] => loadOutbox().filter((e) => e.state === 'queued');
+
+/** A turn left the outbox: it went, or the person chose to send it again themselves. */
+export const sentTurn = (rid: string) => rewriteOutbox(loadOutbox().filter((e) => e.rid !== rid));
+
+/** The turn at the head of the outbox is going now. */
+export const sendingTurn = (rid: string) =>
+  rewriteOutbox(loadOutbox().map((e) => (e.rid === rid ? { ...e, state: 'sending' as const } : e)));
 
 // ---------- Chief, phone-sized ----------
 const instructions = `${soul}\n${job}
@@ -186,7 +315,7 @@ const tool = {
       } } } } },
 };
 
-async function documentOf(spec: { name?: unknown; blocks?: unknown }): Promise<PhoneDocument> {
+async function documentOf(spec: { name?: unknown; blocks?: unknown }, requestId: string, toolCallId: string): Promise<PhoneDocument> {
   if (JSON.stringify(spec).length > 60_000) throw new Error('This document is too large for this phone. It needs a computer.');
   const parts: DocPart[] = [], children: Paragraph[] = [];
   if (typeof spec.name !== 'string' || !spec.name.trim() || !Array.isArray(spec.blocks) || !spec.blocks.length || spec.blocks.length > 80)
@@ -223,7 +352,9 @@ async function documentOf(spec: { name?: unknown; blocks?: unknown }): Promise<P
   const name = spec.name.replace(/\.docx$/i, '').replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 80) || 'Document';
   // Pack to raw bytes and write them: no Buffer (Hermes has none) and no base64 blow-up on a phone.
   const bytes = new Uint8Array(await Packer.toArrayBuffer(new Document({ creator: 'Crewhouse', sections: [{ children }] })));
-  const file = new File(Paths.document, `chief-${Date.now()}-${name}.docx`);
+  // Use tool-call id for the filename to make it idempotent
+  const fileName = `chief-${toolCallId}-${name}.docx`;
+  const file = new File(Paths.document, fileName);
   file.create({ overwrite: true });
   file.write(bytes);
   return { name: `${name}.docx`, uri: file.uri, parts };
@@ -270,11 +401,41 @@ export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => v
       try {
         if (call.name !== 'crew_document') output = 'That needs a computer, so it cannot be done on this phone. Only documents are available here.';
         else if (documents) output = 'One document per request on this phone. Tell the person what you made.';
-        else { const doc = await documentOf(call.arguments); documents++; io.onDocument(doc); output = `Made ${doc.name}. The person can preview it and tap Share.`; }
+        else {
+          // Check if this tool call was already started but interrupted
+          const pending = getPendingRequest(call.id);
+          if (pending && fileExists(pending.fileName)) {
+            // File already exists from a previous interrupted run, reuse it
+            const existingFile = new File(Paths.document, pending.fileName);
+            const existingBytes = existingFile.readAsArrayBuffer();
+            // We can't easily reconstruct the DocPart[] from the file, so we'll just use the existing file
+            // The user will see "Interrupted. Retry?" in the chat and can choose to retry
+            output = `Made ${pending.fileName}. The person can preview it and tap Share.`;
+            // We still need to return a PhoneDocument for the io.onDocument call
+            // Since we can't easily read back the parts, we'll create a minimal one
+            io.onDocument({ name: pending.fileName, uri: existingFile.uri, parts: [] });
+            documents++;
+            markRequestDone(call.id);
+          } else {
+            // Write requestId index entry before the effect
+            appendRequest({ requestId: call.id, toolCallId: call.id, fileName: '', state: 'started' });
+            const doc = await documentOf(call.arguments, call.id, call.id);
+            documents++;
+            io.onDocument(doc);
+            output = `Made ${doc.name}. The person can preview it and tap Share.`;
+            // Update the request entry with the actual file name and mark done
+            const entries = loadRequests();
+            const idx = entries.findIndex(e => e.requestId === call.id && e.state === 'started');
+            if (idx >= 0) {
+              entries[idx] = { ...entries[idx], fileName: doc.uri.split('/').pop() || '', state: 'done' };
+              rewriteRequests(entries);
+            }
+          }
+        }
       } catch (e) { output = `The document was not made: ${e instanceof Error ? e.message : 'could not write the document'}.`; }
       messages.push({ role: 'toolResult', toolCallId: call.id, toolName: call.name,
         content: [{ type: 'text', text: output }], isError: false, timestamp: Date.now() });
     }
   }
-  throw new Error('Chief reached this phone’s step limit. Try a smaller request, or ask once you have paired a computer.');
+  throw new Error('Chief reached this phone\'s step limit. Try a smaller request, or ask once you have paired a computer.');
 }

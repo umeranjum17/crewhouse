@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, loadChat, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, loadChat, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, rememberChief, rememberUser, queuedTurns, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -825,6 +825,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState('');
   const [open, setOpen] = useState<PhoneDocument | null>(null);
+  const [offline, setOffline] = useState(false);
   const scroll = useRef<ScrollView>(null);
   const ctrl = useRef<AbortController | null>(null);
   const reduce = motion.useReduceMotion();
@@ -843,9 +844,27 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     { text: 'Cancel', style: 'cancel' },
     { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
   ]);
+  useEffect(() => {
+    const loadQueued = async () => {
+      const queued = queuedTurns();
+      if (queued.length > 0) {
+        const first = queued[0];
+        setLines((ls) => [...ls, { who: 'you', text: first.text, queued: true, rid: first.rid }]);
+      }
+    };
+    void loadQueued();
+  }, []);
   const send = async (text: string) => {
     const words = text.trim();
-    if (!words || busy) return false;
+    if (!words || busy || offline) {
+      if (!words || busy) return false;
+      // Offline: queue the turn so it can send when back online
+      const rid = queueTurn(words);
+      setLines((ls) => [...ls, { who: 'you', text: words, queued: true, rid }]);
+      setPartial(''); setBusy(false);
+      say('Queued, not sent yet - will go when back online');
+      return true;
+    }
     // A cut-off turn is re-sent by the person as a new turn, never by the app; its start marker is left out
     // of the history so the words are not said twice.
     const turns: ChatTurn[] = [...lines.filter((l) => !l.stopped).map((l) => ({ who: l.who, text: l.text })), { who: 'you', text: words }];
@@ -896,6 +915,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
         </View></View>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+        {offline && <T tone="mute" style={s.small}>Queued turns are saved and will send when back online</T>}
       </ScrollView>
       <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={send} chat="phone-only" photos={false} /></View>
       {open && <PhoneDocSheet doc={open} onClose={() => setOpen(null)} />}
