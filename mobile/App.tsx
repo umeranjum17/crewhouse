@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, useWindowDimensions, View,} from 'react-native';
+  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneWords, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument } from './src/phone-only';
+import { askPhone, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument } from './src/phone-only';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -740,13 +740,19 @@ function PhoneOnly({ onExit }: { onExit: () => void }) {
   return <PhoneChat onExit={onExit} onSignedOut={() => setReady(false)} />;
 }
 
-function PhoneHead({ subtitle, onExit }: { subtitle: string; onExit: () => void }) {
+function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: () => void; onSignOut: () => void }) {
   const t = useLook();
+  // On a very narrow screen the two controls no longer leave room for "Chief", so they stack instead of
+  // squeezing the title into a per-character column. At normal widths the header stays the one row it was.
+  const narrow = useWindowDimensions().width < 360;
   return (
     <View style={[s.head, { borderColor: t.line }]}>
       <Face who="chief" size={32} />
-      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{subtitle}</T></View>
-      <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
+      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small} lines={1}>{subtitle}</T></View>
+      <View style={{ flexDirection: narrow ? 'column' : 'row', alignItems: 'flex-end', gap: narrow ? 2 : 12 }}>
+        <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8}><T tone="ink2" style={s.small}>Sign out</T></Pressable>
+        <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
+      </View>
     </View>
   );
 }
@@ -827,6 +833,18 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const beat = motion.useBeat(360, reduce);
   useEffect(() => { void phonePlan().then((p) => p && setPlan(p)); }, []);
   useEffect(() => () => ctrl.current?.abort(), []);
+  // Leaving phone-only for good: remove the saved key, then flush the mode marker before the app can be killed,
+  // so a relaunch opens the chooser. A key-removal failure says so and keeps the person on the chat.
+  const signOut = async () => {
+    try { await phoneSignOut(); }
+    catch { say("Couldn't sign out. Please try again."); return; }
+    await setPhoneMode(false).catch(() => {});
+    onExit();
+  };
+  const confirmSignOut = () => Alert.alert('Sign out of Chief?', 'Your key will be removed from this phone.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
+  ]);
   const send = async (text: string) => {
     const words = text.trim();
     if (!words || busy) return false;
@@ -850,7 +868,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const speaker = (w: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{w}</T>;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-      <PhoneHead subtitle={plan || 'On this phone, no computer'} onExit={onExit} />
+      <PhoneHead subtitle={plan || 'On this phone, no computer'} onExit={onExit} onSignOut={confirmSignOut} />
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}
         onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
         {!lines.length && !partial && (
