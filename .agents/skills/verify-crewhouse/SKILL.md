@@ -222,6 +222,7 @@ off the screen must still say what changed.
   native proof in `features/phone-pairing.md` (`scripts/phone-pair.mjs`: an emulator whose camera reads
   the live code, the computer confirms, the phone lands on "You're in") and says so instead of claiming
   these four captures. A change to Chief's bubble or its panel runs `features/bubble-write-it-here.md`.
+  A change to phone-only mode (its screens or sign-out) runs `features/phone-only-signout.md`.
 - **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
   designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
   behaviour, not a fifth capture.
