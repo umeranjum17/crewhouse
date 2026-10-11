@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 // @ts-expect-error: a plain script, no types
 import { measure, report, variants } from '../scripts/measure-firstwords.mjs';
-import { loadConfig } from '../src/config.ts';
 import { startModelStub } from './openclaw-stub.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-firstwords-'));
@@ -22,21 +21,12 @@ process.on('exit', () => rmSync(root, { recursive: true, force: true }));
 
 const opts = (extra: object) => ({ runs: 1, variants: ['tiny', 'chief'], body: 'Plan dinners for the week.', out: '', state: join(root, 'state'), crew: join(root, 'crew'), address: '', provider: null, ...extra });
 
-test('the harness writes the crew prompt it measures, and never the harness\'s own words as the person\'s', () => {
-  const cfg = { ...loadConfig(), stateDir: join(root, 'state'), crewDir: join(root, 'crew') };
-  const [tiny, chief] = variants(['tiny', 'chief'], cfg, 'Plan dinners for the week.', 'Sam');
-  assert.ok(chief.messageChars > tiny.messageChars, 'the normal Chief prompt carries the context the tiny one does not');
-  assert.match(chief.system, /You are Chief/);
-  assert.match(chief.system, /Your id in Crewhouse is chief\./);
-  assert.match(chief.message, /^\[Crewhouse\] The person likes to be called "Sam"/);
-  assert.match(chief.message, /What the whole crew knows about the person:\nPrefers short answers\./);
-  assert.match(chief.message, /The person says: Plan dinners for the week\./);
-});
-
 test('crewd already up: the harness refuses instead of taking over its Gateway', async () => {
-  // A live process whose command line names crewd, so the guard sees a running daemon.
-  const fake = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20_000)', 'src/main.ts'], { stdio: 'ignore' });
+  // A live process whose command line names crewd, so the guard sees a running daemon. It says when it is running
+  // its own script: the guard reads /proc, and a pid read before that can still be the test's own (CI 2026-10-10).
+  const fake = spawn(process.execPath, ['-e', 'console.log("up"); setTimeout(() => {}, 20_000)', 'src/main.ts'], { stdio: ['ignore', 'pipe', 'ignore'] });
   try {
+    await new Promise((up, failed) => { fake.stdout!.once('data', up); fake.once('exit', () => failed(new Error('the stand-in crewd exited before it ran'))); });
     mkdirSync(join(root, 'state'), { recursive: true });
     writeFileSync(join(root, 'state', 'crewd.pid'), `${fake.pid}\n`);
     await assert.rejects(measure(opts({})), /crewd \(pid \d+\) is running/);

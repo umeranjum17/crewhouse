@@ -99,7 +99,10 @@ test('a stalled send says it is held, a failed one offers Retry, and Retry sends
   await until('the words sent and the line gone', () => run("!document.querySelector('.dock .composer .send-away') && !document.querySelector('.dock .composer .send-failed') && document.querySelector('.chat .dock textarea').value === ''"), 15_000);
   assert.equal(await words(), '', 'the box clears once the words are really sent');
 
-  // Exactly one message reached the crew — the Retry's — never two from the held request.
+  // Exactly one message reached the crew — the Retry's — never two from the held request. The box clears on the
+  // computer's answer, which can land before the crew has written the line (CI 2026-10-11), so wait for the line.
+  const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id");
+  await until('the retried words in Chief\'s thread', () => said().length > 0, 15_000);
   const mine = db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id");
   assert.deepEqual(mine.map((m: any) => m.text), ['Book the dentist'], 'the words went once, on the Retry');
 });
