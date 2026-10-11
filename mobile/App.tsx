@@ -725,7 +725,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
         <T tone="ink2">Your whole crew runs on your computer — browsing, files, apps and schedules — and this phone talks to it.</T>
         <Btn big label="Pair with a computer" onPress={() => setComputer(true)} />
       </Card>
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>🔒 Either way, your sign-in stays on your own device.</T>
+      <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>Either way, your sign-in stays on your own device.</T>
     </ScrollView>
   );
 }

@@ -14,6 +14,7 @@
     "@byokit/statusbar": "0.1.1",
     "@byokit/ui-core": "0.6.0",
     "@desklink/react-native": "0.3.0",
+    "patch-package": "8.0.1",
     "@expo/ui": "~57.0.21",
     "expo": "~57.0.25",
     "expo-build-properties": "~57.0.22",
@@ -48,7 +49,7 @@
     "android": "expo run:android",
     "apk": "expo prebuild -p android && cd android && ./gradlew assembleRelease",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/patch-modules.mjs"
+    "postinstall": "node scripts/patch-modules.mjs && patch-package --error-on-fail"
   },
   "private": true,
   "expo": {
