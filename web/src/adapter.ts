@@ -1365,6 +1365,16 @@ export function slotMap<T extends { at: number }>(lines: Line[], items: T[]): { 
 export function cardSlots(lines: Line[], cards: Card[]): { before: Map<number, Card[]>; tail: Card[] } {
   return slotMap(lines, cards);
 }
+/** Where a muted approval outcome sits: in time order, just above the result it let through, never floated to the
+ *  bottom of the thread where it would read as if the person had allowed the follow-up instead. */
+export function receiptSlots<T extends { at: number }>(lines: Line[], receipts: T[]): { before: Map<number, T[]>; tail: T[] } {
+  const before = new Map<number, T[]>(), tail: T[] = [];
+  for (const r of [...receipts].sort((a, b) => a.at - b.at)) {
+    const i = lines.findIndex((l) => l.at !== undefined && l.at > r.at);
+    if (i < 0) tail.push(r); else before.set(i, [...(before.get(i) ?? []), r]);
+  }
+  return { before, tail };
+}
 
 /** The memory the crew just kept, announced once each in its chat as "Saved: …" with the way to take it back, after the
  *  turn that kept it. `memory.learned` carries its own undo on crewd; `profile.edited` a sentence that is still in the

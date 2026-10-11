@@ -1511,7 +1511,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const trail = b?.task && page ? A.steps(page.trail ?? [], b.task.id, true) : [];
   const cards = A.cards(state).filter((c) => c.helper === id);
   const receipts = A.answeredReceipts(state).filter((r) => r.helper === id);
-  const slots = A.cardSlots(lines, cards), receiptSlots = A.slotMap(lines, receipts);
+  const slots = A.cardSlots(lines, cards), receiptSlots = A.receiptSlots(lines, receipts);
   const last = lines.at(-1);
   const name = h?.name ?? 'Chief';
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.

@@ -606,8 +606,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   // Each ask's card sits at the end of the turn that raised it, before the next message the person sent (A.cardSlots).
   const slots = A.cardSlots(lines, cards);
   const receipts = page ? A.answeredReceipts(state).filter((r) => r.helper === id) : [];
-  // An answered card leaves a receipt in the same slot its card showed (A.slotMap).
-  const receiptSlots = A.slotMap(lines, receipts);
+  // An answered card leaves a muted outcome in time order, above the result it let through (A.receiptSlots).
+  const receiptSlots = A.receiptSlots(lines, receipts);
   const last = lines.at(-1);
   const send = async (t: string) => {
     setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
@@ -646,7 +646,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {lines.map((l, i) => {
           const speaker = l.helper ? A.crew(state).find((x) => x.id === l.helper) : undefined;
           // A card raised earlier in this turn shows above this line: the ask that ends a turn sits after its reply.
-          // An answered card's receipt keeps the same slot its card showed (A.slotMap).
+          // An answered card's muted outcome shows just above this line, in time order (A.receiptSlots).
           const before = [
             ...(slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh)),
             ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} />),
