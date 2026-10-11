@@ -15,7 +15,9 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin'; head: string; words: string;
+  /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
+  site?: { host: string; icon: string; bot: string };
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
@@ -38,7 +40,7 @@ export type Card = {
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
-export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review };
@@ -683,6 +685,12 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'connect', app, status: `Wants to use ${app.name}`, head: `${name} could use ${app.name}`, words: plain(d.words ?? `${name} can do this with your ${app.name}. Connect it?`),
       choices: [{ label: `Connect ${app.name}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'signin') {
+    const who = crewName(state, d.bot), host = String(d.host);
+    return { ...base, kind: 'signin', site: { host, bot: d.bot, icon: `${d.origin}/favicon.ico` }, status: `For ${who}'s job`, head: `Sign in to ${host}`,
+      words: `${who} needs you signed in to ${host} to carry on. You sign in yourself on ${who}'s screen, then tap Done.`,
+      choices: [{ label: `Sign in to ${host}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -791,7 +799,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
-      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     const what = c.evidence === 'draft' ? receiptWhat(c) : '';
     return [{ id: a.id, helper: c.helper, at: a.answered_at, line: `${word}${what ? `: ${what}` : ''} · ${timeOf(a.answered_at)}` }];
   });

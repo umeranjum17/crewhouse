@@ -629,6 +629,47 @@ test('give back keeps the sites the person ticked, and Forget takes one back', a
   done();
 });
 
+/** A helper with a ready Computer, asked a job that needs a site's sign-in (crew_signin, J8). */
+async function signinAsk() {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('reel', 'Reel', 'person');
+  mkdirSync(join(lab.cfg.toolsDir, 'repo', 'tools', 'computer'), { recursive: true });
+  writeFileSync(join(lab.cfg.toolsDir, 'repo', 'tools', 'computer', 'tool.json'), JSON.stringify({ id: 'computer', source: 'system', bins: ['j8-computer'], install: {} }));
+  symlinkSync(join(lab.cfg.repoDir, 'templates'), join(lab.cfg.toolsDir, 'repo', 'templates'));
+  lab.cfg.repoDir = join(lab.cfg.toolsDir, 'repo');
+  fakeBin(kit.toolBin(lab.cfg), 'j8-computer');
+  disk.setGrants(lab.cfg, 'reel', ['computer']);
+  const t = lab.crew.assign('reel', 'read my orders [tool crew_signin {"site":"http://127.0.0.1:8123/login"}]', 'chief').task;
+  await until('the sign-in ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('reel'));
+  return { ...lab, t };
+}
+
+test('sign-in card: a helper asks in Chief\'s thread, naming the site with its own icon and one button', async () => {
+  const { crew, done } = await signinAsk();
+  const state = crew.snapshot();
+  const c = A.cards(state).find((x) => x.kind === 'signin')!;
+  assert.equal(c.helper, 'chief', 'the person hears it from Chief, never from the helper');
+  assert.equal(c.head, 'Sign in to 127.0.0.1');
+  assert.deepEqual(c.site, { host: '127.0.0.1', bot: 'reel', icon: 'http://127.0.0.1:8123/favicon.ico' });
+  assert.equal(c.choices[0].label, 'Sign in to 127.0.0.1');
+  assert.ok(A.needsYou(state).some((x) => x.id === c.id), 'and it is counted under Needs you');
+  done();
+});
+
+test('Done on a sign-in hands the wheel back: the site is kept, the card answered, the helper carries on by itself', async () => {
+  const { db, crew, cfg, t, done } = await signinAsk();
+  await crew.takeOver('reel');
+  await crew.giveBack('reel');
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done', 'no note needed: the helper resumed and finished');
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${t}`)?.message ?? '', /given them back/);
+  assert.deepEqual(disk.botConfig(cfg, 'reel').signedIn, ['127.0.0.1'], 'its presses there ask from now on');
+  assert.equal(crew.snapshot().asks.length, 0);
+  assert.match(A.answeredReceipts(crew.snapshot())[0].line, /^Signed in to 127\.0\.0\.1 · \d{1,2}:\d\d [ap]m$/);
+  done();
+});
+
 test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {
   const { db, crew, cfg, done } = setup();
   try {

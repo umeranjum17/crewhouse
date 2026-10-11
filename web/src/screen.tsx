@@ -3,18 +3,66 @@ import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
 import * as A from './adapter.ts';
-import { attempt, Pill } from './parts.tsx';
+import { attempt, Pill, SiteIcon } from './parts.tsx';
 
 const STATUS: Record<string, string> = {
   idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
 };
 
-export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => void; showing?: { words: string } | null }) {
-  const control = bot.controls === 'person';
+/** One live session on a bot's screen, with input on while the person holds the wheel. */
+function useBotScreen(bot: Json, control: boolean, setErr: (e: string) => void) {
   const controlRef = useRef(control);
   controlRef.current = control;
-  const watching = useRef(false);
   const signaling = useRef<ReturnType<typeof desktopSignaling> | null>(null);
+  const session = useDesktopSession({
+    authorize: async () => {
+      signaling.current?.close();
+      signaling.current = desktopSignaling(bot.id);
+      return { signaling: signaling.current, session: { permissions: controlRef.current ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
+    },
+    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
+  });
+  // Input is per session (closing one turns it off), so it is switched on after each connect.
+  const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current));
+  useEffect(() => () => { void session.close(); signaling.current?.close(); }, []);
+  return { session, open, stop: () => session.close().then(() => signaling.current?.close()) };
+}
+
+/** A helper's sign-in ask, answered (J8): the helper's screen over the whole window, already driving, the site on top
+ *  and one Done. Done hands the wheel back and the helper carries on by itself; a note is optional. */
+export function SiteSignIn({ c, bot, onClose }: { c: A.Card; bot: Json; onClose: () => void }) {
+  const site = c.site!;
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const [driving, setDriving] = useState(false), [failed, setFailed] = useState(false);
+  const { session, open } = useBotScreen(bot, driving, setErr);
+  useEffect(() => { void attempt(() => api.takeOver(site.bot)).then((ok) => (ok ? setDriving(true) : setFailed(true))); }, [site.bot]);
+  useEffect(() => { if (driving) void open(); }, [driving]);
+  const done = async () => { if (await attempt(() => api.giveBack(site.bot, note ?? ''))) onClose(); };
+  return (
+    <div className="signin-full" role="dialog" aria-modal="true" aria-label={c.head}>
+      <header className="signin-bar">
+        <SiteIcon site={site} />
+        <div className="grow"><b>{c.head}</b><span className="small">{driving ? `You're driving ${bot.display}'s screen. Sign in as you always do.` : failed ? `${bot.display}'s screen didn't open.` : 'Opening…'}</span></div>
+        {failed ? <button className="btn" onClick={onClose}>Back</button> : <button className="btn go" disabled={!driving} onClick={() => void done()}>Done</button>}
+      </header>
+      {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
+      <div className="signin-stage" onPointerDownCapture={() => session.showKeyboard()}>
+        <DesktopView sessionId={session.nativeId} style={{ width: '100%', height: '100%' }} accessibilityLabel={`${bot.display}'s screen`}
+          placeholder={<div className="screen-idle">{driving && session.snapshot.status !== 'idle' ? STATUS[session.snapshot.status] : 'Opening…'}</div>} />
+      </div>
+      <footer className="signin-foot">
+        {err && <span className="nudge-line">{err}</span>}
+        {note === null ? <button className="link" onClick={() => setNote('')}>Add a note</button>
+          : <input className="input grow" autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={`Anything ${bot.display} should know? Never a password.`} />}
+      </footer>
+    </div>
+  );
+}
+
+export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => void; showing?: { words: string } | null }) {
+  const control = bot.controls === 'person';
+  const watching = useRef(false);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
   const [what, setWhat] = useState<string | null>(null); // "Show Reel how": what it is, before the recorder starts
@@ -29,25 +77,14 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
     return () => { on = false; };
   }, [control, bot.id]);
 
-  const session = useDesktopSession({
-    authorize: async () => {
-      signaling.current?.close();
-      signaling.current = desktopSignaling(bot.id);
-      return { signaling: signaling.current, session: { permissions: controlRef.current ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
-    },
-    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
-  });
-
-  // Input is per session (closing one turns it off), so it is switched on after each connect.
-  const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current));
+  const { session, open, stop: close } = useBotScreen(bot, control, setErr);
   // Who holds the controls decides the permissions, so a change re-opens the session with the new ones.
   useEffect(() => {
     if (watching.current) void session.close().then(open);
   }, [control]);
-  useEffect(() => () => { void session.close(); signaling.current?.close(); }, []);
 
   const watch = () => { setErr(''); watching.current = true; void open(); };
-  const stop = () => { watching.current = false; void session.close().then(() => signaling.current?.close()); };
+  const stop = () => { watching.current = false; void close(); };
   const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
 
   const live = session.snapshot.status;

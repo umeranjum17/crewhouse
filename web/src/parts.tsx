@@ -726,7 +726,26 @@ export function AnsweredCard({ line, undo }: { line: string; undo?: () => void }
 
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
  *  review before any yes; spending always says the footer note. */
+/** A site's own icon, from the site itself; its first letter when the site has none to give. */
+export function SiteIcon({ site }: { site: { host: string; icon: string } }) {
+  const [ok, setOk] = useState(false); // the site's letter until its icon has loaded (a slow or missing one never shows a blank tile)
+  return <span className="site-ic" aria-hidden>{!ok && site.host.replace(/^www\./, '')[0]?.toUpperCase()}<img src={site.icon} alt="" referrerPolicy="no-referrer" hidden={!ok} onLoad={() => setOk(true)} /></span>;
+}
+
+/** A helper's sign-in ask: the site's name and icon and one button, which opens the helper's screen to sign in on. */
+function SignInCard({ c, onDone }: { c: Card; onDone: () => void }) {
+  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
+  return (
+    <div className="card ask signin-card">
+      <div className="ask-head"><SiteIcon site={c.site!} /><div className="grow"><b>{c.head}</b><div className="ask-status"><i />{c.status}</div></div><time className="mute small">{clock(c.at)}</time></div>
+      <p className="ask-words">{c.words}</p>
+      <div className="btns"><a className="btn go" href={`#/ask/${c.id}`}>{c.choices[0].label}</a><More title={c.head} sub={c.status} acts={[{ label: 'Not now', run: no }]} /></div>
+    </div>
+  );
+}
+
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
+  if (c.kind === 'signin') return <SignInCard c={c} onDone={onDone} />;
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);

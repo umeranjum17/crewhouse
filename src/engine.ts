@@ -10,7 +10,7 @@ export const PARAMETERS = {
   crew_app: Type.Object({ tool: Type.String(), input: Type.Optional(Type.Object({}, { additionalProperties: true })) }), crew_web_fetch: Type.Object({ url: Type.String() }), crew_web_search: Type.Object({ query: Type.String() }),
   crew_read: Type.Object({ path: Type.String() }), crew_write: Type.Object({ path: Type.String(), content: Type.String() }), crew_edit: Type.Object({ path: Type.String(), oldText: Type.String(), newText: Type.String() }),
   crew_ls: Type.Object({ path: Type.Optional(Type.String()) }), crew_grep: Type.Object({ path: Type.String(), pattern: Type.String() }), crew_find: Type.Object({ path: Type.Optional(Type.String()) }),
-  crew_connect: Type.Object({ app: Type.String() }), crew_outcome: Type.Object({ worked: Type.Boolean(), seen: Type.String() }), crew_report: Type.Object({ text: Type.String() }),
+  crew_connect: Type.Object({ app: Type.String() }), crew_signin: Type.Object({ site: Type.String() }), crew_outcome: Type.Object({ worked: Type.Boolean(), seen: Type.String() }), crew_report: Type.Object({ text: Type.String() }),
   crew_deliver: Type.Object({ path: Type.String(), note: Type.Optional(Type.String()) }),
   crew_workbook: Type.Object({ name: Type.String(), sheets: Type.Array(Type.Object({ name: Type.String(), columns: Type.Array(Type.Object({ header: Type.String(), width: Type.Optional(Type.Number()), options: Type.Optional(Type.Array(Type.String())) })), rows: Type.Array(Type.Array(Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]))) })) }),
   crew_batch: Type.Object({ question: Type.String(), items: Type.Array(Type.String()) }),

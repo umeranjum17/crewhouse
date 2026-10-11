@@ -28,7 +28,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
 const ABOUT: Record<string, string> = {
-  shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.',
+  shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.', crew_signin: 'Ask for a sign-in',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail, read-only: what is new, search it, read a conversation, as `args`. It cannot send or change mail.",

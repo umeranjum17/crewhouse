@@ -10,7 +10,7 @@ type Helper = ReturnType<typeof A.crew>[number];
 import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
-import { Screen } from './screen.tsx';
+import { Screen, SiteSignIn } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
@@ -332,10 +332,10 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   );
 }
 
-/** The desk's right column beside Chief's chat: the question that matters most, with its exact lines and buttons,
+/** The desk's right column beside Chief's chat: the question that matters most (not one his thread already shows), with its exact lines and buttons,
  *  then what its helper is doing, step by step. A file tapped in the chat opens beside it, in the preview sheet. */
 function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; refresh: () => void }) {
-  const ask = live.needs[0]; // Needs you's own order: the question that matters most comes first
+  const ask = live.needs.find((c) => c.helper !== 'chief'); // Needs you's own order; Chief's own asks already sit inline in his thread beside it, never twice on one screen
   const who = ask ? A.crew(state).find((h) => h.id === ask.helper) : undefined;
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   const doer = working.find((c) => c.steps.length) ?? working[0] // someone at work first, like the board's Penny
@@ -1720,7 +1720,8 @@ function App() {
           {v.view === 'share' && <Share {...ctx} />}
         </main>
       </div>
-      {sheet && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
+      {sheet && !sheet.site && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
