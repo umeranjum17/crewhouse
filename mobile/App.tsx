@@ -36,6 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { askPhone, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneWords, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument } from './src/phone-only';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -82,7 +83,11 @@ export default function App() {
   const t = look(useColorScheme() === 'dark');
   const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
+  // Phone-only is an option beside pairing, remembered on this phone; pairing wins when a computer is there.
+  const [phone, setPhone] = useState<boolean | null>(null);
+  const leavePhone = () => { void setPhoneMode(false); setPhone(false); };
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
+  useEffect(() => { phoneMode().then(setPhone).catch(() => setPhone(false)); }, []);
   return (
     <Theme.Provider value={t}>
       <SafeAreaProvider>
@@ -90,7 +95,8 @@ export default function App() {
         <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'bottom']}>
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
-            : grant === null ? <Pair onPaired={setGrant} />
+            : grant === null ? (phone === null ? <Center><ActivityIndicator color={t.ink} /></Center> : phone ? <PhoneOnly onExit={leavePhone} />
+              : <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { void setPhoneMode(false); setPhone(false); setGrant(g); }} />)
             : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
           <Toast />
         </SafeAreaView>
@@ -685,6 +691,176 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>{A.awake('your computer')}</T>
       <T tone="mute" style={[s.small, s.centerText]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
     </ScrollView>
+  );
+}
+
+// ---------- phone only: Chief on this phone, no computer ----------
+/** The first choice, for a phone with no computer paired: run Chief here, or pair one. Never replaces pairing. */
+function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
+  const t = useLook();
+  const [computer, setComputer] = useState(false);
+  if (computer) return <Pair onPaired={onPaired} />;
+  return (
+    <ScrollView contentContainerStyle={s.centerScroll}>
+      <ChiefArt mood="hello" size={104} whole />
+      <T style={s.display}>Crewhouse</T>
+      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant. Run Chief on this phone alone, or pair it with your computer for the whole crew.</T>
+      <Card style={{ alignSelf: 'stretch', gap: 10, marginTop: 6 }}>
+        <T style={s.b}>Just this phone</T>
+        <T tone="ink2">Connect your own account key and Chief runs right here, with no computer. He can answer and make documents.</T>
+        <Btn go big label="Use this phone only" onPress={onPhoneOnly} />
+      </Card>
+      <Card style={{ alignSelf: 'stretch', gap: 10 }}>
+        <T style={s.b}>With your computer</T>
+        <T tone="ink2">Your whole crew runs on your computer — browsing, files, apps and schedules — and this phone talks to it.</T>
+        <Btn big label="Pair with a computer" onPress={() => setComputer(true)} />
+      </Card>
+      <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>🔒 Either way, your sign-in stays on your own device.</T>
+    </ScrollView>
+  );
+}
+
+function PhoneOnly({ onExit }: { onExit: () => void }) {
+  const t = useLook();
+  const [ready, setReady] = useState<boolean | null>(null);
+  useEffect(() => { void phoneSignedIn().then(setReady).catch(() => setReady(false)); }, []);
+  if (ready === null) return <Center><ActivityIndicator color={t.ink} /></Center>;
+  if (!ready) return <PhoneSignIn onExit={onExit} onDone={() => setReady(true)} />;
+  return <PhoneChat onExit={onExit} onSignedOut={() => setReady(false)} />;
+}
+
+function PhoneHead({ subtitle, onExit }: { subtitle: string; onExit: () => void }) {
+  const t = useLook();
+  return (
+    <View style={[s.head, { borderColor: t.line }]}>
+      <Face who="chief" size={32} />
+      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle}>Chief</T><T tone="ink2" style={s.small} lines={1}>{subtitle}</T></View>
+      <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
+    </View>
+  );
+}
+
+/** Connect the person's own account with an API key: one paste, agreed per use, nothing else leaves the phone. */
+function PhoneSignIn({ onDone, onExit }: { onDone: () => void; onExit: () => void }) {
+  const t = useLook();
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const connect = async () => {
+    if (!key.trim() || busy) return;
+    setBusy(true); setErr('');
+    try { await phoneConnect(key); onDone(); }
+    catch (e) { setErr(phoneSignInWords(e)); setBusy(false); }
+  };
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+      <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
+        <ChiefArt mood="hello" size={104} whole />
+        <T style={s.display}>Chief on this phone</T>
+        <T tone="ink2" style={s.centerText}>Connect your own {phoneProviderName} key. Chief runs right here — no computer, and the key never leaves this phone.</T>
+        <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={key} onChangeText={setKey}
+          placeholder={`Paste your ${phoneProviderName} key`} placeholderTextColor={t.mute}
+          accessibilityLabel={`${phoneProviderName} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Connect" disabled={!key.trim()} onPress={connect} />}
+        {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+        <Btn ghost label="Use a computer instead" onPress={onExit} />
+        <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>Billed per use by {phoneProviderName}. Your key is kept on this phone.</T>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+type PhoneLine = { who: 'you' | 'chief'; text: string; doc?: PhoneDocument };
+
+/** A finished document Chief made here: read it, or send it out with the share sheet. Nothing leaves until Share. */
+function PhoneDocCard({ doc, onOpen }: { doc: PhoneDocument; onOpen: () => void }) {
+  const t = useLook();
+  return <Card style={{ marginLeft: 70, gap: 8 }}>
+    <View style={s.row}>
+      <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone="ink2" style={s.fileGlyph}>▤</T></View>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}><T style={[s.rowTitle, s.b]} lines={2}>{doc.name}</T><T tone="mute" style={s.small}>Document</T></View>
+      <Btn label="Read" onPress={onOpen} />
+    </View>
+    <Btn go label="Share" onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
+  </Card>;
+}
+
+function PhoneDocSheet({ doc, onClose }: { doc: PhoneDocument; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose}>
+      <Pressable style={[s.sheet, { backgroundColor: t.bg, maxHeight: '88%' }]} onPress={() => {}}>
+        <View style={[s.row, { paddingBottom: 12, borderBottomWidth: 1, borderColor: t.line }]}>
+          <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone="ink2" style={s.fileGlyph}>▤</T></View>
+          <T style={[s.h2, { flex: 1 }]} lines={2}>{doc.name}</T><Btn label="Close" onPress={onClose} />
+        </View>
+        <ScrollView style={{ flexShrink: 1 }}>{doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>}</ScrollView>
+        <Btn go label="Share" onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
+      </Pressable>
+    </Pressable>
+  </Modal>;
+}
+
+/** Chief's chat on this phone, streamed, with the one tool he has here: a document. */
+function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: () => void }) {
+  const t = useLook();
+  const [lines, setLines] = useState<PhoneLine[]>([]);
+  const [partial, setPartial] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState('');
+  const [open, setOpen] = useState<PhoneDocument | null>(null);
+  const scroll = useRef<ScrollView>(null);
+  const ctrl = useRef<AbortController | null>(null);
+  const reduce = motion.useReduceMotion();
+  const beat = motion.useBeat(360, reduce);
+  useEffect(() => { void phonePlan().then((p) => p && setPlan(p)); }, []);
+  useEffect(() => () => ctrl.current?.abort(), []);
+  const send = async (text: string) => {
+    const words = text.trim();
+    if (!words || busy) return false;
+    const turns: ChatTurn[] = [...lines.map((l) => ({ who: l.who, text: l.text })), { who: 'you', text: words }];
+    setLines((ls) => [...ls, { who: 'you', text: words }]);
+    setPartial(''); setBusy(true);
+    ctrl.current = new AbortController();
+    let doc: PhoneDocument | undefined;
+    try {
+      const answer = await askPhone(turns, { onText: setPartial, onDocument: (d) => { doc = d; } }, ctrl.current.signal);
+      setLines((ls) => [...ls, { who: 'chief', text: answer, doc }]);
+    } catch (e) {
+      if (!ctrl.current.signal.aborted) {
+        if (phoneExpired(e)) onSignedOut();
+        else setLines((ls) => [...ls, { who: 'chief', text: phoneWords(e), doc }]);
+      }
+    } finally { setPartial(''); setBusy(false); }
+    return true;
+  };
+  const starter = 'Draft a one-page packing list for a 3-day trip as a document';
+  const speaker = (w: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{w}</T>;
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+      <PhoneHead subtitle={plan || 'On this phone, no computer'} onExit={onExit} />
+      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}
+        onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
+        {!lines.length && !partial && (
+          <View style={s.intro}>
+            <View style={[s.halo, { backgroundColor: t.soft }]}><ChiefArt mood="hello" size={72} /></View>
+            <T style={s.introName}>Chief</T>
+            <T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>Ask me anything. I can answer here, and make documents you can share.</T>
+            <Btn label="Make a packing list" onPress={() => void send(starter)} />
+          </View>
+        )}
+        {lines.map((l, i) => l.who === 'you'
+          ? <View key={i} style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('You')}<T style={{ flex: 1 }}>{l.text}</T></View></View>
+          : <View key={i} style={{ gap: 10 }}>
+            {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
+            {l.doc && <PhoneDocCard doc={l.doc} onOpen={() => setOpen(l.doc!)} />}
+          </View>)}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+      </ScrollView>
+      <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={send} chat="phone-only" photos={false} /></View>
+      {open && <PhoneDocSheet doc={open} onClose={() => setOpen(null)} />}
+    </KeyboardAvoidingView>
   );
 }
 
