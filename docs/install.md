@@ -1,0 +1,116 @@
+# Install and run Crewhouse
+
+The [README](../README.md#quick-start) has the three-step quick start. This page has everything after it: what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
+
+Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
+
+## Download
+
+There is no full release yet, so there's no packaged computer download and GitHub's `/releases/latest` links don't apply (GitHub skips prereleases there).
+
+- **Computer (Linux):** run it from a checkout today — see the [quick start](../README.md#quick-start). From that checkout (after `./crewhouse setup`), `npm run build:web && node scripts/package.mjs` builds the two computer downloads: **`crewhouse_<version>_amd64.deb`** (about 200 MB) and a portable **`crewhouse-<version>-linux-x64.tar.gz`**. The `.deb` carries the helpers' sandbox and screens, installs under `/opt/crewhouse`, adds an app-menu entry, and starts the crew by itself when you log in. Neither file is on the releases page yet.
+- **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20261001.16.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261001.16/CREWHOUSE-APK-1.0.0-preview.20261001.16.apk) — v1.0.0-preview.20261001.16, ~90 MB, SHA-256 `bae601ad5cf62c9e226d8cced397bb9aba18bebddc41b3cf9e8a6818c21598c6`. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](../TRY-IT.md#3-the-phone-app)).
+
+The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
+
+## From source
+
+You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
+
+```bash
+git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
+./crewhouse setup     # installs dependencies and the engine, builds the web app, checks the machine
+./crewhouse start     # starts Crewhouse and prints the address
+```
+
+Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link (an iPad or phone installs the web app from its own https address: [The installed web app](#the-installed-web-app)). Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
+
+When run in a terminal, `setup` asks two things:
+
+- Whether to install the helpers' pinned tools now: their web browser with its own Chromium (about 170 MB), MarkItDown and yt-dlp. You can do this later with `./crewhouse tools install`.
+- Whether Crewhouse should start by itself when you log in (a systemd user service). You can change this later with `./crewhouse autostart on|off`.
+
+`./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
+
+Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
+| `./crewhouse doctor` | Shows what's installed and what's missing, and how to add it |
+| `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
+| `./crewhouse autostart on\|off` | Turns starting at login on or off |
+| `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone or the installed web app from the terminal; `code` also prints a relay code to use away from home |
+| `./crewhouse phones web [off]` | Serves the installed web app at this computer's Tailscale https address and prints it |
+| `./crewhouse uninstall [--all] [--yes]` | Removes what Crewhouse installed |
+
+## How sign-ins are stored
+
+Engine sign-ins use BYOKit's sealing: the stopped engine keeps `auth-store.sealed`, and the next start restores the same login. Verified legacy copies and migration archives leave no plaintext credential copy. Crewhouse opts into the kit's dual wrapping: when available, the non-interactive OS keyring and an owner-only host key both wrap the saved sign-in, so later locked starts still work without prompting. A new install without keyring access uses the host key. An older keyring-only store needs one unlocked start to upgrade; until then the app asks you to unlock your password storage and try again. There is no plaintext fallback and no `CREWHOUSE_AUTH_KEY_FILE` requirement.
+
+On Linux the kit's host key lives at `$XDG_STATE_HOME/byokit-<SHA-256 of crewhouse-engine>/host-key/` (the state root defaults to `~/.local/state`), beside the default `crewhouse/` state directory. Exclude that key directory from sealed-store backups; keep it separately for restores. Crewhouse does not copy or export it. Stop all writers before any kit-managed rotation; never edit key files yourself. Losing the original key or OS keyring makes the sealed store unrecoverable; an older build cannot open it. If `auth-store.sealed` cannot be read, the engine fails closed: it stays stopped, the file is left untouched, and the app shows the kit's recovery words.
+
+App connections use the pinned BYOKit connection kit and its documented sealed-store adapter, with the same dual wrapping under the separate `crewhouse-connect` service. The person's `app-signins/` folder holds ciphertext, including the setup key and refreshed grants. Keep this service's host key separate from ciphertext backups too. Old app sign-ins and setup keys are not imported; reconnect apps after upgrading.
+
+Credentials remain plaintext while the engine or migration doctor runs. Orderly shutdown waits for sealing; a crash is recovered on the next prepare once the old engine has stopped. Use encrypted storage and exclude live engine state from backups. This does not protect against another process running as the same OS user.
+
+## Upgrading a shared install
+
+Existing shared installs must first update through the one-person migration release (P1, `bc37c20`) before installing this build; otherwise startup refuses without changing their live data. That release upgrades to the person who set them up (person 1). Before changing live data, the P1 release saves the full database as `crew-before-one-person.db` in its state folder. Other people's jobs, messages and phones leave the live install; their files and sign-ins stay untouched on disk. Your sign-ins, connections, memory, phones and settings keep working. Watch baselines for removed routines are kept with a `.before-one-person` suffix so a new routine starts fresh. Downgrading to a build before this migration is unsupported: an older build could reuse a former person's id and files.
+
+## The phone app
+
+The phone app (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](../TRY-IT.md#3-the-phone-app)), or ask Chief to add your phone. Every paired phone uses your crew; you can also add one that only watches. Quiet hours hold notifications across a restart and send one when they end. To reach the computer away from home, use Tailscale or [run your own relay](../relay/README.md). There's no built-in one.
+
+The app pairs with the computer by QR code or a typed code, over the home Wi-Fi, over Tailscale, or through a relay you run yourself. Its notifications only ever say "Crewhouse has news". The words themselves come over the encrypted link.
+
+Keep the phone app up to date alongside the computer. An older preview shows “Get the latest Crewhouse app to keep chatting.” Open Chief’s chat and tap the sentence to download the current preview.
+
+## The installed web app
+
+An iPad or phone can install Crewhouse's web app and use your crew from its Home Screen. The app pairs only on an https page (the browser seals its key with crypto that plain http doesn't offer), so it is served at this computer's own [Tailscale](https://tailscale.com/download) name, with a real certificate:
+
+1. Install Tailscale on this computer and on the iPad or phone, signed in to the same tailnet, with HTTPS certificates turned on for it (Tailscale's admin console, DNS).
+2. On the computer, run `./crewhouse phones web`. It prints the address, `https://<computer>.<tailnet>.ts.net:7713` (the phone link's port plus one).
+3. On the iPad, open that address in Safari, tap Share, then **Add to Home Screen** (keep **Open as Web App** on).
+4. Open Crewhouse from the Home Screen and tap **Pair — yes, let's go**. Paste the code from `./crewhouse phones code`.
+5. Check that the app shows the same two words as `./crewhouse phones pending`, then run `./crewhouse phones approve '<two words>'`.
+
+The direct code works from this page: the app dials the link at its own https address first. A relay code works from it only when your relay is served over https. `./crewhouse phones web off` stops serving the address.
+
+The installed web app (Add to Home Screen on iOS 16.4+, or install on Android) can get the same content-free news as a web push through your own relay. Turn it on under Settings, Phones, "Notifications on this device". A paired installed app has the same switch on its own Settings, under the computer's name. It needs a relay.
+
+## Phone notifications
+
+Phone notifications currently use raw Expo registration, delivery and a local quiet-hours outbox: migration debt pending published BYOKit notification contracts. Content-free news, phone grant authorization and quiet-hour preferences remain Crewhouse policy. Android status uses the published `@byokit/statusbar` 0.1.1 kit; the direct iOS Live Activity integration still needs a kit. The Android preview's push notifications need the builder's own push credential.
+
+## Desktop bar (Omarchy or Waybar)
+
+The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
+
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](../packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
+
+For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
+
+```json
+{
+  "id": "crewhouse", "type": "command",
+  "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
+  "interval": 10,
+  "onClick": "/absolute/path/crewhouse/crewhouse open"
+}
+```
+
+For Waybar, add `custom/crewhouse` to `modules-right` (or another module list) and add this configuration:
+
+```json
+"custom/crewhouse": {
+  "exec": "/absolute/path/node /absolute/path/crewhouse/packaging/bar-pill.mjs",
+  "return-type": "json", "interval": 10,
+  "on-click": "/absolute/path/crewhouse/crewhouse open"
+}
+```
+
+This view is for your computer session. Clicking opens Crewhouse, where you can respond on each card.
