@@ -332,10 +332,10 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   );
 }
 
-/** The desk's right column beside Chief's chat: the question that matters most, with its exact lines and buttons,
+/** The desk's right column beside Chief's chat: the question that matters most (not one his thread already shows), with its exact lines and buttons,
  *  then what its helper is doing, step by step. A file tapped in the chat opens beside it, in the preview sheet. */
 function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; refresh: () => void }) {
-  const ask = live.needs[0]; // Needs you's own order: the question that matters most comes first
+  const ask = live.needs.find((c) => c.helper !== 'chief'); // Needs you's own order; Chief's own asks already sit inline in his thread beside it, never twice on one screen
   const who = ask ? A.crew(state).find((h) => h.id === ask.helper) : undefined;
   const working = live.crew.filter((c) => A.seatOf(c) === 'working');
   const doer = working.find((c) => c.steps.length) ?? working[0] // someone at work first, like the board's Penny

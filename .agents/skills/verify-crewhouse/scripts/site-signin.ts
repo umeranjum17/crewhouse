@@ -1,5 +1,6 @@
 // A helper's site sign-in, end to end on a live crewd, in a private headless browser (own profile, own CDP port).
-//   SITE_URL=http://shop.localhost:<port> node .agents/skills/verify-crewhouse/scripts/site-signin.ts "$PWD" "$B" "$LAB/state" "$EV" [bot]
+//   SITE_URL=http://shop.localhost:<port> node .agents/skills/verify-crewhouse/scripts/site-signin.ts "$PWD" "$B" "$LAB/state" "$EV" [bot] [day-1440,…]
+// One pass per fresh lab (run.sh): a lab's earlier answered lines would sit in the next pass's shots. The report appends.
 // Recipe and what to read: ../features/site-signin.md. SCRATCH (default: the OS temp dir) holds the browser profile.
 // Per theme and width: the card in Chief's thread, the large screen, the signed-in page with Done, the answered line.
 // One recording of the whole flow (day, 1440). On the stub engine the helper's browser tool is headless, so the
@@ -9,7 +10,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 
-const [repo, base, stateDir, out, bot = 'penny'] = process.argv.slice(2);
+const [repo, base, stateDir, out, bot = 'penny', tags = 'day-1440,night-1440,day-390,night-390'] = process.argv.slice(2);
 const site = process.env.SITE_URL!, host = new URL(site).hostname;
 const { taskBrowser } = await import(join(repo, 'test/browser.ts'));
 const { browserBin } = await import(join(repo, 'src/desktop.ts'));
@@ -104,9 +105,10 @@ for (let i = 0; ; i++) { // a loaded host can drop the first load: navigate agai
   await send('Page.navigate', { url: `${base}/#person=${key}` }).catch(() => {});
   try { await until('the app', seen("location.hash === '#/'"), 40_000); break; } catch (e) { if (i === 3) throw e; }
 }
-const report: any[] = [];
-for (const [theme, w] of [['day', 1440], ['night', 1440], ['day', 390], ['night', 390]] as const) {
-  const tag = `${theme}-${w}`, clip = theme === 'day' && w === 1440;
+const reportFile = join(out, 'site-signin-report.json'), report: any[] = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : [];
+const name = (await api('GET', `/api/bots/${bot}`)).bot.display;
+for (const tag of tags.split(',')) {
+  const [theme, w] = tag.split('-') as ['day' | 'night', '1440' | '390'], clip = tag === 'day-1440';
   console.error(`pass ${tag}`);
   await send('Emulation.setDeviceMetricsOverride', SIZES[w]);
   // 1. The helper's job: its browser opens the shop (signed out), then crew_signin asks.
@@ -117,7 +119,8 @@ for (const [theme, w] of [['day', 1440], ['night', 1440], ['day', 390], ['night'
   await sleep(1500);
   xtype('key:ctrl+l', `text:${site}/logout`, 'key:Return');
   await sleep(1500);
-  await api('POST', `/api/bots/${bot}/messages`, { text: `Check my Corner Shop orders [tool crew_signin {"site":"${site}/login"}]` });
+  // Asked of Chief, as a person would; the app shows the words without the stub's tool line.
+  await api('POST', '/api/bots/chief/messages', { text: `${name}, check my Corner Shop orders [tool crew_signin {"site":"${site}/login"}]` });
   await until('the sign-in ask', openAsk);
   const ask = await openAsk();
   // 2. The card, in Chief's thread.
@@ -127,7 +130,7 @@ for (const [theme, w] of [['day', 1440], ['night', 1440], ['day', 390], ['night'
   await until('the site icon', seen("!!document.querySelector('.signin-card .site-ic img')?.complete"), 5000).catch(() => {});
   await sleep(500);
   const card = await run(`(() => { const c = document.querySelector('.signin-card'), b = c.getBoundingClientRect(); return { text: c.innerText, icon: !!c.querySelector('.site-ic img')?.naturalWidth,
-    button: c.querySelector('.btn.go').textContent, inChief: location.hash === '#/', box: [b.x, b.y, b.width, b.height].map(Math.round), sideways: document.documentElement.scrollWidth - innerWidth }; })()`);
+    button: c.querySelector('.btn.go').textContent, inChief: location.hash === '#/', copies: [...document.querySelectorAll('.signin-card')].filter((e) => e.getBoundingClientRect().width > 0).length, box: [b.x, b.y, b.width, b.height].map(Math.round), sideways: document.documentElement.scrollWidth - innerWidth }; })()`);
   report.push({ tag, step: 'card', ...card, file: await shot(`card-${tag}`) });
   if (clip) await record.start();
   // 3. One tap: the helper's screen, large and already driving.
@@ -154,9 +157,15 @@ for (const [theme, w] of [['day', 1440], ['night', 1440], ['day', 390], ['night'
     signedIn: (await api('GET', `/api/bots/${bot}`)).signedIn, file: await shot(`answered-${tag}`) });
   if (clip) { await sleep(1500); report.push(await record.stop(join(out, 'motion', 'site-signin-day-1440.webm'))); }
   await until('the helper carried on', async () => !(await api('GET', '/api/state')).bots.find((b: any) => b.id === bot)?.task);
+  const after = await api('GET', '/api/state'); // the helper's chat badge and the crew's counts, once its job is done
+  report.push({ tag, step: 'after', unread: after.bots.find((b: any) => b.id === bot)?.unread, waiting: after.asks.length, file: await shot(`after-${tag}`) });
 }
-writeFileSync(join(out, 'site-signin-report.json'), JSON.stringify(report, null, 2));
+writeFileSync(reportFile, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.map(({ text: _t, ...r }) => r)));
 ws.close();
-await browser.close();
+await browser.close().catch(async (e: Error) => { // a loaded host can take longer than the close bound: wait for our own browser to go
+  const left = () => [...String(e.message).matchAll(/"pid":(\d+)/g)].map((m) => m[1]).filter((p) => existsSync(`/proc/${p}`));
+  for (let i = 0; i < 600 && left().length; i++) await sleep(100);
+  if (left().length) throw e;
+});
 rmSync(profile, { recursive: true, force: true });
