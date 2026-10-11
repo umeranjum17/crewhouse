@@ -1096,8 +1096,13 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   );
 }
 
-/** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). */
-function AnsweredRow({ line }: { line: string }) {
+/** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). An approval
+ *  outcome instead reads as one muted row, the action in plain words left and the outcome word right. */
+function AnsweredRow({ line, what, word }: { line?: string; what?: string; word?: string }) {
+  if (word !== undefined) return <View style={[s.row, { paddingLeft: 70, marginTop: -2, alignItems: 'baseline' }]}>
+    <T tone="mute" lines={1} style={[s.small, { flex: 1, minWidth: 0 }]}>{what}</T>
+    <T tone="mute" style={s.small}>{word}</T>
+  </View>;
   return <T tone="mute" style={[s.small, { paddingLeft: 70, marginTop: -2 }]}>{line}</T>;
 }
 
@@ -1568,7 +1573,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
           </View>}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>
           {(slots.before.get(i) ?? []).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-          {(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} />)}
+          {(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
           {dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={s.line}>
             {l.from === 'note' ? <>
@@ -1578,9 +1583,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
+                {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
                 {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <ChatText text={l.text} />)}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
-                {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
                 {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
               </View>
             </View>}
@@ -1591,7 +1596,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {ln && <LiveLine ln={ln} go={go} />}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-        {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} />)}
+        {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
       </ScrollView>
       {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}

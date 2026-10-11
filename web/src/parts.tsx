@@ -719,8 +719,11 @@ function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string;
 }
 
 /** What an answered card leaves in the thread: one small plain line — what was done and when — where the card was.
- *  A kept memory's own line carries the way to take it back as an inline text button on the same line. */
-export function AnsweredCard({ line, undo }: { line: string; undo?: () => void }) {
+ *  An approval outcome instead reads as one muted pill, the action in plain words on the left and the outcome word on
+ *  the right ("Placed the order at shop.example   Allowed"), like the reference. A kept memory's own line carries the
+ *  way to take it back as an inline text button on the same line. */
+export function AnsweredCard({ line, what, word, undo }: { line?: string; what?: string; word?: string; undo?: () => void }) {
+  if (word !== undefined) return <div className="card answered receipt" role="status"><span className="receipt-what">{what}</span><span className="receipt-word">{word}</span></div>;
   return <div className="card answered" role="status">{line}{undo && <> <button className="link saved-undo" onClick={undo}>Undo</button></>}</div>;
 }
 

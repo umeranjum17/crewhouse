@@ -792,24 +792,41 @@ function receiptWhat(c: Card): string {
   const words = first.split(/\s+/).filter(Boolean);
   return words.length ? words.slice(0, 8).join(' ') + (words.length > 8 ? '…' : '') : '';
 }
+/** The action an answered permission leaves in the thread, in one plain past-tense phrase — what the person let
+ *  through, named from the card's own words ("Placed the order at shop.example"), never the model's. Empty when
+ *  there is no action to name. */
+function receiptAction(kind: string, detail: Json): string {
+  if (kind !== 'permission') return '';
+  const d = detail ?? {};
+  const site = (/ (?:at|on) ([^\s]+)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
+  if (d.effect === 'spend') return site ? `Placed the order at ${site}` : 'Placed the order';
+  if (d.fill) return site ? `Filled in a form at ${site}` : 'Filled in a form';
+  if (d.effect === 'send') return site ? `Sent a message at ${site}` : 'Sent a message';
+  if (d.effect === 'delete') return 'Deleted something';
+  return '';
+}
 /** A receipt per recently answered card: one plain line, "Copied: Refund for order 98765 · 9:12 pm". The card itself is
- *  gone, but the thread still shows what the person agreed to and when. A dismissed mail acknowledgement leaves nothing. */
-export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string }[] {
+ *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
+ *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
+ *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
-    const what = c.evidence === 'draft' ? receiptWhat(c) : '';
-    return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${what ? `: ${what}` : ''} · ${timeOf(a.answered_at)}` }];
+    const named = c.evidence === 'draft' ? receiptWhat(c) : '';
+    const action = receiptAction(String(a.kind ?? ''), a.detail ?? {});
+    return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });
   const seen = new Set<string>();
   const standing = (state.events ?? []).flatMap((e: Json) => {
     const d = e.data ?? {}, key = `${e.bot}:${d.task}:${d.permission}`;
     if (e.kind !== 'run.allowed' || !d.permission || seen.has(key) || !(['send', 'spend', 'delete'].includes(d.effect) || d.effect === 'files' && /change a file/.test(d.words))) return [];
     seen.add(key);
-    return [{ id: -e.seq, helper: 'chief', at: at(e.at), line: `Allowed by your standing permission · ${timeOf(e.at)}` }];
+    const verb = d.effect === 'spend' ? 'Spent' : d.effect === 'delete' ? 'Deleted' : 'Sent';
+    return [{ id: -e.seq, helper: 'chief', at: at(e.at), line: `Allowed by your standing permission · ${timeOf(e.at)}`, what: `${verb} with your standing permission`, word: 'Allowed' }];
   });
   return [...answered, ...standing].sort((a, b) => a.at - b.at);
 }
