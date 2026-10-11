@@ -28,7 +28,7 @@ for (const name of ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'GNOME_KEYRING_C
 const before = new Set(readdirSync(scratch));
 const cleanup = () => rmSync(root, { recursive: true, force: true });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { cleanup(); process.kill(process.pid, signal); });
-const files = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
+const all = readdirSync('test').filter((name) => name.endsWith('.test.ts')).map((name) => join('test', name));
 // CI lanes: a file that builds a real gateway (`new OpenClawRuntime`) starves past its timeouts when it
 // overlaps another gateway boot, and a file that drives a real browser (Chromium via browserBin/taskBrowser)
 // doubles those boots when it overlaps them — CI 2026-10-06: migrate 150s serial went past its 295s bound
@@ -41,6 +41,12 @@ const LIGHT_CONCURRENCY = 2;
 // The first-words harness builds its gateway in the script, not the test, and starves there as well.
 const isGateway = (file) => /new OpenClawRuntime|migrate-house|measure-firstwords/.test(readFileSync(file, 'utf8'));
 const isBrowser = (file) => /browserBin|taskBrowser|ownedBrowser|Xvfb/.test(readFileSync(file, 'utf8'));
+// `--group=` splits the suite into CI's parallel jobs: the gateway files are most of the wall time (migrate alone is
+// ~5 minutes), so they get their own two jobs and the app files a third. No group runs everything, as before.
+const group = process.argv.find((a) => a.startsWith('--group='))?.slice('--group='.length);
+const GROUPS = { migrate: (f) => isGateway(f) && /migrate/.test(f), engine: (f) => isGateway(f) && !/migrate/.test(f), app: (f) => !isGateway(f) };
+if (group && !GROUPS[group]) throw new Error(`unknown test group ${group}: use ${Object.keys(GROUPS).join(', ')}`);
+const files = group ? all.filter(GROUPS[group]) : all;
 const runOne = (file) => new Promise((resolve) => {
   const t0 = Date.now();
   const child = spawn(bounded ? 'timeout' : process.execPath,
