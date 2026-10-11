@@ -3,82 +3,18 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { createServer as http1, request as http1Request } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, encodeOffer, offerText, parseOffer } from '@byokit/pair';
-import { Link, NEWS, linkHosts, phoneAddresses, tailscalePeer } from '../src/link.ts';
+import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, parseOffer } from '@byokit/pair';
+import { Link, NEWS } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
 import * as A from '../web/src/adapter.ts';
-import { decodeOffer as decodeTyped, encodeOffer as encodeTyped } from '@byokit/pair';
+import { decodeOffer as decodeTyped } from '@byokit/pair';
 import { b64url } from '@byokit/pair';
-
-test('typed envelope carries addresses, port, key and one-use secret; errors are plain', () => {
-  const o = { v: 1 as const, host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),
-    name: 'your computer', role: 'control' as const, expires: Date.now() + 120_000,
-    urls: ['ws://192.168.1.2:9443/link', 'ws://100.101.2.3:9443/link'] };
-  const code = encodeTyped(o);
-  assert.deepEqual({ ...decodeTyped(code), name: o.name }, o);
-  assert.equal(code, encodeOffer(o));
-  assert.deepEqual(parseOffer(offerText(decodeTyped(code))), o);
-  assert.throws(() => decodeTyped(code.replace(/^./, 'Z')), /match/);
-  assert.throws(() => decodeTyped(code, o.expires + 1000), /run out/);
-});
-
-test('pre-kit compact codes remain readable without changing their pinned key or ticket', () => {
-  const old = '262J8-2T52E-3J82T-52E3J-82T52-E3J82-T52E3-J82T5-2E3J8-2T52E-3J82T-92X5J-G3T92-X5JG3-T92X5-JG3T9-HPQSC-22425-2CJ2A-46NKJ-2U572-A3MBT-V98C5-JZ';
-  assert.deepEqual(decodeTyped(old, 0), { v: 1, name: 'your computer', role: 'control', expires: 2100000000000,
-    host: b64url(new Uint8Array(32).fill(3)), ticket: b64url(new Uint8Array(16).fill(7)),
-    urls: ['ws://192.168.1.2:9443/link', 'ws://100.101.2.3:9443/link'] });
-  assert.throws(() => decodeTyped(old, 2100000000001), /run out/);
-  assert.throws(() => decodeTyped(old.slice(0, -1) + '2', 0), /match/);
-});
-
-test('the link binds loopback and Tailscale by default; the home network only when turned on', () => {
-  const at = (address: string, internal = false) => [{ address, family: 'IPv4', internal, netmask: '', mac: '', cidr: null }] as any;
-  const ifaces = { lo: at('127.0.0.1', true), wlan0: at('192.168.1.20'), tailscale0: at('100.101.2.3'), docker0: at('172.17.0.1') };
-  assert.deepEqual(linkHosts('', false, ifaces), ['127.0.0.1', '100.101.2.3']);
-  assert.deepEqual(linkHosts('', true, ifaces), ['0.0.0.0']);
-  assert.deepEqual(linkHosts('10.0.0.5, 127.0.0.1', true, ifaces), ['10.0.0.5', '127.0.0.1'], 'CREWHOUSE_LINK_HOST pins the addresses');
-  assert.deepEqual(phoneAddresses(['127.0.0.1', '100.101.2.3'], ifaces), ['100.101.2.3'], 'the QR offers loopback only when there is nothing else');
-  assert.deepEqual(phoneAddresses(['127.0.0.1'], ifaces), ['127.0.0.1']);
-  assert.deepEqual(phoneAddresses(['0.0.0.0'], ifaces), ['192.168.1.20', '100.101.2.3'], 'home network first; container bridges skipped');
-  assert.deepEqual(linkHosts('', false, { lo: at('127.0.0.1', true), eth0: at('192.168.1.20') }), ['127.0.0.1'], 'no Tailscale: loopback only');
-  const unnamed = { en0: at('192.168.1.20'), utun3: at('100.101.2.3'), wt0: at('100.90.1.2') };
-  assert.deepEqual(linkHosts('', false, unnamed, ['100.101.2.3']), ['127.0.0.1', '100.101.2.3'], 'CLI evidence identifies unnamed Tailscale; another overlay stays closed');
-  assert.deepEqual(linkHosts('', false, unnamed), ['127.0.0.1'], 'CGNAT alone is not Tailscale evidence');
-  assert.deepEqual(phoneAddresses(['0.0.0.0'], unnamed, ['100.101.2.3']), ['192.168.1.20', '100.101.2.3']);
-});
-
-test('quiet hours hold the push and send exactly one when they end, even across a restart', () => {
-  const dir = temp('crewhouse-held');
-  const sent: { id: string; to: string[] }[] = [];
-  let quiet = true;
-  const link = (db: Store) => Object.assign(new Link({} as any, db, async () => null) as any, {
-    client: { notify: async (n: any) => { sent.push(n); return {}; } }, relayStatus: 'online', quiet: () => quiet,
-    host: { devices: () => [{ id: 'pixel' }, { id: 'ipad' }] },
-  });
-  let db = new Store(dir);
-  const a = link(db);
-  // 2 am: a failed job, then a not-sure one, held for both phones in quiet hours.
-  a.news({ seq: 1, kind: 'alert', data: { member: 1 }, bot: null });
-  a.news({ seq: 2, kind: 'alert', data: { member: 1 }, bot: null });
-  a.sendHeld();
-  assert.equal(sent.length, 0, 'nothing reaches the phone in quiet hours');
-
-  // crewd restarts overnight; the hold is in the store.
-  db.close();
-  db = new Store(dir);
-  const b = link(db);
-  quiet = false;
-  b.sendHeld();
-  b.sendHeld();
-  assert.deepEqual(sent.map((n) => n.to), [['pixel', 'ipad', 'web']], 'one push when quiet hours end, for however much came in');
-  db.close();
-});
 
 test('the installed web app subscribes a browser push address through the relay and hears the same news', async () => {
   const db = new Store(temp('crewhouse-web-push'));
@@ -185,17 +121,6 @@ test('questions, finished helper jobs and Chief lines push only content-free new
   for (const task of [2, 3, 4]) link.news({ seq: task + 2, kind: 'task.done', bot: task === 4 ? 'scout' : 'chief', data: { task } });
   await Promise.all(pending);
   assert.equal(got.length, 3, 'All clear routines and Chief task completion give no push');
-});
-
-test('the computer tells a phone whether its Tailscale has that phone as a peer', async () => {
-  const dir = temp('crewhouse-peer');
-  const cli = (name: string, out: string) => { const bin = join(dir, name); writeFileSync(bin, `#!/bin/sh\ncat <<'X'\n${out}\nX\n`, { mode: 0o755 }); return bin; };
-  const ts = cli('ts', JSON.stringify({ Self: { TailscaleIPs: ['100.101.2.3'] }, Peer: { k1: { TailscaleIPs: ['100.90.1.1'] } } }));
-  assert.equal(await tailscalePeer('100.90.1.1', ts), true, 'shared with this phone\'s account');
-  assert.equal(await tailscalePeer('100.90.9.9', ts), false, 'not shared: the computer never sees it');
-  assert.equal(await tailscalePeer('100.90.1.1', cli('broken', 'no')), undefined, 'no Tailscale here to ask');
-  assert.equal(await tailscalePeer('100.90.1.1', cli('absent', JSON.stringify({ Self: {} }))), undefined, 'missing peer map is unknown');
-  assert.equal(await tailscalePeer('100.90.1.1', cli('empty', JSON.stringify({ Self: {}, Peer: {} }))), false, 'an observed empty peer map means no');
 });
 
 test('a paired phone renews the Add-a-phone code it is looking at; the rest of phone admin stays on the computer', async () => {

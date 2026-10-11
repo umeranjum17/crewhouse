@@ -13,12 +13,41 @@ permissions:
   contents: read
 
 jobs:
+  # What a change can affect: a pull request touching only docs, evidence or the landing page skips the jobs below,
+  # which then report as skipped, never pending (mobile/ and .agents/ stay in: kept tests read them).
+  # The relay image builds only when the relay changed. A push to main always runs everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      relay: ${{ steps.diff.outputs.relay }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$BASE" ]; then echo code=true >> "$GITHUB_OUTPUT"; echo relay=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "$BASE"...HEAD)
+          echo "$files"
+          echo code=$(echo "$files" | grep -qvE '^(docs/|data/|landing/|README\.md$|TRY-IT\.md$|LICENSE$|NOTICE$)' && echo true || echo false) >> "$GITHUB_OUTPUT"
+          echo relay=$(echo "$files" | grep -qE '^(relay/|\.github/)' && echo true || echo false) >> "$GITHUB_OUTPUT"
+
   check:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         node: ['22.22.3', '24'] # OpenClaw's supported Node floor and the current LTS
+        # The suite in three parallel parts: the gateway files are most of the wall time, so they get two of them.
+        group: [migrate, engine, app]
+    name: check (${{ matrix.node }}, ${{ matrix.group }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,14 +59,23 @@ jobs:
       # Only Ubuntu supplies our packages; unrelated runner repositories must not delay the test budget.
       - run: sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
       - run: sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The pinned engine install, keyed on the lockfile that pins the kit; prepare reuses a matching one.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            runtime/openclaw
+            runtime/openclaw.sets
+          key: engine-${{ runner.os }}-node${{ matrix.node }}-${{ hashFiles('package-lock.json') }}
       - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
       # Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
       - run: npm audit signatures --prefix "$(cat "$RUNNER_TEMP/engine-prepare/openclaw/engine-set")"
       - run: npm run check
       - run: npm run build:web
-      - run: npm test # stub runner only: no Herdr, no CLI, no model calls
+      - run: npm test -- --group=${{ matrix.group }} # stub runner only: no Herdr, no CLI, no model calls
 
   package:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The one download, built and installed as a person would: apt brings bubblewrap and Xvfb, the menu entry's
     # launcher starts crewd from /opt/crewhouse with its own Node, and the app answers.
     runs-on: ubuntu-latest
@@ -49,6 +87,12 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: |
+            runtime/openclaw
+            runtime/openclaw.sets
+          key: engine-${{ runner.os }}-node24-${{ hashFiles('package-lock.json') }}
       - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
       - run: npm run build:web
       # Exercise the identical package/install journey, not release-grade compression (~11 minutes at xz -6).
@@ -68,6 +112,8 @@ jobs:
           curl -fsS http://127.0.0.1:7711/ | grep -qi '<html'
 
   relay-image:
+    needs: changes
+    if: needs.changes.outputs.relay == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

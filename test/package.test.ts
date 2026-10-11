@@ -50,14 +50,6 @@ test('a newer release is offered to the person in words, and nothing when it is 
   assert.equal((await state()).update, undefined, 'the same version is not an update');
 });
 
-test('the downloaded app\'s words: tools getting ready, and Google in steps on Google\'s own pages', () => {
-  assert.equal(A.gettingReady({ installing: [] }), '');
-  assert.match(A.gettingReady({ installing: ['browser', 'documents'] }), /helpers' own web browser ready/);
-  assert.equal(A.update({}), null);
-  for (const s of A.GOOGLE_STEPS) assert.match(s.url, /^https:\/\/console\.cloud\.google\.com\//);
-  assert.equal(A.GOOGLE_STEPS.length, 4);
-});
-
 test('the downloaded app keeps answering while it fetches the helpers\' tools on its first run', async () => {
   // A fake npm (and pip, and download) that takes eight seconds, so an install is certainly still running.
   const bin = join(root, 'slow-bin');

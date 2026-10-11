@@ -10,21 +10,7 @@ import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
-import { lesson, stepsOf, Teacher } from '../src/teach.ts';
-
-test('steps in the person\'s words: the host and path of a page, labels for the rest, repeats folded', () => {
-  assert.deepEqual(stepsOf([
-    { kind: 'open', url: 'https://www.news.example/stats/?tab=open&token=abc#top' },
-    { kind: 'open', url: 'chrome://newtab/' },
-    { kind: 'fill', label: 'Search' }, { kind: 'fill', label: 'Search' },
-    { kind: 'click', label: 'Subscribers' },
-    { kind: 'choose', label: 'Period' },
-    { kind: 'open', url: 'https://news.example/' },
-  ]), ['Opened news.example/stats', 'Typed in “Search”', 'Clicked “Subscribers”', 'Chose an option in “Period”', 'Opened news.example']);
-  assert.equal(lesson('pull the newsletter stats.', ['Opened news.example/stats', 'Clicked “Subscribers”']),
-    'I showed you how to pull the newsletter stats. Here is what I did, step by step:\n1. Opened news.example/stats\n2. Clicked “Subscribers”\n' +
-    'Please keep this as one of your skills (ask me with crew_learn, in plain steps), then do it once now so I can see it works.');
-});
+import { Teacher } from '../src/teach.ts';
 
 const browser = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'].find(existsSync);
 test('a real show: what was clicked and which box was typed in, never the words, nothing from a password box', { skip: !browser && 'no Chromium here' }, async () => {

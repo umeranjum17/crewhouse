@@ -19,8 +19,10 @@ const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
 /** The bar: never more than a second without a visible change, timed by the page itself (a slow runner's own
  *  round trips do not count against the product). The clock ticks on each whole second of the job, so a still
- *  stretch is its one-second period plus the browser's timer jitter, held to one frame. */
-const GAP_MS = 1000, FRAME_MS = 17, HELD_MS = 3500;
+ *  stretch is its one-second period plus the browser's timer jitter. A busy CI runner delays a tick by 20 ms and
+ *  more (CI 2026-10-10: 1020 and 1022 ms), while a thread that really stalls misses a whole tick (2000 ms), so the
+ *  jitter allowance is a quarter second: it never hides a missed tick. */
+const GAP_MS = 1000, JITTER_MS = 250, HELD_MS = 3500;
 
 test('from send to reply the thread never sits still: a held Chief turn and a job passed to Scout, at 1440 and 390', { skip: !bin && 'no Chromium here' }, async () => {
   // The app as built from this tree, served by crewd itself.
@@ -79,17 +81,16 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       (window.__watch = new MutationObserver(() => { const at = performance.now(); const now = ${SCREEN}; if (now !== was) { was = now; __seen.push(at); } }))
         .observe(document.querySelector('.chat'), { subtree: true, childList: true, characterData: true });
       document.querySelector('.chat .dock textarea').addEventListener('keydown', () => { window.__sent ??= performance.now(); }, { capture: true }); true }`);
-    const sent = Date.now();
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
     await holding(crew, bot);
-    await new Promise((r) => setTimeout(r, HELD_MS - (Date.now() - sent)));
+    await until(`${HELD_MS} ms of the held turn watched`, async () => (await run('performance.now() - __sent')) >= HELD_MS, 30_000);
     const { seen, from, to } = await run('({ seen: __seen, from: __sent, to: performance.now() })');
     let gap = 0, prev = from;
     for (const t of [...seen, to]) { gap = Math.max(gap, t - prev); prev = t; }
     gap = Math.round(gap);
     console.log(`${width} ${bot}: longest still screen ${gap} ms (${seen.length} changes)`);
-    assert.ok(gap <= GAP_MS + FRAME_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
+    assert.ok(gap <= GAP_MS + JITTER_MS, `${width}: the thread sat still for ${gap} ms while ${bot} worked`);
     assert.match(await screen(), expect, `${width}: the live line says who is on it`);
     // The engine's own started and thinking events reach the line, not a local guess: the admission row (from the
     // kit's `started`) and the thinking row (from its `thinking`) both show while the turn is held (ch-chat-live-2).

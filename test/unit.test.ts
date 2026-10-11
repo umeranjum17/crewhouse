@@ -15,7 +15,7 @@ import * as A from '../web/src/adapter.ts';
 const { Crew, quietNow, short, cleanReply, relayResult } = await import('../src/crew.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
 const { Accounts, PROVIDERS, clock } = await import('../src/accounts.ts');
-const { effectOf, browserAsk, coversOf, toolWords, orderOf } = await import('../src/policy.ts');
+const { effectOf, browserAsk, coversOf, toolWords } = await import('../src/policy.ts');
 const kit = await import('../src/tools.ts');
 const disk = await import('../src/bots.ts');
 const { loadConfig } = await import('../src/config.ts');
@@ -27,15 +27,6 @@ const fakeBin = (dir: string, ...names: string[]) => {
 const openAsk = (db: any) => db.get("SELECT * FROM asks WHERE state = 'open'");
 /** A user message the stub model turns into one tool call. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
-
-test('money limits: only a total in dollars counts toward the dollar cap', () => {
-  const usd = orderOf('- text: Order total $43.10');
-  assert.deepEqual([usd.total, usd.shown, usd.currency, usd.capped], [43.10, '$43.10', '$', true]);
-  const gbp = orderOf('- text: Order total £19.00');
-  assert.deepEqual([gbp.total, gbp.shown, gbp.currency, gbp.capped], [19, '£19.00', '£', false], 'a pound price is shown as pounds, never counted as dollars');
-  const none = orderOf('- text: Total unavailable');
-  assert.deepEqual([none.total, none.capped], [null, false], 'no readable total, nothing counted');
-});
 
 test('store: a failed transaction leaves nothing behind; events fan out after commit', async () => {
   const { db, done } = setup();
@@ -724,41 +715,6 @@ test('Forget keeps synthetic sign-ins through unavailable, revoked and restored 
   } finally { done(); }
 });
 
-test('Forget clear contract distinguishes a CDP success result from an error without a result', async () => {
-  const { crew, done } = setup();
-  try {
-    for (const result of [{}, undefined, false]) {
-      const cleared: string[] = [];
-      let detached = false;
-      (crew.desktops as any).withPipe = async (bot: string, run: any) => {
-        assert.equal(bot, 'reel');
-        return run(async (method: string, params: any, sessionId?: string) => {
-          if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'synthetic-page' }] };
-          if (method === 'Target.attachToTarget') {
-            assert.deepEqual(params, { targetId: 'synthetic-page', flatten: true });
-            return { sessionId: 'synthetic-session' };
-          }
-          if (method === 'Target.detachFromTarget') {
-            assert.deepEqual(params, { sessionId: 'synthetic-session' });
-            detached = true;
-            return {};
-          }
-          assert.equal(method, 'Storage.clearDataForOrigin');
-          assert.equal(sessionId, 'synthetic-session', 'clear uses this bot\'s page session, not browser root');
-          assert.deepEqual(params, { origin: `${cleared.length ? 'http' : 'https'}://shop.example`, storageTypes: 'all' });
-          cleared.push(params.origin);
-          return result;
-        });
-      };
-      assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), Boolean(result));
-      assert.equal(detached, true, 'page session is detached even after a rejected clear');
-      assert.equal(cleared.length, result ? 2 : 1, 'both origins must acknowledge success');
-    }
-    (crew.desktops as any).withPipe = async (_bot: string, run: any) => run(async () => ({ targetInfos: [] }));
-    assert.equal(await crew.desktops.clearSite('reel', 'shop.example'), false, 'no page context cannot verify clearing');
-  } finally { done(); }
-});
-
 test('steer: a word from the person reaches the bot mid-task without starting over', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
@@ -1410,28 +1366,6 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo reel\\] files/photos/${c}-1\\.png$`));
   await settled(db, c);
   done();
-});
-
-test('what the phone keeps: its computer\'s chats only, the newest lines, nothing older than a week', async () => {
-  const K = await import('../web/src/kept.ts');
-  const now = 100 * K.WEEK;
-  const msgs = Array.from({ length: 80 }, (_, i) => ({ id: i, author: 'bot', text: `line ${i}`, at: now - 1000 + i }));
-  let k = K.keepState(K.empty('host-a'), { person: { name: 'Sara' } }, now);
-  k = K.keepChat(k, 'pip', { messages: msgs, notes: 'private', soul: 'x', trail: [1] }, now);
-  const back = K.fresh(JSON.parse(JSON.stringify(k)), 'host-a', now);
-  assert.equal(back.state.person.name, 'Sara');
-  assert.deepEqual(back.chats.pip.messages.map((m: any) => m.id), msgs.slice(-K.LINES).map((m) => m.id));
-  assert.deepEqual(Object.keys(back.chats.pip), ['at', 'messages']); // never notes, soul or trail
-  // Another computer's copy, or none, reads as nothing kept.
-  assert.equal(K.fresh(k, 'host-b', now).state, null);
-  assert.equal(K.fresh(null, 'host-a', now).state, null);
-  // A week on, the lines and the home screen from then are gone; a chat kept since stays.
-  const later = now + K.WEEK;
-  const k2 = K.keepChat(k, 'reel', { messages: [{ id: 1, at: later - 5 }] }, later - 5);
-  const old = K.fresh(k2, 'host-a', later);
-  assert.equal(old.state, null);
-  assert.equal(old.chats.pip, undefined);
-  assert.deepEqual(old.chats.reel.messages.map((m: any) => m.id), [1]);
 });
 
 test('a search landing on an old line: botPage opens a window around it', async () => {

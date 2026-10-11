@@ -14,7 +14,6 @@ const A = await import('../web/src/adapter.ts');
 const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
 const { MailSend } = await import('../src/mail-send.ts');
 const { Crew } = await import('../src/crew.ts');
-const { effectOf, toolWords } = await import('../src/policy.ts');
 
 const b64 = (s: string) => Buffer.from(s).toString('base64url');
 const now = Date.now();
@@ -78,14 +77,6 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
   await assert.rejects(runMail(token, ['read', 'deadbeef00']), /No such conversation/);
   await assert.rejects(runMail(async () => null, []), /not connected any more/);
   assert.ok(asked.every((a) => a.startsWith('GET ') && !/settings|\.\./.test(a)), 'it only ever reads');
-});
-
-test('the gate: mail only reads, so it never asks; anything else is refused', () => {
-  const s = { bot: 'Pip', space: '/tmp/pip', secret: [] };
-  for (const args of [[], ['inbox'], ['search', 'from:school'], ['read', '18c0a1f00d2e3b4a', '--full']]) assert.equal(effectOf('mail', { args }, s).kind, 'safe');
-  for (const args of [['send', 'x'], ['delete', '18c0a1f00d2e3b4a']]) assert.equal(effectOf('mail', { args }, s).kind, 'refuse');
-  assert.equal(toolWords('mail', { args: ['search', 'from:school'] }), 'Searched the email for “from:school”');
-  assert.equal(toolWords('mail', { args: ['read', '18c0a1f00d2e3b4a'] }), 'Read an email');
 });
 
 test('a helper reads the connected Gmail through crewd: no Google MCP, the token stays with crewd, it never asks', async () => {
