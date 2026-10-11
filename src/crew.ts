@@ -1773,23 +1773,21 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return answer === 'allow' ? undefined : { block: true, reason: 'The person said not now. Continue without it, or explain what you need.' };
   }
 
-  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in
-   *  dollars. crewd reads it from the page as the browser tool itself reports it; the model's words never reach it. */
+  /** A checkout page's card: the order as the page shows it, and its total as the cost the money cap counts when it's in dollars. */
   private order(botId: string, e: Extract<Effect, { words: string }>) {
-    const l = this.live.get(botId);
-    const name = this.bot(botId)?.display ?? botId;
-    let host = 'a shop', shop = '';
-    try { const u = new URL(l?.page ?? ''); host = u.hostname.replace(/^www\./, ''); shop = u.origin; } catch { /* no page yet */ }
+    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, site = this.siteName(l?.page, l?.snapshot);
+    let shop = '';
+    try { shop = new URL(l?.page ?? '').origin; } catch { /* no page yet */ }
     const o = orderOf(l?.snapshot ?? '');
     const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
     // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
     // anything else says so in plain words, so a capped-looking yes can never hide a different currency.
     const not$ = o.total !== null && o.currency !== '$';
-    const words = o.total === null ? `${name} wants to act on a checkout page at ${host}. I couldn't read the total on this page.`
-      : `${name} wants to place this order at ${host}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
+    const words = o.total === null ? `${name} wants to act on a checkout page at ${site}. I couldn't read the total on this page.`
+      : `${name} wants to place this order at ${site}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
     const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
       o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
-    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${host}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
+    return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${site}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
   }
 
   /** The host of a page, named the way a person would: no www, no path. */
@@ -1797,33 +1795,35 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     try { return new URL(page ?? '').hostname.replace(/^www\./, ''); } catch { return ''; }
   }
 
-  /** The card for acting as the person on a site they signed the bot in to: the button it will press, or the form line
-   *  it will fill, the host, the page's own lines around it, and the money the page shows — all read by crewd from the
-   *  page as the browser tool itself reports it, never from what the model says it was about to do. A filled line is
-   *  shown as `label: value` — the label from the page, the value from the call — since this is the one card that
-   *  carries the person's own words (an unclaimed-money claim). A press that submits a form the helper typed lines
-   *  into asks wherever it is, and its card lists every line it will fill in. */
+  /** The site named the way a person reads it: the page's own title when the host has no name (a local shop), else the bare domain. Never an IP or raw host. */
+  private siteName(page?: string, snapshot?: string) {
+    const host = this.hostOf(page);
+    if (/\./.test(host) && !/^\d+(\.\d+){3}$/.test(host)) return host;
+    const title = ((/title:\s*"((?:[^"\\]|\\.)*)"/.exec(snapshot ?? '') ?? [])[1] ?? '').replace(/\\"/g, '"').split(/\s*[·|:]\s*|\s+[—–-]\s+/)[0].trim();
+    return (title || 'the shop').slice(0, 40);
+  }
+  /** The card for acting as the person on a site: the button or form line, the site, the page's own lines and money. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
-    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
+    const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', site = this.siteName(l?.page, l?.snapshot) || host, value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
     // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
     const pending = value === null ? l?.fills ?? [] : [];
     if (pending.length) {
       const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`));
       const n = pending.length;
       return { ...e, fill: true,
-        words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${host}${signed ? ', a site you signed it in to' : ''}.`,
-        preview: { head: `What ${name} will fill in on ${host}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
+        words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${site}${signed ? ', a site you signed it in to' : ''}.`,
+        preview: { head: `What ${name} will fill in on ${site}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
     }
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
     const shown = orderOf(l?.snapshot ?? '').shown;
     const back = value === null ? claimOf(l?.snapshot ?? '') : null;
     return { ...e, ...(value !== null ? { fill: true } : {}),
-      words: value !== null ? `${name} wants to fill “${p.label}” on ${host}, a site you signed it in to.`
-        : `${name} wants to press “${p.label}” on ${host}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
+      words: value !== null ? `${name} wants to fill “${p.label}” on ${site}, a site you signed it in to.`
+        : `${name} wants to press “${p.label}” on ${site}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
       // One plain money line first on a press, only when the page itself writes both prices (the preview clamps);
       // a filled line reads `label: value`, and the card says nothing about money it did not read.
-      preview: { head: `What ${name} will ${value !== null ? 'fill' : 'press'} on ${host}`,
+      preview: { head: `What ${name} will ${value !== null ? 'fill' : 'press'} on ${site}`,
         body: value !== null ? `${p.label}: ${value}` : back ? `You'd get ${back.shown} back.\n${p.body}` : p.body } };
   }
 

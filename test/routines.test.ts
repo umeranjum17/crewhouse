@@ -614,6 +614,17 @@ test('the checkout card is read from the page: items and total as the page write
   await crew.answer(open()!.id, { answer: 'deny' });
   assert.equal((await unread).block, true);
   assert.equal(crew.snapshot().money!.spent, 43.1);
+
+  // A bare-IP page (a local shop) is named from its own title, never the IP or a raw host.
+  live.page = 'http://127.0.0.1:8123/checkout';
+  live.snapshot = 'page: {url: http://127.0.0.1:8123/checkout, title: "Building Shop · Checkout"}\nsnapshot:\n- text: "Order total: $12.00"';
+  const local = click();
+  await until('asked locally', open);
+  assert.match(open()!.title, /at Building Shop/, 'the site reads as its own name, never the IP');
+  assert.equal(crew.snapshot().asks.find((a: any) => a.id === open()!.id)!.detail.preview.head, 'The order at Building Shop');
+  await crew.answer(open()!.id, { answer: 'deny' });
+  assert.equal((await local).block, true);
+
   await release(crew, 'scout', 'Done shopping.');
   await settled(db, t);
   done();

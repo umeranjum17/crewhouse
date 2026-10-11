@@ -798,7 +798,7 @@ function receiptWhat(c: Card): string {
 function receiptAction(kind: string, detail: Json): string {
   if (kind !== 'permission') return '';
   const d = detail ?? {};
-  const site = (/ (?:at|on) ([^\s]+)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
+  const site = (/ (?:at|on) (.+?)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
   if (d.effect === 'spend') return site ? `Placed the order at ${site}` : 'Placed the order';
   if (d.fill) return site ? `Filled in a form at ${site}` : 'Filled in a form';
   if (d.effect === 'send') return site ? `Sent a message at ${site}` : 'Sent a message';

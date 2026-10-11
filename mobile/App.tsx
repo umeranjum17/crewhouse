@@ -1099,9 +1099,12 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
 /** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). An approval
  *  outcome instead reads as one muted row, the action in plain words left and the outcome word right. */
 function AnsweredRow({ line, what, word }: { line?: string; what?: string; word?: string }) {
-  if (word !== undefined) return <View style={[s.row, { paddingLeft: 70, marginTop: -2, alignItems: 'baseline' }]}>
-    <T tone="mute" lines={1} style={[s.small, { flex: 1, minWidth: 0 }]}>{what}</T>
-    <T tone="mute" style={s.small}>{word}</T>
+  const t = useLook();
+  if (word !== undefined) return <View style={{ paddingLeft: 70, marginTop: -2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, backgroundColor: t.night ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9 }}>
+      <T tone="mute" lines={1} style={[s.small, { flex: 1, minWidth: 0 }]}>{what}</T>
+      <T tone="mute" style={s.small}>{word}</T>
+    </View>
   </View>;
   return <T tone="mute" style={[s.small, { paddingLeft: 70, marginTop: -2 }]}>{line}</T>;
 }
