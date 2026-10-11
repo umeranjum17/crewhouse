@@ -39,7 +39,8 @@ const profile = mkdtempSync(join(process.env.SCRATCH ?? tmpdir(), 'cap-'));
 const browser = taskBrowser(browserBin()!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
   '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', '--autoplay-policy=no-user-gesture-required', 'about:blank'], profile);
 const portFile = join(profile, 'DevToolsActivePort');
-for (let i = 0; i < 300 && !(existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n')); i++) await sleep(100);
+for (let i = 0; i < 1200 && !(existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n')); i++) await sleep(100);
+if (!existsSync(portFile)) throw new Error(`the capture browser did not start (exit ${browser.chrome.exitCode}, signal ${browser.chrome.signalCode})`);
 const port = readFileSync(portFile, 'utf8').split('\n')[0];
 const page = ((await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(30_000) })).json()) as any[]).find((t) => t.type === 'page');
 const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -80,11 +81,34 @@ const tapOn = async (sel: string) => { const r = await run(`(() => { const b = d
 const KEYS: Record<string, [string, number]> = { Tab: ['Tab', 9], Enter: ['Enter', 13] };
 const press = async (k: string) => { const [code, vk] = KEYS[k]; for (const type of ['rawKeyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: k, code, windowsVirtualKeyCode: vk, ...(k === 'Enter' && type === 'rawKeyDown' ? { text: '\r' } : {}) }); await sleep(120); };
 const type = async (text: string) => { for (const ch of text) { await send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch }); await sleep(40); } };
-/** A click on the helper's screen at its own pixel (1280×800), through the picture as it is fitted on the page. */
-const onScreen = async (x: number, y: number) => {
-  const r = await run(`(() => { const v = document.querySelector('.signin-stage video'); const b = v.getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; })()`);
-  const s = Math.min(r[2] / 1280, r[3] / 800), ox = r[0] + (r[2] - 1280 * s) / 2, oy = r[1] + (r[3] - 800 * s) / 2;
-  await click(ox + x * s, oy + y * s);
+/** The page point over one of the helper's own pixels (1280×800), through the picture as it is laid out now, fitted or zoomed. */
+const pagePoint = async (x: number, y: number) => {
+  const r = await run(`(() => { const b = document.querySelector('.signin-stage video').getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; })()`);
+  return [r[0] + (x + 0.5) * r[2] / 1280, r[1] + (y + 0.5) * r[3] / 800];
+};
+const onScreen = async (x: number, y: number) => { const [px, py] = await pagePoint(x, y); await click(px, py); };
+/** A phone's finger: one tap on the helper's pixel, wherever the zoomed picture has put it. */
+const touch = async (type: string, points: number[][]) => send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], i) => ({ x, y, id: i })) });
+const tapScreen = async (x: number, y: number) => { const [px, py] = await pagePoint(x, y); await touch('touchStart', [[px, py]]); await sleep(60); await touch('touchEnd', []); await sleep(400); };
+/** Two fingers spreading around one of the helper's pixels, as a phone's pinch. */
+const pinch = async (x: number, y: number, from: number, to: number) => {
+  const [cx, cy] = await pagePoint(x, y), at = (s: number) => [[cx - s / 2, cy], [cx + s / 2, cy]];
+  await touch('touchStart', at(from).slice(0, 1)); await touch('touchStart', at(from));
+  for (let k = 1; k <= 12; k++) { await touch('touchMove', at(from + (to - from) * k / 12)); await sleep(80); }
+  await touch('touchEnd', at(to).slice(0, 1)); await touch('touchEnd', []); await sleep(600);
+};
+/** One finger dragging the zoomed picture by (dx, dy) page pixels. */
+const pan = async (dx: number, dy: number) => {
+  const [x, y] = [195, 500];
+  await touch('touchStart', [[x, y]]);
+  for (let k = 1; k <= 10; k++) { await touch('touchMove', [[x + dx * k / 10, y + dy * k / 10]]); await sleep(60); }
+  await touch('touchEnd', []); await sleep(400);
+};
+/** Where the shop's form fields sit on the page now, and whether a person sees them whole. */
+const fields = async () => {
+  const rect = async (x0: number, y0: number, x1: number, y1: number) => { const [a, b] = await pagePoint(x0, y0), [c, d] = await pagePoint(x1, y1); return [a, b, c - a, d - b].map(Math.round); };
+  const email = await rect(431, 350, 850, 393), vw = await run('innerWidth'), stage = await run(`(() => { const b = document.querySelector('.signin-stage').getBoundingClientRect(); return [b.top, b.bottom]; })()`);
+  return { email, fieldHeightCss: email[3], inView: email[0] >= 0 && email[0] + email[2] <= vw && email[1] >= stage[0] && email[1] + email[3] <= stage[1] };
 };
 const record = { on: false, start: async () => { frames.length = 0; record.on = true; await send('Page.startScreencast', { format: 'jpeg', quality: 80, maxWidth: 1440, everyNthFrame: 1 }); },
   stop: async (file: string) => {
@@ -138,12 +162,32 @@ for (const tag of tags.split(',')) {
   await until('the large screen, live', seen("(document.querySelector('.signin-stage video')?.videoWidth ?? 0) > 0 && !document.querySelector('.signin-bar .btn.go').disabled"), 60_000);
   await sleep(2000);
   const big = await run(`(() => { const f = document.querySelector('.signin-full').getBoundingClientRect(), v = document.querySelector('.signin-stage video').getBoundingClientRect();
-    return { head: document.querySelector('.signin-bar b').textContent, line: document.querySelector('.signin-bar .small').textContent, done: document.querySelector('.signin-bar .btn.go').textContent,
+    return { head: document.querySelector('.signin-bar b').textContent, line: document.querySelector('.signin-bar .small').innerText, done: document.querySelector('.signin-bar .btn.go').textContent,
       full: [f.width, f.height].map(Math.round), picture: [v.width, v.height].map(Math.round), vw: innerWidth, vh: innerHeight }; })()`);
   report.push({ tag, step: 'large', ...big, controls: (await api('GET', '/api/state')).bots.find((b: any) => b.id === bot)?.controls, file: await shot(`large-${tag}`) });
   // 4. The person signs in on the helper's screen, through the picture: the header first, then the form by keys.
-  await onScreen(640, 125);
-  await press('Tab'); await type('umer@example.com'); await press('Tab'); await type('not-a-real-password'); await press('Enter');
+  if (w === '390') {
+    // On a phone the whole desktop is a strip: pinch on the form until it fills the width, nudge it with one finger,
+    // then tap each field where the zoomed picture put it and type, as a person would. One clip per theme at 390.
+    const fitted = await fields();
+    if (theme === 'day') { await record.start(); await sleep(1500); } // the clip opens on the whole desktop, before the pinch
+    await pinch(640, 420, 60, 165);
+    await pan(0, -40);
+    const zoomed = await fields();
+    // The phone's keyboard rises when desklink's hidden textarea has focus: a pinch or a pan must leave it down, a tap raises it.
+    const keyboardUp = () => run("document.activeElement?.getAttribute('aria-label') === 'Remote keyboard'");
+    report.push({ tag, step: 'zoomed', fitted, zoomed, keyboardAfterPinch: await keyboardUp(), file: await shot(`zoomed-${tag}`) });
+    await tapScreen(640, 371);
+    report.push({ tag, step: 'tapped', keyboardAfterTap: await keyboardUp() });
+    await type('umer@example.com');
+    await tapScreen(640, 457); await type('not-a-real-password');
+    await sleep(800);
+    report.push({ tag, step: 'typed', file: await shot(`typed-${tag}`) });
+    await press('Enter');
+  } else {
+    await onScreen(640, 125);
+    await press('Tab'); await type('umer@example.com'); await press('Tab'); await type('not-a-real-password'); await press('Enter');
+  }
   await sleep(3000);
   report.push({ tag, step: 'signed-in', file: await shot(`done-${tag}`) });
   // 5. Done: the wheel goes back and the card becomes one answered line.
@@ -155,7 +199,7 @@ for (const tag of tags.split(',')) {
   await sleep(400);
   report.push({ tag, step: 'answered', ...answered, ask: ask.id, open: st.asks.filter((a: any) => a.kind === 'signin').length, controls: st.bots.find((b: any) => b.id === bot)?.controls,
     signedIn: (await api('GET', `/api/bots/${bot}`)).signedIn, file: await shot(`answered-${tag}`) });
-  if (clip) { await sleep(1500); report.push(await record.stop(join(out, 'motion', 'site-signin-day-1440.webm'))); }
+  if (clip || tag === 'day-390') { await sleep(1500); report.push({ tag, step: 'clip', ...await record.stop(join(out, 'motion', `site-signin-${tag}.webm`)) }); }
   await until('the helper carried on', async () => !(await api('GET', '/api/state')).bots.find((b: any) => b.id === bot)?.task);
   const after = await api('GET', '/api/state'); // the helper's chat badge and the crew's counts, once its job is done
   report.push({ tag, step: 'after', unread: after.bots.find((b: any) => b.id === bot)?.unread, waiting: after.asks.length, file: await shot(`after-${tag}`) });

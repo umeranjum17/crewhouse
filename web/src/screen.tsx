@@ -43,11 +43,12 @@ export function SiteSignIn({ c, bot, onClose }: { c: A.Card; bot: Json; onClose:
     <div className="signin-full" role="dialog" aria-modal="true" aria-label={c.head}>
       <header className="signin-bar">
         <SiteIcon site={site} />
-        <div className="grow"><b>{c.head}</b><span className="small">{driving ? `You're driving ${bot.display}'s screen. Sign in as you always do.` : failed ? `${bot.display}'s screen didn't open.` : 'Opening…'}</span></div>
+        <div className="grow"><b>{c.head}</b><span className="small">{driving ? <>You're driving {bot.display}'s screen. Sign in as you always do.<span className="phone-only"> Pinch to zoom in.</span></> : failed ? `${bot.display}'s screen didn't open.` : 'Opening…'}</span></div>
         {failed ? <button className="btn" onClick={onClose}>Back</button> : <button className="btn go" disabled={!driving} onClick={() => void done()}>Done</button>}
       </header>
-      {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
-      <div className="signin-stage" onPointerDownCapture={() => session.showKeyboard()}>
+      {/* desklink types through its own hidden textarea; a tap on the picture must focus it, or keys never reach the bot's desktop.
+          A tap, not every touch: a pinch or a pan would raise the phone's keyboard over the picture it is zooming. */}
+      <div className="signin-stage" onClick={() => session.showKeyboard()}>
         <DesktopView sessionId={session.nativeId} style={{ width: '100%', height: '100%' }} accessibilityLabel={`${bot.display}'s screen`}
           placeholder={<div className="screen-idle">{driving && session.snapshot.status !== 'idle' ? STATUS[session.snapshot.status] : 'Opening…'}</div>} />
       </div>
@@ -96,8 +97,8 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
         <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : STATUS[live] ?? 'Opening…'}</Pill>
       </div>
       {control && <p className="nudge-line">You're driving. {bot.display} waits until you hand the wheel back.</p>}
-      {/* desklink types through its own hidden textarea; a click on the picture must focus it, or keys never reach the bot's desktop. */}
-      <div onPointerDownCapture={() => { if (control) session.showKeyboard(); }}>
+      {/* desklink types through its own hidden textarea; a tap on the picture must focus it (a tap, not a pinch), or keys never reach the bot's desktop. */}
+      <div onClick={() => { if (control) session.showKeyboard(); }}>
         <DesktopView
           sessionId={session.nativeId}
           style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 16 }}
