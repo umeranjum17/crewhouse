@@ -120,6 +120,10 @@ row, not just a final screen); verify side effects where the feature has them (f
 `$LAB/crew/bots/<bot>/files/`, rows in `crew.db`); label anything the stub cannot prove
 (no real model words, no real sign-in) as a stub-engine result.
 
+## Finished-action receipt
+
+See [Chief's finished-action receipt](features/done-receipt.md): an approved order's actual browser result, complete facts, muted approval outcome, and approved follow-up, with web/PWA/native proof and its runnable private-shop driver.
+
 ## Person authority (shared ingress)
 
 Run the real paired-phone journey with `node --test test/link.test.ts` under an isolated

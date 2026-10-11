@@ -108,11 +108,10 @@ export function cleanReply(text: string) {
   return String(text ?? '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
 }
 
-/** A relay is the answer, not a quoted chunk of the helper's raw markdown. Clauses about work still under
- *  way (a handoff note like "Scribe is preparing…" written before the next helper finished) are stale by the
- *  time the final wrap states the outcome, so they are never relayed. */
+/** A relay drops stale progress; a confirmed action keeps its complete receipt. */
 const STALE_PROGRESS = /\b(is|are)\s+(preparing|on it\b|working on|looking into|checking|getting|putting together|writing|finishing)|\bwill\s+(prepare|write|check|finish|share|send|follow up)\b/i;
-export function relayResult(reply: string, note = '') {
+export function relayResult(reply: string, note = '', acted = false) {
+  if (acted) return cleanReply(reply); // A confirmed action keeps its receipt facts, not just the opening sentence.
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
@@ -528,7 +527,7 @@ export class Crew {
       this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
-      ? `${this.bot(t.bot)?.display ?? t.bot} finished. ${relayResult(t.result || 'Done')}`
+      ? `${t.acted ? '' : `${this.bot(t.bot)?.display ?? t.bot} finished. `}${relayResult(t.result || 'Done', '', !!t.acted)}`
       : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`);
     const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
     this.say(CHIEF, 'bot', text, root);
@@ -665,7 +664,10 @@ export class Crew {
       const row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
-      if (by === CHIEF) this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `Routine added: “${plan.name}” for ${plan.bot.display}, ${words}.${plan.when ? ` First run ${firstRun(row.next_at)}.` : ''}`, null);
+      if (by === CHIEF) {
+        this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `New routine “${plan.name}”`, null);
+        if (!plan.at) this.say(CHIEF, 'bot', `I'll have ${plan.bot.display} ${plan.body.replace(/^./, (c) => c.toLowerCase()).replace(/[.!?]+$/, '')}. ${words}.${plan.when ? ` First check: ${firstRun(row.next_at)}.` : ''} ${looksFor(plan.body)?.replace(/^Tells you/, "I'll tell you") || (plan.quiet ? "I'll bring changes back here; nothing on a quiet day." : "I'll bring the result back here each time.")}`, null);
+      }
       return row;
     });
   }
@@ -1363,7 +1365,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
         release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
       };
-      l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back',
+      l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back. After a confirmed action, capture its real result with screenshot --filename=files/photos/<name>.png, then crew_deliver that file. Never draw a substitute.',
         { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
         async (p, signal) => {
           started ??= start();
@@ -1558,8 +1560,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
-      // Done needs proof: a job that acted out in the world ends done only when the helper declared it saw it work
-      // (crew_outcome). Declared unsure, or declared nothing, it ends unsure, never done.
+      // An action ends done only with crew_outcome; no confirmation means unsure.
       const said = task.outcome ? JSON.parse(task.outcome) : null;
       const b = this.bot(botId)!;
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
@@ -1571,10 +1572,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      if (task.origin === CHIEF && !this.teamJob(task)) {
-        // The helper's own words (a question word for word) in Chief's thread, with its task: the app shows who said it.
+      if ((task.origin === CHIEF && !this.teamJob(task)) || (botId !== CHIEF && task.routine && !clear)) {
         const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
-        this.say(CHIEF, 'bot', !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean)), task.id);
+        this.say(CHIEF, 'bot', !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean), !!task.acted), task.id);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
@@ -1765,7 +1765,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
     if (standing && task?.reask) this.db.run('UPDATE tasks SET reask = 0 WHERE id = ?', task.id); // acted, then restarted: this one asks
     else if (standing) {
-      this.db.event('run.allowed', botId, { task: task?.id, words: e.words });
+      this.db.event('run.allowed', botId, { task: task?.id, words: e.words, effect: e.kind, permission: e.key });
       return undefined;
     }
     const answer = await this.ask(botId, task, e, checkout);
@@ -1954,7 +1954,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
         'or number, the sent message, the event read back), and `seen` names it. Otherwise false, and `seen` says in plain words what you did ' +
         'and what the person should check ("I pressed Book, but the page didn\'t show a confirmation. Worth checking your email for one."). ' +
-        'Not sure is an honest answer; a job that acted and says nothing counts as not sure.',
+        'Not sure is an honest answer; a job that acted and says nothing counts as not sure. Your final reply is a short warm receipt for Chief: only observed facts (order number, what, total, card ending, shipping, delivery window and receipt destination when known), with the person\'s chosen name. Missing facts stay missing; never promise a follow-up before its routine is approved.',
         (p) => {
           const seen = clean(p.seen, 400);
           if (!seen) throw new Error('say what you saw, or what the person should check');

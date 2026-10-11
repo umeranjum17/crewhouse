@@ -378,6 +378,9 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .line { max-width: 640px; margin-top: 20px; }
 .line:has(> .line-by) { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 10px; align-items: start; }
 .line.note { display: block; }
+.line.note.chat-event { align-self: center; max-width: 100%; color: var(--mute); text-align: center; font: 400 13px/20px var(--ui); padding: 12px 0 4px; }
+.line.note.chat-event .bubble-text p { font: inherit; }
+.line .media img { object-fit: contain; }
 .line-by { grid-column: 1; padding-top: 3px; }
 .line-by .who { font: 600 13px/18px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
 .line > :not(.line-by) { grid-column: 2; min-width: 0; }
