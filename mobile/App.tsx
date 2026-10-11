@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument } from './src/phone-only';
+import { askPhone, loadChat, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -787,8 +787,6 @@ function PhoneSignIn({ onDone, onExit }: { onDone: () => void; onExit: () => voi
   );
 }
 
-type PhoneLine = { who: 'you' | 'chief'; text: string; doc?: PhoneDocument };
-
 /** A finished document Chief made here: read it, or send it out with the share sheet. Nothing leaves until Share. */
 function PhoneDocCard({ doc, onOpen }: { doc: PhoneDocument; onOpen: () => void }) {
   const t = useLook();
@@ -822,7 +820,7 @@ function PhoneDocSheet({ doc, onClose }: { doc: PhoneDocument; onClose: () => vo
 /** Chief's chat on this phone, streamed, with the one tool he has here: a document. */
 function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: () => void }) {
   const t = useLook();
-  const [lines, setLines] = useState<PhoneLine[]>([]);
+  const [lines, setLines] = useState<PhoneLine[]>(loadChat);
   const [partial, setPartial] = useState('');
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState('');
@@ -848,18 +846,22 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const send = async (text: string) => {
     const words = text.trim();
     if (!words || busy) return false;
-    const turns: ChatTurn[] = [...lines.map((l) => ({ who: l.who, text: l.text })), { who: 'you', text: words }];
+    // A cut-off turn is re-sent by the person as a new turn, never by the app; its start marker is left out
+    // of the history so the words are not said twice.
+    const turns: ChatTurn[] = [...lines.filter((l) => !l.stopped).map((l) => ({ who: l.who, text: l.text })), { who: 'you', text: words }];
+    rememberUser(words);
     setLines((ls) => [...ls, { who: 'you', text: words }]);
     setPartial(''); setBusy(true);
     ctrl.current = new AbortController();
     let doc: PhoneDocument | undefined;
     try {
       const answer = await askPhone(turns, { onText: setPartial, onDocument: (d) => { doc = d; } }, ctrl.current.signal);
+      rememberChief(answer, doc);
       setLines((ls) => [...ls, { who: 'chief', text: answer, doc }]);
     } catch (e) {
       if (!ctrl.current.signal.aborted) {
         if (phoneExpired(e)) onSignedOut();
-        else setLines((ls) => [...ls, { who: 'chief', text: phoneWords(e), doc }]);
+        else { const line = phoneWords(e); rememberChief(line, doc); setLines((ls) => [...ls, { who: 'chief', text: line, doc }]); }
       }
     } finally { setPartial(''); setBusy(false); }
     return true;
@@ -881,10 +883,15 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
         )}
         {lines.map((l, i) => l.who === 'you'
           ? <View key={i} style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('You')}<T style={{ flex: 1 }}>{l.text}</T></View></View>
-          : <View key={i} style={{ gap: 10 }}>
-            {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
-            {l.doc && <PhoneDocCard doc={l.doc} onOpen={() => setOpen(l.doc!)} />}
-          </View>)}
+          : l.stopped
+            ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}</T>
+                <Btn label="Try again" disabled={busy} onPress={() => void send(l.retry ?? '')} /></View>
+            </View></View>
+            : <View key={i} style={{ gap: 10 }}>
+              {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
+              {l.doc && <PhoneDocCard doc={l.doc} onOpen={() => setOpen(l.doc!)} />}
+            </View>)}
         {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
         </View></View>}

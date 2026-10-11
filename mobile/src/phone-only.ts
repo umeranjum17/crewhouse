@@ -52,7 +52,8 @@ export async function phoneConnect(key: string) {
   const { state } = await phoneAccounts.saveKey(MEMBER, PROVIDER, key.trim(), { billedPerUse: true });
   if (state === 'failed') throw new Error('This key could not be saved. Try again.');
 }
-export const phoneSignOut = () => phoneAccounts.logout(MEMBER, PROVIDER);
+/** Sign out on this phone: the kept chat goes with the key, so a signed-out phone keeps none of it. */
+export const phoneSignOut = async () => { clearChat(); return phoneAccounts.logout(MEMBER, PROVIDER); };
 /** One plain sentence for a sign-in failure, never a code, path or raw error. */
 export function phoneSignInWords(error: unknown) {
   const text = error instanceof Error ? error.message : '';
@@ -83,6 +84,73 @@ export function phoneWords(error: unknown) {
     return error.message;
   }
   return 'Could not finish on this phone. Check your internet connection and try again.';
+}
+
+// ---------- the phone-only chat, kept on the phone ----------
+// One file, one JSON object per line, appended as the chat happens. A `you` line begins a turn (written
+// before the send) and a `chief` line ends it; a `you` with no `chief` before the next `you`, or before the
+// end of the file, is a turn that was cut off. crew_document is not idempotent, so a cut-off turn is only
+// ever retried by the person (Try again); it never runs itself again on open.
+export type PhoneLine = { who: 'you' | 'chief'; text: string; doc?: PhoneDocument;
+  /** A turn loaded with no end: its user line is left out of the history that Try again re-sends, and the
+   *  Chief line carries the words to send. Both are derived on load and are never written to the file. */
+  stopped?: boolean; retry?: string };
+
+const chatFile = () => new File(Paths.document, 'phone-chat.jsonl');
+
+/** Append one line to the phone-only chat. Silent on failure so a chat on a full disk still works. */
+function append(line: unknown) {
+  try {
+    const f = chatFile();
+    if (!f.exists) f.create({ intermediates: true });
+    f.write(`${JSON.stringify(line)}\n`, { append: true });
+  } catch {}
+}
+
+/** The turn begins, before the send: the person's words are the start marker. */
+export const rememberUser = (text: string) => append({ t: 'you', text });
+/** The turn ends: Chief's answer, and the document card he made, if any. */
+export const rememberChief = (text: string, doc?: PhoneDocument) => append(doc ? { t: 'chief', text, doc } : { t: 'chief', text });
+
+/** The document card kept with a Chief line: its name and uri (and the parts Read shows). */
+function keptDocument(value: unknown): PhoneDocument | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const d = value as Record<string, unknown>;
+  if (typeof d.name !== 'string' || typeof d.uri !== 'string') return undefined;
+  return { name: d.name, uri: d.uri, parts: Array.isArray(d.parts) ? d.parts as DocPart[] : [] };
+}
+
+/** The chat as it was kept. Every whole line is read; a broken line (a partial write, a corrupt file) is
+ *  skipped, and earlier good turns are kept. A turn with a start but no end comes back as a stopped row
+ *  with the words Try again re-sends. Never throws. */
+export function loadChat(): PhoneLine[] {
+  let text = '';
+  try { const f = chatFile(); if (f.exists) text = f.textSync(); } catch { return []; }
+  const lines: PhoneLine[] = [];
+  let open: string | null = null; // the words of a turn whose end has not been seen
+  let userAt = -1;                // where its user line sits in `lines`
+  const cutOff = () => {
+    if (open === null) return;
+    if (lines[userAt]) lines[userAt].stopped = true;
+    lines.push({ who: 'chief', text: 'Stopped.', stopped: true, retry: open });
+    open = null; userAt = -1;
+  };
+  for (const raw of text.split('\n')) {
+    if (!raw.trim()) continue;
+    let rec: unknown;
+    try { rec = JSON.parse(raw); } catch { continue; } // skip a broken line, keep the ones around it
+    const r = rec as Record<string, unknown>;
+    if (!r || typeof r !== 'object' || typeof r.text !== 'string') continue;
+    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text }); open = r.text; userAt = lines.length - 1; }
+    else if (r.t === 'chief' && open !== null) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
+  }
+  cutOff();
+  return lines;
+}
+
+/** A signed-out phone keeps no chat: the kept file goes. */
+export function clearChat() {
+  try { const f = chatFile(); if (f.exists) f.delete(); } catch {}
 }
 
 // ---------- Chief, phone-sized ----------
