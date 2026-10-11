@@ -85,14 +85,7 @@ export default function App() {
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   // Phone-only is an option beside pairing, remembered on this phone; pairing wins when a computer is there.
   const [phone, setPhone] = useState<boolean | null>(null);
-  const leavePhone = () => {
-    void (async () => {
-      try { if (await phoneSignedIn()) await phoneSignOut(); }
-      catch { say("Couldn't sign out. Please try again."); return; }
-      await setPhoneMode(false).catch(() => {});
-      setPhone(false);
-    })();
-  };
+  const leavePhone = () => { void setPhoneMode(false); setPhone(false); };
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
   useEffect(() => { phoneMode().then(setPhone).catch(() => setPhone(false)); }, []);
   return (
@@ -840,9 +833,17 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const beat = motion.useBeat(360, reduce);
   useEffect(() => { void phonePlan().then((p) => p && setPlan(p)); }, []);
   useEffect(() => () => ctrl.current?.abort(), []);
+  // Leaving phone-only for good: remove the saved key, then flush the mode marker before the app can be killed,
+  // so a relaunch opens the chooser. A key-removal failure says so and keeps the person on the chat.
+  const signOut = async () => {
+    try { await phoneSignOut(); }
+    catch { say("Couldn't sign out. Please try again."); return; }
+    await setPhoneMode(false).catch(() => {});
+    onExit();
+  };
   const confirmSignOut = () => Alert.alert('Sign out of Chief?', 'Your key will be removed from this phone.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: onExit },
+    { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
   ]);
   const send = async (text: string) => {
     const words = text.trim();

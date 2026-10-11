@@ -26,6 +26,11 @@ texts | tap '<regex>' | shot <file>`):
 4. force-stop and relaunch → still the chooser, not the chat;
 5. **Use this phone only** again → the sign-in screen (proves no key remains).
 
+**"Use a computer" keeps the key on purpose.** Tapping **Use a computer** (no confirm) leaves
+phone-only mode but keeps the saved key, so returning with **Use this phone only** opens the chat
+again directly, never the sign-in screen. Only **Sign out** removes the key; do not route that exit
+through the sign-out path, or a plain mode switch would silently delete the person's sign-in.
+
 **The message step can be skipped.** Signing in only saves the key (no provider call); when the
 OpenRouter test account is exhausted (requests answer HTTP 402, shown to the person as "Could not
 finish on this phone…"), the "send one message" leg of the journey is skipped and said so in the PR.
