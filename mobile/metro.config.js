@@ -6,7 +6,9 @@ const path = require('path');
 const config = getDefaultConfig(__dirname);
 const repo = path.resolve(__dirname, '..');
 const shared = [path.join(repo, 'src'), path.join(repo, 'web', 'src')]; // web/src/demo.ts reads ../../src/routines.ts
-config.watchFolders = shared;
+config.watchFolders = [...shared, path.join(repo, 'templates', 'chief')];
+config.resolver.sourceExts.push('md');
+config.transformer.babelTransformerPath = require.resolve('./scripts/markdown.cjs');
 config.resolver.nodeModulesPaths = [path.join(__dirname, 'node_modules')];
 config.resolver.resolveRequest = (context, name, platform) => {
   // b4a's Node build needs Buffer, which Hermes lacks; its browser build is plain Uint8Array.

@@ -4,7 +4,8 @@
   "main": "index.ts",
   "dependencies": {
     "@bacons/apple-targets": "5.0.0",
-    "@byokit/accounts": "0.20.0",
+    "@byokit/accounts": "0.21.0",
+    "@byokit/secrets": "0.5.0",
     "@byokit/dictation": "0.3.0",
     "@byokit/overlay": "0.3.0",
     "@byokit/pair": "0.9.0",
@@ -26,6 +27,8 @@
     "expo-linking": "~57.0.11",
     "expo-notifications": "~57.0.21",
     "expo-secure-store": "~57.0.4",
+    "expo-sharing": "~57.0.22",
+    "docx": "9.7.2",
     "expo-share-intent": "^8.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.5",
