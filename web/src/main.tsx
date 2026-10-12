@@ -538,12 +538,13 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: waiting && pending ? pending.at : undefined }) : null;
-  const ticking = !!ln && ln.took === undefined;
+  const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
   const gone = A.goneQuiet(ln, crewNames, id);
   const quiet = !gone && ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
+  // A live line waiting on the person carries no clock and stays still.
   useEffect(() => {
     if (!ticking) return;
     const t = setTimeout(() => setNow(Date.now()), 1005 - ((Date.now() - ln!.since) % 1000));
@@ -703,7 +704,7 @@ function LiveRow({ ln, quiet, gone }: { ln: A.LiveLine; quiet: boolean; gone: bo
   // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat (Main1777).
   return <div className={`line them live-line ${ln.state}`}>
     <div className="live-body">
-      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {word.toLowerCase()} · <span aria-hidden>{A.took(Date.now() - ln.since)}</span>{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
+      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {word.toLowerCase()}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
         <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}</span></li>)}</ol>
       {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>

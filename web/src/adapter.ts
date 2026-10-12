@@ -1124,7 +1124,8 @@ export function firstIdeas(state: Json) {
 }
 
 /** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
- *  Until all three are done, the owner's Home says how many are left. */
+ *  The Settings list keeps all three; the count is only what the first answer needs — the sign-in —
+ *  so a newcomer is never sent after optional jobs before Chief can start. */
 export function homeSetup(state: Json, accounts: Json[] | null, link: Json | null) {
   const plan = planName(accounts);
   const rows = [
@@ -1132,7 +1133,7 @@ export function homeSetup(state: Json, accounts: Json[] | null, link: Json | nul
     { key: 'phones', says: 'Phones can reach the crew away from home', done: link?.anywhere === 'anywhere' },
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
-  return { rows, left: rows.filter((r) => !r.done).length };
+  return { rows, left: rows[0].done ? 0 : 1 };
 }
 
 /** Ideas are promises from a named helper; Chief offers three of his own when the crew has none.
@@ -1209,6 +1210,10 @@ export function steps(events: Json[], task?: number, live = false): Step[] {
 }
 
 // ---------- the live line: what the one answering is doing right now ----------
+/** The one action while a job waits on a sign-in: the thread's sign-in button carries it on the computer,
+ *  so the phone names where to do it instead. Both screens read the live line's own `state` for the clock. */
+export const WAIT_SIGNIN = 'Sign in to an AI account so Chief can start';
+export const WAIT_SIGNIN_PHONE = 'Sign in on your computer';
 /** One row of the live line: the step in plain words and when it began (client time, for the clock). */
 export type LiveStep = { text: string; at: number };
 /** One row of the to-do list: done (it happened), doing (the current focus) or todo (an approved plan step still ahead).
@@ -1235,7 +1240,7 @@ const planOf = (body: unknown): string[] => {
  *  pushed while the thread is open (they carry `seen`, the client time); `last` maps a task to when anything about it
  *  last arrived, streamed words included. */
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
-  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number> }): LiveLine | null {
+  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number>; side?: 'phone' }): LiveLine | null {
   const evs = new Map<number, Json>();
   for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
   const all = [...evs.values()].sort((a, b) => a.seq - b.seq);
@@ -1255,6 +1260,9 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   const own = all.filter((e) => e.data?.task === t.id);
   const start = created ? when(created) : at(t.created_at);
   const title = plain(String(created?.data?.title ?? t.title ?? '')) || 'the job';
+  // A sign-in wait names its one action, in this viewer's words; a waiting live line never carries a clock.
+  const action = o.side === 'phone' ? WAIT_SIGNIN_PHONE : WAIT_SIGNIN;
+  const signing = t?.state === 'paused' && t.wake_at == null && /^Waiting for you to sign in/.test(String(t.result ?? ''));
   // Plan-level rows, each naming its object and never repeated: the model's own progress notes, deliveries and asks.
   // The small tool calls stay out of the list, in `detail` for the expand; `task.working` only flips the state.
   const said = new Set<string>();
@@ -1270,7 +1278,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
     if (e.kind === 'run.admitted') { push(helper ? `Passed to ${who}` : `Started on “${title}”`, when(e)); continue; }
     if (e.kind === 'run.thinking') { push('Thinking', when(e)); continue; }
     if (e.kind === 'run.tool') { const text = step(e); if (text && detail.at(-1)?.text !== text) detail.push({ text, at: when(e) }); continue; }
-    const text = e.kind === 'task.working' ? null : e.kind === 'task.paused' ? waitWords(e.data?.result)
+    const text = e.kind === 'task.working' ? null : e.kind === 'task.paused' ? (signing ? action : waitWords(e.data?.result))
       : e.kind === 'ask.answered' ? `Carrying on with “${title}”` : e.kind === 'ask.opened' ? 'Waiting for your OK' : e.kind in END || e.kind === 'task.created' ? null : step(e);
     if (text) push(text, when(e));
     if (e.kind === 'task.working' || e.kind === 'ask.answered') state = 'working';
@@ -1278,6 +1286,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
     if (e.kind === 'task.paused') state = 'waiting';
     if (e.kind in END) { state = END[e.kind]; ended = e; }
   }
+  if (signing && state === 'waiting' && todos.at(-1)?.text !== action) push(action, start);
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;

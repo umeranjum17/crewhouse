@@ -1703,9 +1703,10 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const crewNames = A.crew(state);
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
-    sent: waiting && pending ? pending.at : undefined }) : null;
-  const ticking = !!ln && ln.took === undefined;
+    sent: waiting && pending ? pending.at : undefined, side: 'phone' }) : null;
+  const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
+  // A live line waiting on the person carries no clock and stays still.
   useEffect(() => {
     if (!ticking) return;
     const t = setTimeout(() => setNow(Date.now()), 1005 - ((Date.now() - ln!.since) % 1000));
@@ -1834,12 +1835,12 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
       <View style={[s.row, { gap: 6 }]}>
         <View style={[s.statusDot, { backgroundColor: ln.state === 'needs' ? t.pink : ln.state === 'waiting' ? t.line : t.ok, opacity: reduce ? 0.6 : beat % 2 === 0 ? 1 : 0.35 }]} />
         <T style={[s.small, s.b, { flexShrink: 1 }]}>{word}</T>
-        <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>
+        {ln.state !== 'waiting' && <T tone="mute" style={s.time}>{A.took(Date.now() - ln.since)}</T>}
       </View>
       {ln.todos.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
         {st.state === 'doing' ? <motion.Ring size={13} width={2} color={t.ink} reduce={reduce} />
           : <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : t.ok }]}>{TICK[st.state]}</T>}
-        <T style={[s.small, { flex: 1, fontWeight: st === doing ? '600' : '400', color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
+        <T style={[s.small, { flex: 1, fontWeight: st === doing ? '600' : '400', color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && ln.state !== 'waiting' && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
       </View>)}
       {!!ln.detail.length && <Pressable onPress={() => setOpenDetail((v) => !v)} accessibilityRole="button" hitSlop={8}>
         <T tone="mute" style={s.small}>{openDetail ? 'Hide the small steps' : `Show the small steps (${ln.detail.length})`}</T></Pressable>}
