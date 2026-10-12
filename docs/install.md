@@ -1,6 +1,6 @@
 # Install and run Crewhouse
 
-The [README](../README.md#quick-start) has the three-step quick start. This page has everything after it: what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
+The [README](../README.md#quick-start) has the quick start: the computer download first, the terminal path for developers after it. This page has everything after it: what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
 
