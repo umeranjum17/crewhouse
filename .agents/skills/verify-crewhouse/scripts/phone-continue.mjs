@@ -93,25 +93,23 @@ tap(/^Use a computer$/);
 await waitFor(/^Pair with a computer$/, 20000); tap(/^Pair with a computer$/);
 await waitFor(/^Type a code$/, 20000); tap(/^Type a code$/);
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
-const offer = await api('POST', '/api/phones/pair', { role: 'control' });
-const code = offer.typed.replace(/[^A-Z0-9-]/gi, '');
-// `input text` drops the tail of a long string (the code is ~490 letters) and, on a loaded emulator, pieces sent
-// back to back interleave: send 60 letters, wait until the box holds them, then the next; start over if it goes wrong.
-const flat = (x) => x.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-const field = () => flat(nodes().find((n) => n.desc === 'Pairing code')?.text ?? '');
-const typeCode = async () => {
-  for (let i = 0; i < code.length; i += 60) {
-    A('shell', 'input', 'text', code.slice(i, i + 60));
-    const want = flat(code.slice(0, i + 60));
-    let now = '';
-    for (const t = Date.now(); Date.now() - t < 30000; await sleep(800)) { now = field(); if (now === want || !want.startsWith(now)) break; }
-    if (now !== want) return false;
-  }
-  return true;
-};
-for (let i = 0; !(await typeCode()); i++) {
-  if (i === 2) throw new Error('the code never typed cleanly');
-  tap(/Pairing code/); A('shell', 'input', 'keycombination', '113', '29'); A('shell', 'input', 'keyevent', '67'); await sleep(1500);
+// The code is ~490 letters and lives two minutes. `input text` drops the tail of a long string and a loaded emulator
+// drops keys, so: type the rest in 60-letter pieces, read the box once, delete back to the first wrong letter, again.
+// Near its end the code is swapped for a fresh one; they share a long prefix, so only the tail is typed again.
+const box = () => nodes().find((n) => n.desc === 'Pairing code')?.text; // undefined: no dump this time, look again
+let offer, code;
+const fresh = async () => { offer = await api('POST', '/api/phones/pair', { role: 'control' }); code = offer.typed.replace(/[^A-Z0-9-]/gi, ''); };
+await fresh();
+for (let pass = 0; ; pass++) {
+  if (Date.now() > offer.expires - 30000) await fresh();
+  const now = box();
+  if (now === undefined) { await sleep(1500); continue; }
+  let i = 0; while (i < now.length && now[i] === code[i]) i++;
+  if (i === code.length && now.length === code.length) break;
+  if (pass === 10) throw new Error('the code never typed cleanly');
+  if (now.length > i) A('shell', 'input', 'keyevent', ...Array(now.length - i).fill('67'));
+  for (let j = i; j < code.length; j += 60) { A('shell', 'input', 'text', code.slice(j, j + 60)); await sleep(1200); }
+  await sleep(2500);
 }
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/);
 let pending = [];

@@ -403,7 +403,7 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .chat-table table { border-collapse: collapse; }
 .chat-table th, .chat-table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
 .chat-md pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); padding: 10px; border-radius: 8px; }
-.chat-more { border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
+.chat-more { border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }
 /* Your words, echoed at once but not yet answered: muted until the home computer confirms them, so a held send never
