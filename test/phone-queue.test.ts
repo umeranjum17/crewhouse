@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearRetryOf, drainPending, failOffOf, historyOf, pendingOf, retrySuffix,
+import { clearRetryOf, drainPending, failOffOf, historyOf, pendingOf, replayChat, retrySuffix,
   type QueueLine } from '../mobile/src/phone-queue.ts';
 
 const you = (text: string, rid: string, extra?: Partial<QueueLine>): QueueLine => ({ who: 'you', text, rid, ...extra });
@@ -54,6 +54,19 @@ test('clearing a retry clears the interrupted suffix with it', () => {
   assert.equal(cleared[0].retry, undefined);
   assert.equal(cleared[0].interrupted, undefined);
   assert.equal(retrySuffix(cleared[0]), false);
+});
+
+test('an offline-failed turn that later sends reloads as one turn with no phantom stop', () => {
+  const records = [
+    { t: 'you', text: 'A', rid: 'a', queued: true },
+    { t: 'you', text: 'A', rid: 'a' },
+    { t: 'you', text: 'A', rid: 'a', queued: true },
+    { t: 'you', text: 'A', rid: 'a' },
+    { t: 'chief', text: 'done', rid: 'a' },
+  ];
+  const reloaded = replayChat(records, () => false);
+  assert.deepEqual(reloaded.map((l) => [l.who, l.text]), [['you', 'A'], ['chief', 'done']]);
+  assert.ok(reloaded.every((l) => !l.stopped));
 });
 
 test('an offline-failed line stays out of the model history', () => {

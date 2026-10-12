@@ -17,7 +17,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import soul from '../../templates/chief/soul.md';
 import job from '../../templates/chief/AGENTS.md';
 import type { DocPart } from '../../web/src/adapter.ts';
-import { clearRetryOf, pendingOf } from './phone-queue.ts';
+import { pendingOf, replayChat } from './phone-queue.ts';
 
 const MEMBER = 1;
 const PROVIDER = 'openrouter';
@@ -195,39 +195,10 @@ export const markHeard = () => writeAll(metaFile, [{ heardAt: Date.now() }]);
 /** The chat as it was kept, with a queued message still waiting and a cut-off turn marked stopped. A broken
  *  line is skipped so earlier good turns survive; never throws. */
 export function loadChat(): PhoneLine[] {
-  const lines: PhoneLine[] = [];
-  let open: { text: string; rid?: string; queued: boolean } | null = null;
-  let userAt = -1;
-  const cutOff = () => {
-    if (!open) return;
-    const { text, rid, queued } = open;
-    if (queued) { if (lines[userAt]) lines[userAt].queued = true; }
-    else {
-      if (lines[userAt]) lines[userAt].stopped = true;
-      const interrupted = !!rid && requestFor(rid)?.state === 'started';
-      lines.push({ who: 'chief', text: interrupted ? 'Interrupted.' : 'Stopped.', stopped: true, retry: text, retryRid: rid, interrupted });
-    }
-    open = null; userAt = -1;
-  };
-  for (const r of readLines(chatFile)) {
-    if (typeof r.text !== 'string') continue;
-    const rid = typeof r.rid === 'string' ? r.rid : undefined;
-    // A queued message going out writes its start marker again under the same id: from here it is an
-    // ordinary turn, so a kill during that send leaves it stopped and it never goes out again by itself.
-    if (r.t === 'you' && open?.queued && rid && open.rid === rid) { open.queued = false; continue; }
-    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text, rid }); open = { text: r.text, rid, queued: r.queued === true }; userAt = lines.length - 1; }
-    else if (r.t === 'chief' && open) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
-  }
-  cutOff();
-  // A stopped turn the person already retried keeps its line, without a second Try again.
-  let out: PhoneLine[] = lines;
-  const seen = new Set<string>();
-  for (let i = out.length - 1; i >= 0; i--) {
-    const l = out[i];
-    if (l.who === 'you' && l.rid) seen.add(l.rid);
-    if (l.stopped && l.who === 'chief' && l.retryRid && seen.has(l.retryRid)) out = clearRetryOf(out, l.retryRid);
-  }
-  return out;
+  const records = readLines(chatFile).flatMap((r) => typeof r.text === 'string' && (r.t === 'you' || r.t === 'chief')
+    ? [{ t: r.t as string, text: r.text as string, rid: typeof r.rid === 'string' ? r.rid : undefined, queued: r.queued === true, doc: keptDocument(r.doc) }]
+    : []);
+  return replayChat(records, (rid) => requestFor(rid)?.state === 'started') as PhoneLine[];
 }
 
 /** A message waiting for a connection: kept under its request id, going by itself when back online. */
