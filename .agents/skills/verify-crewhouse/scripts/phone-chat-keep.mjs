@@ -54,10 +54,16 @@ const shot = (name) => Aout(join(EV, 'screens', name), 'exec-out', 'screencap', 
 const tapText = (re, nth = 0) => { const m = nodes().filter((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc)); const n = m[nth];
   if (!n) throw new Error(`no node matching ${re}`); const [x1, y1, x2, y2] = n.b; A('shell', 'input', 'tap', String((x1 + x2) >> 1), String((y1 + y2) >> 1)); return n.text || n.desc; };
 const type = (s) => A('shell', 'input', 'text', s.trim().replace(/ /g, '%s'));
+// The lowest match on screen: for an Alert dialog's button, which sits below the header link of the same word.
+const tapLowest = (re) => { const m = nodes().filter((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc));
+  if (!m.length) throw new Error(`no node matching ${re}`); const n = m.reduce((a, b) => (b.b[1] > a.b[1] ? b : a));
+  A('shell', 'input', 'tap', String((n.b[0] + n.b[2]) >> 1), String((n.b[1] + n.b[3]) >> 1)); return n.text || n.desc; };
 const launch = () => A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
 const forceStop = () => A('shell', 'am', 'force-stop', PKG);
+// Stop then start in one call: a plain start on a live app only brings it to the front, so the mount effects
+// (the connectivity probe and the queued flush) would never run. -S guarantees a cold remount.
+const relaunch = () => A('shell', 'am', 'start', '-S', '-n', `${PKG}/.MainActivity`);
 const hasNode = (re) => nodes().some((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc));
-const enabled = (re) => { const n = nodes().find((x) => new RegExp(re).test(x.text) || new RegExp(re).test(x.desc)); return n ? n.enabled : null; };
 const speakers = (who) => nodes().filter((n) => n.text === who && n.b[0] === 42).length;
 // A cold emulator under CPU contention can throw a System UI "isn't responding" dialog over the app; Wait clears it.
 const dismissAnr = () => { try { if (hasNode("isn.t responding")) { tapText('^Wait$'); return true; } } catch { /* dump raced */ } return false; };
@@ -179,8 +185,13 @@ const run = async () => {
     forceStop(); await sleep(1000); launch();
     await waitFor(() => hasNode('No connection'), 40000, 'the offline banner');
     say('offline banner shown'); shot('10-offline.png');
-    const shareOff = enabled('^Share$'), retryOff = enabled('Try again') ?? enabled('Retry');
-    say(`offline: Share enabled=${shareOff}, Try-again enabled=${retryOff}`);
+    // A send-side action is inert offline: tapping the retry control writes nothing new.
+    const beforeTap = chat().split('\n').filter(Boolean).length;
+    try { tapText('Try again'); } catch { try { tapText('Retry'); } catch { /* none on screen */ } }
+    await sleep(2500);
+    const afterTap = chat().split('\n').filter(Boolean).length;
+    say(`offline retry control inert (chat lines ${beforeTap} -> ${afterTap})`);
+    if (afterTap > beforeTap) throw new Error('a retry ran while offline');
     tapText('Ask Chief anything'); await sleep(500); await type('This one waits for the network.'); await sleep(500); tapText('Send');
     await waitFor(() => hasNode('Queued, not sent yet'), 25000, 'the queued state');
     say('offline message shown as Queued, not sent yet; it does not look sent'); shot('11-offline-queued.png');
@@ -213,6 +224,32 @@ const run = async () => {
     A('shell', 'settings', 'put', 'system', 'font_scale', '1.3'); A('shell', 'wm', 'density', '480');
     await sleep(1800); shot('15-narrow-1.3x.png');
     A('shell', 'settings', 'put', 'system', 'font_scale', '1.0'); A('shell', 'wm', 'density', 'reset'); await sleep(800);
+  }
+
+  // --- sign out removes the key AND the kept chat; "Use a computer" keeps both ---
+  {
+    const keptFiles = () => files().filter((f) => /^phone-|^chief-/.test(f)).length;
+    // "Use a computer" leaves phone-only (and its mode flag) without clearing the key or the chat. Coming back
+    // with "Use this phone only" goes straight to the kept chat — no key screen — so the key is still there.
+    const beforeUse = keptFiles();
+    tapText('^Use a computer$');
+    await waitFor(() => hasNode('Use this phone only'), 10000, 'the chooser after Use a computer');
+    const afterUse = keptFiles();
+    say(`Use a computer kept the chat files: ${beforeUse} -> ${afterUse}`);
+    tapText('^Use this phone only$');
+    await waitFor(() => hasNode('Ask Chief anything'), 20000, 'the kept chat back (key still saved)');
+    say(`back in the kept chat with no new sign-in; files ${keptFiles()}`); shot('16-use-a-computer-keeps.png');
+    // The confirmed sign out: the dialog names what goes, then the key and the kept chat are removed.
+    tapText('^Sign out$');
+    await waitFor(() => hasNode('Sign out of Chief?'), 8000, 'the sign-out confirm');
+    shot('17-signout-confirm.png');
+    tapLowest('^Sign out$'); await sleep(3000);
+    const left = keptFiles();
+    say(`chat files left after sign out: ${left}`);
+    forceStop(); await sleep(1000); launch();
+    await waitFor(() => hasNode('Use this phone only') || hasNode('Pair with a computer'), 30000, 'the chooser after sign out');
+    say('signed out: relaunch opens the chooser, no chat'); shot('18-signed-out.png');
+    if (left !== 0) throw new Error(`sign out left ${left} chat files`);
   }
 
   // --- erase the key and the chat from this emulator ---
