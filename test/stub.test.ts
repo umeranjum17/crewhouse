@@ -32,7 +32,7 @@ after(() => daemon.kill());
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -43,7 +43,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
 const done = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
-const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+const ready = () => until(async () => (await api('GET', '/api/state').catch(() => null))?.body.person);
 
 test('chief onboarding, recruit, assign, grants', async () => {
   await ready();
@@ -63,6 +63,13 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
   // Cross-site writes are refused.
   assert.equal((await api('POST', '/api/recruit', { template: 'reel' }, {})).status, 403);
+
+  // Cross-site reads are refused too: a loopback caller without the person's authority reads nothing,
+  // and the public header alone never stands in for it.
+  const bare = (path: string, headers: Record<string, string> = {}) => fetch(base + path, { headers }).then((r) => r.status);
+  assert.equal(await bare('/api/about'), 403);
+  assert.equal(await bare('/api/about', { 'x-crewhouse': '1' }), 403);
+  assert.equal((await api('GET', '/api/about')).status, 200);
 
   // A normal message to Chief is a Chief turn on the engine.
   await say('chief', 'I need a demo video');

@@ -37,7 +37,9 @@ echo $! > "$LAB/crewd.spawn.pid"
 - The env mask (`env -i` + full XDG set + dead D-Bus path) keeps the run off the owner's
   home, keyring and sign-ins; `src/main.ts` refuses data dirs inside the repo.
 - Ready = log line `crewd listening on http://127.0.0.1:$PORT (engine: stub, …)` **and**
-  `curl -fsS "http://127.0.0.1:$PORT/api/state"` returning JSON with a `person` key.
+  `curl -fsS -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")"
+  "http://127.0.0.1:$PORT/api/state"` returning JSON with a `person` key.
+  Every `/api` read needs the person's authority, like every write; loopback alone proves nothing.
   Poll for the condition; never a fixed sleep (CI disks are slow).
 - Teardown: `kill -TERM $(cat "$LAB/crewd.spawn.pid")` and wait for exit. crewd also
   writes its own pid to `$LAB/state/crewd.pid` — only ever kill the process you spawned.
@@ -59,7 +61,7 @@ install. The canonical journey, from `test/stub.test.ts`:
 ```bash
 B="http://127.0.0.1:$PORT"; PERSON=$(<"$LAB/state/person.key")
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON") # never log the capability
-curl -fsS "$B/api/state"                                   # person.name "Owner", bots list with chief
+curl -fsS "${H[@]}" "$B/api/state"                        # person.name "Owner", bots list with chief
 curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"   # then /api/state shows person.address "Sir"
 curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"
 # poll GET /api/bots/chief until the bot reply appears:

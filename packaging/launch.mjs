@@ -14,7 +14,8 @@ const url = `http://127.0.0.1:${process.env.CREWHOUSE_PORT || 7711}`;
 // The helpers' tools install with the bundled npm, so it goes first on the PATH crewd and its tools see.
 const env = { ...process.env, PATH: `${join(root, 'node', 'bin')}:${process.env.PATH ?? ''}`, CREWHOUSE_PACKAGED: process.env.CREWHOUSE_PACKAGED ?? '1' };
 
-const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok, () => false);
+// Liveness only: any answer means crewd is up, even the 403 /api/state gives without the person's authority.
+const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false);
 // CREWHOUSE_NO_SERVICE=1 (tests): never touch the login services of whoever runs this.
 const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
 

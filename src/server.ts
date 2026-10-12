@@ -149,7 +149,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
 
       if (p.startsWith('/api/')) {
         // The public header prevents browser CSRF; it never establishes person authority.
-        if (req.method !== 'GET' && (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`)) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu to make changes.' });
+        if (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu to make changes.' });
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());

@@ -18,7 +18,7 @@ after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const api = async (method: string, path: string, body?: unknown) =>
-  (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined })).json();
+  (await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined })).json();
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) { const v = await fn().catch(() => undefined); if (v) return v; }
   throw new Error('timed out');
@@ -26,7 +26,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 
 test('crewd killed mid-run: the task resumes in the same conversation and finishes', async () => {
   start();
-  await until(async () => (await fetch(`${base}/api/state`)).ok);
+  await until(async () => (await api('GET', '/api/state').catch(() => null))?.person);
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   // The stub model reports progress, then holds the turn ("ask permission") as a long render would.

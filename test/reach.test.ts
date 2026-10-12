@@ -33,7 +33,7 @@ after(async () => { daemon.kill(); expo.close(); await relay.close(); });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown) {
-  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(what: string, fn: () => Promise<T | undefined | false> | T | undefined | false, ms = 10_000): Promise<T> {
@@ -42,7 +42,7 @@ async function until<T>(what: string, fn: () => Promise<T | undefined | false> |
 }
 
 test('reachable from anywhere: enrol once, pair by typed code, talk through the relay, content-free push, remove', async () => {
-  await until('crewd', async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until('crewd', async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   assert.equal((await http('GET', '/api/phones/link')).body.relayStatus, 'off', 'no relay until the family sets one');
   assert.equal((await http('POST', '/api/phones/code', { role: 'control' })).status, 409, 'no typed code without a relay');
 

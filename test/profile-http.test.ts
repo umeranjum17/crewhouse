@@ -25,7 +25,7 @@ for (const [label, fields] of Object.entries({
   t.after(async () => { if (server.listening) await new Promise<void>((r, reject) => server.close((e) => e ? reject(e) : r())); done(); });
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = async (method: string, path: string, body?: object) => {
-    const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' },
+    const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: res.status, body: await res.json() };
   };
@@ -50,7 +50,7 @@ for (const [label, fields] of Object.entries({
   reloaded.init();
   const reloadServer = await startServer(cfg, persisted, reloaded);
   try {
-    const res = await fetch(`http://127.0.0.1:${(reloadServer.address() as AddressInfo).port}/api/state`);
+    const res = await fetch(`http://127.0.0.1:${(reloadServer.address() as AddressInfo).port}/api/state`, { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } });
     assert.equal(res.status, 200);
     const reopened = (await res.json()).person;
     console.log(JSON.stringify({ label, status: result.status, before, after, reopened, eventsAdded: added.length }));
