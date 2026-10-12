@@ -7,7 +7,8 @@ import { mkdirSync, writeFileSync, appendFileSync, existsSync, readFileSync, mkd
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 const [base, out, message, W = '1440', H = '900', path = '/?day#/', maxS = '300'] = process.argv.slice(2);
-const PERSON = new URL(base + path).hash.match(/person=([0-9a-f]+)/)?.[1] ?? '';
+const PERSON = new URL(base + path).hash.match(/person=([0-9a-f]+)/)?.[1];
+if (!PERSON) throw new Error('the path must carry #person=<key>');
 mkdirSync(join(out, 'frames'), { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), 'chat-probe-'));
 const chrome = spawn(process.env.CHROMIUM ?? '/usr/bin/chromium', ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${W},${H}`, 'about:blank'], { stdio: 'ignore' });
