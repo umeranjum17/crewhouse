@@ -90,6 +90,15 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id IN (SELECT id FROM tasks WHERE routine = ?)", r.id)!.n, 2, 'still one notice and one follow-up');
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS2, 'the case is untouched');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 1, 'noise opens no case');
+
+  threads[BANK].messages.push(msg(FROM, SUBJECT, 'Thanks, received.', Date.now() + 4000));
+  await fire(r.id); // the same thread again with nothing new: silence, and the held facts stay as they were
+  assert.deepEqual(fired(r.id), ['started', 'mail', 'mail', 'mail', 'mail']);
+  const t4 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t4.id);
+  assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', t4.id)!.result, 'All clear');
+  assert.equal(said(t4.id), undefined, 'silence posts no message');
+  assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS2, 'the case is unchanged');
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (method: string, path: string, body?: object) => (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
