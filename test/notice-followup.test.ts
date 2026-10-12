@@ -99,6 +99,17 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', t4.id)!.result, 'All clear');
   assert.equal(said(t4.id), undefined, 'silence posts no message');
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS2, 'the case is unchanged');
+
+  const CONFIRM_NEW = '18c0000000000013';
+  threads[CONFIRM_NEW] = { messages: [msg(FROM, 'LOCI315: cover confirmed', 'Cover confirmed.', Date.now() + 5000)] }; order.push(CONFIRM_NEW);
+  await fire(r.id); // the same sender on a new thread: a follow-up that holds the case, not a first notice
+  assert.deepEqual(fired(r.id), ['started', 'mail', 'mail', 'mail', 'mail', 'mail']);
+  const t5 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t5.id);
+  assert.match(promptOf(t5.id), new RegExp(`a case you hold: ⟦${FACTS2}⟧`), 'the new thread finds the case by its sender');
+  assert.match(said(t5.id) ?? '', /cover until October 23/, 'the follow-up names the change');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 1, 'a new thread opens no case of its own');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM events WHERE kind = ?', 'case.kept')!.n, 2, 'each kept case is an event');
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (method: string, path: string, body?: object) => (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();

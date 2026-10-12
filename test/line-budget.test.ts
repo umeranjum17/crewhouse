@@ -23,7 +23,9 @@ import { join } from 'node:path';
 // the held-facts lookup and the crew_case tool. No trim paired: the case store is the feature.
 // Raised 6937 -> 6938 for the Memory row's Forget on a held case (owner extended the exception): the one
 // POST /api/cases/forget route. No trim paired: the Forget is the person's control over the case store.
-const BUDGET = 6938;
+// Raised 6938 -> 6944 for the case event log and the same-sender match (owner extended the exception): the
+// case.kept and case.forgotten events, the sender column on a case, and the sender lookup. No trim paired.
+const BUDGET = 6944;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
