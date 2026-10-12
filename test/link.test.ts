@@ -268,7 +268,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 
   // A chat kept from Chief on the phone alone carries on with Chief here as one message (mobile ContinueOffer): it stays
   // with Chief whole, so its "pair one" makes no pairing card, and a resend under the same move id stores it once.
-  const moved = "I'm continuing our chat from my phone. Here is what we said there:\nYou: Book us a table for Friday.\nChief: That needs a computer. Pair one and I'll book it.\nPlease carry on from here.";
+  const moved = "I'm continuing our chat from my phone. Please carry on from here; this is what we said there:\n- You: Book us a table for Friday.\n- Chief: That needs a computer. Pair one and I'll book it.";
   const sent = await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' });
   assert.equal(sent.status, 200);
   assert.deepEqual(await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' }), sent, 'the same move is stored once');

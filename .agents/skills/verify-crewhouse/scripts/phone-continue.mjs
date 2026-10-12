@@ -37,8 +37,12 @@ const api = async (method, path, body) => {
 const nodes = () => {
   let xml = '';
   for (let i = 0; i < 3 && !xml; i++) { try { A('shell', 'uiautomator', 'dump', '/sdcard/ui.xml'); xml = A('shell', 'cat', '/sdcard/ui.xml'); } catch { /* busy window */ } }
-  return [...xml.matchAll(/<node [^>]*>/g)].map(([n]) => ({ text: (n.match(/ text="([^"]*)"/) || [])[1] || '', desc: (n.match(/content-desc="([^"]*)"/) || [])[1] || '',
+  const all = [...xml.matchAll(/<node [^>]*>/g)].map(([n]) => ({ text: (n.match(/ text="([^"]*)"/) || [])[1] || '', desc: (n.match(/content-desc="([^"]*)"/) || [])[1] || '',
     enabled: (n.match(/ enabled="(true|false)"/) || [])[1] !== 'false', b: (n.match(/bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"/) || []).slice(1).map(Number) }));
+  // A loaded host can raise the system's "isn't responding" dialog over the app: answer Wait and look again.
+  const wait = all.some((n) => /isn't responding/.test(n.text)) && all.find((n) => n.text === 'Wait');
+  if (wait) { A('shell', 'input', 'tap', String((wait.b[0] + wait.b[2]) >> 1), String((wait.b[1] + wait.b[3]) >> 1)); return []; }
+  return all;
 };
 const has = (re) => nodes().some((n) => re.test(n.text) || re.test(n.desc));
 const tap = (re) => { const n = nodes().find((x) => re.test(x.text) || re.test(x.desc)); if (!n) throw new Error(`no node ${re}`);
@@ -91,10 +95,27 @@ await waitFor(/^Type a code$/, 20000); tap(/^Type a code$/);
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
 const offer = await api('POST', '/api/phones/pair', { role: 'control' });
 const code = offer.typed.replace(/[^A-Z0-9-]/gi, '');
-for (let i = 0; i < code.length; i += 60) { A('shell', 'input', 'text', code.slice(i, i + 60)); await sleep(300); }
+// `input text` drops the tail of a long string (the code is ~490 letters) and, on a loaded emulator, pieces sent
+// back to back interleave: send 60 letters, wait until the box holds them, then the next; start over if it goes wrong.
+const flat = (x) => x.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+const field = () => flat(nodes().find((n) => n.desc === 'Pairing code')?.text ?? '');
+const typeCode = async () => {
+  for (let i = 0; i < code.length; i += 60) {
+    A('shell', 'input', 'text', code.slice(i, i + 60));
+    const want = flat(code.slice(0, i + 60));
+    let now = '';
+    for (const t = Date.now(); Date.now() - t < 30000; await sleep(800)) { now = field(); if (now === want || !want.startsWith(now)) break; }
+    if (now !== want) return false;
+  }
+  return true;
+};
+for (let i = 0; !(await typeCode()); i++) {
+  if (i === 2) throw new Error('the code never typed cleanly');
+  tap(/Pairing code/); A('shell', 'input', 'keycombination', '113', '29'); A('shell', 'input', 'keyevent', '67'); await sleep(1500);
+}
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/);
 let pending = [];
-for (let t = 0; t < 40 && !pending.length; t++) { pending = await api('GET', '/api/phones/pending'); if (!pending.length) await sleep(500); }
+for (let t = 0; t < 120 && !pending.length; t++) { pending = await api('GET', '/api/phones/pending'); if (!pending.length) await sleep(500); }
 if (!pending.length) throw new Error('the phone never reached the computer');
 await api('POST', '/api/phones/answer', { id: pending[0].id, yes: true });
 await waitFor(/Open Crewhouse/, 30000); tap(/Open Crewhouse/);

@@ -7,7 +7,7 @@ onboarding) then shows one card, **Your chat from this phone**, with **Continue 
 message is still queued.
 
 Continue sends the whole chat as one message to Chief (`POST /api/bots/chief/messages {text, move}`,
-`docs/ui-contract.md`): one line per turn, `You:` / `Chief:`, a phone document as its title with "The file stays on
+`docs/ui-contract.md`): one opening line, then one list item per turn, `- You:` / `- Chief:`, a phone document as its title with "The file stays on
 my phone", the oldest turns left out past 40,000 characters with "(Earlier turns left out.)". crewd makes it one Chief
 task with no routing (so a transcript that says "pair a computer" never turns into a pairing card) and keys it on
 `move`, the chat's last request id, so a resend stores nothing twice. The phone erases `phone-chat.jsonl` and
@@ -33,4 +33,4 @@ night and day), plus `phone-continue.log` (message counts from crewd's own API, 
 
 The computer's half is the ordinary Chief thread: capture it with `scripts/screens.sh "$EV/screens" chief-moved
 "http://127.0.0.1:$PORT/"` after opening the launcher URL once (four files: night and day, 1440 and 390), and check the
-moved message reads one line per turn.
+moved message reads as a list, one turn per item (the web thread is Markdown: plain lines would run together).
