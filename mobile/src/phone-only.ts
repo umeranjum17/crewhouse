@@ -17,7 +17,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import soul from '../../templates/chief/soul.md';
 import job from '../../templates/chief/AGENTS.md';
 import type { DocPart } from '../../web/src/adapter.ts';
-import { pendingOf, replayChat } from './phone-queue.ts';
+import { pendingOf, replayChat, transcriptOf } from './phone-queue.ts';
 
 const MEMBER = 1;
 const PROVIDER = 'openrouter';
@@ -219,9 +219,21 @@ export function queueTurn(text: string, rid?: string): string {
 /** Every message still waiting for a connection, oldest first. */
 export const pendingTurns = (): { rid: string; text: string }[] => pendingOf(loadChat());
 
+/** The kept chat as one message for Chief on a paired computer, and the one id that moves it (its last turn's, so a
+ *  resend after a kill is the same move). Null with nothing said, or while a message still waits to go. */
+export function chatToMove(): { text: string; id: string } | null {
+  const lines = loadChat();
+  if (pendingOf(lines).length || !lines.some((l) => !l.stopped && !l.queued)) return null;
+  return { text: transcriptOf(lines), id: lines.filter((l) => l.who === 'you' && l.rid).at(-1)?.rid ?? newRid() };
+}
+
+/** The chat went to the computer: its kept file and tool index go. The documents Chief made here stay on this phone. */
+export const retireChat = () => { for (const f of [chatFile, requestFile]) keep(() => { const x = f(); if (x.exists) x.delete(); }); };
+
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
-  for (const f of [chatFile, requestFile, metaFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });
+  retireChat();
+  keep(() => { const x = metaFile(); if (x.exists) x.delete(); });
   keep(() => { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); });
 }
 

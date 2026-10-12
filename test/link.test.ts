@@ -266,6 +266,17 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   await a.req('POST', '/api/onboard', { address: 'Sir' });
   await until(async () => a.events.find((e) => e.kind === 'person.onboarded'));
 
+  // A chat kept from Chief on the phone alone carries on with Chief here as one message (mobile ContinueOffer): it stays
+  // with Chief whole, so its "pair one" makes no pairing card, and a resend under the same move id stores it once.
+  const moved = "I'm continuing our chat from my phone. Here is what we said there:\n\nYou: Book us a table for Friday.\n\nChief: That needs a computer. Pair one and I'll book it.\n\nPlease carry on from here.";
+  const sent = await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' });
+  assert.equal(sent.status, 200);
+  assert.deepEqual(await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' }), sent, 'the same move is stored once');
+  const chief = (await http('GET', '/api/bots/chief')).body;
+  assert.equal(chief.messages.filter((x: any) => x.author === 'person' && x.text === moved).length, 1);
+  assert.ok(chief.tasks.some((x: any) => x.id === sent.body.task), 'a Chief task, not a helper\'s');
+  assert.equal(chief.phoneOffer, null);
+
   await http('POST', '/api/bots/chief/messages', { text: 'pair my phone' });
   const card = (await http('GET', '/api/bots/chief')).body.phoneOffer;
   assert.ok(card.token && card.qr);

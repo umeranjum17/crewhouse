@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, retireChat, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -97,7 +97,7 @@ export default function App() {
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
             : grant === null ? (phone === null ? <Center><ActivityIndicator color={t.ink} /></Center> : phone ? <PhoneOnly onExit={leavePhone} />
-              : <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { void setPhoneMode(false); setPhone(false); setGrant(g); }} />)
+              : <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { notNow = false; void setPhoneMode(false); setPhone(false); setGrant(g); }} />)
             : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
           <Toast />
         </SafeAreaView>
@@ -986,6 +986,30 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   );
 }
 
+/** Once a computer is paired, the chat kept from Chief on this phone can carry on with Chief there: one message with
+ *  the whole chat in it. The phone copy goes only after the computer has stored it; a failure keeps it and says so.
+ *  Not now hides the offer until the app opens again or pairs again. */
+let notNow = false;
+function ContinueOffer({ onMoved }: { onMoved: () => void }) {
+  const t = useLook();
+  const [move, setMove] = useState(() => (notNow ? null : chatToMove()));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  if (!move) return null;
+  const go = async () => {
+    setBusy(true); setErr('');
+    try { await api.moveChat(move.text, move.id); retireChat(); setMove(null); onMoved(); }
+    catch (e) { setErr(`${FRIENDLY[trouble(e)]} Your chat is still on this phone.`); setBusy(false); }
+  };
+  return <Card style={{ gap: 10, marginBottom: 8 }}>
+    <T style={s.b}>Your chat from this phone</T>
+    <T tone="ink2">Carry it on with Chief on your computer. It goes as one message; documents stay on this phone.</T>
+    {!!err && <T tone="pinkInk" style={s.small}>{err}</T>}
+    {busy ? <ActivityIndicator color={t.ink} accessibilityLabel="Moving your chat" style={{ alignSelf: 'flex-start' }} />
+      : <View style={s.chips}><Btn go label="Continue on your computer" onPress={() => void go()} /><Btn ghost label="Not now" onPress={() => { notNow = true; setMove(null); }} /></View>}
+  </Card>;
+}
+
 // ---------- the app ----------
 type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
@@ -1180,6 +1204,7 @@ function Hello({ state, refresh, go }: Ctx) {
   const reduce = motion.useReduceMotion();
   return (
     <Page>
+      <ContinueOffer onMoved={refresh} />
       <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
@@ -1608,7 +1633,7 @@ function Home(ctx: Ctx) {
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
   // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
-  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<></>} /></View>;
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={canAct ? <ContinueOffer onMoved={refresh} /> : <></>} /></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">

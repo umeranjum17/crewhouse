@@ -85,3 +85,15 @@ export async function drainPending(
   }
   return { sent, remaining: pending.slice(sent) };
 }
+
+/** The phone-only chat as one message to Chief on the computer: who said what, in order, as Chief on the phone heard
+ *  it (no stopped or queued turns), a document as its title only. Past `max` characters the oldest turns go, said so. */
+export function transcriptOf(lines: QueueLine<{ name: string }>[], max = 40_000): string {
+  const turns = lines.filter((l) => !l.stopped && !l.queued).map((l) => `${l.who === 'you' ? 'You' : 'Chief'}: ${
+    [l.text.trim(), l.doc && `(Chief made a document here, ${l.doc.name}. The file stays on my phone.)`].filter(Boolean).join('\n')}`);
+  let left = false;
+  while (turns.length > 1 && turns.join('\n\n').length > max) { turns.shift(); left = true; }
+  const said = turns.join('\n\n');
+  return ["I'm continuing our chat from my phone. Here is what we said there:", left && '(Earlier turns left out.)',
+    said.length > max ? `…${said.slice(-max)}` : said, 'Please carry on from here.'].filter(Boolean).join('\n\n');
+}

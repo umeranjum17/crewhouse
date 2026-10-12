@@ -1054,16 +1054,16 @@ export class Crew {
     return id;
   }
 
-  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says.
+  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole.
    *  `photos` ride along with the words; `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
-  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string) {
+  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
     const pics = checkPhotos(photos);
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
     if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
-    if (botId === CHIEF && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
+    if (botId === CHIEF && !moved && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null);
       if (asksForPhone(words)) { await this.addPhone(); return; }
       if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', `Sign in with ${(Object.values(PROVIDERS).find((p) => !this.accounts.unready(p.key) && !this.accounts.notIncluded(p.key) && !this.restingUntil(p.key)) ?? PROVIDERS.chatgpt).name}.`, null); return; }
@@ -1072,7 +1072,7 @@ export class Crew {
       if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect');
       return;
     }
-    if (botId === CHIEF) return this.route(words, model, pics, room, key, said);
+    if (botId === CHIEF) return moved ? this.addTask(CHIEF, words, 'person', model, undefined, words, pics, { key }) : this.route(words, model, pics, room, key, said);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
     return this.addTask(botId, words, 'person', model, undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
   }

@@ -21,7 +21,8 @@ export let demo = !!search && (search.has('demo') || (!search.has('real') && !lo
 export const pairable = demo && !search!.has('demo');
 
 /** How a call reaches crewd: HTTP on this computer; the phone app swaps in its encrypted link. */
-export type Transport = (method: string, path: string, body?: Json) => Promise<Json>;
+/** `o.timeoutMs`: give up after that long, and the phone's link tells the computer not to start it any later. */
+export type Transport = (method: string, path: string, body?: Json, o?: { timeoutMs: number }) => Promise<Json>;
 let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
 
@@ -70,6 +71,9 @@ export const api = {
    *  person wrote, when the ask the helper reads is not their own words (the bubble builds one): the thread shows
    *  `said`, the helper gets `text`. */
   post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }, said?: string) => call('POST', `/api/bots/${id}/messages`, { text, ...(said ? { said } : {}), ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
+  /** A chat with Chief on the phone alone, carried to Chief here as one message (mobile/src/phone-only.ts `chatToMove`).
+   *  `move` is that chat's one id: a resend stores nothing twice. Bounded, so a computer that went quiet is a failure. */
+  moveChat: (text: string, move: string) => call('POST', '/api/bots/chief/messages', { text, move }, { timeoutMs: 30_000 }),
   /** A word to a helper's running job: it reads it after its current step, without starting over. */
   steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.
