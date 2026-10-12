@@ -199,11 +199,10 @@ const run = async () => {
     const beforeChiefs = chiefCount(chat());
     A('shell', 'svc', 'wifi', 'enable'); A('shell', 'svc', 'data', 'enable');
     await waitFor(() => ping(), 20000, 'the emulator network to return');
-    await sleep(2000);
-    forceStop(); await sleep(1000); launch();
-    await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the reloaded composer');
+    // No relaunch: the open chat hears the connection come back by itself (it re-checks while offline).
     // It went once: the on-disk log gains exactly the one Chief answer for the queued turn.
-    await waitFor(() => chiefCount(chat()) > beforeChiefs, 60000, 'the queued turn answered');
+    await waitFor(() => chiefCount(chat()) > beforeChiefs, 90000, 'the queued turn answered');
+    await waitFor(() => !hasNode('No connection') && !hasNode('Queued, not sent yet'), 30000, 'the banner and queued mark gone');
     await settle();
     say(`queued message went once back online (chiefs ${beforeChiefs} -> ${chiefCount(chat())})`); shot('12-queued-sent.png');
   }
