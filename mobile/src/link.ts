@@ -127,6 +127,25 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
   return { link: o.link, call: o.call, learn: o.learn, facts: o.facts, push: o.push, release };
 }
 
+/** True when this failure is a build with no Android push credential (README, "Phone notifications"): the same
+ *  Firebase words the Expo-token fetch fails with on such a build. */
+export const noPushCredential = (e: unknown) => {
+  const err = e as Error & { code?: string };
+  return err?.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(String(err?.message ?? ''));
+};
+/** Whether this build can push at all, without asking the person: the native device token needs no permission,
+ *  only the credential. False means asking would be pointless. Anything else that goes wrong (a simulator, a
+ *  transient failure) throws, and the caller carries on as today. */
+export async function canPush(): Promise<boolean> {
+  try {
+    await Notifications.getDevicePushTokenAsync();
+    return true;
+  } catch (e) {
+    if (noPushCredential(e)) return false;
+    throw e;
+  }
+};
+
 function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
   const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else { liveListeners.forEach((fn) => fn(e)); onEvent(e); } };
@@ -166,11 +185,16 @@ function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => 
    *  nothing and tries again on the next reconnect. */
   const push = async () => {
     await Notifications.setNotificationChannelAsync('default', { name: 'Crewhouse', importance: Notifications.AndroidImportance.DEFAULT });
+    // No push credential in this build: say `{missing}` without ever asking the person — the pairing success
+    // skips its ask on the same answer (`canPush` above, App.tsx `pushState`).
+    if (!(await canPush().catch(() => true))) {
+      await call('POST', '/api/push', { missing: true });
+      return;
+    }
     const { status } = asked ? await Notifications.getPermissionsAsync() : await Notifications.requestPermissionsAsync();
     asked = true;
     if (status !== 'granted') return call('POST', '/api/push', { off: true });
-    const token = await Notifications.getExpoPushTokenAsync().then((t) => t.data, (e: Error & { code?: string }) =>
-      (e.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(e.message) ? '' : undefined));
+    const token = await Notifications.getExpoPushTokenAsync().then((t) => t.data, (e) => (noPushCredential(e) ? '' : undefined));
     if (token !== undefined) await call('POST', '/api/push', token ? { expo: token } : { missing: true });
   };
   /** Out of touch: what this phone can see for itself, and a bounded knock on the computer's address, for `away()` in
