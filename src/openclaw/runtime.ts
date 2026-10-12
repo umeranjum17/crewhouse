@@ -45,7 +45,6 @@ const CONFIG = {
     codex: { enabled: false },
   } },
   skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
-  models: { providers: { openai: { models: [{ id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' }] }, 'opencode-go': { models: [{ id: 'muse-spark-1.3-contributor', name: 'Muse Spark', api: 'openai-responses' }] } } }, // Muse on Go until the kit ships it; the openai row keeps the engine default.
 };
 
 export class OpenClawRuntime implements AgentRuntime {
