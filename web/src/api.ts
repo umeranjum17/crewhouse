@@ -208,7 +208,7 @@ export function subscribe(onEvent: (e: Json) => void): () => void {
   if (demo) { let stop = () => {}; void import('./demo.ts').then((m) => { stop = m.demoLive(onEvent); }); return () => stop(); }
   let ws: WebSocket | undefined, stopped = false;
   const open = () => {
-    ws = new WebSocket(`${wsBase()}/ws`);
+    ws = new WebSocket(`${wsBase()}/ws`, `crewhouse-person.${person()}`);
     ws.onmessage = (m) => onEvent(JSON.parse(m.data));
     ws.onclose = () => { if (!stopped) setTimeout(open, 1500); };
     ws.onopen = () => onEvent({ kind: 'connected' });

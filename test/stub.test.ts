@@ -30,6 +30,7 @@ let daemon = startDaemon();
 after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const personWs = () => new WebSocket(base.replace('http:', 'ws:') + '/ws', `crewhouse-person.${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`);
 const { PROVIDERS } = await import('../src/accounts.ts');
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
   const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
@@ -69,6 +70,8 @@ test('chief onboarding, recruit, assign, grants', async () => {
   const bare = (path: string, headers: Record<string, string> = {}) => fetch(base + path, { headers }).then((r) => r.status);
   assert.equal(await bare('/api/about'), 403);
   assert.equal(await bare('/api/about', { 'x-crewhouse': '1' }), 403);
+  const unpaired = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  await assert.rejects(new Promise((resolve, reject) => { unpaired.on('open', resolve); unpaired.on('error', reject); }), 'the live-event socket is refused without the authority');
   assert.equal((await api('GET', '/api/about')).status, 200);
 
   // A normal message to Chief is a Chief turn on the engine.
@@ -199,7 +202,7 @@ test('a Chief reply streams partial words before its durable message', async () 
   await ready();
   if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Sir');
   const events: any[] = [];
-  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  const ws = personWs();
   await new Promise<void>((resolve) => ws.on('open', () => resolve()));
   ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
   try {
@@ -225,7 +228,7 @@ test('Chief streams substantive prose before his tool runs', async () => {
   await ready();
   if (!(await api('GET', '/api/state')).body.person.onboarded) await say('chief', 'Alex');
   const events: any[] = [];
-  const ws = new WebSocket(base.replace('http:', 'ws:') + '/ws');
+  const ws = personWs();
   await new Promise<void>((resolve) => ws.on('open', () => resolve()));
   ws.on('message', (raw) => events.push(JSON.parse(String(raw))));
   try {
@@ -684,7 +687,7 @@ test('the person’s bot page, events and live activity keep their delivered wor
     assert.ok(JSON.stringify(page.trail).includes('my activity'));
     assert.ok(JSON.stringify((await api('GET', '/api/state')).body.events).includes('my activity'));
     assert.ok(JSON.stringify((await api('GET', '/api/events')).body).includes('my activity'));
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const socket = personWs();
     const received: any[] = [];
     socket.on('message', (raw) => received.push(JSON.parse(String(raw))));
     try {

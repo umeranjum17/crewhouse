@@ -25,9 +25,9 @@ first message.
 
 Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in SKILL.md.
 
-- **State before.** `curl -fsS "$B/api/state"` → `person.address` is null, `person.name` "Owner".
+- **State before.** `curl -fsS "${H[@]}" "$B/api/state"` → `person.address` is null, `person.name` "Owner".
 - **Onboard.** `curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"` → `/api/state` now shows `"address":"Sir"`.
-- **Chief's page.** `curl -fsS "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
+- **Chief's page.** `curl -fsS "${H[@]}" "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
 - **Chat.** `curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
 - **UI.** Bootstrap the browser per [Drive](../SKILL.md#drive), then visit `/` in that same tab: the Hello screen shows the name field and three ideas (eval their labels and `getBoundingClientRect`); after onboarding the Chief thread shows hero + Needs-you row and the composer. Capture 1440 and 390 screenshots; at 320 record the actual wrap/scroll behavior of the longest idea label.
 - **Open line.** Click the `button "Or tell Chief something you've been putting off"`: eval `document.activeElement` is `.hello-ask textarea` with placeholder `What have you been putting off?`, and `/api/state` still shows `onboarded: 0`. Fill a name, type a chore in that box and send: the app lands on `#/chief` with the chore as the person's first message. Hello re-renders while its helmet settles, so re-snapshot right before each `chrome-devtools-axi` click/fill and treat a `STALE_REF` error as a miss, never a pass.

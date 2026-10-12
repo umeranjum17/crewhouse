@@ -452,8 +452,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   server.on('upgrade', (req, socket, head) => {
     const origin = req.headers.origin;
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
+    if (req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
-    if (bot && req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });

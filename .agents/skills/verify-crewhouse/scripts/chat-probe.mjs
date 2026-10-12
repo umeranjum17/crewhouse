@@ -1,12 +1,13 @@
 // Send one message in the real web app and record what the thread shows from send to the end: every visible change
 // timed in the page (changes.json: the longest still screen), a row per change every 250 ms (screen.jsonl), one
 // screenshot a second named by ms since send (frames/), and crewd's own /ws push (push.jsonl).
-// Usage: node chat-probe.mjs <base> <outdir> <message> [width height] [path, e.g. /?night#/] [max seconds]
+// Usage: node chat-probe.mjs <base> <outdir> <message> [width height] [path, e.g. /?night#person=<key>] [max seconds]
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, appendFileSync, existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 const [base, out, message, W = '1440', H = '900', path = '/?day#/', maxS = '300'] = process.argv.slice(2);
+const PERSON = new URL(base + path).hash.match(/person=([0-9a-f]+)/)?.[1] ?? '';
 mkdirSync(join(out, 'frames'), { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), 'chat-probe-'));
 const chrome = spawn(process.env.CHROMIUM ?? '/usr/bin/chromium', ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${W},${H}`, 'about:blank'], { stdio: 'ignore' });
@@ -27,7 +28,7 @@ await send('Page.navigate', { url: base + path });
 await until(() => run("!!document.querySelector('.dock textarea')"));
 await sleep(1500);
 // crewd's push, as the app hears it
-const push = new WebSocket(base.replace('http', 'ws') + '/ws');
+const push = new WebSocket(base.replace('http', 'ws') + '/ws', `crewhouse-person.${PERSON}`);
 const log = join(out, 'push.jsonl');
 push.onmessage = (m) => { const e = JSON.parse(m.data); appendFileSync(log, JSON.stringify({ t: Date.now(), kind: e.kind, bot: e.bot, data: JSON.stringify(e.data ?? {}).slice(0, 200) }) + '\n'); };
 const PROBE = `(() => {
@@ -60,7 +61,7 @@ while (Date.now() - t0 < +maxS * 1000) {
   if (t >= nextShot) { const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 60 }); writeFileSync(join(out, 'frames', `${String(frame).padStart(3, '0')}-${String(t - t0).padStart(6, '0')}ms.jpg`), Buffer.from(data, 'base64')); frame++; nextShot += 1000; }
   // done: the task row reached an end state and the screen has been still for 8 s
   if (t - t0 > 15000 && t - settledAt > 8000) {
-    const st = await (await fetch(base + '/api/state')).json().catch(() => ({}));
+    const st = await (await fetch(base + '/api/state', { headers: { 'x-crewhouse': '1', authorization: `Bearer ${PERSON}` } })).json().catch(() => ({}));
     const busy = (st.bots ?? []).some((b) => b.task && ['working', 'queued'].includes(b.task.state));
     if (!busy) break;
   }

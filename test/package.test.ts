@@ -27,9 +27,11 @@ let daemon = start();
 after(() => { daemon.kill(); releases.close(); rmSync(root, { recursive: true, force: true }); });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function state(member?: number) {
+/** The person's app authority, read from the daemon's own state dir; a daemon writes that key before it listens. */
+const authOf = (stateDir: string) => { try { return { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(stateDir, 'person.key'), 'utf8')}` }; } catch { return { 'x-crewhouse': '1' }; } };
+async function state() {
   for (let i = 0; i < 100; i++) {
-    const r = await fetch(`${base}/api/state`, { headers: member ? { 'x-crewhouse-member': String(member) } : {} }).catch(() => null);
+    const r = await fetch(`${base}/api/state`, { headers: authOf(join(root, 'state')) }).catch(() => null);
     if (r?.ok) return r.json();
     await sleep(100);
   }
@@ -62,7 +64,7 @@ test("the downloaded app fetches a helper's tools on its first job, not at start
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   after(() => first.kill());
-  const get = async () => { const r = await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(1000) }).catch(() => null); return r?.ok ? r.json() : null; };
+  const get = async () => { const r = await fetch(`${at}/api/state`, { headers: authOf(state2), signal: AbortSignal.timeout(1000) }).catch(() => null); return r?.ok ? r.json() : null; };
   const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state2, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
   let s: any = null;
   for (let i = 0; i < 100 && !s; i++) if (!(s = await get())) await sleep(100);
@@ -76,10 +78,10 @@ test("the downloaded app fetches a helper's tools on its first job, not at start
   assert.ok(s?.installing?.length, 'an install is under way');
   assert.deepEqual([...s.installing].sort(), ['browser', 'documents', 'write'], "the job fetches exactly the tools Scribe was given and doesn't have");
   const t0 = Date.now();
-  const r = await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(2000) });
+  const r = await fetch(`${at}/api/state`, { headers: authOf(state2), signal: AbortSignal.timeout(2000) });
   assert.ok(r.ok && Date.now() - t0 < 1000, 'and crewd answers at once meanwhile');
   assert.match(A.gettingReady(await r.json()), /getting|Getting/);
-  const scribe = async () => { const b = await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null); return b?.tasks?.find((x: any) => x.id === job); };
+  const scribe = async () => { const b = await fetch(`${at}/api/bots/scribe`, { headers: authOf(state2), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null); return b?.tasks?.find((x: any) => x.id === job); };
   assert.equal((await scribe())?.state, 'queued', 'the job waits for its tools');
   for (let i = 0; i < 100 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
   // The installers run side by side and each re-opens the file with `>` (truncating) before `env` writes, so wait
@@ -109,9 +111,9 @@ test('a stalled install stops at its bound: its job fails in one line, no instal
   });
   after(() => stalled.kill());
   const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state3, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
-  const taskOf = async (bot: string, id: number) => (await fetch(`${at}/api/bots/${bot}`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === id);
+  const taskOf = async (bot: string, id: number) => (await fetch(`${at}/api/bots/${bot}`, { headers: authOf(state3), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === id);
   const running = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
-  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`).catch(() => null))?.ok; i++) await sleep(100);
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`, { headers: authOf(state3) }).catch(() => null))?.ok; i++) await sleep(100);
 
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
@@ -148,19 +150,20 @@ async function brokenKit(tool: string) {
   });
   after(() => broken.kill());
   const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
-  const events = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
-  for (let i = 0; i < 100 && !(await fetch(`${at}/api/events`).catch(() => null))?.ok; i++) await sleep(100);
-  return { at, post, events };
+  const auth = () => authOf(state);
+  const events = async () => (await fetch(`${at}/api/events?after=0`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/events`, { headers: auth() }).catch(() => null))?.ok; i++) await sleep(100);
+  return { at, post, events, auth };
 }
 
 test('an unreadable tool manifest fails a job that needs it in plain words, and crewd keeps answering', async () => {
-  const { at, post, events } = await brokenKit('write');
+  const { at, post, events, auth } = await brokenKit('write');
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
   let t: any;
   for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.failed' && e.data?.task === job)); i++) await sleep(100);
   assert.equal(t?.data.result, 'Its tools could not be checked, so this one stopped. Try again in a moment.');
-  assert.equal((await fetch(`${at}/api/events`, { signal: AbortSignal.timeout(2000) })).ok, true, 'crewd still answers');
+  assert.equal((await fetch(`${at}/api/events`, { headers: auth(), signal: AbortSignal.timeout(2000) })).ok, true, 'crewd still answers');
 });
 
 test("an unreadable manifest for a tool Chief was not given leaves Chief's job unaffected", async () => {
@@ -186,14 +189,15 @@ async function terminalPath(firstUse: boolean) {
   });
   after(() => daemon.kill());
   const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(dir, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
-  const events = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
-  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`).catch(() => null))?.ok; i++) await sleep(100);
-  return { at, post, events, daemon };
+  const auth = () => authOf(join(dir, 'state'));
+  const events = async () => (await fetch(`${at}/api/events?after=0`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`, { headers: auth() }).catch(() => null))?.ok; i++) await sleep(100);
+  return { at, post, events, daemon, auth };
 }
 
 test("the terminal path fetches a helper's tools on its first job, not at start", async () => {
-  const { at, post, events } = await terminalPath(true);
-  const state = async () => (await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null)) as any;
+  const { at, post, events, auth } = await terminalPath(true);
+  const state = async () => (await fetch(`${at}/api/state`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null)) as any;
   assert.deepEqual((await state())?.installing, [], 'nothing installs at start');
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
@@ -201,7 +205,7 @@ test("the terminal path fetches a helper's tools on its first job, not at start"
   for (let i = 0; i < 100 && !(installing = (await events()).filter((e) => e.kind === 'tool.installing').map((e) => e.data?.tool)).length; i++) await sleep(100);
   assert.deepEqual([...installing].sort(), ['browser', 'documents', 'write'], "the first job fetches exactly Scribe's missing tools");
   // The fake installers fail at once: the job goes on without those tools rather than waiting for ever.
-  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
+  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
   let t: any;
   for (let i = 0; i < 300 && (t = await taskOf())?.state !== 'done'; i++) await sleep(100);
   assert.equal(t?.state, 'done');
@@ -209,10 +213,10 @@ test("the terminal path fetches a helper's tools on its first job, not at start"
 });
 
 test('without the terminal path marker, an unpackaged crewd installs nothing by itself', async () => {
-  const { at, post, events } = await terminalPath(false);
+  const { at, post, events, auth } = await terminalPath(false);
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
-  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
+  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
   let t: any;
   for (let i = 0; i < 300 && (t = await taskOf())?.state !== 'done'; i++) await sleep(100);
   assert.equal(t?.state, 'done', 'the job runs without waiting on installs');
