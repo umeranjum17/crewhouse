@@ -237,6 +237,13 @@ export const retireChat = () => keep(() => {
   for (const f of [chatFile(), requestFile()]) if (f.exists) f.moveSync(new File(dir, `${at}-${f.name}`));
 });
 
+/** Carry the chat to the computer, and retire the phone copy only once `send` has resolved: a failed or timed-out
+ *  move keeps the phone copy, message and all. */
+export async function moveChatTo(send: () => Promise<unknown>) {
+  await send();
+  retireChat();
+}
+
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
   for (const f of [chatFile, requestFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });

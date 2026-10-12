@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, retireChat, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -999,7 +999,7 @@ function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => vo
   if (!move || (!canAct && !busy && !err)) return null;
   const go = async () => {
     setBusy(true); setErr('');
-    try { await api.moveChat(move.text, move.id); retireChat(); setMove(null); onMoved(); }
+    try { await moveChatTo(() => api.moveChat(move.text, move.id)); setMove(null); onMoved(); }
     catch (e) { setErr(`${FRIENDLY[trouble(e)]} Your chat is still on this phone.`); setBusy(false); }
   };
   return <Card style={{ gap: 10, marginBottom: 8 }}>
