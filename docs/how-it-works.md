@@ -80,7 +80,7 @@ The same app works at desktop and phone width, and switches to night colours in 
 ## Not yet
 
 - An iPhone build, and a signed Android release. The iPhone app is set up (share sheet, shortcuts, Control Center buttons in `mobile/targets/actions`, and the crew on the Lock Screen and Dynamic Island in `mobile/src/island.ios.tsx`) but has never been built or signed. The Android app is a debug-signed preview, and its push notifications need the builder's own push credential. Editing a helper, signing in and connecting apps stay on the computer.
-- Helpers' shell and screens on macOS and Windows, and a desktop download. Today you install from source.
+- Helpers' shell and screens on macOS and Windows. The desktop download is for Ubuntu and Debian; elsewhere you install from source.
 - Signing in from the phone. For now, everyone signs in on the computer, in the browser, with a one-time code as the fallback.
 - A per-person login. Anyone at the computer can pick who they are.
 

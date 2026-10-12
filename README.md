@@ -91,33 +91,23 @@ Crewhouse gives you a crew that does the work and one calm place to say yes. It 
 
 ## Quick start
 
-You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. The AI engine comes with Crewhouse.
+On **Ubuntu or Debian** (64-bit), with nothing to type:
 
-**1. Get the code**
+1. Download **[crewhouse_0.1.0_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.0/crewhouse_0.1.0_amd64.deb)** (about 200 MB). It carries everything, the AI engine included.
+2. Open it and press **Install** in your software centre.
+3. Open **Crewhouse** from your app menu.
+
+Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No API keys, no terminal logins. A helper fetches its own tools, such as its web browser, the first time it needs them.
+
+**From the code** (any Linux, for developers): you need **[Node.js](https://nodejs.org) 22.22.3 or later**.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
+./crewhouse setup     # installs everything and checks your machine
+./crewhouse start     # prints its address and keeps running
 ```
 
-**2. Set it up** (installs everything and checks your machine)
-
-```bash
-./crewhouse setup
-```
-
-**3. Start it** (it prints its address and keeps running)
-
-```bash
-./crewhouse start
-```
-
-Then, in a second terminal, open it in your browser:
-
-```bash
-./crewhouse open
-```
-
-Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No API keys, no terminal logins.
+Then run `./crewhouse open` in a second terminal.
 
 More: [install and run](docs/install.md) (every command, the phone app, the installed web app, where your data lives).
 
@@ -139,7 +129,7 @@ More: [install and run](docs/install.md) (every command, the phone app, the inst
 - [How it works](docs/how-it-works.md): each feature in detail, and the pieces underneath
 - [Install and run](docs/install.md): commands, updates, the phone app, the installed web app, the desktop bar
 - [AI accounts you can use](docs/supported-subscriptions.md) · [Google apps setup](docs/google-setup.md) · [Run your own relay](relay/README.md)
-- Not there yet: an iPhone build, a signed Android release, a packaged computer download, and helpers' screens on macOS and Windows ([details](docs/how-it-works.md#not-yet))
+- Not there yet: an iPhone build, a signed Android release, and helpers' screens on macOS and Windows ([details](docs/how-it-works.md#not-yet))
 
 **Contributing:** `npm run check` and `./crewhouse test` (no account, no network). Conventions are in [AGENTS.md](AGENTS.md).
 
