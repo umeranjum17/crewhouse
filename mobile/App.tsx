@@ -892,7 +892,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       if (isOffline(e)) {
         setOffline(true);
         // The turn is left stopped (its start marker is on disk); only the person's Try again sends it again.
-        setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
+        setLines((ls) => [...ls.map((l) => (l.rid === rid && l.who === 'you' ? { ...l, queued: false, stopped: true } : clearQueued(l))), { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
         return false;
       }
       if (phoneExpired(e)) { onSignedOut(); return false; }
