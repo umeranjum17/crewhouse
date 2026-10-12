@@ -106,7 +106,8 @@
       ],
       "expo-widgets",
       "@bacons/apple-targets",
-      "./plugins/shortcuts.js"
+      "./plugins/shortcuts.js",
+      "./plugins/abi-splits.js"
     ],
     "scheme": "crewhouse"
   }
