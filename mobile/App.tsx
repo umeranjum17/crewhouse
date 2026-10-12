@@ -932,6 +932,10 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
         return true;
       }
     }
+    if (rid && pendingTurns().length) {
+      await flush();
+      if (pendingTurns().length) return true;
+    }
     const id = rid ?? newRid();
     rememberUser(words, id);
     // A retried stopped turn keeps its line, without a second Try again.
@@ -974,7 +978,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
             <View style={{ flex: 1, gap: 2 }}><T>{l.text}</T>{l.queued && <T tone="mute" style={s.small}>Queued, not sent yet</T>}</View></View></View>
           : l.stopped
             ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
-              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{l.interrupted ? ' Retry?' : ''}</T>
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{l.interrupted && l.retry != null ? ' Retry?' : ''}</T>
                 {l.retry != null && <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry!, l.retryRid)} />}</View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>

@@ -323,13 +323,15 @@ function writeDocument(rid: string, callId: string, prep: { name: string; bytes:
   const prior = requestFor(rid);
   const safeCall = ((prior?.callId || callId).replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 80) || 'doc');
   const fresh = `chief-${safeCall}-${prep.name}.docx`;
-  const fileName = prior?.fileName && /^chief-[\p{L}\p{N} _-]{1,80}-[\p{L}\p{N} _-]{1,80}\.docx$/u.test(prior.fileName) ? prior.fileName : fresh;
+  const reused = !!prior?.fileName && /^chief-[\p{L}\p{N} _-]{1,80}-[\p{L}\p{N} _-]{1,80}\.docx$/u.test(prior.fileName);
+  const fileName = reused && prior ? prior.fileName : fresh;
   startRequest(rid, prior?.callId || callId, fileName);
   const out = new File(Paths.document, fileName);
   out.create({ overwrite: true });
   out.write(prep.bytes);
   finishRequest(rid, fileName);
-  return { name: `${prep.name}.docx`, uri: out.uri, parts: prep.parts };
+  const display = reused ? fileName.slice(`chief-${safeCall}-`.length, -'.docx'.length) || prep.name : prep.name;
+  return { name: `${display}.docx`, uri: out.uri, parts: prep.parts };
 }
 
 /** React Native's AbortSignal has no throwIfAborted, which parts of the kit call; give one signal the whole,
