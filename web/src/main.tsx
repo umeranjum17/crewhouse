@@ -472,12 +472,21 @@ function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
 }
 
 // ---------- a chat ----------
-function PairQR({ text }: { text: string }) {
+function PairQR({ text, label }: { text: string; label?: string }) {
   const rows = useMemo(() => qrMatrix(text, { border: 1 }), [text]);
-  return <svg viewBox={`0 0 ${rows.length} ${rows.length}`} role="img" aria-label="Scan to pair a phone" shapeRendering="crispEdges">
+  return <svg viewBox={`0 0 ${rows.length} ${rows.length}`} role="img" aria-label={label ?? 'Scan to pair a phone'} shapeRendering="crispEdges">
     <rect width="100%" height="100%" fill="white" />
     <path fill="black" d={rows.flatMap((row, y) => row.map((dark, x) => dark ? `M${x} ${y}h1v1h-1z` : '')).join('')} />
   </svg>;
+}
+/** Where no phone is paired yet: the app download as a QR plus the same link as plain text. Gone once a phone is paired. */
+function AppDownloadQR() {
+  return <div className="card pair" aria-label="Get the app">
+    <div className="qr"><PairQR text={A.APP_DOWNLOAD_URL} label="Scan to get the app" /></div>
+    <div className="grow"><b>Get the app</b><p className="small">Scan with your phone camera to get the app</p>
+      <p className="mute small" style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.APP_DOWNLOAD_URL}</p>
+    </div>
+  </div>;
 }
 function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
   const [current, setCurrent] = useState<Json>(offer);
@@ -1223,6 +1232,7 @@ function Phones({ tick }: { tick: number }) {
         {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
+      {!phones.length && !offer && <AppDownloadQR />}
       {link.asking.map((a: Json) => (
         <div key={a.id} className="card ask">
           <b>{a.name} would like to join</b>
@@ -1234,7 +1244,8 @@ function Phones({ tick }: { tick: number }) {
           </div>
         </div>
       ))}
-      {offer && !link.asking.length && (
+      {offer && !link.asking.length && (<>
+        {!phones.length && <AppDownloadQR />}
         <div className="card pair">
           {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
           <div className="grow">
@@ -1248,7 +1259,7 @@ function Phones({ tick }: { tick: number }) {
             <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
           </div>
         </div>
-      )}
+      </>)}
       <label className="card row">
         <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
