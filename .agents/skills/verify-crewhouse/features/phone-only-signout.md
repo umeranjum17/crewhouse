@@ -4,7 +4,7 @@ Phone-only mode (`mobile/src/phone-only.ts`, the `PhoneOnly`/`PhoneChat` screens
 runs Chief on the phone alone, with the person's own account key kept in the device-only secure store
 and a marker (`crewhouse.phone-only.mode`) so a relaunch opens straight into the chat. This feature
 proves the way out: the chat header carries a plain **Sign out** beside **Use a computer**; one
-confirm removes the saved key and returns to the first chooser, and a relaunch stays on the chooser.
+confirm removes the saved key, the kept chat and every document Chief made here, and returns to the first chooser, and a relaunch stays on the chooser.
 
 The Android app (`mobile/`) has its own surface and build, so the loopback crewd run proves nothing
 about it. Drive the release APK on a task-owned emulator (or a lab phone under its lock):
@@ -28,7 +28,7 @@ texts | tap '<regex>' | shot <file>`):
 
 **"Use a computer" keeps the key on purpose.** Tapping **Use a computer** (no confirm) leaves
 phone-only mode but keeps the saved key, so returning with **Use this phone only** opens the chat
-again directly, never the sign-in screen. Only **Sign out** removes the key; do not route that exit
+again directly, never the sign-in screen. Only **Sign out** removes the key, with the kept chat and every document Chief made here (`features/phone-chat-keep.md` owns the keeping); do not route that exit
 through the sign-out path, or a plain mode switch would silently delete the person's sign-in.
 
 **The message step can be skipped.** Signing in only saves the key (no provider call); when the
