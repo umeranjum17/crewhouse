@@ -107,27 +107,33 @@ const chatFile = () => file('phone-chat.jsonl');
 const requestFile = () => file('phone-requests.jsonl');
 const metaFile = () => file('phone-meta.json');
 
+/** Best-effort phone storage: every kept file is a cache, so a failure is dropped (never thrown) and the
+ *  chat keeps working without persisting. One helper so the policy reads once, not per call site. */
+function keep(fn: () => void) {
+  try { fn(); } catch (e) { void e; }
+}
+
 /** Read a whole JSON-lines file as records, skipping any broken line so a partial write never loses the rest.
  *  Never throws: a missing or unreadable file is simply empty. */
 function readLines(fileOf: () => File): Array<Record<string, unknown>> {
   let text = '';
-  try { const f = fileOf(); if (f.exists) text = f.textSync(); } catch { return []; }
+  keep(() => { const f = fileOf(); if (f.exists) text = f.textSync(); });
   const records: Array<Record<string, unknown>> = [];
   for (const raw of text.split('\n')) {
     if (!raw.trim()) continue;
-    try { const r = JSON.parse(raw); if (r && typeof r === 'object') records.push(r as Record<string, unknown>); } catch {}
+    keep(() => { const r: unknown = JSON.parse(raw); if (r && typeof r === 'object') records.push(r as Record<string, unknown>); });
   }
   return records;
 }
 
 /** Append one line, silently: a chat on a full disk still works, it just does not grow. */
 function appendLine(fileOf: () => File, line: unknown) {
-  try { const f = fileOf(); if (!f.exists) f.create({ intermediates: true }); f.write(`${JSON.stringify(line)}\n`, { append: true }); } catch {}
+  keep(() => { const f = fileOf(); if (!f.exists) f.create({ intermediates: true }); f.write(`${JSON.stringify(line)}\n`, { append: true }); });
 }
 
 /** Replace a whole JSON-lines file (the request index and the meta record). */
 function writeAll(fileOf: () => File, lines: unknown[]) {
-  try { const f = fileOf(); f.create({ intermediates: true, overwrite: true }); for (const line of lines) f.write(`${JSON.stringify(line)}\n`, { append: true }); } catch {}
+  keep(() => { const f = fileOf(); f.create({ intermediates: true, overwrite: true }); for (const line of lines) f.write(`${JSON.stringify(line)}\n`, { append: true }); });
 }
 
 /** A fresh id for one turn's request, and the key its tool effects are journalled and retried under. */
@@ -213,8 +219,8 @@ export const pendingTurns = (): { rid: string; text: string }[] => pendingOf(loa
 
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
-  for (const f of [chatFile, requestFile, metaFile]) { try { const x = f(); if (x.exists) x.delete(); } catch {} }
-  try { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); } catch {}
+  for (const f of [chatFile, requestFile, metaFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });
+  keep(() => { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); });
 }
 
 // ---------- Chief, phone-sized ----------

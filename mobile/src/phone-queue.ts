@@ -1,6 +1,8 @@
 export type QueueWho = 'you' | 'chief';
-export type QueueLine = { who: QueueWho; text: string; rid?: string; queued?: boolean;
-  stopped?: boolean; retry?: string; retryRid?: string; interrupted?: boolean; doc?: unknown };
+// Doc is the caller's document card type (PhoneDocument in the app, unknown in tests): generic so the pure
+// module keeps no expo or react-native imports yet the app's typed lines flow through unchanged.
+export type QueueLine<Doc = unknown> = { who: QueueWho; text: string; rid?: string; queued?: boolean;
+  stopped?: boolean; retry?: string; retryRid?: string; interrupted?: boolean; doc?: Doc };
 export type QueueTurn = { rid: string; text: string };
 export type QueueHistory = { who: QueueWho; text: string };
 
@@ -20,11 +22,11 @@ export function historyOf(lines: QueueLine[], rid: string, text: string): QueueH
   return out;
 }
 
-export function clearRetryOf(lines: QueueLine[], retryRid: string): QueueLine[] {
+export function clearRetryOf<Doc>(lines: QueueLine<Doc>[], retryRid: string): QueueLine<Doc>[] {
   return lines.filter((l) => !(l.stopped && l.who === 'chief' && l.retryRid === retryRid));
 }
 
-export function failOffOf(lines: QueueLine[], rid: string, retryText: string): QueueLine[] {
+export function failOffOf<Doc>(lines: QueueLine<Doc>[], rid: string, retryText: string): QueueLine<Doc>[] {
   const mapped = lines.map((l) => {
     if (l.rid === rid && l.who === 'you') return { ...l, queued: false, stopped: true };
     return l;
@@ -37,10 +39,10 @@ export function retrySuffix(line: QueueLine): boolean {
   return line.interrupted === true && line.retry != null;
 }
 
-export type StoredRecord = { t: string; text: string; rid?: string; queued?: boolean; doc?: unknown };
+export type StoredRecord<Doc = unknown> = { t: string; text: string; rid?: string; queued?: boolean; doc?: Doc };
 
-export function replayChat(records: StoredRecord[], isInterrupted: (rid: string) => boolean): QueueLine[] {
-  const lines: QueueLine[] = [];
+export function replayChat<Doc>(records: StoredRecord<Doc>[], isInterrupted: (rid: string) => boolean): QueueLine<Doc>[] {
+  const lines: QueueLine<Doc>[] = [];
   let open: { text: string; rid?: string; queued: boolean } | null = null;
   let userAt = -1;
   const cutOff = () => {
@@ -62,7 +64,7 @@ export function replayChat(records: StoredRecord[], isInterrupted: (rid: string)
     else if (r.t === 'chief' && open) { lines.push({ who: 'chief', text: r.text, doc: r.doc }); open = null; userAt = -1; }
   }
   cutOff();
-  let out: QueueLine[] = lines;
+  let out: QueueLine<Doc>[] = lines;
   const seen = new Set<string>();
   for (let i = out.length - 1; i >= 0; i--) {
     const l = out[i];
