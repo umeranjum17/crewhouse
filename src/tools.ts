@@ -38,9 +38,9 @@ export interface Tool {
   note?: string;
 }
 
-export function registry(cfg: Config): Tool[] {
+export function registry(cfg: Config, only?: string[]): Tool[] {
   const dir = join(cfg.repoDir, 'tools');
-  return readdirSync(dir).sort().filter((t) => existsSync(join(dir, t, 'tool.json')))
+  return readdirSync(dir).sort().filter((t) => (!only || only.includes(t)) && existsSync(join(dir, t, 'tool.json')))
     .map((t) => JSON.parse(readFileSync(join(dir, t, 'tool.json'), 'utf8')));
 }
 
@@ -71,8 +71,8 @@ export function axiEnv(home: string, extra: Record<string, string> = {}): Record
 const fill = (s: string, vars: Record<string, string>) => s.replace(/\{([a-z.]+)\}/g, (m, k) => vars[k] ?? m);
 
 /** Registry plus whether each tool works on this machine right now. */
-export function toolStatus(cfg: Config) {
-  return registry(cfg).map((t) => {
+export function toolStatus(cfg: Config, only?: string[]) {
+  return registry(cfg, only).map((t) => {
     const missing = t.source === 'planned' ? [] : t.bins.filter((b) => !binOf(cfg, t, b));
     const pinned = existsSync(pinFile(cfg, t.id)) ? readFileSync(pinFile(cfg, t.id), 'utf8') : null;
     return {
@@ -100,7 +100,7 @@ export async function herdrStatus(cfg: Config) {
 
 /** What a bot's grants turn into: ready tools, AXIs and env. Missing tools are not offered. */
 export function resolveGrants(cfg: Config, grants: string[], vars: Record<string, string>) {
-  const all = new Map(toolStatus(cfg).map((t) => [t.id, t])), wanted = [...new Set(['crew', ...grants])].map((g) => all.get(g)).filter((t) => t) as ToolState[], tools = wanted.filter((t) => t.ready), v = { tools: cfg.toolsDir, ...vars };
+  const all = new Map(toolStatus(cfg, ['crew', ...grants]).map((t) => [t.id, t])), wanted = [...new Set(['crew', ...grants])].map((g) => all.get(g)).filter((t) => t) as ToolState[], tools = wanted.filter((t) => t.ready), v = { tools: cfg.toolsDir, ...vars };
   // The script itself (the bin is a link into the tool's own node_modules), run on crewd's own node: no PATH lookup.
   const axi = Object.fromEntries(tools.filter((t) => t.axi).map((t) => [t.id, {
     script: realpathSync(binOf(cfg, t, t.bins[0])!),

@@ -4,8 +4,8 @@
 // Run after `npm run build:web`. Needs curl, tar, xz and ar (binutils).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const NODE = '24.21.0';
 const NODE_SHA256 = 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6'; // node-v24.21.0-linux-x64.tar.xz
@@ -18,6 +18,8 @@ const opt = join(stage, 'opt', 'crewhouse');
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', ...opts });
 if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) throw new Error('build the web app first: npm run build:web');
 
+// The engine set ships read-only, so an earlier build's stage needs write access back before it goes.
+if (existsSync(stage)) sh('chmod', ['-R', 'u+w', stage]);
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(join(opt, 'node'), { recursive: true });
 
@@ -43,6 +45,12 @@ sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState]
 // Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
 const engineSet = readFileSync(join(engineState, 'openclaw', 'engine-set'), 'utf8').trim();
 sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', engineSet], { cwd: app, env: bundledEnv });
+// The kit patches a copy of the stock set and keeps both; the engine runs only the patched one, so only it ships
+// (the stock copy is a second ~900 MB tree: it nearly doubled the download).
+for (const name of readdirSync(dirname(engineSet)).filter((n) => join(dirname(engineSet), n) !== engineSet)) {
+  sh('chmod', ['-R', 'u+w', join(dirname(engineSet), name)]);
+  rmSync(join(dirname(engineSet), name), { recursive: true });
+}
 // The kit locks its engine folders to 0700 for the build user; dpkg unpacks them root-owned, and crewd runs as the
 // person, who then cannot read the engine it was given. Everyone reads it; only crewd's own state stays private.
 sh('chmod', ['-R', 'a+rX', join(app, 'runtime')]);

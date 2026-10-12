@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer as http, type Server } from 'node:http';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -50,34 +50,123 @@ test('a newer release is offered to the person in words, and nothing when it is 
   assert.equal((await state()).update, undefined, 'the same version is not an update');
 });
 
-test('the downloaded app keeps answering while it fetches the helpers\' tools on its first run', async () => {
+test("the downloaded app fetches a helper's tools on its first job, not at start, and keeps answering meanwhile", async () => {
   // A fake npm (and pip, and download) that takes eight seconds, so an install is certainly still running.
   const bin = join(root, 'slow-bin');
   mkdirSync(bin, { recursive: true });
   for (const b of ['npm', 'npx', 'python3', 'curl']) { writeFileSync(join(bin, b), `#!/bin/sh\nenv > '${join(root, 'install-env')}'\nsleep 8\nexit 1\n`); chmodSync(join(bin, b), 0o755); }
-  const p2 = await free();
+  const p2 = await free(), at = `http://127.0.0.1:${p2}`, state2 = join(root, 'first', 'state');
   const first = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
     env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, XDG_DATA_HOME: join(root, 'owner-data'), WAYLAND_DISPLAY: 'wayland-owner', CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(p2), CREWHOUSE_LINK_PORT: '0',
-      CREWHOUSE_STATE_DIR: join(root, 'first', 'state'), CREWHOUSE_CREW_DIR: join(root, 'first', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'first', 'tools') },
+      CREWHOUSE_STATE_DIR: state2, CREWHOUSE_CREW_DIR: join(root, 'first', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'first', 'tools') },
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   after(() => first.kill());
+  const get = async () => { const r = await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(1000) }).catch(() => null); return r?.ok ? r.json() : null; };
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state2, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
   let s: any = null;
-  for (let i = 0; i < 100 && !s?.installing?.length; i++) {
-    const r = await fetch(`http://127.0.0.1:${p2}/api/state`, { signal: AbortSignal.timeout(1000) }).catch(() => null);
-    if (r?.ok) s = await r.json(); else await sleep(100);
-  }
+  for (let i = 0; i < 100 && !s; i++) if (!(s = await get())) await sleep(100);
+  assert.deepEqual(s?.installing, [], 'nothing installs at start: Hello never waits behind a download');
+  assert.equal(A.gettingReady(s), '');
+
+  // Scribe's first job is the first use of its browser, its document reader and its writer.
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  for (let i = 0; i < 100 && !s?.installing?.length; i++) if (!(s = await get())?.installing?.length) await sleep(100);
   assert.ok(s?.installing?.length, 'an install is under way');
+  assert.deepEqual([...s.installing].sort(), ['browser', 'documents', 'write'], "the job fetches exactly the tools Scribe was given and doesn't have");
   const t0 = Date.now();
-  const r = await fetch(`http://127.0.0.1:${p2}/api/state`, { signal: AbortSignal.timeout(2000) });
+  const r = await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(2000) });
   assert.ok(r.ok && Date.now() - t0 < 1000, 'and crewd answers at once meanwhile');
   assert.match(A.gettingReady(await r.json()), /getting|Getting/);
-  for (let i = 0; i < 50 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
-  // The installers run one after another and each re-opens the file with `>` (truncating) before `env` writes, so wait
+  const scribe = async () => { const b = await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null); return b?.tasks?.find((x: any) => x.id === job); };
+  assert.equal((await scribe())?.state, 'queued', 'the job waits for its tools');
+  for (let i = 0; i < 100 && !existsSync(join(root, 'install-env')); i++) await sleep(100);
+  // The installers run side by side and each re-opens the file with `>` (truncating) before `env` writes, so wait
   // for words in it, not mere existence: a busy CI box reads between the truncate and the write and sees nothing.
   const envFile = join(root, 'install-env');
   let env = '';
   for (let i = 0; i < 100; i++) { if (existsSync(envFile) && (env = readFileSync(envFile, 'utf8'))) break; await sleep(100); }
   assert.doesNotMatch(env, /^(XDG_|WAYLAND_DISPLAY=)/m, 'the installers see none of the owner\'s desktop session');
   assert.match(env, new RegExp(`^CREWHOUSE_TOOLS_DIR=${join(root, 'first', 'tools')}$`, 'm'));
+  // The fake installers fail: the job goes on without those tools rather than waiting for ever.
+  let t: any;
+  for (let i = 0; i < 300 && (t = await scribe())?.state !== 'done'; i++) await sleep(100);
+  assert.equal(t?.state, 'done');
+  assert.deepEqual((await get()).installing, []);
+});
+
+test('a stalled install stops at its bound: its job fails in one line, no installer is left running, and Chief goes on', async () => {
+  // Fake installers that record their pid and never finish, with a one-second bound instead of ten minutes.
+  const bin = join(root, 'stall-bin'), pids = join(root, 'stall-pids');
+  mkdirSync(bin, { recursive: true });
+  for (const b of ['npm', 'npx', 'python3', 'curl']) { writeFileSync(join(bin, b), `#!/bin/sh\necho $$ >> '${pids}'\nsleep 600\n`); chmodSync(join(bin, b), 0o755); }
+  const p3 = await free(), at = `http://127.0.0.1:${p3}`, state3 = join(root, 'stall', 'state');
+  const stalled = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+    env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_INSTALL_STALL_MS: '1000', CREWHOUSE_PORT: String(p3), CREWHOUSE_LINK_PORT: '0',
+      CREWHOUSE_STATE_DIR: state3, CREWHOUSE_CREW_DIR: join(root, 'stall', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'stall', 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => stalled.kill());
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state3, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const taskOf = async (bot: string, id: number) => (await fetch(`${at}/api/bots/${bot}`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === id);
+  const running = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`).catch(() => null))?.ok; i++) await sleep(100);
+
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  const chief = (await post('/api/bots/chief/messages', { text: 'Hello' })).task;
+  let c: any;
+  for (let i = 0; i < 300 && (c = await taskOf('chief', chief))?.state !== 'done'; i++) await sleep(100);
+  assert.equal(c?.state, 'done', 'Chief answers while the install is stalled');
+  let t: any;
+  for (let i = 0; i < 300 && (t = await taskOf('scribe', job))?.state !== 'failed'; i++) await sleep(100);
+  assert.equal(t?.state, 'failed');
+  assert.match(t.result, /^.+ took too long to install, so this one stopped\. It will try again next time\.$/);
+  for (let i = 0; i < 100 && !existsSync(pids); i++) await sleep(100);
+  const installers = readFileSync(pids, 'utf8').trim().split('\n').map(Number);
+  assert.ok(installers.length >= 1);
+  for (const pid of installers) {
+    for (let i = 0; i < 100 && running(pid); i++) await sleep(100);
+    assert.equal(running(pid), false, `installer ${pid} was stopped`);
+  }
+});
+
+/** A copy of crewd whose tool kit has one manifest cut short: crewd reads its kit from the repo it runs in. */
+async function brokenKit(tool: string) {
+  const real = join(import.meta.dirname, '..'), dir = join(root, `broken-${tool}`), repo = join(dir, 'repo'), state = join(dir, 'state');
+  mkdirSync(repo, { recursive: true });
+  cpSync(join(real, 'src'), join(repo, 'src'), { recursive: true });
+  cpSync(join(real, 'tools'), join(repo, 'tools'), { recursive: true });
+  for (const e of readdirSync(real)) if (!['src', 'tools'].includes(e)) symlinkSync(join(real, e), join(repo, e));
+  writeFileSync(join(repo, 'tools', tool, 'tool.json'), '{ "id": ');
+  const port = await free(), at = `http://127.0.0.1:${port}`;
+  const broken = spawn(process.execPath, [join(repo, 'src', 'main.ts')], {
+    env: { ...process.env, CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0',
+      CREWHOUSE_STATE_DIR: state, CREWHOUSE_CREW_DIR: join(dir, 'crew'), CREWHOUSE_TOOLS_DIR: join(dir, 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => broken.kill());
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const events = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/events`).catch(() => null))?.ok; i++) await sleep(100);
+  return { at, post, events };
+}
+
+test('an unreadable tool manifest fails a job that needs it in plain words, and crewd keeps answering', async () => {
+  const { at, post, events } = await brokenKit('write');
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  let t: any;
+  for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.failed' && e.data?.task === job)); i++) await sleep(100);
+  assert.equal(t?.data.result, 'Its tools could not be checked, so this one stopped. Try again in a moment.');
+  assert.equal((await fetch(`${at}/api/events`, { signal: AbortSignal.timeout(2000) })).ok, true, 'crewd still answers');
+});
+
+test("an unreadable manifest for a tool Chief was not given leaves Chief's job unaffected", async () => {
+  const { post, events } = await brokenKit('browser');
+  const job = (await post('/api/bots/chief/messages', { text: 'Hello' })).task;
+  let t: any;
+  for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.done' && e.data?.task === job)); i++) await sleep(100);
+  assert.ok(t, 'Chief answers');
 });
