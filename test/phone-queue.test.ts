@@ -47,13 +47,23 @@ test('a retry stays queued when the drain fails', async () => {
   assert.ok(remaining.some((t) => t.rid === 's'));
 });
 
-test('clearing a retry clears the interrupted suffix with it', () => {
+test('clearing a retry drops its stopped card with the suffix', () => {
   const lines: QueueLine[] = [{ who: 'chief', text: 'Interrupted.', stopped: true, retry: 'S', retryRid: 's', interrupted: true }];
   assert.equal(retrySuffix(lines[0]), true);
   const cleared = clearRetryOf(lines, 's');
-  assert.equal(cleared[0].retry, undefined);
-  assert.equal(cleared[0].interrupted, undefined);
-  assert.equal(retrySuffix(cleared[0]), false);
+  assert.deepEqual(cleared, []);
+});
+
+test('a failed retry leaves a single stopped card with its try again', () => {
+  const failedOnce = failOffOf([you('S', 's')], 's', 'S');
+  assert.equal(failedOnce.filter((l) => l.stopped && l.who === 'chief').length, 1);
+  const retried = [...clearRetryOf(failedOnce, 's'), you('S', 's', { queued: true })];
+  assert.ok(retried.every((l) => !(l.stopped && l.who === 'chief')));
+  const failedAgain = failOffOf(retried, 's', 'S');
+  const cards = failedAgain.filter((l) => l.stopped && l.who === 'chief');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].retry, 'S');
+  assert.equal(cards[0].retryRid, 's');
 });
 
 test('an offline-failed turn that later sends reloads as one turn with no phantom stop', () => {

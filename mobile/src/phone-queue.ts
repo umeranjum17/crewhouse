@@ -21,9 +21,7 @@ export function historyOf(lines: QueueLine[], rid: string, text: string): QueueH
 }
 
 export function clearRetryOf(lines: QueueLine[], retryRid: string): QueueLine[] {
-  return lines.map((l) => (l.stopped && l.who === 'chief' && l.retryRid === retryRid
-    ? { ...l, retry: undefined, interrupted: undefined }
-    : l));
+  return lines.filter((l) => !(l.stopped && l.who === 'chief' && l.retryRid === retryRid));
 }
 
 export function failOffOf(lines: QueueLine[], rid: string, retryText: string): QueueLine[] {
@@ -31,7 +29,8 @@ export function failOffOf(lines: QueueLine[], rid: string, retryText: string): Q
     if (l.rid === rid && l.who === 'you') return { ...l, queued: false, stopped: true };
     return l;
   });
-  return [...mapped, { who: 'chief', text: 'Stopped.', stopped: true, retry: retryText, retryRid: rid }];
+  const kept = mapped.filter((l) => !(l.stopped && l.who === 'chief' && l.retryRid === rid));
+  return [...kept, { who: 'chief', text: 'Stopped.', stopped: true, retry: retryText, retryRid: rid }];
 }
 
 export function retrySuffix(line: QueueLine): boolean {
