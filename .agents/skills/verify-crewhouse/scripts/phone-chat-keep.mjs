@@ -33,6 +33,8 @@ const APK = opt('apk', null);
 const SEED = Number(opt('seed-turns', 0));
 const OFFLINE = has('offline');
 const INTERRUPTED = has('interrupted');
+// --no-answers: the provider has no credit (HTTP 402, the app's plain error line), so prove keeping with that line.
+const NO_ANSWERS = has('no-answers');
 if (!EV) { console.error('usage: phone-chat-keep.mjs --ev <evidence-dir> [--serial s] [--apk a] [--seed-turns n] [--offline] [--interrupted]'); process.exit(2); }
 mkdirSync(join(EV, 'screens'), { recursive: true });
 
@@ -119,6 +121,12 @@ const run = async () => {
     throw new Error(`${what} did not land after 8 tries (emulator network / provider)`);
   };
 
+  if (NO_ANSWERS) {
+    await sendWait('Say hello back in five words.', 'hello turn (provider error line expected)', () => speakers('Chief') >= 1); shot('02-hello.png');
+    forceStop(); await sleep(1200); launch();
+    const t1 = Date.now(); await waitFor(() => hasNode('Ask Chief anything') && speakers('Chief') >= 1 && hasNode('Say hello back'), 30000, 'the reloaded turn');
+    say(`chat reloaded after a kill in ${Date.now() - t1} ms (real answer and document legs: see the credited run)`); shot('04-after-kill.png');
+  } else {
   // --- a real turn, then a real document (a short document: the emulator drops the odd long stream) ---
   await sendWait('Say hello back in five words.', 'hello turn', () => speakers('Chief') >= 1); shot('02-hello.png');
   await sendWait('Make a Word file called Note with one paragraph: All set.', 'document turn', () => hasNode('Document'));
@@ -134,12 +142,15 @@ const run = async () => {
   // --- the document card still reads after the reload (its parts were kept) ---
   tapText('^Read$'); await waitFor(() => hasNode('All set'), 6000, 'the kept document'); shot('05-read-after-reload.png');
   tapText('^Close$'); await sleep(600);
+  }
 
   // --- a turn cut off mid-flight comes back stopped, with Try again ---
   let stopped = false;
   for (let i = 1; i <= 4 && !stopped; i++) {
     tapText('Ask Chief anything'); await sleep(400); await type('Write one friendly sentence about coffee.'); await sleep(400);
-    tapText('Send'); await sleep(800); forceStop();
+    // Kill the moment the turn's start marker is on disk: before any answer (or a quick provider error) lands.
+    const marks = (chat().match(/coffee/g) || []).length;
+    tapText('Send'); for (let w = 0; w < 40 && (chat().match(/coffee/g) || []).length === marks; w++) await sleep(50); forceStop();
     say('killed the app while the turn ran'); await sleep(1200); launch();
     try { await waitFor(() => hasNode('Try again') || hasNode('Retry'), 16000, 'the stopped turn'); stopped = true; shot('06-stopped.png'); }
     catch { say(`cut-off attempt ${i}: the answer landed before the kill; trying again`); }
