@@ -48,14 +48,13 @@ const CONFIG = {
     codex: { enabled: false },
   } },
   skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
-  models: { providers: { openai: { models: [{ id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' }] }, 'opencode-go': { models: [{ id: 'muse-spark-1.3-contributor', name: 'Muse Spark', api: 'openai-responses' }] } } }, // Muse on Go until the kit ships it; the openai row keeps the engine default.
 };
 
 export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost;
-  private runs = new Map<string, RunRef>();
+  private runs = new Map<string, RunRef & { account?: string }>();
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
@@ -157,16 +156,16 @@ export class OpenClawRuntime implements AgentRuntime {
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
     const register = opts?.register !== false;
     if (register) this.runs.set(spec.key, spec);
-    const provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's)
+    const provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs on the kit's saved model
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && provider !== 'opencode-go' ? { thinking: spec.thinking } : {}), register },
         (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }
-  steer(key: string, text: string) { return this.kit.steer(key, text); }
-  abort(key: string) { return this.kit.abort(key); }
+  steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
+  abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
   /** The person's applied learned skills (the workshop's proposals, applied state last). */
   async learned() {
     const { agentId } = await this.kit.ensureMember(ME);
