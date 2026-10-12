@@ -106,16 +106,35 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.deepEqual(fired(r.id), ['started', 'mail', 'mail', 'mail', 'mail', 'mail']);
   const t5 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t5.id);
-  assert.match(promptOf(t5.id), new RegExp(`a case you hold: ⟦${FACTS2}⟧`), 'the new thread finds the case by its sender');
+  assert.match(promptOf(t5.id), new RegExp(`cases you hold with this sender: ⟦${FACTS2}⟧`), 'the new thread finds the case by its sender');
   assert.match(said(t5.id) ?? '', /cover until October 23/, 'the follow-up names the change');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 1, 'a new thread opens no case of its own');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM events WHERE kind = ?', 'case.kept')!.n, 2, 'each kept case is an event');
+  const LATE = '18c0000000000015', STATEMENT = '18c0000000000016', FACTS400 = 'LOCI400, reply by Nov 2, confirmed: nothing yet';
+  threads[LATE] = { messages: [msg(FROM, 'LOCI400: reply needed by Nov 2', 'A second case from the bank.', Date.now() + 6000)] }; order.push(LATE);
+  await fire(r.id); // a second case from the same sender is kept on its own thread
+  assert.deepEqual(fired(r.id), ['started', 'mail', 'mail', 'mail', 'mail', 'mail', 'mail']);
+  const t6 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t6.id);
+  assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', LATE)?.facts, FACTS400, 'the second case is kept');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 2, 'two cases from one sender are two rows');
+
+  threads[STATEMENT] = { messages: [msg(FROM, 'Your monthly statement is ready', 'Statement attached.', Date.now() + 7000)] }; order.push(STATEMENT);
+  await fire(r.id); // unrelated mail from that sender: both cases are in view, and no follow-up
+  assert.deepEqual(fired(r.id), ['started', 'mail', 'mail', 'mail', 'mail', 'mail', 'mail', 'mail']);
+  const t7 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t7.id);
+  assert.match(promptOf(t7.id), new RegExp(`⟦${FACTS400}⟧ ⟦${FACTS2}⟧`), 'both held cases reach the prompt with the sender framing');
+  assert.equal(said(t7.id), undefined, 'the unrelated same-sender mail posts no follow-up');
+  assert.equal(db.get('SELECT result FROM tasks WHERE id = ?', t7.id)!.result, 'All clear');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 2, 'the unrelated mail opens no case');
+
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (method: string, path: string, body?: object) => (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
-  assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: BANK, facts: FACTS2 }], 'Memory lists the held case');
+  assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: LATE, facts: FACTS400 }, { thread: BANK, facts: FACTS2 }], 'Memory lists the held cases');
   await call('POST', '/api/cases/forget', { thread: BANK });
-  assert.deepEqual((await call('GET', '/api/about')).cases, [], 'Forget deletes that row');
+  assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: LATE, facts: FACTS400 }], 'Forget deletes that row');
   server.close();
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
