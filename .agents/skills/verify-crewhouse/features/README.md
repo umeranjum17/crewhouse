@@ -43,6 +43,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | mail-watch | [mail-watch.md](mail-watch.md) | Chief's Gmail watch: only new mail is noticed, one quiet notice in the Dot shape with a thread link, silence on nothing new |
 | routine-history | [routine-history.md](routine-history.md) | A watch or check-in says what it waits for on its card and Routines row; beside Do it now the last run (nothing new / told you / didn't finish, with the cause) and up to five recent runs; Do it now holds Running… until the new result lands |
 | phone-only-signout | [phone-only-signout.md](phone-only-signout.md) | On the release APK with no computer: the Chief chat header's Sign out (beside Use a computer) confirms once, removes the saved key and returns to the first chooser, where a relaunch stays; at 360 and 320 dp with 1.3× text |
+| phone-chat-keep | [phone-chat-keep.md](phone-chat-keep.md) | Phone-only chat kept in app storage: kill-proof turns (Stopped + Try again, Interrupted + Retry with one document file), the offline queue and banner, the exact-text approval sheet, and sign-out clearing the kept chat |
 
 ## Proof and skip reporting
 
