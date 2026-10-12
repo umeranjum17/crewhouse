@@ -613,7 +613,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
     return pages.chief.phoneOffer;
   }
   if (method === 'POST' && path === '/api/phones/answer') { pages.chief.phoneOffer = { ...pages.chief.phoneOffer, waiting: null, joined: 'Pixel' }; return { ok: true }; }
-  if (method === 'GET' && path === '/api/phones') return [{ id: 1, name: "Maya's phone", seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
+  if (method === 'GET' && path === '/api/phones') return variant === 'nophone' ? [] : [{ id: 1, name: "Maya's phone", seen: now - 5 * min, reached: { home: now - 5 * min }, push: 'on' },
     { id: 2, name: "Maya's other phone", seen: now - 2 * 60 * min, reached: { home: now - 26 * 60 * min, tailscale: now - 2 * 60 * min }, push: 'off' }];
   if (method === 'POST' && path.startsWith('/api/connections/')) return { url: 'https://accounts.google.com/' };
   // The Skills screen's reviewed set (?demo=skills wires the search box too).

@@ -533,3 +533,20 @@ test('a phone card is one primary and ⋯: the sheet names the card and its rows
     await until('the sheet to close', () => b.run("!document.querySelector('.more-sheet')"), 10_000);
   }
 });
+
+// Cut 10: with no phone paired, Chief's chat offers Add your phone with the code in place (the same card as
+// Settings › Phones › Add a phone) plus a plain way to skip; with phones paired the offer stays away.
+test('after sign-in with no phone paired, the chat offers Add your phone with its code; paired, it stays away', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  await b.open('demo=nophone&day');
+  await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+  await until('the pairing offer', () => b.run("!!document.querySelector('[aria-label=\"Add your phone\"] .qr svg')"), 30_000);
+  const card = await b.run(`(() => { const c = document.querySelector('[aria-label="Add your phone"]');
+    return { qr: !!c.querySelector('.qr svg'), code: /Type this code/.test(c.innerText),
+      skip: [...c.querySelectorAll('button')].some((x) => x.innerText === 'Not now') }; })()`);
+  assert.deepEqual(card, { qr: true, code: true, skip: true }, 'nophone: the QR, the code and Not now are in place');
+  await b.open('demo=maya&day');
+  await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
+  assert.equal(await b.run("!!document.querySelector('[aria-label=\"Add your phone\"]')"), false, 'paired phones: no offer in the chat');
+});
