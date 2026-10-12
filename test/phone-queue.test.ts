@@ -90,8 +90,8 @@ test('an offline-failed line stays out of the model history', () => {
 });
 
 test('the chat carried to the computer reads one turn per item in the thread, a document by title, the oldest cut first', () => {
-  const chat: QueueLine<{ name: string }>[] = [you('Book a table', 'a'), { who: 'chief', text: 'That needs a computer.\nPair one.', doc: { name: 'Packing list' } },
-    you('Cut off', 'b', { stopped: true }), { who: 'chief', text: 'Stopped.', stopped: true }, you('Thanks', 'c'), { who: 'chief', text: 'Any time.' }];
+  const chat = [you('Book a table', 'a'), { who: 'chief', text: 'That needs a computer.\nPair one.', doc: { name: 'Packing list' } },
+    you('Cut off', 'b', { stopped: true }), { who: 'chief', text: 'Stopped.', stopped: true }, you('Thanks', 'c'), { who: 'chief', text: 'Any time.' }] as QueueLine<{ name: string }>[];
   const items = (text: string) => (chatTokens(noTools(text)).find((t) => t.type === 'list') as any).items.map((i: any) => i.text);
   assert.deepEqual(items(transcriptOf(chat)), ['You: Book a table',
     'Chief: That needs a computer.\nPair one.\n(Chief made a document here, Packing list. The file stays on my phone.)', 'You: Thanks', 'Chief: Any time.']);
