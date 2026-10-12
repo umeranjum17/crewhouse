@@ -547,7 +547,7 @@ test('after sign-in with no phone paired, the chat offers Add your phone with it
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   await until('the pairing offer', () => b.run("!!document.querySelector('[aria-label=\"Add your phone\"] .qr svg')"), 30_000);
   const card = await b.run(`(() => { const c = document.querySelector('[aria-label="Add your phone"]');
-    return { qr: !!c.querySelector('.qr svg'), code: /Type this code/.test(c.innerText),
+    return { qr: !!c.querySelector('.qr svg'), code: /^[2-9A-HJKMNP-Z]{4}(-[2-9A-HJKMNP-Z]{4}){2}$/.test(c.querySelector('.pair-typed')?.textContent ?? ''),
       skip: [...c.querySelectorAll('button')].some((x) => x.innerText === 'Not now') }; })()`);
   assert.deepEqual(card, { qr: true, code: true, skip: true }, 'nophone: the QR, the code and Not now are in place');
   await b.open('demo=maya&day');

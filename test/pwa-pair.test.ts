@@ -2,7 +2,7 @@
 // public-style origin (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens on
 // Chief's first question, Where should I work?; On my computer opens the Pair sheet, a relay code pastes in, the page shows the same two words the computer asks about, and on yes
 // the same page opens on crewd's real data over the link (web/src/link.ts). A reload stays paired, Unpair goes back to
-// the first question and the computer forgets the device, and the long direct code pairs too. Needs a Chromium on PATH (skipped
+// the first question and the computer forgets the device, and the computer's 12-letter code pairs too. Needs a Chromium on PATH (skipped
 // without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +25,7 @@ const bin = browserBin();
 const root = temp('pwa-pair');
 const free = () => new Promise<number>((r) => { const s: Server = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 
-test('the public web app asks where Chief works, pairs by a relay code or a direct code, opens on real data, and unpairs back to the question', { skip: !bin && 'no Chromium on PATH' }, async () => {
+test('the public web app asks where Chief works, pairs by a relay code or the 12-letter code, opens on real data, and unpairs back to the question', { skip: !bin && 'no Chromium on PATH' }, async () => {
   // The app as the installed web app opens it: from crewd's own link port (`./crewhouse phones web` publishes that).
   if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) assert.equal(spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs')]).status, 0);
   const relay = await startRelay({ port: 0, dataDir: join(root, 'relay'), signup: 'open' });
@@ -120,8 +120,10 @@ test('the public web app asks where Chief works, pairs by a relay code or a dire
   await until('back to the first question', async () => (await mode()) === 'where', 20_000);
   assert.equal(await devices(), 0, 'the computer forgot this browser');
 
-  // At home: the long direct code, as the first line `./crewhouse phones code` prints.
-  await pair((await http('POST', '/api/phones/pair', { role: 'control' })).typed);
+  // At home: the 12-letter code, as the first line `./crewhouse phones code` prints; the app dials its own address.
+  const typed = (await http('POST', '/api/phones/pair', { role: 'control' })).typed;
+  assert.equal(typed.replace(/-/g, '').length, 12);
+  await pair(typed);
   assert.equal(await devices(), 1);
   // A computer with no mailbox: the paired app (direct-paired, so still connected) says so in plain words,
   // never a broken toggle. The switch itself stays off — nothing to tap that cannot work.

@@ -7,7 +7,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import { browse, type BrowseService } from '@byokit/reach';
+import { browse, scan, type BrowseService } from '@byokit/reach';
 import * as K from '../../web/src/kept.ts';
 import { knock } from '../../web/src/adapter.ts';
 import { addresses } from '../modules/crewhouse-net';
@@ -52,16 +52,37 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   return g;
 }
 
-/** Typed instead of scanned: one box takes any code. A direct code is the long envelope; a relay code names its
- *  relay inside itself (readTyped), so the address is never typed by the person. */
+/** Typed instead of scanned: one box takes any code, and the person never types an address. The computer's 12-letter
+ *  code is found on this Wi-Fi; a relay code names its relay inside itself (readTyped); an older computer's long
+ *  envelope carries its addresses. */
 export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
   const t = readTyped(text);
   if (t.kind === 'direct') return pair(offerText(decodeOffer(t.text)), onWords);
-  if (t.kind === 'unknown') throw new Error('That code is missing where to look it up. Copy the whole code from your computer, then try again.');
-  const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
-  const g = await pairWithCode(await findHost(t.base, t.short), t.code, { name, onWords });
+  if (t.kind === 'unknown') throw new Error('That code is missing a part. Copy the whole code from your computer, then try again.');
+  const o = { name: (Device.deviceName || Device.modelName || 'Phone').slice(0, 40), onWords };
+  const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short), t.code, o);
   await store.save(g);
   return g;
+}
+
+/** The Crewhouse computers announcing themselves on this Wi-Fi while a code shows (src/link.ts `announce`), each tried
+ *  in turn: only the one showing this code finishes the handshake, and an address a firewall drops times out into the
+ *  next. A computer that says the code is wrong is not asked again at another of its addresses, since five wrong tries
+ *  withdraw its codes. */
+async function pairOnWifi(code: string, o: { name: string; onWords: (w: string) => void }): Promise<Grant> {
+  const found = await scan({ type: 'crewhouse', protocol: 'tcp', domain: 'local.', ms: 3000 }).catch(() => []);
+  let last: unknown = new Error("Couldn't find your computer on this Wi-Fi. Join the same Wi-Fi as your computer and try again, or scan the code instead.");
+  for (const s of found) {
+    const urls = new Set([s.txt.url, ...s.addresses.filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).map((a) => `ws://${a}:${s.port}/link`)]);
+    for (const url of [...urls].filter((u) => u?.startsWith('ws://'))) {
+      try { return await pairWithCode(url, code, o); } catch (e) {
+        if (!(e instanceof LinkError) || !['unreachable', 'timeout', 'wrong-code'].includes(e.code)) throw e; // a dropped address times out
+        if (!(last instanceof LinkError && last.code === 'wrong-code')) last = e; // "didn't match" says more than "can't reach"
+        if (e.code === 'wrong-code') break;
+      }
+    }
+  }
+  throw last;
 }
 
 /** The live link, for a bot's screen: its signaling rides a stream on it (src/link.ts `desktop`). */

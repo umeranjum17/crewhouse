@@ -271,7 +271,7 @@ function PhoneCard({ offer, reload }: { offer: NonNullable<ReturnType<typeof A.p
     <T style={s.b}>Add a phone</T>
     {!offer.joined && <T tone="mute">The other phone will answer the crew and give them jobs, as you.</T>}
     {!offer.joined && !offer.waiting && left > 0 && qr && <View accessibilityLabel="Scan to pair another phone" style={{ width: 220, height: 220, backgroundColor: 'white', padding: 8 }}><View style={{ flex: 1 }}>{qr.map((row, y) => <View key={y} style={{ flex: 1, flexDirection: 'row' }}>{row.map((dark, x) => <View key={x} style={{ flex: 1, backgroundColor: dark ? 'black' : 'white' }} />)}</View>)}</View></View>}
-    {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
+    {offer.joined ? <T style={s.b}>Paired: {offer.joined}</T> : offer.waiting ? <><T>{offer.waiting.name} is waiting. Check these two words: {offer.waiting.words}</T><T tone="mute">For your safety, approve on the computer where this code was shown.</T></> : left ? <><T>Scan this with the other phone, or type this code there while it's on your computer's Wi‑Fi. Approve on the computer.</T><T style={s.b}>{current.typed}</T><Btn label="Copy code" onPress={() => { Clipboard.setString(current.typed); say('Code copied'); }} /><T tone="mute">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</T></>
       : <><T tone="mute">That code has run out.</T><Btn go label="Show a new code" onPress={() => { active.current = Date.now(); void renew(); }} /></>}
   </Card>;
 }
@@ -591,7 +591,7 @@ const pairWords = (e: any): string => {
   const m = String(e?.message ?? e ?? '');
   if (/isn't a pairing code/i.test(m)) return "That's not a Crewhouse code. Point the camera at the code on your computer, then try again.";
   if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
-  if (/copy the whole code/i.test(m)) return m; // already said for the person
+  if (/copy the whole code|same Wi-Fi/i.test(m)) return m; // already said for the person
   if ((Object.values(LINK_WORDS) as string[]).includes(m)) return m; // the link's own sentence for this exact failure
   if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
   if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";

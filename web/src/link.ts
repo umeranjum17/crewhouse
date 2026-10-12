@@ -16,8 +16,9 @@ export async function resume() {
   if (grant) start(grant);
 }
 
-/** The paste box: a relay code (`SHORT-CODE@relay`) or a direct envelope, split by shape (readTyped). Resolves once the
- *  person at the computer says yes, with the grant saved; `onWords` gets the two words to check meanwhile. */
+/** The paste box: the computer's 12-letter code, a relay code (`SHORT-CODE@relay`) or an older direct envelope, split by
+ *  shape (readTyped). Resolves once the person at the computer says yes, with the grant saved; `onWords` gets the two
+ *  words to check meanwhile. */
 export async function pair(text: string, onWords: (w: string) => void) {
   const t = readTyped(text.trim());
   const o = { name: deviceName(), onWords };
@@ -27,16 +28,17 @@ export async function pair(text: string, onWords: (w: string) => void) {
   if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short).catch((e) => {
     throw e instanceof TypeError ? new Error("Could not reach your computer's relay. Check it is on and try again.") : e;
   }), t.code, o);
-  // A direct code dials the computer's own addresses, so off its network it can't get through; the relay's code can.
-  // This page's own address goes first: the computer's link serves the app (`./crewhouse phones web`), and an https page
-  // may dial only wss. A wrong host fails the handshake, so any other page loses nothing.
-  else grant = await pairWithOffer(offerText(withOwn(decodeOffer(t.text))), o).catch((e) => {
+  // The 12-letter code dials this page's own address: the computer's link serves the app (`./crewhouse phones web`), and
+  // an https page may dial only wss. An older direct code also dials the computer's own addresses. Off the computer's
+  // network neither gets through; the relay's code can. A wrong host fails the handshake, so any other page loses nothing.
+  else grant = await (t.kind === 'code' ? pairWithCode(own(), t.code, o) : pairWithOffer(offerText(withOwn(decodeOffer(t.text))), o)).catch((e) => {
     throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the second code the command printed instead.`) : e;
   });
   await store.save(grant);
 }
 
-const withOwn = (offer: ReturnType<typeof decodeOffer>) => ({ ...offer, urls: [`${location.origin.replace(/^http/, 'ws')}/link`, ...offer.urls].slice(0, 8) });
+const own = () => `${location.origin.replace(/^http/, 'ws')}/link`;
+const withOwn = (offer: ReturnType<typeof decodeOffer>) => ({ ...offer, urls: [own(), ...offer.urls].slice(0, 8) });
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 export async function unpair(link: DeviceLink) {

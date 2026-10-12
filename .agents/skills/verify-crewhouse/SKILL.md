@@ -321,6 +321,8 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
   is on screen (uiautomator), for the bubble recipe.
 - `scripts/record.mjs --cdp <port> --out <file.webm> --seconds 8` — one motion recording of
   a changed interaction: screencast frames timed by their own timestamps, muxed by ffmpeg.
+- `node .agents/skills/verify-crewhouse/scripts/phone-pair-timed.mjs --out <dir> --state <owned-state-dir> --serial … --base … [--cps 2]` — the
+  typed-code pairing proof on a real phone as its app stands (`features/phone-pairing.md`, "The typed code").
 - `node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs --out <dir> --state <owned-state-dir> [--serial …] [--base …] [--apk …] [--runs n]
   [--record]` — the native pairing proof (`features/phone-pairing.md`): the phone's camera
   reads the live code, the computer confirms, the phone reaches "You're in"; screenshots, an

@@ -16,8 +16,6 @@ import { Link, NEWS } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
 import * as A from '../web/src/adapter.ts';
-import { decodeOffer as decodeTyped } from '@byokit/pair';
-import { b64url } from '@byokit/pair';
 import { transcriptOf } from '../mobile/src/phone-queue.ts';
 import { chatTokens } from '../web/src/chat-md.ts';
 
@@ -366,16 +364,14 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   watcher.link.stop();
 });
 
-test('a direct typed code and exact local CLI words pair once', async () => {
+test('the short typed code and exact local CLI words pair once', async () => {
   await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const cli = (...args: string[]) => execFileSync(join(import.meta.dirname, '..', 'crewhouse'), ['phones', ...args],
     { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state') } });
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
-  const typed = decodeTyped(offer.typed);
-  assert.deepEqual(typed.urls, offer.urls);
-  const qr = `byokit-link:1:${b64url(new TextEncoder().encode(JSON.stringify(typed)))}`;
+  assert.equal(offer.typed.replace(/-/g, '').length, 12, 'a code a person types on a phone, not an envelope');
   let words = '';
-  const pairing = pairWithOffer(qr, { name: 'Typed phone', onWords: (w) => { words = w; } });
+  const pairing = pairWithCode(offer.urls[0], offer.typed, { name: 'Typed phone', onWords: (w) => { words = w; } });
   await until(async () => (await http('GET', '/api/phones/pending')).body.find((a: any) => a.name === 'Typed phone'));
   assert.match(cli('pending'), /Typed phone/);
   assert.throws(() => cli('approve', 'wrong words'), /Command failed/);
@@ -387,7 +383,7 @@ test('a direct typed code and exact local CLI words pair once', async () => {
   assert.ok(phone, 'the paired phone appears in the computer’s phone list');
   assert.equal(Object.hasOwn(phone, 'member'), false, 'the paired phone has no person selector');
   assert.equal(Object.hasOwn(phone, 'person'), false, 'the paired phone needs no person label');
-  await assert.rejects(pairWithOffer(qr, { name: 'Again', onWords: () => {} }), /code|used|match|run out/i);
+  await assert.rejects(pairWithCode(offer.urls[0], offer.typed, { name: 'Again', onWords: () => {} }), /code|used|match|run out/i);
   assert.equal((await http('POST', '/api/phones/approve', { words }, {})).status, 403);
   const lan = await new Promise<number>((resolve, reject) => {
     const req = http1Request({ hostname: '127.0.0.1', port, path: '/api/phones/approve', method: 'POST',

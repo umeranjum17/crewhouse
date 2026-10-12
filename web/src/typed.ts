@@ -1,6 +1,10 @@
-// The one code box: what a typed code is. A direct code is the long letter envelope (@byokit/pair); a relay
-// code carries its relay inside itself — SHORT-CODE@relay — so the person types one thing and nothing else.
+// The one code box: what a typed code is. The computer shows @byokit/pair's 12-letter code, found on the phone's own
+// Wi-Fi; a relay code carries its relay inside itself — SHORT-CODE@relay — so the person types one thing and nothing
+// else. A direct code is the long letter envelope older computers showed.
+import { normalizeCode } from '@byokit/pair';
+
 export type Typed =
+  | { kind: 'code'; code: string }
   | { kind: 'direct'; text: string }
   | { kind: 'relay'; short: string; code: string; base: string }
   | { kind: 'unknown' };
@@ -20,6 +24,8 @@ export function relayTyped(short: string, code: string, relay: string) {
 export function readTyped(text: string): Typed {
   const at = text.indexOf('@');
   if (at < 0) {
+    const code = normalizeCode(text);
+    if (code) return { kind: 'code', code };
     const flat = text.toUpperCase().replace(/[\s-]/g, '');
     // The envelope is 95+ letters; anything shorter names no relay, so there is nowhere to dial.
     return flat.length >= 40 ? { kind: 'direct', text } : { kind: 'unknown' };

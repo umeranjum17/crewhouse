@@ -462,7 +462,7 @@ if (variant.startsWith('phone')) pages.chief = {
     { id: 401, author: 'bot', text: 'Open Crewhouse on your phone and scan this, or type the code.', at: now },
   ],
   // A demonstration ticket; no device accepts it. The real card is issued by src/link.ts.
-  phoneOffer: { message: 401, token: 'demo-phone', qr: 'crewhouse-demo-phone-pairing', typed: '23456-789AB-CDEFG-HJKMN-PQRST', expires: now + 120_000,
+  phoneOffer: { message: 401, token: 'demo-phone', qr: 'crewhouse-demo-phone-pairing', typed: 'K7QM-4XPN-9RTH', expires: now + 120_000,
     ...(variant === 'phone-waiting' ? { waiting: { id: 1, name: 'Pixel', words: 'maple lantern' } } : variant === 'phone-paired' ? { joined: 'Pixel' } : {}) },
 };
 for (const b of bots) pages[b.id] ??= { messages: [], notes: '', tasks: [] };
@@ -607,7 +607,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
   if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
-  if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-9RTH-6N5B-8V3C', expires: Date.now() + 120_000 };
+  if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-6N5B', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/phones/refresh') {
     pages.chief.phoneOffer = { ...pages.chief.phoneOffer, token: `demo-${Date.now()}`, expires: Date.now() + 120_000 };
     return pages.chief.phoneOffer;
