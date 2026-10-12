@@ -21,7 +21,9 @@ import { join } from 'node:path';
 // and the shutdown cleanup. No trim paired: the install path is the feature.
 // Raised 6927 -> 6937 for Chief's case follow-ups (ch-notice-followup, owner exception): the cases table,
 // the held-facts lookup and the crew_case tool. No trim paired: the case store is the feature.
-const BUDGET = 6937;
+// Raised 6937 -> 6938 for the Memory row's Forget on a held case (owner extended the exception): the one
+// POST /api/cases/forget route. No trim paired: the Forget is the person's control over the case store.
+const BUDGET = 6938;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

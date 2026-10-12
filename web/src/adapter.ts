@@ -1452,6 +1452,8 @@ export function withoutMemory(notes = '', i: number) {
 export const profileParts = (text = '') => text.split(/(?<=[.!?…])\s+/).map((p) => plain(p.trim())).filter(Boolean);
 /** The record with its parts changed, forgotten or added to: one space between sentences. */
 export const profileText = (parts: string[]) => parts.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean).join(' ');
+/** A case Chief holds from new mail: one line in Memory, Forget deletes it. */
+export const caseLines = (cases: { thread: string; facts: string }[] = []) => cases.map((c) => ({ thread: c.thread, text: `Case: ${plain(c.facts)}` }));
 
 /** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)

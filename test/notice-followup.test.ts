@@ -5,7 +5,11 @@
 import { signInApp } from './connect-fixture.ts';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { AddressInfo } from 'node:net';
 import { setup, settled, until } from './lab.ts';
+import { startServer } from '../src/server.ts';
 
 process.env.CREWHOUSE_STUB_GOLDEN = '1';
 
@@ -36,7 +40,7 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
 after(() => { globalThis.fetch = real; });
 
 test('a two-step case gives one notice and one follow-up; unrelated mail adds nothing', async () => {
-  const { db, crew, done } = setup();
+  const { cfg, db, crew, done } = setup();
   await signInApp(crew.connections, 'gmail');
   const due = (id: number) => db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, id);
   const fired = (id: number) => db.all("SELECT * FROM events WHERE kind = 'routine.fired' AND json_extract(data, '$.routine') = ? ORDER BY seq", id)
@@ -86,6 +90,13 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id IN (SELECT id FROM tasks WHERE routine = ?)", r.id)!.n, 2, 'still one notice and one follow-up');
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS2, 'the case is untouched');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 1, 'noise opens no case');
+  const server = await startServer(cfg, db, crew);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const call = async (method: string, path: string, body?: object) => (await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
+  assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: BANK, facts: FACTS2 }], 'Memory lists the held case');
+  await call('POST', '/api/cases/forget', { thread: BANK });
+  assert.deepEqual((await call('GET', '/api/about')).cases, [], 'Forget deletes that row');
+  server.close();
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
 });
