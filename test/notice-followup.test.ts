@@ -151,3 +151,15 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
 });
+
+test('the sender is the bank when the person replied last, and a long From keeps its address', async () => {
+  const { newThreads } = await import('../src/mail.ts');
+  const PERSON_LAST = '18c0000000000021', LONG = '18c0000000000022';
+  threads[PERSON_LAST] = { messages: [msg(FROM, 'LOCI800: reply needed', 'Question.', 1000), { ...msg('Umer <umer@home.example>', 'Re: LOCI800: reply needed', 'Sent.', 2000), labelIds: ['SENT'] }] };
+  threads[LONG] = { messages: [msg('Commonwealth Bank Insurance Alerts Team Pty Ltd Customer Care <alerts@bank.example>', 'LOCI900: cover', 'Long name.', 3000)] };
+  order.push(PERSON_LAST, LONG);
+  const rows = await newThreads(async () => 'tok', 0);
+  const row = (id: string) => rows.find((r) => r.id === id)!;
+  assert.equal(row(PERSON_LAST).from, FROM, 'the person replied last, and the bank is still the sender');
+  assert.equal(row(LONG).from, 'Commonwealth Bank Insurance Alerts Team <alerts@bank.example>', 'the display name is shortened, the address is kept');
+});
