@@ -12,22 +12,17 @@ changed means ALL-CLEAR and no message; unrelated mail never touches the held ca
 - The crew logic is real on either engine; the wording needs the **real engine** with a
   signed-in account (see `mail-watch.md`, `signin-stepper.md`). On the stub engine the
   wording is scripted.
-- `crew_case` alone runs on the stub engine today: send Chief a chat message carrying
-  `[tool crew_case {"thread": "<16-hex-id>", "facts": "<case id, dates, deadline, confirmed vs not>"}]`
-  (tool calls written into the message run, per `SKILL.md` Drive). It gates safe, needs
-  no approval, and answers `{ok: true}`.
-- The full two-step case (warning → confirmation reply in the same thread → unrelated
-  mail) needs a scripted Gmail behind the mail watch; that path is pinned in
-  `test/notice-followup.test.ts`, not drivable from the app's UI.
+- `crew_case` only works inside a mail-watch check: a chat message cannot call it, since
+  its thread must be one the check just listed. The app's UI cannot drive a mail check
+  without a connected Gmail, so the case path is pinned in `test/notice-followup.test.ts`.
 
 ## Prove
 
-- After the chat tool call: `cases` holds one row for the thread id (read
-  `$LAB/state/crew.db` read-only), and Chief's reply says the case is kept.
-- A bad thread id answers `error: crew_case needs the thread id from the mail link`;
-  empty facts answer `error: say what you hold on the case`. Neither writes a row.
-- `node --test test/notice-followup.test.ts`: one first notice, one follow-up naming the
-  change, silence plus an untouched case row for the unrelated mail.
+- `node --test test/notice-followup.test.ts`: one first notice that keeps the case row,
+  one follow-up in the same thread naming the change, silence plus an untouched case row
+  for the unrelated mail, and a `crew_case` naming a thread the check did not list is
+  refused (`crew_case: error: crew_case takes only a thread the mail check just showed you`
+  in the run's transcript).
 
 ## Limits
 

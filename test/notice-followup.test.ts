@@ -69,7 +69,7 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.deepEqual(fired(r.id), ['started', 'mail', 'mail']);
   const t2 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t2.id);
-  assert.match(promptOf(t2.id), new RegExp(`a case you hold: ${FACTS1}`), 'the follow-up carries what Chief holds');
+  assert.match(promptOf(t2.id), new RegExp(`a case you hold: ⟦${FACTS1}⟧`), 'the follow-up carries what Chief holds, marked as mail');
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t2.id)!.session) ?? '', /cover stays until October 23/, 'the model read the new mail before judging');
   assert.match(said(t2.id) ?? '', /now confirmed.*October 23/);
   assert.match(said(t2.id) ?? '', /October 8 stays the deadline/);
