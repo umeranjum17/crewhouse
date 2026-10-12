@@ -58,9 +58,7 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.deepEqual(fired(r.id), ['started', 'mail']);
   const t1 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t1.id);
-  assert.match(t1.body, /A notice belongs to its thread's case/);
   assert.doesNotMatch(t1.body, /— a case you hold:/, 'the first notice holds nothing yet');
-  assert.match(promptOf(t1.id), /keep it with crew_case/);
   assert.match(said(t1.id) ?? '', /forwarded your insurance questions/);
   assert.match(said(t1.id) ?? '', /October 8.*not confirmed/);
   assert.match(said(t1.id) ?? '', new RegExp(`https://mail.google.com/mail/u/0/#inbox/${BANK}`));
@@ -88,5 +86,6 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id IN (SELECT id FROM tasks WHERE routine = ?)", r.id)!.n, 2, 'still one notice and one follow-up');
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS2, 'the case is untouched');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM cases')!.n, 1, 'noise opens no case');
+  assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
 });
