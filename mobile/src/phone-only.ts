@@ -17,7 +17,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import soul from '../../templates/chief/soul.md';
 import job from '../../templates/chief/AGENTS.md';
 import type { DocPart } from '../../web/src/adapter.ts';
-import { pendingOf, replayChat } from './phone-queue.ts';
+import { pendingOf, replayChat, transcriptOf } from './phone-queue.ts';
 
 const MEMBER = 1;
 const PROVIDER = 'openrouter';
@@ -219,9 +219,36 @@ export function queueTurn(text: string, rid?: string): string {
 /** Every message still waiting for a connection, oldest first. */
 export const pendingTurns = (): { rid: string; text: string }[] => pendingOf(loadChat());
 
+/** The kept chat as one message for Chief on a paired computer, and the one id that moves it (its last turn's, so a
+ *  resend after a kill is the same move). Null with nothing said. Paired, no turn here is in flight (leaving phone-only
+ *  aborts it), so a queued message moves too, marked not sent yet. */
+export function chatToMove(): { text: string; id: string } | null {
+  const lines = loadChat();
+  if (!lines.some((l) => l.who === 'you')) return null;
+  return { text: transcriptOf(lines), id: lines.filter((l) => l.who === 'you' && l.rid).at(-1)?.rid ?? newRid() };
+}
+
+/** The chat went to the computer: its kept file and tool index move into one hidden archive (never shown, never
+ *  reloaded), so a turn the move trimmed is not destroyed. The documents Chief made here stay on this phone. */
+const moved = () => new Directory(Paths.document, 'phone-moved');
+export const retireChat = () => keep(() => {
+  const dir = moved(), at = Date.now();
+  dir.create({ intermediates: true, idempotent: true });
+  for (const f of [chatFile(), requestFile()]) if (f.exists) f.moveSync(new File(dir, `${at}-${f.name}`));
+});
+
+/** Carry the chat to the computer, and retire the phone copy only once `send` has resolved: a failed or timed-out
+ *  move keeps the phone copy, message and all. */
+export async function moveChatTo(send: () => Promise<unknown>) {
+  await send();
+  retireChat();
+}
+
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
-  for (const f of [chatFile, requestFile, metaFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });
+  for (const f of [chatFile, requestFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });
+  keep(() => { const x = moved(); if (x.exists) x.delete(); });
+  keep(() => { const x = metaFile(); if (x.exists) x.delete(); });
   keep(() => { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); });
 }
 

@@ -8,7 +8,8 @@
 set -euo pipefail
 LAB=${LAB:?set LAB to a scratch folder}
 free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})'; }
-mask() { env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB/tmp" XDG_STATE_HOME="$LAB/home/.local/state" \
+# exec: a backgrounded `( … mask node … & echo $! )` records the server itself, so `down` stops it, not a wrapper.
+mask() { exec env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB/tmp" XDG_STATE_HOME="$LAB/home/.local/state" \
   XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" "$@"; }
 wait_for() { for _ in $(seq 300); do if eval "$1" >/dev/null 2>&1; then return 0; fi; sleep 0.2; done; echo "timed out: $1" >&2; return 1; }
@@ -23,7 +24,7 @@ case "${1:-}" in
       CREWHOUSE_RELAY="http://127.0.0.1:$RPORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
       node src/main.ts >"$LAB/crewd.log" 2>&1 & echo $! >"$LAB/crewd.pid")
     wait_for "curl -fsS http://127.0.0.1:$PORT/api/state | grep -q person"
-    (cd "$REPO" && node .agents/skills/verify-crewhouse/scripts/serve-web.mjs web/dist >"$LAB/web.log" 2>&1 & echo $! >"$LAB/web.pid")
+    (cd "$REPO" && exec node .agents/skills/verify-crewhouse/scripts/serve-web.mjs web/dist >"$LAB/web.log" 2>&1 & echo $! >"$LAB/web.pid")
     wait_for "grep -q serving $LAB/web.log"
     WEB=$(grep -o 'http://[^ ]*' "$LAB/web.log")
     printf 'LAB=%s\nPORT=%s\nLINK_PORT=%s\nRELAY=http://127.0.0.1:%s\nWEB=%s\nB=http://127.0.0.1:%s\nREPO=%s\n' "$LAB" "$PORT" "$LINK_PORT" "$RPORT" "$WEB" "$PORT" "$REPO" >"$LAB/env"

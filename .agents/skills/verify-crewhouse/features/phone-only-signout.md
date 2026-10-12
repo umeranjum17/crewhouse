@@ -28,7 +28,7 @@ texts | tap '<regex>' | shot <file>`):
 
 **"Use a computer" keeps the key on purpose.** Tapping **Use a computer** (no confirm) leaves
 phone-only mode but keeps the saved key, so returning with **Use this phone only** opens the chat
-again directly, never the sign-in screen. Only **Sign out** removes the key, with the kept chat and every document Chief made here (`features/phone-chat-keep.md` owns the keeping); do not route that exit
+again directly, never the sign-in screen. Only **Sign out** removes the key, with the kept chat, the hidden archive of a chat moved to the computer, and every document Chief made here (`features/phone-chat-keep.md` owns the keeping, `features/phone-continue.md` the archive); do not route that exit
 through the sign-out path, or a plain mode switch would silently delete the person's sign-in.
 
 **The message step can be skipped.** Signing in only saves the key (no provider call); when the

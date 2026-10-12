@@ -159,9 +159,10 @@ function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => 
   const link: DeviceLink = new DeviceLink(grant, { store, onEvent: heard, onStatus: status });
   current = link;
   /** The Transport for web/src/api.ts: crewd's answer, or an error with the HTTP status the screens understand. */
-  const call = async (method: string, path: string, body?: unknown) => {
+  const call = async (method: string, path: string, body?: unknown, o?: { timeoutMs: number }) => {
     let r: { status: number; body: any };
-    try { r = (await link.request(`${method} ${path}`, { ...body as object, build: 'p9b' })) as typeof r; } catch (e) {
+    const bound = o && { timeoutMs: o.timeoutMs, notValidAfter: Date.now() + o.timeoutMs };
+    try { r = (await link.request(`${method} ${path}`, { ...body as object, build: 'p9b' }, bound)) as typeof r; } catch (e) {
       // No status means "can't reach the home computer"; a view-only phone is told it can't, as crewd would.
       throw Object.assign(new Error((e as Error).message), e instanceof LinkError && e.code === 'view-only' ? { status: 403 } : {});
     }

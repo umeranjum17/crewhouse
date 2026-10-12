@@ -224,7 +224,8 @@ off the screen must still say what changed.
   these four captures. A change to Chief's bubble or its panel runs `features/bubble-write-it-here.md`.
   A change to phone-only mode (its screens or sign-out) runs `features/phone-only-signout.md`.
   A change to the phone-only chat's keeping, stopped/interrupted turns, offline queue or the approval
-  sheet runs `features/phone-chat-keep.md` (`scripts/phone-chat-keep.mjs`).
+  sheet runs `features/phone-chat-keep.md` (`scripts/phone-chat-keep.mjs`). A change to carrying that chat to
+  Chief on a paired computer runs `features/phone-continue.md` (`scripts/phone-continue.mjs`).
 - **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
   designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
   behaviour, not a fifth capture.

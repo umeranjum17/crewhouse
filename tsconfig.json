@@ -4,7 +4,9 @@
     "allowImportingTsExtensions": true, "erasableSyntaxOnly": true, "verbatimModuleSyntax": false,
     "jsx": "react-jsx", "lib": ["es2023", "dom"], "types": ["node"], "skipLibCheck": true,
     // @desklink/react-native ships Metro/Expo sources; tsc checks the web surface we use instead (web/src/desklink.d.ts).
-    "paths": { "@desklink/react-native": ["./web/src/desklink.d.ts"] }
+    "paths": { "@desklink/react-native": ["./web/src/desklink.d.ts"],
+      "expo-file-system": ["./test/expo-fake.ts"], "expo-secure-store": ["./test/expo-fake.ts"], "expo-sharing": ["./test/expo-fake.ts"],
+      "expo-crypto": ["./test/expo-fake.ts"], "expo/fetch": ["./test/expo-fake.ts"] }
   },
   "include": ["src", "web/src", "test", "relay"]
 }
