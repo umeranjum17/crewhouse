@@ -183,7 +183,8 @@ const run = async () => {
     await waitFor(() => !ping(), 20000, 'the emulator network to drop');
     await sleep(2000);
     forceStop(); await sleep(1000); launch();
-    await waitFor(() => hasNode('No connection'), 40000, 'the offline banner');
+    await waitFor(() => hasNode('Ask Chief anything'), 90000, 'the chat back while offline');
+    await waitFor(() => hasNode('No connection'), 60000, 'the offline banner');
     say('offline banner shown'); shot('10-offline.png');
     // A send-side action is inert offline: tapping the retry control writes nothing new.
     const beforeTap = chat().split('\n').filter(Boolean).length;
