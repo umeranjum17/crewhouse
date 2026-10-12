@@ -11,7 +11,7 @@ import { nativeStore } from '@byokit/secrets/native';
 import * as SecureStore from 'expo-secure-store';
 import { randomUUID } from 'expo-crypto';
 import { fetch } from 'expo/fetch';
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import { shareAsync } from 'expo-sharing';
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import soul from '../../templates/chief/soul.md';
@@ -235,9 +235,10 @@ export const pendingTurns = (): { rid: string; text: string }[] =>
   loadChat().filter((l): l is PhoneLine & { rid: string } => l.who === 'you' && l.queued === true && !!l.rid)
     .map((l) => ({ rid: l.rid, text: l.text }));
 
-/** A signed-out phone keeps no chat: the kept files go. */
+/** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
   for (const f of [chatFile, requestFile, metaFile]) { try { const x = f(); if (x.exists) x.delete(); } catch {} }
+  try { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); } catch {}
 }
 
 // ---------- Chief, phone-sized ----------

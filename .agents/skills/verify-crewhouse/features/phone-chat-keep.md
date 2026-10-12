@@ -24,7 +24,7 @@ journal line and `done` is too short to hit with a kill) reopens as Interrupted 
 exactly one file; offline (wifi and data off) shows the pinned banner with the last-heard time, an inert
 Try again, a send shown "Queued, not sent yet", and the queued turn answered once after the network
 returns with no relaunch; 52 seeded turns load and scroll, and 1.3x text at 360 dp; "Use a computer"
-keeps the chat, the confirmed Sign out deletes it.
+keeps the chat, the confirmed Sign out deletes it and every document Chief made here.
 
 When the OpenRouter balance is empty (HTTP 402, the app's plain error), the real-answer and document
 legs are not proven: say so, and prove persistence with the turns you have.

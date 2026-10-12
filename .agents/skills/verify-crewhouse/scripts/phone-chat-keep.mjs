@@ -56,8 +56,8 @@ const shot = (name) => Aout(join(EV, 'screens', name), 'exec-out', 'screencap', 
 const tapText = (re, nth = 0) => { const m = nodes().filter((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc)); const n = m[nth];
   if (!n) throw new Error(`no node matching ${re}`); const [x1, y1, x2, y2] = n.b; A('shell', 'input', 'tap', String((x1 + x2) >> 1), String((y1 + y2) >> 1)); return n.text || n.desc; };
 const type = (s) => A('shell', 'input', 'text', s.trim().replace(/ /g, '%s'));
-// The lowest match on screen: for an Alert dialog's button, which sits below the header link of the same word.
-const tapLowest = (re) => { const m = nodes().filter((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc));
+// The lowest match on screen, any case: an Alert dialog's button (Android capitalises it) sits below the header link.
+const tapLowest = (re) => { const m = nodes().filter((n) => new RegExp(re, 'i').test(n.text) || new RegExp(re, 'i').test(n.desc));
   if (!m.length) throw new Error(`no node matching ${re}`); const n = m.reduce((a, b) => (b.b[1] > a.b[1] ? b : a));
   A('shell', 'input', 'tap', String((n.b[0] + n.b[2]) >> 1), String((n.b[1] + n.b[3]) >> 1)); return n.text || n.desc; };
 const launch = () => A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
@@ -254,7 +254,7 @@ const run = async () => {
     tapText('^Sign out$');
     await waitFor(() => hasNode('Sign out of Chief?'), 8000, 'the sign-out confirm');
     shot('17-signout-confirm.png');
-    tapLowest('^Sign out$'); await sleep(3000);
+    tapLowest('^sign out$'); await sleep(3000);
     const left = keptFiles();
     say(`chat files left after sign out: ${left}`);
     forceStop(); await sleep(1000); launch();
