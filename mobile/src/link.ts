@@ -7,7 +7,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import { browse, scan, type BrowseService } from '@byokit/reach';
+import { browse, scan, type BrowseService } from '@byokit/discover';
 import * as K from '../../web/src/kept.ts';
 import { knock } from '../../web/src/adapter.ts';
 import { addresses } from '../modules/crewhouse-net';
