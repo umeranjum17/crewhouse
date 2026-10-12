@@ -684,6 +684,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
+        {id === 'chief' && <AddPhonePrompt accounts={accounts} tick={tick} />}
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
@@ -1197,6 +1198,85 @@ function NotifyLine({ relay, norelay }: { relay: boolean | 'offline' | 'unreacha
   </>;
 }
 
+/** The one-use code that pairs a phone, with its QR: Settings shows it under Phones, and Chief's chat shows
+ *  the same card right after sign-in while no phone is paired yet (cut 10). */
+function PairCodeCard({ offer, left, typed, link, title, sub, onAway, onNew, onClose, closeLabel }: {
+  offer: Json; left: number; typed: Json; link: Json; title: string; sub: ReactNode;
+  onAway: () => void; onNew: () => void; onClose: () => void; closeLabel: string;
+}) {
+  return (
+    <div className="card pair" aria-label={title}>
+      {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
+      <div className="grow">
+        <b>{title}</b>
+        {sub}
+        <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
+        <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
+        {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
+        {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
+          : <button className="link inline small" onClick={onAway}>Show a code for a phone away from home</button>)}
+        <div className="btns">{left <= 0 && <button className="btn go" onClick={onNew}>New code</button>}<button className="btn ghost" onClick={onClose}>{closeLabel}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/** Cut 10: right after sign-in, while no phone is paired yet, Chief's chat offers "Add your phone" with the code in
+ *  place — the same card as Settings › Phones › Add a phone — instead of sending the person hunting through Settings.
+ *  "Not now" puts it away on this browser; a paired phone ends it for good. Settings keeps working as it is. */
+const ADD_PHONE_SKIP = 'crewhouse.addPhone.skip';
+const ADD_PHONE_DONE = 'crewhouse.addPhone.done';
+function AddPhonePrompt({ accounts, tick }: { accounts: Json[] | null; tick: number }) {
+  const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
+  const [link, setLink] = useState<Json>(null);
+  const [offer, setOffer] = useState<Json>(null);
+  const [typed, setTyped] = useState<Json>(null);
+  const [now, setNow] = useState(Date.now());
+  const [gone, setGone] = useState(() => { try { return !!localStorage.getItem(ADD_PHONE_SKIP) || !!localStorage.getItem(ADD_PHONE_DONE); } catch { return false; } });
+  const load = () => Promise.all([api.phones(), api.phoneLink()]).then(([p, l]) => { setPhones(p); setLink(l); }).catch(() => setPhones(null));
+  useEffect(() => { if (!paired) void load(); }, [tick]);
+  // A paired phone ends the offer for good, on every later visit too.
+  useEffect(() => {
+    if (phones && phones.length && !gone) {
+      try { localStorage.setItem(ADD_PHONE_DONE, '1'); } catch { /* this visit only */ }
+      setGone(true);
+      toast(`${phones[0].name} is paired`);
+    }
+  }, [phones]);
+  const mine = accounts ? A.aiList(accounts).mine[0] : null;
+  const signedIn = !!mine && mine.g.state === 'ready' && !mine.g.notIncluded;
+  const open = !paired && !gone && signedIn && Array.isArray(phones) && phones.length === 0 && !!link && (!!link.on || !!link.relay);
+  const mint = () => attempt(async () => { setTyped(null); setOffer({ ...(await api.pairPhone('control')), role: 'control' }); });
+  useEffect(() => { if (open && !offer) void mint(); }, [open]);
+  useEffect(() => { if (!offer) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [offer]);
+  if (!open) return null;
+  const asking: Json[] = link.asking ?? [];
+  const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
+  const skip = () => { try { localStorage.setItem(ADD_PHONE_SKIP, '1'); } catch { /* this visit only */ } setOffer(null); setGone(true); };
+  return (<>
+    {asking.map((a: Json) => (
+      <div key={a.id} className="card ask">
+        <b>{a.name} would like to join</b>
+        <p>Only say yes if the phone shows these two words: <b>{a.words}</b></p>
+        <p className="mute small">{a.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
+        <div className="btns">
+          <button className="btn go" onClick={() => attempt(async () => { await api.answerPhone(a.id, true); await load(); })}>Yes, the words match</button>
+          <button className="btn" onClick={() => attempt(async () => { await api.answerPhone(a.id, false); await load(); }, `${a.name} was turned away`)}>No</button>
+        </div>
+      </div>
+    ))}
+    {!asking.length && (offer ? <PairCodeCard offer={offer} left={left} typed={typed} link={link} title="Add your phone"
+      sub={<><p className="small">Scan this in the phone app or type the code.</p><p className="mute small">This phone will answer the crew and give them jobs, as you.</p></>}
+      onAway={() => attempt(async () => setTyped(await api.phoneCode('control')))} onNew={mint} onClose={skip} closeLabel="Not now" />
+      : <div className="card pair" aria-label="Add your phone">
+        <div className="grow"><b>Add your phone</b>
+          <p className="small">Scan this in the phone app or type the code.</p>
+          <div className="btns"><button className="btn go" onClick={mint}>Show the code</button><button className="btn ghost" onClick={skip}>Not now</button></div>
+        </div>
+      </div>)}
+  </>);
+}
+
 /** Settings, Phones: pair the phone app by its camera, see each phone, take one away. Only this computer can. */
 function Phones({ tick }: { tick: number }) {
   const [phones, setPhones] = useState<Json[] | null | undefined>(undefined);
@@ -1247,19 +1327,9 @@ function Phones({ tick }: { tick: number }) {
       ))}
       {offer && !link.asking.length && (<>
         {!phones.length && <AppDownloadQR />}
-        <div className="card pair">
-          {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
-          <div className="grow">
-            <b>Scan this with the Crewhouse app</b>
-            <p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>
-            <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
-            <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
-            {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
-            {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
-              : <button className="link inline small" onClick={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))}>Show a code for a phone away from home</button>)}
-            <div className="btns">{left <= 0 && <button className="btn go" onClick={() => show(offer.role)}>New code</button>}<button className="btn ghost" onClick={() => setOffer(null)}>Close</button></div>
-          </div>
-        </div>
+        <PairCodeCard offer={offer} left={left} typed={typed} link={link} title="Scan this with the Crewhouse app"
+          sub={<p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>}
+          onAway={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))} onNew={() => show(offer.role)} onClose={() => setOffer(null)} closeLabel="Close" />
       </>)}
       <label className="card row">
         <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />

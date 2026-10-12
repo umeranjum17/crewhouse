@@ -39,6 +39,12 @@ the same card shows the phone's two words with "Yes, the words match". Drive tha
 (`screens.sh`-style captures at 1440 and 390, `?night` and `?day`) when the change touches pairing, and
 note that the card's own request is what the script sends when it confirms.
 
+**The post-sign-in offer (cut 10).** While no phone is paired, Chief's chat shows "Add your phone" with
+the same code card in place right after sign-in, plus "Not now" to put it away; a paired phone ends it
+for good. Drive it with `?demo=nophone` (no paired phones, signed-in accounts): the prompt mints its
+code through `POST /api/phones/pair` like Settings does. Capture the prompt at 1440 and 390, `?night`
+and `?day`, and prove Settings still mints its own code on the same build.
+
 **A pairing failure is part of the proof.** Point the camera at something that is not a Crewhouse code
 (`node -e "…qrMatrix('hello')…" > not-a-code.png`, or any QR), and at a code that has run out
 (`CREWHOUSE_PAIR_MS=1` on the crewd side, or wait two minutes), and keep the screenshot of what the
