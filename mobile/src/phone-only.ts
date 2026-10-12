@@ -179,7 +179,8 @@ const finishRequest = (rid: string, fileName: string) => { const prev = requestF
 export async function probeOnline(): Promise<boolean> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 4000);
-  try { await fetch('https://openrouter.ai/api/v1/models', { method: 'HEAD', signal: ctrl.signal }); return true; }
+  // Read only the response headers: any answer (even 401) means the internet is there.
+  try { await fetch('https://openrouter.ai/api/v1/models', { signal: ctrl.signal }); return true; }
   catch { return false; }
   finally { clearTimeout(timer); }
 }
@@ -209,7 +210,7 @@ export function loadChat(): PhoneLine[] {
   for (const r of readLines(chatFile)) {
     if (typeof r.text !== 'string') continue;
     const rid = typeof r.rid === 'string' ? r.rid : undefined;
-    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text, rid }); open = { text: r.text, rid, queued: r.queued === true }; }
+    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text, rid }); open = { text: r.text, rid, queued: r.queued === true }; userAt = lines.length - 1; }
     else if (r.t === 'chief' && open) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
   }
   cutOff();

@@ -898,7 +898,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       rememberChief(line, doc, rid);
       setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: line, doc }]);
       return true;
-    } finally { setPartial(''); setBusy(false); }
+    } finally { setPartial(''); setBusy(false); ctrl.current = null; }
   };
 
   /** A message the person just sent: queued while offline, otherwise run now under a fresh request id. */
@@ -916,7 +916,8 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     const id = rid ?? newRid();
     rememberUser(words, id);
     setLines((ls) => [...ls, { who: 'you', text: words, rid: id }]);
-    return askTurn(words, id, false);
+    await askTurn(words, id, false);
+    return true;
   };
 
   /** Send what waited for a connection, oldest first, once the phone hears the model again. */
@@ -973,7 +974,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
           <T tone="ink2" style={s.small}>No connection. A message you send waits here and goes once you're back.{heard ? ` Last heard ${heardWords(heard)}.` : ''}</T>
         </View>}
       </ScrollView>
-      <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={(text) => void send(text)} chat="phone-only" photos={false} /></View>
+      <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={(text) => send(text)} chat="phone-only" photos={false} /></View>
       {open && <PhoneDocSheet doc={open} disabled={offline} onClose={() => setOpen(null)} />}
     </KeyboardAvoidingView>
   );

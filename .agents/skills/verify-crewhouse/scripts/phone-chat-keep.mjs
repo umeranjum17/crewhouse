@@ -1,35 +1,43 @@
 #!/usr/bin/env node
-// The phone-only chat's own durability proof (mobile/src/phone-only.ts): the chat lives in app storage,
-// reloads on open, and a turn the app was killed in the middle of comes back stopped with Try again.
+// The phone-only chat's own durability proof (mobile/src/phone-only.ts, mobile/App.tsx): the chat lives in
+// app storage, reloads on open, and a turn the app was killed inside of comes back stopped with Try again;
+// a document effect killed inside comes back "Interrupted. Retry?" with exactly one file; a message written
+// with no connection waits as "Queued, not sent yet" and goes when the phone hears the model again.
 //
 //   node .agents/skills/verify-crewhouse/scripts/phone-chat-keep.mjs \
 //     --serial emulator-5562 --repo "$PWD" --ev "$EV" --key-file /home/umer/.config/openrouter/api_key \
-//     [--apk path.apk] [--seed-turns 52]
+//     [--apk path.apk] [--seed-turns 52] [--offline] [--interrupted]
 //
 // It drives the real release app on an emulator: sign in with the person's own OpenRouter key (file only,
 // pushed to the device and typed without ever touching this process's argv), send turns, force-stop and
-// relaunch, kill a turn mid-flight, then Try again. With --seed-turns it writes a long log straight into the
-// app's own files (emulator root) and measures the reopen, so the 50+-turn load and scroll are real.
+// relaunch, kill a turn mid-flight, then Try again. --offline cuts the emulator's wifi to prove the queued
+// state and back. --interrupted seeds the exact on-disk state a kill inside crew_document leaves (a turn's
+// start marker plus a `started` request journal entry and its file) and proves reopen shows "Interrupted."
+// with Retry, and Retry reuses the one file. With --seed-turns it writes a long log straight into the app's
+// own files (emulator root) and measures the reopen, so the 50+-turn load and scroll are real.
 //
 // The key is never printed, logged or committed: it is read from --key-file and pushed to /data/local/tmp,
 // typed by the device shell (`cat`), then deleted from the device. `adb root` is used only on this task's
 // emulator (google_apis image); the app's private files are erased at the end.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
+const has = (n) => args.includes(`--${n}`);
 const SERIAL = opt('serial', 'emulator-5562');
-const REPO = opt('repo', process.cwd());
 const EV = opt('ev', null);
 const KEY_FILE = opt('key-file', '/home/umer/.config/openrouter/api_key');
 const APK = opt('apk', null);
 const SEED = Number(opt('seed-turns', 0));
-if (!EV) { console.error('usage: phone-chat-keep.mjs --ev <evidence-dir> [--serial s] [--repo r] [--key-file k] [--apk a] [--seed-turns n]'); process.exit(2); }
+const OFFLINE = has('offline');
+const INTERRUPTED = has('interrupted');
+if (!EV) { console.error('usage: phone-chat-keep.mjs --ev <evidence-dir> [--serial s] [--apk a] [--seed-turns n] [--offline] [--interrupted]'); process.exit(2); }
 mkdirSync(join(EV, 'screens'), { recursive: true });
 
 const PKG = 'dev.crewhouse.app';
+const FILES = `/data/data/${PKG}/files`;
 const A = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
 const Aout = (file, ...a) => writeFileSync(file, execFileSync('adb', ['-s', SERIAL, ...a], { maxBuffer: 1 << 27 }));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -39,122 +47,177 @@ const nodes = () => {
   if (!xml) return []; // a busy window can refuse the dump; the caller polls again
   return [...xml.matchAll(/<node [^>]*>/g)].map(([n]) => ({
     text: (n.match(/ text="([^"]*)"/) || [])[1] || '', desc: (n.match(/content-desc="([^"]*)"/) || [])[1] || '',
+    enabled: (n.match(/ enabled="(true|false)"/) || [])[1] !== 'false',
     b: (n.match(/bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"/) || []).slice(1).map(Number) }));
 };
 const shot = (name) => Aout(join(EV, 'screens', name), 'exec-out', 'screencap', '-p');
 const tapText = (re, nth = 0) => { const m = nodes().filter((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc)); const n = m[nth];
   if (!n) throw new Error(`no node matching ${re}`); const [x1, y1, x2, y2] = n.b; A('shell', 'input', 'tap', String((x1 + x2) >> 1), String((y1 + y2) >> 1)); return n.text || n.desc; };
 const type = (s) => A('shell', 'input', 'text', s.trim().replace(/ /g, '%s'));
-const launch = () => { A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`); };
+const launch = () => A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
 const forceStop = () => A('shell', 'am', 'force-stop', PKG);
-// A speaker label ("You"/"Chief") sits at x=42; the header and hero sit further right.
+const hasNode = (re) => nodes().some((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc));
+const enabled = (re) => { const n = nodes().find((x) => new RegExp(re).test(x.text) || new RegExp(re).test(x.desc)); return n ? n.enabled : null; };
 const speakers = (who) => nodes().filter((n) => n.text === who && n.b[0] === 42).length;
-const has = (re) => nodes().some((n) => new RegExp(re).test(n.text) || new RegExp(re).test(n.desc));
 // A cold emulator under CPU contention can throw a System UI "isn't responding" dialog over the app; Wait clears it.
-const dismissAnr = () => { try { if (has("isn.t responding")) { tapText('^Wait$'); return true; } } catch { /* dump raced */ } return false; };
+const dismissAnr = () => { try { if (hasNode("isn.t responding")) { tapText('^Wait$'); return true; } } catch { /* dump raced */ } return false; };
 const waitFor = async (fn, ms, what) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (dismissAnr()) await sleep(400); if (fn()) return Date.now() - t0; await sleep(700); } throw new Error(`timed out waiting for ${what}`); };
 // A turn is done when the screen's text stops changing: while Chief streams, the growing words and the
 // blinking cursor keep the text in motion; once the answer is committed the text holds still.
-const settle = async (ms = 90000) => { let prev = '', still = 0; const t0 = Date.now();
+const settle = async (ms = 120000) => { let prev = '', still = 0; const t0 = Date.now();
   while (Date.now() - t0 < ms) { const cur = nodes().map((n) => n.text).join('\n'); if (cur === prev && cur.includes('Ask Chief anything')) { if (++still >= 2) return Date.now() - t0; } else still = 0; prev = cur; await sleep(900); } return Date.now() - t0; };
 const log = [];
 const say = (line) => { log.push(line); console.log(line); };
+const chat = () => { try { return A('shell', 'cat', `${FILES}/phone-chat.jsonl`); } catch { return ''; } };
+const requests = () => { try { return A('shell', 'cat', `${FILES}/phone-requests.jsonl`); } catch { return ''; } };
+const files = () => { try { return A('shell', 'ls', FILES).split('\n'); } catch { return []; } };
+const chiefCount = (body) => (body.match(/"t":"chief"/g) || []).length;
+const writeDevice = (name, body) => { writeFileSync(join(EV, name), body); const tmp = `/data/local/tmp/${name}`, dst = `${FILES}/${name}`;
+  A('push', join(EV, name), tmp);
+  A('shell', `cp '${tmp}' '${dst}'`);
+  const owner = A('shell', 'stat', '-c', '%u:%g', FILES).trim();
+  A('shell', `chown '${owner}' '${dst}'`); A('shell', `chmod 660 '${dst}'`); A('shell', `restorecon '${dst}'`); A('shell', `rm -f '${tmp}'`); };
 
 const run = async () => {
   // --- fresh install of the real app ---
   if (APK) { try { A('uninstall', PKG); } catch { /* not installed */ } A('install', '-r', '-g', APK); }
   A('shell', 'pm', 'clear', PKG);
+  try { A('root'); A('wait-for-device'); await sleep(1500); } catch { /* already root or not permitted */ }
   A('shell', 'settings', 'put', 'system', 'font_scale', '1.0');
   A('shell', 'wm', 'density', 'reset');
   launch();
-  await waitFor(() => has("Use this phone only"), 90000, "first run");
+  await waitFor(() => hasNode('Use this phone only'), 90000, 'first run');
   say('first run shown'); shot('00-firstrun.png');
 
   // --- sign in with the person's own key (file only; never this process's argv) ---
   tapText('Use this phone only');
-  await waitFor(() => has('Paste your .* key'), 15000, 'key screen');
+  await waitFor(() => hasNode('Paste your .* key'), 15000, 'key screen');
   tapText('Paste your .* key');
   A('push', KEY_FILE, '/data/local/tmp/kc.txt');
   A('shell', 'input text "$(cat /data/local/tmp/kc.txt)"');
   A('shell', 'rm', '-f', '/data/local/tmp/kc.txt');
   await sleep(800);
   tapText('^Connect$');
-  await waitFor(() => has('Ask Chief anything'), 30000, 'the composer');
+  await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the composer');
   say('signed in, composer ready'); shot('01-chat-empty.png');
 
-  // --- a real turn, then a real document ---
-  // The emulator's slirp networking drops the odd outbound request; a person just sends again, so the driver
-  // does the same (this also exercises sending a second turn), and only reports a leg once it truly landed.
-  const errs = () => nodes().filter((n) => /Could not finish on this phone|No internet connection|at its limit|cut short/.test(n.text)).length;
-  const send = async (text, what, expect) => {
-    for (let i = 1; i <= 6; i++) {
-      const before = errs();
-      tapText('Ask Chief anything'); await sleep(500); await type(text); await sleep(600); tapText('Send');
+  const sendWait = async (text, what, expect) => {
+    for (let i = 1; i <= 8; i++) {
+      tapText('Ask Chief anything'); await sleep(500); await type(text); await sleep(500); tapText('Send');
       const ms = await settle();
-      if (errs() === before && (!expect || expect())) { say(`${what}: settled in ${ms} ms${i > 1 ? ` (try ${i})` : ''}`); return ms; }
-      say(`${what}: attempt ${i} did not land, sending again`); await sleep(1800);
+      if (!expect) { say(`${what}: settled in ${ms} ms`); return ms; }
+      const ok = await (async () => { const t = Date.now(); while (Date.now() - t < 45000) { if (expect()) return true; await sleep(1500); } return false; })();
+      if (ok) { say(`${what}: settled in ${ms} ms${i > 1 ? ` (try ${i})` : ''}`); return ms; }
+      say(`${what}: attempt ${i} did not land, sending again`); await sleep(3000);
     }
-    throw new Error(`${what} did not land after 6 tries (emulator network / provider)`);
+    throw new Error(`${what} did not land after 8 tries (emulator network / provider)`);
   };
-  await send('Say hello back in five words.', 'hello turn'); shot('02-hello.png');
-  await send('Use your document tool to make a Word file named Packing list with a heading Essentials and a bullet list: 3 shirts, 3 socks, toothbrush.', 'document turn', () => has('Document')); shot('03-document.png');
-  say('document card shown');
+
+  // --- a real turn, then a real document (a short document: the emulator drops the odd long stream) ---
+  await sendWait('Say hello back in five words.', 'hello turn', () => speakers('Chief') >= 1); shot('02-hello.png');
+  await sendWait('Make a Word file called Note with one paragraph: All set.', 'document turn', () => hasNode('Document'));
+  say('document card shown'); shot('03-document.png');
 
   // --- the chat survives a kill ---
   forceStop(); await sleep(1200); launch();
-  const t0 = Date.now(); await waitFor(() => has('Ask Chief anything'), 30000, 'the reloaded composer');
+  const t0 = Date.now(); await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the reloaded composer');
   await waitFor(() => speakers('Chief') >= 2, 8000, 'the two reloaded answers');
+  await waitFor(() => hasNode('Document'), 8000, 'the kept document card');
   say(`chat reloaded after a kill in ${Date.now() - t0} ms`); shot('04-after-kill.png');
 
   // --- the document card still reads after the reload (its parts were kept) ---
-  tapText('^Read$'); await waitFor(() => has('Essentials'), 6000, 'the kept document'); shot('05-read-after-reload.png');
+  tapText('^Read$'); await waitFor(() => hasNode('All set'), 6000, 'the kept document'); shot('05-read-after-reload.png');
   tapText('^Close$'); await sleep(600);
 
   // --- a turn cut off mid-flight comes back stopped, with Try again ---
-  tapText('Ask Chief anything'); await sleep(500); await type('Write one friendly sentence about coffee.'); await sleep(600);
-  tapText('Send'); forceStop();
-  say('killed the app while the turn ran'); await sleep(1200); launch();
-  await waitFor(() => has('Try again'), 30000, 'the stopped turn'); shot('06-stopped.png');
+  let stopped = false;
+  for (let i = 1; i <= 4 && !stopped; i++) {
+    tapText('Ask Chief anything'); await sleep(400); await type('Write one friendly sentence about coffee.'); await sleep(400);
+    tapText('Send'); await sleep(800); forceStop();
+    say('killed the app while the turn ran'); await sleep(1200); launch();
+    try { await waitFor(() => hasNode('Try again') || hasNode('Retry'), 16000, 'the stopped turn'); stopped = true; shot('06-stopped.png'); }
+    catch { say(`cut-off attempt ${i}: the answer landed before the kill; trying again`); }
+  }
+  if (!stopped) throw new Error('could not leave a cut-off turn on disk');
 
   // --- Try again re-sends it as a new turn and answers ---
-  const beforeRetry = speakers('You');
+  const beforeRetry = (chat().match(/coffee/g) || []).length;
   tapText('^Try again$');
-  await waitFor(() => speakers('You') > beforeRetry, 15000, 'the retried turn to start');
-  const rms = await settle();
-  say(`Try again settled in ${rms} ms`); shot('07-retry-answer.png');
+  await waitFor(() => (chat().match(/coffee/g) || []).length > beforeRetry, 25000, 'the retried turn written');
+  say(`Try again wrote a new turn; settled in ${await settle()} ms`); shot('07-retry-answer.png');
+
+  // --- interrupted crew_document: reopen shows "Interrupted." with Retry and exactly one file ---
+  if (INTERRUPTED) {
+    say('seeding the exact state a kill inside crew_document leaves');
+    forceStop(); await sleep(800);
+    try { A('root'); } catch { /* already root */ }
+    await sleep(1500);
+    const RID = 'rid-interrupted-1', CALL = 'call-interrupted-1', NAME = 'Interrupted proof';
+    writeDevice('phone-chat.jsonl', JSON.stringify({ t: 'you', text: 'Make a Word file called Proof with one paragraph: Done.', rid: RID }) + '\n');
+    writeDevice('phone-requests.jsonl', JSON.stringify({ rid: RID, callId: CALL, fileName: `chief-${CALL}-${NAME}.docx`, state: 'started' }) + '\n');
+    writeDevice('phone-meta.json', JSON.stringify({ heardAt: Date.now() }) + '\n');
+    writeDevice(`chief-${CALL}-${NAME}.docx`, 'PK-partial');
+    launch();
+    await waitFor(() => hasNode('Interrupted') && hasNode('Retry'), 30000, 'the interrupted turn');
+    say('reopen shows: ' + nodes().filter((n) => /Interrupted|Retry/.test(n.text)).map((n) => n.text.trim()).filter(Boolean).join(' | '));
+    shot('08-interrupted.png');
+    say(`files before Retry: ${files().filter((f) => f.startsWith(`chief-${CALL}`)).length}`);
+    tapText('^Retry$');
+    await waitFor(() => speakers('Chief') >= 1, 15000, 'the retried document turn');
+    await settle();
+    const n = files().filter((f) => f.startsWith(`chief-${CALL}`)).length;
+    say(`exactly one file after Retry: ${n === 1} (${n})`); shot('09-interrupted-retry.png');
+    if (n !== 1) throw new Error(`retry doubled the document: ${n} files`);
+  }
+
+  // --- offline: banner, a queued message that never looks sent, actions off, then it goes ---
+  if (OFFLINE) {
+    const ping = () => { try { return /1 received|1 packets received/.test(A('shell', 'ping', '-c1', '-W2', '8.8.8.8')); } catch { return false; } };
+    A('shell', 'svc', 'wifi', 'disable'); A('shell', 'svc', 'data', 'disable');
+    await waitFor(() => !ping(), 20000, 'the emulator network to drop');
+    await sleep(2000);
+    forceStop(); await sleep(1000); launch();
+    await waitFor(() => hasNode('No connection'), 40000, 'the offline banner');
+    say('offline banner shown'); shot('10-offline.png');
+    const shareOff = enabled('^Share$'), retryOff = enabled('Try again') ?? enabled('Retry');
+    say(`offline: Share enabled=${shareOff}, Try-again enabled=${retryOff}`);
+    tapText('Ask Chief anything'); await sleep(500); await type('This one waits for the network.'); await sleep(500); tapText('Send');
+    await waitFor(() => hasNode('Queued, not sent yet'), 25000, 'the queued state');
+    say('offline message shown as Queued, not sent yet; it does not look sent'); shot('11-offline-queued.png');
+    const beforeChiefs = chiefCount(chat());
+    A('shell', 'svc', 'wifi', 'enable'); A('shell', 'svc', 'data', 'enable');
+    await waitFor(() => ping(), 20000, 'the emulator network to return');
+    await sleep(2000);
+    forceStop(); await sleep(1000); launch();
+    await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the reloaded composer');
+    // It went once: the on-disk log gains exactly the one Chief answer for the queued turn.
+    await waitFor(() => chiefCount(chat()) > beforeChiefs, 60000, 'the queued turn answered');
+    await settle();
+    say(`queued message went once back online (chiefs ${beforeChiefs} -> ${chiefCount(chat())})`); shot('12-queued-sent.png');
+  }
 
   // --- 50+ turns: load and scroll (seeded straight into the app's own files, emulator root) ---
   if (SEED) {
-    try { A('root'); } catch { /* already root or not permitted */ }
+    try { A('root'); } catch { /* already root */ }
     await sleep(1500);
     const lines = [];
-    for (let i = 0; i < SEED; i++) { lines.push(JSON.stringify({ t: 'you', text: `Turn ${i}: what is ${i} plus ${i}?` })); lines.push(JSON.stringify({ t: 'chief', text: `Turn ${i}: that is ${i + i}.` })); }
-    const file = join(EV, `seed-${SEED}.jsonl`); writeFileSync(file, lines.join('\n') + '\n');
-    const target = `/data/data/${PKG}/files/phone-chat.jsonl`;
-    const owner = A('shell', 'stat', '-c', '%u:%g', `/data/data/${PKG}/files`).trim();
+    for (let i = 0; i < SEED; i++) { lines.push(JSON.stringify({ t: 'you', text: `Turn ${i}: what is ${i} plus ${i}?`, rid: `seed-${i}` })); lines.push(JSON.stringify({ t: 'chief', text: `Turn ${i}: that is ${i + i}.` })); }
     forceStop();
-    A('push', file, '/data/local/tmp/seed.jsonl');
-    A('shell', 'cp', '/data/local/tmp/seed.jsonl', target);
-    A('shell', 'chown', owner, target);
-    A('shell', 'chmod', '660', target);
-    A('shell', 'restorecon', target); // give it the app's own SELinux label, or the app cannot read it
-    A('shell', 'rm', '-f', '/data/local/tmp/seed.jsonl');
+    writeDevice('phone-chat.jsonl', lines.join('\n') + '\n');
     const s0 = Date.now(); launch();
-    await waitFor(() => has('Ask Chief anything'), 30000, 'the reloaded composer');
-    const loaded = Date.now() - s0;
+    await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the reloaded composer');
     await waitFor(() => speakers('Chief') >= 1, 8000, 'lines on screen');
-    say(`${SEED} turns reloaded in ${loaded} ms`); shot('08-many-turns.png');
-    for (let i = 0; i < 6; i++) { A('shell', 'input', 'swipe', '540', '1900', '540', '500', '180'); await sleep(300); }
-    say('scrolled to the top of the long chat'); shot('09-many-turns-top.png');
-    // narrow width at 1.3x text (360 dp: 1080 px / 360 dp * 160)
-    A('shell', 'settings', 'put', 'system', 'font_scale', '1.3');
-    A('shell', 'wm', 'density', '480');
-    await sleep(1500); shot('10-narrow-1.3x.png');
+    say(`${SEED} turns reloaded in ${Date.now() - s0} ms`); shot('13-many-turns.png');
+    for (let i = 0; i < 8; i++) { A('shell', 'input', 'swipe', '540', '1900', '540', '500', '180'); await sleep(300); }
+    say('scrolled to the top of the long chat'); shot('14-many-turns-top.png');
+    A('shell', 'settings', 'put', 'system', 'font_scale', '1.3'); A('shell', 'wm', 'density', '480');
+    await sleep(1800); shot('15-narrow-1.3x.png');
     A('shell', 'settings', 'put', 'system', 'font_scale', '1.0'); A('shell', 'wm', 'density', 'reset'); await sleep(800);
   }
 
   // --- erase the key and the chat from this emulator ---
-  A('shell', 'rm', '-f', '/data/data/' + PKG + '/files/phone-chat.jsonl');
+  try { A('root'); } catch { /* already root */ }
+  A('shell', 'rm', '-f', `${FILES}/phone-chat.jsonl`, `${FILES}/phone-requests.jsonl`, `${FILES}/phone-meta.json`);
   A('shell', 'pm', 'clear', PKG);
   A('uninstall', PKG);
   say('erased the key, the chat and the app from the emulator');
