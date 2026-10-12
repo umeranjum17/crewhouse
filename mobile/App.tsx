@@ -922,7 +922,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       setLines((ls) => [...ls, { who: 'you', text: words, rid: id, queued: true }]);
       return true;
     }
-    if (!rid && offline) {
+    if (!rid && (offline || pendingTurns().length)) {
       setOffline(false); setHeard(Date.now());
       await flush();
       if (pendingTurns().length) {
