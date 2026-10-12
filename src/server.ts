@@ -242,13 +242,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
           notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key), work: false };
       }));
     }
-    // "Sign in with …": start (the page by default, `via: 'code'` for the code), paste the address the browser landed on,
-    // cancel, sign out; "I've changed my plan" (retry).
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
+    // "Sign in with …": start (the page, `via: 'code'` for the code, `via: 'key'` for a pasted plan key),
+    // paste the address the browser landed on or the key, cancel, sign out; "I've changed my plan" (retry).
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
       const [key, act] = [r[2], r[3]];
       provider(key);
       const b = body;
-      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(key, b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
+      if (act === 'login') return { ok: true, signIn: await crew.accounts.login(key, b.via === 'key' ? 'key' : b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
       else if (act === 'retry') crew.retryAccount(key);
       else if (act === 'paste') crew.accounts.paste(key, String(b.text ?? ''));
       else if (act === 'cancel') await crew.accounts.cancel(key);

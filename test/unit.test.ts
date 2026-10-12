@@ -949,6 +949,20 @@ test('sign-in: one button shows a code, finishes by itself, and signs the person
   done();
 });
 
+test('sign-in: a plan-key account waits for the pasted key, and the card asks for it', async () => {
+  const { crew, done } = setup();
+  const shown = await crew.accounts.login('opencode-go', 'key');
+  assert.equal(shown?.state, 'waiting');
+  assert.equal(shown?.via, 'key');
+  assert.ok(!shown?.url && !shown?.code, 'no page and no code: the key is the whole sign-in');
+  assert.ok(A.account([{ account: 'opencode-go', name: 'x', signedIn: false, restingUntil: 0, signIn: shown }], 'opencode-go').key, 'the card is in its paste-a-key phase');
+  crew.accounts.paste('opencode-go', 'not-a-real-key');
+  await crew.accounts.finished('opencode-go');
+  assert.equal(crew.accounts.view('opencode-go')!.state, 'done');
+  await until('the account is ready', () => crew.accounts.signedIn('opencode-go'));
+  done();
+});
+
 test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () => {
   const { crew, done } = setup();
   const begin = crew.runtime.signIn.bind(crew.runtime);
