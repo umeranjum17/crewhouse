@@ -48,7 +48,9 @@ const nodes = () => {
   return all;
 };
 const has = (re) => nodes().some((n) => re.test(n.text) || re.test(n.desc));
-const tap = (re) => { const n = nodes().find((x) => re.test(x.text) || re.test(x.desc)); if (!n) throw new Error(`no node ${re}`);
+// A loaded emulator sometimes dumps an empty window: look again for a while before calling the node missing.
+const tap = (re) => { let n; for (let i = 0; i < 8 && !n; i++) { if (i) execFileSync('sleep', ['2']); n = nodes().find((x) => re.test(x.text) || re.test(x.desc)); }
+  if (!n) throw new Error(`no node ${re}`);
   A('shell', 'input', 'tap', String((n.b[0] + n.b[2]) >> 1), String((n.b[1] + n.b[3]) >> 1)); };
 const waitFor = async (re, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (has(re)) return Date.now() - t; await sleep(700); } throw new Error(`timed out waiting for ${re}`); };
 const gone = async (re, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (!has(re)) return Date.now() - t; await sleep(700); } throw new Error(`still showing ${re}`); };
@@ -90,7 +92,9 @@ const noCredit = has(/Could not finish on this phone/);
 say(noCredit ? 'phone-only chat: the provider gave no answer (plain error lines kept as the chat)' : `phone-only chat: real answers${has(/^Document$/) ? ' and a document card' : ''}`);
 shot('01-phone-only-chat.png');
 const QUEUED = 'And what about the weather there?';
+// Opened cold with no network, the chat's own probe finds no connection, so the next send waits queued.
 A('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable'); await sleep(3000);
+relaunch(); await waitFor(/No connection/, 90000);
 tap(/Ask Chief anything/); await sleep(400); A('shell', 'input', 'text', QUEUED.replace(/ /g, '%s')); await sleep(400); tap(/^Send$/);
 await waitFor(/Queued, not sent yet/, 30000); await sleep(800); shot('01b-queued-offline.png');
 say('offline: one message queued, not sent yet');
