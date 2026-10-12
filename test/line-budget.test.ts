@@ -19,7 +19,9 @@ import { join } from 'node:path';
 // Raised 6876 -> 6927 for the packaged download's first-use tool install (ch-ob-desktop-deb, owner
 // exception): the admission wait, the shared install map with its 10-minute stall bound and group kill,
 // and the shutdown cleanup. No trim paired: the install path is the feature.
-const BUDGET = 6927;
+// Raised 6927 -> 6938 for the OpenCode Go key sign-in through the kit (ch-opencode-go-route, owner exception):
+// OpenClawRuntime.keyIn and its addKey branch, the kit route row. No trim paired: the kit path is the feature.
+const BUDGET = 6938;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
