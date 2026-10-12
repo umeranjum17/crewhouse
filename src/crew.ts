@@ -1282,11 +1282,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (free <= 0) break;
       if (this.activeTask(t.bot) || this.starting.has(t.bot) || this.held.has(t.bot)) continue;
       const tools = this.toolWait.get(t.id);
-      if (tools === undefined && this.fetchTools) { // a first job waits for its tools before it takes a slot, so Chief never queues behind a download
+      if (tools === undefined && this.fetchTools) { // a first job is admitted and waits for its tools before it takes a slot, so Chief never queues behind a download
         this.toolWait.set(t.id, false);
-        void this.fetchTools(disk.botConfig(this.cfg, t.bot).tools ?? []).then((stalled) => {
-          this.toolWait.set(t.id, true);
-          if (stalled) { this.toolWait.delete(t.id); if (this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state = 'queued'", t.id)) this.setTask(t, 'failed', stalled); }
+        void this.admit(t).catch((e) => {
+          console.error(`tools for ${t.bot} #${t.id}:`, e);
+          return 'Its tools could not be checked, so this one stopped. Try again in a moment.';
+        }).then((stalled) => {
+          const queued = this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state = 'queued'", t.id);
+          if (queued && stalled) this.setTask(t, 'failed', stalled);
+          if (queued && !stalled) this.toolWait.set(t.id, true); else this.toolWait.delete(t.id);
           this.dispatch();
         });
         continue;
@@ -1297,6 +1301,14 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.starting.add(t.bot);
       void this.run(t);
     }
+  }
+
+  /** A queued job's checks, then its first-job tool wait: a job that pauses or waits for tomorrow never downloads. */
+  private async admit(task: Row) {
+    const choices = this.choices(task);
+    if (!await this.usable(choices)) { this.pause(task, choices); return null; }
+    if (task.origin === 'routine' && this.overShare()) { this.waitForTomorrow(task); return null; }
+    return this.fetchTools!(disk.botConfig(this.cfg, task.bot).tools ?? []);
   }
 
   /** Start (or continue) a task in its own engine session, on the person's accounts. */
