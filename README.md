@@ -24,6 +24,10 @@
 </p>
 
 <p align="center">
+  The Android preview link is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the versioned release; see <a href="docs/install.md">docs/install.md</a>.
+</p>
+
+<p align="center">
   <picture>
     <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-phone-night.webp" />
     <source media="(max-width: 600px)" srcset="docs/screenshots/readme/home-phone-day.webp" />
