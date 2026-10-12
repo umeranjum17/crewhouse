@@ -26,9 +26,17 @@ Try again, a send shown "Queued, not sent yet", and the queued turn answered onc
 returns with no relaunch; 52 seeded turns load and scroll, and 1.3x text at 360 dp; "Use a computer"
 keeps the chat, the confirmed Sign out deletes it and every document Chief made here.
 
-When the OpenRouter balance is empty (HTTP 402, the app's plain error), the real-answer and document
-legs are not proven: say so, and prove persistence with the turns you have.
+When the OpenRouter balance is empty (HTTP 402; the kit shows it as the plain "check internet" error),
+pass `--no-answers`: the kill leg then kills on the turn's start marker, the real-answer and document legs
+are not proven (say so), and persistence is proven with the turns you have.
 
 The approval sheet (`AskSheet`, the paired app) shows the exact outgoing text in full (no preview cut),
 two answer buttons, and Edit / Read all / a standing answer only as small links; nothing answers on a
-timer. Prove it on a paired emulator (`features/phone-pairing.md`) with an open `crew_draft` ask.
+timer. `scripts/phone-asksheet.mjs` proves it on a paired emulator (`features/phone-pairing.md`, the lab from
+`pair-lab.sh`), paired by the typed code: a Reel file-write ask reaches the sheet through Office -> Reel's
+desk -> Review (the phone has no Needs you pin for a helper's ask) and stays up 30 s unanswered; a Reel
+`crew_draft` email lands in Chief's thread with the body exactly as written, whole:
+
+```bash
+LAB=<lab> node .agents/skills/verify-crewhouse/scripts/phone-asksheet.mjs --serial <emulator> --ev "$EV" --apk <apk>
+```

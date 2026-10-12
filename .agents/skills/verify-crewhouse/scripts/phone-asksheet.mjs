@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The approval sheet on the real paired app (features/phone-chat-keep.md): the exact outgoing text in full,
 // two answer buttons, no timer. Pairs a task-owned emulator to the lab crewd (pair-lab.sh) by the typed code
-// (`adb reverse` carries the code's loopback link address), opens a Tracer draft ask and captures the sheet.
+// (`adb reverse` carries the code's loopback link address), opens a Reel file-write ask (the sheet) and a Reel email draft (its exact text).
 //
 //   LAB=<lab> node .agents/skills/verify-crewhouse/scripts/phone-asksheet.mjs --serial <emulator> --ev "$EV" [--apk app.apk]
 import { execFileSync } from 'node:child_process';
@@ -37,7 +37,9 @@ const log = []; const say = (l) => { log.push(l); console.log(l); };
 
 if (APK) { try { A('uninstall', PKG); } catch { /* none */ } A('install', '-g', APK); }
 A('shell', 'pm', 'clear', PKG);
+A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); // pm clear takes it; its prompt would cover the app
 for (const port of [env.LINK_PORT, env.RELAY.split(':').pop()]) A('reverse', `tcp:${port}`, `tcp:${port}`);
+await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past Hello, so the phone opens on Home
 const offer = await api('POST', '/api/phones/pair', { role: 'control' });
 A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
 await waitFor(/^Pair with a computer$/, 60000);
@@ -45,7 +47,9 @@ tap(/^Pair with a computer$/);
 await waitFor(/^Type a code$/, 20000); tap(/^Type a code$/);
 await waitFor(/Type or paste the code/, 20000);
 tap(/Type or paste the code/); await sleep(500);
-A('shell', 'input', 'text', offer.typed.replace(/[^A-Z0-9-]/gi, ''));
+// `input text` drops the tail of a long string: the code is ~490 letters, so type it in short pieces.
+const code = offer.typed.replace(/[^A-Z0-9-]/gi, '');
+for (let i = 0; i < code.length; i += 60) { A('shell', 'input', 'text', code.slice(i, i + 60)); await sleep(300); }
 await sleep(500);
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/); // close the keyboard, then Pair
 let pending = [];
@@ -56,27 +60,40 @@ say(`paired by the typed code as ${pending[0].name}`);
 await sleep(4000);
 try { tap(/Open Crewhouse/); } catch { /* already in */ }
 
-// An unsent draft in the person's name: the ask whose sheet must show every word that would go out.
-await api('POST', '/api/recruit', { template: 'tracer', name: 'Tracer' });
-const body = 'Hi Ada,\n\nThanks for Thursday. The signed lease is attached; the deposit went out this morning.\n\nOne thing to check: the move-in date on page 2 says the 14th, and we agreed on the 12th. Could you correct it and send a fresh copy?\n\nBest,\nUmer';
-const tool = (name, input) => `[tool ${name} ${JSON.stringify(input)}]`;
-await api('POST', '/api/bots/tracer/messages', { text: tool('crew_write', { path: 'files/lease.md', content: body }) +
-  tool('crew_draft', { path: 'files/lease.md', channel: 'email', to: 'ada@fernwood.example', subject: 'Lease move-in date' }) });
-let ask;
-for (let t = 0; t < 40 && !ask; t++) { ask = (await api('GET', '/api/state')).asks.find((x) => x.bot === 'tracer'); if (!ask) await sleep(500); }
-if (!ask) throw new Error('no draft ask');
-say('draft ask open on the computer');
-await waitFor(/Needs you|Tracer|lease|Lease/i, 30000);
-shot('20-home-ask.png');
-tap(/Lease move-in date|wants to send|draft/i);
-await waitFor(/correct it and send a fresh copy/, 15000);
-await sleep(800); shot('21-asksheet-exact-text.png');
-const ns = nodes();
-const buttons = ns.filter((n) => n.clickable && /^(Send|Approve|Allow|Yes.*|Not now|No.*|Deny|Don.t.*|Keep.*|Skip.*)$/i.test(n.text || n.desc)).map((n) => n.text || n.desc);
-say(`sheet shows the whole body: ${ns.some((n) => n.text.includes('Best,') || n.text.includes('send a fresh copy'))}; answer buttons: ${JSON.stringify(buttons)}`);
+const state = () => api('GET', '/api/state');
+const denyAll = async () => { for (const a of (await state()).asks) await api('POST', `/api/asks/${a.id}/answer`, { answer: 'deny' }).catch(() => {}); };
+const tapAt = (n) => A('shell', 'input', 'tap', String((n.b[0] + n.b[2]) >> 1), String((n.b[1] + n.b[3]) >> 1));
+const newAsk = async () => { for (let t = 0; t < 40; t++) { const x = (await state()).asks[0]; if (x) return x; await sleep(500); } throw new Error('no ask opened'); };
+await denyAll(); // one ask at a time
+if (!(await state()).bots?.some?.((x) => x.id === 'reel')) await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' }).catch(() => {});
+
+// 1. The sheet: a helper's own ask (a file write outside its space) reaches it through Office -> the helper's desk -> Review
+// (the phone has no Needs you pin). Two answer buttons, the standing answer only as a link, and nothing answers on a timer.
+await api('POST', '/api/bots/reel/messages', { text: `save it [tool crew_write ${JSON.stringify({ path: join(LAB, 'home', 'Documents', 'lease-note.txt'), content: 'lease note' })}]` });
+const ask = await newAsk(); say(`ask open on the computer: ${ask.title}`);
+await waitFor(/^Office$/, 30000); tap(/^Office$/);
+await waitFor(/^Reel/, 30000); shot('20-office-ask.png'); tap(/^Reel/);
+await waitFor(/^Review$/, 15000); tap(/^Review$/);
+await waitFor(/^Yes, go ahead$/, 15000); await sleep(800); shot('21-asksheet.png');
+const sheet = nodes().filter((n) => n.b[1] > 1500); // the sheet sits over the lower half of the desk
+const buttons = sheet.filter((n) => n.clickable && (n.b[3] - n.b[1]) >= 110).map((n) => n.text || n.desc).filter(Boolean);
+say(`answer buttons: ${JSON.stringify(buttons)}; links: ${JSON.stringify(sheet.filter((n) => n.clickable && (n.b[3] - n.b[1]) < 110).map((n) => n.text || n.desc).filter(Boolean))}`);
 await sleep(30000);
-const still = (await api('GET', '/api/state')).asks.some((x) => x.id === ask.id) && has(/correct it and send a fresh copy/);
+const still = (await state()).asks.some((x) => x.id === ask.id) && has(/^Yes, go ahead$/);
 say(`after 30 s untouched: ask still open and the sheet still up: ${still}`); shot('22-asksheet-after-30s.png');
-A('shell', 'input', 'keyevent', '4'); // back out: never answer for the person
+A('shell', 'input', 'keyevent', '4'); await sleep(800); A('shell', 'input', 'keyevent', '4'); await sleep(800); // back out: never answer for the person
+await denyAll();
+
+// 2. The exact outgoing text: a draft in the person's name lands as a card in Chief's thread with every word of the body.
+const body = 'Hi Ada,\n\nThanks for Thursday. The signed lease is attached; the deposit went out this morning.\n\nOne thing to check: the move-in date on page 2 says the 14th, and we agreed on the 12th. Could you correct it and send a fresh copy?\n\nBest,\nUmer';
+await api('POST', '/api/bots/reel/messages', { text: `write to Ada [tool crew_write ${JSON.stringify({ path: 'files/lease-note.md', content: body })}][tool crew_draft ${JSON.stringify({ path: 'files/lease-note.md', channel: 'email', to: 'ada@fernwood.example', subject: 'The lease: move-in date' })}]` });
+await newAsk();
+await waitFor(/Chief has 1 thing for you/, 30000); tap(/Chief has 1 thing for you/);
+await waitFor(/correct it and send a fresh copy/, 15000);
+const shown = nodes().find((n) => n.text.includes('correct it and send a fresh copy'));
+const decoded = shown.text.replace(/&#10;/g, '\n').replace(/&amp;/g, '&');
+for (let i = 0; i < 6 && !has(/^Copy$/); i++) { A('shell', 'input', 'swipe', '540', '1500', '540', '900', '200'); await sleep(400); }
+await sleep(600); shot('23-draft-exact-text.png');
+say(`draft card shows the body exactly, whole: ${decoded === body}`);
 A('shell', 'pm', 'clear', PKG);
 writeFileSync(join(EV, 'phone-asksheet.log'), log.join('\n') + '\n');

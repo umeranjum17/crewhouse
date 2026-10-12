@@ -1562,7 +1562,7 @@ function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gea
         <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
         <View style={[s.row, { gap: 6, flexShrink: 1, minWidth: 0 }]}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : st.group === 'work' ? t.green : t.line2 }} />
-          <T numberOfLines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
+          <T lines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
         </View>
         <View style={{ flex: 1 }} />
         {gear}
@@ -1697,7 +1697,7 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           <Btn label="Close" onPress={onClose} />
         </View>
         <View style={{ flexDirection: 'row' }}>{offline ? <Pill tone="off">{OUT}</Pill>
-          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.statusOf(c, view).word}</Pill>}</View>
+          : <Pill tone={A.waitsOnYou(c) ? 'wait' : c.ring ? 'ok' : 'off'}>{A.statusOf(c, A.office(state)).word}</Pill>}</View>
         <ScrollView contentContainerStyle={{ gap: 12 }}>
           {!offline && !!job && <View style={[s.ev, { backgroundColor: t.sunken }]}>
             <T tone="ink2" style={s.label}>{job.waiting && c.ring !== 'needs' ? 'Up next' : 'Working on'}</T>
