@@ -89,7 +89,7 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async signedIn(account: string) {
     const provider = PROVIDER_OF[account];
-    return provider ? await this.kit.signedIn(ME, provider) || (await this.kit.callDynamic('byokit.keys', { member: ME, action: 'ready' }, { timeoutMs: 20_000 }).catch(() => undefined) as { model?: string } | undefined)?.model?.startsWith(`${provider}/`) === true : false;
+    return provider ? await this.kit.signedIn(ME, provider) : false;
   }
 
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
@@ -118,9 +118,15 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     const name = PROVIDERS[account]?.name ?? account;
+    let cancelled = false;
     return {
-      paste: (text: string) => { void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => on(r === 'ok' ? { waiting: false, done: true } : r === 'invalid' ? { waiting: true, error: `That key didn't work. Check it and paste it again.` } : { waiting: false, error: `Sign-in for ${name} is not connected yet` })); },
-      cancel: () => on({ waiting: false, error: 'The sign-in was cancelled.' }),
+      paste: (text: string) => {
+        void this.kit.addKey(ME, { authChoice, apiKey: text }).catch(() => 'error' as const).then(async (r) => {
+          if (cancelled) { if (r === 'ok') await this.signOut(account).catch(() => {}); return; }
+          on(r === 'ok' ? { waiting: false, done: true } : r === 'invalid' ? { waiting: true, error: `That key didn't work. Check it and paste it again.` } : { waiting: false, error: `Sign-in for ${name} is not connected yet` });
+        });
+      },
+      cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
     };
   }
 
