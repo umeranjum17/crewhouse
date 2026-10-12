@@ -864,8 +864,10 @@ export class Crew {
         if (!fresh) return seen('unreachable');
         this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(fresh.length ? Math.max(...fresh.map((m) => m.at)) : Date.now()), r.id);
         if (r.cursor == null || !fresh.length) return seen(r.cursor == null ? 'started' : 'same');
-        const lines = fresh.map((m) => `• ${m.subject} — ${m.from} (https://mail.google.com/mail/u/0/#inbox/${m.id})`).join('\n');
-        return seen('mail', this.addTask(r.bot, `${r.body}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r).task);
+        const lines = fresh.map((m) => { const held = this.db.get('SELECT facts FROM cases WHERE thread = ?', m.id);
+          return `• ${m.subject} — ${m.from} (https://mail.google.com/mail/u/0/#inbox/${m.id})${held ? ` — a case you hold: ${held.facts}` : ''}`; }).join('\n');
+        const keep = '[Crewhouse] A notice belongs to its thread\'s case. When new mail changes a case you hold, follow up in the same thread: what changed, the deadline you hold, what is still not confirmed. When you first notice a case worth tracking, keep it with crew_case {thread, facts: its id, dates, deadline, confirmed vs not}; reply ALL-CLEAR when nothing in the new mail needs the person.';
+        return seen('mail', this.addTask(r.bot, `${r.body}\n\n${keep}\n\n[Crewhouse] New mail since the last check:\n${lines}`, 'routine', r.brain ?? undefined, r).task);
       }
       let now: string;
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
@@ -2077,6 +2079,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         if (!text) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, text); this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task(), added: text.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter((s) => s && !was.includes(s)) });
       }),
       tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
+      tool('crew_case', 'Keep the facts of a case you noticed from new mail, so a later reply follows up in the same thread. `thread`: the thread id from its link; `facts`: its id, dates, the deadline you hold, and what is confirmed vs not yet, briefly.', (p) => {
+        const thread = String(p.thread ?? '').trim();
+        if (!/^[a-f0-9]{8,32}$/i.test(thread)) throw new Error('crew_case needs the thread id from the mail link');
+        this.db.run('INSERT INTO cases (thread, facts, updated_at) VALUES (?, ?, ?) ON CONFLICT(thread) DO UPDATE SET facts = excluded.facts, updated_at = excluded.updated_at', thread, needText(p.facts, 1000, 'say what you hold on the case'), Date.now());
+      }),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id), does: disk.readJob(this.cfg, x.id).does,
           knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),

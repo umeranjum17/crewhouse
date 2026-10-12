@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, name TEXT, pk TEXT UNIQ
 CREATE TABLE IF NOT EXISTS reads (member INTEGER, bot TEXT, seen INTEGER, PRIMARY KEY (member, bot));
 CREATE TABLE IF NOT EXISTS usage (member INTEGER, day TEXT, tokens INTEGER, PRIMARY KEY (member, day));
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at INTEGER, kind TEXT, bot TEXT, data TEXT);
+CREATE TABLE IF NOT EXISTS cases (thread TEXT PRIMARY KEY, facts TEXT, updated_at INTEGER);
 `;
 
 /** One SQLite file. Every write that matters appends an event in the same transaction. */
