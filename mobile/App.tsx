@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, loadChat, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, rememberChief, rememberUser, queuedTurns, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, heardAt, isOffline, loadChat, markHeard, newRid, pendingTurns, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -183,6 +183,15 @@ function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPr
       <Text style={[s.btnText, { color: go ? t.goInk : ghost ? t.ink2 : t.ink }]}>{label}</Text>
     </Pressable>
   );
+}
+/** A secondary affordance in a sheet (Edit, Read all): a small underlined link, never a second answer. Keeps an
+ *  approval's answers to the two decisions — yes and the one way out — however much detail the card carries. */
+function Link({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const t = useLook();
+  return <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} hitSlop={8}
+    style={({ pressed }) => [(pressed || disabled) && { opacity: 0.55 }]}>
+    <T style={[s.small, { color: t.pinkInk, textDecorationLine: 'underline' }]}>{label}</T>
+  </Pressable>;
 }
 function ChatText({ text }: { text: string }) {
   const t = useLook();
@@ -788,7 +797,7 @@ function PhoneSignIn({ onDone, onExit }: { onDone: () => void; onExit: () => voi
 }
 
 /** A finished document Chief made here: read it, or send it out with the share sheet. Nothing leaves until Share. */
-function PhoneDocCard({ doc, onOpen }: { doc: PhoneDocument; onOpen: () => void }) {
+function PhoneDocCard({ doc, onOpen, disabled }: { doc: PhoneDocument; onOpen: () => void; disabled?: boolean }) {
   const t = useLook();
   return <Card style={{ marginLeft: 70, gap: 8 }}>
     <View style={s.row}>
@@ -796,11 +805,11 @@ function PhoneDocCard({ doc, onOpen }: { doc: PhoneDocument; onOpen: () => void 
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}><T style={[s.rowTitle, s.b]} lines={2}>{doc.name}</T><T tone="mute" style={s.small}>Document</T></View>
       <Btn label="Read" onPress={onOpen} />
     </View>
-    <Btn go label="Share" onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
+    <Btn go label="Share" disabled={disabled} onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
   </Card>;
 }
 
-function PhoneDocSheet({ doc, onClose }: { doc: PhoneDocument; onClose: () => void }) {
+function PhoneDocSheet({ doc, onClose, disabled }: { doc: PhoneDocument; onClose: () => void; disabled?: boolean }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
@@ -811,13 +820,16 @@ function PhoneDocSheet({ doc, onClose }: { doc: PhoneDocument; onClose: () => vo
           <T style={[s.h2, { flex: 1 }]} lines={2}>{doc.name}</T><Btn label="Close" onPress={onClose} />
         </View>
         <ScrollView style={{ flexShrink: 1 }}>{doc.parts.length ? <DocParts parts={doc.parts} /> : <T tone="mute">There is nothing in it to show yet.</T>}</ScrollView>
-        <Btn go label="Share" onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
+        <Btn go label="Share" disabled={disabled} onPress={() => void attempt(() => shareDocument(doc), 'Ready to share')} />
       </Pressable>
     </Pressable>
   </Modal>;
 }
 
-/** Chief's chat on this phone, streamed, with the one tool he has here: a document. */
+/** Chief's chat on this phone, streamed, with the one tool he has here: a document. The whole chat lives in
+ *  app storage, so it is still there after the app is killed; a turn with no end comes back stopped, a
+ *  document effect the phone was killed inside comes back "Interrupted. Retry?", and a message written with
+ *  no connection waits as "Queued, not sent yet" until the phone hears the model again. */
 function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: () => void }) {
   const t = useLook();
   const [lines, setLines] = useState<PhoneLine[]>(loadChat);
@@ -826,8 +838,12 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const [plan, setPlan] = useState('');
   const [open, setOpen] = useState<PhoneDocument | null>(null);
   const [offline, setOffline] = useState(false);
+  const [heard, setHeard] = useState(() => heardAt());
   const scroll = useRef<ScrollView>(null);
   const ctrl = useRef<AbortController | null>(null);
+  const flushing = useRef(false);
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
   const reduce = motion.useReduceMotion();
   const beat = motion.useBeat(360, reduce);
   useEffect(() => { void phonePlan().then((p) => p && setPlan(p)); }, []);
@@ -844,48 +860,85 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     { text: 'Cancel', style: 'cancel' },
     { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
   ]);
-  useEffect(() => {
-    const loadQueued = async () => {
-      const queued = queuedTurns();
-      if (queued.length > 0) {
-        const first = queued[0];
-        setLines((ls) => [...ls, { who: 'you', text: first.text, queued: true, rid: first.rid }]);
-      }
-    };
-    void loadQueued();
-  }, []);
-  const send = async (text: string) => {
-    const words = text.trim();
-    if (!words || busy || offline) {
-      if (!words || busy) return false;
-      // Offline: queue the turn so it can send when back online
-      const rid = queueTurn(words);
-      setLines((ls) => [...ls, { who: 'you', text: words, queued: true, rid }]);
-      setPartial(''); setBusy(false);
-      say('Queued, not sent yet - will go when back online');
-      return true;
+
+  // The history the model sees: every finished turn, plus the one being sent. A stopped or queued turn is
+  // left out (its words come back only through the person's Try again), so nothing is ever said twice.
+  const historyFor = (rid: string, text: string): ChatTurn[] => {
+    const out: ChatTurn[] = [];
+    for (const l of linesRef.current) {
+      if (l.stopped || l.queued || (l.who === 'you' && l.rid === rid)) continue;
+      out.push({ who: l.who, text: l.text });
     }
-    // A cut-off turn is re-sent by the person as a new turn, never by the app; its start marker is left out
-    // of the history so the words are not said twice.
-    const turns: ChatTurn[] = [...lines.filter((l) => !l.stopped).map((l) => ({ who: l.who, text: l.text })), { who: 'you', text: words }];
-    rememberUser(words);
-    setLines((ls) => [...ls, { who: 'you', text: words }]);
+    out.push({ who: 'you', text });
+    return out;
+  };
+
+  /** Run one turn already written to the chat: a fresh send, a retry, or a queued message going out. */
+  const askTurn = async (text: string, rid: string, fromQueue: boolean): Promise<boolean> => {
     setPartial(''); setBusy(true);
     ctrl.current = new AbortController();
     let doc: PhoneDocument | undefined;
+    const clearQueued = (l: PhoneLine) => (l.rid === rid && l.queued ? { ...l, queued: false } : l);
     try {
-      const answer = await askPhone(turns, { onText: setPartial, onDocument: (d) => { doc = d; } }, ctrl.current.signal);
-      rememberChief(answer, doc);
-      setLines((ls) => [...ls, { who: 'chief', text: answer, doc }]);
+      const answer = await askPhone(historyFor(rid, text), { onText: setPartial, onDocument: (d) => { doc = d; } }, ctrl.current.signal, rid);
+      markHeard(); setHeard(Date.now()); setOffline(false);
+      rememberChief(answer, doc, rid);
+      setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: answer, doc }]);
+      return true;
     } catch (e) {
-      if (!ctrl.current.signal.aborted) {
-        if (phoneExpired(e)) onSignedOut();
-        else { const line = phoneWords(e); rememberChief(line, doc); setLines((ls) => [...ls, { who: 'chief', text: line, doc }]); }
+      if (ctrl.current.signal.aborted) return false;
+      if (isOffline(e)) {
+        setOffline(true);
+        // A queued message stays queued; a fresh turn is left stopped (its start marker is already on disk).
+        if (!fromQueue) setLines((ls) => [...ls, { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
+        return false;
       }
+      if (phoneExpired(e)) { onSignedOut(); return false; }
+      const line = phoneWords(e);
+      rememberChief(line, doc, rid);
+      setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: line, doc }]);
+      return true;
     } finally { setPartial(''); setBusy(false); }
-    return true;
   };
-  const starter = 'Draft a one-page packing list for a 3-day trip as a document';
+
+  /** A message the person just sent: queued while offline, otherwise run now under a fresh request id. */
+  const send = async (text: string, rid?: string): Promise<boolean> => {
+    const words = text.trim();
+    if (!words || busy) return false;
+    // While offline a message is queued, never sent: it looks unsent and goes by itself when the phone hears
+    // the model again. A send is the moment to re-check, in case the connection is quietly back.
+    if (!rid && offline && !(await probeOnline())) {
+      const id = queueTurn(words);
+      setLines((ls) => [...ls, { who: 'you', text: words, rid: id, queued: true }]);
+      return true;
+    }
+    if (!rid && offline) { setOffline(false); setHeard(Date.now()); }
+    const id = rid ?? newRid();
+    rememberUser(words, id);
+    setLines((ls) => [...ls, { who: 'you', text: words, rid: id }]);
+    return askTurn(words, id, false);
+  };
+
+  /** Send what waited for a connection, oldest first, once the phone hears the model again. */
+  const flush = async () => {
+    if (flushing.current || ctrl.current) return;
+    flushing.current = true;
+    try { for (const q of pendingTurns()) { if (!(await askTurn(q.text, q.rid, true))) break; } }
+    finally { flushing.current = false; }
+  };
+  const reconnect = async () => {
+    const ok = await probeOnline();
+    setOffline(!ok);
+    if (ok) { setHeard(heardAt()); await flush(); }
+  };
+  useEffect(() => { void reconnect(); }, []);
+  useEffect(() => { const sub = AppState.addEventListener('change', (st) => { if (st === 'active') void reconnect(); }); return () => sub.remove(); }, []);
+
+  const heardWords = (at: number) => {
+    if (!at) return '';
+    const m = Math.floor((Date.now() - at) / 60_000);
+    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
   const speaker = (w: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{w}</T>;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
@@ -897,28 +950,31 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
             <View style={[s.halo, { backgroundColor: t.soft }]}><ChiefArt mood="hello" size={72} /></View>
             <T style={s.introName}>Chief</T>
             <T tone="ink2" style={[s.centerText, { maxWidth: 300 }]}>Ask me anything. I can answer here, and make documents you can share.</T>
-            <Btn label="Make a packing list" onPress={() => void send(starter)} />
+            <Btn label="Make a packing list" onPress={() => void send('Draft a one-page packing list for a 3-day trip as a document')} />
           </View>
         )}
         {lines.map((l, i) => l.who === 'you'
-          ? <View key={i} style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('You')}<T style={{ flex: 1 }}>{l.text}</T></View></View>
+          ? <View key={i} style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('You')}
+            <View style={{ flex: 1, gap: 2 }}><T>{l.text}</T>{l.queued && <T tone="mute" style={s.small}>Queued, not sent yet</T>}</View></View></View>
           : l.stopped
             ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
-              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}</T>
-                <Btn label="Try again" disabled={busy} onPress={() => void send(l.retry ?? '')} /></View>
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{l.interrupted ? ' Retry?' : ''}</T>
+                <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry ?? '', l.retryRid)} /></View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>
               {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
-              {l.doc && <PhoneDocCard doc={l.doc} onOpen={() => setOpen(l.doc!)} />}
+              {l.doc && <PhoneDocCard doc={l.doc} disabled={offline} onOpen={() => setOpen(l.doc!)} />}
             </View>)}
         {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
         </View></View>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
-        {offline && <T tone="mute" style={s.small}>Queued turns are saved and will send when back online</T>}
+        {offline && <View style={[s.line, { borderLeftWidth: 2, borderLeftColor: t.line2, paddingLeft: 10 }]} accessibilityLiveRegion="polite">
+          <T tone="ink2" style={s.small}>No connection. A message you send waits here and goes once you're back.{heard ? ` Last heard ${heardWords(heard)}.` : ''}</T>
+        </View>}
       </ScrollView>
-      <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={send} chat="phone-only" photos={false} /></View>
-      {open && <PhoneDocSheet doc={open} onClose={() => setOpen(null)} />}
+      <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={(text) => void send(text)} chat="phone-only" photos={false} /></View>
+      {open && <PhoneDocSheet doc={open} disabled={offline} onClose={() => setOpen(null)} />}
     </KeyboardAvoidingView>
   );
 }
@@ -1258,7 +1314,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       <T style={s.askWords}>{question}</T>
       {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
         <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
-        : <AskEvidence c={c} open={false} readAll={<Btn label="Read all" onPress={() => open(c)} />} />)}
+        : <AskEvidence c={c} open={false} readAll={<Link label="Read all" onPress={() => open(c)} />} />)}
       {c.mailTo && <MailSetup c={c} canAct={canAct && !offline} done={onDone} />}
       {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
@@ -1358,14 +1414,14 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <ScrollView style={{ flexShrink: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           <AskHead c={c} who={who} />
           <T style={s.askQ}>{question}</T>
-          {edit.box || <AskEvidence c={c} open={open} readAll={<Btn label="Read all" onPress={() => setOpen(true)} />} />}
+          {edit.box || <AskEvidence c={c} open={open} readAll={<Link label="Read all" onPress={() => setOpen(true)} />} />}
           {c.mailTo && <MailSetup c={c} canAct={canAct} done={onClose} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
           {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
-            {edit.can && <Btn big label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
+            {edit.can && <Link label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
             {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
             {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}

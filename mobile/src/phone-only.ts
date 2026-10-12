@@ -9,6 +9,7 @@ import { Accounts, IncompleteError, KeyRouteError, ResponseError, portable, secu
 import { withKeys } from '@byokit/accounts/keys';
 import { nativeStore } from '@byokit/secrets/native';
 import * as SecureStore from 'expo-secure-store';
+import { randomUUID } from 'expo-crypto';
 import { fetch } from 'expo/fetch';
 import { File, Paths } from 'expo-file-system';
 import { shareAsync } from 'expo-sharing';
@@ -87,30 +88,55 @@ export function phoneWords(error: unknown) {
 }
 
 // ---------- the phone-only chat, kept on the phone ----------
-// One file, one JSON object per line, appended as the chat happens. A `you` line begins a turn (written
-// before the send) and a `chief` line ends it; a `you` with no `chief` before the next `you`, or before the
-// end of the file, is a turn that was cut off. crew_document is not idempotent, so a cut-off turn is only
-// ever retried by the person (Try again); it never runs itself again on open.
-export type PhoneLine = { who: 'you' | 'chief'; text: string; doc?: PhoneDocument;
-  /** A turn loaded with no end: its user line is left out of the history that Try again re-sends, and the
-   *  Chief line carries the words to send. Both are derived on load and are never written to the file. */
-  stopped?: boolean; retry?: string };
+// One append-only file per chat, one JSON object per line, written as the chat happens. A `you` line
+// begins a turn (written before the send) and a `chief` line ends it. A `you` with no `chief` before the
+// next `you`, or before the end of the file, is a turn the phone was cut off inside; with `queued` it is
+// only waiting for a connection and goes by itself, otherwise the person retries it (Try again / Retry).
+// crew_document writes a real file, so a cut-off turn is never run again by the app on its own.
+export type PhoneLine = { who: 'you' | 'chief'; text: string; doc?: PhoneDocument; rid?: string;
+  /** A message saved while offline: shown "Queued, not sent yet" and sent by itself when back online. */
+  queued?: boolean;
+  /** A turn with a start marker and no end: shown with Try again. `retry`/`retryRid` are what it re-sends. */
+  stopped?: boolean; retry?: string; retryRid?: string;
+  /** The cut-off turn was inside a tool effect (its request is journalled `started`): shown "Interrupted." */
+  interrupted?: boolean };
 
-const chatFile = () => new File(Paths.document, 'phone-chat.jsonl');
+const file = (name: string) => new File(Paths.document, name);
+const chatFile = () => file('phone-chat.jsonl');
+const requestFile = () => file('phone-requests.jsonl');
+const metaFile = () => file('phone-meta.json');
 
-/** Append one line to the phone-only chat. Silent on failure so a chat on a full disk still works. */
-function append(line: unknown) {
-  try {
-    const f = chatFile();
-    if (!f.exists) f.create({ intermediates: true });
-    f.write(`${JSON.stringify(line)}\n`, { append: true });
-  } catch {}
+/** Read a whole JSON-lines file as records, skipping any broken line so a partial write never loses the rest.
+ *  Never throws: a missing or unreadable file is simply empty. */
+function readLines(fileOf: () => File): Array<Record<string, unknown>> {
+  let text = '';
+  try { const f = fileOf(); if (f.exists) text = f.textSync(); } catch { return []; }
+  const records: Array<Record<string, unknown>> = [];
+  for (const raw of text.split('\n')) {
+    if (!raw.trim()) continue;
+    try { const r = JSON.parse(raw); if (r && typeof r === 'object') records.push(r as Record<string, unknown>); } catch {}
+  }
+  return records;
 }
 
-/** The turn begins, before the send: the person's words are the start marker. */
-export const rememberUser = (text: string) => append({ t: 'you', text });
-/** The turn ends: Chief's answer, and the document card he made, if any. */
-export const rememberChief = (text: string, doc?: PhoneDocument) => append(doc ? { t: 'chief', text, doc } : { t: 'chief', text });
+/** Append one line, silently: a chat on a full disk still works, it just does not grow. */
+function appendLine(fileOf: () => File, line: unknown) {
+  try { const f = fileOf(); if (!f.exists) f.create({ intermediates: true }); f.write(`${JSON.stringify(line)}\n`, { append: true }); } catch {}
+}
+
+/** Replace a whole JSON-lines file (the request index and the meta record). */
+function writeAll(fileOf: () => File, lines: unknown[]) {
+  try { const f = fileOf(); f.create({ intermediates: true, overwrite: true }); for (const line of lines) f.write(`${JSON.stringify(line)}\n`, { append: true }); } catch {}
+}
+
+/** A fresh id for one turn's request, and the key its tool effects are journalled and retried under. */
+export const newRid = () => randomUUID();
+
+/** The turn begins, before the send: the person's words and the request's id are the start marker. */
+export const rememberUser = (text: string, rid: string) => appendLine(chatFile, { t: 'you', text, rid });
+/** The turn ends: Chief's answer and the document card he made here, if any. */
+export const rememberChief = (text: string, doc?: PhoneDocument, rid?: string) =>
+  appendLine(chatFile, doc ? { t: 'chief', text, doc, rid } : { t: 'chief', text, rid });
 
 /** The document card kept with a Chief line: its name and uri (and the parts Read shows). */
 function keptDocument(value: unknown): PhoneDocument | undefined {
@@ -120,167 +146,92 @@ function keptDocument(value: unknown): PhoneDocument | undefined {
   return { name: d.name, uri: d.uri, parts: Array.isArray(d.parts) ? d.parts as DocPart[] : [] };
 }
 
-/** The chat as it was kept. Every whole line is read; a broken line (a partial write, a corrupt file) is
- *  skipped, and earlier good turns are kept. A turn with a start but no end comes back as a stopped row
- *  with the words Try again re-sends. Never throws. */
+// ---------- the request index: one effect per request ----------
+// crew_document writes a real file, so the request that runs it is journalled before the effect and closed
+// after it: one line per requestId, the tool-call id and file name it owns, and started|done. A line left
+// `started` on open is an effect the phone was killed inside: that turn comes back "Interrupted.", nothing
+// reruns itself, and the person's Retry runs the same requestId once more under the same first tool-call id,
+// so the file it made is reused, not doubled.
+export type RequestEntry = { rid: string; callId: string; fileName: string; state: 'started' | 'done' };
+
+function loadRequests(): RequestEntry[] {
+  return readLines(requestFile).flatMap((r) =>
+    typeof r.rid === 'string' && (r.state === 'started' || r.state === 'done')
+      ? [{ rid: r.rid, callId: typeof r.callId === 'string' ? r.callId : '', fileName: typeof r.fileName === 'string' ? r.fileName : '', state: r.state as 'started' | 'done' }]
+      : []);
+}
+/** The last journal line for a request, if any. */
+function requestFor(rid: string): RequestEntry | undefined {
+  const mine = loadRequests().filter((e) => e.rid === rid);
+  return mine.length ? mine[mine.length - 1] : undefined;
+}
+function writeRequest(entry: RequestEntry) {
+  writeAll(requestFile, [...loadRequests().filter((e) => e.rid !== entry.rid), entry]);
+}
+/** Record the effect starting, before it writes anything. */
+const startRequest = (rid: string, callId: string, fileName: string) => writeRequest({ rid, callId, fileName, state: 'started' });
+/** Close the effect with the file it made, keeping the tool-call id it was named by. */
+const finishRequest = (rid: string, fileName: string) => { const prev = requestFor(rid); writeRequest({ rid, callId: prev?.callId ?? '', fileName, state: 'done' }); };
+
+// ---------- offline: what this phone heard last ----------
+// A keyless call to the same provider the phone already uses. Any answer means the internet is there; a
+// thrown fetch means it is not. Used to show the offline banner and to queue sends instead of failing them.
+export async function probeOnline(): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try { await fetch('https://openrouter.ai/api/v1/models', { method: 'HEAD', signal: ctrl.signal }); return true; }
+  catch { return false; }
+  finally { clearTimeout(timer); }
+}
+/** True when a failure is the internet, not the model: only that queues a message or goes offline. */
+export const isOffline = (e: unknown) => e instanceof ResponseError && e.kind === 'network';
+/** When the phone last heard the model (a real answer or a probe), for the offline banner. */
+export const heardAt = (): number => { const r = readLines(metaFile)[0]; return typeof r?.heardAt === 'number' ? r.heardAt : 0; };
+export const markHeard = () => writeAll(metaFile, [{ heardAt: Date.now() }]);
+
+/** The chat as it was kept, with a queued message still waiting and a cut-off turn marked stopped. A broken
+ *  line is skipped so earlier good turns survive; never throws. */
 export function loadChat(): PhoneLine[] {
-  let text = '';
-  try { const f = chatFile(); if (f.exists) text = f.textSync(); } catch { return []; }
   const lines: PhoneLine[] = [];
-  let open: string | null = null; // the words of a turn whose end has not been seen
-  let userAt = -1;                // where its user line sits in `lines`
+  let open: { text: string; rid?: string; queued: boolean } | null = null;
+  let userAt = -1;
   const cutOff = () => {
-    if (open === null) return;
-    if (lines[userAt]) lines[userAt].stopped = true;
-    lines.push({ who: 'chief', text: 'Stopped.', stopped: true, retry: open });
+    if (!open) return;
+    const { text, rid, queued } = open;
+    if (queued) { if (lines[userAt]) lines[userAt].queued = true; }
+    else {
+      if (lines[userAt]) lines[userAt].stopped = true;
+      const interrupted = !!rid && requestFor(rid)?.state === 'started';
+      lines.push({ who: 'chief', text: interrupted ? 'Interrupted.' : 'Stopped.', stopped: true, retry: text, retryRid: rid, interrupted });
+    }
     open = null; userAt = -1;
   };
-  for (const raw of text.split('\n')) {
-    if (!raw.trim()) continue;
-    let rec: unknown;
-    try { rec = JSON.parse(raw); } catch { continue; } // skip a broken line, keep the ones around it
-    const r = rec as Record<string, unknown>;
-    if (!r || typeof r !== 'object' || typeof r.text !== 'string') continue;
-    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text }); open = r.text; userAt = lines.length - 1; }
-    else if (r.t === 'chief' && open !== null) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
+  for (const r of readLines(chatFile)) {
+    if (typeof r.text !== 'string') continue;
+    const rid = typeof r.rid === 'string' ? r.rid : undefined;
+    if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text, rid }); open = { text: r.text, rid, queued: r.queued === true }; }
+    else if (r.t === 'chief' && open) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
   }
   cutOff();
   return lines;
 }
 
-/** A signed-out phone keeps no chat: the kept file goes. */
-export function clearChat() {
-  try { const f = chatFile(); if (f.exists) f.delete(); } catch {}
-  try { const f = requestIndexFile(); if (f.exists) f.delete(); } catch {}
-}
-
-// ---------- the request index: one effect per request ----------
-// crew_document writes a real file, so the request that runs it is journalled before the effect and closed
-// after it: one line per requestId, the file name it owns, and started|done. A line left `started` on open is
-// an effect the phone was killed inside: that turn comes back "Interrupted. Retry?", nothing reruns itself,
-// and the person's Try again runs the same requestId once more, so the file it made is reused, not doubled.
-export type RequestEntry = { rid: string; fileName: string; state: 'started' | 'done' };
-
-const requestIndexFile = () => new File(Paths.document, 'phone-requests.jsonl');
-
-function appendRequest(entry: RequestEntry) {
-  try {
-    const f = requestIndexFile();
-    if (!f.exists) f.create({ intermediates: true });
-    f.write(`${JSON.stringify(entry)}\n`, { append: true });
-  } catch {}
-}
-
-function loadRequests(): RequestEntry[] {
-  let text = '';
-  try { const f = requestIndexFile(); if (f.exists) text = f.textSync(); } catch { return []; }
-  const entries: RequestEntry[] = [];
-  for (const raw of text.split('\n')) {
-    if (!raw.trim()) continue;
-    let rec: unknown;
-    try { rec = JSON.parse(raw); } catch { continue; } // a partial line is skipped, the ones around it stay
-    const r = rec as Record<string, unknown>;
-    if (typeof r.rid === 'string' && (r.state === 'started' || r.state === 'done'))
-      entries.push({ rid: r.rid, fileName: typeof r.fileName === 'string' ? r.fileName : '', state: r.state });
-  }
-  return entries;
-}
-
-function rewriteRequests(entries: RequestEntry[]) {
-  try {
-    const f = requestIndexFile();
-    f.create({ intermediates: true, overwrite: true });
-    for (const e of entries) f.write(`${JSON.stringify(e)}\n`, { append: true });
-  } catch {}
-}
-
-/** The effect the phone was killed inside, if there is one: the only request a turn may resume. */
-export const interruptedRequest = (): string | null => {
-  const e = loadRequests().find((x) => x.state === 'started');
-  return e ? e.rid : null;
-};
-
-/** Record the effect starting, once per request. */
-function startRequest(rid: string) {
-  if (loadRequests().some((e) => e.rid === rid)) return;
-  appendRequest({ rid, fileName: '', state: 'started' });
-}
-
-/** Close the effect with the file it made, under the request's own name. */
-function finishRequest(rid: string, fileName: string) {
-  rewriteRequests([...loadRequests().filter((e) => e.rid !== rid), { rid, fileName, state: 'done' }]);
-}
-
-/** A request nobody is retrying any more (a new turn ran instead) leaves the index. */
-function dropRequest(rid: string) { rewriteRequests(loadRequests().filter((e) => e.rid !== rid)); }
-
-function getPendingRequest(requestId: string): { fileName: string } | null {
-  const entries = loadRequests();
-  const entry = entries.find((e: RequestEntry) => e.rid === requestId && e.state === 'started');
-  return entry ? { fileName: entry.fileName } : null;
-}
-
-function markRequestDone(requestId: string) {
-  rewriteRequests(loadRequests().map((e: RequestEntry) =>
-    e.rid === requestId && e.state === 'started' ? { ...e, state: 'done' } : e
-  ));
-}
-
-function fileExists(filePath: string): boolean {
-  try { 
-    const f = new File(filePath);
-    return f.exists; 
-  } catch { return false; }
-}
-
-// ---------- the outbox: words sent while this phone is offline ----------
-// A message sent with no connection is kept and shown as "queued, not sent yet"; it goes once, under its
-// own requestId, when the phone is back online. An entry left `sending` on open is a turn the phone was
-// killed inside: it never goes by itself, and comes back stopped, with the person's Try again.
-export type OutboxEntry = { rid: string; text: string; state: 'queued' | 'sending' };
-
-const outboxFile = () => new File(Paths.document, 'phone-outbox.jsonl');
-
-function loadOutbox(): OutboxEntry[] {
-  let text = '';
-  try { const f = outboxFile(); if (f.exists) text = f.textSync(); } catch { return []; }
-  const entries: OutboxEntry[] = [];
-  for (const raw of text.split('\n')) {
-    if (!raw.trim()) continue;
-    let rec: unknown;
-    try { rec = JSON.parse(raw); } catch { continue; }
-    const r = rec as Record<string, unknown>;
-    if (typeof r.rid === 'string' && typeof r.text === 'string' && (r.state === 'queued' || r.state === 'sending'))
-      entries.push({ rid: r.rid, text: r.text, state: r.state });
-  }
-  return entries;
-}
-
-function rewriteOutbox(entries: OutboxEntry[]) {
-  try {
-    const f = outboxFile();
-    f.create({ intermediates: true, overwrite: true });
-    for (const e of entries) f.write(`${JSON.stringify(e)}\n`, { append: true });
-  } catch {}
-}
-
-/** Keep the words for a turn this phone cannot send yet, under a requestId of their own. */
+/** A message sent with no connection: the words are kept and go by themselves under the same request id. */
 export function queueTurn(text: string): string {
-  const rid = randomUUID();
-  append({ t: 'you', text });
-  rewriteOutbox([...loadOutbox(), { rid, text, state: 'queued' }]);
+  const rid = newRid();
+  appendLine(chatFile, { t: 'you', text, rid, queued: true });
   return rid;
 }
 
-/** The turns waiting for a connection, oldest first. */
-export const queuedTurns = (): OutboxEntry[] => loadOutbox().filter((e) => e.state === 'queued');
+/** Every message still waiting for a connection, oldest first. */
+export const pendingTurns = (): { rid: string; text: string }[] =>
+  loadChat().filter((l): l is PhoneLine & { rid: string } => l.who === 'you' && l.queued === true && !!l.rid)
+    .map((l) => ({ rid: l.rid, text: l.text }));
 
-/** A turn left the outbox: it went, or the person chose to send it again themselves. */
-export const sentTurn = (rid: string) => rewriteOutbox(loadOutbox().filter((e) => e.rid !== rid));
-
-/** The turn at the head of the outbox is going now. */
-export const sendingTurn = (rid: string) =>
-  rewriteOutbox(loadOutbox().map((e) => (e.rid === rid ? { ...e, state: 'sending' as const } : e)));
+/** A signed-out phone keeps no chat: the kept files go. */
+export function clearChat() {
+  for (const f of [chatFile, requestFile, metaFile]) { try { const x = f(); if (x.exists) x.delete(); } catch {} }
+}
 
 // ---------- Chief, phone-sized ----------
 const instructions = `${soul}\n${job}
@@ -315,7 +266,9 @@ const tool = {
       } } } } },
 };
 
-async function documentOf(spec: { name?: unknown; blocks?: unknown }, requestId: string, toolCallId: string): Promise<PhoneDocument> {
+/** Validate a document spec and pack it to bytes and readable parts, before anything is written. Throws one
+ *  plain sentence on a bad spec, so a failed document leaves no request journalled and no file behind. */
+async function prepareDocument(spec: { name?: unknown; blocks?: unknown }): Promise<{ name: string; bytes: Uint8Array; parts: DocPart[] }> {
   if (JSON.stringify(spec).length > 60_000) throw new Error('This document is too large for this phone. It needs a computer.');
   const parts: DocPart[] = [], children: Paragraph[] = [];
   if (typeof spec.name !== 'string' || !spec.name.trim() || !Array.isArray(spec.blocks) || !spec.blocks.length || spec.blocks.length > 80)
@@ -350,14 +303,23 @@ async function documentOf(spec: { name?: unknown; blocks?: unknown }, requestId:
     }
   }
   const name = spec.name.replace(/\.docx$/i, '').replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 80) || 'Document';
-  // Pack to raw bytes and write them: no Buffer (Hermes has none) and no base64 blow-up on a phone.
+  // Pack to raw bytes: no Buffer (Hermes has none) and no base64 blow-up on a phone.
   const bytes = new Uint8Array(await Packer.toArrayBuffer(new Document({ creator: 'Crewhouse', sections: [{ children }] })));
-  // Use tool-call id for the filename to make it idempotent
-  const fileName = `chief-${toolCallId}-${name}.docx`;
-  const file = new File(Paths.document, fileName);
-  file.create({ overwrite: true });
-  file.write(bytes);
-  return { name: `${name}.docx`, uri: file.uri, parts };
+  return { name, bytes, parts };
+}
+
+/** Write the one document a turn may make. Its file is named by the request's first tool-call id, so a Retry
+ *  reuses the same path instead of doubling the file. The request is journalled `started` before the write and
+ *  `done` after, so a kill in between is known and the person (never the app) retries it. */
+function writeDocument(rid: string, callId: string, prep: { name: string; bytes: Uint8Array; parts: DocPart[] }): PhoneDocument {
+  const prior = requestFor(rid);
+  const fileName = prior?.fileName || `chief-${callId}-${prep.name}.docx`;
+  startRequest(rid, prior?.callId || callId, fileName);
+  const out = new File(Paths.document, fileName);
+  out.create({ overwrite: true });
+  out.write(prep.bytes);
+  finishRequest(rid, fileName);
+  return { name: `${prep.name}.docx`, uri: out.uri, parts: prep.parts };
 }
 
 /** React Native's AbortSignal has no throwIfAborted, which parts of the kit call; give one signal the whole,
@@ -373,8 +335,9 @@ type Msg = Record<string, unknown>;
 const ZERO_USAGE = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 
-/** Chief's whole turn over a key route: stream the words, run the one tool it asks for, answer again. Bounded. */
-export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => void; onDocument: (d: PhoneDocument) => void }, signal: AbortSignal): Promise<string> {
+/** Chief's whole turn over a key route: stream the words, run the one tool it asks for, answer again. Bounded.
+ *  `rid` is the turn's request id: the key a document effect is journalled and retried under. */
+export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => void; onDocument: (d: PhoneDocument) => void }, signal: AbortSignal, rid: string): Promise<string> {
   const sig = abortSafe(signal);
   const messages: Msg[] = turns.map((turn) => turn.who === 'you'
     ? { role: 'user', content: [{ type: 'text', text: turn.text }], timestamp: Date.now() }
@@ -402,35 +365,12 @@ export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => v
         if (call.name !== 'crew_document') output = 'That needs a computer, so it cannot be done on this phone. Only documents are available here.';
         else if (documents) output = 'One document per request on this phone. Tell the person what you made.';
         else {
-          // Check if this tool call was already started but interrupted
-          const pending = getPendingRequest(call.id);
-          if (pending && fileExists(pending.fileName)) {
-            // File already exists from a previous interrupted run, reuse it
-            const existingFile = new File(Paths.document, pending.fileName);
-            const existingBytes = existingFile.readAsArrayBuffer();
-            // We can't easily reconstruct the DocPart[] from the file, so we'll just use the existing file
-            // The user will see "Interrupted. Retry?" in the chat and can choose to retry
-            output = `Made ${pending.fileName}. The person can preview it and tap Share.`;
-            // We still need to return a PhoneDocument for the io.onDocument call
-            // Since we can't easily read back the parts, we'll create a minimal one
-            io.onDocument({ name: pending.fileName, uri: existingFile.uri, parts: [] });
-            documents++;
-            markRequestDone(call.id);
-          } else {
-            // Write request index entry before the effect
-            appendRequest({ rid: call.id, fileName: '', state: 'started' });
-            const doc = await documentOf(call.arguments, call.id, call.id);
-            documents++;
-            io.onDocument(doc);
-            output = `Made ${doc.name}. The person can preview it and tap Share.`;
-            // Update the request entry with the actual file name and mark done
-            const entries = loadRequests();
-            const idx = entries.findIndex(e => e.rid === call.id && e.state === 'started');
-            if (idx >= 0) {
-              entries[idx] = { ...entries[idx], fileName: doc.uri.split('/').pop() || '', state: 'done' };
-              rewriteRequests(entries);
-            }
-          }
+          // Validate and pack first, then journal the effect started, write its one file, and close the request.
+          const prep = await prepareDocument(call.arguments);
+          const doc = writeDocument(rid, call.id, prep);
+          documents++;
+          io.onDocument(doc);
+          output = `Made ${doc.name}. The person can preview it and tap Share.`;
         }
       } catch (e) { output = `The document was not made: ${e instanceof Error ? e.message : 'could not write the document'}.`; }
       messages.push({ role: 'toolResult', toolCallId: call.id, toolName: call.name,
