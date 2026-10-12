@@ -222,6 +222,7 @@ export class Crew {
   readonly accounts: Accounts;
   readonly connections: Connections;
   phoneLink?: Pick<Link, 'offer' | 'status'>;
+  fetchTools?: (grants: string[]) => Promise<unknown>;
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -1291,6 +1292,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       const brain = await this.usable(choices);
       if (!brain) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare()) return this.waitForTomorrow(task);
+      await this.fetchTools?.(disk.botConfig(this.cfg, bot.id).tools ?? []); // the downloaded app: a helper's first job waits for its tools
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';

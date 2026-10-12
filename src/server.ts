@@ -66,7 +66,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
   const authority = readFileSync(authorityFile, 'utf8');
   if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
-  const installing = new Set<string>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
+  const installing = new Map<string, Promise<void>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
@@ -78,22 +78,19 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   };
   /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
    *  runs as its own process (src/tools.ts's own command): crewd keeps answering meanwhile. The result arrives as an event. */
-  const install = (id: string) => {
-    if (installing.has(id)) return;
-    installing.add(id);
+  const install = (id: string) => installing.get(id) ?? installing.set(id, new Promise<void>((resolve) => {
     db.event('tool.installing', null, { tool: id });
-    return new Promise<void>((resolve) => {
-      const done = (ok: boolean) => { if (!installing.delete(id)) return; db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id }); resolve(); };
-      const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
-        // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
-        env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
-          CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, stdio: ['ignore', 'inherit', 'inherit'] });
-      child.on('exit', (code) => done(code === 0));
-      child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
-    });
-  };
+    const done = (ok: boolean) => { if (!installing.delete(id)) return; db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id }); resolve(); };
+    const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
+      // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
+      env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
+        CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, stdio: ['ignore', 'inherit', 'inherit'] });
+    child.on('exit', (code) => done(code === 0));
+    child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
+  })).get(id)!;
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
-  if (packaged) void (async () => { for (const t of toolStatus(cfg).filter((x) => x.installable && !x.ready)) await install(t.id); })();
+  // The downloaded app fetches a helper's tools on its first job, never at start: Hello doesn't wait behind the browser's big download.
+  if (packaged) crew.fetchTools = (grants) => Promise.all(toolStatus(cfg).filter((t) => grants.includes(t.id) && t.installable && !t.ready).map((t) => install(t.id)));
   let update: { version: string; url: string } | null = null;
   const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
   const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
@@ -176,7 +173,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string, phone?: string) {
     let r: RegExpMatchArray | null;
     // What is installing now, and a newer Crewhouse to download.
-    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing], showing: teacher.showing(), ...(update ? { update } : {}) };
+    if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing.keys()], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
     if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
