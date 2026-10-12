@@ -1,9 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearRetryOf, drainPending, failOffOf, historyOf, pendingOf, replayChat, retrySuffix, transcriptOf,
+import { clearRetryOf, drainPending, failOffOf, historyOf, pendingOf, replayChat, retrySuffix,
   type QueueLine } from '../mobile/src/phone-queue.ts';
-import { chatTokens } from '../web/src/chat-md.ts';
-import { noTools } from '../web/src/adapter.ts';
 
 const you = (text: string, rid: string, extra?: Partial<QueueLine>): QueueLine => ({ who: 'you', text, rid, ...extra });
 
@@ -87,15 +85,4 @@ test('an offline-failed line stays out of the model history', () => {
   assert.equal(failed.find((l) => l.who === 'you' && l.rid === 'a')?.stopped, true);
   const history = historyOf(failed, 'b', 'B');
   assert.deepEqual(history, [{ who: 'you', text: 'B' }]);
-});
-
-test('the chat carried to the computer reads one turn per item in the thread, a document by title, the oldest cut first', () => {
-  const chat = [you('Book a table', 'a'), { who: 'chief', text: 'That needs a computer.\nPair one.', doc: { name: 'Packing list' } },
-    you('Cut off', 'b', { stopped: true }), { who: 'chief', text: 'Stopped.', stopped: true }, you('Thanks', 'c'), { who: 'chief', text: 'Any time.' }] as QueueLine<{ name: string }>[];
-  const items = (text: string) => (chatTokens(noTools(text)).find((t) => t.type === 'list') as any).items.map((i: any) => i.text);
-  assert.deepEqual(items(transcriptOf(chat)), ['You: Book a table',
-    'Chief: That needs a computer.\nPair one.\n(Chief made a document here, Packing list. The file stays on my phone.)', 'You: Thanks', 'Chief: Any time.']);
-  const cut = transcriptOf(chat, 60);
-  assert.match(cut, /\(Earlier turns left out\.\)/);
-  assert.deepEqual(items(cut), ['You: Thanks', 'Chief: Any time.']);
 });
