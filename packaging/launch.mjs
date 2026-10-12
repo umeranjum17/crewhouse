@@ -3,7 +3,7 @@
 // First run also makes crewd start by itself at login (a systemd user service), so after a reboot it is simply there.
 //   --no-open   start and wait, but open no window (tests)
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -59,6 +59,9 @@ if (!(await up())) {
     if (process.argv.includes('--no-open')) { console.error(`Crewhouse didn't start; see ~/.local/state/crewhouse/crewd.log`); process.exit(1); }
     const page = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'trouble.html');
     mkdirSync(dirname(page), { recursive: true });
+    const keyFile = await import(join(app, 'src', 'config.ts')).then(({ loadConfig }) => join(loadConfig().stateDir, 'person.key'), () => null);
+    const key = keyFile && existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '';
+    rmSync(page, { force: true });
     writeFileSync(page, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crewhouse</title>
 <style>
@@ -86,9 +89,9 @@ p{margin:0 0 1rem;color:var(--ink2)}
 <h1>Crewhouse didn't start</h1>
 <p class="lead">Give it another try, or restart your computer.</p>
 <p class="why"><b>What happened:</b> ${why}.</p>
-<a class="btn" href="${url}">Open Crewhouse again</a>
+<a class="btn" href="${url}${key ? `/#person=${key}` : ''}">Open Crewhouse again</a>
 <p class="mute">Still nothing? Open Crewhouse from your app menu.</p>
-</main>`);
+</main>`, { mode: 0o600 });
     show(`file://${page}`);
     process.exit(1);
   }
