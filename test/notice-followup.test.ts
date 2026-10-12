@@ -141,11 +141,11 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   const t8 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t8.id);
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BRACKET)?.facts, FACTS500, 'the bracket-sender case is kept');
-  threads[BRACKET2] = { messages: [msg(FROM_BRACKET, 'LOCI500: cover confirmed', 'Cover confirmed.', Date.now() + 9000)] }; order.push(BRACKET2);
-  await fire(r.id); // the same bracketed sender on a new thread finds its held case
+  threads[BRACKET2] = { messages: [msg('Bank Alerts <alerts@bank.example>', 'LOCI500: cover confirmed', 'Cover confirmed.', Date.now() + 9000)] }; order.push(BRACKET2);
+  await fire(r.id); // the same address under another display name, on a new thread, finds its held case
   const t9 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t9.id);
-  assert.match(promptOf(t9.id), new RegExp(`cases you hold with this sender: ⟦${FACTS500}⟧`), 'the bracketed sender matches its own held case');
+  assert.match(promptOf(t9.id), new RegExp(`cases you hold with this sender: ⟦${FACTS500}⟧`), 'the same address under another display name matches the held case');
   server.close();
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
