@@ -26,7 +26,7 @@ const shop = createServer((req,res) => {
 });
 await new Promise(r=>shop.listen(0,'127.0.0.1',r));
 const shopBase=`http://127.0.0.1:${shop.address().port}`;
-const api=async(method,path,body)=>{const r=await fetch(base+path,{method,headers:{authorization:method==='GET'?'':`Bearer ${readFileSync(join(cfg.stateDir,'person.key'),'utf8')}`,'x-crewhouse':'1','content-type':'application/json'},body:body&&JSON.stringify(body)});const result=await r.json();if(!r.ok)throw new Error(JSON.stringify(result));return result;};
+const api=async(method,path,body)=>{const r=await fetch(base+path,{method,headers:{authorization:`Bearer ${readFileSync(join(cfg.stateDir,'person.key'),'utf8')}`,'x-crewhouse':'1','content-type':'application/json'},body:body&&JSON.stringify(body)});const result=await r.json();if(!r.ok)throw new Error(JSON.stringify(result));return result;};
 const until=async(label,fn)=>{for(const end=Date.now()+60000;!await fn();await new Promise(r=>setTimeout(r,50)))if(Date.now()>end)throw Error(label);};
 const call=(name,input)=>`[tool ${name} ${JSON.stringify(input)}]`;
 await until('engine ready',()=>crew.runtime);
