@@ -36,7 +36,7 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -784,6 +784,12 @@ function PhoneSignIn({ onDone, onExit }: { onDone: () => void; onExit: () => voi
         <ChiefArt mood="hello" size={104} whole />
         <T style={s.display}>Chief on this phone</T>
         <T tone="ink2" style={s.centerText}>Connect your own {phoneProviderName} key. Chief runs right here — no computer, and the key never leaves this phone.</T>
+        <View style={{ alignSelf: 'stretch', gap: 4 }}>
+          <Link label="Get a key" onPress={() => void Linking.openURL(phoneKeyUrl)} />
+          <T tone="ink2" style={s.small}>1. Make an account.</T>
+          <T tone="ink2" style={s.small}>2. Add a little credit.</T>
+          <T tone="ink2" style={s.small}>3. Create a key and copy it here.</T>
+        </View>
         <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={key} onChangeText={setKey}
           placeholder={`Paste your ${phoneProviderName} key`} placeholderTextColor={t.mute}
           accessibilityLabel={`${phoneProviderName} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />

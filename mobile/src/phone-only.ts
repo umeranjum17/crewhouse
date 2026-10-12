@@ -43,6 +43,8 @@ export type PhoneDocument = { name: string; uri: string; parts: DocPart[] };
 
 // ---------- sign-in (the person's own API key, billed per use) ----------
 export const phoneProviderName = 'OpenRouter';
+/** Where a person without a key gets one: the provider's own key page. */
+export const phoneKeyUrl = 'https://openrouter.ai/keys';
 /** True once the person's key is saved on this phone. */
 export async function phoneSignedIn(): Promise<boolean> {
   try { return !!(await phoneAccounts.key(MEMBER, PROVIDER)); } catch { return false; }
