@@ -48,6 +48,7 @@ const CONFIG = {
     codex: { enabled: false },
   } },
   skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
+  models: { providers: { openai: { models: [{ id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' }] }, 'opencode-go': { models: [{ id: 'muse-spark-1.3-contributor', name: 'Muse Spark', api: 'openai-responses' }] } } }, // Muse on Go until the kit ships it; the openai row keeps the engine default.
 };
 
 export class OpenClawRuntime implements AgentRuntime {
@@ -89,7 +90,7 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async signedIn(account: string) {
     const provider = PROVIDER_OF[account];
-    return provider ? this.kit.signedIn(ME, provider) : false;
+    return provider ? await this.kit.signedIn(ME, provider) || (await this.kit.callDynamic('byokit.keys', { member: ME, action: 'ready' }, { timeoutMs: 20_000 }).catch(() => undefined) as { model?: string } | undefined)?.model?.startsWith(`${provider}/`) === true : false;
   }
 
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
