@@ -2,7 +2,7 @@
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing. Crewhouse's own
 // status lines read in plain words (no commands, paths, model names, percentages or raw prompts);
 // a chat answer reads as written. test/ui.test.ts holds this.
-import { PROVIDERS as ROUTES } from '@byokit/accounts';
+import { PROVIDERS as ROUTES, route as kitRoute } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
@@ -1541,10 +1541,15 @@ const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: st
   openrouter: { bg: '#8b5cf6' },
   minimax: { bg: '#e11d48', name: 'MiniMax' },
   claude: { bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
+  'opencode-go': { bg: '#18181b' },
 };
-export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'].map((key) => {
+/** OpenCode Go, by route id straight from the kit's catalogue like crewd's own list (src/accounts.ts): key, name and
+ *  billing land with the bump, never a local row. */
+const GO = kitRoute('opencode:plan_key:opencode-go'), GO_KEY = GO.aliases?.[0] ?? 'opencode-go';
+const GO_ON = GO.billing === 'subscription' || GO.billing === 'api';
+export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude', ...(GO_ON ? [GO_KEY] : [])].map((key) => {
   const mark = MARKS[key];
-  const route = ROUTES[key];
+  const route = key === GO_KEY ? { name: GO.name, billing: GO.billing } : ROUTES[key];
   return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription' };
 });
 /** How one account is paid for, in the person's words: their own plan, or money charged for each use. */

@@ -6,6 +6,7 @@ export const MARKS: Record<string, number> = {
   openrouter: require('../assets/ai/openrouter.png'),
   minimax: require('../assets/ai/minimax.png'),
   claude: require('../assets/ai/claude.png'),
+  'opencode-go': require('../assets/ai/opencode-go.png'),
 };
 // Chief and each helper as PNGs (made from web/src/art.ts by `node scripts/icons.mjs`): whole in every pose for the
 // office, `head-` for faces. Metro needs literal requires, so the phone reads PALS[`${who}-${pose}`].

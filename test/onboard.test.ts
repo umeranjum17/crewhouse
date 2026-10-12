@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 const { setup, settled, task, until } = await import('./lab.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
+const { PROVIDERS } = await import('../src/accounts.ts');
 const disk = await import('../src/bots.ts');
 const A = await import('../web/src/adapter.ts');
 
@@ -12,7 +13,7 @@ const A = await import('../web/src/adapter.ts');
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 /** Only the named accounts count as signed in for the person; the rest wait for sign-in. */
 function only(crew: any, keys: string[]) {
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) {
+  for (const k of Object.keys(PROVIDERS)) {
     if (!keys.includes(k)) (crew.accounts as any).ready.set(k, false);
   }
 }

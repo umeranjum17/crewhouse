@@ -492,7 +492,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.deepEqual(crew.snapshot().resting, {}, 'Copilot finished the job: no standing "resting" while nothing waits on it');
 
   // Every account resting: the task pauses with a wake-up time, Chief says when once, and it resumes by itself.
-  const others = ['copilot', 'openrouter', 'minimax', 'claude']; // the stub counts these as signed in; Grok is not
+  const others = Object.keys(PROVIDERS).filter((k) => k !== 'chatgpt' && k !== 'grok'); // every account the stub counts as signed in
   for (const k of others) await crew.accounts.failed(k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
   const b = crew.assign('scout', 'look it up again', 'chief').task, b2 = crew.assign('scout', 'and this', 'chief').task;
   await settled(db, b); await settled(db, b2);
@@ -830,7 +830,7 @@ test('accounts: the person keeps their address and every account rests together'
   assert.equal(task(db, a).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'grok');
   assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) crew.accounts.failed(k, 'usage limit, try again in 1 min');
+  for (const k of Object.keys(PROVIDERS)) crew.accounts.failed(k, 'usage limit, try again in 1 min');
   assert.ok(crew.restingUntil('chatgpt') > Date.now());
   const b = (await crew.post('reel', 'another demo'))!.task;
   await settled(db, b);
