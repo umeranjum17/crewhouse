@@ -5,6 +5,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
 import * as disk from '../src/bots.ts';
+import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
 import type { Store } from '../src/db.ts';
 const state = (db: Store, t: number) => db.get('SELECT state FROM tasks WHERE id = ?', t)!.state;
@@ -350,7 +351,7 @@ test('Do it now on a share-parked routine restarts the run clock: an hour-old ta
 
 test('Do it now recovers a sign-in-parked routine once signed in, and refuses honestly while still signed out', async () => {
   const { db, crew, done } = setup();
-  const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
+  const keys = Object.keys(PROVIDERS);
   for (const k of keys) (crew.accounts as any).ready.set(k, false);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
   crew.runRoutine(r.id);
@@ -380,7 +381,7 @@ test('Do it now recovers a sign-in-parked routine once signed in, and refuses ho
 
 test('a scheduled tick recovers a sign-in-parked routine once signed in, and stays quiet while signed out', async () => {
   const { db, crew, done } = setup();
-  const keys = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'];
+  const keys = Object.keys(PROVIDERS);
   for (const k of keys) (crew.accounts as any).ready.set(k, false);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'check the prices', name: 'Deal check' }, 'person');
   crew.runRoutine(r.id);
