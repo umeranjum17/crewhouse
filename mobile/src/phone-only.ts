@@ -417,15 +417,15 @@ export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => v
             documents++;
             markRequestDone(call.id);
           } else {
-            // Write requestId index entry before the effect
-            appendRequest({ requestId: call.id, toolCallId: call.id, fileName: '', state: 'started' });
+            // Write request index entry before the effect
+            appendRequest({ rid: call.id, fileName: '', state: 'started' });
             const doc = await documentOf(call.arguments, call.id, call.id);
             documents++;
             io.onDocument(doc);
             output = `Made ${doc.name}. The person can preview it and tap Share.`;
             // Update the request entry with the actual file name and mark done
             const entries = loadRequests();
-            const idx = entries.findIndex(e => e.requestId === call.id && e.state === 'started');
+            const idx = entries.findIndex(e => e.rid === call.id && e.state === 'started');
             if (idx >= 0) {
               entries[idx] = { ...entries[idx], fileName: doc.uri.split('/').pop() || '', state: 'done' };
               rewriteRequests(entries);
