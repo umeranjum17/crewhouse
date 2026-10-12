@@ -213,7 +213,7 @@ test('an unmarked old phone reads only the update notice; a marked current phone
     const notice = await phone.link.request('GET /api/bots/chief') as { status: number; body: any };
     assert.equal(notice.status, 200, 'the old phone can open the update link in Chief’s chat');
     assert.equal(notice.body.messages.length, 1);
-    assert.match(A.lines(notice.body, 'chief')[0].text, /\[Get the latest Crewhouse app\]\(https:\/\/github.com\/umeranjum17\/crewhouse\/releases\/tag\/v1.0.0-preview.20261012.17\) to keep chatting\./);
+    assert.match(A.lines(notice.body, 'chief')[0].text, /\[Get the latest Crewhouse app\]\(https:\/\/github.com\/umeranjum17\/crewhouse\/releases\/tag\/v1.0.0-preview.20261012.18\) to keep chatting\./);
     assert.doesNotMatch(JSON.stringify(notice.body), /Private question/);
     const desktop = await phone.link.stream('desktop', { bot: 'chief' });
     assert.equal(await new Promise((r) => { desktop.onEnd = r; }), 'Get the latest Crewhouse app to keep chatting.', 'old desktop controls cannot act either');

@@ -29,7 +29,7 @@ From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 ## 3. The phone app
 
-Install [Crewhouse phone preview .17](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261012.17**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
+Install [Crewhouse phone preview .18](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261012.18**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
 To pair:
 
