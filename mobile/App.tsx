@@ -36,7 +36,8 @@ import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, heardAt, isOffline, loadChat, markHeard, newRid, pendingTurns, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -837,11 +838,11 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState('');
   const [open, setOpen] = useState<PhoneDocument | null>(null);
-  const [offline, setOffline] = useState(false);
+  const [offline, setOffline] = useState(true);
   const [heard, setHeard] = useState(() => heardAt());
   const scroll = useRef<ScrollView>(null);
   const ctrl = useRef<AbortController | null>(null);
-  const flushing = useRef(false);
+  const tail = useRef(Promise.resolve());
   const linesRef = useRef(lines);
   linesRef.current = lines;
   const reduce = motion.useReduceMotion();
@@ -861,17 +862,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
   ]);
 
-  // The history the model sees: every finished turn, plus the one being sent. A stopped or queued turn is
-  // left out (its words come back only through the person's Try again), so nothing is ever said twice.
-  const historyFor = (rid: string, text: string): ChatTurn[] => {
-    const out: ChatTurn[] = [];
-    for (const l of linesRef.current) {
-      if (l.stopped || l.queued || (l.who === 'you' && l.rid === rid)) continue;
-      out.push({ who: l.who, text: l.text });
-    }
-    out.push({ who: 'you', text });
-    return out;
-  };
+  const historyFor = (rid: string, text: string): ChatTurn[] => historyOf(linesRef.current, rid, text);
 
   /** Run one turn already written to the chat: a fresh send, a retry, or a queued message going out. */
   const askTurn = async (text: string, rid: string, fromQueue: boolean): Promise<boolean> => {
@@ -891,8 +882,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       if (ctrl.current.signal.aborted) return false;
       if (isOffline(e)) {
         setOffline(true);
-        // The turn is left stopped (its start marker is on disk); only the person's Try again sends it again.
-        setLines((ls) => [...ls.map((l) => (l.rid === rid && l.who === 'you' ? { ...l, queued: false, stopped: true } : clearQueued(l))), { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
+        setLines((ls) => failOffOf(ls, rid, text));
         return false;
       }
       if (phoneExpired(e)) { onSignedOut(); return false; }
@@ -904,43 +894,34 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
   };
 
   /** Send what waited for a connection, oldest first, once the phone hears the model again. */
-  const flush = async () => {
-    if (flushing.current || ctrl.current) return;
-    flushing.current = true;
-    try { for (const q of pendingTurns()) { if (!(await askTurn(q.text, q.rid, true))) break; } }
-    finally { flushing.current = false; }
+  const flush = (): Promise<void> => {
+    const run = tail.current.then(async () => {
+      if (ctrl.current) return;
+      await drainPending(pendingTurns(), (q) => askTurn(q.text, q.rid, true));
+    });
+    tail.current = run.catch(() => {});
+    return run;
   };
 
-  /** A message the person just sent: queued while offline, otherwise run now under a fresh request id. */
+  /** Every send is queued behind what waits, then the queue drains oldest first. */
   const send = async (text: string, rid?: string): Promise<boolean> => {
     const words = text.trim();
     if (!words || busy) return false;
-    // While offline a message is queued, never sent: it looks unsent and goes by itself when the phone hears
-    // the model again. A send is the moment to re-check, in case the connection is quietly back.
     if (!rid && offline && !(await probeOnline())) {
       const id = queueTurn(words);
       setLines((ls) => [...ls, { who: 'you', text: words, rid: id, queued: true }]);
       return true;
     }
-    if (!rid && (offline || pendingTurns().length)) {
-      setOffline(false); setHeard(Date.now());
-      await flush();
-      if (pendingTurns().length) {
-        const qid = queueTurn(words);
-        setLines((ls) => [...ls, { who: 'you', text: words, rid: qid, queued: true }]);
-        setOffline(true);
-        return true;
-      }
+    if (rid) {
+      queueTurn(words, rid);
+      setLines((ls) => [...clearRetryOf(ls, rid), { who: 'you', text: words, rid, queued: true }]);
+    } else {
+      const id = queueTurn(words);
+      setLines((ls) => [...ls, { who: 'you', text: words, rid: id, queued: true }]);
     }
-    if (rid && pendingTurns().length) {
-      await flush();
-      if (pendingTurns().length) return true;
-    }
-    const id = rid ?? newRid();
-    rememberUser(words, id);
-    // A retried stopped turn keeps its line, without a second Try again.
-    setLines((ls) => [...ls.map((l) => (rid && l.stopped && l.retryRid === rid ? { ...l, retry: undefined } : l)), { who: 'you', text: words, rid: id }]);
-    await askTurn(words, id, false);
+    setOffline(false);
+    await flush();
+    if (!ctrl.current && pendingTurns().length) setOffline(true);
     return true;
   };
 
@@ -978,7 +959,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
             <View style={{ flex: 1, gap: 2 }}><T>{l.text}</T>{l.queued && <T tone="mute" style={s.small}>Queued, not sent yet</T>}</View></View></View>
           : l.stopped
             ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
-              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{l.interrupted && l.retry != null ? ' Retry?' : ''}</T>
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{retrySuffix(l) ? ' Retry?' : ''}</T>
                 {l.retry != null && <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry!, l.retryRid)} />}</View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>

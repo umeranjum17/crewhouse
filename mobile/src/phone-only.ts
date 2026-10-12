@@ -17,6 +17,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import soul from '../../templates/chief/soul.md';
 import job from '../../templates/chief/AGENTS.md';
 import type { DocPart } from '../../web/src/adapter.ts';
+import { clearRetryOf, pendingOf } from './phone-queue.ts';
 
 const MEMBER = 1;
 const PROVIDER = 'openrouter';
@@ -219,21 +220,25 @@ export function loadChat(): PhoneLine[] {
   }
   cutOff();
   // A stopped turn the person already retried keeps its line, without a second Try again.
-  lines.forEach((l, i) => { if (l.stopped && l.who === 'chief' && lines.slice(i + 1).some((n) => n.who === 'you' && !!n.rid && n.rid === l.retryRid)) delete l.retry; });
-  return lines;
+  let out: PhoneLine[] = lines;
+  const seen = new Set<string>();
+  for (let i = out.length - 1; i >= 0; i--) {
+    const l = out[i];
+    if (l.who === 'you' && l.rid) seen.add(l.rid);
+    if (l.stopped && l.who === 'chief' && l.retryRid && seen.has(l.retryRid)) out = clearRetryOf(out, l.retryRid);
+  }
+  return out;
 }
 
-/** A message sent with no connection: the words are kept and go by themselves under the same request id. */
-export function queueTurn(text: string): string {
-  const rid = newRid();
-  appendLine(chatFile, { t: 'you', text, rid, queued: true });
-  return rid;
+/** A message waiting for a connection: kept under its request id, going by itself when back online. */
+export function queueTurn(text: string, rid?: string): string {
+  const id = rid ?? newRid();
+  appendLine(chatFile, { t: 'you', text, rid: id, queued: true });
+  return id;
 }
 
 /** Every message still waiting for a connection, oldest first. */
-export const pendingTurns = (): { rid: string; text: string }[] =>
-  loadChat().filter((l): l is PhoneLine & { rid: string } => l.who === 'you' && l.queued === true && !!l.rid)
-    .map((l) => ({ rid: l.rid, text: l.text }));
+export const pendingTurns = (): { rid: string; text: string }[] => pendingOf(loadChat());
 
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
