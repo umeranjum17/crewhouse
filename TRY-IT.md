@@ -31,6 +31,8 @@ From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 Install [Crewhouse phone preview .18](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261012.18**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
+This file is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the versioned release; see [docs/install.md](docs/install.md).
+
 To pair:
 
 1. The phone needs to reach this computer. For the same Wi-Fi, turn on **Phones on this Wi-Fi can reach the crew** under **Settings → Phones**. To reach it from away, turn on Tailscale on both devices.
