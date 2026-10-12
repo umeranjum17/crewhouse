@@ -879,6 +879,8 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     ctrl.current = new AbortController();
     let doc: PhoneDocument | undefined;
     const clearQueued = (l: PhoneLine) => (l.rid === rid && l.queued ? { ...l, queued: false } : l);
+    // A queued message going out is an ordinary turn from here: a kill now leaves it stopped, never resent.
+    if (fromQueue) rememberUser(text, rid);
     try {
       const answer = await askPhone(historyFor(rid, text), { onText: setPartial, onDocument: (d) => { doc = d; } }, ctrl.current.signal, rid);
       markHeard(); setHeard(Date.now()); setOffline(false);
@@ -889,8 +891,8 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       if (ctrl.current.signal.aborted) return false;
       if (isOffline(e)) {
         setOffline(true);
-        // A queued message stays queued; a fresh turn is left stopped (its start marker is already on disk).
-        if (!fromQueue) setLines((ls) => [...ls, { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
+        // The turn is left stopped (its start marker is on disk); only the person's Try again sends it again.
+        setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: 'Stopped.', stopped: true, retry: text, retryRid: rid }]);
         return false;
       }
       if (phoneExpired(e)) { onSignedOut(); return false; }
@@ -915,7 +917,8 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     if (!rid && offline) { setOffline(false); setHeard(Date.now()); }
     const id = rid ?? newRid();
     rememberUser(words, id);
-    setLines((ls) => [...ls, { who: 'you', text: words, rid: id }]);
+    // A retried stopped turn keeps its line, without a second Try again.
+    setLines((ls) => [...ls.map((l) => (rid && l.stopped && l.retryRid === rid ? { ...l, retry: undefined } : l)), { who: 'you', text: words, rid: id }]);
     await askTurn(words, id, false);
     return true;
   };
@@ -933,6 +936,8 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     if (ok) { setHeard(heardAt()); await flush(); }
   };
   useEffect(() => { void reconnect(); }, []);
+  // While offline, listen for the connection coming back so a queued message goes without the person acting.
+  useEffect(() => { if (!offline) return; const x = setInterval(() => void reconnect(), 15_000); return () => clearInterval(x); }, [offline]);
   useEffect(() => { const sub = AppState.addEventListener('change', (st) => { if (st === 'active') void reconnect(); }); return () => sub.remove(); }, []);
 
   const heardWords = (at: number) => {
@@ -960,7 +965,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
           : l.stopped
             ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
               <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{l.interrupted ? ' Retry?' : ''}</T>
-                <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry ?? '', l.retryRid)} /></View>
+                {l.retry != null && <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry!, l.retryRid)} />}</View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>
               {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
@@ -970,10 +975,11 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
         </View></View>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
-        {offline && <View style={[s.line, { borderLeftWidth: 2, borderLeftColor: t.line2, paddingLeft: 10 }]} accessibilityLiveRegion="polite">
-          <T tone="ink2" style={s.small}>No connection. A message you send waits here and goes once you're back.{heard ? ` Last heard ${heardWords(heard)}.` : ''}</T>
-        </View>}
       </ScrollView>
+      {/* Pinned above the composer, so it shows however long the chat is. */}
+      {offline && <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: t.sunken }} accessibilityLiveRegion="polite">
+        <T tone="ink2" style={s.small}>No connection. A message you send waits here and goes once you're back.{heard ? ` Last heard ${heardWords(heard)}.` : ''}</T>
+      </View>}
       <View style={[s.dock, { backgroundColor: t.bg }]}><Composer placeholder="Ask Chief anything" onSend={(text) => send(text)} chat="phone-only" photos={false} /></View>
       {open && <PhoneDocSheet doc={open} disabled={offline} onClose={() => setOpen(null)} />}
     </KeyboardAvoidingView>
@@ -1396,7 +1402,6 @@ function AnsweredRow({ line, what, word }: { line?: string; what?: string; word?
  *  order without a readable total offers no yes at all. */
 function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.Helper | undefined; chiefSays?: string; canAct: boolean; onClose: () => void }) {
   const t = useLook();
-  const [open, setOpen] = useState(false);
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
   const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
@@ -1415,7 +1420,8 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <ScrollView style={{ flexShrink: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           <AskHead c={c} who={who} />
           <T style={s.askQ}>{question}</T>
-          {edit.box || <AskEvidence c={c} open={open} readAll={<Link label="Read all" onPress={() => setOpen(true)} />} />}
+          {/* The exact text that goes out, whole: never cut to a preview here. */}
+          {edit.box || <AskEvidence c={c} open />}
           {c.mailTo && <MailSetup c={c} canAct={canAct} done={onClose} />}
           {c.review && c.order && !c.order.known && <T tone="mute" style={s.small}>So nothing is counted against the monthly limit.</T>}
           {!!chiefSays && <View style={s.row}><Face who="chief" size={20} /><T tone="ink2" style={{ flex: 1 }}><Text style={s.b}>Chief:</Text> {A.plain(chiefSays)}</T></View>}
@@ -1426,7 +1432,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
             {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
             {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
-          {always && canAct && <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, paddingTop: 10 }}><Btn ghost big label={always.label} onPress={() => act(always.body)} /></View>}
+          {always && canAct && <Link label={always.label} onPress={() => act(always.body)} />}
           {c.kind === 'spend' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Anything that costs money asks you every time.</T>}
           </ScrollView>
         </Pressable>

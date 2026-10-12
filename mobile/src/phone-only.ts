@@ -178,9 +178,10 @@ const finishRequest = (rid: string, fileName: string) => { const prev = requestF
 // thrown fetch means it is not. Used to show the offline banner and to queue sends instead of failing them.
 export async function probeOnline(): Promise<boolean> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 4000);
-  // Read only the response headers: any answer (even 401) means the internet is there.
-  try { await fetch('https://openrouter.ai/api/v1/models', { signal: ctrl.signal }); return true; }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Bounded by its own timer too: a fetch with no network can sit in DNS without honouring the abort.
+  const late = new Promise<never>((_, no) => { timer = setTimeout(() => { ctrl.abort(); no(new Error('timeout')); }, 4000); });
+  try { await Promise.race([fetch('https://openrouter.ai/api/v1/models', { method: 'HEAD', signal: ctrl.signal }), late]); return true; }
   catch { return false; }
   finally { clearTimeout(timer); }
 }
@@ -210,10 +211,15 @@ export function loadChat(): PhoneLine[] {
   for (const r of readLines(chatFile)) {
     if (typeof r.text !== 'string') continue;
     const rid = typeof r.rid === 'string' ? r.rid : undefined;
+    // A queued message going out writes its start marker again under the same id: from here it is an
+    // ordinary turn, so a kill during that send leaves it stopped and it never goes out again by itself.
+    if (r.t === 'you' && open?.queued && rid && open.rid === rid) { open.queued = false; continue; }
     if (r.t === 'you') { cutOff(); lines.push({ who: 'you', text: r.text, rid }); open = { text: r.text, rid, queued: r.queued === true }; userAt = lines.length - 1; }
     else if (r.t === 'chief' && open) { lines.push({ who: 'chief', text: r.text, doc: keptDocument(r.doc) }); open = null; userAt = -1; }
   }
   cutOff();
+  // A stopped turn the person already retried keeps its line, without a second Try again.
+  lines.forEach((l, i) => { if (l.stopped && l.who === 'chief' && lines.slice(i + 1).some((n) => n.who === 'you' && !!n.rid && n.rid === l.retryRid)) delete l.retry; });
   return lines;
 }
 
