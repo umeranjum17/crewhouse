@@ -1424,7 +1424,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
     <div className="page settings">
       <a href="#/" className="back phone-only">‹ Home</a>
       <h1>Settings</h1>
-      <p className="mute small"><b>{A.trust.home}.</b> {A.atHome(undefined, A.planName(accounts)).join(' ')}</p>
+      <p className="mute small"><b>{A.trust.home}.</b> {A.atHome().join(' ')}</p>
       <button className="link trust" onClick={() => document.getElementById('memory')?.scrollIntoView({ behavior: 'smooth' })}>{A.trust.kept}</button>
       {demo && <PairRow />}
       {/* Paired: notifications ride the person's mailbox like at home — the switch lives here, since crewd refuses

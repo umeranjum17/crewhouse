@@ -185,15 +185,15 @@ export const dayLabel = (t: number, now = new Date()) => {
  * Each part is true of the code as it ships — the database, the crew's notes and everyone's sign-ins live on this
  * machine and crewd has no server of its own (README); a job's own words are the only thing sent to the person's own
  * AI account or a connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
- * `home` names the machine from wherever the line is read, `plan` the one the crew thinks with (`planName`). Keep it
- * free of technical words; test/ui.test.ts pins it. The middle line is `awake`, the one condition every surface that
- * mentions the computer or pairing repeats word for word.
+ * `home` names the machine from wherever the line is read. The account is never named: with several sign-ins the
+ * line cannot know which one a job will use. Keep it free of technical words; test/ui.test.ts pins it. The middle
+ * line is `awake`, the one condition every surface that mentions the computer or pairing repeats word for word.
  */
 export const awake = (home = 'this computer') => `The crew works only while ${home} is on and connected to the internet.`;
-export const atHome = (home = 'this computer', plan = 'AI plan') => [
+export const atHome = (home = 'this computer') => [
   `Your helpers live on ${home} and use your own sign-ins.`,
   awake(home),
-  `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
+  `Nothing you tell them is kept anywhere else — only what a job needs goes to the AI plan you picked or the app it's using.`,
 ];
 /** The trust story where the fear is. `kept`: everything remembered about the person (the one Memory section,
  *  each helper's notes) shows line by line with Forget beside it. `home`: there is no Crewhouse server and no
