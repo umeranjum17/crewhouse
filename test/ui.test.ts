@@ -93,6 +93,9 @@ test('the account list is the one crewd really serves: every route, none made up
   // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
   assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);
   assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^Your AI accounts are resting until /);
+  // The runs-at-home line never names one account: with several sign-ins it cannot know which a job will use.
+  for (const line of A.atHome()) assert.doesNotMatch(line, /ChatGPT|Grok|Copilot|OpenRouter|MiniMax|Claude|OpenCode Go/, 'the privacy line names no provider');
+  assert.match(A.atHome()[2], /goes to the AI plan you picked/, "a job's words go to the picked plan");
 });
 
 test('the screens read view models only, and the mono face draws art only', () => {
