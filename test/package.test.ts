@@ -73,6 +73,7 @@ test("the downloaded app fetches a helper's tools on its first job, not at start
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
   for (let i = 0; i < 100 && !s?.installing?.length; i++) if (!(s = await get())?.installing?.length) await sleep(100);
+  assert.ok(s?.installing?.length, 'an install is under way');
   assert.deepEqual([...s.installing].sort(), ['browser', 'documents', 'write'], "the job fetches exactly the tools Scribe was given and doesn't have");
   const t0 = Date.now();
   const r = await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(2000) });
