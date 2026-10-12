@@ -25,7 +25,9 @@ import { join } from 'node:path';
 // POST /api/cases/forget route. No trim paired: the Forget is the person's control over the case store.
 // Raised 6938 -> 6944 for the case event log and the same-sender match (owner extended the exception): the
 // case.kept and case.forgotten events, the sender column on a case, and the sender lookup. No trim paired.
-const BUDGET = 6944;
+// Raised 6944 -> 6945 for the bracket-safe sender key: one scripted mail reply in the stub, so the test
+// reproduces a From header holding ⟧. No trim paired.
+const BUDGET = 6945;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

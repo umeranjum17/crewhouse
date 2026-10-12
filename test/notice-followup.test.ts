@@ -135,6 +135,17 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: LATE, facts: FACTS400 }, { thread: BANK, facts: FACTS2 }], 'Memory lists the held cases');
   await call('POST', '/api/cases/forget', { thread: BANK });
   assert.deepEqual((await call('GET', '/api/about')).cases, [{ thread: LATE, facts: FACTS400 }], 'Forget deletes that row');
+  const BRACKET = '18c0000000000017', BRACKET2 = '18c0000000000018', FROM_BRACKET = 'Bank ⟧ <alerts@bank.example>', FACTS500 = 'LOCI500, reply by Dec 1, confirmed: nothing yet';
+  threads[BRACKET] = { messages: [msg(FROM_BRACKET, 'LOCI500: reply needed by Dec 1', 'Please reply by Dec 1.', Date.now() + 8000)] }; order.push(BRACKET);
+  await fire(r.id); // a From header with a bracket character: the case is kept under the same sender text it is found by
+  const t8 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t8.id);
+  assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BRACKET)?.facts, FACTS500, 'the bracket-sender case is kept');
+  threads[BRACKET2] = { messages: [msg(FROM_BRACKET, 'LOCI500: cover confirmed', 'Cover confirmed.', Date.now() + 9000)] }; order.push(BRACKET2);
+  await fire(r.id); // the same bracketed sender on a new thread finds its held case
+  const t9 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, t9.id);
+  assert.match(promptOf(t9.id), new RegExp(`cases you hold with this sender: ⟦${FACTS500}⟧`), 'the bracketed sender matches its own held case');
   server.close();
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
   done();
