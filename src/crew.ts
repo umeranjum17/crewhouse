@@ -256,7 +256,8 @@ export class Crew {
 
   init() {
     this.db.tx(() => {
-      if (!this.db.get('SELECT 1 FROM people WHERE id = 1')) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
+      const fresh = !this.db.get('SELECT 1 FROM people WHERE id = 1');
+      if (fresh) this.db.run('INSERT INTO people (id, name, created_at) VALUES (1, ?, ?)', 'Owner', Date.now());
       if (!this.bot(CHIEF)) this.addBot(disk.loadTemplate(this.cfg, 'chief'), 'Chief', CHIEF, 'system');
       // Questions whose task is over have no one left to answer them.
       // A suggestion (a skill to keep, a new personality) or an email waiting for its send belongs to no running task, so it waits for its answer across restarts.
@@ -265,9 +266,8 @@ export class Crew {
       this.db.event('system.started', null, {});
       // Chats were unread-less before: an existing install starts with everything already seen.
       if (!this.db.get('SELECT 1 FROM reads')) this.db.run('INSERT INTO reads (member, bot, seen) SELECT 1, b.id, COALESCE((SELECT MAX(id) FROM messages), 0) FROM bots b');
-      // The morning digest is on from the start; the person can move or pause it, not delete it.
-      if (!this.db.get("SELECT 1 FROM routines WHERE kind = 'digest'")) this.db.run("INSERT INTO routines (bot, name, schedule, kind, next_at, created_at) VALUES (?, 'Morning digest', 'every day 8:00', 'digest', ?, ?)",
-        CHIEF, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
+      // An existing install keeps its morning digest; a fresh install starts with no routines. The digest can be paused, not removed.
+      if (!fresh && !this.db.get("SELECT 1 FROM routines WHERE kind = 'digest'")) this.db.run("INSERT INTO routines (bot, name, schedule, kind, next_at, created_at) VALUES (?, 'Morning digest', 'every day 8:00', 'digest', ?, ?)", CHIEF, nextRun(parseSchedule('every day 8:00'), Date.now()), Date.now());
     });
     for (const b of this.bots()) {
       let tpl: disk.Template | null = null;
@@ -356,7 +356,7 @@ export class Crew {
       const outcome = await runtime.runCollectionReview();
       this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
     } catch (e) {
-      console.error('curation:', e);
+      console.error(`curation skipped: ${(e as Error)?.message ?? e}`);
       this.db.event('learn.curated', CHIEF, { refused: String(e).slice(0, 200) });
     }
   }

@@ -20,6 +20,8 @@ const port = await new Promise<number>((r) => { const s = createServer().listen(
 const base = `http://127.0.0.1:${port}`;
 // Fixture writers share crewd's WAL file and its bounded SQLite contention handler.
 const openDb = () => new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
+/** A fresh install seeds no digest: plant the one this coverage needs, like an existing install has. */
+const seedDigest = () => { const db = openDb(); try { if (!db.prepare("SELECT 1 FROM routines WHERE kind = 'digest'").get()) db.prepare("INSERT INTO routines (bot, name, schedule, kind, next_at, created_at) VALUES ('chief', 'Morning digest', 'every day 8:00', 'digest', ?, ?)").run(Date.now() + 86_400_000, Date.now()); } finally { db.close(); } };
 const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
@@ -409,6 +411,7 @@ test('routine PUT validates the whole update and commits fields and event togeth
       await ready();
       const reloaded = (await api('GET', '/api/state')).body.routines.find((r: any) => r.id === id);
       for (const key of ['quiet', 'state', 'schedule', 'next_at']) assert.equal(reloaded[key], row()[key]);
+      seedDigest();
       const digest = (await api('GET', '/api/state')).body.routines.find((r: any) => r.kind === 'digest');
       assert.equal((await api('PUT', `/api/routines/${digest.id}`, { quiet: true, state: 'paused' })).status, 400);
     } finally { db.exec('DROP TRIGGER IF EXISTS reject_routine_event'); db.close(); await api('DELETE', `/api/routines/${id}`); }
@@ -492,6 +495,7 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.why === 'now' && x.history[0]?.state === 'done'));
   // The morning recap over the same door: the run lands in Chief's thread, and a second run that sends nothing is a
   // failure naming why, not an ok for a call that returned.
+  seedDigest();
   const digest = (await api('GET', '/api/state')).body.routines.find((x: any) => x.kind === 'digest');
   const thread = async () => (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
   const before = (await thread()).length;

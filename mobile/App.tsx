@@ -727,7 +727,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
       <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant. Run Chief on this phone alone, or pair it with your computer for the whole crew.</T>
       <Card style={{ alignSelf: 'stretch', gap: 10, marginTop: 6 }}>
         <T style={s.b}>Just this phone</T>
-        <T tone="ink2">Connect your own account key and Chief runs right here, with no computer. He can answer and make documents.</T>
+        <T tone="ink2">Connect your own {phoneProviderName} key and Chief runs right here, with no computer. He can answer and make documents.</T>
         <Btn go big label="Use this phone only" onPress={onPhoneOnly} />
       </Card>
       <Card style={{ alignSelf: 'stretch', gap: 10 }}>

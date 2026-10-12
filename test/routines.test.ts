@@ -17,6 +17,12 @@ function setup() {
 }
 const fired = (db: Store, id: number) => db.all("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ?", id)
   .map((e) => ({ kind: e.kind, ...JSON.parse(e.data) }));
+/** A fresh install seeds no digest: tests that exercise it plant one explicitly, like an existing install has. */
+function seedDigest(db: Store) {
+  if (!db.get("SELECT 1 FROM routines WHERE kind = 'digest'"))
+    db.run("INSERT INTO routines (bot, name, schedule, kind, next_at, created_at) VALUES ('chief', 'Morning digest', 'every day 8:00', 'digest', ?, ?)", Date.now() + 86_400_000, Date.now());
+  return db.get("SELECT * FROM routines WHERE kind = 'digest'")!;
+}
 
 test('routines: fire when due, catch up once after sleep, skip on overlap, pause, run now, per-routine model', async () => {
   const { db, crew, done } = setup();
@@ -79,8 +85,15 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   done();
 });
 
-test('morning digest: on by default at 8:00, says what finished, what needs you, what is coming up', async () => {
+test('fresh install starts with no ready-made routines', async () => {
+  const { crew, done } = lab();
+  assert.deepEqual(crew.routines(), [], 'no Morning digest before the person makes anything');
+  done();
+});
+
+test('morning digest: at 8:00, says what finished, what needs you, what is coming up', async () => {
   const { db, crew, done } = setup();
+  seedDigest(db);
   const digest = crew.routines().find((r) => r.kind === 'digest')!;
   assert.equal(digest.state, 'on');
   assert.equal(digest.words, 'Every day at 8:00 am');
@@ -112,6 +125,7 @@ test('recap keeps an unknown name out, stays quiet on an empty day, and is a sep
   assert.match(crew.digest(0), /^Good \w+\. While you were away:/);
   assert.doesNotMatch(crew.digest(0), /Nothing new|Nothing needs|Nothing is scheduled|Tap to begin/);
   crew.setAddress('Umer.');
+  seedDigest(db);
   const digest = crew.routines().find((r) => r.kind === 'digest')!;
   const sent = await crew.runRoutine(digest.id);
   assert.equal(db.get('SELECT bot FROM messages WHERE id = ?', sent.message)?.bot, 'chief', 'the run answers with the recap it left in Chief\'s chat');
@@ -143,6 +157,7 @@ test('recap keeps an unknown name out, stays quiet on an empty day, and is a sep
 test('one morning digest reports the person’s routines in Chief’s thread', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sam');
+  seedDigest(db);
   const digests = db.all("SELECT * FROM routines WHERE kind = 'digest'");
   assert.equal(digests.length, 1);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: "Sam's daily clip" }, 'person');
@@ -158,6 +173,7 @@ test('one morning digest reports the person’s routines in Chief’s thread', a
 
 test('quiet check-ins: all clear says nothing and stays out of the digest; anything else speaks up', async () => {
   const { db, crew, done } = setup();
+  seedDigest(db);
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 9:00', task: 'ask permission: check the shared folder for new photos', quiet: true }, 'person');
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'reel' AND author = 'bot'").map((m) => m.text);
   const run = async (reply: string) => {
@@ -510,6 +526,7 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
     return new Response(JSON.stringify({ items: [{ summary: 'Dentist', start: { dateTime: nine.toISOString() } }, { summary: 'Eid', start: { date: '2026-09-25' } }, { summary: 'Gone', status: 'cancelled', start: {} }] }), { status: 200 });
   }) as typeof fetch;
   try {
+    seedDigest(db);
     const d = crew.routines().find((x) => x.kind === 'digest')!;
     crew.runRoutine(d.id);
     await until('digest', () => /calendar/.test(lastSaid(db, 'chief') ?? ''));
