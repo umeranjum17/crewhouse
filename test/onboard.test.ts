@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const { setup, settled, task, until } = await import('./lab.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
 const disk = await import('../src/bots.ts');
+const A = await import('../web/src/adapter.ts');
 
 /** A user message the stub model turns into one tool call. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
@@ -46,6 +47,21 @@ test('first run: her first request waits for her own sign-in, Chief says why in 
   const said = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot'").map((m: any) => m.text);
   assert.ok(said().includes("The crew uses your AI account. Sign in when you're ready and I'll start."), said().join('\n'));
   assert.equal(db.get("SELECT 1 FROM events WHERE kind = 'run.started'"), undefined, 'nothing ran on anyone else\'s account');
+  // The wait on her sign-in reads calm everywhere (ch-ob-calm-wait): the snapshot carries Chief's paused
+  // task, so the office counts him as waiting; the live line names the one action, and the setup count is
+  // only what her first answer needs. No clock renders for a waiting live line (the screens read its state).
+  const snap = crew.snapshot();
+  assert.ok(snap.tasks.some((t: any) => t.bot === 'chief' && t.state === 'paused' && t.wake_at == null), 'Chief\u2019s sign-in wait is in the snapshot tasks');
+  const page = crew.botPage('chief');
+  const line = (side?: 'phone') => A.liveLine({ id: 'chief', name: 'Chief', crew: A.crew(snap), tasks: page.tasks, events: [...page.trail, ...snap.events], heard: [], writing: new Map(), ...(side ? { side } : {}) });
+  assert.equal(line()?.state, 'waiting');
+  assert.equal(line()?.todos.at(-1)?.text, A.WAIT_SIGNIN, 'the computer names the one action');
+  assert.equal(line('phone')?.todos.at(-1)?.text, A.WAIT_SIGNIN_PHONE, 'the phone names where to do it');
+  const view = A.office(snap);
+  assert.equal(view.lead, 'waiting', 'Chief counts as waiting, never free or at work');
+  assert.equal(A.chiefStatus(view).group, 'wait');
+  assert.equal(A.summaryOf(view), '1 waiting · 0 at work · 0 done · 0 free');
+  assert.equal(A.homeSetup(snap, null, null).left, 1, 'the setup count is only the sign-in the first answer needs');
   // More notes while she waits: Chief notes the next one in other words, then holds the rest quietly, never one sentence twice.
   for (const note of ['Also the school run on Friday', 'And remind me about the dentist']) {
     const { task: n } = await crew.post('chief', note) as { task: number };

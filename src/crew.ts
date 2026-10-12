@@ -487,7 +487,7 @@ export class Crew {
       person,
       bots: this.bots().map((b) => ({ ...this.pub(b), ...this.chat(b.id) })),
       templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, display: t.display, role: t.role, color: t.color, kit: disk.templateKit(this.cfg, t) })),
-      tasks: this.db.all('SELECT * FROM tasks WHERE bot != ? ORDER BY id DESC LIMIT 50', CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
+      tasks: this.db.all("SELECT * FROM tasks WHERE bot != ? OR state = 'paused' ORDER BY id DESC LIMIT 50", CHIEF).map((t) => ({ ...this.task(t), files: t.state === 'done' ? files(t.id) : [] })),
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
