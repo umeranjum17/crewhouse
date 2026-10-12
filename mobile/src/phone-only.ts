@@ -321,7 +321,9 @@ async function prepareDocument(spec: { name?: unknown; blocks?: unknown }): Prom
  *  `done` after, so a kill in between is known and the person (never the app) retries it. */
 function writeDocument(rid: string, callId: string, prep: { name: string; bytes: Uint8Array; parts: DocPart[] }): PhoneDocument {
   const prior = requestFor(rid);
-  const fileName = prior?.fileName || `chief-${callId}-${prep.name}.docx`;
+  const safeCall = ((prior?.callId || callId).replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 80) || 'doc');
+  const fresh = `chief-${safeCall}-${prep.name}.docx`;
+  const fileName = prior?.fileName && /^chief-[\p{L}\p{N} _-]{1,80}-[\p{L}\p{N} _-]{1,80}\.docx$/u.test(prior.fileName) ? prior.fileName : fresh;
   startRequest(rid, prior?.callId || callId, fileName);
   const out = new File(Paths.document, fileName);
   out.create({ overwrite: true });
