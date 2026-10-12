@@ -7,13 +7,16 @@
 //   LAB=<lab> node .agents/skills/verify-crewhouse/scripts/phone-continue.mjs --serial <emulator> --ev "$EV" \
 //     --apk <app-release.apk> --key-file /home/umer/.config/openrouter/api_key [--seed-turns 52]
 //
-// 1. a real phone-only chat (the OpenRouter key is pushed and typed on the device, never in argv or logs);
-// 2. pair, the offer shows on Home, Continue on your computer: one Chief message on the computer, the phone's chat
-//    file and tool index gone, its documents kept;
+// 1. a real phone-only chat (the OpenRouter key is pushed and typed on the device, never in argv or logs), then one
+//    message sent in airplane mode, so it waits queued when the phone leaves phone-only;
+// 2. pair, the offer shows on Home, Continue on your computer: one Chief message on the computer carrying the queued
+//    turn marked "(not sent yet)", the phone's chat file and tool index moved to the hidden phone-moved/ archive, its
+//    documents kept;
 // 3. a seeded long chat (--seed-turns, one very long turn): Not now keeps it and the offer is back on the next open;
 // 4. a failed send (the lab crewd frozen with SIGSTOP, so the link stays up but nothing answers): the plain failure
 //    line, the copy kept; SIGCONT, Continue again, stored exactly once (the trimmed note when over 40,000 characters);
-// 5. the offer and the moved message at 360 dp and 1.3x text, dark and light.
+// 5. the offer and the moved message at 360 dp and 1.3x text, dark and light;
+// 6. the computer removes the phone, phone-only again, Sign out: the hidden archive goes with the key.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -86,10 +89,16 @@ await turn('Thanks. What should I check before I leave the house?');
 const noCredit = has(/Could not finish on this phone/);
 say(noCredit ? 'phone-only chat: the provider gave no answer (plain error lines kept as the chat)' : `phone-only chat: real answers${has(/^Document$/) ? ' and a document card' : ''}`);
 shot('01-phone-only-chat.png');
+const QUEUED = 'And what about the weather there?';
+A('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable'); await sleep(3000);
+tap(/Ask Chief anything/); await sleep(400); A('shell', 'input', 'text', QUEUED.replace(/ /g, '%s')); await sleep(400); tap(/^Send$/);
+await waitFor(/Queued, not sent yet/, 30000); await sleep(800); shot('01b-queued-offline.png');
+say('offline: one message queued, not sent yet');
 const before = kept(); say(`phone files before the move: ${before.join(' ')}`);
 
-// 2. Pair, then Continue on your computer.
+// 2. Pair, then Continue on your computer (the queued message never left the phone: leaving phone-only stops its sender).
 tap(/^Use a computer$/);
+A('shell', 'cmd', 'connectivity', 'airplane-mode', 'disable');
 await waitFor(/^Pair with a computer$/, 20000); tap(/^Pair with a computer$/);
 await waitFor(/^Type a code$/, 20000); tap(/^Type a code$/);
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
@@ -123,7 +132,9 @@ tap(OFFER);
 await gone(OFFER, 40000); await waitFor(/continuing our chat from my phone/, 20000); await sleep(1200); shot('03-moved-phone.png');
 const first = await moves();
 const after = kept();
+const archive = A('shell', 'ls', `${FILES}/phone-moved`).split(/\s+/).filter(Boolean);
 say(`moved: ${first.length} Chief message(s) from the phone; phone chat file ${after.includes('phone-chat.jsonl') ? 'STILL THERE' : 'gone'}, tool index ${after.includes('phone-requests.jsonl') ? 'STILL THERE' : 'gone'}, documents kept: ${after.filter((f) => f.startsWith('chief-')).length} of ${before.filter((f) => f.startsWith('chief-')).length}`);
+say(`queued turn: ${first[0]?.text.includes(`- You (not sent yet): ${QUEUED}`) ? 'carried, marked not sent yet' : 'MISSING'}; hidden archive: ${archive.join(' ') || 'EMPTY'}`);
 writeFileSync(join(EV, 'moved-message.txt'), first.at(-1)?.text ?? '');
 
 // 3. A long kept chat: Not now keeps it; the offer is back on the next open.
@@ -169,6 +180,18 @@ tap(/^Not now$/); await gone(OFFER, 10000);
 for (let i = 0; i < 4; i++) { A('shell', 'input', 'swipe', '540', '700', '540', '1500', '150'); await sleep(400); } // up into the long moved message
 for (const night of ['yes', 'no']) { A('shell', 'cmd', 'uimode', 'night', night); await sleep(2500); shot(`10-thread-360dp-1.3x-${night === 'yes' ? 'night' : 'day'}.png`); }
 A('shell', 'settings', 'put', 'system', 'font_scale', '1.0'); A('shell', 'wm', 'density', 'reset'); A('shell', 'cmd', 'uimode', 'night', 'no');
+
+// 6. Removed by the computer, back to phone-only (the key is still kept), Sign out: nothing moved stays behind.
+const moved = () => { try { return A('shell', 'ls', `${FILES}/phone-moved`).split(/\s+/).filter(Boolean); } catch { return []; } };
+say(`before sign out: hidden archive holds ${moved().length} file(s)`);
+for (const d of await api('GET', '/api/phones')) await api('DELETE', `/api/phones/${d.id}`);
+await waitFor(/^Use this phone only$/, 60000); tap(/^Use this phone only$/);
+await waitFor(/Ask Chief anything/, 30000); tap(/^Sign out$/);
+await waitFor(/Sign out of Chief\?/, 10000); shot('11-signout-confirm.png');
+const btn = nodes().filter((n) => /^sign out$/i.test(n.text)).sort((x, y) => y.b[1] - x.b[1])[0];
+A('shell', 'input', 'tap', String((btn.b[0] + btn.b[2]) >> 1), String((btn.b[1] + btn.b[3]) >> 1));
+await waitFor(/^Use this phone only$/, 30000);
+const leftOver = moved(); say(`after sign out: hidden archive ${leftOver.length ? `STILL HOLDS ${leftOver.join(' ')}` : 'gone'}; chat file ${kept().includes('phone-chat.jsonl') ? 'STILL THERE' : 'gone'}`);
 A('shell', 'pm', 'clear', PKG); // the key and the chats go with the app's data
 say('erased the key and the app data from the emulator');
 writeFileSync(join(EV, 'phone-continue.log'), log.join('\n') + '\n');

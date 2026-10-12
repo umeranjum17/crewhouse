@@ -220,19 +220,27 @@ export function queueTurn(text: string, rid?: string): string {
 export const pendingTurns = (): { rid: string; text: string }[] => pendingOf(loadChat());
 
 /** The kept chat as one message for Chief on a paired computer, and the one id that moves it (its last turn's, so a
- *  resend after a kill is the same move). Null with nothing said, or while a message still waits to go. */
+ *  resend after a kill is the same move). Null with nothing said. Paired, no turn here is in flight (leaving phone-only
+ *  aborts it), so a queued message moves too, marked not sent yet. */
 export function chatToMove(): { text: string; id: string } | null {
   const lines = loadChat();
-  if (pendingOf(lines).length || !lines.some((l) => !l.stopped && !l.queued)) return null;
+  if (!lines.some((l) => l.who === 'you')) return null;
   return { text: transcriptOf(lines), id: lines.filter((l) => l.who === 'you' && l.rid).at(-1)?.rid ?? newRid() };
 }
 
-/** The chat went to the computer: its kept file and tool index go. The documents Chief made here stay on this phone. */
-export const retireChat = () => { for (const f of [chatFile, requestFile]) keep(() => { const x = f(); if (x.exists) x.delete(); }); };
+/** The chat went to the computer: its kept file and tool index move into one hidden archive (never shown, never
+ *  reloaded), so a turn the move trimmed is not destroyed. The documents Chief made here stay on this phone. */
+const moved = () => new Directory(Paths.document, 'phone-moved');
+export const retireChat = () => keep(() => {
+  const dir = moved(), at = Date.now();
+  dir.create({ intermediates: true, idempotent: true });
+  for (const f of [chatFile(), requestFile()]) if (f.exists) f.moveSync(new File(dir, `${at}-${f.name}`));
+});
 
 /** A signed-out phone keeps no chat: the kept files go, with every document Chief made here. */
 export function clearChat() {
-  retireChat();
+  for (const f of [chatFile, requestFile]) keep(() => { const x = f(); if (x.exists) x.delete(); });
+  keep(() => { const x = moved(); if (x.exists) x.delete(); });
   keep(() => { const x = metaFile(); if (x.exists) x.delete(); });
   keep(() => { for (const x of new Directory(Paths.document).list()) if (x instanceof File && x.name.startsWith('chief-')) x.delete(); });
 }

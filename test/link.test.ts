@@ -270,9 +270,11 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 
   // A chat kept from Chief on the phone alone carries on with Chief here as one message (mobile ContinueOffer): it stays
   // with Chief whole, so its "pair one" makes no pairing card, and a resend under the same move id stores it once.
-  // The phone's own chat, carried over: a stopped turn stays behind, a document goes as its title.
+  // The phone's own chat, carried over whole: a cut-off turn marked stopped, a queued one not sent yet (its id moves it),
+  // a document as its title.
   const moved = transcriptOf([{ who: 'you', text: 'Book us a table for Friday.', rid: 'r0' }, { who: 'chief', text: "That needs a computer. Pair one and I'll book it.", doc: { name: 'Packing list' } },
-    { who: 'you', text: 'Cut off', rid: 'r1', stopped: true }, { who: 'chief', text: 'Stopped.', stopped: true }, { who: 'you', text: 'Thanks', rid: 'move-rid-1' }, { who: 'chief', text: 'Any time.' }]);
+    { who: 'you', text: 'Cut off', rid: 'r1', stopped: true }, { who: 'chief', text: 'Stopped.', stopped: true }, { who: 'you', text: 'Thanks', rid: 'r2' }, { who: 'chief', text: 'Any time.' },
+    { who: 'you', text: 'And Saturday?', rid: 'move-rid-1', queued: true }]);
   const sent = await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' });
   assert.equal(sent.status, 200);
   assert.deepEqual(await a.req('POST', '/api/bots/chief/messages', { text: moved, move: 'move-rid-1' }), sent, 'the same move is stored once');
@@ -280,7 +282,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.equal(chief.messages.filter((x: any) => x.author === 'person' && x.text === moved).length, 1);
   const said = (chatTokens(A.noTools(moved)).find((t) => t.type === 'list') as any)?.items.map((i: any) => i.text);
   assert.deepEqual(said, ['You: Book us a table for Friday.', "Chief: That needs a computer. Pair one and I'll book it.\n(Chief made a document here, Packing list. The file stays on my phone.)",
-    'You: Thanks', 'Chief: Any time.'], 'the thread reads one turn per item');
+    'You (stopped): Cut off', 'You: Thanks', 'Chief: Any time.', 'You (not sent yet): And Saturday?'], 'the thread reads one turn per item');
   const turns = [{ who: 'you' as const, text: 'First', rid: 'a' }, { who: 'chief' as const, text: 'One' }, { who: 'you' as const, text: 'Last', rid: 'b' }, { who: 'chief' as const, text: 'Two' }];
   assert.match(transcriptOf(turns, 30), /\(Earlier turns left out\.\)\n- You: Last\n- Chief: Two$/, 'past the cap the oldest turns go, said so');
   assert.ok(chief.tasks.some((x: any) => x.id === sent.body.task), 'a Chief task, not a helper\'s');

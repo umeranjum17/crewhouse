@@ -86,11 +86,13 @@ export async function drainPending(
   return { sent, remaining: pending.slice(sent) };
 }
 
-/** The phone-only chat as one message to Chief on the computer: who said what, in order, as Chief on the phone heard
- *  it (no stopped or queued turns), a document as its title only. One list item per turn: the thread folds blank lines and
- *  its Markdown joins single ones, so nothing may follow the list. Past `max` characters the oldest turns go, said so. */
+/** The phone-only chat as one message to Chief on the computer: who said what, in order, a document as its title only.
+ *  Nothing typed is left out: a turn cut off on the phone is marked stopped, and a queued one not sent yet, for Chief
+ *  there to answer. One list item per turn: the thread folds blank lines and its Markdown joins single ones, so nothing
+ *  may follow the list. Past `max` characters the oldest turns go, said so. */
 export function transcriptOf(lines: QueueLine<{ name: string }>[], max = 40_000): string {
-  const turns = lines.filter((l) => !l.stopped && !l.queued).map((l) => `- ${l.who === 'you' ? 'You' : 'Chief'}: ${
+  const turns = lines.filter((l) => !(l.stopped && l.who === 'chief')).map((l) => `- ${l.who === 'you' ? 'You' : 'Chief'}${
+    l.queued ? ' (not sent yet)' : l.stopped ? ' (stopped)' : ''}: ${
     [l.text.trim(), l.doc && `(Chief made a document here, ${l.doc.name}. The file stays on my phone.)`].filter(Boolean).join('\n')}`);
   let left = false;
   while (turns.length > 1 && turns.join('\n').length > max) { turns.shift(); left = true; }
