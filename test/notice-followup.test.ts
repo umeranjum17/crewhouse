@@ -57,7 +57,7 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   await fire(r.id); // first look: the empty mailbox is the baseline
   assert.deepEqual(fired(r.id), ['started']);
 
-  threads[BANK] = { messages: [msg(FROM, SUBJECT, WARN, Date.now() + 1000)] }; order.push(BANK);
+  threads[BANK] = { messages: [msg('Umer <umer@home.example>', SUBJECT, 'I asked the bank about it.', Date.now() + 500), msg(FROM, SUBJECT, WARN, Date.now() + 1000)] }; order.push(BANK);
   await fire(r.id); // the warning: one first notice, and the case is kept
   assert.deepEqual(fired(r.id), ['started', 'mail']);
   const t1 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
@@ -67,6 +67,7 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   assert.match(said(t1.id) ?? '', /October 8.*not confirmed/);
   assert.match(said(t1.id) ?? '', new RegExp(`https://mail.google.com/mail/u/0/#inbox/${BANK}`));
   assert.equal(db.get('SELECT facts FROM cases WHERE thread = ?', BANK)?.facts, FACTS1);
+  assert.equal(db.get('SELECT sender FROM cases WHERE thread = ?', BANK)?.sender, 'alerts@bank.example', 'a thread the person opened is keyed to the bank that replied');
 
   threads[BANK].messages.push(msg(FROM, SUBJECT, CONFIRM, Date.now() + 2000));
   await fire(r.id); // the confirmation reply: one follow-up in the same thread, naming the change

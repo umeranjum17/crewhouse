@@ -49,7 +49,7 @@ export function bodyOf(payload: any): string {
 async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
     const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`), m = t.messages?.at(-1);
-    return { id, from: header(t.messages?.[0], 'From'), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
+    return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
   }));
 }
 
