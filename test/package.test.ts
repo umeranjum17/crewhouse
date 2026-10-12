@@ -94,3 +94,39 @@ test("the downloaded app fetches a helper's tools on its first job, not at start
   assert.equal(t?.state, 'done');
   assert.deepEqual((await get()).installing, []);
 });
+
+test('a stalled install stops at its bound: its job fails in one line, no installer is left running, and Chief goes on', async () => {
+  // Fake installers that record their pid and never finish, with a one-second bound instead of ten minutes.
+  const bin = join(root, 'stall-bin'), pids = join(root, 'stall-pids');
+  mkdirSync(bin, { recursive: true });
+  for (const b of ['npm', 'npx', 'python3', 'curl']) { writeFileSync(join(bin, b), `#!/bin/sh\necho $$ >> '${pids}'\nsleep 600\n`); chmodSync(join(bin, b), 0o755); }
+  const p3 = await free(), at = `http://127.0.0.1:${p3}`, state3 = join(root, 'stall', 'state');
+  const stalled = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+    env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_INSTALL_STALL_MS: '1000', CREWHOUSE_PORT: String(p3), CREWHOUSE_LINK_PORT: '0',
+      CREWHOUSE_STATE_DIR: state3, CREWHOUSE_CREW_DIR: join(root, 'stall', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'stall', 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => stalled.kill());
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state3, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const taskOf = async (bot: string, id: number) => (await fetch(`${at}/api/bots/${bot}`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === id);
+  const running = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`).catch(() => null))?.ok; i++) await sleep(100);
+
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  const chief = (await post('/api/bots/chief/messages', { text: 'Hello' })).task;
+  let c: any;
+  for (let i = 0; i < 300 && (c = await taskOf('chief', chief))?.state !== 'done'; i++) await sleep(100);
+  assert.equal(c?.state, 'done', 'Chief answers while the install is stalled');
+  let t: any;
+  for (let i = 0; i < 300 && (t = await taskOf('scribe', job))?.state !== 'failed'; i++) await sleep(100);
+  assert.equal(t?.state, 'failed');
+  assert.match(t.result, /^.+ took too long to install, so this one stopped\. It will try again next time\.$/);
+  for (let i = 0; i < 100 && !existsSync(pids); i++) await sleep(100);
+  const installers = readFileSync(pids, 'utf8').trim().split('\n').map(Number);
+  assert.ok(installers.length >= 1);
+  for (const pid of installers) {
+    for (let i = 0; i < 100 && running(pid); i++) await sleep(100);
+    assert.equal(running(pid), false, `installer ${pid} was stopped`);
+  }
+});

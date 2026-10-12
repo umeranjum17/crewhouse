@@ -222,7 +222,10 @@ export class Crew {
   readonly accounts: Accounts;
   readonly connections: Connections;
   phoneLink?: Pick<Link, 'offer' | 'status'>;
-  fetchTools?: (grants: string[]) => Promise<unknown>;
+  /** The downloaded app: installs a helper's missing tools; resolves to the line a job fails with when one stalled. */
+  fetchTools?: (grants: string[]) => Promise<string | null>;
+  /** A queued job's first-job tool wait: false while its installs run, true once they settled (it then takes a slot). */
+  private toolWait = new Map<number, boolean>();
   private freshAt = 0;
   private lastTick = 0;
   /** Keeps idle sleep away while a helper is working, and only then. Never the lid. Tests replace it. */
@@ -1278,6 +1281,18 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     for (const t of this.db.all("SELECT * FROM tasks WHERE state = 'queued' ORDER BY id")) {
       if (free <= 0) break;
       if (this.activeTask(t.bot) || this.starting.has(t.bot) || this.held.has(t.bot)) continue;
+      const tools = this.toolWait.get(t.id);
+      if (tools === undefined && this.fetchTools) { // a first job waits for its tools before it takes a slot, so Chief never queues behind a download
+        this.toolWait.set(t.id, false);
+        void this.fetchTools(disk.botConfig(this.cfg, t.bot).tools ?? []).then((stalled) => {
+          this.toolWait.set(t.id, true);
+          if (stalled) { this.toolWait.delete(t.id); if (this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state = 'queued'", t.id)) this.setTask(t, 'failed', stalled); }
+          this.dispatch();
+        });
+        continue;
+      }
+      if (tools === false) continue;
+      this.toolWait.delete(t.id);
       free--;
       this.starting.add(t.bot);
       void this.run(t);
@@ -1292,7 +1307,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       const brain = await this.usable(choices);
       if (!brain) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare()) return this.waitForTomorrow(task);
-      await this.fetchTools?.(disk.botConfig(this.cfg, bot.id).tools ?? []); // the downloaded app: a helper's first job waits for its tools
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';

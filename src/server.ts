@@ -32,6 +32,10 @@ function send(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body ?? { ok: true }));
 }
 
+/** An installer's process group (its pid): gone once no member is left. */
+const alive = (pid: number) => { try { process.kill(-pid, 0); return true; } catch { return false; } };
+const killGroup = (pid: number) => { try { process.kill(-pid, 'SIGKILL'); } catch { /* the group already emptied */ } };
+
 async function readJson(req: IncomingMessage): Promise<any> {
   let raw = '';
   for await (const c of req) { raw += c; if (raw.length > 12 << 20) throw Object.assign(new Error('too large'), { status: 413 }); }
@@ -66,7 +70,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
   const authority = readFileSync(authorityFile, 'utf8');
   if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
-  const installing = new Map<string, Promise<void>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
+  const installing = new Map<string, Promise<boolean>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
@@ -78,19 +82,41 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   };
   /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
    *  runs as its own process (src/tools.ts's own command): crewd keeps answering meanwhile. The result arrives as an event. */
-  const install = (id: string) => installing.get(id) ?? installing.set(id, new Promise<void>((resolve) => {
+  // An install that never finishes is stopped at this bound: its whole process group goes, and the job fails in one line.
+  const INSTALL_STALL_MS = Number(process.env.CREWHOUSE_INSTALL_STALL_MS) || 10 * 60_000;
+  const groups = new Set<number>(); // installer process groups still running, killed if crewd exits
+  process.once('exit', () => groups.forEach(killGroup));
+  const install = (id: string) => installing.get(id) ?? installing.set(id, new Promise<boolean>((resolve) => {
     db.event('tool.installing', null, { tool: id });
-    const done = (ok: boolean) => { if (!installing.delete(id)) return; db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id }); resolve(); };
+    // Its own process group: the stall kill reaches npm, pip and the download as well as the installer.
     const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
       // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
       env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
-        CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, stdio: ['ignore', 'inherit', 'inherit'] });
-    child.on('exit', (code) => done(code === 0));
-    child.on('error', (e) => { console.error(`install ${id}:`, e); done(false); });
+        CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
+    const pid = child.pid;
+    if (pid) groups.add(pid);
+    let stalled = false;
+    const finish = (ok: boolean) => {
+      installing.delete(id);
+      if (pid) groups.delete(pid);
+      db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id });
+      resolve(stalled);
+    };
+    const stall = setTimeout(async () => {
+      stalled = true;
+      if (pid) { killGroup(pid); for (let i = 0; i < 100 && alive(pid); i++) await new Promise((r) => setTimeout(r, 100)); }
+      finish(false);
+    }, INSTALL_STALL_MS);
+    child.on('exit', (code) => { clearTimeout(stall); if (!stalled) finish(code === 0); });
+    child.on('error', (e) => { console.error(`install ${id}:`, e); clearTimeout(stall); if (!stalled) finish(false); });
   })).get(id)!;
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
   // The downloaded app fetches a helper's tools on its first job, never at start: Hello doesn't wait behind the browser's big download.
-  if (packaged) crew.fetchTools = (grants) => Promise.all(toolStatus(cfg).filter((t) => grants.includes(t.id) && t.installable && !t.ready).map((t) => install(t.id)));
+  if (packaged) crew.fetchTools = async (grants) => {
+    const stalled = await Promise.all(toolStatus(cfg).filter((t) => grants.includes(t.id) && t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null)));
+    const t = stalled.find(Boolean);
+    return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
+  };
   let update: { version: string; url: string } | null = null;
   const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
   const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
