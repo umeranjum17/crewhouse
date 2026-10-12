@@ -94,9 +94,11 @@ export function transcriptOf(lines: QueueLine<{ name: string }>[], max = 40_000)
   const turns = lines.filter((l) => !(l.stopped && l.who === 'chief')).map((l) => `- ${l.who === 'you' ? 'You' : 'Chief'}${
     l.queued ? ' (not sent yet)' : l.stopped ? ' (stopped)' : ''}: ${
     [l.text.trim(), l.doc && `(Chief made a document here, ${l.doc.name}. The file stays on my phone.)`].filter(Boolean).join('\n')}`);
-  let left = false;
-  while (turns.length > 1 && turns.join('\n').length > max) { turns.shift(); left = true; }
-  const said = turns.join('\n');
+  let start = turns.length - 1;
+  let size = start >= 0 ? turns[start].length : 0;
+  for (let i = start - 1; i >= 0 && size + 1 + turns[i].length <= max; i--) { size += 1 + turns[i].length; start = i; }
+  const said = turns.slice(Math.max(start, 0)).join('\n');
+  const cut = start > 0 || said.length > max;
   return ["I'm continuing our chat from my phone. Please carry on from here; this is what we said there:",
-    left && '(Earlier turns left out.)', said.length > max ? `…${said.slice(-max)}` : said].filter(Boolean).join('\n');
+    cut && '(Earlier turns left out.)', said.length > max ? `…${said.slice(-max)}` : said].filter(Boolean).join('\n');
 }

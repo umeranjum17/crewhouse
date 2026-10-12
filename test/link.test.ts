@@ -285,6 +285,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
     'You (stopped): Cut off', 'You: Thanks', 'Chief: Any time.', 'You (not sent yet): And Saturday?'], 'the thread reads one turn per item');
   const turns = [{ who: 'you' as const, text: 'First', rid: 'a' }, { who: 'chief' as const, text: 'One' }, { who: 'you' as const, text: 'Last', rid: 'b' }, { who: 'chief' as const, text: 'Two' }];
   assert.match(transcriptOf(turns, 30), /\(Earlier turns left out\.\)\n- You: Last\n- Chief: Two$/, 'past the cap the oldest turns go, said so');
+  assert.match(transcriptOf([{ who: 'you', text: 'x'.repeat(50), rid: 'c' }], 30), /\(Earlier turns left out\.\)\n…x+$/, 'a single turn past the cap is cut to its tail, said so');
   assert.ok(chief.tasks.some((x: any) => x.id === sent.body.task), 'a Chief task, not a helper\'s');
   assert.equal(chief.phoneOffer, null);
 
