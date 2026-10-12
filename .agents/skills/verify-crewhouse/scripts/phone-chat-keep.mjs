@@ -230,10 +230,12 @@ const run = async () => {
     await waitFor(() => hasNode('Ask Chief anything'), 30000, 'the reloaded composer');
     await waitFor(() => speakers('Chief') >= 1, 8000, 'lines on screen');
     say(`${SEED} turns reloaded in ${Date.now() - s0} ms`); shot('13-many-turns.png');
-    for (let i = 0; i < 8; i++) { A('shell', 'input', 'swipe', '540', '1900', '540', '500', '180'); await sleep(300); }
+    for (let i = 0; i < 25 && !hasNode('^Turn 0: '); i++) { A('shell', 'input', 'swipe', '540', '500', '540', '1900', '120'); await sleep(400); } // finger down: back to the first turns
+    await waitFor(() => hasNode('^Turn 0: '), 8000, 'the first turn');
     say('scrolled to the top of the long chat'); shot('14-many-turns-top.png');
     A('shell', 'settings', 'put', 'system', 'font_scale', '1.3'); A('shell', 'wm', 'density', '480');
-    await sleep(1800); shot('15-narrow-1.3x.png');
+    await sleep(1500); await waitFor(() => hasNode('Ask Chief anything') && hasNode('^Turn 51: '), 30000, 'the chat at 1.3x'); // the density change restarts the activity
+    shot('15-narrow-1.3x.png');
     A('shell', 'settings', 'put', 'system', 'font_scale', '1.0'); A('shell', 'wm', 'density', 'reset'); await sleep(800);
   }
 
