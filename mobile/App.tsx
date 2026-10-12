@@ -990,12 +990,13 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
  *  the whole chat in it. The phone copy goes only after the computer has stored it; a failure keeps it and says so.
  *  Not now hides the offer until the app opens again or pairs again. */
 let notNow = false;
-function ContinueOffer({ onMoved }: { onMoved: () => void }) {
+function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => void }) {
   const t = useLook();
   const [move, setMove] = useState(() => (notNow ? null : chatToMove()));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  if (!move) return null;
+  // Out of touch it waits unseen, unless a move is under way or just failed: that outcome still shows.
+  if (!move || (!canAct && !busy && !err)) return null;
   const go = async () => {
     setBusy(true); setErr('');
     try { await api.moveChat(move.text, move.id); retireChat(); setMove(null); onMoved(); }
@@ -1006,7 +1007,7 @@ function ContinueOffer({ onMoved }: { onMoved: () => void }) {
     <T tone="ink2">Carry it on with Chief on your computer. It goes as one message; documents stay on this phone.</T>
     {!!err && <T tone="pinkInk" style={s.small}>{err}</T>}
     {busy ? <ActivityIndicator color={t.ink} accessibilityLabel="Moving your chat" style={{ alignSelf: 'flex-start' }} />
-      : <View style={s.chips}><Btn go label="Continue on your computer" onPress={() => void go()} /><Btn ghost label="Not now" onPress={() => { notNow = true; setMove(null); }} /></View>}
+      : <View style={s.chips}><Btn go label="Continue on your computer" disabled={!canAct} onPress={() => void go()} /><Btn ghost label="Not now" onPress={() => { notNow = true; setMove(null); }} /></View>}
   </Card>;
 }
 
@@ -1204,7 +1205,7 @@ function Hello({ state, refresh, go }: Ctx) {
   const reduce = motion.useReduceMotion();
   return (
     <Page>
-      <ContinueOffer onMoved={refresh} />
+      <ContinueOffer canAct onMoved={refresh} />
       <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
       <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
         <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
@@ -1633,7 +1634,7 @@ function Home(ctx: Ctx) {
     <HomeBar state={state} view={view} offline={offline} go={go} mode={mode} pick={pick} />
   </View>;
   // Chat: Chief's hero and Needs you stay over his thread, which scrolls on its own to the newest line.
-  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={canAct ? <ContinueOffer onMoved={refresh} /> : <></>} /></View>;
+  if (mode === 'chat') return <View style={{ flex: 1 }}>{top}<Chat {...ctx} id="chief" hero={<ContinueOffer canAct={canAct} onMoved={refresh} />} /></View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
