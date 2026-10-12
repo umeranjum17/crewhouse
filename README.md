@@ -103,11 +103,10 @@ Chief greets you and offers three things to take off your plate. Tap one, then *
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
-./crewhouse setup     # installs everything and checks your machine
-./crewhouse start     # prints its address and keeps running
+./crewhouse setup     # installs the engine and checks your machine
+./crewhouse start     # starts Crewhouse and opens it in your browser
 ```
-
-Then run `./crewhouse open` in a second terminal.
+A helper fetches its own tools the first time it needs them, so setup installs nothing beyond the engine.
 
 More: [install and run](docs/install.md) (every command, the phone app, the installed web app, where your data lives).
 
