@@ -1686,7 +1686,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
           return said(app, input, signal);
         }
         // Command-line tools that need the person's own sign-in: fixed argv on this computer, outside the sandbox.
-        const runTool = registry(this.cfg).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);
+        const runTool = registry(this.cfg, l?.grants ?? []).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);
         if (runTool) return await new Promise<string>((resolve) => {
           execFile(which(this.cfg, runTool.bins[0]) ?? runTool.bins[0], ((input.args as string[]) ?? []).map(String),
             { cwd: space, env: { ...process.env, ...(this.live.get(run.bot) ? resolveGrants(this.cfg, disk.botConfig(this.cfg, run.bot).tools ?? [], { 'bot.dir': space, 'bot.id': run.bot }).env : {}), NO_COLOR: '1' }, timeout: 120_000, maxBuffer: 8 << 20, signal },
@@ -1711,7 +1711,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
     if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
     if (name.startsWith('crew_')) return this.crewTools(botId).some((t) => t.name === name);
-    return registry(this.cfg).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);
+    return registry(this.cfg, grants).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);
   }
 
   // ---- the gate: every tool call, before it runs ----
@@ -1722,7 +1722,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
-      run: Object.fromEntries(registry(this.cfg).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
+      run: Object.fromEntries(registry(this.cfg, [...granted]).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
       // Sign-ins and keys: the person's, former people's, the engine's, and other programs'. Nothing reads them through a bot.
       secret: [this.cfg.stateDir, this.cfg.toolsDir, ...['.pi', '.ssh', '.gnupg', '.aws', '.config/gh', '.treg', '.codex', '.claude', '.claude.json'].map((d) => join(homedir(), d))],
     };

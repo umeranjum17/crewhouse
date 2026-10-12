@@ -131,29 +131,41 @@ test('a stalled install stops at its bound: its job fails in one line, no instal
   }
 });
 
-test('an unreadable tool manifest fails that job in plain words, and crewd keeps answering', async () => {
-  // crewd reads its tool kit from the repo it runs in, so a copy of the code with one manifest cut short.
-  const real = join(import.meta.dirname, '..'), repo = join(root, 'broken-repo');
-  mkdirSync(repo);
+/** A copy of crewd whose tool kit has one manifest cut short: crewd reads its kit from the repo it runs in. */
+async function brokenKit(tool: string) {
+  const real = join(import.meta.dirname, '..'), dir = join(root, `broken-${tool}`), repo = join(dir, 'repo'), state = join(dir, 'state');
+  mkdirSync(repo, { recursive: true });
   cpSync(join(real, 'src'), join(repo, 'src'), { recursive: true });
   cpSync(join(real, 'tools'), join(repo, 'tools'), { recursive: true });
   for (const e of readdirSync(real)) if (!['src', 'tools'].includes(e)) symlinkSync(join(real, e), join(repo, e));
-  writeFileSync(join(repo, 'tools', 'write', 'tool.json'), '{ "id": ');
-  const p4 = await free(), at = `http://127.0.0.1:${p4}`, state4 = join(root, 'broken', 'state');
+  writeFileSync(join(repo, 'tools', tool, 'tool.json'), '{ "id": ');
+  const port = await free(), at = `http://127.0.0.1:${port}`;
   const broken = spawn(process.execPath, [join(repo, 'src', 'main.ts')], {
-    env: { ...process.env, CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(p4), CREWHOUSE_LINK_PORT: '0',
-      CREWHOUSE_STATE_DIR: state4, CREWHOUSE_CREW_DIR: join(root, 'broken', 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'broken', 'tools') },
+    env: { ...process.env, CREWHOUSE_PACKAGED: '1', CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0',
+      CREWHOUSE_STATE_DIR: state, CREWHOUSE_CREW_DIR: join(dir, 'crew'), CREWHOUSE_TOOLS_DIR: join(dir, 'tools') },
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   after(() => broken.kill());
-  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state4, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(state, 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const events = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
   for (let i = 0; i < 100 && !(await fetch(`${at}/api/events`).catch(() => null))?.ok; i++) await sleep(100);
+  return { at, post, events };
+}
 
+test('an unreadable tool manifest fails a job that needs it in plain words, and crewd keeps answering', async () => {
+  const { at, post, events } = await brokenKit('write');
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
   const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
-  const failed = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])).find((e: any) => e.kind === 'task.failed' && e.data?.task === job);
   let t: any;
-  for (let i = 0; i < 300 && !(t = await failed()); i++) await sleep(100);
+  for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.failed' && e.data?.task === job)); i++) await sleep(100);
   assert.equal(t?.data.result, 'Its tools could not be checked, so this one stopped. Try again in a moment.');
   assert.equal((await fetch(`${at}/api/events`, { signal: AbortSignal.timeout(2000) })).ok, true, 'crewd still answers');
+});
+
+test("an unreadable manifest for a tool Chief was not given leaves Chief's job unaffected", async () => {
+  const { post, events } = await brokenKit('browser');
+  const job = (await post('/api/bots/chief/messages', { text: 'Hello' })).task;
+  let t: any;
+  for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.done' && e.data?.task === job)); i++) await sleep(100);
+  assert.ok(t, 'Chief answers');
 });

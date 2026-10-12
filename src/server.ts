@@ -113,7 +113,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const packaged = process.env.CREWHOUSE_PACKAGED === '1';
   // The downloaded app fetches a helper's tools on its first job, never at start: Hello doesn't wait behind the browser's big download.
   if (packaged) crew.fetchTools = async (grants) => {
-    const stalled = await Promise.all(toolStatus(cfg).filter((t) => grants.includes(t.id) && t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null)));
+    const stalled = await Promise.all(toolStatus(cfg, grants).filter((t) => t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null)));
     const t = stalled.find(Boolean);
     return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
   };
