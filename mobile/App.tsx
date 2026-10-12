@@ -35,7 +35,7 @@ import { island } from './src/island';
 import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
-import { connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
@@ -582,10 +582,11 @@ const pairWords = (e: any): string => {
 /** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
  *  (missing — the phone still shows everything the moment the app is opened). */
 async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
+  // No push credential in this build: never ask, so "You're in" carries no permission dialog and no line.
+  if (ask && !(await canPush().catch(() => true))) return 'missing';
   const { status } = ask ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
   if (status !== 'granted') return 'off';
-  const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data,
-    (e: Error & { code?: string }) => (e.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(e.message) ? '' : undefined));
+  const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data, (e) => (noPushCredential(e) ? '' : undefined));
   return token === '' ? 'missing' : 'on';
 }
 const PUSH_WORDS = {
@@ -597,8 +598,6 @@ const PUSH_WORDS = {
 function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
-  const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
-  const [checked, setChecked] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -638,15 +637,15 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
     const m = /^crewhouse:\/\/pair\?code=(.+)$/.exec(devPairUrl);
     if (m) void tryCode(decodeURIComponent(m[1]));
   }, [devPairUrl]);
-  // The pairing success says the news state once ('missing' when this build has no push credential).
-  useEffect(() => { if (!done) return; void pushState(true).then((p) => { setPush(p); setChecked(true); }).catch(() => setChecked(true)); }, [!!done]);
+  // The pairing success asks for the news permission once, but only where push can work: on a build with no
+  // push credential nothing is asked and "You're in" carries no notification line at all.
+  useEffect(() => { if (!done) return; void pushState(true).catch(() => {}); }, [!!done]);
   if (done) {
     return (
       <Center>
         <ChiefArt mood="happy" size={104} whole />
         <T style={s.display}>You're in</T>
         <T tone="ink2" style={s.centerText}>This phone is paired with your computer{done.device.role === 'view' ? '. It can watch the crew, not answer' : ''}.</T>
-        {checked && push === 'missing' && <T tone="mute" style={s.centerText}>{PUSH_WORDS.missing}</T>}
         <Btn go big label="Open Crewhouse" onPress={() => onPaired(done)} />
       </Center>
     );
