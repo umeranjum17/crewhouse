@@ -903,6 +903,14 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     } finally { setPartial(''); setBusy(false); ctrl.current = null; }
   };
 
+  /** Send what waited for a connection, oldest first, once the phone hears the model again. */
+  const flush = async () => {
+    if (flushing.current || ctrl.current) return;
+    flushing.current = true;
+    try { for (const q of pendingTurns()) { if (!(await askTurn(q.text, q.rid, true))) break; } }
+    finally { flushing.current = false; }
+  };
+
   /** A message the person just sent: queued while offline, otherwise run now under a fresh request id. */
   const send = async (text: string, rid?: string): Promise<boolean> => {
     const words = text.trim();
@@ -914,7 +922,16 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
       setLines((ls) => [...ls, { who: 'you', text: words, rid: id, queued: true }]);
       return true;
     }
-    if (!rid && offline) { setOffline(false); setHeard(Date.now()); }
+    if (!rid && offline) {
+      setOffline(false); setHeard(Date.now());
+      await flush();
+      if (pendingTurns().length) {
+        const qid = queueTurn(words);
+        setLines((ls) => [...ls, { who: 'you', text: words, rid: qid, queued: true }]);
+        setOffline(true);
+        return true;
+      }
+    }
     const id = rid ?? newRid();
     rememberUser(words, id);
     // A retried stopped turn keeps its line, without a second Try again.
@@ -923,13 +940,6 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     return true;
   };
 
-  /** Send what waited for a connection, oldest first, once the phone hears the model again. */
-  const flush = async () => {
-    if (flushing.current || ctrl.current) return;
-    flushing.current = true;
-    try { for (const q of pendingTurns()) { if (!(await askTurn(q.text, q.rid, true))) break; } }
-    finally { flushing.current = false; }
-  };
   const reconnect = async () => {
     const ok = await probeOnline();
     setOffline(!ok);
