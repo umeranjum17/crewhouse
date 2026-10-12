@@ -170,3 +170,51 @@ test("an unreadable manifest for a tool Chief was not given leaves Chief's job u
   for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.done' && e.data?.task === job)); i++) await sleep(100);
   assert.ok(t, 'Chief answers');
 });
+
+/** The terminal path's own first-use install: `./crewhouse start` sets CREWHOUSE_FIRST_USE_TOOLS, reusing the
+ *  downloaded app's install path instead of installing the kit at setup. Fake installers fail at once. */
+async function terminalPath(firstUse: boolean) {
+  const bin = join(root, firstUse ? 'term-on-bin' : 'term-off-bin');
+  mkdirSync(bin, { recursive: true });
+  for (const b of ['npm', 'npx', 'python3', 'curl']) { writeFileSync(join(bin, b), '#!/bin/sh\nexit 1\n'); chmodSync(join(bin, b), 0o755); }
+  const port = await free(), at = `http://127.0.0.1:${port}`, dir = join(root, firstUse ? 'term-on' : 'term-off');
+  const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
+    env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0',
+      ...(firstUse ? { CREWHOUSE_FIRST_USE_TOOLS: '1' } : {}),
+      CREWHOUSE_STATE_DIR: join(dir, 'state'), CREWHOUSE_CREW_DIR: join(dir, 'crew'), CREWHOUSE_TOOLS_DIR: join(dir, 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => daemon.kill());
+  const post = (path: string, body: unknown) => fetch(at + path, { method: 'POST', headers: { authorization: `Bearer ${readFileSync(join(dir, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const events = async () => (await fetch(`${at}/api/events?after=0`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => [])) as any[];
+  for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`).catch(() => null))?.ok; i++) await sleep(100);
+  return { at, post, events, daemon };
+}
+
+test("the terminal path fetches a helper's tools on its first job, not at start", async () => {
+  const { at, post, events } = await terminalPath(true);
+  const state = async () => (await fetch(`${at}/api/state`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null)) as any;
+  assert.deepEqual((await state())?.installing, [], 'nothing installs at start');
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  let installing: string[] = [];
+  for (let i = 0; i < 100 && !(installing = (await events()).filter((e) => e.kind === 'tool.installing').map((e) => e.data?.tool)).length; i++) await sleep(100);
+  assert.deepEqual([...installing].sort(), ['browser', 'documents', 'write'], "the first job fetches exactly Scribe's missing tools");
+  // The fake installers fail at once: the job goes on without those tools rather than waiting for ever.
+  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
+  let t: any;
+  for (let i = 0; i < 300 && (t = await taskOf())?.state !== 'done'; i++) await sleep(100);
+  assert.equal(t?.state, 'done');
+  assert.deepEqual((await state())?.installing, []);
+});
+
+test('without the terminal path marker, an unpackaged crewd installs nothing by itself', async () => {
+  const { at, post, events } = await terminalPath(false);
+  await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
+  const job = (await post('/api/bots/scribe/messages', { text: 'Write me a short note' })).task;
+  const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
+  let t: any;
+  for (let i = 0; i < 300 && (t = await taskOf())?.state !== 'done'; i++) await sleep(100);
+  assert.equal(t?.state, 'done', 'the job runs without waiting on installs');
+  assert.equal((await events()).filter((e) => e.kind === 'tool.installing').length, 0, 'no install was started');
+});

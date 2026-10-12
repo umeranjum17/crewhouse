@@ -1,6 +1,6 @@
 // `./crewhouse doctor`: is this machine ready? Never reads a sign-in.
 import { loadConfig } from './config.ts';
-import { toolStatus, which } from './tools.ts';
+import { toolStatus } from './tools.ts';
 import { browserBin, missing } from './desktop.ts';
 import { sandboxReady } from './engine.ts';
 import { ENGINE_VERSION } from './openclaw/runtime.ts';
@@ -19,12 +19,11 @@ line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bu
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
 console.log('AI accounts: sign in from the app, under Settings, AI accounts.');
 
-console.log('\nTool kit:');
+console.log('\nTool kit (a helper fetches its own the first time it needs it):');
 for (const t of toolStatus(cfg)) {
-  if (t.source === 'planned') { line(null, t.name, `planned: ${t.install.system ?? ''}`); continue; }
-  if (!t.ready) { line(null, t.name, `missing ${t.missing.join(', ')}: ${t.howto}`); continue; }
-  const where = !t.bins.length ? 'built in' : which(cfg, t.bins[0])!.startsWith(cfg.toolsDir) ? 'pinned in Crewhouse' : 'found on PATH';
-  line(true, t.name, `${t.license}, ${where}${t.outdated ? '; new pin available: ./crewhouse tools install ' + t.id : ''}`);
+  if (t.source === 'planned') { line(null, t.name, 'planned'); continue; }
+  if (!t.ready) { line(null, t.name, t.installable ? 'arrives on first use' : `missing ${t.missing.join(', ')}`); continue; }
+  line(true, t.name, t.outdated ? 'a newer pin is available' : '');
 }
 console.log('\nBot desktops (the Computer tool):');
 const gaps = missing();

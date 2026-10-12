@@ -36,6 +36,8 @@ UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/crewhouse.service"
 has_systemd() { command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; }
 autostart_on() {
   has_systemd || { echo "This computer has no systemd user session, so Crewhouse can't start by itself here. Use ./crewhouse start." >&2; return 1; }
+  # Helpers fetch their tools on first use, wherever crewd starts from: the unit carries the same marker start sets.
+  export CREWHOUSE_FIRST_USE_TOOLS=1
   mkdir -p "$(dirname "$UNIT")"
   cat > "$UNIT" <<UNIT
 [Unit]
@@ -75,18 +77,33 @@ remove() {
   rm -rf -- "$1"
 }
 
+# The engine install takes about two minutes, and its longest phase prints nothing itself: a line every
+# 10 s so setup never looks hung. The shell counts, not node: the installer's own event loop can block
+# for almost a minute while it verifies the engine set, which would stall an in-process heartbeat.
+prepare_engine() {
+  local eng started el
+  node scripts/prepare-engine.mjs & eng=$!
+  trap 'kill "$eng" 2>/dev/null; exit 130' INT TERM
+  started=$(date +%s)
+  while kill -0 "$eng" 2>/dev/null; do
+    sleep 10
+    kill -0 "$eng" 2>/dev/null || break
+    el=$(($(date +%s) - started))
+    printf 'Installing the AI engine… %d:%02d elapsed\n' $((el / 60)) $((el % 60))
+  done
+  trap - INT TERM
+  wait "$eng"
+}
+
 case "${1:-}" in
   setup)
     need_node
     npm ci --no-audit --no-fund
-    node scripts/prepare-engine.mjs
+    echo "Installing the AI engine (this can take a couple of minutes; it reports progress as it goes)."
+    prepare_engine
     npm run build:web
-    # Detect, explain, ask, then install: pinned tools go into Crewhouse's own folder, never global, never sudo.
-    node src/tools.ts
-    if [ -t 0 ]; then
-      read -r -p "Install the missing pinned tools now (browser with its own Chromium, MarkItDown, yt-dlp)? [Y/n] " yn
-      case "${yn:-y}" in [Yy]*) node src/tools.ts install || true ;; esac
-    fi
+    # Helpers fetch their own tools the first time they need them: setup installs nothing beyond the engine.
+    echo "Helpers fetch their own tools the first time they need them, so there is nothing more to install."
     echo
     node src/doctor.ts || true
     echo
@@ -94,7 +111,7 @@ case "${1:-}" in
       read -r -p "Start Crewhouse by itself whenever you log in? [Y/n] " yn
       case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open Crewhouse from the app menu, or run ./crewhouse open"; exit 0; } ;; esac
     fi
-    echo "Next: ./crewhouse start, then ./crewhouse open in another terminal."
+    echo "Next: ./crewhouse start, which opens Crewhouse in your browser."
     ;;
   autostart)
     need_node
@@ -108,7 +125,52 @@ case "${1:-}" in
     need_node
     [ -f web/dist/index.html ] || npm run build:web
     if autostarted; then echo "Crewhouse is already running; open it from the app menu or run ./crewhouse open"; exit 0; fi
-    exec node src/main.ts
+    paths
+    # Helpers fetch their tools on first use (see src/server.ts): crewd installs them itself, so setup stays short.
+    export CREWHOUSE_FIRST_USE_TOOLS=1
+    # This checkout's app address, once its crewd answers. The URL carries the private capability, so only the browser gets it.
+    app_url() {
+      node --input-type=module - <<'NODE' 2>/dev/null
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadConfig } from './src/config.ts';
+try {
+  const c = loadConfig(), key = join(c.stateDir, 'person.key');
+  if (!existsSync(key)) process.exit(1);
+  const r = await fetch(`http://${c.host}:${c.port}/api/state`);
+  if (!r.ok) process.exit(1);
+  console.log(`http://${c.host}:${c.port}/#person=${readFileSync(key, 'utf8')}`);
+} catch { process.exit(1); }
+NODE
+    }
+    open_url() {
+      if command -v xdg-open >/dev/null; then (xdg-open "$1" >/dev/null 2>&1 &)
+      elif command -v open >/dev/null; then (open "$1" >/dev/null 2>&1 &)
+      else echo "Open ${1%%#*} in your browser."; fi
+    }
+    if pid=$(crewd_pid); then
+      url=$(app_url) || { echo "Crewhouse is running (pid $pid) but not answering yet; try ./crewhouse open in a moment." >&2; exit 1; }
+      open_url "$url"
+      echo "Crewhouse is already running; opened ${url%%#*} in your browser."
+      exit 0
+    fi
+    node src/main.ts & crewd=$!
+    trap 'kill "$crewd" 2>/dev/null; exit 130' INT TERM
+    url=
+    for _ in $(seq 360); do
+      url=$(app_url) || true
+      [ -n "$url" ] && break
+      kill -0 "$crewd" 2>/dev/null || { wait "$crewd"; exit $?; }
+      sleep 0.5
+    done
+    trap - INT TERM
+    if [ -z "$url" ]; then
+      echo "Crewhouse is taking a while to answer. It keeps starting in this terminal; open it with ./crewhouse open once it does."
+    else
+      open_url "$url"
+      echo "Crewhouse is up at ${url%%#*}."
+    fi
+    wait "$crewd"
     ;;
   update)
     need_node
@@ -123,9 +185,11 @@ case "${1:-}" in
     git pull --ff-only
     if [ "$(git rev-parse HEAD)" = "$before" ]; then echo "Already up to date."; exit 0; fi
     npm ci --no-audit --no-fund
-    node scripts/prepare-engine.mjs
+    prepare_engine
     npm run build:web
     paths
+    # A restarted crewd keeps fetching helpers' tools on first use, like start.
+    export CREWHOUSE_FIRST_USE_TOOLS=1
     # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.
     node src/tools.ts install --refresh || echo "A tool didn't update; ./crewhouse tools install tries again." >&2
     if autostarted; then

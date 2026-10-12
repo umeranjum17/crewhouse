@@ -20,17 +20,16 @@ You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothi
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
 ./crewhouse setup     # installs dependencies and the engine, builds the web app, checks the machine
-./crewhouse start     # starts Crewhouse and prints the address
+./crewhouse start     # starts Crewhouse and opens it in your browser
 ```
 
-Run **`./crewhouse open`** in another terminal (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link (an iPad or phone installs the web app from its own https address: [The installed web app](#the-installed-web-app)). Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
+A helper fetches its own tools the first time it needs them, so `setup` installs nothing beyond the engine. `./crewhouse start` opens your browser at the app itself, so no second terminal is needed; later, **`./crewhouse open`** reopens it (or use the installed app menu). The launcher hands your browser a private capability from your install, so a helper cannot approve its own work over local HTTP. The public address alone is read-only; paired phones and a paired installed web app use their authenticated encrypted link (an iPad or phone installs the web app from its own https address: [The installed web app](#the-installed-web-app)). Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply, and the crew starts work.
 
-When run in a terminal, `setup` asks two things:
+When run in a terminal, `setup` asks one thing:
 
-- Whether to install the helpers' pinned tools now: their web browser with its own Chromium (about 170 MB), MarkItDown and yt-dlp. You can do this later with `./crewhouse tools install`.
 - Whether Crewhouse should start by itself when you log in (a systemd user service). You can change this later with `./crewhouse autostart on|off`.
 
-`./crewhouse doctor` shows what's installed and what's missing. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
+`./crewhouse doctor` shows what's installed and what's missing; `./crewhouse tools` has the details for each tool. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
@@ -39,7 +38,8 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 | Command | What it does |
 |---|---|
 | `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
-| `./crewhouse doctor` | Shows what's installed and what's missing, and how to add it |
+| `./crewhouse doctor` | Shows what's installed and what's missing |
+| `./crewhouse open` | Reopens Crewhouse in your browser |
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
 | `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone or the installed web app from the terminal; `code` also prints a relay code to use away from home |
