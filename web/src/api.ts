@@ -119,8 +119,10 @@ export const api = {
   person: (id: number, body: { name?: string; address?: string; quiet?: string | null; share?: string }) => call('PUT', `/api/people/${id}`, body),
   accounts: () => call('GET', '/api/accounts'),
   /** "Sign in with ChatGPT": its own page, which comes straight back to the home computer. `via: 'code'` is the fallback;
-   *  `fresh` asks ChatGPT's page which account again ("Use my personal account"). */
-  signIn: (account: string, body: { via?: 'code'; fresh?: boolean } = {}) => call('POST', `/api/accounts/1/${account}/login`, body),
+   *  `via: 'key'` waits for a pasted plan key (OpenCode Go); `fresh` asks ChatGPT's page which account again. */
+  signIn: (account: string, body: { via?: 'code' | 'key'; fresh?: boolean } = {}) => call('POST', `/api/accounts/1/${account}/login`, body),
+  /** Paste the plan key the key wait asks for. */
+  signInPaste: (account: string, text: string) => call('POST', `/api/accounts/1/${account}/paste`, { text }),
   retryAccount: (account: string) => call('POST', `/api/accounts/1/${account}/retry`),
   /** The person switches Google on for their crew: their own Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),

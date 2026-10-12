@@ -1412,7 +1412,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <Memory tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
-      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: openTab() })} />
+      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />
 
       <div className="label">Your apps</div>
       <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>

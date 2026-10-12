@@ -92,7 +92,7 @@ export class OpenClawRuntime implements AgentRuntime {
     return provider ? this.kit.signedIn(ME, provider) : false;
   }
 
-  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
+  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
@@ -104,6 +104,7 @@ export class OpenClawRuntime implements AgentRuntime {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
     }
+    if (via === 'key') return this.keyIn(account, authChoice, on);
     const name = PROVIDERS[account]?.name ?? account;
     return this.kit.signIn(ME, { authChoice, via }, (v) => {
       if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
@@ -112,6 +113,15 @@ export class OpenClawRuntime implements AgentRuntime {
       else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
       else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed' });
     });
+  }
+
+  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
+  keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
+    const name = PROVIDERS[account]?.name ?? account;
+    return {
+      paste: (text: string) => { void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => on(r === 'ok' ? { waiting: false, done: true } : r === 'invalid' ? { waiting: true, error: `That key didn't work. Check it and paste it again.` } : { waiting: false, error: `Sign-in for ${name} is not connected yet` })); },
+      cancel: () => on({ waiting: false, error: 'The sign-in was cancelled.' }),
+    };
   }
 
   async signOut(account: string) {
