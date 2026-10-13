@@ -43,19 +43,11 @@ async function http(method: string, path: string, body?: Json) {
   return out;
 }
 
-/** A delivered file as a `blob:` address only this page opens. crewd opens `/files/` only for the person's authority (a
- *  helper's shell shares the loopback) and a link, `<img>` or `<video>` can't send it, so the app fetches the bytes itself;
- *  a cookie would reach any server on 127.0.0.1, whatever its port. Demo and the phone link keep the address as it is.
- *  ponytail: one blob per file for the page's life, never revoked; revoke on unmount if long sessions hold too much. */
-const blobs = new Map<string, Promise<string>>();
-export function fileUrl(url: string): Promise<string> {
-  if (demo || paired || !url.startsWith('/files/')) return Promise.resolve(url);
-  let got = blobs.get(url);
-  if (!got) blobs.set(url, got = fetch(url, { headers: { authorization: `Bearer ${person()}` } })
-    .then(async (r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return URL.createObjectURL(await r.blob()); })
-    .catch((e) => { blobs.delete(url); throw e; }));
-  return got;
-}
+/** A delivered file's `/files/` address works as a plain link, `<img>` or `<video>`: crewd sets a cookie for it once, here,
+ *  from the person's key (`POST /api/files/session`). Demo and the phone never reach `/files`, so they skip it. */
+export const filesSession: Promise<void> = localTransport && !demo && person()
+  ? fetch('/api/files/session', { method: 'POST', headers: { 'x-crewhouse': '1', authorization: `Bearer ${person()}` } }).then(() => {}, () => {})
+  : Promise.resolve();
 
 /** What went wrong, in the three ways a screen cares about: the home computer is unreachable, crewd doesn't do that yet, or it failed. */
 export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');

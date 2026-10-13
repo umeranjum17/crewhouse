@@ -1,7 +1,7 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
 import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { api, fileUrl, trouble, type Json } from './api.ts';
+import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { canHear, hear } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
@@ -309,22 +309,14 @@ export function ReviewCard({ f }: { f: FileView }) {
   </div>;
 }
 
-/** A delivered picture or video's bytes, fetched with the person's authority (`fileUrl`); '' until they arrive. */
-function useFileSrc(url: string) {
-  const [src, setSrc] = useState('');
-  useEffect(() => { let on = true; setSrc(''); if (url) fileUrl(url).then((u) => on && setSrc(u), () => {}); return () => { on = false; }; }, [url]);
-  return src;
-}
-
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
-  const src = useFileSrc(f.kind === 'image' || (f.kind === 'video' && play) ? f.url : '');
-  if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={src || undefined} alt={f.name} /></a>;
+  if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
   if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a><ReviewCard f={f} /></div>;
   if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play
-      ? <video className="media" src={src || undefined} controls autoPlay />
+      ? <video className="media" src={f.url} controls autoPlay />
       : <button className={`media cover ${big ? 'big' : ''}`} onClick={() => setPlay(true)} aria-label={`Play ${f.name}`}><span>{f.name}</span><i>▶</i></button>;
   }
   return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a>;
