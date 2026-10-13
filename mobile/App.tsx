@@ -752,9 +752,10 @@ function PhoneOnly({ onExit }: { onExit: () => void }) {
 
 function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: () => void; onSignOut: () => void }) {
   const t = useLook();
-  // On a very narrow screen the two controls no longer leave room for "Chief", so they stack instead of
-  // squeezing the title into a per-character column. At normal widths the header stays the one row it was.
-  const narrow = useWindowDimensions().width < 360;
+  // When the screen is narrow for its text (a small phone, or a large font) the two controls no longer leave room for
+  // "Chief", so they stack instead of squeezing the title out. At normal widths and fonts the header stays one row.
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360;
   return (
     <View style={[s.head, { borderColor: t.line }]}>
       <Face who="chief" size={32} />

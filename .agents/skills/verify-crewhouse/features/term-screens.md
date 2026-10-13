@@ -71,3 +71,16 @@ buttons in a row (`.more-dots` hidden).
   primary and ⋯" runs this and the sheet at 390 and 1440, day and night).
 - **Motion.** Tap a card's "⋯": the sheet rises with the card's title on top; tap Change time: the sheet closes and
   the card's time box opens (`.routine-edit`). Escape or a tap on the scrim closes it.
+
+## The helmet keeps its own shape
+
+Every helmet is sized by its width alone and its height follows the drawing: a head about 1.35 wide per 1 tall in
+every face, header and hero, never a flat bar. On web each `.face img.ink` has `width / height` within 0.05 of
+`naturalWidth / naturalHeight` (`test/office.test.ts` "your crew reads whole" probes every row at 390 and 1440, day
+and night). The native app draws `art.helmetDots` on square dots, so its rows follow the 5:4 box
+(`helmet(cols, …, cell = 1)`): pair it (`features/phone-pairing.md`), screenshot Home's Chief header
+(`adb -s <serial> exec-out screencap -p`) at `font_scale` 1.0 and the largest, `cmd uimode night yes|no`, and measure
+the helmet's dot block: 56 dp wide, about 45 dp tall. A black band outside the phone's own status bar (the clock
+shifted with it) is the viewer or a system shrink mode, not the app: the app cannot move the status bar.
+In phone-only mode the header (`PhoneHead`) stacks Sign out and Use a computer whenever the width over the font scale
+is under 360 dp, so at the largest font "Chief" stays on screen beside the helmet.
