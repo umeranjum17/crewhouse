@@ -136,6 +136,8 @@ async function probe(ratio) {
       // A sticky or fixed bar over a page that still scrolls is the content passing under it; at the page's end it counts.
       // ponytail: the page's own scroll only; a bar over an inner scroller still fails, add the scroller test when one does.
       if (/fixed|sticky/.test(getComputedStyle(up).position) && document.scrollingElement.scrollHeight - scrollY - innerHeight > 1) continue;
+      // A part pulled onto its neighbour by a negative margin is a stack drawn on purpose (Chats' two crew faces).
+      const pull = getComputedStyle(up); if (parseFloat(pull.marginLeft) < 0 || parseFloat(pull.marginTop) < 0) continue;
       const meet = cover(up).flatMap((a) => ink(low).map((b) => cut(cut(a, b), o))).find((q) => q.width > 1 && q.height > 1);
       if (meet) hit('overlap', up, `covers ${name(low)} "${words(low).slice(0, 30)}" by ${Math.round(meet.width)}×${Math.round(meet.height)}`, meet);
     }
