@@ -178,9 +178,13 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
             {c.id === 'room' ? <span className="stack-faces">{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={26} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
-            <span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.line}</span></span>
-            <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
-          </a>{h && <Stuck h={h} refresh={refresh} />}
+            <span className="grow chat-preview"><b>{c.name}</b><span className="small">{c.line}</span></span>
+            <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>
+              {c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}
+              {c.id === 'chief' && c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
+          </a>
+          {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
+          {h && <Stuck h={h} refresh={refresh} />}
         </div>;
       })}
     </div>
@@ -549,7 +553,11 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
-  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
+  // Keep the opening unread boundary after the thread's read acknowledgment.
+  const mark = useRef<number | null>(null);
+  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => {
+    mark.current ??= A.newDivider(p, id); setPage(p);
+  }).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
   const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
@@ -693,7 +701,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
-          return <Fragment key={l.id}>{before}{shown ? null : wrap}</Fragment>;
+          return <Fragment key={l.id}>{before}{l.id === mark.current && <div className="new-divider" role="separator"><span>New</span></div>}{shown ? null : wrap}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
@@ -1743,7 +1751,6 @@ function useLook() {
 /** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
  *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
 function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
-  const chats = new Map(A.chats(state).map((c) => [c.id, c]));
   const word = signedOut ? NEEDS_SIGNIN : A.chiefStatus(live).word;
   // The crew summary is the office's own count line (A.summaryOf): every member once, Chief too, by the status the
   // rail rows and the Office read, so a row that shows "Free" is counted as free.
@@ -1758,14 +1765,12 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
       {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
-        const r = A.statusOf(h, live), c = chats.get(h.id);
-        // A crew member waiting on the person is Chief's to bring (waitsOnYou): the row carries no badge for it;
-        // the ask reaches the person through Chief's own chat. The seat class is namespaced (`seat-…`) so a seat
+        const r = A.statusOf(h, live);
+        // Only Chief carries a badge or an ask; a crew row never does. The seat class is namespaced (`seat-…`) so a seat
         // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
         // over the nav).
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
-          {(c?.unread ?? 0) > 0 && !A.waitsOnYou(h) && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
           <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.word}</span></span>
         </a>;
       })}

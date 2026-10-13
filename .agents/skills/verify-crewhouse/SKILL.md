@@ -197,7 +197,7 @@ Checks, each with the element and a red-outlined crop (`hits/`), and exit 0 clea
 - **clipped**: words running past a box that hides overflow. A designed cut (ellipsis, line clamp) passes while it
   shows at least half; a hard cut always fails.
 - **overlap**: a sibling on top of another's words or pictures (covering padding is layout; a sticky bar over a page
-  that still scrolls is content passing under it).
+  that still scrolls is content passing under it; a sibling pulled on by a negative margin is a stack on purpose).
 - **offscreen**: a part past the screen's sides, a fixed part past its bottom, or a page that scrolls sideways.
 - **strip**: a one-colour band at a screen edge (at least 6 px and 1.5% of the side) that is not one of the theme's
   page colours (`web/src/tokens.ts` bg/surface/sunken).

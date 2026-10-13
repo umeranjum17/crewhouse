@@ -545,8 +545,8 @@ export class Crew {
     const last = this.db.get(`SELECT author, text, at, task_id FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
     if (last) Object.assign(last, { text: short(cleanReply(last.text), 160), task_id: undefined, helper: bot === CHIEF ? this.speaker(last) : undefined });
     const seen = this.db.get('SELECT seen FROM reads WHERE bot = ?', bot)?.seen ?? 0;
-    const unread = this.db.get(`SELECT COUNT(*) AS n FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!.n as number;
-    return { last: last ?? null, unread };
+    const unseen = this.db.get(`SELECT COUNT(*) AS n, MIN(id) AS first FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!;
+    return { last: last ?? null, unread: unseen.n as number, firstUnread: unseen.first as number | null };
   }
 
   /** The person has read this thread up to now. */
@@ -914,7 +914,7 @@ export class Crew {
     const b = this.needBot(id);
     const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], 10000).map((e) => e.data.seq));
     return {
-      bot: this.pub(b),
+      bot: { ...this.pub(b), ...this.chat(id) },
       job: disk.readJob(this.cfg, id),
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
       phoneOffer: id === CHIEF && !around ? (() => {
