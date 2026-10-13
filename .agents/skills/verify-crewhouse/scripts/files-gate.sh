@@ -54,6 +54,7 @@ XLSX=$(cd "$LAB/crew/bots/reel/files" && ls *.xlsx | head -1)
 ls -la "$LAB/crew/bots/reel/files" > "$OUT/reel-files.txt"
 
 # 1. Host curl matrix: the status per caller, and whether the body is the file's own bytes.
+COOKIE=$(curl -fsS -X POST -D - -o /dev/null "${H[@]}" "$B/api/files/session" | tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: \(crewhouse-files=[^;]*\).*/\1/p')
 check() { local label=$1 f=$2 code leak=no; shift 2
   code=$(curl -sS -o "$LAB/body" -w '%{http_code}' "$@" "$B/files/reel/$f" || true)
   cmp -s "$LAB/body" "$LAB/crew/bots/reel/files/$f" && leak=yes
@@ -64,6 +65,9 @@ check() { local label=$1 f=$2 code leak=no; shift 2
     check 'public header only' "$f" -H x-crewhouse:1
     check 'wrong key' "$f" -H 'Authorization: Bearer nope'
     check 'range, no key' "$f" -H 'Range: bytes=0-15'
+    check 'wrong cookie' "$f" -H 'Cookie: crewhouse-files=0000000000000000000000000000000000000000000000000000000000000000'
+    check "person's browser cookie" "$f" -H "Cookie: $COOKIE"
+    check "range, person's browser cookie" "$f" -H "Cookie: $COOKIE" -H 'Range: bytes=0-15'
     check "person's key" "$f" "${H[@]}"
   done; } > "$OUT/curl-matrix.tsv"
 cat "$OUT/curl-matrix.tsv"
@@ -97,7 +101,7 @@ ax stop >/dev/null 2>&1 || true; ax pages >/dev/null 2>&1 || true; ax selectpage
 ax open "$B/#person=$PERSON" >/dev/null
 # The person's key never stays in the address: the app moves it to the tab's sessionStorage.
 ax eval 'location.href.includes("person=") ? "KEY IN URL" : "address clean"' | tee "$OUT/address-check.txt"
-IMG_CHECK='(async () => { for (let i = 0; i < 100; i++) { const im = [...document.querySelectorAll("img")].find((x) => x.alt === "Beach day"); if (im && im.complete && im.naturalWidth) return { src: im.src.slice(0, 5), width: im.naturalWidth }; await new Promise((r) => setTimeout(r, 100)); } return "picture never loaded"; })()'
+IMG_CHECK='(async () => { for (let i = 0; i < 100; i++) { const im = [...document.querySelectorAll("img")].find((x) => x.alt === "Beach day"); if (im && im.complete && im.naturalWidth) return { src: new URL(im.src).pathname.slice(0, 7), width: im.naturalWidth }; await new Promise((r) => setTimeout(r, 100)); } return "picture never loaded"; })()'
 for theme in night day; do
   for wh in 1440x900 390x844; do
     w=${wh%x*}; h=${wh#*x}
@@ -109,25 +113,22 @@ for theme in night day; do
   done
 done
 ax resize 1440 900 >/dev/null; ax open "$B/?night#/h/reel" >/dev/null
-# The video plays from a blob: address once the person taps Play.
+# The video plays from its /files address (Range, with the cookie) once the person taps Play.
 ax eval '(async () => { for (let i = 0; i < 100 && !document.querySelector("button[aria-label=\"Play Beach clip\"]"); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector("button[aria-label=\"Play Beach clip\"]").click();
-  for (let i = 0; i < 100; i++) { const v = document.querySelector("video"); if (v && v.readyState >= 2) return { src: v.src.slice(0, 5), seconds: v.duration, width: v.videoWidth }; await new Promise((r) => setTimeout(r, 100)); } return "video never loaded"; })()' | tee "$OUT/video-check.txt"
+  for (let i = 0; i < 100; i++) { const v = document.querySelector("video"); if (v && v.readyState >= 2) return { src: new URL(v.src).pathname.slice(0, 7), seconds: v.duration, width: v.videoWidth }; await new Promise((r) => setTimeout(r, 100)); } return "video never loaded"; })()' | tee "$OUT/video-check.txt"
 ax screenshot "$SH/video-night-1440.png" >/dev/null
-# The PDF opens in its own tab as a blob: address; the spreadsheet's Download saves it under its own name.
+# The PDF opens in its own tab at its /files address; the spreadsheet's Download link fetches the file with the cookie.
 ax eval '(async () => { for (let i = 0; i < 100 && ![...document.querySelectorAll("a[href^=\"/files/\"]")].some((a) => /trip-plan/.test(a.getAttribute("href"))); i++) await new Promise((r) => setTimeout(r, 100)); [...document.querySelectorAll("a[href^=\"/files/\"]")].find((a) => /trip-plan/.test(a.getAttribute("href"))).click(); return "clicked"; })()' >/dev/null
 app=$(ax pages | awk -F, '$NF=="true"{gsub(/ /,"",$1); print $1}')
-for _ in $(seq 1 50); do ax pages | grep -q ',blob:' && break; sleep 0.2; done
+for _ in $(seq 1 50); do ax pages | grep -q '/files/' && break; sleep 0.2; done
 ax pages | tee "$OUT/pdf-tab.txt"
-pdf=$(ax pages | awk -F, '$2 ~ /^blob:/{gsub(/ /,"",$1); print $1; exit}')
+pdf=$(ax pages | awk -F, '$2 ~ /\/files\//{gsub(/ /,"",$1); print $1; exit}')
 [ -n "$pdf" ] && { ax selectpage "$pdf" >/dev/null; ax screenshot "$SH/pdf-tab-1440.png" >/dev/null; ax closepage "$pdf" >/dev/null; }; ax selectpage "$app" >/dev/null
 ax open "$B/?night#/f/reel/files%2F$XLSX" >/dev/null
-ax eval '(async () => { const got = []; const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { got.push({ href: this.href, name: this.download }); };
-  for (let i = 0; i < 100 && ![...document.querySelectorAll("a")].some((a) => a.textContent === "Download"); i++) await new Promise((r) => setTimeout(r, 100));
-  click.call([...document.querySelectorAll("a")].find((a) => a.textContent === "Download"));
-  for (let i = 0; i < 100 && !got.length; i++) await new Promise((r) => setTimeout(r, 100));
-  HTMLAnchorElement.prototype.click = click; if (!got.length) return "no download";
-  const b = new Uint8Array(await (await fetch(got[0].href)).arrayBuffer());
-  return { href: got[0].href.slice(0, 5), name: got[0].name, bytes: b.length, zip: String.fromCharCode(b[0], b[1]) }; })()' | tee "$OUT/download-check.txt"
+ax eval '(async () => { for (let i = 0; i < 100 && ![...document.querySelectorAll("a")].some((a) => a.textContent === "Download"); i++) await new Promise((r) => setTimeout(r, 100));
+  const a = [...document.querySelectorAll("a")].find((x) => x.textContent === "Download"); if (!a) return "no download link";
+  const b = new Uint8Array(await (await fetch(a.href)).arrayBuffer());
+  return { href: new URL(a.href).pathname.slice(0, 7), name: decodeURIComponent(a.href.split("/").pop()), bytes: b.length, zip: String.fromCharCode(b[0], b[1]) }; })()' | tee "$OUT/download-check.txt"
 ax eval "$PANEL" >/dev/null; ax screenshot "$SH/sheet-panel-night-1440.png" >/dev/null
 ax resize 390 844 >/dev/null; ax open "$B/?day#/f/reel/files%2F$XLSX" >/dev/null; ax eval "$PANEL" >/dev/null
 ax screenshot "$SH/sheet-panel-day-390.png" >/dev/null
