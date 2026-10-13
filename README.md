@@ -97,7 +97,7 @@ On **Ubuntu or Debian** (64-bit), with nothing to type:
 2. Open it and press **Install** in your software centre.
 3. Open **Crewhouse** from your app menu.
 
-Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No API keys, no terminal logins. A helper fetches its own tools, such as its web browser, the first time it needs them.
+Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No terminal logins. You never copy an API key; the one exception is OpenCode Go, which asks you to paste your plan key on the card. A helper fetches its own tools, such as its web browser, the first time it needs them.
 
 **From the code** (any Linux, for developers): you need **[Node.js](https://nodejs.org) 22.22.3 or later**.
 
