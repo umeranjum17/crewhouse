@@ -25,6 +25,15 @@ change is flipped away and back once after 20 s. Exit 2 means it never settled; 
 **Someone's shot** (a phone photo, a bug report): `shot <slug>=<file>` runs the strip check and the mock pairing.
 The theme comes from the file name (`day|light`, `night|dark`), or from the page colour nearest the shot's middle.
 
+**Bundled phone fonts.** `fonts --out <dir>` (no emulator, no screenshot) guards the Android bold-weight
+mechanism: every weight the phone asks for (`...fw()` in `mobile/`) must resolve to a static family in
+`mobile/src/font.ts` that `useFonts` loads from a bundled file, and no bare `fontWeight` may remain outside that
+map — Android draws a bare weight on a custom family as regular. Exit 0 clean, 1 a hit, 2 could not run.
+A raster weight check is deliberately not attempted: uiautomator carries no size or weight per node, and at the
+largest text the titles and the body differ in size per style, so a stroke ratio needs a per-node em that the
+pixels cannot recover (tried on ch-android-bold-weight: band merges, baseline contamination, core fragmentation
+across themes).
+
 Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme>-vs-mock.png`,
 `hits/<slug>-<theme>-<n>-<kind>.png` and `look-check.json` (every hit's element, words, box and detail).
 
