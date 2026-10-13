@@ -166,14 +166,97 @@ async function strips(src, frac, sets, theme) {
   // A phone shot with no theme given: the look whose page colour is nearer the middle of the screen.
   if (!sets[theme]) { const m = px(w >> 1, h >> 1), d = (k) => Math.abs(sets[k][0][0] - m[0]) + Math.abs(sets[k][0][1] - m[1]) + Math.abs(sets[k][0][2] - m[2]); theme = d('day') <= d('night') ? 'day' : 'night'; }
   const bgs = sets[theme], out = [];
+  // A solid black band is never the app's page: night's sunken (#060605) sits within 10 of black, so without
+  // this a letterbox band passes in the night look while failing by day. Only (near-)pure black counts: the app's
+  // own night page colours (bg #0C0C0B, sunken #060605) stay the app's page, even at its padded edges.
+  const black = (c) => c[0] <= 4 && c[1] <= 4 && c[2] <= 4;
   // Each edge: the run of lines, from the edge inwards, that are one colour end to end (98% of their pixels).
   for (const [edge, n, len, at] of [['left', w, h, (k, t) => px(k, t)], ['right', w, h, (k, t) => px(w - 1 - k, t)], ['top', h, w, (k, t) => px(t, k)], ['bottom', h, w, (k, t) => px(t, h - 1 - k)]]) {
     const ink = at(0, len >> 1);
     let k = 0;
     for (; k < n >> 1; k++) { let same = 0; for (let t = 0; t < len; t += 2) same += near(at(k, t), ink); if (same < 0.98 * Math.ceil(len / 2)) break; }
-    if (k >= Math.max(6, frac * n) && !bgs.some((b) => near(ink, b, 10))) out.push({ edge, px: k, colour: ink });
+    if (k >= Math.max(6, frac * n) && (!bgs.some((b) => near(ink, b, 10)) || black(ink))) out.push({ edge, px: k, colour: ink });
   }
   return { out, w, h, theme };
+}
+/** A text line the native shell drew cut. uiautomator reports a node's full text, so a drawn ellipsis
+ *  ("DeepS…" at the largest font) or a sliced glyph is invisible to the tree: read the drawn pixels instead.
+ *  A hard cut touches the node's own edge; a native ellipsis ends the last drawn line with its dots while the
+ *  node reports the whole string. Inputs skip their own text (typed dots, passwords) and the status bar. */
+async function nativeCut(src, xml) {
+  // Each text node with its parent's bounds: a hard cut only counts where the text reaches its container's edge
+  // (tightly wrapped text like a centred "Chief" ends at its own ink; that is not a cut).
+  const nodes = [];
+  const tags = xml.match(/<node [^>]*?\/?>|<\/node>/g) ?? [];
+  const stack = [{ b: null }];
+  for (const tag of tags) {
+    if (tag === '</node>') { if (stack.length > 1) stack.pop(); continue; }
+    const attr = (k) => (tag.match(new RegExp(` ${k}="([^"]*)"`)) || [])[1] ?? '';
+    const nums = (attr('bounds').match(/\d+/g) ?? []).map(Number);
+    const b = nums.length === 4 ? { x1: nums[0], y1: nums[1], x2: nums[2], y2: nums[3] } : null;
+    const text = attr('text'), cls = attr('class');
+    if (text.trim() && attr('password') !== 'true' && !/EditText/.test(cls) && attr('package') !== 'com.android.systemui'
+      && b && b.x2 - b.x1 >= 24 && b.y2 - b.y1 >= 10 && !/(…|\.\.\.)\s*$/.test(text.trim()))
+      nodes.push({ text, cls: cls.split('.').pop(), b, parent: (stack[stack.length - 1] || {}).b });
+    if (!tag.endsWith('/>')) stack.push({ b });
+  }
+  if (!nodes.length) return [];
+  const shot = new Image(); shot.src = src; await shot.decode();
+  const c = new OffscreenCanvas(shot.width, shot.height), g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(shot, 0, 0);
+  const out = [];
+  for (const n of nodes) {
+    const { x1: bx1, y1: by1, x2: bx2, y2: by2 } = n.b, x = Math.max(0, bx1), y = Math.max(0, by1);
+    const w = Math.min(shot.width, bx2) - x, h = Math.min(shot.height, by2) - y;
+    if (w < 24 || h < 10) continue;
+    const d = g.getImageData(x, y, w, h).data;
+    const at = (px, py) => { const k = (py * w + px) * 4; return [d[k], d[k + 1], d[k + 2]]; };
+    // The node's own background: the per-channel median of its corners and edge midpoints.
+    const s = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1), at(w >> 1, 0), at(w >> 1, h - 1), at(0, h >> 1), at(w - 1, h >> 1)];
+    const bg = [0, 1, 2].map((i) => s.map((p) => p[i]).sort((a, b) => a - b)[3]);
+    const ink = (px, py) => { const p = at(px, py); return Math.abs(p[0] - bg[0]) + Math.abs(p[1] - bg[1]) + Math.abs(p[2] - bg[2]) > 90; };
+    const label = `${n.cls} "${n.text.trim().replace(/\s+/g, ' ').slice(0, 30)}"`;
+    // (a) a hard cut: drawn ink in the node's outermost right columns where the node itself reaches its
+    // container's (or the screen's) right edge, and as dense there as just inside — a sliced glyph. Text just
+    // ending there tapers off. Only the right edge: left-to-right text never starts sliced.
+    if (n.parent == null || bx2 >= n.parent.x2 - 4) {
+      let outer = 0, inner = 0;
+      for (let py = 1; py < h - 1; py++) { outer += ink(w - 1, py) + ink(w - 2, py); inner += ink(w - 5, py) + ink(w - 6, py); }
+      if (outer >= 6 && outer >= inner)
+        { out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60), box: { x, y, w, h }, detail: 'drawn past its own edge (a sliced glyph)' }); continue; }
+    }
+    // The drawn lines (rows with ink, split by gaps of 4+ empty rows); only the last line can carry the cut.
+    const rows = [];
+    for (let py = 0; py < h; py++) { let m = 0; for (let px = 0; px < w; px += 2) m += ink(px, py); if (m) rows.push(py); }
+    if (!rows.length) continue;
+    const lines = []; let cur = [rows[0]];
+    for (const r of rows.slice(1)) { if (r - cur[cur.length - 1] > 4) { lines.push(cur); cur = [r]; } else cur.push(r); }
+    lines.push(cur);
+    const last = lines[lines.length - 1], top = last[0], bot = last[last.length - 1], lh = bot - top + 1;
+    if (lh < 6) continue;
+    let reach = -1;
+    for (let px = w - 1; px >= 0 && reach < 0; px--) for (let py = top; py <= bot; py++) if (ink(px, py)) { reach = px; break; }
+    // A line ending well short of the node's edge cannot be cut by it.
+    if (reach < 0 || w - 1 - reach > 8) continue;
+    // (b) a drawn ellipsis: the line's tail (one line tall at most) ends in 2+ small ink groups low on the
+    // line with no ink above them — the native cut marker. A normal ending ("k", ".", ":") is tall or single.
+    const span = Math.min(w, Math.max(16, Math.round(lh * 0.8))), x0 = w - span, mid = top + lh * 0.45;
+    const groups = [];
+    for (let px = x0; px < w; px++) {
+      let tall = false, low = 0;
+      for (let py = top; py <= bot; py++) if (ink(px, py)) { if (py < mid) { tall = true; break; } low++; }
+      if (tall) groups.push({ tall: true });
+      else if (low >= 2) { if (!groups.length || groups[groups.length - 1].tall || px - groups[groups.length - 1].end > 2) groups.push({ tall: false, start: px, end: px, wide: 1 });
+        else { groups[groups.length - 1].end = px; groups[groups.length - 1].wide++; } }
+    }
+    const tail = [];
+    for (let i = groups.length - 1; i >= 0 && !groups[i].tall; i--) tail.unshift(groups[i]);
+    const dots = tail.filter((t) => t.wide <= Math.max(8, lh * 0.2)).length;
+    if (dots >= 2) out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60),
+      box: { x: x + x0, y: y + top, w: span, h: lh },
+      detail: `drawn cut (ends "…" on screen) but reports its full text "${n.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` });
+  }
+  return out;
 }
 async function crop(src, b, pad) {
   const i = new Image(); i.src = src; await i.decode();
@@ -304,7 +387,9 @@ try {
         if (THEN && words() !== reached) for (const t of THEN.split('>>')) { await sleep(1000); try { execFileSync(process.execPath, [join(import.meta.dirname, 'phone-ui.mjs'), 'tap', t.trim()], { env: { ...process.env, SERIAL: S }, encoding: 'utf8', stdio: 'pipe' }); } catch (e) { throw new Error(`--then could not tap ${t.trim()}: ${(e.stderr || e.message).trim()}`); } await settle(); }
         reached = words(); writeFileSync(file, png);
         writeFileSync(join(OUT, `${slug}-${theme}.xml`), xml);
-        report.push(await finish(slug, theme, file, nativeHits(xml, png.readUInt32BE(16), png.readUInt32BE(20)), 1));
+        const src = `data:image/png;base64,${png.toString('base64')}`;
+        report.push(await finish(slug, theme, file,
+          [...nativeHits(xml, png.readUInt32BE(16), png.readUInt32BE(20)), ...(await run(img, nativeCut, src, xml))], 1));
       }
     } finally { adb('shell', 'wm', 'density', 'reset'); adb('shell', 'settings', 'put', 'system', 'font_scale', was.font === 'null' ? '1.0' : was.font); adb('shell', 'cmd', 'uimode', 'night', /yes/.test(was.night) ? 'yes' : 'no'); }
   }
