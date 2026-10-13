@@ -75,11 +75,12 @@ test('title, relay and markdown trust boundary', () => {
 
 test('the live system prompt stays brief, answers first, and honors a chosen address once', () => {
   const { cfg, crew, done } = setup();
-  // Frozen at 10,685 chars. Re-frozen from 10,386 for the two Chief lines of marketplace import
-  // (crew_import and the recruit/import/hire routing: +299 chars of prompt). The guard is still a
+  // Frozen at 10,885 chars. Re-frozen from 10,685 for Chief's plain "What can you do?" answer (what the
+  // crew really does, the yes before buying or sending, routines, Google, one next step: +245 net after
+  // dropping the lines it replaces). Before that, 10,386 → 10,685 for marketplace import. The guard is still a
   // plain length check; P7's note stands, the prompt no longer varies with HOME.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
-  assert.ok(prompt.length <= 10_685, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
+  assert.ok(prompt.length <= 10_885, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
   assert.doesNotMatch(prompt, /on every line/, 'the soul never permits an occasional Sir');
   assert.match(prompt, /no "Sir", no "Madam"/, 'Chief never titles the person');
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
