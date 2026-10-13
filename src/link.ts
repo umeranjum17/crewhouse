@@ -242,23 +242,23 @@ export class Link {
     await this.bind();
   }
 
-  /** The person's own relay, from Settings, else CREWHOUSE_RELAY. Empty (the default): no relay. */
-  get relay(): string { return this.db.get("SELECT value FROM settings WHERE key = 'link.relay'")?.value ?? this.cfg.relay; }
-  /** An `https://` or `wss://` address (`http`/`ws` for a relay on the home network or Tailscale); '' turns the relay
-   *  off; null goes back to CREWHOUSE_RELAY. */
-  setRelay(url: string | null, enrol?: string) {
-    let value = url;
-    if (value) {
-      const u = URL.canParse(value) ? new URL(value) : null;
+  /** Dial the person's relay; advertise its public origin when a cloud proxy fronts it. No hosted default. */
+  get relay(): string { return this.setting('link.relay') ?? this.cfg.relay; }
+  get relayPublic(): string { return this.setting('link.relayPublic') || this.relay; }
+  /** '' disables the relay; null restores CREWHOUSE_RELAY. Omit publicUrl to clear an old proxy address. */
+  setRelay(url: string | null, enrol?: string, publicUrl: string | null = null) {
+    const before = this.relay, settings = ([['link.relay', url], ['link.relayPublic', publicUrl]] as const).map(([key, value]) => {
+      if (value === null || value === '') return [key, value] as const;
+      const u = typeof value === 'string' && URL.canParse(value) ? new URL(value) : null;
       if (!u || !/^(https?|wss?):$/.test(u.protocol)) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
-      value = u.origin;
-    }
-    if (value === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
-    else this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", value);
-    // A relay that lets computers in by invitation gives a one-use enrolment; it is kept only until it is used.
-    if (enrol?.trim()) this.db.run("INSERT INTO settings (key, value) VALUES ('link.relay.enrol', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", enrol.trim());
-    this.db.event('link.relay', null, { on: !!this.relay });
-    this.dial();
+      return [key, u.origin] as const;
+    });
+    this.db.tx(() => {
+      for (const [key, value] of settings) if (value === null) this.db.run('DELETE FROM settings WHERE key = ?', key); else this.put(key, value);
+      if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
+      this.db.event('link.relay', null, { on: !!this.relay });
+    });
+    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial();
     this.follow();
   }
 
@@ -283,7 +283,7 @@ export class Link {
   }
 
   /** The address a phone dials through the relay, or none. */
-  relayUrl() { return this.relay && this.host ? linkUrl(this.relay, this.host.id) : ''; }
+  relayUrl() { return this.relay && this.host ? linkUrl(this.relayPublic, this.host.id) : ''; }
   /** Set by the server: what a phone's desktop stream talks to. */
   desk?: Desk;
   /** Set by the server: the web app, which the link's own address serves (README, "The installed web app"). */
@@ -359,7 +359,7 @@ export class Link {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
-      relay: this.relay, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
+      relay: this.relay, relayPublic: this.relayPublic, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
@@ -384,7 +384,7 @@ export class Link {
     if (!this.client || this.relayStatus !== 'online') throw Object.assign(new Error('typing a code works once this computer is reachable from anywhere'), { status: 409 });
     const { code: short, expires } = await this.client.code();
     const { code } = this.host.code({ role });
-    return { short, code, relay: this.relay, expires };
+    return { short, code, relay: this.relayPublic, expires };
   }
 
   devices() {
