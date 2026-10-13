@@ -11,6 +11,7 @@ import type { Json } from '../../web/src/api.ts';
 import { CELL, helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
 import { color } from '../../web/src/tokens.ts';
 import { onLive } from './link';
+import { fw } from './font';
 
 type Look = typeof color.day;
 const { landed, groupOf } = A;
@@ -44,7 +45,7 @@ function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 }}>
       {(g === 'wait' || g === 'work') && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: col }} />}
-      <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: col }}>{word}</Text>
+      <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, ...fw('600'), color: col }}>{word}</Text>
     </View>
   );
 }
@@ -66,10 +67,10 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
       <Helmet mood={c.mood} night={night} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, fontWeight: '600', color: t.ink, flex: 1 }}>{c.name}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, ...fw('600'), color: t.ink, flex: 1 }}>{c.name}</Text>
           <State c={c} v={v} t={t} />
         </View>
-        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{line}</Text>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, ...fw('500'), color: t.ink }}>{line}</Text>
         {!!meta && <Text numberOfLines={2} style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 17, color: t.mute }}>{meta}</Text>}
       </View>
     </Pressable>
@@ -85,10 +86,10 @@ function ChiefRow({ view, t, night, onChief }: { view: A.OfficeView; t: Look; ni
       <Helmet mood={view.chief.mood} night={night} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, fontWeight: '600', color: t.ink, flex: 1 }}>Chief</Text>
-          <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, fontWeight: '600', color: col }}>{st.word}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, ...fw('600'), color: t.ink, flex: 1 }}>Chief</Text>
+          <Text style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 16, ...fw('600'), color: col }}>{st.word}</Text>
         </View>
-        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, fontWeight: '500', color: t.ink }}>{A.officeLine(view)}</Text>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 19, ...fw('500'), color: t.ink }}>{A.officeLine(view)}</Text>
       </View>
     </Pressable>
   );
@@ -99,7 +100,7 @@ function Group({ title, t, children }: { title: string; t: Look; children: React
   return (
     <View style={{ paddingTop: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14 }}>
-        <Text style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 17, fontWeight: '500', color: t.mute }}>{title}</Text>
+        <Text style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 17, ...fw('500'), color: t.mute }}>{title}</Text>
         <View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: t.line }} />
       </View>
       {children}
@@ -123,7 +124,7 @@ export function Office({ view, night, offline, width, jobs, onChief, onDesk, onT
     <View>
       {view.counts.needs > 0 && <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={A.chiefHas(view)}
         style={{ alignSelf: 'flex-start', marginTop: 14, marginHorizontal: 14, backgroundColor: t.pink, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16 }}>
-        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, fontWeight: '600', color: '#fff' }}>{A.chiefHas(view)}</Text>
+        <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, ...fw('600'), color: '#fff' }}>{A.chiefHas(view)}</Text>
       </Pressable>}
       {groups.map(([g, rows]) => <Group key={g} title={A.GROUP_TITLES[g]} t={t}>
         {g === cs.group && <ChiefRow view={view} t={t} night={night} onChief={onChief} />}
