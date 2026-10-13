@@ -660,6 +660,13 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
       <div className="ev-body draft-body">{body}</div>
     </div>;
   }
+  if (c.hire) return <div className="ev hire-ev">
+    {!!c.hire.will_do.length && <><div className="hire-sect">Will do</div>{c.hire.will_do.map((l, i) => <div key={`w${i}`} className="hire-li">{l}</div>)}</>}
+    {!!c.hire.wont_do.length && <><div className="hire-sect">Won't do</div>{c.hire.wont_do.map((l, i) => <div key={`n${i}`} className="hire-li no">{l}</div>)}</>}
+    {!!c.hire.first_step && <><div className="hire-sect">First step for you</div><div className="hire-first"><b className="hire-n">1</b><span>{c.hire.first_step}</span></div></>}
+    {!!c.hire.first_job && <><div className="hire-sect">First job</div><div className="hire-li">{c.hire.first_job}</div></>}
+    <div className="hire-foot">Nothing changes until you say yes.</div>
+  </div>;
   if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;
   if (c.preview) return <div className="ev">
     {c.preview.head && <div className="ev-to">{c.preview.head}</div>}

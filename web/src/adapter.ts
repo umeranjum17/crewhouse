@@ -22,6 +22,8 @@ export type Card = {
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
   lines?: string[]; schedule?: string; zoneNote?: string;
+  /** Chief's hire in a glance (mock 1): what the helper will and won't do, the person's first step, its first job. */
+  hire?: { will_do: string[]; wont_do: string[]; first_step?: string; first_job?: string };
   /** A reminder is the person's own one moment: the card says when it is, and offers nothing else to remember. */
   remind?: boolean;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
@@ -805,10 +807,17 @@ export function card(a: Json, state: Json): Card {
       ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
-  // Chief's hire in a glance: who, the role, what it can do and the first job; nothing changes until the yes.
-  if (a.kind === 'propose' && d.hire) return { ...base, kind: 'ok', status: d.adapt ? 'A new job' : 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
-    lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean),
-    choices: [{ label: plain(d.yes ?? 'Yes'), body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  // Chief's hire in a glance: who, will/won't do, the person's first step and the first job; nothing changes until the yes.
+  if (a.kind === 'propose' && d.hire) {
+    const will_do = (Array.isArray(d.will_do) ? d.will_do : []).map((l: string) => plain(l)).filter(Boolean).slice(0, 6);
+    const wont_do = (Array.isArray(d.wont_do) ? d.wont_do : []).map((l: string) => plain(l)).filter(Boolean).slice(0, 6);
+    const first_step = plain(d.first_step ?? '').trim() || undefined, first_job = plain(d.first_job ?? '').trim() || undefined;
+    const hire = will_do.length || wont_do.length || first_step || first_job ? { will_do, wont_do, first_step, first_job } : undefined;
+    return { ...base, kind: 'ok', status: d.adapt ? 'A new job' : 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
+      ...(hire ? { hire } : {}),
+      lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean),
+      choices: [{ label: plain(d.yes ?? 'Yes'), body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose') {
     // A suggestion: a skill a helper would like to keep, or a new personality from Chief. Nothing changes without a yes.
     return { ...base, kind: 'ok', status: 'Would like to remember this',

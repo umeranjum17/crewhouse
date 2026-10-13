@@ -209,6 +209,17 @@ textarea.input { resize: vertical; }
 .ev-line { display: grid; gap: 2px; }
 .ev-line span { font: 500 12px/16px var(--ui); color: var(--mute); }
 .ev-line b { font-weight: 500; }
+/* Chief's hire card (mock 1): section headers over plain lines, the first step numbered, the foot muted. */
+.hire-ev { gap: 8px; }
+.hire-sect { font: 600 12px/16px var(--ui); letter-spacing: .06em; color: var(--mute); margin-top: 6px; text-transform: uppercase; }
+.hire-sect:first-child { margin-top: 0; }
+.hire-li { color: var(--ink2); padding-left: 16px; position: relative; }
+.hire-li::before { content: ''; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+.hire-li.no { list-style: none; }
+.hire-li.no::before { background: transparent; border: 1.5px solid var(--mute); width: 4px; height: 4px; top: .6em; }
+.hire-first { display: flex; gap: 10px; align-items: baseline; color: var(--ink2); }
+.hire-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--solid); display: inline-grid; place-items: center; font-size: 13px; font-weight: 600; transform: translateY(4px); }
+.hire-foot { font: 400 13px/18px var(--ui); color: var(--mute); margin-top: 4px; }
 .order-row { display: flex; gap: 12px; justify-content: space-between; }
 .order-row.total { font-weight: 600; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
 .ask-note { font: 400 13px/18px var(--ui); color: var(--mute); text-align: center; margin: 10px 0 0; }

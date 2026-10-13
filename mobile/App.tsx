@@ -1346,6 +1346,15 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
       <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
     </View>;
   }
+  if ((c as any).hire) { const h = (c as any).hire;
+    return <View style={[s.ev, { backgroundColor: t.sunken, gap: 8 }]}>
+      {!!h.will_do?.length && <><T tone="mute" style={s.label2}>WILL DO</T>{h.will_do.map((l: string, i: number) => <T key={`w${i}`} tone="ink2">{l}</T>)}</>}
+      {!!h.wont_do?.length && <><T tone="mute" style={s.label2}>WON'T DO</T>{h.wont_do.map((l: string, i: number) => <T key={`n${i}`} tone="ink2">{l}</T>)}</>}
+      {!!h.first_step && <><T tone="mute" style={s.label2}>FIRST STEP FOR YOU</T><View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}><View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: t.ink, alignItems: 'center', justifyContent: 'center' }}><T style={{ color: t.solid, fontSize: 13 }}>1</T></View><T tone="ink2" style={{ flex: 1 }}>{h.first_step}</T></View></>}
+      {!!h.first_job && <><T tone="mute" style={s.label2}>FIRST JOB</T><T tone="ink2">{h.first_job}</T></>}
+      <T tone="mute" style={s.small}>Nothing changes until you say yes.</T>
+    </View>;
+  }
   if (c.lines) return <View style={[s.ev, { backgroundColor: t.sunken }]}>{c.lines.map((l, i) =>
     <T key={i} tone={i && c.kind === 'routine' ? 'mute' : 'ink'} style={i && c.kind === 'routine' ? s.small : undefined}>{l}</T>)}</View>;
   if (c.preview) return <View style={[s.ev, { backgroundColor: t.sunken }]}>
