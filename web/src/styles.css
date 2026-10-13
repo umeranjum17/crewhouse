@@ -1434,7 +1434,11 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .card.ask .ask-line.quiet + .ask-line.quiet::before { content: ' · '; }
   .chat .card.ask .ask-note { text-align: left; }
   .chat .card.ask .ev { margin: 0; padding: 0; background: none; border-radius: 0; }
-  .chat .card.ask .btns { flex-wrap: nowrap; align-items: center; margin-top: 4px; }
+  /* The row wraps at the largest text: two buttons stack inside the card instead of
+     pushing the second one past its edge. One-line labels still sit side by side. */
+  .chat .card.ask .btns { flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  /* A long label wraps to its own lines instead of pushing past the card: labels that fit read as before. */
+  .chat .card.ask .btns .btn { max-width: 100%; white-space: normal; text-align: center; }
   .chat .card.ask .btn.go { min-height: 40px; padding: 8px 18px; font: 600 15px/20px var(--ui); }
   .chat .card.ask .more-act { display: none; }
   .chat .card.ask .more-dots { display: grid; place-items: center; width: 40px; min-height: 40px; padding: 0; }
