@@ -84,9 +84,12 @@ keeps retrying by itself. The screen keeps three ways out, all reusing existing 
 - **Just on this phone** enters the existing phone-only mode without touching the grant; leaving
   phone-only returns to the paired app, still retrying.
 
-Prove it on the test phone through `fm-device-lock.sh` (the emulator pool is shared and often full):
-pair to a lab crewd by the typed code (`phone-pair-typed.mjs`), then stop and delete that lab.
-Capture the screen at 390 wide, day and night, at the largest text (no clipped or ellipsis text),
-tap "Pair again" to the code box, and tap Back to the retry screen. The same rule on the web twin
+Prove it on the test phone through one `fm-device-lock.sh` call for both baseline and candidate:
+pair to a lab crewd by the typed code (`phone-pair-timed.mjs`), then stop and delete that lab.
+Keep the phone's current font, density and theme; install without `-g`, never grant permissions,
+and deny any permission dialog. Capture the baseline dead end and candidate ways out, tap
+"Pair again", then "Type a code" to reach the code box, and tap Back to the retry screen.
+Run the largest-text, day/night Android `look-check.mjs` only on an owned emulator, never the
+test phone: it changes density, font scale and theme. The retry screen scrolls on short screens. The same rule on the web twin
 (`Unreachable` in `web/src/flows.tsx`): a paired app whose computer is gone keeps "Pair again"
 to the code sheet beside "Try now".

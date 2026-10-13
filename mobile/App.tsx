@@ -696,6 +696,7 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
           {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
           {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
           <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); void openCamera(); }} />
+          {onBack && <Btn ghost label="Back" onPress={onBack} />}
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -1237,14 +1238,14 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     // backing out keeps retrying the old one. Nothing here names the machinery.
     if (repair) return <Pair onPaired={(g) => { setRepair(false); onRepaired(g); }} onBack={() => setRepair(false)} />;
     return (
-      <Center>
+      <ScrollView contentContainerStyle={s.centerScroll}>
         <ChiefArt mood="work" size={112} whole />
         <T style={s.h1}>Can't reach the home computer</T>
         <T tone="ink2" style={s.centerText}>This phone is still paired with it, but it doesn't answer. It may be switched off, asleep, or gone. Trying again by itself.</T>
         <Btn go big label="Pair again" onPress={() => setRepair(true)} />
         <Btn label="Try again" onPress={() => link.current?.retry()} />
         <Btn ghost label="Just on this phone" onPress={onPhoneOnly} />
-      </Center>
+      </ScrollView>
     );
   }
   const offline = status !== 'online';
