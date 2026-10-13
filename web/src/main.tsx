@@ -16,7 +16,9 @@ import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTa
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair' | 'computer';
+/** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
+const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -30,6 +32,7 @@ function parseRoute(): Route {
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
+  if (a === 'computer' && cloudOn) return { view: 'computer' };
   return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps', 'skills'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
@@ -493,7 +496,7 @@ function AppDownloadQR() {
  *  both rows say so. The cloud row waits for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows it. */
 function Where({ pairing }: { pairing: boolean }) {
   const [app, setApp] = useState(false);
-  const w = A.where(process.env.CREWHOUSE_CLOUD === '1');
+  const w = A.where(cloudOn);
   return <div className="where">
     <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
     {w.line && <p className="where-line">{w.line}</p>}
@@ -1394,7 +1397,8 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
-const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief']];
+const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief'],
+  ...(cloudOn ? [['#/computer', A.computer(null).title, 'cloud'] as [string, string, IconName]] : [])];
 /** Paired: this installed app carries a crew from its own computer. Its notifications ride the same mailbox, so the
  *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
  *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
@@ -1443,6 +1447,39 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <Money state={state} refresh={refresh} />
       <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+    </div>
+  );
+}
+
+/** Settings › Chief's computer (mocks computer, computer-reset): the one cloud computer the crew shares. Every value
+ *  and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected. */
+function ChiefComputer() {
+  const [c, setC] = useState<A.Computer | null>(null);
+  const [resetting, setResetting] = useState(false);
+  useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
+  const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
+  const w = A.computer(c), boat = A.CLOUD.clouds[0];
+  const two = ([l, v]: string[], red = false) => <span className="grow"><span className={red ? 'danger' : ''}>{l}</span><span className="mute small">{v}</span></span>;
+  return (
+    <div className="page settings computer">
+      <a href="#/settings" className="back">‹ Settings</a>
+      <h1>{w.title}</h1>
+      <div className="card list"><button className="row-item" onClick={() => act('update')}><span className="grow">{w.update[0]}</span><span className="mute">{w.update[1]}</span></button>
+        <button className="row-item" onClick={() => setResetting(true)}>{two(w.reset, true)}</button></div>
+      <p className="mute small computer-cap">{w.caption}</p>
+      <div className="card list"><label className="row-item">{two(w.daily)}<input type="checkbox" role="switch" checked={!!c?.daily} onChange={(e) => act(e.target.checked ? 'daily-on' : 'daily-off')} /></label>
+        <div className="row-item"><span className="grow">{w.disk[0]}</span><span className="mute">{w.disk[1]}</span></div></div>
+      <div className="card list"><div className="row-item"><span className="o-ic" style={{ background: boat.tile, color: '#fff' }}>{boat.mark}</span>{two(w.host)}</div></div>
+      <details className="more-ways"><summary><span className="grow">{w.more}</span><i aria-hidden>›</i></summary>
+        <div className="card list"><button className="row-item" onClick={() => act('undo')}><span className="grow">{w.undo}</span></button>
+          <button className="row-item" onClick={() => confirm(w.removeAsk.join('\n\n')) && act('delete')}><span className="grow danger">{w.remove}</span></button></div></details>
+      {resetting && <Sheet label={w.sheet.title} onClose={() => setResetting(false)}><div className="computer-ask">
+        <h2>{w.sheet.title}</h2>
+        <p>{w.sheet.lost.map((p, i) => (i % 2 ? <b key={i}>{p}</b> : p))}</p>
+        <p>{w.sheet.safe}</p>
+        <button className="btn big danger" onClick={() => { setResetting(false); void act('reset'); }}>{w.sheet.yes}</button>
+        <button className="btn big ghost" onClick={() => setResetting(false)}>{w.sheet.no}</button>
+      </div></Sheet>}
     </div>
   );
 }
@@ -1806,7 +1843,7 @@ function App() {
           <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} />
           <div className="grow" />
           {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
-          <a href="#/settings" className={`side-me ${v.view === 'settings' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>
+          <a href="#/settings" className={`side-me ${v.view === 'settings' || v.view === 'computer' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>
             <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{quiet && <span className="clamp1">{quiet}</span>}</span><Icon name="settings" />
           </a>
         </aside>
@@ -1820,6 +1857,7 @@ function App() {
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} />}
           {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
+          {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'skills' && <Skills {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}

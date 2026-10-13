@@ -110,6 +110,8 @@ test('the public web app asks where Chief works, pairs by a relay code or a dire
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!!document.getElementById('setup-phones')`), false, 'phones stay the computer’s to manage');
+  // Chief's computer is the cloud kit's too: a release build lists no row for it.
+  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to')].map((a) => a.textContent)`), ['Your things', 'Routines', 'Apps', 'Your crew']);
   // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
   // over the link (`POST /api/push {key}`, never /api/phones/link).
   await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));

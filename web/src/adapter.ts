@@ -104,6 +104,40 @@ export const CLOUD = {
   kept: "The key stays on this phone, locked by your phone's own lock. It never goes to Crewhouse.",
 };
 
+// ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mocks computer, computer-reset: Main2678) ----------
+/** What only BYOKit's cloud kit can say: whether crewd is the latest, the daily snapshots and the last one, the disk. */
+export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
+export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
+/** The page's one call: no `act` reads the computer, an act does it and reads again. It stops at the kit:
+ *  @byokit/cloud (machine.update, reset, copies, remove) is not on npm yet, so no computer is reached and nothing
+ *  changes. The 404 is crewd's own "not here yet" (api.ts `trouble`), so each surface says it isn't ready. */
+export async function computerCall(_act?: ComputerAct): Promise<Computer> {
+  throw Object.assign(new Error("Chief's computer isn't connected yet"), { status: 404 });
+}
+/** The page's words; `c` null until the kit answers, so nothing it alone knows is ever made up. A snapshot's time is
+ *  the odd part of `reset.lost`, set bold. */
+export const computer = (c: Computer | null) => {
+  const at = c?.snapshot ? `${new Date(c.snapshot).toDateString() === new Date().toDateString() ? 'today at ' : ''}${clock(c.snapshot)}` : '';
+  const off = 'Not connected', lost = ' Anything Chief and his crew did after that is lost, including chats and finished files.';
+  return {
+    title: "Chief's computer",
+    update: ['Update computer', c ? (c.current ? 'Up to date' : 'Update ready') : off],
+    reset: ['Reset computer', `Go back to the last snapshot${at && `, from ${at}`}. Changes since then are lost.`],
+    caption: 'The one cloud computer Chief and his crew share. It is their sandbox, away from your phone and your files.',
+    daily: ['Daily snapshots', `Keeps the last 7.${at && ` Last one ${at}.`}`],
+    disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
+    host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
+    more: 'More', undo: 'Undo update', remove: 'Delete my cloud computer',
+    removeAsk: ['Delete your cloud computer?', "Chief's computer and its snapshots are removed for good, with everything on them. Your phone and your own files are not touched."],
+    sheet: {
+      title: "Reset Chief's computer?",
+      lost: at ? ['It goes back to the snapshot from ', at, `.${lost}`] : [`It goes back to the last snapshot.${lost}`],
+      safe: 'Use this if the computer is stuck or broken. Your phone and your own files are not touched. It takes a few minutes.',
+      yes: at ? `Reset to ${timeOf(c!.snapshot!)}` : 'Reset computer', no: 'Cancel',
+    },
+  };
+};
+
 // ---------- words ----------
 /** "8:02 pm": the time alone (a phone's day line carries it, "Today 8:02 pm"). */
 export const timeOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
