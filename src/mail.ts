@@ -3,7 +3,6 @@
 // (`gmail.readonly`): the token never leaves crewd, and nothing here can send, change or delete mail.
 import { tool } from './engine.ts';
 import { options, table } from './calendar.ts';
-
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 const HELP = [
@@ -13,22 +12,19 @@ const HELP = [
 ];
 const CUT = 1500, FULL = 8000;
 type Token = () => Promise<string | null>;
-
 async function get(token: Token, path: string) {
   const t = await token();
   if (!t) throw new Error('Gmail is not connected any more. Ask the person to connect it again (crew_connect).');
   const res = await fetch(`${GMAIL}${path}`, { headers: { authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(20_000) });
-  if (res.status === 404) throw new Error('No such conversation. Search again for its id.');
+  if (res.status === 404) throw Object.assign(new Error('No such conversation, or the saved mail history is too old. Recreate the email routine to start watching again.'), { status: 404 });
   if (!res.ok) throw new Error(`Gmail said ${res.status}. Try again in a moment.`);
   return res.json() as Promise<any>;
 }
-
 const header = (m: any, name: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '').replace(/\s+/g, ' ').trim();
 export function ageOf(ms: number, now = Date.now()) {
   const m = Math.max(0, Math.round((now - ms) / 60_000));
   return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
 }
-
 /** A message's words: its plain text (or its HTML without tags), without the quoted earlier messages. */
 export function bodyOf(payload: any): string {
   const parts: any[] = [];
@@ -44,7 +40,6 @@ export function bodyOf(payload: any): string {
   const lines = text.replace(/\r/g, '').split('\n'), quoted = lines.findIndex((l) => /^On .+ wrote:$/.test(l.trim()) || /^-{2,} ?Original Message ?-{2,}$/i.test(l.trim()));
   return (quoted >= 0 ? lines.slice(0, quoted) : lines).filter((l) => !l.startsWith('>')).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
-
 /** Threads as rows: who, what, how long ago (from each thread's newest message). */
 async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
@@ -52,12 +47,26 @@ async function rows(token: Token, threads: { id: string }[]) {
     return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
   }));
 }
-
 export async function newThreads(token: Token, after: number, limit = 25) {
   const list = await get(token, `/threads?${new URLSearchParams({ q: 'in:inbox', maxResults: String(limit) })}`);
   return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
 }
-
+/** History IDs are opaque strings, never numbers. Advance only after all pages and envelopes succeeded. */
+export async function mailChanges(token: Token, after?: string) {
+  if (!after) return { history: String((await get(token, '/profile')).historyId), messages: [] };
+  const ids = new Set<string>(); let page: string | undefined, history = after;
+  do {
+    const q = new URLSearchParams({ startHistoryId: after, historyTypes: 'messageAdded', ...(page ? { pageToken: page } : {}) });
+    const out = await get(token, `/history?${q}`); history = String(out.historyId); page = out.nextPageToken;
+    for (const h of out.history ?? []) for (const { message: m } of h.messagesAdded ?? []) if (m.labelIds?.includes('INBOX')) ids.add(String(m.id));
+  } while (page);
+  const messages = [];
+  for (const id of ids) {
+    const m = await get(token, `/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`).catch((e) => { if (e.status === 404) return null; throw e; });
+    if (m) messages.push({ id, from: header(m, 'From'), subject: header(m, 'Subject') });
+  }
+  return { history, messages };
+}
 export async function runMail(token: Token, args: string[]): Promise<string> {
   const [cmd = 'inbox', ...more] = args;
   const { o, rest } = options(more);
@@ -85,7 +94,6 @@ export async function runMail(token: Token, args: string[]): Promise<string> {
   }
   return bad(`no command "${cmd}"`);
 }
-
 export const mailTool = (token: Token) =>
   tool('mail', "The person's own Gmail, read-only (mail-axi): what is new, search it, read a conversation. It cannot send, change or delete mail. Pass the command's arguments as a list, without the program name.",
     { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
