@@ -1,4 +1,8 @@
-# Supported subscriptions through OpenClaw 2026.8.1 (spec §12 matrix)
+# Supported subscriptions through OpenClaw (spec §12 matrix)
+
+Pin: `@byokit/openclaw` in `package.json` carries the engine version (`ENGINE_VERSION`). The rows below were verified
+against OpenClaw 2026.8.1 only. The pin has since moved to `@byokit/openclaw` 0.11.0 (engine 2026.8.35), which has
+not been re-run through `docs/pin-bump.md`, so treat every "verified" note here as 2026.8.1 until that re-run lands.
 
 Owner directive: "Via OpenClaw we should support all subs that OpenClaw support." This is the pin-bound matrix of
 every sign-in route the pinned OpenClaw offers, kept distinct from plain API-key access. Sources: the pinned
@@ -39,8 +43,8 @@ key when a subscription route exists; they surface only as explicit "more option
 
 ## Gaps and pin assessment
 
-- The pin (2026.8.1) carries every subscription route OpenClaw documents as of 2026-09-27; nothing supported
-  upstream is missing from the pin, so no compatible-tested-pin move is required.
+- As of 2026-09-27 the 2026.8.1 pin carried every subscription route OpenClaw documents; nothing supported upstream
+  was missing from it. Whether 2026.8.35 still does is the open `docs/pin-bump.md` re-run.
 - Every route is now reachable through the same sign-in drive (`src/openclaw/runtime.ts` auth-choice table); the
   distinction that remains is verified-login (ChatGPT) versus **UNTESTED-no-account** (the rest), which only the
   QA home's real accounts can close.
