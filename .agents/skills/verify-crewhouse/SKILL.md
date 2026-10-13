@@ -54,9 +54,9 @@ is stub) plus `curl -fsS "http://127.0.0.1:$PORT/"` returning HTML.
 **Desktop prerequisites:** the shared readiness check runs the engine's non-prompting
 `capabilities` command with a three-second bound, not just an executable-file check.
 The engine is probed per engine key (engine override, PATH, LD_LIBRARY_PATH), at boot first. A
-definite answer (ready, or a named missing library) is kept for the whole crewd process, so a
-library installed while crewd runs is seen only after a restart. A timeout, spawn failure or other
-nonzero exit is not kept: the next check probes again.
+definite answer (ready, or a named missing library) is kept for the whole crewd process; a library
+installed, removed, or an engine broken in place while crewd runs is seen only after a restart. Any
+other answer (timeout, spawn failure, nonzero exit) is kept for sixty seconds, then probed again.
 A loader failure must name its library and an install command; doctor exits nonzero,
 the Computer kit row is unavailable, and the live `GET /api/state` has
 `desktops.ready: false`. Under the isolated env above, run

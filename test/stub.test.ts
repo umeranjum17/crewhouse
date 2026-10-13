@@ -169,8 +169,10 @@ test('desktop setup refuses a loader failure in doctor, the tool kit and the liv
     const slow = join(s.root, 'slow-engine'), once = join(s.root, 'slow-once');
     writeFileSync(slow, `#!/bin/sh\nif [ -e '${once}' ]; then exit 0; fi\n: > '${once}'\nexec sleep 30\n`, { mode: 0o700 });
     process.env.DESKLINK_ENGINE = slow;
-    assert.match(probeEngine().engine ?? '', /ETIMEDOUT/, 'a probe past its bound reports the failure');
-    assert.equal(probeEngine().engine, null, 'the failure was not kept: the next probe answers');
+    const t0 = Date.now();
+    assert.match(probeEngine(t0).engine ?? '', /ETIMEDOUT/, 'a probe past its bound reports the failure');
+    assert.match(probeEngine(t0 + 59_000).engine ?? '', /ETIMEDOUT/, 'within a minute the failure is not probed again');
+    assert.equal(probeEngine(t0 + 60_001).engine, null, 'after a minute the next probe answers');
     assert.deepEqual(engineGaps(), [], 'the desktop engine is ready once it answers');
   } finally {
     if (before === undefined) delete process.env.DESKLINK_ENGINE; else process.env.DESKLINK_ENGINE = before;
