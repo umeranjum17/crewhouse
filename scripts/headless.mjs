@@ -14,7 +14,7 @@ const pause = () => new Promise(r => setTimeout(r, 100));
 async function tailnet() {
   if (publicRelay) {
     const u = new URL(publicRelay);
-    if (!/^(https?|wss?):$/.test(u.protocol) || !isIPv4(u.hostname) || !/^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.)/.test(u.hostname) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('CREWHOUSE_RELAY_PUBLIC needs a tailnet or loopback relay origin, without credentials or a path.');
+    if (!/^(https?|wss?):$/.test(u.protocol) || !isIPv4(u.hostname) || !/^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('CREWHOUSE_RELAY_PUBLIC needs a tailnet or private IPv4 relay origin, without credentials or a path.');
     return '0.0.0.0'; // operator-owned port publication; no Tailscale discovery in the container
   }
   const s = await tailscaleState({ timeoutMs: 5000 });
