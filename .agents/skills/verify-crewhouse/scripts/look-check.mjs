@@ -14,15 +14,16 @@
 // Writes <out>/<slug>-<theme>.png, <slug>-<theme>-vs-mock.png, hits/<slug>-<theme>-<n>-<kind>.png, look-check.json.
 // Exit 0 clean, 1 a defect, 2 could not run.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2), mode = argv.shift();
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : argv.splice(i, 2)[1]; };
 const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
+const ROOT = opt('root', join(import.meta.dirname, '..', '..', '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
-if (!OUT || !['web', 'android', 'shot'].includes(mode) || !argv.length) { console.error('usage: look-check.mjs web|android --out <dir> … <slug>[=<url>]…'); process.exit(2); }
+if (!OUT || !['web', 'android', 'shot', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|fonts --out <dir> …'); process.exit(2); }
 mkdirSync(join(OUT, 'hits'), { recursive: true });
 const FM = process.env.FM_HOME ?? `${process.env.HOME}/.treehouse/firstmate`;
 const mocks = Object.fromEntries(readFileSync(join(import.meta.dirname, 'mocks.tsv'), 'utf8').split('\n')
@@ -209,6 +210,38 @@ async function finish(slug, theme, shotFile, domHits, scale) {
 }
 
 const report = [];
+if (mode === 'fonts') { // the Android bold-weight regression (ch-android-bold-weight): every weight the phone asks
+  // for must resolve to a bundled static family — Android draws a bare fontWeight on a custom family as regular.
+  try {
+    const hits = [], mob = (p) => join(ROOT, 'mobile', p);
+    const hit = (el, detail) => hits.push({ kind: 'font', el, text: '', detail });
+    const files = [], walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.name === 'node_modules') continue; const p = join(d, e.name);
+      e.isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(e.name) && files.push(p); } };
+    walk(mob(''));
+    const mapFile = mob('src/font.ts');
+    const map = existsSync(mapFile) ? Object.fromEntries([...readFileSync(mapFile, 'utf8').matchAll(/'(\d{3})'\s*:\s*'([^']+)'/g)].map((m) => [m[1], m[2]])) : null;
+    if (!map || !Object.keys(map).length) hit('mobile/src/font.ts', 'no weight map: every phone weight needs a static family');
+    for (const f of files) {
+      const rel = f.slice(ROOT.length + 1), src = readFileSync(f, 'utf8');
+      if (!rel.endsWith('src/font.ts')) for (const [i, line] of src.split('\n').entries())
+        if (/fontWeight\s*:/.test(line)) hit(rel, `bare fontWeight on line ${i + 1}: Android draws it regular — use ...fw()`);
+      for (const m of src.matchAll(/fw\(([^)]*)\)/g)) for (const w of m[1].matchAll(/'(\d{3})'/g))
+        if (map && !map[w[1]]) hit(rel, `weight ${w[1]} has no static family in src/font.ts`);
+    }
+    const app = existsSync(mob('App.tsx')) ? readFileSync(mob('App.tsx'), 'utf8') : '';
+    const reg = Object.fromEntries([...app.matchAll(/(\w+):\s*require\('([^']*fonts\/[^']+)'\)/g)].map((m) => [m[1], m[2]]));
+    for (const fam of Object.values(map ?? {})) {
+      if (!reg[fam]) hit('mobile/App.tsx', `family ${fam} not loaded in useFonts`);
+      else if (!existsSync(join(ROOT, reg[fam].replace('./', 'mobile/')))) hit('mobile/App.tsx', `bundled file missing: ${reg[fam]}`);
+    }
+    writeFileSync(join(OUT, 'fonts.json'), JSON.stringify(hits, null, 1));
+    console.log(`${hits.length ? 'FAIL' : 'ok  '} fonts  ${OUT}`);
+    for (const x of hits) console.log(`  ${x.kind}: ${x.el} — ${x.detail}`);
+    done(hits.length ? 1 : 0);
+  } catch (e) { console.error(`look-check: could not run: ${e.message}`); done(2); }
+  await new Promise(() => {});
+}
 try {
   if (mode === 'web') {
     const app = await page(), text = +(TEXT ?? 1.3);
