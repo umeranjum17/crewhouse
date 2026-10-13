@@ -1,5 +1,5 @@
 // Private authenticated Xvfb displays and Chromium, streamed through the capture kit; never the owner's display.
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
@@ -12,21 +12,45 @@ const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000), BR
 
 const onPath = (bin: string) => (process.env.PATH ?? '').split(':').find((d) => d && existsSync(join(d, bin))) && bin;
 export const browserBin = () => BROWSERS.map(onPath).find(Boolean) || null;
-let checked: { key: string; until: number; gaps: string[] } | undefined;
-/** ponytail: cache prerequisites 5s; add install-triggered invalidation if live package updates need instant readiness. */
-export function missing() {
-  const key = [process.env.DESKLINK_ENGINE, process.env.MUXR_DESKLINK_ENGINE, process.env.PATH, process.env.LD_LIBRARY_PATH].join('\0');
-  if (checked?.key === key && checked.until > Date.now()) return checked.gaps;
-  let engine = explainMissingEngine();
-  const e = engine ? null : resolveEngine();
+let checked: { key: string; until: number; engine: string | null; refused: boolean } | undefined;
+let inflight: Promise<void> | undefined;
+const probeKey = () => [process.env.DESKLINK_ENGINE, process.env.MUXR_DESKLINK_ENGINE, process.env.PATH, process.env.LD_LIBRARY_PATH].join('\0');
+
+const capabilities = (command: string) => new Promise<{ lib?: string; why?: string }>((done) => execFile(command, ['capabilities'],
+  { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, timeout: 3000 }, (err, _out, stderr) => {
+    if (!err) return done({});
+    const lib = /error while loading shared libraries: ([^:\s]+)/.exec(stderr)?.[1];
+    done(lib ? { lib } : { why: stderr.trim() || err.message });
+  }));
+
+async function probeEngine(key: string) {
+  const explained = explainMissingEngine(), e = explained ? null : resolveEngine();
+  let engine = explained ?? null, refused = false;
   if (e) {
-    const p = spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 }), lib = /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr ?? '')?.[1];
-    if (p.status !== 0) engine = lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : p.error?.message || p.stderr.trim() || `engine capability check exited ${p.status}`;
+    const { lib, why } = await capabilities(e.command);
+    refused = !!lib;
+    engine = lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : why ?? null;
   }
-  const gaps = [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)',
-    engine && `the desklink engine: ${engine}`].filter((m): m is string => !!m);
-  checked = { key, until: Date.now() + 5000, gaps }; return gaps;
+  checked = { key, until: Date.now() + 5000, engine, refused };
 }
+
+/** The engine probe runs off the event loop: one in flight, its result kept 5s per key. Callers that cannot wait read the last result. */
+// ponytail: cache prerequisites 5s; add install-triggered invalidation if live package updates need instant readiness.
+export function readiness(): Promise<void> {
+  const key = probeKey();
+  if (checked?.key === key && checked.until > Date.now()) return Promise.resolve();
+  inflight ??= probeEngine(key).finally(() => { inflight = undefined; });
+  return inflight;
+}
+
+/** What is missing on this machine for bot desktops, in words fit for doctor and the app. */
+export function missing() {
+  void readiness();
+  const { engine } = checked ?? { engine: 'checking, not finished yet' };
+  return [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)', engine && `the desklink engine: ${engine}`].filter((m): m is string => !!m);
+}
+
+export const loaderRefused = () => !!checked?.refused;
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
 function xauthority(n: number | string, cookie: Buffer) {
@@ -72,12 +96,14 @@ export class Desktops {
   private ends = new Map<string, Promise<unknown>>();
   private stateDir: string;
   constructor(stateDir: string) { this.stateDir = stateDir; }
+
   running(bot: string) { return this.desks.has(bot); }
   info(bot: string) {
     const d = this.desks.get(bot);
     return d ? { display: d.display, watching: !!d.session, control: !!d.session?.control } : null;
   }
 
+  /** Start the bot's display and browser if they aren't up. Idempotent; called before every run that needs a screen. */
   ensure(bot: string, botDir: string): Promise<Desk> {
     const have = this.starts.get(bot);
     if (have) return have;
@@ -130,7 +156,8 @@ export class Desktops {
     }
   }
 
-  /** Private profile/display; DevTools is a pipe (bot shells share loopback), relayed only at a fresh secret path. */
+  /** Its own profile/display. DevTools uses a pipe: bot shells share loopback, so a TCP endpoint is unsafe.
+   *  crewd relays it only at a fresh secret WebSocket path given to this bot's browser tool. */
   private async browser(d: Desk, botDir: string) {
     const bin = browserBin();
     if (!bin) return;
@@ -160,6 +187,8 @@ export class Desktops {
     wss.on('connection', (ws) => { client?.close(); client = ws; ws.on('message', (m) => toChrome.write(`${m}\0`)); });
     child.on('exit', () => { wss.close(); if (d.devtools === wss) d.cdp = undefined; });
     // A dead Chromium leaves the relay listening: require a reply before handing out the endpoint.
+    // A Chromium that died (a crash, a missing library, a socket path past the kernel's 108 bytes) leaves this relay
+    // listening, and every DevTools call then waits for a reply forever: make it answer before handing the endpoint out.
     toChrome.write('{"id":0,"method":"Browser.getVersion"}\0');
     await new Promise<void>((ok, no) => {
       answered = (bad) => { answered = undefined; if (!bad) return ok(); // settled once: a later ordinary exit is not a failed start
@@ -193,7 +222,8 @@ export class Desktops {
       d.session = { id: opened.sessionId, generation: opened.generation, control, watcher };
       const early = d.early.filter((e) => (e.params as any).sessionId === opened.sessionId);
       d.early = [];
-      setTimeout(() => early.forEach((e) => this.deliver(d, e))); // After the reply gives the watcher its session.
+      // After the reply, so the watcher knows its session before the offer arrives.
+      setTimeout(() => early.forEach((e) => this.deliver(d, e)));
       return opened;
     }
     if (!['session.description', 'session.candidate', 'session.restart_ice', 'session.close'].includes(method)) throw refused(`${method} is not allowed`, 'malformed');
@@ -237,6 +267,7 @@ export class Desktops {
     for (const d of this.desks.values()) if (d.session?.watcher === watcher) void this.closeSession(d);
   }
 
+  /** The person gave the controls back: end any session that can drive the bot's screen. */
   async revokeControl(bot: string) {
     const d = this.desks.get(bot);
     if (d?.session?.control) await this.closeSession(d, 'The controls went back to the bot');
@@ -293,6 +324,7 @@ export class Desktops {
     });
   }
 
+  /** Stop desktops nobody is watching and no task needs, after the idle window. */
   sweep(busy: (bot: string) => boolean, now = Date.now()) {
     for (const d of [...this.desks.values()]) if (!d.session && !busy(d.bot) && now - d.used > IDLE_MS) this.stop(d.bot);
   }

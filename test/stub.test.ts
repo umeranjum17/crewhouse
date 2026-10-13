@@ -13,6 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import * as A from '../web/src/adapter.ts';
 import { startServer } from '../src/server.ts';
+import { loaderRefused, missing, readiness } from '../src/desktop.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -135,29 +136,37 @@ test('chief onboarding, recruit, assign, grants', async () => {
 });
 
 test('desktop setup refuses a loader failure in doctor, the tool kit and the live state', async () => {
-  const s = lab(), before = process.env.DESKLINK_ENGINE, engine = join(s.root, 'unavailable-engine');
+  const s = lab(), before = process.env.DESKLINK_ENGINE;
   s.cfg.port = 0; s.cfg.linkPort = 0;
   const server = await startServer(s.cfg, s.db, s.crew);
+  const doctor = () => spawnSync(process.execPath, [join(import.meta.dirname, '..', 'src', 'doctor.ts')], {
+    env: { ...process.env, CREWHOUSE_STATE_DIR: s.cfg.stateDir, CREWHOUSE_CREW_DIR: s.cfg.crewDir, CREWHOUSE_TOOLS_DIR: s.cfg.toolsDir }, encoding: 'utf8', timeout: 15_000,
+  });
   try {
-    process.env.DESKLINK_ENGINE = engine;
     for (const library of ['libevdev.so.2', 'libfuture.so.7']) {
       // A task-private native command reproduces the loader's exit/status, not a mocked readiness helper.
+      const engine = join(s.root, `unavailable-${library}`);
       writeFileSync(engine, `#!/bin/sh\necho 'error while loading shared libraries: ${library}: cannot open shared object file: No such file or directory' >&2\nexit 127\n`, { mode: 0o700 });
-      const doctor = spawnSync(process.execPath, [join(import.meta.dirname, '..', 'src', 'doctor.ts')], {
-        env: { ...process.env, CREWHOUSE_STATE_DIR: s.cfg.stateDir, CREWHOUSE_CREW_DIR: s.cfg.crewDir, CREWHOUSE_TOOLS_DIR: s.cfg.toolsDir }, encoding: 'utf8', timeout: 15_000,
-      });
-      assert.equal(doctor.status, 1, doctor.stderr);
-      assert.match(doctor.stdout, new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
-      assert.doesNotMatch(doctor.stdout, /desklink engine are ready|\nReady\./);
-      assert.match(doctor.stdout, /Computer \(desklink\).*missing system library/, 'the kit row uses the same runtime check');
+      process.env.DESKLINK_ENGINE = engine;
+      const out = doctor();
+      assert.equal(out.status, 1, out.stderr);
+      assert.match(out.stdout, new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
+      assert.doesNotMatch(out.stdout, /desklink engine are ready|\nReady\./);
+      assert.match(out.stdout, /Computer \(desklink\).*missing system library/, 'the kit row uses the same runtime check');
+      await readiness();
+      assert.equal(loaderRefused(), true);
+      assert.match(missing().join('\n'), new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}`));
       const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/state`, {
         headers: { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` },
       });
       assert.equal(res.status, 200);
       const state = await res.json() as any;
       assert.equal(state.desktops.ready, false, 'the app must not promise a desktop that cannot load');
-
     }
+    process.env.DESKLINK_ENGINE = join(s.root, 'absent-engine');
+    const soft = doctor();
+    assert.match(soft.stdout, /· not available: needs the desklink engine/, 'an absent engine is an optional gap, not a failure');
+    assert.doesNotMatch(soft.stdout, /✗ not available/);
   } finally {
     if (before === undefined) delete process.env.DESKLINK_ENGINE; else process.env.DESKLINK_ENGINE = before;
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
