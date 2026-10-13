@@ -68,7 +68,7 @@ check() { local label=$1 f=$2 code leak=no; shift 2
     check 'wrong cookie' "$f" -H 'Cookie: crewhouse-files=0000000000000000000000000000000000000000000000000000000000000000'
     check "person's browser cookie" "$f" -H "Cookie: $COOKIE"
     check "range, person's browser cookie" "$f" -H "Cookie: $COOKIE" -H 'Range: bytes=0-15'
-    check "person's key" "$f" "${H[@]}"
+    check "person's key alone" "$f" "${H[@]}"
   done; } > "$OUT/curl-matrix.tsv"
 cat "$OUT/curl-matrix.tsv"
 

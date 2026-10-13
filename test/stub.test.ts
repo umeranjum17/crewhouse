@@ -713,9 +713,9 @@ test('raw /files/ only opens delivered files, and only for the person', async ()
   writeFileSync(join(root, 'crew', 'bots', 'reel', 'work', 'secret.webm'), 'raw take bytes');
   // A helper's shell shares this loopback: without the person's authority a delivered file stays shut.
   const person = { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}` };
-  for (const headers of [{}, { authorization: 'Bearer nope' }, { 'x-crewhouse': '1' }, { cookie: `crewhouse-files=${'0'.repeat(64)}` }] as Record<string, string>[]) {
+  for (const headers of [{}, person, { 'x-crewhouse': '1' }, { cookie: `crewhouse-files=${'0'.repeat(64)}` }] as Record<string, string>[]) {
     const res = await fetch(`${base}/files/reel/owner-file.txt`, { headers });
-    assert.equal(res.status, 403, 'a loopback caller without the person key is refused');
+    assert.equal(res.status, 403, 'a loopback caller without the browser cookie is refused');
     assert.ok(!(await res.text()).includes('owner words'), 'and reads nothing');
   }
   const unsigned = await fetch(`${base}/api/files/session`, { method: 'POST', headers: { 'x-crewhouse': '1' } });
@@ -727,12 +727,11 @@ test('raw /files/ only opens delivered files, and only for the person', async ()
   assert.ok(!set.includes(person.authorization.slice('Bearer '.length)), 'and never carries the key itself');
   const cookie = { cookie: set.split(';')[0] };
   assert.equal(await (await fetch(`${base}/files/reel/owner-file.txt`, { headers: cookie })).text(), 'owner words', 'the owner keeps the trail');
-  assert.equal(await (await fetch(`${base}/files/reel/owner-file.txt`, { headers: person })).text(), 'owner words', 'and the key still opens it');
   const range = await fetch(`${base}/files/reel/owner-file.txt`, { headers: { ...cookie, range: 'bytes=0-4' } });
   assert.equal(range.status, 206, 'a video can seek with the cookie alone');
   assert.equal(await range.text(), 'owner');
   for (const sneak of ['..%2Fwork%2Fsecret.webm', '..%252Fwork%252Fsecret.webm', '../work/secret.webm', '..%2F..%2Fcrew%2Fbots%2Freel%2Fwork%2Fsecret.webm']) {
-    const res = await fetch(`${base}/files/reel/${sneak}`, { headers: person });
+    const res = await fetch(`${base}/files/reel/${sneak}`, { headers: cookie });
     assert.notEqual(res.status, 200, `${sneak} never serves`);
     assert.ok(!(await res.text()).includes('raw take'), `${sneak} leaks nothing`);
   }

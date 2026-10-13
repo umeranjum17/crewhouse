@@ -1,10 +1,8 @@
 # Delivered files: the person's authority, never the loopback
 
 **What it proves.** A helper's sandboxed shell shares the host's loopback, so `GET /files/<bot>/<path>` (src/server.ts)
-answers only a caller holding the person's authority: the `person.key` as `Authorization: Bearer …`, or the
-`crewhouse-files` cookie. The web app mints that cookie once at start with `POST /api/files/session` (bearer +
-`x-crewhouse`; HttpOnly, SameSite=Strict, `Path=/files`; its value is an HMAC of the key, never the key). Anything else
-gets 403 and none of the file's bytes. The person opens every delivered file at its plain `/files/` address: pictures
+answers only a caller holding the `crewhouse-files` cookie. The web app mints that cookie once at start with `POST /api/files/session` (bearer +
+`x-crewhouse`; HttpOnly, SameSite=Strict, `Path=/files`; its value is an HMAC of the key, never the key). The bearer alone gets 403, as does anything else, with none of the file's bytes. The person opens every delivered file at its plain `/files/` address: pictures
 and videos in `<img>`/`<video>` (video seeks with Range), PDFs and text in their own tab, the spreadsheet's Download
 link. The phone and paired web app never use `/files` (they read `/api/photo`, `/api/document`, `/api/workbook`,
 `/api/video` over the link; `test/link.test.ts`), and `?demo` keeps its addresses untouched.
