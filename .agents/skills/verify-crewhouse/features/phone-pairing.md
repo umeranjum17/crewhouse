@@ -65,9 +65,8 @@ connections (`ufw` here drops even ssh), route the hop over USB rather than touc
 `adb -s <serial> reverse tcp:$LPORT tcp:$LPORT`, then publish a lab-only record while the run lasts:
 `avahi-publish -s crewhouse-lab _crewhouse._tcp $LPORT "url=ws://127.0.0.1:$LPORT/link"`. The phone's
 discovery and handshake are still the real ones; say in the report that the hop went over USB.
-Known gap (12 Oct): `@byokit/discover` 0.8.0 keeps a resolved service only when its
-`fullName` ends in `_crewhouse._tcp.`, but Android resolves it as `<host>._crewhouse._tcp` with no trailing dot. Until
-discover 0.8.1 (byokit PR 527), every Android run ends on "Couldn't find your computer on this Wi-Fi…" about 3 s after Pair.
-That's the kit, not the lab.
+Measured 13 Oct on the test phone (discover 0.8.1, which keeps Android's `<host>._crewhouse._tcp` name): 12 letters
+typed in 6.8 s, the two words 8.3 s after Pair, paired 18.6 s after the first key. Before 0.8.1 every Android run
+ended on "Couldn't find your computer on this Wi-Fi…" about 3 s after Pair.
 Failure proof: a wrong code ("doesn't match"), and the phone off the computer's Wi-Fi ("Couldn't find
 your computer on this Wi-Fi…").
