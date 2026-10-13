@@ -71,7 +71,7 @@ Run the same real bot-shell curl denial before and after: POST
 `/api/asks/<draft>/answer` with `x-crewhouse:1` and `answer:allow`; after the change it
 returns 403, the card remains open and no `draft.approved` event exists. HTTP PUT
 `/api/mail` with forged authority also returns 403. GET `/api/mail?to=<address>` is
-read-only; only the authenticated control link may PUT an organisation type or
+read-only, yet still needs the person's capability: an unauthenticated bot-shell GET returns 403. Only the authenticated control link may PUT an organisation type or
 suppression change, POST `/api/mail/review {draft}`, or approve a send card.
 
 ## Hard stop and honest limitations
