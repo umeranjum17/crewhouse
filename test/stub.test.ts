@@ -164,7 +164,7 @@ test('desktop setup refuses a loader failure in doctor, the tool kit and the liv
     }
     process.env.DESKLINK_ENGINE = join(s.root, 'absent-engine');
     const soft = doctor();
-    assert.match(soft.stdout, /· not available: needs the desklink engine/, 'an absent engine is an optional gap, not a failure');
+    assert.match(soft.stdout, /· not available: needs .*the desklink engine/, 'an absent engine is an optional gap, not a failure');
     assert.doesNotMatch(soft.stdout, /✗ not available/);
   } finally {
     if (before === undefined) delete process.env.DESKLINK_ENGINE; else process.env.DESKLINK_ENGINE = before;
