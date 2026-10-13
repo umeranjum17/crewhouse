@@ -699,17 +699,10 @@ export function chats(state: Json): Chat[] {
   const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '', status: '', cls: 'rest' };
   return [lead, pin, ...rest];
 }
-/** First unread message id, counted like Crew.UNSEEN, before rendering adds notes or hides fixture lines. */
+/** Crewd owns the unread boundary; select the first retained, rendered message at or beyond it. */
 export function newDivider(page: Json, bot: string): number {
-  let left = page.bot?.unread ?? 0, first = -1;
-  if (!left) return first;
-  const relayed = new Set((page.tasks ?? []).filter((t: Json) => t.origin === 'chief' && t.state === 'done').map((t: Json) => t.id));
-  for (const m of [...(page.messages ?? [])].reverse()) {
-    if (m.author === 'person' || (bot !== 'chief' && (relayed.has(m.task_id) || m.author === 'system' && !m.text.startsWith('Delivered ')))) continue;
-    first = m.id;
-    if (--left === 0) break;
-  }
-  return first;
+  const first = page.bot?.firstUnread;
+  return first == null ? -1 : lines(page, bot).find((l) => l.id >= first)?.id ?? -1;
 }
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) / 60_000); return m >= 0 && m < 60 ? `${Math.max(1, m)}m` : clock(t); };
