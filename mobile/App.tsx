@@ -28,6 +28,7 @@ import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
 import { MARKS, WHERE } from './src/marks';
+import { fw } from './src/font';
 import { askOf, sharedOf } from './src/ask';
 import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, useBubbleEdge, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
@@ -83,7 +84,19 @@ function Toast() {
 
 export default function App() {
   const t = look(useColorScheme() === 'dark');
-  const [fontsReady, fontError] = useFonts({ Inter: require('./assets/fonts/InterVariable.ttf') });
+  // Android draws one variable file at its default weight, so the bold weights load as their own static
+  // families (src/font.ts maps each weight); iOS keeps the variable font alone, as before.
+  const [fontsReady, fontError] = useFonts(
+    Platform.OS === 'android'
+      ? {
+          Inter: require('./assets/fonts/InterVariable.ttf'),
+          Inter_Medium: require('./assets/fonts/Inter-Medium.ttf'),
+          Inter_SemiBold: require('./assets/fonts/Inter-SemiBold.ttf'),
+          Inter_Bold: require('./assets/fonts/Inter-Bold.ttf'),
+          Inter_Black: require('./assets/fonts/Inter-Black.ttf'),
+        }
+      : { Inter: require('./assets/fonts/InterVariable.ttf') },
+  );
   const [grant, setGrant] = useState<Grant | null | undefined>(undefined);
   // Phone-only is an option beside pairing, remembered on this phone; pairing wins when a computer is there.
   const [phone, setPhone] = useState<boolean | null>(null);
@@ -208,7 +221,7 @@ function ChatText({ text }: { text: string }) {
     : x.type === 'em' ? <Text key={i} style={{ fontStyle: 'italic' }}>{inline(x.tokens)}</Text>
     : x.type === 'link' && safeLink(x.href) ? <Text key={i} accessibilityRole="link" onPress={() => void Linking.openURL(safeLink(x.href))} style={{ textDecorationLine: 'underline', backgroundColor: t.soft, color: t.ink }}>{inline(x.tokens)}</Text>
     : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
-  const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: 8 }}>{inline(x.tokens)}</T>
+  const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, ...fw('600'), marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
     : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
     : x.type === 'table' ? <Wide key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></Wide>
@@ -370,7 +383,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mi
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
         <Mic on={mic} text={text} put={change} listen={listen} />
         <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
-          <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, fontWeight: '900' }}>↑</Text>
+          <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
         </Pressable>
       </View>
     </View>
@@ -474,7 +487,7 @@ function DocParts({ parts }: { parts: A.DocPart[] }) {
   parts.forEach((p) => { const last = runs.at(-1); if (p.kind === 'li' && Array.isArray(last)) last.push(p); else if (p.kind === 'li') runs.push([p]); else runs.push(p); });
   return <View style={{ gap: 12, paddingTop: 12, paddingBottom: 24 }}>{runs.map((run, i) => Array.isArray(run)
     ? <View key={i} style={{ gap: 6 }}>{run.map((li, j) => <View key={j} style={{ flexDirection: 'row', gap: 8 }}><T style={s.read}>•</T><T style={[s.read, { flex: 1 }]}>{li.text}</T></View>)}</View>
-    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, fontWeight: '600', marginTop: i ? 6 : 0 }}>{run.text}</T>
+    : run.kind === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, ...fw('600'), marginTop: i ? 6 : 0 }}>{run.text}</T>
     : run.kind === 'table' ? <Wide key={i}><SheetGrid head={run.head ?? []} rows={run.rows ?? []} /></Wide>
     : <T key={i} style={[s.read, run.bold && s.b]}>{run.text}</T>)}</View>;
 }
@@ -780,7 +793,7 @@ function CloudPick({ onBack, onNext }: { onBack: () => void; onNext: () => void 
           <View style={[s.radio, { borderColor: i ? t.line2 : t.go, borderWidth: i ? 2 : 7 }]} />
           <View style={[s.mark, { backgroundColor: p.tile }]}><Text style={s.markText}>{p.mark}</Text></View>
           <View style={{ flex: 1 }}><T style={s.b}>{p.name}</T><T tone="mute" style={s.small}>{p.sub}</T></View>
-          {!!p.soon && <T tone="mute" style={[s.label2, { alignSelf: 'flex-start', fontWeight: '600', backgroundColor: t.soft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{p.soon}</T>}
+          {!!p.soon && <T tone="mute" style={[s.label2, { alignSelf: 'flex-start', ...fw('600'), backgroundColor: t.soft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{p.soon}</T>}
         </View>)}</View>
       <T tone="mute" style={[s.small, { marginTop: 10, marginHorizontal: 4 }]}>{c.more}</T>
       <Note><Text style={[s.b, { color: t.ink }]}>{c.sandbox[0]}</Text> {c.sandbox[1]}</Note>
@@ -808,7 +821,7 @@ function CloudKey({ onBack }: { onBack: () => void }) {
         <StepTop step={c.key.step} title={c.key.title} onBack={onBack} />
         <View style={{ gap: 14, marginVertical: 14 }}>{c.steps.map((parts, i) =>
           <View key={i} style={[s.row, { alignItems: 'flex-start', gap: 12 }]}>
-            <Text style={[s.stepNum, { width: 26, height: 26, borderRadius: 13, lineHeight: 26, fontSize: 13, fontWeight: '600', backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text>
+            <Text style={[s.stepNum, { width: 26, height: 26, borderRadius: 13, lineHeight: 26, fontSize: 13, ...fw('600'), backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text>
             <T style={{ flex: 1 }}>{parts.map((p, j) => j % 2 ? <Text key={j} style={s.b}>{p}</Text> : p)}</T>
           </View>)}</View>
         <Btn big label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} />
@@ -1297,14 +1310,14 @@ function Hello({ state, refresh, go }: Ctx) {
       </View></motion.Rise>
       <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
         {[...A.atHome('the home computer'), "I'll ask before sending messages, deleting things or spending money."].map((l) =>
-          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, fontWeight: '700' }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
+          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, ...fw('700') }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card></motion.Rise>
       {name}
       <Label>What can I take off your plate?</Label>
       {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
         style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
         <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
-        <T style={{ flex: 1, fontWeight: '500' }}>{i.label}</T><T tone="mute">›</T>
+        <T style={{ flex: 1, ...fw('500') }}>{i.label}</T><T tone="mute">›</T>
       </Pressable>)}
       {own ? <>
         <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={words} onChangeText={setWords} placeholder="Ask for anything…" placeholderTextColor={useLook().mute} accessibilityLabel="Your first ask" />
@@ -1332,14 +1345,14 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
   })}</View>;
   if (c.evidence === 'lines') return <View style={[s.ev, { backgroundColor: t.sunken }]}>{body.split('\n').filter(Boolean).map((l, i) => {
     const at = l.indexOf(': ');
-    return at > 0 ? <View key={i} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{l.slice(0, at)}</T><T style={{ fontWeight: '500' }}>{l.slice(at + 2)}</T></View>
+    return at > 0 ? <View key={i} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{l.slice(0, at)}</T><T style={{ ...fw('500') }}>{l.slice(at + 2)}</T></View>
       : <T key={i}>{l}</T>;
   })}</View>;
   if (c.evidence === 'draft') {
     return <View style={[s.ev, { backgroundColor: t.sunken }]}>
       {!!c.mailFrom && <T tone="mute" style={s.small}>From {c.mailFrom}</T>}
       {!!c.draftTo && <T tone="mute" style={s.small}>To {c.draftTo}</T>}
-      {!!c.draftSubject && <T style={{ fontWeight: '500' }}>Subject: {c.draftSubject}</T>}
+      {!!c.draftSubject && <T style={{ ...fw('500') }}>Subject: {c.draftSubject}</T>}
       <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
     </View>;
   }
@@ -1358,7 +1371,7 @@ function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   const t = useLook();
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
   return <View style={{ gap: 2 }}>
-    <T style={{ fontWeight: '600', color: t.pinkInk }}>{name}</T>
+    <T style={{ ...fw('600'), color: t.pinkInk }}>{name}</T>
     <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
   </View>;
 }
@@ -1671,7 +1684,7 @@ function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gea
         <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
         <View style={[s.row, { gap: 6, flexShrink: 1, minWidth: 0 }]}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : st.group === 'work' ? t.green : t.line2 }} />
-          <T lines={1} style={[s.small, { fontWeight: '500', color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
+          <T lines={1} style={[s.small, { ...fw('500'), color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
         </View>
         <View style={{ flex: 1 }} />
         {gear}
@@ -2039,7 +2052,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
       {ln.todos.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>
         {st.state === 'doing' ? <motion.Ring size={13} width={2} color={t.ink} reduce={reduce} />
           : <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : t.ok }]}>{TICK[st.state]}</T>}
-        <T style={[s.small, { flex: 1, fontWeight: st === doing ? '600' : '400', color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && ln.state !== 'waiting' && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
+        <T style={[s.small, { flex: 1, ...fw(st === doing ? '600' : '400'), color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && ln.state !== 'waiting' && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
       </View>)}
       {!!ln.detail.length && <Pressable onPress={() => setOpenDetail((v) => !v)} accessibilityRole="button" hitSlop={8}>
         <T tone="mute" style={s.small}>{openDetail ? 'Hide the small steps' : `Show the small steps (${ln.detail.length})`}</T></Pressable>}
@@ -2394,7 +2407,7 @@ function AddHelper({ state, refresh, go, back }: Ctx) {
       <Label>Starters</Label><Card>{A.gallery(state).map((g: Json) => {
         const name = (names[g.id] ?? g.name).trim() || g.name;
         return <View key={g.id} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: t.line }}>
-          <Face who={{ kind: g.kind, name: g.name } as any} size={44} /><View style={{ flex: 1, minWidth: 0 }}><TextInput style={{ fontFamily: 'Inter', fontWeight: '500', fontSize: 15, color: t.ink, padding: 0 }} value={names[g.id] ?? g.name} onChangeText={(v) => setNames({ ...names, [g.id]: v })} accessibilityLabel={`Name for ${g.name}`} /><T tone="mute" style={s.small} lines={2}>{g.does}</T></View>
+          <Face who={{ kind: g.kind, name: g.name } as any} size={44} /><View style={{ flex: 1, minWidth: 0 }}><TextInput style={{ fontFamily: 'Inter', ...fw('500'), fontSize: 15, color: t.ink, padding: 0 }} value={names[g.id] ?? g.name} onChangeText={(v) => setNames({ ...names, [g.id]: v })} accessibilityLabel={`Name for ${g.name}`} /><T tone="mute" style={s.small} lines={2}>{g.does}</T></View>
           <Btn label="Add" onPress={() => attempt(async () => { const b = await api.recruit(g.id, name); refresh(); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`)} />
         </View>;
       })}</Card>
@@ -2439,7 +2452,7 @@ function PhoneAccounts() {
     </Card>
     <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel="More ways to sign in"
       style={[s.row, { minHeight: 48, paddingHorizontal: 4, marginTop: 8 }]}>
-      <T tone="ink2" style={{ flex: 1, fontWeight: '500' }}>More ways to sign in</T>
+      <T tone="ink2" style={{ flex: 1, ...fw('500') }}>More ways to sign in</T>
       {!more && <View style={[s.row, { gap: 4 }]}>{A.AIS.slice(1).map((ai) => <AiMark key={ai.key} ai={ai} size={22} />)}</View>}
       <T tone="mute">{more ? '⌄' : '›'}</T>
     </Pressable>
@@ -2568,13 +2581,13 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
-  h1: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.6, marginVertical: 4 },
-  display: { fontFamily: 'Inter', fontSize: 38, lineHeight: 42, fontWeight: '600', letterSpacing: 0, textAlign: 'center' },
+  h1: { fontSize: 26, lineHeight: 32, ...fw('700'), letterSpacing: -0.6, marginVertical: 4 },
+  display: { fontFamily: 'Inter', fontSize: 38, lineHeight: 42, ...fw('600'), letterSpacing: 0, textAlign: 'center' },
   // Titles and names: Inter 600 (welcome, pairing, Hello, the office's sheets).
-  serif: { fontFamily: 'Inter', fontWeight: '600', letterSpacing: 0 },
-  stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '700', overflow: 'hidden', marginTop: 0 },
-  h2: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
-  b: { fontWeight: '600' },
+  serif: { fontFamily: 'Inter', ...fw('600'), letterSpacing: 0 },
+  stepNum: { width: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, fontSize: 12, ...fw('700'), overflow: 'hidden', marginTop: 0 },
+  h2: { fontSize: 17, ...fw('600'), lineHeight: 24 },
+  b: { ...fw('600') },
   small: { fontSize: 13, lineHeight: 18 },
   read: { fontSize: 16, lineHeight: 24 },
   askCard: { shadowColor: '#14121a', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
@@ -2587,24 +2600,24 @@ const s = StyleSheet.create({
   ideaIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   palRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: radius.card, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 14 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 8, marginHorizontal: 4 },
-  label: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.7, textTransform: 'uppercase' },
-  count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', overflow: 'hidden' },
+  label: { fontSize: 12, lineHeight: 16, ...fw('600'), letterSpacing: 0.7, textTransform: 'uppercase' },
+  count: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, fontSize: 11, lineHeight: 18, ...fw('700'), textAlign: 'center', overflow: 'hidden' },
   office: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
   stats: { flexDirection: 'row', gap: 6, marginTop: 14 },
   seg: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 4 },
   segBtn: { borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   stat: { flex: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
-  statNum: { fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: -0.3 },
+  statNum: { fontSize: 18, lineHeight: 22, ...fw('700'), letterSpacing: -0.3 },
   statLabel: { fontSize: 12, lineHeight: 16 },
   time: { fontSize: 12, lineHeight: 16 },
-  fp: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
+  fp: { fontSize: 22, ...fw('600'), fontVariant: ['tabular-nums'], marginVertical: 8, textAlign: 'center' },
   card: { borderRadius: radius.card, padding: 16, gap: 8 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 8, maxWidth: '100%' },
   pillDot: { width: 8, height: 8, borderRadius: 4 },
-  pillText: { fontFamily: 'Inter', fontSize: 13, fontWeight: '500', flexShrink: 1 },
+  pillText: { fontFamily: 'Inter', fontSize: 13, ...fw('500'), flexShrink: 1 },
   btn: { borderRadius: radius.control, paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40 },
   btnBig: { alignSelf: 'stretch', minHeight: 48 },
-  btnText: { fontFamily: 'Inter', fontSize: 14, fontWeight: '600' },
+  btnText: { fontFamily: 'Inter', fontSize: 14, ...fw('600') },
   input: { fontFamily: 'Inter', borderWidth: 1, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 7, paddingRight: 7, paddingLeft: 14, minHeight: 52 },
   composerInput: { fontFamily: 'Inter', flex: 1, fontSize: 15, paddingVertical: 8, maxHeight: 140 },
@@ -2616,42 +2629,42 @@ const s = StyleSheet.create({
   stepDot: { width: 10, height: 10, borderRadius: 5 },
   line: { width: '100%', maxWidth: '92%', gap: 4, alignSelf: 'flex-start' },
   intro: { alignItems: 'center', gap: 2, paddingTop: 12, paddingBottom: 6 },
-  introName: { fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3, marginTop: 8 },
+  introName: { fontSize: 20, lineHeight: 26, ...fw('700'), letterSpacing: -0.3, marginTop: 8 },
   day: { alignItems: 'center', marginTop: 10 },
-  dayText: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  dayText: { fontSize: 12, lineHeight: 16, ...fw('500') },
   typing: { flexDirection: 'row', gap: 5, paddingVertical: 8, flex: 1 },
   typingDot: { width: 7, height: 7, borderRadius: 4 },
   bar: { height: 14, borderRadius: 7 },
   listGroup: { borderWidth: 1, borderRadius: radius.card, overflow: 'hidden' },
   listRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, gap: 12 },
-  rowTitle: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
+  rowTitle: { fontSize: 15, lineHeight: 22, ...fw('500') },
   fileIc: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   fileGlyph: { fontSize: 20, lineHeight: 24 },
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
+  unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   offline: { paddingVertical: 7, paddingHorizontal: 16 },
-  offlineText: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
-  toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, fontWeight: '500', overflow: 'hidden', maxWidth: '90%' },
+  offlineText: { textAlign: 'center', fontSize: 13, ...fw('700') },
+  toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, ...fw('500'), overflow: 'hidden', maxWidth: '90%' },
   scanHint: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 20, gap: 12, backgroundColor: '#000a' },
   scrim: { flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' },
   sheet: { padding: 22, paddingTop: 12, gap: 12, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: 2 },
   askStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  askWords: { fontSize: 17, lineHeight: 24, fontWeight: '600' },
-  askQ: { fontSize: 20, lineHeight: 26, fontWeight: '600', letterSpacing: -0.2 },
+  askWords: { fontSize: 17, lineHeight: 24, ...fw('600') },
+  askQ: { fontSize: 20, lineHeight: 26, ...fw('600'), letterSpacing: -0.2 },
   askInline: { gap: 8, borderTopWidth: 1, borderStyle: 'dashed', paddingTop: 14, marginTop: 6 },
   ev: { borderRadius: radius.control, padding: 12, gap: 6, width: '100%' },
   orderRow: { flexDirection: 'row', gap: 12, alignItems: 'baseline', alignSelf: 'stretch' },
-  label2: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  label2: { fontSize: 12, lineHeight: 16, ...fw('500') },
   // The first screen and the cloud steps (mocks C, provider, signin-key): one phone column, the last line at the foot.
   screen: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 28 },
   foot: { marginTop: 'auto', paddingTop: 18 },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '600' },
+  title: { fontSize: 22, lineHeight: 28, ...fw('600') },
   opt: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card },
   mark: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  markText: { fontFamily: 'Inter', fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  markText: { fontFamily: 'Inter', fontSize: 15, ...fw('700'), color: '#FFFFFF' },
   radio: { width: 22, height: 22, borderRadius: 11 },
 });
 
