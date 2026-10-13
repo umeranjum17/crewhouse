@@ -11,7 +11,7 @@ import { until } from './lab.ts';
 const repo = join(import.meta.dirname, '..');
 const KEY = 'ab'.repeat(32);
 
-async function answering(status: number, body: object) {
+async function answering(status: number, body: object | null) {
   const server = createServer((_req, res) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return { port: (server.address() as AddressInfo).port, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };

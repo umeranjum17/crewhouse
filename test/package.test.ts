@@ -28,7 +28,7 @@ after(() => { daemon.kill(); releases.close(); rmSync(root, { recursive: true, f
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The person's app authority, read from the daemon's own state dir; a daemon writes that key before it listens. */
-const authOf = (stateDir: string) => { try { return { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(stateDir, 'person.key'), 'utf8')}` }; } catch { return { 'x-crewhouse': '1' }; } };
+const authOf = (stateDir: string): Record<string, string> => { try { return { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(stateDir, 'person.key'), 'utf8')}` }; } catch { return { 'x-crewhouse': '1' }; } };
 async function state() {
   for (let i = 0; i < 100; i++) {
     const r = await fetch(`${base}/api/state`, { headers: authOf(join(root, 'state')) }).catch(() => null);
