@@ -756,14 +756,14 @@ function PhoneOnly({ onExit }: { onExit: () => void }) {
 function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: () => void; onSignOut: () => void }) {
   const t = useLook();
   // When the screen is narrow for its text (a small phone, or a large font) the two controls no longer leave room for
-  // "Chief", so they stack instead of squeezing the title out. At normal widths and fonts the header stays one row.
+  // "Chief" and the account's name, so they move to their own row below. At normal widths and fonts it stays one row.
   const { width, fontScale } = useWindowDimensions();
   const narrow = width / fontScale < 360;
   return (
-    <View style={[s.head, { borderColor: t.line }]}>
+    <View style={[s.head, { borderColor: t.line }, narrow && { flexWrap: 'wrap' }]}>
       <Face who="chief" size={32} />
       <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small}>{subtitle}</T></View>
-      <View style={{ flexDirection: narrow ? 'column' : 'row', alignItems: 'flex-end', gap: narrow ? 2 : 12 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, ...(narrow && { width: '100%' }) }}>
         <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8}><T tone="ink2" style={s.small}>Sign out</T></Pressable>
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
       </View>
