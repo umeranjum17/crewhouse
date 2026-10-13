@@ -2,8 +2,8 @@
 // pair-lab.sh whose web/dist was built with CREWHOUSE_CLOUD=1:
 //   node computer-plan.mjs <lab dir> <evidence dir> > plan.json
 // Pairs the public shell by the relay code (yes at the computer), names the person Umer, installs the app from
-// Settings, then in the installed window: Settings with its Chief's computer row, the page, and the Reset sheet, day
-// and night at 390 and 1440, plus one tap on Reset to 7:00's button, which must say the kit isn't ready.
+// Settings, then in the installed window: Settings with its Chief's computer row and the page, day
+// and night at 390 and 1440, plus one tap on the dimmed Reset, which must answer with the reason — no sheet, no toast.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 const [S, EV] = process.argv.slice(2).map((p) => resolve(p));
@@ -12,7 +12,7 @@ const WEB = /^WEB=(.*)$/m.exec(readFileSync(`${S}/env`, 'utf8'))[1];
 const cli = `LAB=${S} ${SK}/pair-lab.sh cli`;
 const put = (sel) => `(() => { const t = document.querySelector(${JSON.stringify(sel)}); const p = t.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(p, 'value').set.call(t, {{out}}); t.dispatchEvent(new Event('input', { bubbles: true })); return t.value.length; })()`;
-const reset = `document.querySelectorAll('.computer .row-item')[1]`;
+const reset = `document.querySelector('.computer-off .row-item')`;
 const steps = [
   { name: 'pair', w: 390, h: 844, dpr: 2, mobile: true, url: `${WEB}?day#/pair`, settle: 3000 },
   { name: 'code', run: `${cli} phones code | tail -1`, eval: put('.pair-code') },
@@ -37,10 +37,19 @@ for (const look of ['day', 'night']) for (const [w, h] of [[390, 844], [1440, 90
     eval: `[matchMedia('(display-mode: standalone)').matches, [...document.querySelectorAll('.go-to')].map((a) => a.textContent)]`, out: `${EV}/pwa/settings-${look}-${w}.png` });
   steps.push({ name: `computer-${look}-${w}`, eval: `(() => { [...document.querySelectorAll('.go-to')].find((a) => a.textContent === "Chief's computer").click(); return location.hash; })()` });
   steps.push({ name: `computer-${look}-${w}-shot`, run: 'sleep 1; true', wait: `!!${reset}`, eval: `document.querySelector('.computer').innerText`, out: `${EV}/pwa/computer-${look}-${w}.png` });
-  steps.push({ name: `reset-${look}-${w}`, eval: `(${reset}.click(), true)` });
-  steps.push({ name: `reset-${look}-${w}-shot`, run: 'sleep 1; true', wait: `!!document.querySelector('.computer-ask')`, eval: `document.querySelector('.computer-ask').innerText`, out: `${EV}/pwa/computer-reset-${look}-${w}.png` });
+  steps.push({ name: `tap-${look}-${w}`, eval: `(() => { document.querySelector('.computer-off').click(); return true; })()` });
+  steps.push({ name: `tap-${look}-${w}-shot`, run: 'sleep 0.5; true',
+    eval: `[!!document.querySelector('.computer-connect.nudge'), !!document.querySelector('.computer-ask'), !!document.querySelector('.toast'), document.querySelector('.computer-connect')?.textContent ?? '']`,
+    out: `${EV}/pwa/computer-tap-${look}-${w}.png` });
 }
-// The sheet's red button reaches the one kit call, which stops at the kit: the sheet closes and the toast says so.
-steps.push({ name: 'reset-tap', click: '.computer-ask .btn.danger', settle: 800, eval: `document.querySelector('.toast')?.textContent ?? ''`, out: `${EV}/pwa/computer-reset-tapped.png` });
+// A tap on the dimmed Reset answers with the reason (the `.computer-connect.nudge` line) — no sheet, no toast.
+// The answer is also recorded at 390 wide: the recorder starts first, then the tap lands inside its six seconds.
+steps.push({ name: 'tap-390', w: 390, h: 844, dpr: 2, mobile: true, url: `${WEB}?day#/computer`, settle: 2000, wait: `!!${reset}`,
+  record: `${EV}/pwa/computer-tap-answer.webm`, seconds: 6 });
+steps.push({ name: 'tap-390-click', eval: `(() => { document.querySelector('.computer-off').click(); return true; })()` });
+steps.push({ name: 'tap-390-shot',
+  eval: `[!!document.querySelector('.computer-connect.nudge'), !!document.querySelector('.computer-ask'), !!document.querySelector('.toast'), document.querySelector('.computer-connect')?.textContent ?? '']`,
+  out: `${EV}/pwa/computer-tap-answer.png` });
+steps.push({ name: 'tap-390-recorded', recwait: true });
 console.log(JSON.stringify({ profile: `${S}/pwa/profile`, home: `${S}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, recorder: `${SK}/record.mjs`,
   args: ['--window-size=1400,950', '--force-device-scale-factor=1', 'about:blank'], steps }, null, 1));
