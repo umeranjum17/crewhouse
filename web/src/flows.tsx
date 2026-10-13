@@ -349,6 +349,21 @@ function OfflineWords({ onClose }: { onClose: () => void }) {
     <Pill tone="off">Trying again…</Pill><button className="link" onClick={onClose}>Close for now</button></>;
 }
 
+/** Full screen when this page opened without the person's authority (a bare bookmark or typed address, whose every
+ *  read crewd refuses with 403 no-authority): the computer is up, so never the offline screen and no retry loop —
+ *  one plain screen in the same tokens that says to open Crewhouse from this computer's app menu. */
+export function NoAuthority() {
+  return (
+    <div className="unreachable">
+      <div className="asleep">
+        <Dots rows={art.HOUSE} pal={art.HOUSE_PAL} d={9} label="Crewhouse" />
+      </div>
+      <h1>Open Crewhouse from this computer’s app menu</h1>
+      <p className="lead">This page opened in the browser on its own, so it can’t reach your crew. Your helpers are waiting on this computer — open Crewhouse from the app menu and everything picks up right here.</p>
+    </div>
+  );
+}
+
 /** Full screen when Crewhouse can't be reached at all: never a blank page or an error code. */
 export function Unreachable({ retry }: { retry: () => void }) {
   const [n, setN] = useState(5);
