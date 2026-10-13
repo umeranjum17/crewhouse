@@ -647,7 +647,7 @@ for (const publicMode of [false, true]) test(`a headless runner pairs once and k
   await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   assert.equal((await http('POST', '/api/phones/pair', { first: true })).status, 409, 'desktop flow cannot auto-enrol');
   boot();
-  await until(async () => log.includes('headless host ready'));
+  await until(async () => log.includes('headless host ready')).catch(e => { throw new Error(`${e.message}\n${log}`); });
   assert.deepEqual((await local('phones/link')).body.hosts.sort(), publicMode ? [] : ['127.0.0.1', '127.0.0.2']);
   assert.equal((await local('phones/pair', { first: true, role: 'view' })).status, 409);
   const expired = (await local('phones/pair', { first: true })).body.qr;

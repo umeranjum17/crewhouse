@@ -3,7 +3,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isIPv4 } from 'node:net';
-import { tailscaleState } from '@byokit/reach';
+import { tailscaleState } from '@byokit/discover';
 import { keyPairFrom } from '@byokit/pair';
 import { qrText } from '@byokit/ui-core/link';
 import { loadConfig } from '../src/config.ts';
