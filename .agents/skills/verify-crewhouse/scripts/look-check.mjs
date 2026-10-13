@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2), mode = argv.shift();
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : argv.splice(i, 2)[1]; };
-const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
+const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), REVERSE = opt('reverse'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
 const ROOT = opt('root', join(import.meta.dirname, '..', '..', '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
 if (!OUT || !['web', 'android', 'shot', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|fonts --out <dir> …'); process.exit(2); }
@@ -357,9 +357,10 @@ try {
   } else {
     const S = process.env.SERIAL, adb = (...a) => execFileSync('adb', ['-s', S, ...a], { encoding: 'utf8', maxBuffer: 1 << 27 });
     if (!S) throw new Error('set SERIAL to your own emulator');
-    const [pw] = adb('shell', 'wm', 'size').match(/(\d+)x(\d+)/).slice(1).map(Number);
+    if (REVERSE && !/^\d+:\d+(,\d+:\d+)*$/.test(REVERSE)) throw new Error('--reverse takes device:host port pairs');
+    const [pw] = [...adb('shell', 'wm', 'size').matchAll(/(\d+)x(\d+)/g)].at(-1).slice(1).map(Number); // override is the active viewport
     const sdk = +adb('shell', 'getprop', 'ro.build.version.sdk').trim(), scale = TEXT ?? (sdk >= 34 ? '2.0' : '1.3'), dens = Math.round((pw / W) * 160);
-    const was = { font: adb('shell', 'settings', 'get', 'system', 'font_scale').trim(), night: adb('shell', 'cmd', 'uimode', 'night').trim() };
+    const was = { font: adb('shell', 'settings', 'get', 'system', 'font_scale').trim(), night: adb('shell', 'cmd', 'uimode', 'night').trim(), density: adb('shell', 'wm', 'density').match(/Override density: (\d+)/)?.[1] };
     try {
       adb('shell', 'wm', 'density', String(dens)); adb('shell', 'settings', 'put', 'system', 'font_scale', scale);
       let reached;
@@ -375,7 +376,10 @@ try {
         // An app now and then misses a theme change it was already told about: after 20 s, flip it away and back once.
         const settle = async () => { let nudge = Date.now() + 20000, was = ''; for (const end = Date.now() + 90000; Date.now() < end;) {
           if (Date.now() > nudge) { nudge = Infinity; adb('shell', 'cmd', 'uimode', 'night', theme === 'night' ? 'no' : 'yes'); await sleep(1500); adb('shell', 'cmd', 'uimode', 'night', theme === 'night' ? 'yes' : 'no'); }
-          await sleep(800); png = cap();
+          await sleep(800);
+          try { if (adb('get-state').trim() !== 'device') continue; } catch { why = 'owned adb device is offline'; continue; }
+          if (REVERSE) for (const pair of REVERSE.split(',')) { const [device, host] = pair.split(':'); adb('reverse', `tcp:${device}`, `tcp:${host}`); }
+          png = cap();
           adb('shell', 'uiautomator', 'dump', '/sdcard/look.xml'); xml = adb('shell', 'cat', '/sdcard/look.xml');
           const app = xml.replace(/<node [^>]*package="com\.android\.systemui"[^>]*\/?>/g, '');
           const ready = /package="(?!com\.android\.systemui)[^"]+"[^>]*text="[^"]+"|text="[^"]+"[^>]*package="(?!com\.android\.systemui)/.test(xml);
@@ -384,9 +388,9 @@ try {
         } throw new Error(`the phone never settled in the ${theme} look within 90 s (last: ${why})`); };
         await settle();
         const words = () => [...xml.matchAll(/ text="([^"]+)"[^>]*package="(?!com\.android\.systemui)/g)].map((m) => m[1]).join('\n');
-        if (THEN && words() !== reached) for (const t of THEN.split('>>')) { await sleep(1000); try { execFileSync(process.execPath, [join(import.meta.dirname, 'phone-ui.mjs'), 'tap', t.trim()], { env: { ...process.env, SERIAL: S }, encoding: 'utf8', stdio: 'pipe' }); } catch (e) { throw new Error(`--then could not tap ${t.trim()}: ${(e.stderr || e.message).trim()}`); } await settle(); }
+        if (THEN && words() !== reached) for (const t of THEN.split('>>')) { await sleep(1000); try { execFileSync(process.execPath, [join(import.meta.dirname, 'phone-ui.mjs'), ...(t.trim().startsWith('reveal:') ? ['reveal', t.trim().slice(7)] : t.trim().startsWith('optional:') ? ['tap-if', t.trim().slice(9)] : ['tap', t.trim()])], { env: { ...process.env, SERIAL: S }, encoding: 'utf8', stdio: 'pipe' }); } catch (e) { throw new Error(`--then could not tap ${t.trim()}: ${(e.stderr || e.message).trim()}`); } await settle(); }
         if (SCROLL_TO) {
-          const [, ph] = adb('shell', 'wm', 'size').match(/(\d+)x(\d+)/).slice(1).map(Number);
+          const [, ph] = [...adb('shell', 'wm', 'size').matchAll(/(\d+)x(\d+)/g)].at(-1).slice(1).map(Number);
           const visible = () => [...xml.matchAll(/<node [^>]+>/g)].some(([node]) => {
             if (!node.includes(`text="${SCROLL_TO}"`)) return false;
             const b = node.match(/bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"/)?.slice(1).map(Number);
@@ -404,7 +408,7 @@ try {
         report.push(await finish(slug, theme, file,
           [...nativeHits(xml, png.readUInt32BE(16), png.readUInt32BE(20)), ...(await run(img, nativeCut, src, xml))], 1));
       }
-    } finally { adb('shell', 'wm', 'density', 'reset'); adb('shell', 'settings', 'put', 'system', 'font_scale', was.font === 'null' ? '1.0' : was.font); adb('shell', 'cmd', 'uimode', 'night', /yes/.test(was.night) ? 'yes' : 'no'); }
+    } finally { adb('shell', 'wm', 'density', was.density ?? 'reset'); adb('shell', 'settings', 'put', 'system', 'font_scale', was.font === 'null' ? '1.0' : was.font); adb('shell', 'cmd', 'uimode', 'night', /yes/.test(was.night) ? 'yes' : 'no'); }
   }
 } catch (e) { console.error(`look-check: could not run: ${e.message}`); done(2); await new Promise(() => {}); }
 

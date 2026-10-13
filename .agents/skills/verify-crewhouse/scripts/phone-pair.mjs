@@ -37,6 +37,7 @@ if (!STATE) throw new Error('Pass --state for the task-owned crewd state directo
 const SERIAL = opt('serial', 'emulator-5562');
 const BASE = opt('base', 'http://127.0.0.1:7801');
 const APK = opt('apk', null);
+const PREPARED = flag('prepared'); // an installed dev APK already on Pair; preserve its Metro host settings
 const RUNS = Number(opt('runs', 1));
 const CAMERA_FILE = opt('camera-file', '/home/umer/lab-tmp/ch-pm-19/ev/live-qr.png');
 const TAP_SCAN = opt('tap-scan', '540 1598').split(' ');  // "Scan the code" at 1080x2400
@@ -51,6 +52,8 @@ const require = createRequire(process.env.CREWHOUSE_REPO ? join(process.env.CREW
 const { qrMatrix } = require('@byokit/ui-core');
 const adb = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const ui = (...args) => execFileSync(process.execPath, [join(import.meta.dirname, 'phone-ui.mjs'), ...args], { env: { ...process.env, SERIAL }, encoding: 'utf8' });
+const waitText = async (word) => { for (const end = Date.now() + 30000; !ui('texts').includes(word);) { if (Date.now() > end) throw new Error(`phone never showed ${word}`); await sleep(100); } };
 const api = async (path, body) => {
   const r = await fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(STATE, 'person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
   const out = await r.json(); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out;
@@ -76,16 +79,16 @@ for (let run = 1; run <= RUNS; run++) {
   drawPoster(offer.qr, CAMERA_FILE);
   writeFileSync(join(OUT, `offer-${run}.json`), JSON.stringify(offer, null, 2));
   if (APK) { try { adb('uninstall', PKG); } catch { /* not installed */ } adb('install', '-g', APK); }
-  adb('shell', 'pm', 'clear', PKG);
-  adb('shell', 'pm', 'grant', PKG, 'android.permission.CAMERA'); // pm clear takes the permission with it
-  adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
-  await sleep(8000);
+  if (!PREPARED) adb('shell', 'pm', 'clear', PKG);
+  adb('shell', 'pm', 'grant', PKG, 'android.permission.CAMERA');
+  if (PREPARED) await waitText('Scan the code');
+  else { adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`); await sleep(8000); }
   await shot(`run${run}-1-pair.png`);
   // screenrecord writes on the device, so record there and pull the file back when the run is over.
   const deviceRec = `/sdcard/${PKG}-pairing.mp4`;
   const recorder = flag('record') ? spawn('adb', ['-s', SERIAL, 'shell', 'screenrecord', '--time-limit', '60', deviceRec]) : null;
   const t0 = Date.now();
-  adb('shell', 'input', 'tap', ...TAP_SCAN);
+  if (PREPARED) ui('tap', '^Scan the code$'); else adb('shell', 'input', 'tap', ...TAP_SCAN);
   let asking = [];
   for (let waited = 0; waited < 15000 && !asking.length; waited += 200) { asking = await api('/api/phones/pending'); if (!asking.length) await sleep(200); }
   const tRead = Date.now();
@@ -99,9 +102,10 @@ for (let run = 1; run <= RUNS; run++) {
     paired = (await api('/api/phones')).some((p) => p.name === asking[0].name);
   }
   const tPaired = Date.now();
+  if (PREPARED) await waitText('Open Crewhouse');
   await shot(`run${run}-3-yourein.png`);
-  adb('shell', 'input', 'tap', ...TAP_OPEN);
-  await sleep(3000);
+  if (PREPARED) ui('tap', '^Open Crewhouse$'); else adb('shell', 'input', 'tap', ...TAP_OPEN);
+  if (PREPARED) await waitText('Chief'); else await sleep(3000);
   await shot(`run${run}-4-open.png`);
   if (recorder) { // SIGINT makes screenrecord finalise the file; then pull it off the device
     recorder.kill('SIGINT');

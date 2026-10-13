@@ -1033,7 +1033,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     const m = Math.floor((Date.now() - at) / 60_000);
     return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
-  const speaker = (w: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{w}</T>;
+  const speaker = (w: string) => <T style={[s.small, s.b, { width: nameCol(), color: t.ink2 }]}>{w}</T>;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <PhoneHead subtitle={plan || 'On this phone, no computer'} onExit={onExit} onSignOut={confirmSignOut} />
@@ -1772,7 +1772,7 @@ function Home(ctx: Ctx) {
         {!!A.resting(state) && <Card><T>{A.resting(state)}. I'll pick things back up then.</T></Card>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <AiMark ai={A.AIS[0]} size={30} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small} lines={2}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
         </Pressable>
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} refresh={refresh} />
@@ -1876,9 +1876,14 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
   </Modal>;
 }
 
+// A transcript's name column, wide enough for a name at the person's text size (60 at normal size).
+const nameCol = () => Math.round(60 * Math.min(PixelRatio.getFontScale(), 2));
+
 function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
   const t = useLook();
   const crew = A.crew(state);
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360; // large text: time and status go under the preview, never squeeze it
   const statusColor = (cls: string) => cls === 'needs' ? t.pink : cls === 'work' ? t.green : cls === 'quiet' ? t.amber
     : cls === 'failed' ? t.danger : cls === 'done' ? t.ink : t.mute;
   return <View><Label>Chats</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
@@ -1887,17 +1892,20 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
         onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.id === 'chief' && c.unread ? `, ${c.unread} new` : ''}`}>
         {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
           : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
-        <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small}>{c.line}</T></View>
-        <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
-          {c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
-            {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'quiet' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
-            <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
-          </View>}
-          {c.id === 'chief' && c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small}>{c.line}</T>{narrow && (c.at > 0 || c.id !== 'room') && end(c)}</View>
+        {!narrow && end(c)}
       </Pressable>
       {!!c.working && <View style={s.workingLine}><View style={[s.statusDot, { backgroundColor: t.green }]} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{c.working}</T></View>}
     </View>)}
   </View></View>;
+  function end(c: A.Chat) {
+    return <View style={narrow ? [s.row, { gap: 10, flexWrap: 'wrap', marginTop: 4 }] : { alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
+      {c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
+        {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'quiet' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
+        <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
+      </View>}
+      {c.id === 'chief' && c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>;
+  }
 }
 
 function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: () => void }) {
@@ -2007,7 +2015,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   let day = '';
   const dayOf = (at?: number) => { if (!at) return null; const d = A.dayLabel(at); if (d === day) return null; day = d; return <View style={s.day} accessibilityRole="header"><T tone="mute" style={s.dayText}>{d}</T></View>; };
   // The transcript's name column: every line named, no faces, no clocks.
-  const who = (f: string) => <T style={[s.small, s.b, { width: 60, color: t.ink2 }]}>{f === 'chief' ? 'Chief' : name}</T>;
+  const who = (f: string) => <T style={[s.small, s.b, { width: nameCol(), color: t.ink2 }]}>{f === 'chief' ? 'Chief' : name}</T>;
   const speaker = (l: { from: string; helper?: string }) => l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : A.crew(state).find((x) => x.id === l.helper)?.name ?? name;
   return (
     <View style={{ flex: 1 }}>
@@ -2016,7 +2024,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       <ScrollView ref={scroll} style={{ flex: 1, minHeight: hero ? 168 : undefined }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero ? 'flex-end' : undefined }}
         onContentSizeChange={() => {
           if (around) return;
-          scroll.current?.scrollToEnd({ animated: false });
+          // Android ignores a scroll in the same frame as the growth (the live page's new lines stayed below the fold).
+          requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
         }}>
         {start && !hero && <View style={s.intro}>
           <View style={[s.halo, { backgroundColor: t.soft }]}><Ink who={h ? h.kind : 'chief'} mood={h?.mood} size={72} /></View>
@@ -2036,7 +2045,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
               {!!l.text && !l.by && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
             </> : <View style={{ flexDirection: 'row', gap: 10 }}>
-              <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
+              <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
                 {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
@@ -2047,7 +2056,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             </View>}
           </View></motion.Rise></View>
         )}
-        {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}><T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
+        {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}><T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
         {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
         {ln && <LiveLine ln={ln} go={go} />}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
@@ -2076,7 +2085,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : LIVE_WORD[ln.state];
   if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
-    <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
+    <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
       <T tone="mute" style={s.small}>{ln.helper ? `${ln.who} · ` : ''}{word} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
       {open}
@@ -2084,7 +2093,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   </View></View>;
   const doing = ln.todos.find((x) => x.state === 'doing');
   return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${word}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
-    <T style={[s.small, s.b, { width: 60, color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
+    <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
       <View style={[s.row, { gap: 6 }]}>
         <View style={[s.statusDot, { backgroundColor: ln.state === 'needs' ? t.pink : ln.state === 'waiting' ? t.line : t.ok, opacity: reduce ? 0.6 : beat % 2 === 0 ? 1 : 0.35 }]} />

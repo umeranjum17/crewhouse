@@ -688,10 +688,10 @@ export function chats(state: Json): Chat[] {
   const glow = (s: Status): Chat['cls'] => s.seat === 'needs' ? 'needs' : s.seat === 'working' ? 'work'
     : s.seat === 'quiet' ? 'quiet' : s.seat === 'done' ? 'done' : s.seat === 'failed' ? 'failed' : 'rest';
   const cs = chiefStatus(v);
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' ? { working: 'Chief is working' } : {}) };
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' || cs.seat === 'quiet' ? { working: 'Chief is working' } : {}) };
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id), s = statusOf(member(h.id), v), m = member(h.id);
-    const working = m.seat === 'working' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
+    const working = m.seat === 'working' || m.seat === 'quiet' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
     return { id: h.id, name: h.name, who: h, line: preview(b.last, h.role), at: at(b.last?.at ?? 0) || 0,
       unread: b.unread ?? 0, ring: h.ring === 'needs' ? '' : h.ring, status: s.word, cls: glow(s), ...(working ? { working } : {}) };
   }).sort((a, b) => b.at - a.at);

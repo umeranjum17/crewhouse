@@ -7,9 +7,12 @@ code the computer is showing, the person says yes on the computer, and the phone
 
 `scripts/phone-pair.mjs` drives the whole journey and writes the evidence:
 
-(Drift, seen 2026-10-13 on v1.0.0-preview.20261012.18: the app now opens on a chooser, "Use this phone only" or
-"Pair with a computer", and the script still expects the Pair screen first. Its default `TAP_SCAN` (540,1598)
-misses. Tap "Pair with a computer" first with `phone-ui.mjs`, or pair by typing the computer's code.)
+The app opens on "Where should I work?": tap **On my computer** to reach Pair. On a task-owned debug APK
+whose native dependencies are unchanged, first configure its own `debug_http_host` for the isolated Metro.
+Then use `--prepared` without `--apk`: it preserves those settings and pairs from the visible Pair screen,
+finds Scan/Open by their exact labels, and waits for the phone's words rather than fixed startup sleeps.
+The release-APK path still clears its own app between runs; its legacy coordinate defaults need adjustment
+for the current screen. Neither path may reuse the person's app data or adb keys.
 
 ```bash
 REPO=$PWD                                  # the script renders the code with this repo's @byokit/ui-core
