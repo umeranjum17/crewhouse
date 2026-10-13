@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, parseV1Offer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
-import type { Config } from './config.ts';
+import { relayOrigin, type Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
 
@@ -63,10 +63,6 @@ const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired 
 const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null, UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws'), pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
-const relayOrigin = (value: string | null) => {
-  if (value && (!URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
-  return value && new URL(value).origin;
-};
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
 type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
 export class Link {
@@ -248,8 +244,7 @@ export class Link {
 
   /** Dial the person's relay; advertise its public origin when a cloud proxy fronts it. No hosted default. */
   get relay(): string { return this.setting('link.relay') ?? this.cfg.relay; }
-  get relayPublic(): string { return this.setting('link.relayPublic') || this.relay; }
-  /** '' disables the relay; null restores CREWHOUSE_RELAY. A save of the same relay keeps its public origin; a different one clears it. */
+  get relayPublic(): string { return this.setting('link.relayPublic') || this.cfg.relayPublic || this.relay; }
   setRelay(url: string | null, enrol?: string, publicUrl?: string | null) {
     const before = this.relay, next = relayOrigin(url), settings: [string, string | null][] = [['link.relay', next]];
     if (publicUrl !== undefined || (next ?? this.cfg.relay) !== before) settings.push(['link.relayPublic', relayOrigin(publicUrl ?? null)]);
@@ -258,8 +253,7 @@ export class Link {
       if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
       this.db.event('link.relay', null, { on: !!this.relay });
     });
-    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial();
-    this.follow();
+    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial(); this.follow();
   }
 
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */

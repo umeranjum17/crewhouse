@@ -433,7 +433,7 @@ test('the relay address: local dial, public offers and typed phone pairing, with
   assert.deepEqual([configured.status, configured.body.relay, configured.body.relayPublic], [200, local.url, publicUrl]);
   await until(async () => (await http('GET', '/api/phones/link')).body.relayStatus === 'online');
   assert.equal(publicConnections, 0, 'crewd registers by the local address, never by the public proxy');
-  for (const invalid of ['ftp://wrong', 'not a URL', 42]) {
+  for (const invalid of ['ftp://wrong', 'not a URL', 42, false, 0, ['https://x']]) {
     assert.equal((await http('PUT', '/api/phones/relay', { url: 'https://changed.example', publicUrl: invalid })).status, 400);
     const kept = (await http('GET', '/api/phones/link')).body;
     assert.deepEqual([kept.relay, kept.relayPublic, kept.relayStatus], [local.url, publicUrl, 'online'], 'invalid public origin changes neither setting nor the live connection');
