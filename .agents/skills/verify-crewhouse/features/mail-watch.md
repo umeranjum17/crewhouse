@@ -5,6 +5,8 @@ watch", every 2 hours) that reads only threads newer than its stored cursor and 
 most one quiet task per run. The model decides whether anything in the new mail needs the
 person and, if so, says it once in the Dot shape: the fact; a date or deadline; what is not
 confirmed yet; one thing they can do; one link to the source thread. Mail is read-only.
+A thread Chief already holds a case for gets its same-thread follow-up instead:
+`notice-followup.md`.
 
 ## Drive
 
