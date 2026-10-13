@@ -1,7 +1,7 @@
 // End to end through the real daemon, running the bundled engine on the stub model: no account, no network, no quota.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,6 +132,37 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.deepEqual((await api('GET', '/api/bots/reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
   await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
 
+});
+
+test('desktop setup refuses a loader failure in doctor, the tool kit and the live state', async () => {
+  const s = lab(), before = process.env.DESKLINK_ENGINE, engine = join(s.root, 'unavailable-engine');
+  s.cfg.port = 0; s.cfg.linkPort = 0;
+  const server = await startServer(s.cfg, s.db, s.crew);
+  try {
+    process.env.DESKLINK_ENGINE = engine;
+    for (const library of ['libevdev.so.2', 'libfuture.so.7']) {
+      // A task-private native command reproduces the loader's exit/status, not a mocked readiness helper.
+      writeFileSync(engine, `#!/bin/sh\necho 'error while loading shared libraries: ${library}: cannot open shared object file: No such file or directory' >&2\nexit 127\n`, { mode: 0o700 });
+      const doctor = spawnSync(process.execPath, [join(import.meta.dirname, '..', 'src', 'doctor.ts')], {
+        env: { ...process.env, CREWHOUSE_STATE_DIR: s.cfg.stateDir, CREWHOUSE_CREW_DIR: s.cfg.crewDir, CREWHOUSE_TOOLS_DIR: s.cfg.toolsDir }, encoding: 'utf8', timeout: 15_000,
+      });
+      assert.equal(doctor.status, 1, doctor.stderr);
+      assert.match(doctor.stdout, new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
+      assert.doesNotMatch(doctor.stdout, /desklink engine are ready|\nReady\./);
+      assert.match(doctor.stdout, /Computer \(desklink\).*missing system library/, 'the kit row uses the same runtime check');
+      const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/state`, {
+        headers: { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` },
+      });
+      assert.equal(res.status, 200);
+      const state = await res.json() as any;
+      assert.equal(state.desktops.ready, false, 'the app must not promise a desktop that cannot load');
+
+    }
+  } finally {
+    if (before === undefined) delete process.env.DESKLINK_ENGINE; else process.env.DESKLINK_ENGINE = before;
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    s.done();
+  }
 });
 
 test('parked peer reads: both approvals resume one turn and the person gets the finished draft', async () => {
