@@ -51,6 +51,9 @@ b { font-weight: 600; }
 .clamp1 { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row { display: flex; gap: 12px; align-items: center; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+/* A list card's buttons stay inside the card: at the largest text a long label wraps to
+   its own lines instead of pushing the page sideways. Single-line labels read as before. */
+.card.list .btns .btn { max-width: 100%; white-space: normal; text-align: center; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .rest-screen { max-width: 720px; }
@@ -514,6 +517,9 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
   .side-chief b { font: 600 17px/22px var(--ui); }
   .side-helmet { display: block; max-width: 100%; overflow: hidden; }
   .side-helmet .helmet { text-align: center; }
+  /* The rail's decorative helmet fits its mask at every text size: the 38-column ink wraps
+     inside the slot instead of clipping under it. While it fits, nothing wraps and it reads as before. */
+  .side-helmet .helmet { white-space: pre-wrap; overflow-wrap: anywhere; }
   .side-status { display: flex; gap: 6px; align-items: center; justify-content: center; font: 600 13px/18px var(--ui); color: var(--ink2); }
   .side-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); flex: none; }
   .side-status.needs { color: var(--pink-ink); }
