@@ -238,8 +238,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
           notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key), work: false };
       }));
     }
-    // "Sign in with …": start (the page, `via: 'code'` for the code, `via: 'key'` for a pasted plan key),
-    // paste the address the browser landed on or the key, cancel, sign out; "I've changed my plan" (retry).
+    // "Sign in with …": start (the page, or `via: 'code'` / `'key'`), paste the address or key, cancel, sign out; "I've changed my plan" (retry).
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
       const [key, act] = [r[2], r[3]];
       provider(key);
