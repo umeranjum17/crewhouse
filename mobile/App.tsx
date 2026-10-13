@@ -36,7 +36,8 @@ import { island } from './src/island';
 import { Office, useOffice } from './src/office';
 import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
-import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { pairWords } from './src/pair-words';
+import { canPush, connect, desktopSignaling, forgetGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { cloudOn, connectCloud } from './src/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
@@ -584,19 +585,6 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 }
 
 // ---------- pairing ----------
-/** One plain line for a pairing failure, and the retry is the action — never the machinery's own words.
- *  The link's own sentences already say which mistake it was (the computer said no, the code didn't match, that
- *  address is unreachable), so a message the link owns passes through as it is; only machinery text is replaced. */
-const pairWords = (e: any): string => {
-  const m = String(e?.message ?? e ?? '');
-  if (/isn't a pairing code/i.test(m)) return "That's not a Crewhouse code. Point the camera at the code on your computer, then try again.";
-  if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
-  if (/copy the whole code|typo|same Wi-Fi/i.test(m)) return m; // already said for the person
-  if ((Object.values(LINK_WORDS) as string[]).includes(m)) return m; // the link's own sentence for this exact failure
-  if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
-  if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";
-  return 'That didn\'t go through. Check the code, then try again.';
-};
 /** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
  *  (missing — the phone still shows everything the moment the app is opened). */
 async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
@@ -627,6 +615,10 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
   // Whether the camera itself is the problem, kept as its own answer: the "Open phone settings" button belongs to
   // that, and no pairing sentence can be read for it (the wrong-code sentence talks about pointing the camera).
   const [noCamera, setNoCamera] = useState(false);
+  const openCamera = async () => {
+    const p = perm?.granted ? perm : await askPerm();
+    if (p.granted) { setNoCamera(false); setScanning(true); } else { setNoCamera(true); setErr('Crewhouse needs the camera to read the code.'); }
+  };
   const typed = async () => {
     setBusy(true);
     setErr('');
@@ -702,7 +694,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
             accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
           {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
           {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-          <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); }} />
+          <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); void openCamera(); }} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -718,10 +710,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
           <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
       </Card>
       {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : (
-        <Btn go big label="Scan the code" onPress={async () => {
-          const p = perm?.granted ? perm : await askPerm();
-          if (p.granted) { setNoCamera(false); setScanning(true); } else { setNoCamera(true); setErr('Crewhouse needs the camera to read the code.'); }
-        }} />
+        <Btn go big label="Scan the code" onPress={openCamera} />
       )}
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
       {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}

@@ -71,12 +71,14 @@ export async function pairTypedCode(text: string, onWords: (w: string) => void):
  *  withdraw its codes. */
 async function pairOnWifi(code: string, o: { name: string; onWords: (w: string) => void }): Promise<Grant> {
   const found = await scan({ type: 'crewhouse', protocol: 'tcp', domain: 'local.', ms: 3000 }).catch(() => []);
+  let taken = false; // the computer has the code and is asking the person: no other address or computer may answer
+  const words = { ...o, onWords: (w: string) => { taken = true; o.onWords(w); } };
   let wrong: LinkError | null = null; // "didn't match" says more than "can't reach"
   for (const s of found) {
     const urls = new Set([s.txt.url, ...s.addresses.filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).map((a) => `ws://${a}:${s.port}/link`)]);
     for (const url of [...urls].filter((u) => u?.startsWith('ws://'))) {
-      try { return await pairWithCode(url, code, o); } catch (e) {
-        if (!(e instanceof LinkError) || !['unreachable', 'timeout', 'wrong-code'].includes(e.code)) throw e; // a dropped address times out
+      try { return await pairWithCode(url, code, words); } catch (e) {
+        if (taken || !(e instanceof LinkError) || !['unreachable', 'timeout', 'wrong-host', 'wrong-code'].includes(e.code)) throw e; // a dropped address times out
         if (e.code === 'wrong-code') { wrong = e; break; }
       }
     }

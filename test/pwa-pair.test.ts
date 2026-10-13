@@ -18,7 +18,9 @@ import { browserBin } from '../src/desktop.ts';
 import { startRelay } from '../relay/main.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
+import { LinkError } from '@byokit/pair';
 import { pair } from '../web/src/link.ts';
+import { pairWords } from '../mobile/src/pair-words.ts';
 import { NO_COMPUTER } from '../web/src/typed.ts';
 
 const repo = join(import.meta.dirname, '..');
@@ -152,4 +154,20 @@ test('a 12-letter code the computer cannot be reached at says to scan the QR, in
   } finally {
     delete (globalThis as { location?: unknown }).location;
   }
+});
+
+test('the phone words a failure with the same sentences the web app shows, and an approval that timed out with the link\'s own', async () => {
+  const failure = (p: Promise<unknown>) => p.then(() => assert.fail('it paired'), (e: Error) => e);
+  const relay = await failure(pair('VBF8PJ-G4S7-KC97-H5GM@http://127.0.0.1:1', () => {}));
+  Object.assign(globalThis, { location: new URL('http://127.0.0.1:1/') });
+  let computer: Error;
+  try {
+    computer = await failure(pair('BCDF-GHJK-MNPQ', () => {}));
+  } finally {
+    delete (globalThis as { location?: unknown }).location;
+  }
+  assert.equal(pairWords(computer), 'Your phone could not find your computer on this Wi-Fi. Scan the QR on your computer instead.');
+  assert.equal(pairWords(relay), "Could not reach your computer's relay. Check it is on and try again.");
+  assert.equal(pairWords(new LinkError('timeout')), "Your computer didn't answer in time.");
+  assert.equal(pairWords(new Error('That code has a typo. Check the 12 letters on your computer and try again.')), 'That code has a typo. Check the 12 letters on your computer and try again.');
 });
