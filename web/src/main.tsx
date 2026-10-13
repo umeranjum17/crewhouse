@@ -1696,7 +1696,7 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
   const schedWho = (h: string) => (h === 'chief' ? 'Chief' : crew.find((x) => x.id === h)?.name ?? 'Chief');
   return (
     <div className="side-crew">
-      <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} d={7} whole /></span><b>Chief</b></a>
+      <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} rail /></span><b>Chief</b></a>
       <div className={`side-status${word === A.WORDS.needs || signedOut ? ' needs' : ''}`}><i />{word}</div>
       {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>

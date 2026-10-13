@@ -51,6 +51,9 @@ b { font-weight: 600; }
 .clamp1 { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row { display: flex; gap: 12px; align-items: center; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+/* A list card's buttons stay inside the card: at the largest text a long label wraps to
+   its own lines instead of pushing the page sideways. Single-line labels read as before. */
+.card.list .btns .btn { max-width: 100%; white-space: normal; text-align: center; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .rest-screen { max-width: 720px; }
