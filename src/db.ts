@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, name TEXT, pk TEXT UNIQ
 CREATE TABLE IF NOT EXISTS reads (member INTEGER, bot TEXT, seen INTEGER, PRIMARY KEY (member, bot));
 CREATE TABLE IF NOT EXISTS usage (member INTEGER, day TEXT, tokens INTEGER, PRIMARY KEY (member, day));
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at INTEGER, kind TEXT, bot TEXT, data TEXT);
+CREATE TABLE IF NOT EXISTS cases (thread TEXT PRIMARY KEY, facts TEXT, updated_at INTEGER);
 `;
 
 /** One SQLite file. Every write that matters appends an event in the same transaction. */
@@ -44,7 +45,7 @@ export class Store {
     this.db.exec(SCHEMA);
     // Columns added after the first release; CREATE IF NOT EXISTS leaves older tables as they were.
     // Member columns stay for compatibility with existing databases.
-    for (const [table, col] of [['tasks', 'brain TEXT'], ['tasks', 'wake_at INTEGER'], ['people', 'quiet TEXT'], ['bots', 'member INTEGER DEFAULT 1'],
+    for (const [table, col] of [['tasks', 'brain TEXT'], ['cases', 'sender TEXT'], ['tasks', 'wake_at INTEGER'], ['people', 'quiet TEXT'], ['bots', 'member INTEGER DEFAULT 1'],
       ['tasks', 'member INTEGER DEFAULT 1'], ['messages', 'member INTEGER'], ['asks', 'member INTEGER'], ['tasks', 'routine INTEGER'], ['tasks', 'session TEXT'], ['routines', 'quiet INTEGER DEFAULT 0'], ['people', 'share TEXT'], ['routines', 'watch TEXT'], ['routines', 'trigger TEXT'], ['routines', 'cursor TEXT'], ['tasks', 'hops INTEGER DEFAULT 0'], ['routines', 'down INTEGER DEFAULT 0'], ['tasks', 'photos TEXT'], ['tasks', 'acted TEXT'], ['tasks', 'outcome TEXT'], ['tasks', 'tokens INTEGER DEFAULT 0'], ['tasks', 'parent INTEGER'], ['tasks', 'root INTEGER'], ['tasks', 'room INTEGER DEFAULT 0'], ['tasks', 'reask INTEGER DEFAULT 0'], ['routines', 'mailwatch INTEGER DEFAULT 0']]) {
       if (!this.all(`PRAGMA table_info(${table})`).some((c) => c.name === col.split(' ')[0])) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     }

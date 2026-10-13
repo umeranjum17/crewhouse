@@ -331,7 +331,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.edited', r[1], { by: 'person' });
       return { ok: true };
     }
-    if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { bot: null }), cap: disk.ABOUT_CAP };
+    if (p === '/api/about' && m === 'GET') return { notes: disk.readNotes(cfg, { bot: null }), cap: disk.ABOUT_CAP, cases: db.all('SELECT thread, facts FROM cases ORDER BY updated_at DESC') };
+    if (p === '/api/cases/forget' && m === 'POST') { db.tx(() => { db.run('DELETE FROM cases WHERE thread = ?', String(body.thread ?? '')); db.event('case.forgotten', null, { thread: String(body.thread ?? '') }); }); return { ok: true }; }
     if (p === '/api/about' && m === 'PUT') {
       disk.writeNotes(cfg, { bot: null }, body.text ?? '');
       db.event('memory.edited', null, { by: 'person', everyone: true });

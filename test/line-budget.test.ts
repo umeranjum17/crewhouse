@@ -19,7 +19,13 @@ import { join } from 'node:path';
 // Raised 6876 -> 6927 for the packaged download's first-use tool install (ch-ob-desktop-deb, owner
 // exception): the admission wait, the shared install map with its 10-minute stall bound and group kill,
 // and the shutdown cleanup. No trim paired: the install path is the feature.
-const BUDGET = 6927;
+// Raised 6927 -> 6937 for Chief's case follow-ups (ch-notice-followup, owner exception): the cases table,
+// the held-facts lookup and the crew_case tool. No trim paired: the case store is the feature.
+// Raised 6937 -> 6938 for the Memory row's Forget on a held case (owner extended the exception): the one
+// POST /api/cases/forget route. No trim paired: the Forget is the person's control over the case store.
+// Raised 6938 -> 6944 for the case event log and the same-sender match (owner extended the exception): the
+// case.kept and case.forgotten events, the sender column on a case, and the sender lookup. No trim paired.
+const BUDGET = 6944;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

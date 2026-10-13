@@ -94,6 +94,7 @@ export const api = {
   notes: (id: string, text: string) => call('PUT', `/api/bots/${id}/notes`, { text }),
   about: () => call('GET', '/api/about'),
   setAbout: (text: string) => call('PUT', '/api/about', { text }),
+  forgetCase: (thread: string) => call('POST', '/api/cases/forget', { thread }),
   /** About me and my work: the record every helper reads before a job for them. */
   profile: () => call('GET', '/api/profile'),
   setProfile: (text: string) => call('PUT', '/api/profile', { text }),
