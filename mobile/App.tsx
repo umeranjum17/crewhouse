@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, useWindowDimensions, View,} from 'react-native';
+  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -107,13 +107,15 @@ export default function App() {
 }
 
 // ---------- the mascots, as dots ----------
-/** `cell`: how much taller than wide each cell is (art.CELL for a helmet); the dot stays round in its middle. */
-function Dots({ rows, pal, d, crisp = false, cell = 1 }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean; cell?: number }) {
+/** `cell`: how much taller than wide each cell is (art.CELL for a helmet); the dot stays round in its middle. `d` snaps
+ *  to whole device pixels so every dot is the same size and the rows keep one pitch, even at a few pixels a dot. */
+function Dots({ rows, pal, d: raw, crisp = false, cell = 1 }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean; cell?: number }) {
+  const d = PixelRatio.roundToNearestPixel(raw) || 1 / PixelRatio.get();
   return (
     <View accessible={false}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * cell, padding: crisp ? 0 : d * 0.06, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: crisp ? d : d * 0.88, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * cell, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: d, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>
