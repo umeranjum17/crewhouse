@@ -27,7 +27,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
-import { MARKS } from './src/marks';
+import { MARKS, WHERE } from './src/marks';
 import { askOf, sharedOf } from './src/ask';
 import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, useBubbleEdge, wanted, type OverlayState } from './src/bubble';
 import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } from './src/chip';
@@ -37,6 +37,7 @@ import { crewPill, chiefPill } from './src/crew-status';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { canPush, connect, desktopSignaling, forgetGrant, kept, LINK_WORDS, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { cloudOn, connectCloud } from './src/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -719,28 +720,105 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
 }
 
 // ---------- phone only: Chief on this phone, no computer ----------
-/** The first choice, for a phone with no computer paired: run Chief here, or pair one. Never replaces pairing. */
+/** The first screen with no computer paired (mock C, Main2691): Chief asks where he should work. On my computer is
+ *  the pairing as before, Just on this phone the phone-only floor as before, In my cloud the cloud set-up steps (only
+ *  in a build with the cloud on, src/cloud.ts). */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
-  const [computer, setComputer] = useState(false);
-  if (computer) return <Pair onPaired={onPaired} />;
+  const [at, setAt] = useState<'where' | 'computer' | 'cloud' | 'key'>('where');
+  const back = at === 'computer' || at === 'cloud' ? () => setAt('where') : at === 'key' ? () => setAt('cloud') : null;
+  useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
+  if (at === 'computer') return <Pair onPaired={onPaired} />;
+  if (at === 'cloud') return <CloudPick onBack={back!} onNext={() => setAt('key')} />;
+  if (at === 'key') return <CloudKey onBack={back!} />;
+  const w = A.where(cloudOn);
   return (
-    <ScrollView contentContainerStyle={s.centerScroll}>
-      <ChiefArt mood="hello" size={104} whole />
-      <T style={s.display}>Crewhouse</T>
-      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant. Run Chief on this phone alone, or pair it with your computer for the whole crew.</T>
-      <Card style={{ alignSelf: 'stretch', gap: 10, marginTop: 6 }}>
-        <T style={s.b}>Just this phone</T>
-        <T tone="ink2">Connect your own {phoneProviderName} key and Chief runs right here, with no computer. He can answer and make documents.</T>
-        <Btn go big label="Use this phone only" onPress={onPhoneOnly} />
-      </Card>
-      <Card style={{ alignSelf: 'stretch', gap: 10 }}>
-        <T style={s.b}>With your computer</T>
-        <T tone="ink2">Your whole crew runs on your computer — browsing, files, apps and schedules — and this phone talks to it.</T>
-        <Btn big label="Pair with a computer" onPress={() => setComputer(true)} />
-      </Card>
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>Either way, your sign-in stays on your own device.</T>
+    <ScrollView contentContainerStyle={s.screen}>
+      <View style={[s.row, { alignItems: 'flex-start', marginTop: 22 }]}>
+        <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 44, height: 40.5 }} accessibilityIgnoresInvertColors />
+        <View style={{ flex: 1, paddingTop: 2 }}><T style={s.b}>Chief</T><T>{w.hello}</T></View>
+      </View>
+      {!!w.line && <T tone="ink2" style={[s.small, { marginLeft: 54, marginTop: 10 }]}>{w.line}</T>}
+      <View style={{ gap: 10, marginTop: 12 }}>{w.rows.map((r, i) =>
+        <Pressable key={r.key} onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key)} accessibilityRole="button" accessibilityLabel={r.title}
+          style={({ pressed }) => [s.opt, { backgroundColor: t.solid, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }, pressed && { opacity: 0.7 }]}>
+          <View style={[s.mark, { backgroundColor: i ? t.soft : t.softAccent }]}><Image source={WHERE[r.key]} style={{ width: 20, height: 20, tintColor: i ? t.ink : t.go }} /></View>
+          <View style={{ flex: 1 }}><T style={s.b}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View>
+          <T tone="mute" style={{ fontSize: 20 }}>›</T>
+        </Pressable>)}</View>
+      <Note>{w.note}</Note>
+      <T tone="mute" style={[s.small, s.centerText, s.foot]}>{w.later}</T>
     </ScrollView>
+  );
+}
+
+/** The shield card under a choice: what Crewhouse never sees, and who bills you. */
+function Note({ children }: { children: ReactNode }) {
+  const t = useLook();
+  return <View style={[s.row, { alignItems: 'flex-start', marginTop: 14, padding: 12, paddingHorizontal: 14, borderRadius: radius.card, backgroundColor: t.soft }]}>
+    <Image source={WHERE.shield} style={{ width: 18, height: 18, marginTop: 1, tintColor: t.ink }} /><T tone="ink2" style={[s.small, { flex: 1, lineHeight: 19 }]}>{children}</T>
+  </View>;
+}
+function StepTop({ step, title, onBack }: { step: string; title: string; onBack: () => void }) {
+  return <>
+    <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}><T tone="ink2" style={{ fontSize: 22, width: 28 }}>‹</T><T tone="ink2">Back</T></Pressable>
+    <T tone="mute" style={[s.label2, { marginTop: 8 }]}>{step}</T>
+    <T style={[s.title, { marginTop: 4 }]}>{title}</T>
+  </>;
+}
+
+/** Step 1 of the cloud: pick the company that rents Chief his computer. boat.dev for now; Hetzner is shown, not ready. */
+function CloudPick({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const t = useLook();
+  const c = A.CLOUD;
+  return (
+    <View style={{ flex: 1 }}><ScrollView contentContainerStyle={s.screen}>
+      <StepTop step={c.pick.step} title={c.pick.title} onBack={onBack} />
+      <T tone="ink2" style={{ marginTop: 6, marginBottom: 16 }}>{c.pick.lead}</T>
+      <View style={{ gap: 10 }}>{c.clouds.map((p, i) =>
+        <View key={p.name} accessibilityState={{ selected: !i, disabled: !!i }} style={[s.opt, { backgroundColor: t.solid, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2, opacity: i ? 0.6 : 1 }]}>
+          <View style={[s.radio, { borderColor: i ? t.line2 : t.go, borderWidth: i ? 2 : 7 }]} />
+          <View style={[s.mark, { backgroundColor: p.tile }]}><Text style={s.markText}>{p.mark}</Text></View>
+          <View style={{ flex: 1 }}><T style={s.b}>{p.name}</T><T tone="mute" style={s.small}>{p.sub}</T></View>
+          {!!p.soon && <T tone="mute" style={[s.label2, { alignSelf: 'flex-start', fontWeight: '600', backgroundColor: t.soft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{p.soon}</T>}
+        </View>)}</View>
+      <T tone="mute" style={[s.small, { marginTop: 10, marginHorizontal: 4 }]}>{c.more}</T>
+      <Note><Text style={[s.b, { color: t.ink }]}>{c.sandbox[0]}</Text> {c.sandbox[1]}</Note>
+    </ScrollView>
+    {/* Pinned under the list, as in the mock, so the largest text never pushes it out of sight. */}
+    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 }}><Btn go big label={c.next} onPress={onNext} /></View></View>
+  );
+}
+
+/** Step 2 of the cloud: make a key on boat.dev and paste it here. The box clears on Connect, so the key never stays on
+ *  screen; the kit checks it and keeps it on this phone (src/cloud.ts). */
+function CloudKey({ onBack }: { onBack: () => void }) {
+  const t = useLook();
+  const c = A.CLOUD;
+  const [key, setKey] = useState('');
+  const [err, setErr] = useState('');
+  const connect = async () => {
+    const k = key.trim();
+    setKey(''); setErr('');
+    try { await connectCloud(k); } catch { setErr(FRIENDLY.missing); }
+  };
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+      <ScrollView contentContainerStyle={s.screen} keyboardShouldPersistTaps="handled">
+        <StepTop step={c.key.step} title={c.key.title} onBack={onBack} />
+        <View style={{ gap: 14, marginVertical: 14 }}>{c.steps.map((parts, i) =>
+          <View key={i} style={[s.row, { alignItems: 'flex-start', gap: 12 }]}>
+            <Text style={[s.stepNum, { width: 26, height: 26, borderRadius: 13, lineHeight: 26, fontSize: 13, fontWeight: '600', backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text>
+            <T style={{ flex: 1 }}>{parts.map((p, j) => j % 2 ? <Text key={j} style={s.b}>{p}</Text> : p)}</T>
+          </View>)}</View>
+        <Btn big label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} />
+        <TextInput style={[s.input, { marginTop: 14, minHeight: 48, color: t.ink, borderColor: t.line2, backgroundColor: t.bg }]} value={key} onChangeText={setKey}
+          placeholder={c.key.paste} placeholderTextColor={t.mute} accessibilityLabel={c.key.paste} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+        <View style={{ marginTop: 10 }}><Btn go big label={c.key.connect} disabled={!key.trim()} onPress={connect} /></View>
+        {!!err && <T tone="pinkInk" style={[s.centerText, { marginTop: 10 }]}>{err}</T>}
+        <T tone="mute" style={[s.small, s.centerText, s.foot]}>{c.kept}</T>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -2567,6 +2645,14 @@ const s = StyleSheet.create({
   ev: { borderRadius: radius.control, padding: 12, gap: 6, width: '100%' },
   orderRow: { flexDirection: 'row', gap: 12, alignItems: 'baseline', alignSelf: 'stretch' },
   label2: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  // The first screen and the cloud steps (mocks C, provider, signin-key): one phone column, the last line at the foot.
+  screen: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 28 },
+  foot: { marginTop: 'auto', paddingTop: 18 },
+  title: { fontSize: 22, lineHeight: 28, fontWeight: '600' },
+  opt: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.card },
+  mark: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  markText: { fontFamily: 'Inter', fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  radio: { width: 22, height: 22, borderRadius: 11 },
 });
 
 // The bubble's panel (src/panel.tsx) is its own screen over other apps, built from these same pieces.

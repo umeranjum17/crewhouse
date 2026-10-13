@@ -1,6 +1,7 @@
 // A cold relaunch of the installed app returns to the place the person was last showing, not always Home
 // (web/src/resume.ts). Driven in a real browser on the built public shell served from a *.localhost origin —
-// the published shell's own situation, so it boots the demo with no crewd, no account and no network. Covers:
+// the published shell's own situation, opened on its demo (`?demo`; bare, it asks where Chief works), with no crewd, no
+// account and no network. Covers:
 // a thread is remembered and reopened; a link or shortcut that names a place wins over the memory; a remembered
 // thread that has since gone opens Home with no error. Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
@@ -56,25 +57,25 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
     return r.result.value;
   };
   // A real cold start: about:blank unloads the document, so the target URL is a fresh load (a hash-only change would not be).
-  const cold = async (url = `${base}/`) => {
+  const cold = async (url = `${base}/?demo`) => {
     await send('Page.navigate', { url: 'about:blank' });
     await send('Page.navigate', { url });
     await until('the app', () => run("!!document.querySelector('.shell')"), 30_000);
   };
   const hash = () => run('location.hash');
 
-  // The public shell boots the demo with no query (the published start_url), and Scout's thread remembers itself.
+  // The public shell's demo, and Scout's thread remembers itself.
   await cold();
-  assert.equal(await run("!!document.querySelector('.demo-tag')"), true, 'the public shell boots the demo');
+  assert.equal(await run("!!document.querySelector('.demo-tag')"), true, 'the public shell runs the demo');
   await run("location.hash = '#/h/scout'");
   await until('Scout’s thread', () => run("!!document.querySelector('.page.helper')"), 30_000);
 
-  // A home-screen launch (start_url "/", nothing after the #) reopens the remembered thread.
+  // A home-screen launch (the app root, nothing after the #) reopens the remembered thread.
   await cold();
   assert.equal(await hash(), '#/h/scout', 'the cold relaunch reopened the last thread');
 
   // A named place in a link or shortcut wins over the remembered one.
-  await cold(`${base}/#/things`);
+  await cold(`${base}/?demo#/things`);
   assert.equal(await hash(), '#/things', 'the place named in the link wins');
 
   // A remembered thread that has since gone opens Home, with no error.

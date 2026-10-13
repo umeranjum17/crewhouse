@@ -14,7 +14,7 @@ const pinned = demo ? (new URLSearchParams(location.search).get('phase') as Phas
 /** ?demo&sheet=signin|connect opens that sheet straight away. */
 export const sheet = demo ? new URLSearchParams(location.search).get('sheet') : null;
 
-function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+export function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   // A portal, so a sheet opened from inside a card still covers the whole screen. The keyboard belongs to it while
   // it's open, the same as every other sheet (parts.tsx useDialogOwn).
   const box = useRef<HTMLDivElement>(null);

@@ -1,4 +1,7 @@
-# screen slug	its approved mock, under $FM_HOME ({theme} = day|night); a screen with none says so in every report
+# screen slug	its approved mock, under $FM_HOME ({theme} = day|night, {look} = light|dark); a screen with none says so in every report
 # Approved = a Main message approving that mock round (data/done-archive.md, data/backlog.md); the newest round wins.
 chief-chat	data/evidence/ch-pwa-simplify/mock-r3/shots/chat-top-{theme}-390.png
 hello	data/evidence/ch-pwa-simplify/mock-r3/shots/first-{theme}-390.png
+where	data/ch-cloud-onboarding-mock/png/c-{look}.png
+cloud-pick	data/ch-cloud-onboarding-mock/png/provider-{look}.png
+cloud-key	data/ch-cloud-onboarding-mock/png/signin-key-{look}.png

@@ -10,7 +10,7 @@
 // web: its own headless Chromium (throwaway profile), ?day and ?night per screen (the app's own theme switch), every
 // text box's font-size and line-height × --text (Android Chrome's text scaling). android: the emulator at 360 dp
 // (`wm density`), the system's largest font_scale and `cmd uimode night`, read back from uiautomator and screencap;
-// both are reset afterwards. Mocks: mocks.tsv beside this script (slug → path under $FM_HOME, {theme} = day|night).
+// both are reset afterwards. Mocks: mocks.tsv beside this script (slug → path under $FM_HOME, {theme} = day|night, {look} = light|dark).
 // Writes <out>/<slug>-<theme>.png, <slug>-<theme>-vs-mock.png, hits/<slug>-<theme>-<n>-<kind>.png, look-check.json.
 // Exit 0 clean, 1 a defect, 2 could not run.
 import { execFileSync, spawn } from 'node:child_process';
@@ -30,7 +30,9 @@ const mocks = Object.fromEntries(readFileSync(join(import.meta.dirname, 'mocks.t
 // The app's own backgrounds (web/src/tokens.ts, shared with the phone): an edge band of one of these is the app's page.
 const { color } = await import(join(import.meta.dirname, '../../../../web/src/tokens.ts'));
 // Per theme: night's surfaces are near-black, so by day a black band must not pass as one of them.
-const BGS = Object.fromEntries(Object.entries(color).map(([k, t]) => [k, [t.bg, t.surface, t.sunken].map((x) => [1, 3, 5].map((i) => parseInt(x.slice(i, i + 2), 16)))]));
+// A sheet's page dimmed by the shared .scrim (styles.css, rgba(12,10,16,.32)) is still the app's page.
+const dim = (c) => c.map((v, i) => Math.round(v * 0.68 + [12, 10, 16][i] * 0.32));
+const BGS = Object.fromEntries(Object.entries(color).map(([k, t]) => { const own = [t.bg, t.surface, t.sunken].map((x) => [1, 3, 5].map((i) => parseInt(x.slice(i, i + 2), 16))); return [k, [...own, ...own.map(dim)]]; }));
 const art = await import(join(import.meta.dirname, '../../../../web/src/art.ts'));
 const [, cw, ch] = art.helmetSvg(20).match(/<rect [^>]*width="([\d.]+)" height="([\d.]+)"/), CELL = cw / ch;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -201,7 +203,7 @@ async function finish(slug, theme, shotFile, domHits, scale) {
       box: b.edge === 'left' ? { x: 0, y: 0, w: b.px, h } : b.edge === 'right' ? { x: w - b.px, y: 0, w: b.px, h } : b.edge === 'top' ? { x: 0, y: 0, w, h: b.px } : { x: 0, y: h - b.px, w, h: b.px } }))];
   hits.forEach((x, n) => { x.crop = join('hits', `${slug}-${theme}-${n + 1}-${x.kind}.png`); });
   for (const x of hits) save(join(OUT, x.crop), await run(img, crop, src, x.box, 16 * scale));
-  const m = mocks[slug]?.replace('{theme}', theme), mock = m && existsSync(join(FM, m)) ? join(FM, m) : null;
+  const m = mocks[slug]?.replace('{theme}', theme).replace('{look}', theme === 'night' ? 'dark' : 'light'), mock = m && existsSync(join(FM, m)) ? join(FM, m) : null;
   save(join(OUT, `${slug}-${theme}-vs-mock.png`), await run(img, pair, src, mock && dataUrl(mock), `${slug} ${theme}${mock ? '' : ' (no approved mock)'}`));
   return { slug, theme, shot: shotFile, mock, hits };
 }

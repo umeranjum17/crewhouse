@@ -7,6 +7,16 @@ export const MARKS: Record<string, number> = {
   minimax: require('../assets/ai/minimax.png'),
   claude: require('../assets/ai/claude.png'),
 };
+// The first screen's marks (mock C, made by `node scripts/icons.mjs`): line marks in white, tinted on screen, and Chief's
+// soft helmet in each look.
+export const WHERE = {
+  cloud: require('../assets/where/cloud.png'),
+  computer: require('../assets/where/computer.png'),
+  phone: require('../assets/where/phone.png'),
+  shield: require('../assets/where/shield.png'),
+  'chief-day': require('../assets/where/chief-day.png'),
+  'chief-night': require('../assets/where/chief-night.png'),
+};
 // Chief and each helper as PNGs (made from web/src/art.ts by `node scripts/icons.mjs`): whole in every pose for the
 // office, `head-` for faces. Metro needs literal requires, so the phone reads PALS[`${who}-${pose}`].
 export const PALS: Record<string, number> = {

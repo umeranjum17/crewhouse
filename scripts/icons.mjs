@@ -5,7 +5,8 @@
 // ImageMagick's `magick`). The outputs are committed.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { helmetSvg, helmetOf, POSES, PALS } from '../web/src/art.ts';
+import { helmetSoft, helmetSvg, helmetOf, POSES, PALS } from '../web/src/art.ts';
+import { ICONS } from '../web/src/icons.ts';
 import { MARKS } from '../web/src/logos.ts';
 
 const web = new URL('../web/', import.meta.url).pathname;
@@ -106,3 +107,15 @@ for (const m of ['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error']) {
 }
 execFileSync('magick', [web + 'notify-96.png', `PNG32:${bubbles}glyph.png`]);
 console.log('bubble written into mobile/assets/bubble/');
+// The phone's first screen (mock C): the line marks white on transparent (the screen tints each one), and Chief's soft
+// helmet in each look, at 3x.
+const where = new URL('../mobile/assets/where/', import.meta.url).pathname;
+mkdirSync(where, { recursive: true });
+const draw = (name, art, w, h) => {
+  writeFileSync(`${where}${name}.svg`, art);
+  execFileSync('magick', ['-background', 'none', '-density', '600', `${where}${name}.svg`, '-resize', `${w}x${h}`, '-depth', '8', '-strip', `PNG32:${where}${name}.png`]);
+  rmSync(`${where}${name}.svg`);
+};
+for (const k of ['cloud', 'computer', 'phone', 'shield']) draw(k, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`, 60, 60);
+for (const look of ['day', 'night']) draw(`chief-${look}`, helmetSoft('here', { night: look === 'night' }).replace('<svg ', '<svg width="100" height="92" '), 132, 121);
+console.log('first-screen marks written into mobile/assets/where/');

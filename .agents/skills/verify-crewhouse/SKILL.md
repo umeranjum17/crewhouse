@@ -263,6 +263,7 @@ off the screen must still say what changed.
   the live code, the computer confirms, the phone lands on "You're in") and says so instead of claiming
   these four captures. A change to Chief's bubble or its panel runs `features/bubble-write-it-here.md`.
   A change to phone-only mode (its screens or sign-out) runs `features/phone-only-signout.md`.
+  A change to the first screen ("Where should I work?") or the cloud steps runs `features/where-cloud.md`.
   A change to the phone-only chat's keeping, stopped/interrupted turns, offline queue or the approval
   sheet runs `features/phone-chat-keep.md` (`scripts/phone-chat-keep.mjs`). A change to carrying that chat to
   Chief on a paired computer runs `features/phone-continue.md` (`scripts/phone-continue.mjs`).
