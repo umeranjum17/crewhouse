@@ -1240,7 +1240,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     return (
       <ScrollView contentContainerStyle={s.centerScroll}>
         <ChiefArt mood="work" size={112} whole />
-        <T style={s.h1}>Can't reach the home computer</T>
+        <T style={[s.h1, s.centerText]}>Can't reach the home computer</T>
         <T tone="ink2" style={s.centerText}>This phone is still paired with it, but it doesn't answer. It may be switched off, asleep, or gone. Trying again by itself.</T>
         <Btn go big label="Pair again" onPress={() => setRepair(true)} />
         <Btn label="Try again" onPress={() => link.current?.retry()} />
