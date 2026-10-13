@@ -53,6 +53,7 @@ and `?day`, and prove Settings still mints its own code on the same build.
 (`node -e "…qrMatrix('hello')…" > not-a-code.png`, or any QR), and at a code that has run out
 (`CREWHOUSE_PAIR_MS=1` on the crewd side, or wait two minutes), and keep the screenshot of what the
 phone says. Each failure must be one plain sentence that says what to do next, never an error code.
+
 **The typed code.** Under the code, every card (Settings › Phones, "Add your phone", Chief's phone offer)
 shows the kit's 12-letter code (`Host.code`, `XXXX-XXXX-XXXX`; case, spaces and dashes optional).
 The phone's "Type a code" box takes it and finds the computer by its `_crewhouse._tcp` mDNS
