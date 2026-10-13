@@ -31,7 +31,7 @@ No provider is dropped: all seven "Sign in with …" buttons stay in the card.
 ## Pass
 
 `geometry.json`: `primary` is the expected account, seven buttons, `clippedOrUnder` empty and `sideways` 0 in every
-theme and width. Shots: one filled button, the other five marks beside "Use another account", and all five rows
+theme and width. Shots: one filled button, the other six marks beside "Use another account", and all six rows
 whole once opened.
 
 ## Gotchas

@@ -118,11 +118,11 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     let cancelled = false;
+    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'invalid' ? on({ waiting: true, error: `That key didn't work. Check it and paste it again.` }) : on({ waiting: false, error: status === 'retry' ? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` : `Sign-in for ${PROVIDERS[account]?.name ?? account} is not connected yet` })));
     return {
-      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).catch(() => 'error' as const).then(async (r) => {
-        if (cancelled) { if (r === 'ok') await this.signOut(account).catch(() => {}); return; }
-        on(r === 'ok' ? { waiting: false, done: true } : r === 'invalid' ? { waiting: true, error: `That key didn't work. Check it and paste it again.` } : { waiting: false, error: `Sign-in for ${PROVIDERS[account]?.name ?? account} is not connected yet` });
-      }),
+      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then(async (r) => {
+        if (cancelled) { if (r.status === 'ok') await this.signOut(account).catch(() => {}); } else step(r.status);
+      }).catch(() => step('retry')),
       cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
     };
   }
@@ -162,7 +162,7 @@ export class OpenClawRuntime implements AgentRuntime {
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
         ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && provider !== 'opencode-go' ? { thinking: spec.thinking } : {}), register },
-        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
+        (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }
