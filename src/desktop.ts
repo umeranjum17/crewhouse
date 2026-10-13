@@ -13,15 +13,15 @@ const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000), BR
 const onPath = (bin: string) => (process.env.PATH ?? '').split(':').find((d) => d && existsSync(join(d, bin))) && bin;
 export const browserBin = () => BROWSERS.map(onPath).find(Boolean) || null;
 let probed: { key: string; engine: string | null; refused: boolean } | undefined;
-// ponytail: probed once per engine key for the life of crewd; a library installed while it runs is seen after restart.
+// ponytail: a definite answer (ready or a named missing library) is kept per engine key for the life of crewd; a library installed while it runs is seen after restart.
 export function probeEngine() {
   const key = [process.env.DESKLINK_ENGINE, process.env.MUXR_DESKLINK_ENGINE, process.env.PATH, process.env.LD_LIBRARY_PATH].join('\0');
   if (probed?.key === key) return probed;
   const explained = explainMissingEngine(), e = explained ? null : resolveEngine();
-  const p = e && spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 });
-  const lib = p && p.status !== 0 ? /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr)?.[1] : undefined;
+  const p = e && spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 }), lib = p && p.status !== 0 ? /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr)?.[1] : undefined;
   const engine = explained ?? (lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : p && p.status !== 0 ? p.error?.message || p.stderr.trim() || `engine capability check exited ${p.status}` : null);
-  return probed = { key, engine, refused: !!lib };
+  const result = { key, engine, refused: !!lib };
+  return p && (p.status === 0 || lib) ? (probed = result) : result;
 }
 
 export const engineGaps = () => { const { engine } = probeEngine(); return engine ? [`the desklink engine: ${engine}`] : []; };

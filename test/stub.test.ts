@@ -13,7 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import * as A from '../web/src/adapter.ts';
 import { startServer } from '../src/server.ts';
-import { missing, probeEngine } from '../src/desktop.ts';
+import { engineGaps, missing, probeEngine } from '../src/desktop.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -166,6 +166,12 @@ test('desktop setup refuses a loader failure in doctor, the tool kit and the liv
     const soft = doctor();
     assert.match(soft.stdout, /· not available: needs .*the desklink engine/, 'an absent engine is an optional gap, not a failure');
     assert.doesNotMatch(soft.stdout, /✗ not available/);
+    const slow = join(s.root, 'slow-engine'), once = join(s.root, 'slow-once');
+    writeFileSync(slow, `#!/bin/sh\nif [ -e '${once}' ]; then exit 0; fi\n: > '${once}'\nexec sleep 30\n`, { mode: 0o700 });
+    process.env.DESKLINK_ENGINE = slow;
+    assert.match(probeEngine().engine ?? '', /ETIMEDOUT/, 'a probe past its bound reports the failure');
+    assert.equal(probeEngine().engine, null, 'the failure was not kept: the next probe answers');
+    assert.deepEqual(engineGaps(), [], 'the desktop engine is ready once it answers');
   } finally {
     if (before === undefined) delete process.env.DESKLINK_ENGINE; else process.env.DESKLINK_ENGINE = before;
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
