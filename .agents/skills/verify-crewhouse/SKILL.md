@@ -149,6 +149,44 @@ changed interaction**, into one stable evidence folder that the PR body names. T
 runs (API, data, policy) skip this section — say so in the report rather than leaving it
 silent.
 
+### Mandatory: look check (360 wide, largest text, light and dark)
+
+Every UI change runs `scripts/look-check.mjs` on each changed screen before it claims done;
+eyeballing the 390/1440 captures does not replace it. It measures what a person sees at the
+hardest size: a 360-wide screen with the largest text, in light and in dark. A screen is
+**web/PWA** (headless Chromium, every text box × 1.3) or **Android** (the emulator at 360 dp
+with the system's largest `font_scale`), and it runs on Android whenever the native shell draws
+the screen differently (`mobile/`). Any hit fails the change: fix it, or name it in the PR as a
+known defect with its crop.
+
+```bash
+L=.agents/skills/verify-crewhouse/scripts/look-check.mjs; export FM_HOME=<firstmate home>   # mocks resolve there
+node $L web --out "$EV/look" --person "$LAB/state/person.key" chief-chat="$B/#/chief" crew="$B/#/crew"
+node $L web --out "$EV/look" --then "document.querySelector('[data-mode=office]')?.click()" office="$WEB/?demo=office"
+SERIAL=<your emulator> node $L android --out "$EV/look" --then 'Settings>>Your crew' crew   # taps reach the screen
+node $L shot --out "$EV/look" captain-photo=/path/to/phone-shot.png   # someone else's shot: strips and mock only
+```
+
+Checks, each with the element and a red-outlined crop (`hits/`), and exit 0 clean / 1 a hit / 2 could not run:
+
+- **stretched**: a picture drawn off its own shape by more than 3% (an `<img>`/video with `object-fit: fill`,
+  a canvas, an SVG with `preserveAspectRatio="none"`, a sized background image; on the phone, a dot-drawn helmet
+  whose cells are not art.ts's 10:16).
+- **clipped**: words running past a box that hides overflow. A designed cut (ellipsis, line clamp) passes while it
+  shows at least half; a hard cut always fails.
+- **overlap**: a sibling on top of another's words or pictures (covering padding is layout; a sticky bar over a page
+  that still scrolls is content passing under it).
+- **offscreen**: a part past the screen's sides, a fixed part past its bottom, or a page that scrolls sideways.
+- **strip**: a one-colour band at a screen edge (at least 6 px and 1.5% of the side) that is not one of the theme's
+  page colours (`web/src/tokens.ts` bg/surface/sunken).
+
+Each shot is saved beside its approved mock (`<slug>-<theme>-vs-mock.png`). **Where mocks live:** approved mocks
+stay in the Firstmate home, never in the repo; `scripts/mocks.tsv` maps a screen slug to its mock path under
+`$FM_HOME` (`{theme}` = day|night). A mock counts as approved only when a Main message approves that mock round
+(`data/done-archive.md`, `data/backlog.md`); the newest approved round wins, and adding a row is part of the change
+that brings a new approved mock. A screen with no row says "(no approved mock)" in every report. Recipe, tuning
+evidence and limits: [features/look-check.md](features/look-check.md).
+
 ### Mandatory: personal voice (one person, one assistant)
 
 Crewhouse is a personal assistant for **one** person. No screen, capture or reply may speak
@@ -247,6 +285,9 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 
 - `scripts/screens.sh <dest> <slug> <url> [query]` — the four design-bar captures of one
   changed screen (dark and light, 1440 and 390), after the mandatory personal-voice check.
+- `node scripts/look-check.mjs web|android|shot --out <dir> …` — the mandatory look check (above): 360 wide,
+  largest text, light and dark; stretched, clipped, overlapping, off-screen and edge-strip hits with crops, each shot
+  beside its approved mock (`scripts/mocks.tsv`). Exit 0 clean / 1 a hit / 2 could not run.
 - `node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
   (one person, one assistant) over the demo seed, the screens and the prompts: exit 0 clean /
   1 a hit to fix at the producer / 2 could not run. `--self-test` is its negative test.

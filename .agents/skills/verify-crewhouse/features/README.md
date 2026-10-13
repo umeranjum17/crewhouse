@@ -15,6 +15,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 
 | ID | File | What it proves |
 |----|------|----------------|
+| look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/mocks.tsv`) |
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper; assignment, wrap-up and long/bullet-only relay openings; real Marketing crew recipe, shared profile and Chief's read-only skill admission |
 | office-layout | [office-layout.md](office-layout.md) | The Office view's counts and labels at desktop, phone and narrow widths |

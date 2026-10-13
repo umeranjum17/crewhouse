@@ -1,0 +1,4 @@
+# screen slug	its approved mock, under $FM_HOME ({theme} = day|night); a screen with none says so in every report
+# Approved = a Main message approving that mock round (data/done-archive.md, data/backlog.md); the newest round wins.
+chief-chat	data/evidence/ch-pwa-simplify/mock-r3/shots/chat-top-{theme}-390.png
+hello	data/evidence/ch-pwa-simplify/mock-r3/shots/first-{theme}-390.png
