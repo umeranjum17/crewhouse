@@ -25,7 +25,8 @@ not a TLS or boat.dev proof). The driver uses the person's owned HTTP capability
 5. Confirm phone admin remains refused; send a synthetic Chief message and witness its task finish
    through that same link. The log emits one JSON `proof: relayPublic` row with addresses and outcomes,
    never a capability, pairing code, invitation or device secret.
-6. Clear the public override through an ordinary relay update and witness the live `link.urls` change.
+6. Save the same relay again and witness the public origin kept; send `publicUrl: null` and witness the override
+   cleared and the live `link.urls` change.
 
 Retain the command and stdout/stderr as evidence. Run the complete `test/link.test.ts` and
 `test/relay.test.ts` too. Every listener, proxy socket and phone created by this journey is closed by

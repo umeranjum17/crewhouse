@@ -160,7 +160,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
         if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
-        if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined, b.publicUrl ?? null); return send(res, 200, link.status()); }
+        if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined, b.publicUrl); return send(res, 200, link.status()); }
         if (p === '/api/phones/code' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await link.typed(b.role ?? 'control')); }
         // A phone that scanned the code waits here: the person checks its two words and says yes or no.
         if (p === '/api/phones/answer' && req.method === 'POST') { const b = await readJson(req);

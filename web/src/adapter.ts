@@ -472,7 +472,8 @@ export const phoneTyped = (t: Json) => {
 /** Settings, Phones: whether phones reach this computer away from home, in one sentence. */
 export function reach(link: Json) {
   let where = '';
-  try { where = link?.relay ? new URL(link.relay).host : ''; } catch { /* kept as typed */ }
+  const at = link?.relayPublic || link?.relay;
+  try { where = at ? new URL(at).host : ''; } catch { /* kept as typed */ }
   const words: Record<string, string> = {
     online: `On. Phones reach this computer away from home through ${where}, which passes along what they say without being able to read it.`,
     connecting: `Getting in touch with ${where}…`,

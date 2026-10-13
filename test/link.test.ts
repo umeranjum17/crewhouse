@@ -469,8 +469,10 @@ test('the relay address: local dial, public offers and typed phone pairing, with
   await until(async () => (await phone.req('GET', '/api/bots/chief')).body.tasks.some((job: any) => job.id === posted.body.task && job.state === 'done'));
   assert.ok(publicConnections > 0, 'the phone really used the public proxy');
   console.log(JSON.stringify({ proof: 'relayPublic', local: local.url, public: publicUrl, advertised: publicLink, typedResolved: resolved, phone: 'paired', chief: 'done', engine: 'stub' }));
-  const reset = await relay(local.url);
-  assert.equal(reset.body.relayPublic, local.url, 'ordinary relay changes clear a stale public override');
+  const saved = await relay(local.url);
+  assert.equal(saved.body.relayPublic, publicUrl, 'saving the same relay again keeps the cloud public origin');
+  const reset = await http('PUT', '/api/phones/relay', { url: local.url, publicUrl: null });
+  assert.equal(reset.body.relayPublic, local.url, 'an explicit null clears a stale public override');
   await until(async () => phone.events.some((e) => e.kind === 'link.urls' && e.data.urls.includes(publicLink.replace(publicUrl.replace(/^http/, 'ws'), local.url.replace(/^http/, 'ws')))));
 });
 

@@ -63,6 +63,10 @@ const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired 
 const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null, UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
 const wsOrigin = (url: string) => url.replace(/^http/, 'ws'), pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
+const relayOrigin = (value: string | null) => {
+  if (value && (!URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
+  return value && new URL(value).origin;
+};
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
 type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
 export class Link {
@@ -245,14 +249,10 @@ export class Link {
   /** Dial the person's relay; advertise its public origin when a cloud proxy fronts it. No hosted default. */
   get relay(): string { return this.setting('link.relay') ?? this.cfg.relay; }
   get relayPublic(): string { return this.setting('link.relayPublic') || this.relay; }
-  /** '' disables the relay; null restores CREWHOUSE_RELAY. Omit publicUrl to clear an old proxy address. */
-  setRelay(url: string | null, enrol?: string, publicUrl: string | null = null) {
-    const before = this.relay, settings = ([['link.relay', url], ['link.relayPublic', publicUrl]] as const).map(([key, value]) => {
-      if (value === null || value === '') return [key, value] as const;
-      const u = typeof value === 'string' && URL.canParse(value) ? new URL(value) : null;
-      if (!u || !/^(https?|wss?):$/.test(u.protocol)) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
-      return [key, u.origin] as const;
-    });
+  /** '' disables the relay; null restores CREWHOUSE_RELAY. A save of the same relay keeps its public origin; a different one clears it. */
+  setRelay(url: string | null, enrol?: string, publicUrl?: string | null) {
+    const before = this.relay, next = relayOrigin(url), settings: [string, string | null][] = [['link.relay', next]];
+    if (publicUrl !== undefined || (next ?? this.cfg.relay) !== before) settings.push(['link.relayPublic', relayOrigin(publicUrl ?? null)]);
     this.db.tx(() => {
       for (const [key, value] of settings) if (value === null) this.db.run('DELETE FROM settings WHERE key = ?', key); else this.put(key, value);
       if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
