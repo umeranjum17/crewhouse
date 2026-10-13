@@ -1,0 +1,25 @@
+# Headless host and first-phone authority
+
+This is a backend/CLI journey, not a changed web/native screen. Keep the existing desktop pairing proof unchanged. Use an isolated HOME/XDG/state/crew and unused ports throughout; never start a second host on the owner's address. The portable release carries the pinned Node, engine, launcher and `relay/`.
+
+## Scripted integration gate
+
+Run the repo's isolated launcher, not bare `node --test` (HOME and keyring isolation live in the launcher):
+
+```bash
+./crewhouse test
+```
+
+The real runner/HTTP/Noise/relay journey in `test/link.test.ts` covers direct binding with scripted loopback Tailscale status and published-relay mode with a fail-and-mark Tailscale executable. The latter checks no Tailscale invocation, including the phone's reach request; neither fixture is real tailnet proof. It checks: desktop first-owner enrolment refused; tailnet/loopback-only listener policy; expired code refused; printed typed envelope and terminal QR; concurrent pairing through the real relay admits only one first phone; owner account and phone administration; Chief's scripted answer; no pairing capability in service logs; persisted authority after restart; bootstrap cannot be reopened by revoking the phone. Existing tests retain ordinary-phone and view-only restrictions. This does not prove hardware reachability or hosted-model words.
+
+## Release and real phone
+
+1. Build `npm run build:web && node scripts/package.mjs` through the memory gate in an isolated environment; retain the tarball's SHA-256 and source commit. Scratch/engine installs belong on disk outside the checkout, never in `/tmp`. Do not copy a credential into packaging.
+2. Extract the actual tarball on a disposable Linux box/container, with no source checkout or desktop. A standalone host needs its own running Tailscale. For an expressly authorized container proof, use one task-owned capped container on a private bridge with private cgroups/tmpfs and no host mounts/sockets; publish only its relay port on the supervisor-supplied host tailnet address. Set `CREWHOUSE_RELAY_PUBLIC=http://<tailnet-ip>:<published-port>`. This mode uses a private relay-only link, advertises that origin, and performs no Tailscale discovery or peer lookup. It binds its relay to all **container** interfaces; the operator must restrict port publication to the tailnet. Do not discover/read/change the desktop's Tailscale state or claim an independent cloud identity. Container systemd privileges require explicit supervisor authorization.
+3. Run `crewhouse/app/crewhouse setup --headless`. It installs/starts the headless systemd unit (system for root, user otherwise), and prints the two-minute, single-use code and QR to the invoking terminal, never the service journal. For a kit-owned unit: run `setup --headless --install-only`, own the unit running the bundled Node on `scripts/headless.mjs serve`, then `crewhouse headless pair`. `crewhouse headless health` must exit zero before pairing. A container without systemd can qualify the kit-owned runner, but does not qualify systemd setup.
+4. Drive only the Crewhouse app on a4b93ea2, using one `/home/umer/firstmate/config/fm-device-lock.sh a4b93ea2 <whole-journey-command>` call. No permission grants, volume changes, personal apps, credential files or AI key moves to the phone. On its existing pairing screen choose **Pair with a computer** if needed, paste the printed code, and witness the host's first control grant without a desktop approval. Do not log the full code or include it in retained UI dumps/captures. Record safe host/device counts and the post-pair screen. This proof specifically uses typed pairing; a camera preview alone is not a QR scan proof.
+5. Through that paired phone, ask Chief one harmless question and witness both the new user message and completed bot answer. With `CREWHOUSE_ENGINE=stub`, label the reply scripted, not hosted. A real Go answer follows the supervising brief's dedicated key and proof-only route instructions; never substitute another account or silently promote a stub answer.
+6. Verify a new first-phone code is refused after pairing, and service logs contain neither the printed envelope nor QR capability. Capture the post-pair phone screen outside the repo and inspect a downscaled copy. No screenshot matrix is needed for this backend change; if a phone screen changes, apply the native/PWA capture rules instead.
+7. Stop only the disposable unit/container/processes you started; await exit and prove its ports no longer answer. Remove owned scratch, preserving explicit evidence files. Run the Pi byte-for-byte gate (`./crewhouse test`) before claiming release readiness.
+
+For installed-PWA regression, `test/pwa-pair.test.ts` still exercises the app's HTTPS encrypted-grant pairing. The existing `crewhouse phones web` path is unchanged; raw `ws://` relay addresses are not a substitute for the PWA's HTTPS ingress.

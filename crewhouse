@@ -2,6 +2,8 @@
 # Crewhouse: setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
 set -euo pipefail
 cd "$(dirname "$0")"
+# Portable release: use its checksum-pinned Node, not the machine's PATH.
+[ ! -x ../node/bin/node ] || export PATH="$(cd ../node/bin && pwd -P):$PATH"
 
 need_node() {
   command -v node >/dev/null || { echo "Crewhouse needs Node 22.22.3 or later: https://nodejs.org" >&2; exit 1; }
@@ -98,10 +100,13 @@ prepare_engine() {
 case "${1:-}" in
   setup)
     need_node
-    npm ci --no-audit --no-fund
-    echo "Installing the AI engine (this can take a couple of minutes; it reports progress as it goes)."
-    prepare_engine
-    npm run build:web
+    if [ ! -x ../node/bin/node ]; then
+      npm ci --no-audit --no-fund
+      echo "Installing the AI engine (this can take a couple of minutes; it reports progress as it goes)."
+      prepare_engine
+      npm run build:web
+    fi
+    if [ "${2:-}" = --headless ]; then exec node scripts/headless.mjs setup "${@:3}"; fi
     # Helpers fetch their own tools the first time they need them: setup installs nothing beyond the engine.
     echo "Helpers fetch their own tools the first time they need them, so there is nothing more to install."
     echo
@@ -112,6 +117,10 @@ case "${1:-}" in
       case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open Crewhouse from the app menu, or run ./crewhouse open"; exit 0; } ;; esac
     fi
     echo "Next: ./crewhouse start, which opens Crewhouse in your browser."
+    ;;
+  headless)
+    need_node
+    exec node scripts/headless.mjs "${@:2}"
     ;;
   autostart)
     need_node
@@ -314,7 +323,7 @@ NODE
     [ -z "$before" ] || echo "~/.pi: sign-ins, settings and extensions unchanged, byte for byte."
     ;;
   *)
-    echo "usage: ./crewhouse setup | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    echo "usage: ./crewhouse setup [--headless [--install-only]] | headless serve|pair|health | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

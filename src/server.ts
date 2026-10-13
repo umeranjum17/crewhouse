@@ -137,27 +137,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p.startsWith('/api/')) {
         // The public header prevents browser CSRF; it never establishes person authority.
         if (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu.', code: 'no-authority' });
-        // Phones: pairing and grants answer on this computer only, never over the phone link.
-        if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
-        if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
-        // Pairing always adds a phone to the person's crew.
-        if (p === '/api/phones/pair' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await link.offer(b.role ?? 'control')); }
-        if (p === '/api/phones/refresh' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await api(req.method, p, url.searchParams, b)); }
         if (p === '/api/files/session' && req.method === 'POST') { res.setHeader('set-cookie', `crewhouse-files=${filesToken}; HttpOnly; SameSite=Strict; Path=/files`); return send(res, 200, { ok: true }); }
-        if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
-        if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
-        if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
-        if (p === '/api/phones/relay' && req.method === 'PUT') { const b = await readJson(req); link.setRelay(typeof b.url === 'string' ? b.url.trim() : null, typeof b.enrol === 'string' ? b.enrol : undefined); return send(res, 200, link.status()); }
-        if (p === '/api/phones/code' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await link.typed(b.role ?? 'control')); }
-        // A phone that scanned the code waits here: the person checks its two words and says yes or no.
-        if (p === '/api/phones/answer' && req.method === 'POST') { const b = await readJson(req);
-          if (b.offer !== undefined) {
-            if (!link.status().asking.some((a) => a.id === Number(b.id) && a.offer === b.offer)) return send(res, 403, { error: 'that phone is not waiting for you' });
-            if (crew.botPage('chief').phoneOffer?.token !== b.offer) return send(res, 409, { error: 'that code is no longer showing' });
-          }
-          link.answer(Number(b.id), b.yes === true); return send(res, 200, { ok: true }); }
-        const phone = p.match(/^\/api\/phones\/([\w-]+)$/);
-        if (phone && req.method === 'DELETE') { await link.revoke(phone[1]); return send(res, 200, { ok: true }); }
         return send(res, 200, await api(req.method!, p, url.searchParams, req.method === 'GET' ? {} : await readJson(req)));
       }
 
@@ -185,6 +165,21 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   /** The app API, shared by the web app (HTTP) and paired phones (the link). Every screen uses the person’s crew. */
   async function api(m: string, p: string, q: URLSearchParams, body: any, key?: string, phone?: string) {
     let r: RegExpMatchArray | null;
+    // Person-authorized HTTP and the enrolled headless owner share phone administration; Link gates other phones.
+    if (p === '/api/phones' && m === 'GET') return link.devices();
+    if (p === '/api/phones/link' && m === 'GET') return link.status();
+    if (p === '/api/phones/pair' && m === 'POST') { if (phone && body.first === true) throw Object.assign(new Error('first-phone pairing stays on the host'), { status: 403 }); return link.offer(body.role ?? 'control', undefined, body.first === true); }
+    if (p === '/api/phones/pending' && m === 'GET') return link.status().asking;
+    if (p === '/api/phones/approve' && m === 'POST') { link.approve(String(body.words ?? '')); return { ok: true }; }
+    if (p === '/api/phones/lan' && m === 'PUT') { await link.setLan(!!body.on); return link.status(); }
+    if (p === '/api/phones/relay' && m === 'PUT') { link.setRelay(typeof body.url === 'string' ? body.url.trim() : null, typeof body.enrol === 'string' ? body.enrol : undefined); return link.status(); }
+    if (p === '/api/phones/code' && m === 'POST') return link.typed(body.role ?? 'control');
+    if (p === '/api/phones/answer' && m === 'POST') {
+      if (body.offer !== undefined && !link.status().asking.some((a) => a.id === Number(body.id) && a.offer === body.offer)) throw Object.assign(new Error('that phone is not waiting for you'), { status: 403 });
+      if (body.offer !== undefined && crew.botPage('chief').phoneOffer?.token !== body.offer) throw Object.assign(new Error('that code is no longer showing'), { status: 409 });
+      link.answer(Number(body.id), body.yes === true); return { ok: true };
+    }
+    if ((r = p.match(/^\/api\/phones\/([\w-]+)$/)) && m === 'DELETE') { await link.revoke(r[1]); return { ok: true }; }
     // What is installing now, and a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing.keys()], showing: teacher.showing(), ...(update ? { update } : {}) };
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
