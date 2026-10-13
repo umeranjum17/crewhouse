@@ -1451,24 +1451,44 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
   );
 }
 
-/** Settings › Chief's computer (mocks computer, computer-reset): the one cloud computer the crew shares. Every value
- *  and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected. */
+/** Settings › Chief's computer (mock computer): the one cloud computer the crew shares. Every value
+ *  and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected,
+ *  Reset and Daily snapshots stay dimmed and disabled with the reason under the group, and a tap on either answers
+ *  with that reason — never the Reset sheet, never a toast. */
 function ChiefComputer() {
   const [c, setC] = useState<A.Computer | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [nudged, setNudged] = useState(false);
+  const [note, setNote] = useState('');
+  const nudgeT = useRef<number | undefined>(undefined);
+  const connectRef = useRef<HTMLParagraphElement | null>(null);
   useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
+  useEffect(() => () => window.clearTimeout(nudgeT.current), []);
   const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
-  const w = A.computer(c), boat = A.CLOUD.clouds[0];
+  const w = A.computer(c), boat = A.CLOUD.clouds[0], off = !c;
+  // Not connected: the dimmed rows never act — a tap flashes the reason line and says it aloud instead.
+  const nudge = () => {
+    setNudged(true); setNote(w.connect);
+    connectRef.current?.scrollIntoView({ block: 'nearest' });
+    window.clearTimeout(nudgeT.current);
+    nudgeT.current = window.setTimeout(() => { setNudged(false); setNote(''); }, 1600);
+  };
   const two = ([l, v]: string[], red = false) => <span className="grow"><span className={red ? 'danger' : ''}>{l}</span><span className="mute small">{v}</span></span>;
   return (
     <div className="page settings computer">
       <a href="#/settings" className="back">‹ Settings</a>
       <h1>{w.title}</h1>
       <div className="card list"><button className="row-item" onClick={() => act('update')}><span className="grow">{w.update[0]}</span><span className="mute">{w.update[1]}</span></button>
-        <button className="row-item" onClick={() => setResetting(true)}>{two(w.reset, true)}</button></div>
+        {off
+          ? <div className="computer-off" onClick={nudge}><button className="row-item" disabled aria-disabled="true">{two(w.reset, true)}</button></div>
+          : <button className="row-item" onClick={() => setResetting(true)}>{two(w.reset, true)}</button>}</div>
       <p className="mute small computer-cap">{w.caption}</p>
-      <div className="card list"><label className="row-item">{two(w.daily)}<input type="checkbox" role="switch" checked={!!c?.daily} onChange={(e) => act(e.target.checked ? 'daily-on' : 'daily-off')} /></label>
+      <div className="card list">{off
+        ? <div className="computer-off" onClick={nudge}><label className="row-item" aria-disabled="true">{two(w.daily)}<input type="checkbox" role="switch" checked={false} disabled aria-disabled="true" onChange={() => {}} /></label></div>
+        : <label className="row-item">{two(w.daily)}<input type="checkbox" role="switch" checked={!!c?.daily} onChange={(e) => act(e.target.checked ? 'daily-on' : 'daily-off')} /></label>}
         <div className="row-item"><span className="grow">{w.disk[0]}</span><span className="mute">{w.disk[1]}</span></div></div>
+      {off && <p ref={connectRef} className={`mute small computer-cap computer-connect${nudged ? ' nudge' : ''}`}>{w.connect}</p>}
+      {note ? <span role="status" className="vh">{note}</span> : null}
       <div className="card list"><div className="row-item"><span className="o-ic" style={{ background: boat.tile, color: '#fff' }}>{boat.mark}</span>{two(w.host)}</div></div>
       <details className="more-ways"><summary><span className="grow">{w.more}</span><i aria-hidden>›</i></summary>
         <div className="card list"><button className="row-item" onClick={() => act('undo')}><span className="grow">{w.undo}</span></button>

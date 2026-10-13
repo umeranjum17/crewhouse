@@ -2576,17 +2576,30 @@ function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Gran
   );
 }
 
-/** Settings › Chief's computer (mocks computer, computer-reset), as on the web (web/src/main.tsx ChiefComputer): every
- *  value and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected. */
+/** Settings › Chief's computer (mock computer), as on the web (web/src/main.tsx ChiefComputer): every
+ *  value and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not
+ *  connected, Reset and Daily snapshots stay dimmed and disabled with the reason under the group, and a tap on either
+ *  answers with that reason — never the Reset sheet, never a toast. */
 function ChiefComputer({ back }: { back: [string, () => void] }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   const [c, setC] = useState<A.Computer | null>(null);
   const [resetting, setResetting] = useState(false);
   const [more, setMore] = useState(false);
+  const [nudged, setNudged] = useState(false);
+  const [note, setNote] = useState('');
+  const nudgeT = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
+  useEffect(() => () => { if (nudgeT.current) clearTimeout(nudgeT.current); }, []);
   const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
-  const w = A.computer(c), boat = A.CLOUD.clouds[0];
+  const w = A.computer(c), boat = A.CLOUD.clouds[0], off = !c;
+  // Not connected: the dimmed rows never act — a tap flashes the reason line and says it aloud instead. The control
+  // itself stays disabled for screen readers (it takes no touch) while the wrapper answers the tap.
+  const nudge = () => {
+    setNudged(true); setNote(w.connect);
+    if (nudgeT.current) clearTimeout(nudgeT.current);
+    nudgeT.current = setTimeout(() => { setNudged(false); setNote(''); }, 1600);
+  };
   const group = [s.listGroup, { backgroundColor: t.solid, borderColor: t.line }];
   const row = (i: number, body: ReactNode, onPress?: () => void, label?: string) => {
     const line = { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line };
@@ -2596,13 +2609,24 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
   const two = ([l, v]: string[], red = false) => <View style={{ flex: 1 }}><T style={[s.rowTitle, red && { color: t.danger }]}>{l}</T><T tone="mute" style={s.small}>{v}</T></View>;
   // Wraps: at the largest text the value drops under its label rather than splitting a word.
   const value = ([l, v]: string[]) => <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12 }}><T style={s.rowTitle}>{l}</T><T tone="mute">{v}</T></View>;
+  const offReset = <Pressable onPress={nudge} accessible={false}>
+    <View style={[s.listRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, opacity: 0.55 }]}
+      accessibilityRole="button" accessibilityLabel={w.reset[0]} accessibilityState={{ disabled: true }}>{two(w.reset, true)}</View>
+  </Pressable>;
+  const offDaily = <Pressable onPress={nudge} accessible={false}>
+    <View style={[s.listRow, { opacity: 0.55 }]} accessibilityRole="switch" accessibilityLabel={w.daily[0]} accessibilityState={{ disabled: true, checked: false }}>
+      <>{two(w.daily)}<View pointerEvents="none"><Switch value={false} disabled accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={() => {}} /></View></>
+    </View>
+  </Pressable>;
   return (
     <Page title={w.title} back={back}>
-      <View style={group}>{row(0, value(w.update), () => void act('update'), w.update[0])}{row(1, two(w.reset, true), () => setResetting(true), w.reset[0])}</View>
+      <View style={group}>{row(0, value(w.update), () => void act('update'), w.update[0])}{off ? offReset : row(1, two(w.reset, true), () => setResetting(true), w.reset[0])}</View>
       <T tone="mute" style={[s.small, { marginHorizontal: 16, marginTop: -4 }]}>{w.caption}</T>
       <View style={group}>
-        {row(0, <>{two(w.daily)}<Switch value={!!c?.daily} accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void act(on ? 'daily-on' : 'daily-off')} /></>)}
+        {off ? offDaily : row(0, <>{two(w.daily)}<Switch value={!!c?.daily} accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void act(on ? 'daily-on' : 'daily-off')} /></>)}
         {row(1, value(w.disk))}</View>
+      {off && <T tone="mute" style={[s.small, { marginHorizontal: 16 }, nudged && { color: t.ink }]}>{w.connect}</T>}
+      {!!note && <Text accessibilityLiveRegion="polite" style={{ height: 0, opacity: 0 }}>{note}</Text>}
       <View style={group}>{row(0, <><View style={[s.mark, { backgroundColor: boat.tile }]}><Text style={s.markText}>{boat.mark}</Text></View>{two(w.host)}</>)}</View>
       <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel={w.more} style={[s.row, { minHeight: 48, paddingHorizontal: 4 }]}>
         <T tone="ink2" style={{ flex: 1, ...fw('500') }}>{w.more}</T><T tone="mute">{more ? '⌄' : '›'}</T></Pressable>

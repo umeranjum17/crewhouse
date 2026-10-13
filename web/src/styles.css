@@ -639,7 +639,7 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .where-note svg { flex: none; margin-top: 1px; color: var(--ink); }
 .where-note p { margin: 0; }
 .where-foot { margin: auto 0 0; padding-top: 18px; text-align: center; color: var(--mute); font-size: 13px; line-height: 18px; }
-/* Settings › Chief's computer (mocks computer, computer-reset): grouped rows, the caption under the first group. */
+/* Settings › Chief's computer (mock computer): grouped rows, the caption under the first group. */
 .computer .card.list { padding: 0 16px; }
 .computer .row-item { width: 100%; min-height: 56px; padding: 14px 0; background: none; border: 0; border-top: 1px solid var(--line); color: inherit; font: inherit; text-align: left; }
 .computer .row-item:first-child { border-top: 0; }
@@ -649,6 +649,15 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .computer .danger { color: var(--danger); }
 .computer .o-ic { font: 700 15px/1 var(--ui); }
 .computer-cap { margin: 8px 16px 0; }
+.computer-connect { transition: color .15s ease; }
+.computer-connect.nudge { color: var(--ink); }
+/* Not connected: the dimmed rows never act — a tap on the wrapper answers with the reason instead. The disabled
+ *  control takes no pointer, so the tap always reaches the wrapper; screen readers still find it disabled. */
+.computer-off > .row-item { opacity: .55; }
+.computer-off { border-top: 1px solid var(--line); }
+.card.list > .computer-off:first-child { border-top: 0; }
+.computer-off [disabled] { pointer-events: none; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .computer-ask { display: grid; gap: 12px; width: 100%; text-align: left; }
 .computer-ask h2, .computer-ask p { margin: 0; max-width: none; }
 .computer-ask p { color: var(--ink2); }

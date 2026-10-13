@@ -104,7 +104,7 @@ export const CLOUD = {
   kept: "The key stays on this phone, locked by your phone's own lock. It never goes to Crewhouse.",
 };
 
-// ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mocks computer, computer-reset: Main2678) ----------
+// ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer: Main2678) ----------
 /** What only BYOKit's cloud kit can say: whether crewd is the latest, the daily snapshots and the last one, the disk. */
 export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
 export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
@@ -124,6 +124,7 @@ export const computer = (c: Computer | null) => {
     update: ['Update computer', c ? (c.current ? 'Up to date' : 'Update ready') : off],
     reset: ['Reset computer', `Go back to the last snapshot${at && `, from ${at}`}. Changes since then are lost.`],
     caption: 'The one cloud computer Chief and his crew share. It is their sandbox, away from your phone and your files.',
+    connect: "Connect Chief's computer first.",
     daily: ['Daily snapshots', `Keeps the last 7.${at && ` Last one ${at}.`}`],
     disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
     host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
