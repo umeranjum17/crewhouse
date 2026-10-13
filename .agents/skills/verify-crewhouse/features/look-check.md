@@ -73,10 +73,13 @@ Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme
 
 ## Limits (say them in the report)
 
-- On Android, uiautomator reports a node's full text, so an ellipsis it draws ("Runs the c…" on Your crew at
-  2.0×) cannot be seen. A native clipped hit is only a text node running past its parent.
+- On Android, uiautomator still reports a node's full text, so the tree alone cannot see a drawn cut.
+The pixel check (`nativeCut`) covers it instead: a last line ending in the native "…" dots while the node
+reports the whole string fails, as does ink sliced through the node's own edge where the node reaches its
+container's edge (proved on the pre-#475 phone header: `DeepSeek` drawn `DeepS…`, fail before, pass after).
 - Overlap compares siblings only, and on Android only nodes with words. A box over a cousin's words passes.
-- A black strip in the night look passes: it matches night's page colour.
+- A solid black band always fails, in every look: (near-)pure black is never the app's page, even though
+night's sunken sits near it. The app's own night page colours (bg, sunken) at a padded edge still pass.
 - Background images check the first layer only.
 - A sticky bar is excused only while the page itself scrolls. A bar over an inner scroller still fails;
   confirm by eye that the content can scroll out.
