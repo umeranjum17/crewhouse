@@ -119,7 +119,8 @@ function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Pale
   );
 }
 /** Chief or a helper in dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot
- *  opacity. Every helper wears the same small helmet; `whole` draws all of it. */
+ *  opacity. Every helper wears the same small helmet; `whole` draws all of it. `size` is its width: the height follows
+ *  the art's own 5:4 box (square dots, helmetDots), so nothing squashes it. */
 function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   const t = useLook();
   const cols = whole ? 30 : 20;
@@ -137,7 +138,7 @@ function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       backgroundColor: chief && t.night ? '#2A2622' : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
-      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
+      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.52} />
     </View>
   );
 }

@@ -31,9 +31,11 @@ export const helmetOf = (m: Mood | Pose | HelmetMode = 'idle'): HelmetMode => {
   return p === 'needs' ? 'needs' : p === 'work' ? 'think' : p === 'rest' ? 'rest' : 'here';
 };
 export type HelmetCell = { ch: string; eye?: true; scan?: true };
-/** The helmet as cells: ' ' is bare canvas, eye/scan cells wear the mood colour. */
-export function helmet(cols: number, mode: HelmetMode = 'here', night = true, beat = 0): HelmetCell[][] {
-  const rows = Math.round(cols * 0.5);
+/** The helmet as cells: ' ' is bare canvas, eye/scan cells wear the mood colour. The head fills a 5:4 box whatever
+ *  draws it: `cell` is one cell's height over its width (1.6, a mono glyph at line-height 1 and helmetSvg's 10×16;
+ *  the phone's square dots pass 1), so the rows follow the cell and the head never squashes. */
+export function helmet(cols: number, mode: HelmetMode = 'here', night = true, beat = 0, cell = 1.6): HelmetCell[][] {
+  const rows = Math.round((cols * 0.8) / cell);
   const scan = ((beat % 24) / 23) * 1.8 - 0.9;
   const grid: HelmetCell[][] = [];
   for (let r = 0; r < rows; r++) {
@@ -66,13 +68,13 @@ export function helmet(cols: number, mode: HelmetMode = 'here', night = true, be
 /** The helmet as plain text rows, for the web's <pre className="art">. */
 export const helmetText = (cols: number, mode: HelmetMode = 'here', night = true, beat = 0): string[] =>
   helmet(cols, mode, night, beat).map((r) => r.map((c) => c.ch).join(''));
-/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): one dot per character,
- *  the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
+/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): sampled on square dots,
+ *  so it keeps the head's 5:4 box, the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
 export function helmetDots(cols: number, mode: HelmetMode = 'here', night = true, beat = 0, eye = night ? '#ececec' : '#1d1b18'): { rows: Bitmap; pal: Palette } {
   const ink: [number, number, number] = night ? [236, 236, 236] : [29, 27, 24];
   const pal: Palette = { e: mode === 'needs' ? '#0a84ff' : eye, s: '#0a84ff' };
   for (let k = 1; k < RAMP.length; k++) pal[String(k)] = `rgba(${ink[0]},${ink[1]},${ink[2]},${(0.2 + 0.8 * (k / (RAMP.length - 1))).toFixed(2)})`;
-  const rows = helmet(cols, mode, night, beat).map((r) => r.map((c) =>
+  const rows = helmet(cols, mode, night, beat, 1).map((r) => r.map((c) =>
     c.ch === ' ' ? '.' : c.eye ? 'e' : c.scan ? 's' : String(Math.max(1, RAMP.indexOf(c.ch)))).join(''));
   return { rows, pal };
 }
