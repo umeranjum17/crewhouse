@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
-import { helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
+import { CELL, helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
 import { color } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 
@@ -17,7 +17,7 @@ const { landed, groupOf } = A;
 
 type Group = keyof typeof A.GROUP_TITLES;
 
-/** The helmet as dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot opacity. The
+/** The helmet as dots (art.helmetDots) on the art's own cell (CELL): the phone sets no text in mono, so the shading rides on dot opacity. The
  *  think-scan shows centred while working (a fixed beat); nothing animates. */
 function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: number }) {
   const mode = helmetOf(mood), cols = 20;
@@ -27,7 +27,7 @@ function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: numbe
     <View accessible={false} style={{ width: size }}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * CELL, padding: d * 0.06, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: d * 0.88, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>

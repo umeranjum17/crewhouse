@@ -107,25 +107,26 @@ export default function App() {
 }
 
 // ---------- the mascots, as dots ----------
-function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean }) {
+/** `cell`: how much taller than wide each cell is (art.CELL for a helmet); the dot stays round in its middle. */
+function Dots({ rows, pal, d, crisp = false, cell = 1 }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean; cell?: number }) {
   return (
     <View accessible={false}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: crisp ? 0 : d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * cell, padding: crisp ? 0 : d * 0.06, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: crisp ? d : d * 0.88, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>
   );
 }
 /** Chief or a helper in dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot
- *  opacity. Every helper wears the same small helmet; `whole` draws all of it. `size` is its width: the height follows
- *  the art's own 5:4 box (square dots, helmetDots), so nothing squashes it. */
+ *  opacity. Every helper wears the same small helmet; `whole` draws all of it. `size` is its width: the dots sit on the
+ *  art's own cell (art.CELL), so the head keeps its 5:4 box and nothing squashes it. */
 function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   const t = useLook();
   const cols = whole ? 30 : 20;
   const { rows, pal } = art.helmetDots(cols, art.helmetOf(mood), t.night, 0);
-  return <Dots rows={rows} pal={pal} d={size / cols} />;
+  return <Dots rows={rows} pal={pal} d={size / cols} cell={art.CELL} />;
 }
 function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
@@ -759,7 +760,7 @@ function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: 
   return (
     <View style={[s.head, { borderColor: t.line }]}>
       <Face who="chief" size={32} />
-      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small} lines={1}>{subtitle}</T></View>
+      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small}>{subtitle}</T></View>
       <View style={{ flexDirection: narrow ? 'column' : 'row', alignItems: 'flex-end', gap: narrow ? 2 : 12 }}>
         <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8}><T tone="ink2" style={s.small}>Sign out</T></Pressable>
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
