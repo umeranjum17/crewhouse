@@ -589,6 +589,12 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
   await until('last reply in the row', async () => (await row())?.line === 'Three Friday flights are ready.', 30_000);
   assert.equal((await row()).word, 'Done');
+  // Scout's reply is still unread: only Chief carries a badge, so the desk rail's Scout row has none.
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+  assert.equal((await api('/api/bots/scout')).bot.unread > 0, true);
+  assert.equal(await b.run("document.querySelectorAll('.side-row .badge').length"), 0, 'no crew rail row carries a badge');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await b.run('location.hash = "#/h/scout"');
   await until('opening NEW divider', () => b.run("!!document.querySelector('.new-divider')"), 30_000);
   await until('read acknowledged', async () => (await api('/api/bots/scout')).bot.unread === 0);

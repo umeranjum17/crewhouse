@@ -1751,7 +1751,6 @@ function useLook() {
 /** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
  *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
 function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
-  const chats = new Map(A.chats(state).map((c) => [c.id, c]));
   const word = signedOut ? NEEDS_SIGNIN : A.chiefStatus(live).word;
   // The crew summary is the office's own count line (A.summaryOf): every member once, Chief too, by the status the
   // rail rows and the Office read, so a row that shows "Free" is counted as free.
@@ -1766,14 +1765,12 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
       {sub && <div className="mute small side-sub">{sub}</div>}
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
-        const r = A.statusOf(h, live), c = chats.get(h.id);
-        // A crew member waiting on the person is Chief's to bring (waitsOnYou): the row carries no badge for it;
-        // the ask reaches the person through Chief's own chat. The seat class is namespaced (`seat-…`) so a seat
+        const r = A.statusOf(h, live);
+        // Only Chief carries a badge or an ask; a crew row never does. The seat class is namespaced (`seat-…`) so a seat
         // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
         // over the nav).
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
-          {(c?.unread ?? 0) > 0 && !A.waitsOnYou(h) && <span className="badge">{A.unreadBadge(c!.unread)}</span>}
           <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.word}</span></span>
         </a>;
       })}
