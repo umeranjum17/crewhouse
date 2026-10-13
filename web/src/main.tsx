@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
-import { api, demo, pairable, paired, subscribe, type Json } from './api.ts';
+import { api, demo, fileUrl, pairable, paired, subscribe, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
@@ -1428,6 +1428,19 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
     </div>
   );
 }
+
+// Every link to a delivered file (a document, a picture, Download) opens through `fileUrl`, since a plain link can't carry
+// the person's authority: a PDF, picture, video or text opens in its own tab, anything else downloads under its own name.
+// Capture phase: a sheet or panel that stops its clicks (the file panel does) still has its links opened here.
+addEventListener('click', (e) => {
+  const a = (e.target as Element | null)?.closest?.('a[href^="/files/"]') as HTMLAnchorElement | null;
+  if (!a || demo || paired) return;
+  e.preventDefault();
+  const href = a.getAttribute('href')!, tab = !a.download && /\.(pdf|png|jpe?g|webp|gif|mp4|webm|txt)$/i.test(href) ? openTab() : null;
+  fileUrl(href).then((u) => {
+    if (tab) { tab.opener = null; tab.location.href = u; } else Object.assign(document.createElement('a'), { href: u, download: a.download || decodeURIComponent(href.split('/').pop() ?? '') }).click();
+  }, () => { tab?.close(); toast('That file did not open. Try again in a bit.'); });
+}, true);
 
 // The browser's own install offer (Chrome, Edge, Android), held for Settings rather than shown on its own.
 let offer: (Event & { prompt: () => Promise<unknown> }) | null = null;

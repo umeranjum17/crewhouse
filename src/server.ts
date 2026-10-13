@@ -179,11 +179,11 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         return res.end(resultPage('Crewhouse', words, /connected\./.test(words)));
       }
-
+      // A helper's shell shares this loopback: a delivered file opens only for the person's app, which sends its authority.
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
         const rel = join('files', decodeURIComponent(file[2])); if (rel !== 'files' && !rel.startsWith('files/')) return send(res, 404, { error: 'no such file' });
-        if (!crew.fileFor(file[1], rel)) return send(res, 403, { error: 'not delivered to you' });
+        if (req.headers.authorization !== `Bearer ${authority}` || !crew.fileFor(file[1], rel)) return send(res, 403, { error: 'not delivered to you' });
         const full = disk.insideBot(cfg, file[1], rel);
         if (!existsSync(full)) return send(res, 404, { error: 'no such file' });
         return sendFile(req, res, full);
