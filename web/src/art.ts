@@ -31,9 +31,12 @@ export const helmetOf = (m: Mood | Pose | HelmetMode = 'idle'): HelmetMode => {
   return p === 'needs' ? 'needs' : p === 'work' ? 'think' : p === 'rest' ? 'rest' : 'here';
 };
 export type HelmetCell = { ch: string; eye?: true; scan?: true };
+/** One cell's height over its width: a mono glyph at line-height 1, helmetSvg's 10×16. The head fills a 5:4 box only
+ *  when every drawing keeps it, so the phone's dots sit on this pitch too. */
+export const CELL = 1.6;
 /** The helmet as cells: ' ' is bare canvas, eye/scan cells wear the mood colour. */
 export function helmet(cols: number, mode: HelmetMode = 'here', night = true, beat = 0): HelmetCell[][] {
-  const rows = Math.round(cols * 0.5);
+  const rows = Math.round((cols * 0.8) / CELL);
   const scan = ((beat % 24) / 23) * 1.8 - 0.9;
   const grid: HelmetCell[][] = [];
   for (let r = 0; r < rows; r++) {
@@ -66,8 +69,8 @@ export function helmet(cols: number, mode: HelmetMode = 'here', night = true, be
 /** The helmet as plain text rows, for the web's <pre className="art">. */
 export const helmetText = (cols: number, mode: HelmetMode = 'here', night = true, beat = 0): string[] =>
   helmet(cols, mode, night, beat).map((r) => r.map((c) => c.ch).join(''));
-/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): one dot per character,
- *  the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
+/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): one dot per character, laid
+ *  CELL times as far apart down as across, the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
 export function helmetDots(cols: number, mode: HelmetMode = 'here', night = true, beat = 0, eye = night ? '#ececec' : '#1d1b18'): { rows: Bitmap; pal: Palette } {
   const ink: [number, number, number] = night ? [236, 236, 236] : [29, 27, 24];
   const pal: Palette = { e: mode === 'needs' ? '#0a84ff' : eye, s: '#0a84ff' };

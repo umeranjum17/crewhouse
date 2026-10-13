@@ -5,10 +5,10 @@
 // A.office view Home also reads (useOffice). The helmets are still: the think-scan shows while working and nothing
 // moves, so the old animation battery budget holds with no code for it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { PixelRatio, Pressable, Text, View } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
-import { helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
+import { CELL, helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
 import { color } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 
@@ -17,17 +17,17 @@ const { landed, groupOf } = A;
 
 type Group = keyof typeof A.GROUP_TITLES;
 
-/** The helmet as dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot opacity. The
+/** The helmet as dots (art.helmetDots) on the art's own cell (CELL): the phone sets no text in mono, so the shading rides on dot opacity. The
  *  think-scan shows centred while working (a fixed beat); nothing animates. */
 function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: number }) {
   const mode = helmetOf(mood), cols = 20;
   const { rows, pal } = helmetDots(cols, mode, night, mode === 'think' ? 12 : 0);
-  const d = size / cols;
+  const d = PixelRatio.roundToNearestPixel(size / cols) || 1 / PixelRatio.get();
   return (
-    <View accessible={false} style={{ width: size }}>
+    <View accessible={false} style={{ width: d * cols }}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * CELL, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: d, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>

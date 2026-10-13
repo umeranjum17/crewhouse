@@ -266,6 +266,8 @@ off the screen must still say what changed.
   A change to the phone-only chat's keeping, stopped/interrupted turns, offline queue or the approval
   sheet runs `features/phone-chat-keep.md` (`scripts/phone-chat-keep.mjs`). A change to carrying that chat to
   Chief on a paired computer runs `features/phone-continue.md` (`scripts/phone-continue.mjs`).
+  A change to the helmet art or how it is sized (`web/src/art.ts`, `Ink`/`Face`) runs
+  `features/term-screens.md` "The helmet keeps its own shape" on web and on the native app.
 - **A third form factor.** 1440 (desktop) and 390 (phone) are the two widths the app is
   designed at; 320 stays the narrowest *probe* in the Drive section, reported as measured
   behaviour, not a fifth capture.

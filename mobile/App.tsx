@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, useColorScheme, useWindowDimensions, View,} from 'react-native';
+  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -107,24 +107,28 @@ export default function App() {
 }
 
 // ---------- the mascots, as dots ----------
-function Dots({ rows, pal, d, crisp = false }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean }) {
+/** `cell`: how much taller than wide each cell is (art.CELL for a helmet); the dot stays round in its middle. `d` snaps
+ *  to whole device pixels so every dot is the same size and the rows keep one pitch, even at a few pixels a dot. */
+function Dots({ rows, pal, d: raw, crisp = false, cell = 1 }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean; cell?: number }) {
+  const d = PixelRatio.roundToNearestPixel(raw) || 1 / PixelRatio.get();
   return (
     <View accessible={false}>
       {rows.map((r, y) => (
         <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d, padding: crisp ? 0 : d * 0.06 }}>{pal[k] ? <View style={{ flex: 1, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
+          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * cell, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: d, borderRadius: crisp ? 0 : d, backgroundColor: pal[k] }} /> : null}</View>)}
         </View>
       ))}
     </View>
   );
 }
 /** Chief or a helper in dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot
- *  opacity. Every helper wears the same small helmet; `whole` draws all of it. */
+ *  opacity. Every helper wears the same small helmet; `whole` draws all of it. `size` is its width: the dots sit on the
+ *  art's own cell (art.CELL), so the head keeps its 5:4 box and nothing squashes it. */
 function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   const t = useLook();
   const cols = whole ? 30 : 20;
   const { rows, pal } = art.helmetDots(cols, art.helmetOf(mood), t.night, 0);
-  return <Dots rows={rows} pal={pal} d={size / cols} />;
+  return <Dots rows={rows} pal={pal} d={size / cols} cell={art.CELL} />;
 }
 function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
@@ -137,7 +141,7 @@ function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       backgroundColor: chief && t.night ? '#2A2622' : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
-      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.8} />
+      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.52} />
     </View>
   );
 }
@@ -751,14 +755,15 @@ function PhoneOnly({ onExit }: { onExit: () => void }) {
 
 function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: () => void; onSignOut: () => void }) {
   const t = useLook();
-  // On a very narrow screen the two controls no longer leave room for "Chief", so they stack instead of
-  // squeezing the title into a per-character column. At normal widths the header stays the one row it was.
-  const narrow = useWindowDimensions().width < 360;
+  // When the screen is narrow for its text (a small phone, or a large font) the two controls no longer leave room for
+  // "Chief" and the account's name, so they move to their own row below. At normal widths and fonts it stays one row.
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360;
   return (
-    <View style={[s.head, { borderColor: t.line }]}>
+    <View style={[s.head, { borderColor: t.line }, narrow && { flexWrap: 'wrap' }]}>
       <Face who="chief" size={32} />
-      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small} lines={1}>{subtitle}</T></View>
-      <View style={{ flexDirection: narrow ? 'column' : 'row', alignItems: 'flex-end', gap: narrow ? 2 : 12 }}>
+      <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle} lines={1}>Chief</T><T tone="ink2" style={s.small}>{subtitle}</T></View>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, ...(narrow && { width: '100%' }) }}>
         <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out" hitSlop={8}><T tone="ink2" style={s.small}>Sign out</T></Pressable>
         <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Use a computer instead" hitSlop={8}><T tone="ink2" style={s.small}>Use a computer</T></Pressable>
       </View>
