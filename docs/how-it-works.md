@@ -38,7 +38,7 @@ Ask Chief to hire CTO to watch and nudge your terminal agents. It needs [Herdr](
 
 ## Sign in once, inside the app
 
-There are no terminal logins and no API keys. The first time you ask for something, Chief puts a **Sign in with…** button under his reply, naming the account the crew will think with. That account's own page opens, you say yes, and the job starts. A one-time code is the fallback. Every account the engine supports is under Settings, Your AI accounts ([the list](supported-subscriptions.md)); each row says whether it uses a plan you already pay for or is charged to your account per use.
+There are no terminal logins, and you never copy an API key. The first time you ask for something, Chief puts a **Sign in with…** button under his reply, naming the account the crew will think with. That account's own page opens, you say yes, and the job starts. A one-time code is the fallback. The one exception is OpenCode Go: its card asks you to paste your plan key once instead of opening a page. Every account the engine supports is under Settings, Your AI accounts ([the list](supported-subscriptions.md)); each row says whether it uses a plan you already pay for or is charged to your account per use.
 
 ## Day and night, desk and pocket
 
