@@ -1,8 +1,8 @@
 // The public web app's whole pairing journey in a real browser: the built shell served by crewd's phone link at a
-// public-style origin (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens in demo
-// with its Pair button; a relay code pastes in, the page shows the same two words the computer asks about, and on yes
+// public-style origin (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens on
+// Chief's first question, Where should I work?; On my computer opens the Pair sheet, a relay code pastes in, the page shows the same two words the computer asks about, and on yes
 // the same page opens on crewd's real data over the link (web/src/link.ts). A reload stays paired, Unpair goes back to
-// the demo and the computer forgets the device, and the long direct code pairs too. Needs a Chromium on PATH (skipped
+// the first question and the computer forgets the device, and the long direct code pairs too. Needs a Chromium on PATH (skipped
 // without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +25,7 @@ const bin = browserBin();
 const root = temp('pwa-pair');
 const free = () => new Promise<number>((r) => { const s: Server = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 
-test('the public demo app pairs by a relay code or a direct code, opens on real data, and unpairs back to the demo', { skip: !bin && 'no Chromium on PATH' }, async () => {
+test('the public web app asks where Chief works, pairs by a relay code or a direct code, opens on real data, and unpairs back to the question', { skip: !bin && 'no Chromium on PATH' }, async () => {
   // The app as the installed web app opens it: from crewd's own link port (`./crewhouse phones web` publishes that).
   if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) assert.equal(spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs')]).status, 0);
   const relay = await startRelay({ port: 0, dataDir: join(root, 'relay'), signup: 'open' });
@@ -65,13 +65,13 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
     return r.result.value;
   };
   // Unpair and reload navigate the page under a poll: a poll that lands mid-navigation is "not yet", not a failure.
-  const mode = () => run(`document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.hello') ? 'real' : ''`)
+  const mode = () => run(`document.querySelector('.where') ? 'where' : document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.hello') ? 'real' : ''`)
     .catch((e: Error) => { if (/navigated or closed/.test(e.message)) return ''; throw e; });
   const devices = async () => (await http('GET', '/api/phones')).length;
 
   /** Paste a code into the Pair sheet, then say yes at the computer once its two words match the page's. */
   const pair = async (code: string) => {
-    await run(`location.hash = '#/pair'`);
+    await run(`[...document.querySelectorAll('.where-opt')].find((b) => /On my computer/.test(b.textContent)).click()`);
     await until('the pair sheet', () => run(`!!document.querySelector('.pair-code')`));
     await run(`(() => { const t = document.querySelector('.pair-code');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(code)});
@@ -86,8 +86,9 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   };
 
   await send('Page.navigate', { url: shell });
-  await until('the demo', async () => (await mode()) === 'demo', 30_000);
-  assert.match(await run(`document.querySelector('.pair-row')?.textContent ?? ''`), /Pair — yes, let's go/);
+  await until('the first question', async () => (await mode()) === 'where', 30_000);
+  // A release build keeps the cloud row off until BYOKit's cloud kit is published (CREWHOUSE_CLOUD unset).
+  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['On my computer', 'Just on this phone']);
 
   // From anywhere: the relay's code, written as `./crewhouse phones code` prints it.
   const away = await http('POST', '/api/phones/code', { role: 'control' });
@@ -114,7 +115,7 @@ test('the public demo app pairs by a relay code or a direct code, opens on real 
   await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));
   assert.match(await run(`document.body.innerText`), /Notifications: Off · Turn on/);
   await run(`(() => { window.confirm = () => true; [...document.querySelectorAll('button')].find((b) => b.textContent === 'Unpair').click(); })()`);
-  await until('back to the demo', async () => (await mode()) === 'demo', 20_000);
+  await until('back to the first question', async () => (await mode()) === 'where', 20_000);
   assert.equal(await devices(), 0, 'the computer forgot this browser');
 
   // At home: the long direct code, as the first line `./crewhouse phones code` prints.

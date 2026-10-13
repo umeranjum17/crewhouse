@@ -6,11 +6,11 @@ relay code (`SHORT-CODE@relay`) or the long direct code, told apart by shape (`w
 phone uses too). `@byokit/pair` pairs the browser and shows the two words while the person says yes at the computer.
 The grant is sealed in IndexedDB (`browserDeviceStore('crewhouse.grant')`), and the same installed app reloads on real
 data: every call, live event and desktop stream rides the link (`web/src/api.ts` `setLink`). Unpair forgets the grant,
-clears the icon badge and goes back to the demo.
+clears the icon badge and goes back to "Where should I work?".
 
 ## What it proves
 
-- With no grant, the public shell boots the demo with the Pair row (see [pwa-demo-boot.md](pwa-demo-boot.md)). With a
+- With no grant, the public shell opens "Where should I work?", whose On my computer row is the Pair sheet (see [where-cloud.md](where-cloud.md)); `?demo` boots the demo with the Pair row (see [pwa-demo-boot.md](pwa-demo-boot.md)). With a
   grant, it boots paired and never shows the demo.
 - A relay code and a direct code both pair. The page's two words equal crewd's `phones pending`.
 - Once paired, the app shows crewd's own state. A change (a message to Chief, the first-run name) lands in crewd over
@@ -20,7 +20,7 @@ clears the icon badge and goes back to the demo.
   refuses), `{off: true, web}` removes the calling device's own address at the mailbox, a computer with no mailbox is
   said in plain words with no dead toggle, and no Getting-set-up item whose call the link refuses is left — Home's
   setup nudge waits for the computer too.
-- Unpair: crewd's device list drops the browser, and the app shows the demo again with no reinstall.
+- Unpair: crewd's device list drops the browser, and the app goes back to "Where should I work?" with no reinstall.
 - The link's trust rules hold: crewd still refuses admin writes over the link (`src/link.ts`).
 
 ## How to drive it

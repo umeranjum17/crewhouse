@@ -12,7 +12,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, SiteSignIn } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
@@ -486,6 +486,24 @@ function AppDownloadQR() {
     <div className="grow"><b>Get the app</b><p className="small">Scan with your phone camera to get the app</p>
       <p className="mute small" style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.APP_DOWNLOAD_URL}</p>
     </div>
+  </div>;
+}
+/** The public web app's first screen with no computer paired (mock C, Main2691): Chief asks where he should work.
+ *  On my computer opens the Pair sheet (#/pair); a cloud, or Chief on the phone alone, is set up in the phone app, so
+ *  both rows say so. The cloud row waits for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows it. */
+function Where({ pairing }: { pairing: boolean }) {
+  const [app, setApp] = useState(false);
+  const w = A.where(process.env.CREWHOUSE_CLOUD === '1');
+  return <div className="where">
+    <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
+    {w.line && <p className="where-line">{w.line}</p>}
+    {w.rows.map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
+      <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="mute small">{r.sub}</span></span><i aria-hidden>›</i>
+    </button>)}
+    <div className="where-note"><Icon name="shield" size={18} /><p>{w.note}</p></div>
+    <p className="where-foot">{w.later}</p>
+    {pairing && <PairSheet onClose={back} />}
+    {app && <Sheet label={w.app} onClose={() => setApp(false)}><h2>{w.app}</h2><AppDownloadQR /><button className="link" onClick={() => setApp(false)}>Not now</button></Sheet>}
   </div>;
 }
 function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
@@ -1764,6 +1782,7 @@ function App() {
   // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
   useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
   const splash = <Splash done={!!ctx || offline || noauth} />;
+  if (pairable && !paired) return <><Where pairing={route.view === 'pair'} /><Toasts /></>;
   if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);

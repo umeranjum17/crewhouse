@@ -71,6 +71,39 @@ export const phoneOffer = (page: Json): { qr: string; typed: string; expires: nu
 export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
 export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
 
+// ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key: Main2691) ----------
+export type Where = 'cloud' | 'computer' | 'phone';
+/** Chief asks where he should work. `cloud` shows the cloud row and its line: each surface keeps it off in a release
+ *  build until BYOKit's cloud kit is published. */
+export const where = (cloud: boolean) => ({
+  hello: "Hi, I'm Chief. Where should I work?",
+  line: cloud ? 'In the cloud I get my own computer: my sandbox, away from your phone and your files. Nothing to install at home.' : '',
+  rows: ([
+    ['cloud', 'In my cloud', 'No computer needed · about $20 a month, billed to you'],
+    ['computer', 'On my computer', 'One you own and leave on · free'],
+    ['phone', 'Just on this phone', 'Chats and documents only · your own AI key'],
+  ] as const).filter(([key]) => cloud || key !== 'cloud').map(([key, title, sub]) => ({ key: key as Where, title, sub })),
+  note: 'Whatever you pick, you sign in yourself, on your own accounts. Crewhouse never sees your passwords or card.',
+  later: 'You can change this later in Settings.',
+  /** The web app can't set up a cloud (or run Chief on the phone alone): both live in the phone app. */
+  app: 'Use the phone app to set this up',
+});
+/** The cloud set-up steps on the phone: pick a cloud, then paste its key. */
+export const CLOUD = {
+  pick: { step: 'Step 1 of 3 · Your cloud', title: "Where should Chief's computer live?", lead: 'Pick a cloud company. You rent the computer from them, in your own name.' },
+  clouds: [
+    { name: 'boat.dev', sub: 'Ready in about a minute · about $20 a month · free trial first', mark: 'b', tile: '#111111' },
+    { name: 'Hetzner', sub: 'About €6 a month · coming next', mark: 'H', tile: '#D50C2D', soon: 'Soon' },
+  ],
+  more: 'More clouds later.',
+  sandbox: ["Chief's own sandbox.", 'He works on this computer, away from your phone and your files. boat.dev bills you directly. Crewhouse charges nothing and never sees your card.'],
+  next: 'Continue with boat.dev',
+  key: { step: 'Step 2 of 3 · Your cloud', title: 'Connect boat.dev', open: 'Open boat.dev', url: 'https://boat.dev', paste: 'Paste your key', connect: 'Connect' },
+  /** Each step's words; the middle part of the second is the page's own name, set bold. */
+  steps: [['Open boat.dev and sign in. New there? Make an account and start the free trial.'], ['Go to ', 'API keys', ', make a new key and copy it.'], ['Come back and paste it here.']],
+  kept: "The key stays on this phone, locked by your phone's own lock. It never goes to Crewhouse.",
+};
+
 // ---------- words ----------
 /** "8:02 pm": the time alone (a phone's day line carries it, "Today 8:02 pm"). */
 export const timeOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
