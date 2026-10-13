@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
-import { api, demo, filesSession, pairable, paired, subscribe, trouble, type Json } from './api.ts';
+import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
@@ -1739,7 +1739,7 @@ function App() {
     return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
   }, [refresh]);
   const wasOffline = useRef(false);
-  useEffect(() => { if (wasOffline.current && !offline && state) toast('Back in touch with the home computer ✓'); wasOffline.current = offline; }, [offline]);
+  useEffect(() => { if (wasOffline.current && !offline && state) { toast('Back in touch with the home computer ✓'); void mintFiles(); } wasOffline.current = offline; }, [offline]);
   // A job that finishes while you watch gets a little party.
   useEffect(() => {
     if (!state) return;
@@ -1818,4 +1818,4 @@ function App() {
 
 startWorker(); // the offline shell and web-push handler are ready from the first load on
 // The public shell decides once, before its first screen: a device grant kept here makes it the paired app; none, the demo.
-void Promise.all([pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve(), filesSession]).finally(() => { resume(); createRoot(document.getElementById('root')!).render(<App />); });
+void Promise.all([pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve(), mintFiles()]).finally(() => { resume(); createRoot(document.getElementById('root')!).render(<App />); });

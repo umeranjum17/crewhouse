@@ -43,11 +43,12 @@ async function http(method: string, path: string, body?: Json) {
   return out;
 }
 
-/** A delivered file's `/files/` address works as a plain link, `<img>` or `<video>`: crewd sets a cookie for it once, here,
- *  from the person's key (`POST /api/files/session`). Demo and the phone never reach `/files`, so they skip it. */
-export const filesSession: Promise<void> = localTransport && !demo && person()
-  ? fetch('/api/files/session', { method: 'POST', headers: { 'x-crewhouse': '1', authorization: `Bearer ${person()}` } }).then(() => {}, () => {})
-  : Promise.resolve();
+/** A delivered file's `/files/` address works as a plain link, `<img>` or `<video>`: crewd sets a cookie for it from the
+ *  person's key (`POST /api/files/session`), at boot and again whenever the home computer comes back. */
+export function mintFiles(): Promise<void> {
+  if (!localTransport || !person()) return Promise.resolve();
+  return fetch('/api/files/session', { method: 'POST', headers: { 'x-crewhouse': '1', authorization: `Bearer ${person()}` } }).then(() => {}, () => {});
+}
 
 /** What went wrong, in the four ways a screen cares about: the home computer is unreachable, this page opened
  *  without the person's authority (a bare bookmark or typed address answers every read with 403 no-authority),
