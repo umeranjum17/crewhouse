@@ -71,3 +71,25 @@ typed in 6.8 s, the two words 8.3 s after Pair, paired 18.6 s after the first ke
 ended on "Couldn't find your computer on this Wi-Fi…" about 3 s after Pair.
 Failure proof: a wrong code ("doesn't match"), and the phone off the computer's Wi-Fi ("Couldn't find
 your computer on this Wi-Fi…").
+
+## The computer is gone: the out-of-touch screen is never a dead end
+
+A phone paired to a computer that no longer answers (stopped, deleted, asleep with nothing kept)
+opens on "Can't reach the home computer", in plain words with no setup jargon, while the link
+keeps retrying by itself. The screen keeps three ways out, all reusing existing flows:
+
+- **Pair again** opens the same scan/type flow (`Pair` in `mobile/App.tsx`), with a Back way out.
+  The kept grant is replaced only when the new pairing succeeds; backing out keeps retrying the old one.
+- **Try again** retries the link once (`link.retry()`), beside the automatic retry.
+- **Just on this phone** enters the existing phone-only mode without touching the grant; leaving
+  phone-only returns to the paired app, still retrying.
+
+Prove it on the test phone through one `fm-device-lock.sh` call for both baseline and candidate:
+pair to a lab crewd by the typed code (`phone-pair-timed.mjs`), then stop and delete that lab.
+Keep the phone's current font, density and theme; install without `-g`, never grant permissions,
+and deny any permission dialog. Capture the baseline dead end and candidate ways out, tap
+"Pair again", then "Type a code" to reach the code box, and tap Back to the retry screen.
+Run the largest-text, day/night Android `look-check.mjs` only on an owned emulator, never the
+test phone: it changes density, font scale and theme. The retry screen scrolls on short screens. The same rule on the web twin
+(`Unreachable` in `web/src/flows.tsx`): a paired app whose computer is gone keeps "Pair again"
+to the code sheet beside "Try now".

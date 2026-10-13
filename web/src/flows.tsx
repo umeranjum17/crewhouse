@@ -3,7 +3,7 @@
 // plain-words way forward from every failure. ?demo&phase=… pins one state, for review and screenshots.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { api, demo, trouble, type Json } from './api.ts';
+import { api, demo, paired, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
@@ -364,11 +364,13 @@ export function NoAuthority() {
   );
 }
 
-/** Full screen when Crewhouse can't be reached at all: never a blank page or an error code. */
+/** Full screen when Crewhouse can't be reached at all: never a blank page or an error code. A paired app
+ *  keeps a way out: pairing again reuses the code flow and only replaces the kept grant once the new one succeeds. */
 export function Unreachable({ retry }: { retry: () => void }) {
   const [n, setN] = useState(5);
+  const [pairing, setPairing] = useState(false);
   useEffect(() => { const t = setInterval(() => setN((x) => (x <= 1 ? (retry(), 5) : x - 1)), 1000); return () => clearInterval(t); }, [retry]);
-  return (
+  return (<>
     <div className="unreachable">
       <div className="asleep">
         <pre className="art zzz" aria-hidden>{'      z\n    z\n  z'}</pre>
@@ -376,11 +378,14 @@ export function Unreachable({ retry }: { retry: () => void }) {
       </div>
       <h1>The home computer isn't answering</h1>
       <p className="lead">It may be asleep, switched off, or offline. Crewhouse and your helpers live there, so everything picks up again the moment it's back.</p>
+      {paired && <p className="mute">This app is still paired with it. To use this computer or another one, pair again.</p>}
       <div className="card tips">
         <div><Face who="chief" size={34} /><span>Check the home computer is on and connected to the internet.</span></div>
       </div>
       <button className="btn go big" onClick={() => { setN(5); retry(); }}>Try now</button>
+      {paired && <button className="btn" onClick={() => setPairing(true)}>Pair again</button>}
       <p className="mute small">Trying again in {n}s</p>
     </div>
-  );
+    {pairing && <PairSheet onClose={() => setPairing(false)} />}
+  </>);
 }
