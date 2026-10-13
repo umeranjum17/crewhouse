@@ -110,10 +110,11 @@ export default function App() {
         <StatusBar barStyle={t.night ? 'light-content' : 'dark-content'} backgroundColor={t.bg} />
         <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'bottom']}>
           {!fontsReady && !fontError ? <Center><ActivityIndicator color={t.ink} /></Center>
-            : grant === undefined ? <Center><ActivityIndicator color={t.ink} /></Center>
-            : grant === null ? (phone === null ? <Center><ActivityIndicator color={t.ink} /></Center> : phone ? <PhoneOnly onExit={leavePhone} />
-              : <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { notNow = false; void setPhoneMode(false); setPhone(false); setGrant(g); }} />)
-            : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} />}
+            : grant === undefined || phone === null ? <Center><ActivityIndicator color={t.ink} /></Center>
+            // Phone-only stays a way out even with a pairing kept: leaving it returns to the paired app, grant intact.
+            : phone ? <PhoneOnly onExit={leavePhone} />
+            : grant === null ? <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { notNow = false; void setPhoneMode(false); setPhone(false); setGrant(g); }} />
+            : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} onRepaired={(g) => setGrant(g)} onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} />}
           <Toast />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -601,7 +602,7 @@ const PUSH_WORDS = {
   missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
 };
 
-function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
+function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () => void }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -715,6 +716,7 @@ function Pair({ onPaired }: { onPaired: (g: Grant) => void }) {
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
       {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
       {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
+      {onBack && <Btn ghost label="Back" onPress={onBack} />}
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>{A.awake('your computer')}</T>
       <T tone="mute" style={[s.small, s.centerText]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
     </ScrollView>
@@ -1101,7 +1103,7 @@ type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
-function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }) {
+function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant; onRemoved: () => void; onRepaired: (g: Grant) => void; onPhoneOnly: () => void }) {
   const t = useLook();
   // A photo, link or text shared from another app arrives here (Android's share sheet).
   const { hasShareIntent, shareIntent, resetShareIntent, error: shareError } = useShareIntent();
@@ -1123,6 +1125,8 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
   const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
   const heard = useRef(first.at); // when the home computer last answered
   const [missing, setMissing] = useState('');
+  // Repairing the pairing from the out-of-touch screen below: the kept grant stays until a new one succeeds.
+  const [repair, setRepair] = useState(false);
   // Connecting for longer than a bound counts as out of touch: no spinner without an end.
   const [late, setLate] = useState(false);
   const facts = useRef<ReturnType<typeof connect>['facts'] | null>(null);
@@ -1220,10 +1224,26 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
     );
   }
   if (!state) {
+    if (!out) {
+      return (
+        <Center>
+          <ChiefArt mood="work" size={112} whole />
+          <T tone="ink2" style={s.centerText}>Waking the crew…</T>
+        </Center>
+      );
+    }
+    // Out of touch with nothing kept to show: plain words and plain ways out, while the link keeps retrying by
+    // itself. Pairing again reuses the scan/type flow and only replaces the kept grant once the new one succeeds;
+    // backing out keeps retrying the old one. Nothing here names the machinery.
+    if (repair) return <Pair onPaired={(g) => { setRepair(false); onRepaired(g); }} onBack={() => setRepair(false)} />;
     return (
       <Center>
         <ChiefArt mood="work" size={112} whole />
-        <T tone="ink2" style={s.centerText}>{out ? `Can't reach the home computer. ${missing || 'Checking why…'} Trying again by itself.` : 'Waking the crew…'}</T>
+        <T style={s.h1}>Can't reach the home computer</T>
+        <T tone="ink2" style={s.centerText}>This phone is still paired with it, but it doesn't answer. It may be switched off, asleep, or gone. Trying again by itself.</T>
+        <Btn go big label="Pair again" onPress={() => setRepair(true)} />
+        <Btn label="Try again" onPress={() => link.current?.retry()} />
+        <Btn ghost label="Just on this phone" onPress={onPhoneOnly} />
       </Center>
     );
   }
