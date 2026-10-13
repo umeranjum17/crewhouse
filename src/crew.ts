@@ -914,7 +914,7 @@ export class Crew {
     const b = this.needBot(id);
     const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], 10000).map((e) => e.data.seq));
     return {
-      bot: this.pub(b),
+      bot: { ...this.pub(b), ...this.chat(id) },
       job: disk.readJob(this.cfg, id),
       // A search landing on an old line gets a window around it: the newest 200 would miss it entirely.
       phoneOffer: id === CHIEF && !around ? (() => {

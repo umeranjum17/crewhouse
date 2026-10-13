@@ -14,7 +14,8 @@ import { taskBrowser } from './browser.ts';
 import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
-import { until } from './lab.ts';
+import { until, setup, settled, release, holding } from './lab.ts';
+import { startServer } from '../src/server.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -35,7 +36,7 @@ test('the office is flat 2D: no 3D library in any bundle or in the dependencies'
 });
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' };
-async function browse() {
+async function browse(external?: string) {
   const server = createServer((q, s) => {
     const p = decodeURIComponent(new URL(q.url ?? '/', 'http://x').pathname).replace(/\.\.+/g, '');
     let f = join(dist, p === '/' ? 'index.html' : p);
@@ -43,7 +44,7 @@ async function browse() {
     s.writeHead(200, { 'content-type': TYPES[extname(f)] ?? 'application/octet-stream' }); s.end(readFileSync(f));
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const base = external ?? `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const profile = mkdtempSync(join(tmpdir(), 'office-browser-'));
   const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
@@ -194,7 +195,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
           const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
           // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
-          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge')]);
+          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge'), r.querySelector('.p-state')?.textContent?.trim()]);
           const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
           const officeText = document.querySelector('.office')?.innerText ?? '';
           const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
@@ -240,12 +241,16 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           // On it now's idle line uses the rows' words and the header's waiting count.
           assert.ok(!/on you/.test(m.idle) && (!/^No helper is at work:/.test(m.idle) || m.idle === `No helper is at work: ${m.memberNeeds} waiting for Chief.`), `${at}: On it now says the ${m.memberNeeds} waiting rows wait for Chief (${m.idle})`);
           // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
-          const chat = new Map<string, { line: string; dot: boolean }>(m.chatRows.map(([name, line, dot]: [string, string, boolean]) => [name, { line, dot }]));
+          const chat = new Map<string, { line: string; dot: boolean; word: string }>(m.chatRows.map(([name, line, dot, word]: [string, string, boolean, string]) => [name, { line, dot, word }]));
           for (const [name, g] of m.grouped as [string, string][]) {
             const row = chat.get(name);
             if (!row || name === 'Chief') continue;
-            if (g === 'Waiting') assert.equal(row.line, 'Waiting', `${at}: ${name} waits in the Office and in Chats`);
-            if (g === 'Done today') assert.match(row.line, /^Done: /, `${at}: ${name} is done in the Office and in Chats`);
+            // A chats row reads its thread's last line (or the helper's role before it ever spoke), never the
+            // status word: the word lives in the row's end column, the same word the Office group shows.
+            if (g === 'Waiting') assert.equal(row.word, 'Waiting', `${at}: ${name} shows the same status in Chats`);
+            if (g === 'Done today') assert.equal(row.word, 'Done', `${at}: ${name} shows the same status in Chats`);
+            if (g === 'Waiting') assert.notEqual(row.line, 'Waiting', `${at}: ${name} waits in the Office but its row reads its last line`);
+            if (g === 'Done today') assert.doesNotMatch(row.line, /^Done: /, `${at}: ${name} is done in the Office but its row reads its last line`);
             if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
           }
           // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
@@ -553,4 +558,45 @@ test('after sign-in with no phone paired, the chat offers Add your phone with it
   await b.open('demo=maya&day');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   assert.equal(await b.run("!!document.querySelector('[aria-label=\"Add your phone\"]')"), false, 'paired phones: no offer in the chat');
+});
+
+test('live Chats keep the last reply separate from status and the opening NEW divider after read', { skip: !bin && 'no Chromium here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.cfg.port = 0; lab.cfg.linkPort = 0;
+  cpSync(join(repo, 'package.json'), join(parent, 'package.json'));
+  const server = await startServer({ ...lab.cfg, repoDir: parent }, lab.db, lab.crew);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const person = readFileSync(join(lab.cfg.stateDir, 'person.key'), 'utf8');
+  const api = async (path: string, body?: object) => {
+    const r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: { 'x-crewhouse': '1', authorization: `Bearer ${person}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    assert.equal(r.status, 200); return r.json();
+  };
+  await api('/api/recruit', { template: 'scout', name: 'Scout' });
+  const job = (await api('/api/bots/scout/messages', { text: 'Check my Friday flights; ask permission' })).task;
+  await holding(lab.crew, 'scout');
+  const b = await browse(base);
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await b.open(`day#person=${person}`);
+  await until('Chief chat', () => b.run("!!document.querySelector('.home-mode')"), 30_000);
+  await toOffice(b);
+  const row = () => b.run(`(() => { const r = document.querySelector('[aria-label="Chats"] a[href="#/h/scout"]'); return r && { line: r.querySelector('.small').textContent, word: r.querySelector('.p-state').textContent, badge: !!r.querySelector('.badge'), working: r.parentElement.querySelector('.chat-working')?.textContent, time: r.querySelector('time').textContent }; })()`);
+  const live = await row();
+  assert.equal(live.word, 'At work'); assert.match(live.working, /Scout is working/);
+  assert.match(live.line, /^You: Check my Friday flights/); assert.ok(live.time); assert.equal(live.badge, false);
+  await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
+  await until('last reply in the row', async () => (await row())?.line === 'Three Friday flights are ready.', 30_000);
+  assert.equal((await row()).word, 'Done');
+  await b.run('location.hash = "#/h/scout"');
+  await until('opening NEW divider', () => b.run("!!document.querySelector('.new-divider')"), 30_000);
+  await until('read acknowledged', async () => (await api('/api/bots/scout')).bot.unread === 0);
+  const boundary = await b.run("(() => { const n = document.querySelector('.new-divider'); return {word:n?.textContent, after:n?.nextElementSibling?.textContent}; })()");
+  assert.equal(boundary.word, 'New'); assert.match(boundary.after, /Three Friday flights are ready/);
+  await b.run('location.hash = "#/"');
+  await until('left the helper thread', () => b.run("!!document.querySelector('.home-mode')"));
+  await b.run('location.hash = "#/h/scout"');
+  await until('opened the read thread', () => b.run("!!document.querySelector('.chat-page .line.them')"));
+  assert.equal(await b.run("!!document.querySelector('.new-divider')"), false, 'a read thread has no NEW on the next visit');
 });

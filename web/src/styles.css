@@ -726,6 +726,19 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 
 /* The chat list: a search box on top, then each thread's last line, time and unread count. */
 
+.chat-preview { overflow-wrap: anywhere; }
+.chat-end { flex: none; max-width: 40%; }
+.chat-end .p-state { white-space: normal; text-align: right; }
+/* A live member's line under its chats row. */
+.chat-working { display: flex; gap: 7px; align-items: center; padding: 2px 14px 10px 66px; color: var(--ink2); font-size: 13px; }
+.chat-working i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex: none; }
+.chat-working span { min-width: 0; overflow-wrap: anywhere; }
+
+/* The NEW divider over the first line the person hasn't seen yet. */
+.new-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; }
+.new-divider::before, .new-divider::after { content: ''; flex: 1 1 0; min-width: 0; border-top: 1px solid var(--line); }
+.new-divider span { font: 700 11px/16px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--pink-ink); }
+
 .side-row .grow { min-width: 0; }
 .side-meter { display: block; padding: 6px 10px 10px; line-height: 1.3; }
 .how { margin: 8px 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; }

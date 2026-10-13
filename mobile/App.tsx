@@ -1879,15 +1879,24 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
 function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
   const t = useLook();
   const crew = A.crew(state);
+  const statusColor = (cls: string) => cls === 'needs' ? t.pink : cls === 'work' ? t.green : cls === 'quiet' ? t.amber
+    : cls === 'failed' ? t.danger : cls === 'done' ? t.ink : t.mute;
   return <View><Label>Chats</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
-    {A.chats(state).map((c, i) => <Pressable key={c.id} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
-      onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.unread ? `, ${c.unread} new` : ''}`}>
-      {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
-        : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
-      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T></View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
-        {c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>
-    </Pressable>)}
+    {A.chats(state).map((c, i) => <View key={c.id}>
+      <Pressable style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
+        onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.id === 'chief' && c.unread ? `, ${c.unread} new` : ''}`}>
+        {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
+          : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small}>{c.line}</T></View>
+        <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
+          {c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
+            {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'quiet' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
+            <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
+          </View>}
+          {c.id === 'chief' && c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>
+      </Pressable>
+      {!!c.working && <View style={s.workingLine}><View style={[s.statusDot, { backgroundColor: t.green }]} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{c.working}</T></View>}
+    </View>)}
   </View></View>;
 }
 
@@ -1932,7 +1941,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ?? 0);
-  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
+  // Use the first live page, not the phone's cached unread count, and keep its boundary after read.
+  const mark = useRef<number | null>(null);
+  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { mark.current ??= A.newDivider(p, id); setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const scroll = useRef<ScrollView>(null);
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
@@ -1969,7 +1980,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const own = id === 'chief' ? A.ideas(state) : A.ideas(state).filter((i: Json) => i.bot === id);
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
-  useEffect(() => { if (canAct && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
+  useEffect(() => { if (canAct && mark.current !== null && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
   const send = async (x: string, p: Photo[] = []) => {
     setPending({ text: x, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
@@ -2018,6 +2029,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>
           {(slots.before.get(i) ?? []).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
           {(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
+          {l.id === mark.current && <View style={s.newDivider} accessibilityRole="header"><View style={[s.newDividerLine, { backgroundColor: t.line }]} /><T style={[s.newDividerText, { color: t.pink }]}>New</T><View style={[s.newDividerLine, { backgroundColor: t.line }]} /></View>}
           {dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={s.line}>
             {l.from === 'note' ? <>
@@ -2740,6 +2752,10 @@ const s = StyleSheet.create({
   introName: { fontSize: 20, lineHeight: 26, ...fw('700'), letterSpacing: -0.3, marginTop: 8 },
   day: { alignItems: 'center', marginTop: 10 },
   dayText: { fontSize: 12, lineHeight: 16, ...fw('500') },
+  // A thread's NEW divider over the first line the person hasn't seen yet.
+  newDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6 },
+  newDividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  newDividerText: { fontSize: 11, lineHeight: 16, letterSpacing: 1, textTransform: 'uppercase', ...fw('700') },
   typing: { flexDirection: 'row', gap: 5, paddingVertical: 8, flex: 1 },
   typingDot: { width: 7, height: 7, borderRadius: 4 },
   bar: { height: 14, borderRadius: 7 },
@@ -2751,6 +2767,9 @@ const s = StyleSheet.create({
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
+  // A chats row's one office status word, and a live helper's "<name> is working" line under its row.
+  statusWord: { fontSize: 12, lineHeight: 16, ...fw('600') },
+  workingLine: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 66, paddingRight: 14, paddingBottom: 10 },
   offline: { paddingVertical: 7, paddingHorizontal: 16 },
   offlineText: { textAlign: 'center', fontSize: 13, ...fw('700') },
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, ...fw('500'), overflow: 'hidden', maxWidth: '90%' },

@@ -178,9 +178,13 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
             {c.id === 'room' ? <span className="stack-faces">{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={26} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
-            <span className="grow"><b className="clamp1">{c.name}</b><span className="small clamp1">{c.line}</span></span>
-            <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>{c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
-          </a>{h && <Stuck h={h} refresh={refresh} />}
+            <span className="grow chat-preview"><b>{c.name}</b><span className="small">{c.line}</span></span>
+            <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>
+              {c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}
+              {c.id === 'chief' && c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
+          </a>
+          {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
+          {h && <Stuck h={h} refresh={refresh} />}
         </div>;
       })}
     </div>
@@ -549,7 +553,11 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ? Number(m.slice(1)) : 0);
-  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then(setPage).catch(() => {}), [id, around]);
+  // Keep the opening unread boundary after the thread's read acknowledgment.
+  const mark = useRef<number | null>(null);
+  const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => {
+    mark.current ??= A.newDivider(p, id); setPage(p);
+  }).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
   const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
@@ -693,7 +701,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
-          return <Fragment key={l.id}>{before}{shown ? null : wrap}</Fragment>;
+          return <Fragment key={l.id}>{before}{l.id === mark.current && <div className="new-divider" role="separator"><span>New</span></div>}{shown ? null : wrap}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}

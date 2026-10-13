@@ -658,8 +658,9 @@ export function crew(state: Json) {
   return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])) as Helper[];
 }
 
-/** One thread in the chat list: Chief pinned on top, then the helpers, the latest talk first. */
-export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'] };
+/** Chief pinned, then latest talk first. Last line and office status stay separate; only Chief carries a badge. */
+export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'];
+  status: string; cls: 'needs' | 'work' | 'quiet' | 'failed' | 'done' | 'rest'; working?: string };
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
 export function preview(last: Json | null | undefined, status = '') {
   if (!last) return status || 'Say hello';
@@ -683,23 +684,32 @@ export function chiefSaid(state: Json): string {
 }
 export function chats(state: Json): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
-  // The words the office uses (statusOf): waiting for Chief, at work on a job, done today, else the last line. An ask
-  // counts once, on Chief's row (his ring), never as an unread dot.
   const v = office(state), member = (id: string) => v.crew.find((m) => m.id === id)!;
-  const waiting = new Set(v.crew.filter(waitsOnYou).map((m) => m.id));
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '' };
+  const glow = (s: Status): Chat['cls'] => s.seat === 'needs' ? 'needs' : s.seat === 'working' ? 'work'
+    : s.seat === 'quiet' ? 'quiet' : s.seat === 'done' ? 'done' : s.seat === 'failed' ? 'failed' : 'rest';
+  const cs = chiefStatus(v);
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' ? { working: 'Chief is working' } : {}) };
   const rest = crew(state).map((h): Chat => {
-    const b = bot(h.id), s = statusOf(member(h.id), v);
-    // Working or waiting on the person says more than the last line did.
-    const done = s.group === 'done' ? landed(member(h.id), v) : undefined;
-    const line = waiting.has(h.id) ? s.word : done ? `${s.word}: ${done.title || 'a job'}` : s.group === 'work' ? `${s.word}: ${h.status}`
-      : s.group === 'wait' ? h.status : preview(b.last, h.role);
-    // An ask counts once, on Chief's row: a crew row never carries a dot for one, a draft or a suggestion alike.
-    return { id: h.id, name: h.name, who: h, line, at: at(b.last?.at ?? 0) || 0, unread: b.unread ?? 0, ring: waiting.has(h.id) ? 'needs' : h.ring };
+    const b = bot(h.id), s = statusOf(member(h.id), v), m = member(h.id);
+    const working = m.seat === 'working' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
+    return { id: h.id, name: h.name, who: h, line: preview(b.last, h.role), at: at(b.last?.at ?? 0) || 0,
+      unread: b.unread ?? 0, ring: h.ring === 'needs' ? '' : h.ring, status: s.word, cls: glow(s), ...(working ? { working } : {}) };
   }).sort((a, b) => b.at - a.at);
   const room = state.room ?? {};
-  const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '' };
+  const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '', status: '', cls: 'rest' };
   return [lead, pin, ...rest];
+}
+/** First unread message id, counted like Crew.UNSEEN, before rendering adds notes or hides fixture lines. */
+export function newDivider(page: Json, bot: string): number {
+  let left = page.bot?.unread ?? 0, first = -1;
+  if (!left) return first;
+  const relayed = new Set((page.tasks ?? []).filter((t: Json) => t.origin === 'chief' && t.state === 'done').map((t: Json) => t.id));
+  for (const m of [...(page.messages ?? [])].reverse()) {
+    if (m.author === 'person' || (bot !== 'chief' && (relayed.has(m.task_id) || m.author === 'system' && !m.text.startsWith('Delivered ')))) continue;
+    first = m.id;
+    if (--left === 0) break;
+  }
+  return first;
 }
 export const unreadBadge = (n: number) => (n > 9 ? '9+' : String(n));
 export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) / 60_000); return m >= 0 && m < 60 ? `${Math.max(1, m)}m` : clock(t); };
