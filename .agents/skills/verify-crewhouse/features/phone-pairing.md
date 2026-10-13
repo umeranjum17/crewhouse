@@ -7,6 +7,10 @@ code the computer is showing, the person says yes on the computer, and the phone
 
 `scripts/phone-pair.mjs` drives the whole journey and writes the evidence:
 
+(Drift, seen 2026-10-13 on v1.0.0-preview.20261012.18: the app now opens on a chooser, "Use this phone only" or
+"Pair with a computer", and the script still expects the Pair screen first. Its default `TAP_SCAN` (540,1598)
+misses. Tap "Pair with a computer" first with `phone-ui.mjs`, or pair by typing the computer's code.)
+
 ```bash
 REPO=$PWD                                  # the script renders the code with this repo's @byokit/ui-core
 CREWHOUSE_REPO=$REPO node .agents/skills/verify-crewhouse/scripts/phone-pair.mjs \
