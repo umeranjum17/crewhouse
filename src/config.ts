@@ -36,7 +36,7 @@ function envPath(name: string, fallback: string): string {
 }
 
 export function relayOrigin(value: string | null): string | null {
-  if (value !== null && value !== '' && (typeof value !== 'string' || !URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
+  if (value && (!URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
   return value && new URL(value).origin;
 }
 

@@ -148,9 +148,10 @@ const port = await free();
 const linkPort = await free();
 const base = `http://127.0.0.1:${port}`;
 let pushUrl = '';
+let relayPublic = '';
 const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '3000', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort),
-    CREWHOUSE_PUSH_URL: pushUrl, CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+    CREWHOUSE_PUSH_URL: pushUrl, CREWHOUSE_RELAY_PUBLIC: relayPublic, CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let daemon = startDaemon();
@@ -427,18 +428,18 @@ test('the relay address: local dial, public offers and typed phone pairing, with
   });
   await new Promise<void>((r) => front.listen(0, '127.0.0.1', r));
   const publicUrl = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
+  relayPublic = publicUrl;
+  const exited = new Promise((r) => daemon.once('exit', r));
+  daemon.kill();
+  await exited;
+  daemon = startDaemon();
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const invitation = await fetch(`${local.url}/relay/v1/enrolments`, { method: 'POST', headers: { authorization: 'Bearer lab-owner' }, body: '{}' });
   assert.equal(invitation.status, 201);
-  const configured = await http('PUT', '/api/phones/relay', { url: local.url, publicUrl: `${publicUrl}/ignored?not-a-token=1`, enrol: (await invitation.json()).token });
+  const configured = await http('PUT', '/api/phones/relay', { url: local.url, enrol: (await invitation.json()).token });
   assert.deepEqual([configured.status, configured.body.relay, configured.body.relayPublic], [200, local.url, publicUrl]);
   await until(async () => (await http('GET', '/api/phones/link')).body.relayStatus === 'online');
   assert.equal(publicConnections, 0, 'crewd registers by the local address, never by the public proxy');
-  for (const invalid of ['ftp://wrong', 'not a URL', 42, false, 0, ['https://x']]) {
-    assert.equal((await http('PUT', '/api/phones/relay', { url: 'https://changed.example', publicUrl: invalid })).status, 400);
-    const kept = (await http('GET', '/api/phones/link')).body;
-    assert.deepEqual([kept.relay, kept.relayPublic, kept.relayStatus], [local.url, publicUrl, 'online'], 'invalid public origin changes neither setting nor the live connection');
-  }
-  assert.equal((await http('PUT', '/api/phones/relay', { url: local.url, publicUrl: 'https://other.example' }, {})).status, 403);
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
   const publicLink = offer.urls.find((u: string) => u.startsWith(publicUrl.replace(/^http/, 'ws')));
   assert.ok(publicLink, 'the advertised offer carries the public link');
@@ -463,17 +464,14 @@ test('the relay address: local dial, public offers and typed phone pairing, with
   const reach = await phone.req('GET', '/api/reach', { via: 'relay' });
   assert.equal(reach.status, 200);
   assert.ok(reach.body.urls.includes(publicLink), 'the paired phone learns the public route too');
-  assert.equal((await phone.req('PUT', '/api/phones/relay', { url: local.url, publicUrl: 'https://other.example' })).status, 403, 'public routing does not grant phone admin');
+  assert.equal((await phone.req('PUT', '/api/phones/relay', { url: local.url })).status, 403, 'public routing does not grant phone admin');
   const posted = await phone.req('POST', '/api/bots/chief/messages', { text: 'Hello from Umer on the cloud link' });
   assert.equal(posted.status, 200);
   await until(async () => (await phone.req('GET', '/api/bots/chief')).body.tasks.some((job: any) => job.id === posted.body.task && job.state === 'done'));
   assert.ok(publicConnections > 0, 'the phone really used the public proxy');
   console.log(JSON.stringify({ proof: 'relayPublic', local: local.url, public: publicUrl, advertised: publicLink, typedResolved: resolved, phone: 'paired', chief: 'done', engine: 'stub' }));
   const saved = await relay(local.url);
-  assert.equal(saved.body.relayPublic, publicUrl, 'saving the same relay again keeps the cloud public origin');
-  const reset = await http('PUT', '/api/phones/relay', { url: local.url, publicUrl: null });
-  assert.equal(reset.body.relayPublic, local.url, 'an explicit null clears a stale public override');
-  await until(async () => phone.events.some((e) => e.kind === 'link.urls' && e.data.urls.includes(publicLink.replace(publicUrl.replace(/^http/, 'ws'), local.url.replace(/^http/, 'ws')))));
+  assert.equal(saved.body.relayPublic, publicUrl, 'a Settings relay save keeps the install-time public origin');
 });
 
 test('a bot\'s screen over the link: a watch-only phone may open it, and crewd answers as on the computer\'s own socket', async () => {

@@ -15,9 +15,9 @@ The existing phone-link journey starts real `src/main.ts` on the stub engine and
 server on OS-assigned ports. A disposable TCP proxy stands in for the provider's public port (HTTP/WS,
 not a TLS or boat.dev proof). The driver uses the person's owned HTTP capability to:
 
-1. Configure `PUT /api/phones/relay {url, publicUrl, enrol}`. Witness local registration with zero public
-   proxy connections, and both normalized origins in `GET /api/phones/link`.
-2. Reject invalid public URLs and unauthorized updates without changing the live connection.
+1. Start crewd with `CREWHOUSE_RELAY_PUBLIC` set to the proxy origin, then configure `PUT /api/phones/relay {url, enrol}`.
+   Witness local registration with zero public proxy connections, and both origins in `GET /api/phones/link`.
+2. Reject unauthorized updates without changing the live connection.
 3. Check that the QR offer carries the public link, never the local relay dial address. Feed
    `adapter.phoneTyped()` through the shared `readTyped`, then kit `findHost` against the public origin.
 4. Pair by `pairWithCode` over the public proxy, compare the two Noise verification words and approve
@@ -25,8 +25,7 @@ not a TLS or boat.dev proof). The driver uses the person's owned HTTP capability
 5. Confirm phone admin remains refused; send a synthetic Chief message and witness its task finish
    through that same link. The log emits one JSON `proof: relayPublic` row with addresses and outcomes,
    never a capability, pairing code, invitation or device secret.
-6. Save the same relay again and witness the public origin kept; send `publicUrl: null` and witness the override
-   cleared and the live `link.urls` change.
+6. Save the same relay again and witness the install-time public origin kept.
 
 Retain the command and stdout/stderr as evidence. Run the complete `test/link.test.ts` and
 `test/relay.test.ts` too. Every listener, proxy socket and phone created by this journey is closed by

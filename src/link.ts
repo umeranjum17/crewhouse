@@ -244,16 +244,15 @@ export class Link {
 
   /** Dial the person's relay; advertise its public origin when a cloud proxy fronts it. No hosted default. */
   get relay(): string { return this.setting('link.relay') ?? this.cfg.relay; }
-  get relayPublic(): string { return this.setting('link.relayPublic') || this.cfg.relayPublic || this.relay; }
-  setRelay(url: string | null, enrol?: string, publicUrl?: string | null) {
-    const before = this.relay, next = relayOrigin(url), settings: [string, string | null][] = [['link.relay', next]];
-    if (publicUrl !== undefined || (next ?? this.cfg.relay) !== before) settings.push(['link.relayPublic', relayOrigin(publicUrl ?? null)]);
-    this.db.tx(() => {
-      for (const [key, value] of settings) if (value === null) this.db.run('DELETE FROM settings WHERE key = ?', key); else this.put(key, value);
-      if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
-      this.db.event('link.relay', null, { on: !!this.relay });
-    });
-    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial(); this.follow();
+  get relayPublic(): string { return this.cfg.relayPublic || this.relay; }
+  setRelay(url: string | null, enrol?: string) {
+    const before = this.relay, next = relayOrigin(url);
+    if (next === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
+    else this.put('link.relay', next);
+    if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
+    this.db.event('link.relay', null, { on: !!this.relay });
+    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial();
+    this.follow();
   }
 
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
