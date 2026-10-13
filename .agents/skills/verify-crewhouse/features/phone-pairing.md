@@ -93,3 +93,7 @@ Run the largest-text, day/night Android `look-check.mjs` only on an owned emulat
 test phone: it changes density, font scale and theme. The retry screen scrolls on short screens. The same rule on the web twin
 (`Unreachable` in `web/src/flows.tsx`): a paired app whose computer is gone keeps "Pair again"
 to the code sheet beside "Try now".
+Heading, body and buttons share one centre in every shot, the wrapped heading's second line included. Check it by
+the drawn ink (each line's leftmost and rightmost ink in the screencap), since uiautomator gives a wrapped heading a
+full-width box. Before the fix, on a 1080 px phone at 390 dp, the heading's lines centred at x 442 and 243 against
+the body's 540.
