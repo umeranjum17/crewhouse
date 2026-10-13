@@ -19,7 +19,7 @@ const { loadConfig } = await import(join(app, 'src', 'config.ts'));
 const stateDir = loadConfig().stateDir;
 const keyFile = join(stateDir, 'person.key');
 const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) })
-  .then(async (r) => r.status === 403 && (await r.json().catch(() => ({}))).code === 'no-authority', () => false);
+  .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({}))).code === 'no-authority'), () => false);
 // CREWHOUSE_NO_SERVICE=1 (tests): never touch the login services of whoever runs this.
 const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
 

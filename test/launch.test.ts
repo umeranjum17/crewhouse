@@ -44,6 +44,15 @@ test('crewd’s own gate 403 counts as up, so the launcher starts nothing and op
   assert.equal(code, 0);
 });
 
+test('an older crewd answering its probe with 200 still counts as up, so the launcher starts nothing', async (t) => {
+  const older = await answering(200, { ok: true });
+  t.after(() => older.close());
+  const fixture = install(true);
+  t.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const code = await run(join(fixture.opt, 'launch.mjs'), ['--no-open'], { ...fixture.env, CREWHOUSE_PORT: String(older.port) });
+  assert.equal(code, 0);
+});
+
 test('a foreign 403 is not crewd: the launcher falls through to its trouble page, linked with the person key', async (t) => {
   const foreign = await answering(403, { error: 'forbidden elsewhere' });
   t.after(() => foreign.close());
