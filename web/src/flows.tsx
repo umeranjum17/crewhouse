@@ -297,7 +297,7 @@ export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: 
 const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
 
 /** The demo's way to the person's own crew: the few commands for their computer, one box for the code it prints (a relay
- *  code or the long direct one, web/src/link.ts), then the two words to check there. Paired, the same installed app
+ *  code or the 12-letter one, web/src/link.ts), then the two words to check there. Paired, the same installed app
  *  opens again on their real crew. ?demo&phase=waiting|done pins a step, for review. */
 export function PairSheet({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');

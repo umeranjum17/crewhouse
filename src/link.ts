@@ -7,8 +7,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { Host, keyPair, keyPairFrom, parseV1Offer, encodeOffer, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
-import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/reach';
+import { Host, keyPair, keyPairFrom, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
+import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/discover';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
 import { relayOrigin, type Config } from './config.ts';
 import type { Store } from './db.ts';
@@ -356,7 +356,8 @@ export class Link {
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
-  /** A single-use QR for the person's phone. */
+  /** A single-use QR for the person's phone, and the kit's 12-letter code to type instead (the phone finds this computer
+   *  on its Wi-Fi by `announce`): each single use, for two minutes, with the same two words and yes here. */
   async offer(role: string, offer?: string): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
@@ -367,8 +368,7 @@ export class Link {
     await this.bind();
     const urls = this.urls();
     const { text, expires } = this.host.offer({ role, urls, meta: { offer } });
-    const raw = parseV1Offer(text); // the host's own QR is always a v1 offer; pair 0.8.0's compact offers never reach here
-    return { qr: text, typed: encodeOffer(raw), expires, urls };
+    return { qr: text, typed: this.host.code({ role, meta: { offer } }).code, expires, urls };
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */

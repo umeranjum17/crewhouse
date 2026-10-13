@@ -33,10 +33,10 @@ With Docker, from the repository root:
 docker compose -f relay/compose.yml up -d
 ```
 
-It listens on `127.0.0.1:7300`. For your tailnet, provision TLS through `@byokit/reach` instead of driving the Tailscale CLI:
+It listens on `127.0.0.1:7300`. For your tailnet, provision TLS through `@byokit/discover` instead of driving the Tailscale CLI:
 
 ```ts
-import { reach } from '@byokit/reach';
+import { reach } from '@byokit/discover';
 const result = await reach({ port: 7300, via: 'tailscale', previous: saved.ingress });
 saved.ingress = result.ingress;
 if (result.pendingCleanup) saved.pendingCleanup = result.pendingCleanup;

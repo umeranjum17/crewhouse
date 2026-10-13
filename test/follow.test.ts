@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/pair';
+import { DeviceLink, pairWithCode, pairWithOffer, type DeviceGrant, type LinkStatus } from '@byokit/pair';
+import { readTyped } from '../web/src/typed.ts';
 process.env.CREWHOUSE_PAIR_MS = '1500'; // read when src/link.ts loads
 const { loadConfig } = await import('../src/config.ts');
 const { Store } = await import('../src/db.ts');
@@ -95,7 +96,7 @@ test('another computer at a learned address fails the handshake', async () => {
   await until('refused', () => p.status() === 'refused');
 });
 
-test('the home network opens for a pairing code, closes after it, and stays open only when the owner turns it on', async () => {
+test('the home network opens for a pairing code, a phone types the code and finds it by its announcement, it closes after, and stays open only when the owner turns it on', async () => {
   const home = await computer('window', { wlan0: at('192.168.1.7') }, false);
   const lan = `ws://192.168.1.7:${home.port}/link`;
   assert.deepEqual(home.link.status().hosts, ['127.0.0.1'], 'off by default: loopback (and Tailscale) only');
@@ -106,7 +107,12 @@ test('the home network opens for a pairing code, closes after it, and stays open
   assert.deepEqual(offer.urls, [lan], 'the code carries the home address');
   assert.deepEqual(home.link.status().hosts, ['0.0.0.0']);
   assert.deepEqual(home.mdns.on.map((m) => [m.type, m.port, m.txt]), [['crewhouse', home.port, { id: home.link.host.id, url: lan }]]);
-  const paired = pairWithOffer(offer.qr, { resolve: dialUrl, name: 'Pixel', onWords: () => {} });
+  // The code to type instead of scanning is 12 letters; the phone dials the address the announcement names
+  // (mobile/src/link.ts `pairOnWifi`), so nobody types an address.
+  const typed = readTyped(offer.typed);
+  assert.match(offer.typed, /^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$/);
+  assert.equal(typed.kind, 'code');
+  const paired = pairWithCode(dialUrl(home.mdns.on[0].txt.url), offer.typed, { name: 'Pixel', onWords: () => {} });
   home.link.answer((await until('asked', () => home.link.status().asking[0])).id, true);
   const p = phone(await paired);
   await until('online', () => p.status() === 'online');

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Pairs a task-owned emulator to the lab crewd (pair-lab.sh) by the typed relay code and stops on the app's Home, for
 // a proof that starts there (features/chief-computer.md). From "Where should I work?": On my computer, Type a code,
-// the relay code (`phones code`'s last line: `input text` drops pieces of the 488-letter direct code on a slow
+// the relay code (`phones code`'s last line: `input text` drops pieces of the relay code on a slow
 // emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports.
 //
 //   LAB=<lab> node .agents/skills/verify-crewhouse/scripts/phone-pair-typed.mjs --serial <emulator> [--apk app.apk]

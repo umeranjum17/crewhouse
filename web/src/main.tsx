@@ -529,7 +529,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
       {left ? <div className="qr"><PairQR text={current.qr} /></div> : <div className="qr expired">Code expired</div>}
       <div className="grow"><b>Add a phone</b><p className="small">Scan this in the phone app or type the code.</p>
         <p className="mute small">This phone will answer the crew and give them jobs, as you.</p>
-        {left > 0 ? <><p className="small">Type this code: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{current.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(current.typed)}>Copy</button></p><p className="mute small">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</p></> : <button className="btn go" onClick={() => { active.current = Date.now(); void renew(); }}>Show a new code</button>}
+        {left > 0 ? <><p className="small">Or type this code with the phone on this computer's Wi‑Fi: <b className="pair-typed">{current.typed}</b> <button className="btn ghost" onClick={() => void navigator.clipboard.writeText(current.typed)}>Copy</button></p><p className="mute small">Works once · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} left</p></> : <button className="btn go" onClick={() => { active.current = Date.now(); void renew(); }}>Show a new code</button>}
       </div></>}
   </div>;
 }
@@ -1233,7 +1233,7 @@ function PairCodeCard({ offer, left, typed, link, title, sub, onAway, onNew, onC
         {sub}
         <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
         <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
-        {left > 0 && <p className="small">Can't scan? Type this code on the phone (or copy it to someone you trust): <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{offer.typed}</b></p>}
+        {left > 0 && <p className="small">Can't scan? With the phone on this computer's Wi‑Fi, type this code in the phone app: <b className="pair-typed">{offer.typed}</b></p>}
         {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
           : <button className="link inline small" onClick={onAway}>Show a code for a phone away from home</button>)}
         <div className="btns">{left <= 0 && <button className="btn go" onClick={onNew}>New code</button>}<button className="btn ghost" onClick={onClose}>{closeLabel}</button></div>

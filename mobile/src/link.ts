@@ -1,13 +1,13 @@
 // The phone's end of the link: @byokit/pair's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
+import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
-import { readTyped } from '../../web/src/typed.ts';
+import { NO_COMPUTER, NO_RELAY, readTyped } from '../../web/src/typed.ts';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import { browse, type BrowseService } from '@byokit/reach';
+import { browse, scan, type BrowseService } from '@byokit/discover';
 import * as K from '../../web/src/kept.ts';
 import { knock } from '../../web/src/adapter.ts';
 import { addresses } from '../modules/crewhouse-net';
@@ -52,16 +52,38 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   return g;
 }
 
-/** Typed instead of scanned: one box takes any code. A direct code is the long envelope; a relay code names its
- *  relay inside itself (readTyped), so the address is never typed by the person. */
+/** Typed instead of scanned: one box takes any code, and the person never types an address. The computer's 12-letter
+ *  code is found on this Wi-Fi; a relay code names its relay inside itself (readTyped). */
 export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
   const t = readTyped(text);
-  if (t.kind === 'direct') return pair(offerText(decodeOffer(t.text)), onWords);
-  if (t.kind === 'unknown') throw new Error('That code is missing where to look it up. Copy the whole code from your computer, then try again.');
-  const name = (Device.deviceName || Device.modelName || 'Phone').slice(0, 40);
-  const g = await pairWithCode(await findHost(t.base, t.short), t.code, { name, onWords });
+  if (t.kind === 'unknown') throw new Error(t.words);
+  const o = { name: (Device.deviceName || Device.modelName || 'Phone').slice(0, 40), onWords };
+  const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short).catch((e) => {
+    throw e instanceof TypeError ? new Error(NO_RELAY) : e;
+  }), t.code, o);
   await store.save(g);
   return g;
+}
+
+/** The Crewhouse computers announcing themselves on this Wi-Fi while a code shows (src/link.ts `announce`), each tried
+ *  in turn: only the one showing this code finishes the handshake, and an address a firewall drops times out into the
+ *  next. A computer that says the code is wrong is not asked again at another of its addresses, since five wrong tries
+ *  withdraw its codes. */
+async function pairOnWifi(code: string, o: { name: string; onWords: (w: string) => void }): Promise<Grant> {
+  const found = await scan({ type: 'crewhouse', protocol: 'tcp', domain: 'local.', ms: 3000 }).catch(() => []);
+  let taken = false; // the computer has the code and is asking the person: no other address or computer may answer
+  const words = { ...o, onWords: (w: string) => { taken = true; o.onWords(w); } };
+  let wrong: LinkError | null = null; // "didn't match" says more than "can't reach"
+  for (const s of found) {
+    const urls = new Set([s.txt.url, ...s.addresses.filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).map((a) => `ws://${a}:${s.port}/link`)]);
+    for (const url of [...urls].filter((u) => u?.startsWith('ws://'))) {
+      try { return await pairWithCode(url, code, words); } catch (e) {
+        if (taken || !(e instanceof LinkError) || !['unreachable', 'timeout', 'wrong-host', 'wrong-code'].includes(e.code)) throw e; // a dropped address times out
+        if (e.code === 'wrong-code') { wrong = e; break; }
+      }
+    }
+  }
+  throw wrong ?? new Error(NO_COMPUTER);
 }
 
 /** The live link, for a bot's screen: its signaling rides a stream on it (src/link.ts `desktop`). */
