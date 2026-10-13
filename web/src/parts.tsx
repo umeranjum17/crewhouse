@@ -167,7 +167,7 @@ export function Ink({ svg, w, label, className = '' }: { svg: string; w: number;
 /** Chief, head and shoulders (`whole` for all of him, the mock rail's 38-column grid). `d` keeps the old 14-dot footprint,
  *  so callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink,
  *  and the think-scan while he works. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean }) {
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean; rail?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
@@ -175,6 +175,9 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot }: { mood?:
   // The phone header's mascot (Main1804/1808, as Muse heads a thread): the helmet drawn smooth, a character, not a pixel icon.
   const pal = night ? color.night : color.day;
   if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.helmetSoft(mode, { night, beat, eye: mode === 'needs' ? pal.pink : mode === 'rest' ? pal.mute : undefined, scan: pal.pink })} />;
+  // The desk rail's helmet: the whole 38-column head as rects at a fixed width, so the person's text size never
+  // rescales it — text art would grow with it and clip under its mask. Sized by width alone, like every Ink face.
+  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.helmetSvg(38, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined })} />;
   return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
     cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
   </pre>;
