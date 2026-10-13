@@ -639,6 +639,21 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .where-note svg { flex: none; margin-top: 1px; color: var(--ink); }
 .where-note p { margin: 0; }
 .where-foot { margin: auto 0 0; padding-top: 18px; text-align: center; color: var(--mute); font-size: 13px; line-height: 18px; }
+/* Settings › Chief's computer (mocks computer, computer-reset): grouped rows, the caption under the first group. */
+.computer .card.list { padding: 0 16px; }
+.computer .row-item { width: 100%; min-height: 56px; padding: 14px 0; background: none; border: 0; border-top: 1px solid var(--line); color: inherit; font: inherit; text-align: left; }
+.computer .row-item:first-child { border-top: 0; }
+.computer button.row-item { cursor: pointer; }
+.computer .row-item .grow { display: grid; min-width: 0; }
+.computer .row-item > .mute { text-align: right; }
+.computer .danger { color: var(--danger); }
+.computer .o-ic { font: 700 15px/1 var(--ui); }
+.computer-cap { margin: 8px 16px 0; }
+.computer-ask { display: grid; gap: 12px; width: 100%; text-align: left; }
+.computer-ask h2, .computer-ask p { margin: 0; max-width: none; }
+.computer-ask p { color: var(--ink2); }
+.computer-ask b { color: var(--ink); }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: var(--bg); }
 .unreachable { max-width: 520px; margin: 0 auto; padding: 48px 22px; display: grid; justify-items: center; text-align: center; gap: 6px; min-height: calc(100vh - var(--top)); align-content: center; }
 .unreachable h1 { font-size: 26px; }
 .asleep { position: relative; opacity: .8; filter: saturate(.7); }

@@ -193,13 +193,13 @@ function Center({ children }: { children: ReactNode }) { return <View style={s.c
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
   return <Text style={[s.text, { color: useLook()[tone] }, style]} numberOfLines={lines}>{children}</Text>;
 }
-function Btn({ label, onPress, go, ghost, big, disabled }: { label: string; onPress: () => void; go?: boolean; ghost?: boolean; big?: boolean; disabled?: boolean }) {
+function Btn({ label, onPress, go, ghost, danger, big, disabled }: { label: string; onPress: () => void; go?: boolean; ghost?: boolean; danger?: boolean; big?: boolean; disabled?: boolean }) {
   const t = useLook();
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}
-      style={({ pressed }) => [s.btn, { backgroundColor: go ? t.go : ghost ? 'transparent' : t.solid, borderColor: go || ghost ? 'transparent' : t.line },
+      style={({ pressed }) => [s.btn, { backgroundColor: go ? t.go : danger ? t.danger : ghost ? 'transparent' : t.solid, borderColor: go || ghost || danger ? 'transparent' : t.line },
         big && s.btnBig, (pressed || disabled) && { opacity: 0.55 }]}>
-      <Text style={[s.btnText, { color: go ? t.goInk : ghost ? t.ink2 : t.ink }]}>{label}</Text>
+      <Text style={[s.btnText, { color: go ? t.goInk : danger ? t.bg : ghost ? t.ink2 : t.ink }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -1108,7 +1108,7 @@ function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => vo
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone'; id?: string; tab?: string; m?: number };
+type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone' | 'computer'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
@@ -1276,6 +1276,7 @@ function Crewhouse({ grant, onRemoved }: { grant: Grant; onRemoved: () => void }
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
+        {route.view === 'computer' && <ChiefComputer back={['Settings', back]} />}
       </View>
       {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
@@ -2525,7 +2526,8 @@ function BubbleRow({ grant }: { grant: Grant }) {
 }
 
 /** The places the desk's rail reaches, listed first in Settings on the phone (web/src/main.tsx GO_TO): no tab bar. */
-const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew']];
+const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew'],
+  ...(cloudOn ? [['computer', A.computer(null).title, null] as [Route['view'], string, null]] : [])];
 function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Grant; status: Status; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
   const t = useLook();
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
@@ -2535,7 +2537,8 @@ function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Gran
     <Page title="Settings" back={back}>
       <View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>{GO_TO.map(([v, label, icon], i) => {
         const body = <>
-          <View style={{ width: 24, alignItems: 'center' }}>{icon && <Dots rows={art.TABS[icon]} pal={{ x: t.ink2 }} d={20 / 9} crisp />}</View>
+          <View style={{ width: 24, alignItems: 'center' }}>{icon && <Dots rows={art.TABS[icon]} pal={{ x: t.ink2 }} d={20 / 9} crisp />}
+            {v === 'computer' && <Image source={WHERE.cloud} style={{ width: 20, height: 20, tintColor: t.ink2 }} />}</View>
           {/* Apps connect where the sign-in happens; this phone has no apps screen of its own. */}
           <View style={{ flex: 1 }}><T style={s.rowTitle}>{label}</T>{!v && <T tone="mute" style={s.small}>Connected on the home computer, in Apps.</T>}</View>
           {!!v && <T tone="mute">›</T>}
@@ -2569,6 +2572,55 @@ function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Gran
       <T tone="mute" style={s.small}>🔒 Only the computer this phone was paired with can read what it sends.</T>
       <Btn label="Unpair this phone" onPress={onForget} />
       <T tone="mute" style={s.small}>To take a phone's access away for good, remove it on the computer too: Settings, Phones.</T>
+    </Page>
+  );
+}
+
+/** Settings › Chief's computer (mocks computer, computer-reset), as on the web (web/src/main.tsx ChiefComputer): every
+ *  value and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected. */
+function ChiefComputer({ back }: { back: [string, () => void] }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const [c, setC] = useState<A.Computer | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [more, setMore] = useState(false);
+  useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
+  const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
+  const w = A.computer(c), boat = A.CLOUD.clouds[0];
+  const group = [s.listGroup, { backgroundColor: t.solid, borderColor: t.line }];
+  const row = (i: number, body: ReactNode, onPress?: () => void, label?: string) => {
+    const line = { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line };
+    return onPress ? <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.listRow, line, pressed && { opacity: 0.6 }]}>{body}</Pressable>
+      : <View style={[s.listRow, line]}>{body}</View>;
+  };
+  const two = ([l, v]: string[], red = false) => <View style={{ flex: 1 }}><T style={[s.rowTitle, red && { color: t.danger }]}>{l}</T><T tone="mute" style={s.small}>{v}</T></View>;
+  // Wraps: at the largest text the value drops under its label rather than splitting a word.
+  const value = ([l, v]: string[]) => <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12 }}><T style={s.rowTitle}>{l}</T><T tone="mute">{v}</T></View>;
+  return (
+    <Page title={w.title} back={back}>
+      <View style={group}>{row(0, value(w.update), () => void act('update'), w.update[0])}{row(1, two(w.reset, true), () => setResetting(true), w.reset[0])}</View>
+      <T tone="mute" style={[s.small, { marginHorizontal: 16, marginTop: -4 }]}>{w.caption}</T>
+      <View style={group}>
+        {row(0, <>{two(w.daily)}<Switch value={!!c?.daily} accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void act(on ? 'daily-on' : 'daily-off')} /></>)}
+        {row(1, value(w.disk))}</View>
+      <View style={group}>{row(0, <><View style={[s.mark, { backgroundColor: boat.tile }]}><Text style={s.markText}>{boat.mark}</Text></View>{two(w.host)}</>)}</View>
+      <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel={w.more} style={[s.row, { minHeight: 48, paddingHorizontal: 4 }]}>
+        <T tone="ink2" style={{ flex: 1, ...fw('500') }}>{w.more}</T><T tone="mute">{more ? '⌄' : '›'}</T></Pressable>
+      {more && <View style={group}>
+        {row(0, <T style={[s.rowTitle, { flex: 1 }]}>{w.undo}</T>, () => void act('undo'), w.undo)}
+        {row(1, <T style={[s.rowTitle, { flex: 1, color: t.danger }]}>{w.remove}</T>, () => Alert.alert(w.removeAsk[0], w.removeAsk[1],
+          [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void act('delete') }]), w.remove)}</View>}
+      <Modal visible={resetting} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setResetting(false)}>
+        <Pressable style={s.scrim} onPress={() => setResetting(false)}>
+          <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
+            <T style={s.title}>{w.sheet.title}</T>
+            <T tone="ink2">{w.sheet.lost.map((p, i) => (i % 2 ? <Text key={i} style={[s.b, { color: t.ink }]}>{p}</Text> : p))}</T>
+            <T tone="ink2">{w.sheet.safe}</T>
+            <Btn danger big label={w.sheet.yes} onPress={() => { setResetting(false); void act('reset'); }} />
+            <Btn ghost big label={w.sheet.no} onPress={() => setResetting(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Page>
   );
 }
