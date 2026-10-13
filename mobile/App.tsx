@@ -1367,6 +1367,15 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
       <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
     </View>;
   }
+  if ((c as any).hire) { const h = (c as any).hire;
+    return <View style={[s.ev, { backgroundColor: t.sunken, gap: 8 }]}>
+      {!!h.will_do?.length && <><T tone="mute" style={s.label2}>WILL DO</T>{h.will_do.map((l: string, i: number) => <View key={`w${i}`} style={{ flexDirection: 'row', gap: 8 }}><T tone="green">•</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}</>}
+      {!!h.wont_do?.length && <><T tone="mute" style={s.label2}>WON'T DO</T>{h.wont_do.map((l: string, i: number) => <View key={`n${i}`} style={{ flexDirection: 'row', gap: 8 }}><T tone="ink2">—</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}</>}
+      {!!h.first_step && <><T tone="mute" style={s.label2}>FIRST STEP FOR YOU</T><View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}><View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: t.ink, alignItems: 'center', justifyContent: 'center' }}><T style={{ color: t.solid, fontSize: 13 }}>1</T></View><T tone="ink2" style={{ flex: 1 }}>{h.first_step}</T></View></>}
+      {!!h.first_job && <><T tone="mute" style={s.label2}>FIRST JOB</T><T tone="ink2">{h.first_job}</T></>}
+      <T tone="mute" style={s.small}>Nothing changes until you say yes.</T>
+    </View>;
+  }
   if (c.lines) return <View style={[s.ev, { backgroundColor: t.sunken }]}>{c.lines.map((l, i) =>
     <T key={i} tone={i && c.kind === 'routine' ? 'mute' : 'ink'} style={i && c.kind === 'routine' ? s.small : undefined}>{l}</T>)}</View>;
   if (c.preview) return <View style={[s.ev, { backgroundColor: t.sunken }]}>
@@ -1377,10 +1386,20 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
   return null;
 }
 
-/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock —
+ *  except a hire, which wears the new helper's own face and role line (mock 1) until the person says yes. */
 function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   const t = useLook();
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  const hire = c.hire;
+  if (hire) return <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+    <Face who={{ kind: hire.kind, name: hire.name }} size={48} />
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <T style={{ ...fw('600'), color: t.pinkInk }}>{c.words}</T>
+      {!!hire.role ? <T tone="ink2" style={s.small}>{hire.role}</T>
+        : <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>}
+    </View>
+  </View>;
   return <View style={{ gap: 2 }}>
     <T style={{ ...fw('600'), color: t.pinkInk }}>{name}</T>
     <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
@@ -1451,7 +1470,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   return (
     <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
-      <T style={s.askWords}>{question}</T>
+      {!c.hire && <T style={s.askWords}>{question}</T>}
       {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
         <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
         : <AskEvidence c={c} open={false} readAll={<Link label="Read all" onPress={() => open(c)} />} />)}
@@ -1552,7 +1571,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <View style={[s.grabber, { backgroundColor: t.line2 }]} />
           <ScrollView style={{ flexShrink: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           <AskHead c={c} who={who} />
-          <T style={s.askQ}>{question}</T>
+          {!c.hire && <T style={s.askQ}>{question}</T>}
           {/* The exact text that goes out, whole: never cut to a preview here. */}
           {edit.box || <AskEvidence c={c} open />}
           {c.mailTo && <MailSetup c={c} canAct={canAct} done={onClose} />}

@@ -41,8 +41,7 @@ const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a 
 const TASK_TIMEOUT_MS = 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // the engine silent this long: the run has hung
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
-/** OpenClaw's own tools crewhouse adopts once their policy effects are reviewed: reads, recall and media on the
- *  person's own sign-in. Any future native tool not reviewed here fails closed until a bump reviews it. */
+/** OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed. */
 const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
@@ -50,20 +49,15 @@ export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${
 
 /** How much of the person's AI the crew may use in a day: a share of `dayBudget`, as the person picks it in plain words. */
 export const SHARES: Record<string, number> = { light: 0.25, normal: 0.6, full: Infinity };
-/** ponytail: one fixed guess at a day of a ChatGPT plan, weighted like its limits (cached reading is cheap); the vendors
- *  publish no allowance to read, so tune this, or read the plan's own when one is published. */
+/** ponytail: one fixed guess at a day of a ChatGPT plan (cached reading is cheap); tune when a plan publishes one. */
 const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
 /** A job the person stopped (they know: no alert), or one crewd stopped when it stalled: Chief says so in one line. */
 const STOPPED = 'Stopped by you.', HUNG = 'It stalled, so I stopped it.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
 const UNSURE = 'Not sure it worked:';
 const MONEY_CAP = 20; // dollars a month, until the owner changes it
-/** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. One run, one sentence. */
-const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check'
-  : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed'
-    : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved'
-    : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it'
-    : 'the same check still fails after the change'}`;
+/** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. */
+const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check' : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed' : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
 const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA'), monthOf = (t = Date.now()) => dayOf(t).slice(0, 7);
 /** The shortest a routine may repeat: faster checks would use up the person's AI. */
@@ -89,6 +83,9 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000;
 const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+/** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
+const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; };
+const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
@@ -466,7 +463,7 @@ export class Crew {
     const covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect' || a.kind === 'signin') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -2111,21 +2108,21 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
         }),
       tool('crew_create', 'Take on a helper for a job no one on the crew does yet, when the person asks for someone ("I need someone to…") or a job will come round again, or change a helper\'s job when they ask ("Penny should also…"). A vague ask gets plain-words questions first, in chat and never on this card: at most three (what it does, what good looks like, its first job) across two turns, then build the card from the answers; an already-specific ask, or "just do it", skips the questions. Adapt first: when a crew member\'s work is close, `bot` is that helper and `job` is its whole job from now on; only when no one and no template fits, a new one with `name` (a short friendly first name) ' +
-        'and `personality` (a few short plain lines, "You are Pip. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; ' +
-        '`first`: the person\'s request, its first job once they say yes. The person sees a short card and decides; nothing changes until then.',
+        'and `personality` (a few short plain lines, "You are Pip. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; `will_do`: up to six lines of what it will do; `wont_do`: up to six lines of what it never does (posting/sending, spending, deleting switch its browser off; passwords/sign-in switch its computer off); `first_step`: the person\'s first step after yes; `first_job` (or `first`): its first job once they say yes. The person sees a short card and decides; nothing changes until then.',
         (p) => {
           const was = p.bot ? this.bot(String(p.bot).toLowerCase()) : undefined;
           if (p.bot && (!was || was.id === CHIEF)) throw fail(`no helper called ${p.bot}; see crew_roster`, 404);
-          const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), first = p.first ? String(p.first).slice(0, 2000) : undefined;
+          const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), will_do = hireList(p.will_do), wont_do = hireList(p.wont_do), first_step = clean(p.first_step, 200) || undefined, first_job = clean(p.first_job ?? p.first, 2000) || undefined;
           const job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p.job?.[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
           disk.validateJob(job);
           if (!name || !/[a-z]/i.test(name) || !role) throw fail('give the helper a name and a role');
           if (!was && (this.bot(disk.slug(name)) || disk.slug(name) === 'helper')) throw fail(`there is already a helper called ${name}; pick another name`, 409);
           const soul = was ? undefined : `# ${name}\n\n${String(p.personality ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '') || `You are ${name}. Friendly, careful and brief.`}`;
           if (soul && soul.length > disk.SOUL_CAP) throw fail(`say who it is in a few lines, under ${disk.SOUL_CAP} characters`);
-          // The card is the hire in a glance (role, reach, first job); the five-part job goes to its file unshown.
-          return this.propose(CHIEF, was ? `Shall ${name} take this on?` : `Shall I take on ${name}?`, { create: { bot: was?.id, name, role, job, soul, first },
-            preview: { head: name, body: [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first ? `First job: ${short(first, 120)}` : ''].filter(Boolean).join('\n') } });
+          const plain = will_do.length || wont_do.length || first_step ? [`${was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.`}`, ...will_do.map((w) => `Will do: ${w}`), ...wont_do.map((w) => `Won't do: ${w}`), ...(first_step ? [`First step for you: ${first_step}`] : []), ...(first_job ? [`First job: ${short(first_job, 120)}`] : [])].join('\n') : [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first_job ? `First job: ${short(first_job, 120)}` : ''].filter(Boolean).join('\n');
+          // The card is the hire in a glance (role, will/won't, first step, first job); the five-part job goes to its file unshown.
+          return this.propose(CHIEF, was ? `Shall ${name} take this on?` : `Shall I take on ${name}?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job },
+            preview: { head: name, body: plain } });
         }),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
@@ -2224,8 +2221,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     }
   }
 
-  /** On the person's yes, a helper Chief made up (base template and tools: nothing that spends) or adapted (job and role widened); the request is its first task. */
-  private create(c: { bot?: string; name: string; role?: string; job: disk.Job; soul?: string; first?: string }) {
+  /** On the person's yes, a helper Chief made up (base template and tools minus each won't-do grant) or adapted (job and role widened); the request is its first task. */
+  private create(c: { bot?: string; name: string; role?: string; job: disk.Job; soul?: string; first?: string; will_do?: string[]; wont_do?: string[]; first_step?: string; first_job?: string }) {
     const id = c.bot ?? disk.slug(c.name);
     if (c.bot ? !this.bot(id) : this.bot(id)) throw fail(c.bot ? 'that helper has left the crew' : `there is already a helper called ${c.name}`, 409);
     if (c.bot) this.db.run('UPDATE bots SET role = ? WHERE id = ?', c.role, id);
@@ -2234,6 +2231,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.say(id, 'system', `${c.name} joined the crew.`);
     });
     disk.writeJob(this.cfg, id, c.job);
+    const off = hireOff(c.wont_do ?? []);
+    if (off.size) disk.setGrants(this.cfg, id, [...new Set(disk.botConfig(this.cfg, id).tools ?? [])].filter((t) => t !== 'crew' && !off.has(t)));
     if (c.soul) disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
     // The first job is Chief's hand-on, so its result comes back here in Chief's chat.
     this.say(CHIEF, 'bot', `${c.bot ? `From now on, ${c.name} ${c.role?.replace(/^./, (x) => x.toLowerCase())}.` : `${c.name} has joined the crew.`}${c.first?.trim() ? ` ${c.name} is starting on it now; I'll bring the result back here.` : ''}`, null);

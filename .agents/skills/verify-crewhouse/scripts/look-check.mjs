@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2), mode = argv.shift();
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : argv.splice(i, 2)[1]; };
-const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
+const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
 const ROOT = opt('root', join(import.meta.dirname, '..', '..', '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
 if (!OUT || !['web', 'android', 'shot', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|fonts --out <dir> …'); process.exit(2); }
@@ -358,7 +358,7 @@ try {
     const S = process.env.SERIAL, adb = (...a) => execFileSync('adb', ['-s', S, ...a], { encoding: 'utf8', maxBuffer: 1 << 27 });
     if (!S) throw new Error('set SERIAL to your own emulator');
     const [pw] = adb('shell', 'wm', 'size').match(/(\d+)x(\d+)/).slice(1).map(Number);
-    const sdk = +adb('shell', 'getprop', 'ro.build.version.sdk').trim(), scale = TEXT ?? (sdk >= 34 ? '2.0' : '1.3'), dens = Math.round((pw / 360) * 160);
+    const sdk = +adb('shell', 'getprop', 'ro.build.version.sdk').trim(), scale = TEXT ?? (sdk >= 34 ? '2.0' : '1.3'), dens = Math.round((pw / W) * 160);
     const was = { font: adb('shell', 'settings', 'get', 'system', 'font_scale').trim(), night: adb('shell', 'cmd', 'uimode', 'night').trim() };
     try {
       adb('shell', 'wm', 'density', String(dens)); adb('shell', 'settings', 'put', 'system', 'font_scale', scale);
@@ -385,6 +385,19 @@ try {
         await settle();
         const words = () => [...xml.matchAll(/ text="([^"]+)"[^>]*package="(?!com\.android\.systemui)/g)].map((m) => m[1]).join('\n');
         if (THEN && words() !== reached) for (const t of THEN.split('>>')) { await sleep(1000); try { execFileSync(process.execPath, [join(import.meta.dirname, 'phone-ui.mjs'), 'tap', t.trim()], { env: { ...process.env, SERIAL: S }, encoding: 'utf8', stdio: 'pipe' }); } catch (e) { throw new Error(`--then could not tap ${t.trim()}: ${(e.stderr || e.message).trim()}`); } await settle(); }
+        if (SCROLL_TO) {
+          const [, ph] = adb('shell', 'wm', 'size').match(/(\d+)x(\d+)/).slice(1).map(Number);
+          const visible = () => [...xml.matchAll(/<node [^>]+>/g)].some(([node]) => {
+            if (!node.includes(`text="${SCROLL_TO}"`)) return false;
+            const b = node.match(/bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"/)?.slice(1).map(Number);
+            return b && b[2] > b[0] && b[3] > b[1];
+          });
+          for (let n = 0; n < 12 && !visible(); n++) {
+            adb('shell', 'input', 'swipe', String(pw / 2), String(ph * .3), String(pw / 2), String(ph * .7), '250');
+            await settle();
+          }
+          if (!visible()) throw new Error(`--scroll-to could not reach ${SCROLL_TO}`);
+        }
         reached = words(); writeFileSync(file, png);
         writeFileSync(join(OUT, `${slug}-${theme}.xml`), xml);
         const src = `data:image/png;base64,${png.toString('base64')}`;

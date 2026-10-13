@@ -660,6 +660,13 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
       <div className="ev-body draft-body">{body}</div>
     </div>;
   }
+  if (c.hire) return <div className="ev hire-ev">
+    {!!c.hire.will_do.length && <><div className="hire-sect">Will do</div>{c.hire.will_do.map((l, i) => <div key={`w${i}`} className="hire-li">{l}</div>)}</>}
+    {!!c.hire.wont_do.length && <><div className="hire-sect">Won't do</div>{c.hire.wont_do.map((l, i) => <div key={`n${i}`} className="hire-li no">{l}</div>)}</>}
+    {!!c.hire.first_step && <><div className="hire-sect">First step for you</div><div className="hire-first"><b className="hire-n">1</b><span>{c.hire.first_step}</span></div></>}
+    {!!c.hire.first_job && <><div className="hire-sect">First job</div><div className="hire-li">{c.hire.first_job}</div></>}
+    <div className="hire-foot">Nothing changes until you say yes.</div>
+  </div>;
   if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;
   if (c.preview) return <div className="ev">
     {c.preview.head && <div className="ev-to">{c.preview.head}</div>}
@@ -669,9 +676,14 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
   return null;
 }
 
-/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock —
+ *  except a hire, which is the new helper's own header (mock 1): its face left of the title and its role under it. */
 function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  if (c.hire) return <div className="ask-head hire-head">
+    <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={48} />
+    <div className="grow"><b>{c.words}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
+  </div>;
   return <div className="ask-head">
     <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
   </div>;
@@ -776,7 +788,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   return (
     <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
       <AskHead c={c} who={who} />
-      {!routine && <p className="ask-words">{question}</p>}
+      {!routine && !c.hire && <p className="ask-words">{question}</p>}
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
         : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
@@ -859,7 +871,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
         <AskHead c={c} who={who} />
-        <h2 className="ask-words">{question}</h2>
+        {!c.hire && <h2 className="ask-words">{question}</h2>}
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
         {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}

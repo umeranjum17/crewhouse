@@ -1269,6 +1269,39 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   done();
 });
 
+test("Chief's hire card shows will/won't/first-step/first-job, and a won't-post switches the posting grant off", async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
+  const job = { does: 'Learns your voice from your posts and your code, then drafts a week of posts.', aim: 'Get to 1,000 followers on drafts you publish yourself.', gets: 'Your X handle and the projects you point to.', how: 'Reads your posts and code, plans the week, drafts each post to stand alone.', great: 'Five drafts in your voice; for example, two from one diary entry.' };
+  const echo = { name: 'Echo', role: 'Grows your X from what you build', job, personality: 'You are Echo. Brief and plain.', will_do: ['Learn your voice from your posts and your code', 'Draft five posts a week that each stand alone'], wont_do: ['Post for you. Every post is a draft you publish yourself'], first_step: 'Tell Echo your X handle.', first_job: 'Read your posts and draft five posts.' };
+  const { task: t } = (await crew.post('chief', `please ${create(echo)}`))!;
+  await settled(db, t);
+  const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
+  assert.ok(card(), 'a card, not a helper');
+  const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
+  assert.deepEqual(view.detail.will_do, echo.will_do);
+  assert.deepEqual(view.detail.wont_do, echo.wont_do);
+  assert.equal(view.detail.first_step, echo.first_step);
+  assert.equal(view.detail.first_job, echo.first_job);
+  const shown = A.card(view, crew.snapshot());
+  assert.deepEqual(shown.hire, { name: 'Echo', kind: shown.hire!.kind, role: echo.role, will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
+  assert.ok(['pip', 'bow', 'cap', 'specs', 'scarf'].includes(shown.hire!.kind), 'a made-up look of its own');
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.ok(crew.bot('echo'), 'yes hires Echo');
+  assert.equal(A.kindOf(crew.bot('echo'), crew.snapshot().bots), shown.hire!.kind, 'its card and hired face agree');
+  assert.ok(!disk.botConfig(crew['cfg'], 'echo').tools.includes('browser'), 'won\'t post switches the posting grant off');
+  assert.ok(disk.botConfig(crew['cfg'], 'echo').tools.includes('computer'), 'an unmatched grant stays');
+  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'echo'")!.id);
+  const next = (await crew.post('chief', create({ ...echo, name: 'Reel' })))!;
+  await settled(db, next.task);
+  const offered = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.equal(A.kindOf(crew.bot('reel'), crew.snapshot().bots), offered.hire!.kind, 'a name matching a template still keeps its custom face');
+  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'reel'")!.id);
+  done();
+});
+
 test('Chief interviews a vague ask before hiring: questions first, the card built from the answers; a specific "just do it" goes straight to the card', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
