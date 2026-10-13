@@ -5,10 +5,10 @@ import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig, type Config } from './config.ts';
+import { engineGaps as desktopEngineGaps } from './desktop.ts';
 
 export interface Install {
-  /** Pinned npm spec, installed with its own node_modules under tools/<id>/. With a package-lock.json beside the
-   *  manifest, the whole tree is installed from that lockfile instead (`npm ci`), so no dependency floats. */
+  /** Pinned npm spec under tools/<id>/; a manifest's adjacent lockfile uses npm ci, so nothing floats. */
   npm?: string;
   /** Pinned pip spec, installed into its own venv under tools/<id>/. */
   pip?: string;
@@ -30,8 +30,7 @@ export interface Tool {
   /** A command-line tool that runs with the person's own sign-in, on this computer rather than in the bot's sandbox.
    *  The bot calls it with a list of arguments: `free` prefixes run at once (Herdr reads ask first), `spend` prefixes ask every time, anything else is refused. */
   run?: { free: string[]; spend: string[] };
-  /** An AXI: a pinned agent-ergonomic CLI the bot calls with an argument list, run with crewd's own environment
-   *  (`axiEnv`) plus this; the gate reads every argument list. */
+  /** Pinned AXI: every argument list is gated; runs with axiEnv plus these entries. */
   axi?: { env?: Record<string, string> };
   env?: Record<string, string>;
   grant?: { default: boolean };
@@ -70,10 +69,9 @@ export function axiEnv(home: string, extra: Record<string, string> = {}): Record
 
 const fill = (s: string, vars: Record<string, string>) => s.replace(/\{([a-z.]+)\}/g, (m, k) => vars[k] ?? m);
 
-/** Registry plus whether each tool works on this machine right now. */
 export function toolStatus(cfg: Config, only?: string[]) {
   return registry(cfg, only).map((t) => {
-    const missing = t.source === 'planned' ? [] : t.bins.filter((b) => !binOf(cfg, t, b));
+    const missing = t.source === 'planned' ? [] : [...t.bins.filter((b) => !binOf(cfg, t, b)), ...(t.id === 'computer' ? desktopEngineGaps() : [])];
     const pinned = existsSync(pinFile(cfg, t.id)) ? readFileSync(pinFile(cfg, t.id), 'utf8') : null;
     return {
       ...t, missing,

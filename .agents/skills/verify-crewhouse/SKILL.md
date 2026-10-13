@@ -51,6 +51,22 @@ when ready; it never reads a sign-in. Run it once per verification when anything
 The live-instance doctor is the two readiness checks above (state endpoint answers, engine
 is stub) plus `curl -fsS "http://127.0.0.1:$PORT/"` returning HTML.
 
+**Desktop prerequisites:** the shared readiness check runs the engine's non-prompting
+`capabilities` command with a three-second bound, not just an executable-file check.
+The engine is probed per engine key (engine override, PATH, LD_LIBRARY_PATH), at boot first. A
+definite answer (ready, or a named missing library) is kept for the whole crewd process; a library
+installed, removed, or an engine broken in place while crewd runs is seen only after a restart. Any
+other answer (timeout, spawn failure, nonzero exit) is kept for sixty seconds, then probed again.
+A loader failure must name its library and an install command; doctor exits nonzero,
+the Computer kit row is unavailable, and the live `GET /api/state` has
+`desktops.ready: false`. Under the isolated env above, run
+`node --test --test-name-pattern='desktop setup refuses' test/stub.test.ts`:
+the real HTTP server and doctor are driven against a task-private command that emits
+the native loader's refusal for libevdev and for an unknown library. This synthetic
+prerequisite failure is not proof that the host itself lacks either library.
+Also run doctor and the live state on the normal engine; never remove a host library
+to reproduce the failure. No UI layout or motion changed by this CLI/API readiness check.
+
 ## Drive
 
 **HTTP (the app's own consumer path).** Follow the authority contract in

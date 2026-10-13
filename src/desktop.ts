@@ -1,5 +1,5 @@
 // Private authenticated Xvfb displays and Chromium, streamed through the capture kit; never the owner's display.
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
@@ -12,12 +12,20 @@ const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000), BR
 
 const onPath = (bin: string) => (process.env.PATH ?? '').split(':').find((d) => d && existsSync(join(d, bin))) && bin;
 export const browserBin = () => BROWSERS.map(onPath).find(Boolean) || null;
-/** What is missing on this machine for bot desktops, in words fit for doctor and the app. */
-export function missing() {
-  const engine = explainMissingEngine();
-  return [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)',
-    engine && `the desklink engine: ${engine}`].filter((m): m is string => !!m);
+let probed: { key: string; engine: string | null; refused: boolean; until: number } | undefined;
+// ponytail: a definite answer (ready or a named missing library) is kept per engine key for the life of crewd, any other answer for a minute; a library installed, removed or an engine broken in place is seen after restart.
+export function probeEngine(now = Date.now()) {
+  const key = [process.env.DESKLINK_ENGINE, process.env.MUXR_DESKLINK_ENGINE, process.env.PATH, process.env.LD_LIBRARY_PATH].join('\0');
+  if (probed?.key === key && probed.until > now) return probed;
+  const explained = explainMissingEngine(), e = explained ? null : resolveEngine();
+  const p = e && spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 }), lib = p && p.status !== 0 ? /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr)?.[1] : undefined;
+  const engine = explained ?? (lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : p && p.status !== 0 ? p.error?.message || p.stderr.trim() || `engine capability check exited ${p.status}` : null);
+  const definite = !!p && (p.status === 0 || !!lib);
+  return probed = { key, engine, refused: !!lib, until: definite ? Infinity : now + 60_000 };
 }
+
+export const engineGaps = () => { const { engine } = probeEngine(); return engine ? [`the desklink engine: ${engine}`] : []; };
+export const missing = () => [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)', ...engineGaps()].filter((m): m is string => !!m);
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
 function xauthority(n: number | string, cookie: Buffer) {
@@ -63,14 +71,12 @@ export class Desktops {
   private ends = new Map<string, Promise<unknown>>();
   private stateDir: string;
   constructor(stateDir: string) { this.stateDir = stateDir; }
-
   running(bot: string) { return this.desks.has(bot); }
   info(bot: string) {
     const d = this.desks.get(bot);
     return d ? { display: d.display, watching: !!d.session, control: !!d.session?.control } : null;
   }
 
-  /** Start the bot's display and browser if they aren't up. Idempotent; called before every run that needs a screen. */
   ensure(bot: string, botDir: string): Promise<Desk> {
     const have = this.starts.get(bot);
     if (have) return have;
@@ -123,8 +129,7 @@ export class Desktops {
     }
   }
 
-  /** Its own profile/display. DevTools uses a pipe: bot shells share loopback, so a TCP endpoint is unsafe.
-   *  crewd relays it only at a fresh secret WebSocket path given to this bot's browser tool. */
+  /** Private profile/display; DevTools is a pipe (bot shells share loopback), relayed only at a fresh secret path. */
   private async browser(d: Desk, botDir: string) {
     const bin = browserBin();
     if (!bin) return;
@@ -153,8 +158,7 @@ export class Desktops {
     toChrome.on('error', () => {});
     wss.on('connection', (ws) => { client?.close(); client = ws; ws.on('message', (m) => toChrome.write(`${m}\0`)); });
     child.on('exit', () => { wss.close(); if (d.devtools === wss) d.cdp = undefined; });
-    // A Chromium that died (a crash, a missing library, a socket path past the kernel's 108 bytes) leaves this relay
-    // listening, and every DevTools call then waits for a reply forever: make it answer before handing the endpoint out.
+    // A dead Chromium leaves the relay listening: require a reply before handing out the endpoint.
     toChrome.write('{"id":0,"method":"Browser.getVersion"}\0');
     await new Promise<void>((ok, no) => {
       answered = (bad) => { answered = undefined; if (!bad) return ok(); // settled once: a later ordinary exit is not a failed start
@@ -188,8 +192,7 @@ export class Desktops {
       d.session = { id: opened.sessionId, generation: opened.generation, control, watcher };
       const early = d.early.filter((e) => (e.params as any).sessionId === opened.sessionId);
       d.early = [];
-      // After the reply, so the watcher knows its session before the offer arrives.
-      setTimeout(() => early.forEach((e) => this.deliver(d, e)));
+      setTimeout(() => early.forEach((e) => this.deliver(d, e))); // After the reply gives the watcher its session.
       return opened;
     }
     if (!['session.description', 'session.candidate', 'session.restart_ice', 'session.close'].includes(method)) throw refused(`${method} is not allowed`, 'malformed');
@@ -233,7 +236,6 @@ export class Desktops {
     for (const d of this.desks.values()) if (d.session?.watcher === watcher) void this.closeSession(d);
   }
 
-  /** The person gave the controls back: end any session that can drive the bot's screen. */
   async revokeControl(bot: string) {
     const d = this.desks.get(bot);
     if (d?.session?.control) await this.closeSession(d, 'The controls went back to the bot');
@@ -290,7 +292,6 @@ export class Desktops {
     });
   }
 
-  /** Stop desktops nobody is watching and no task needs, after the idle window. */
   sweep(busy: (bot: string) => boolean, now = Date.now()) {
     for (const d of [...this.desks.values()]) if (!d.session && !busy(d.bot) && now - d.used > IDLE_MS) this.stop(d.bot);
   }

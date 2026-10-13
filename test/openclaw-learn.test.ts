@@ -15,7 +15,8 @@ import { startModelStub } from './openclaw-stub.ts';
 // real model proves the loop anyway). Everything around it — the proposal RPC contract, the gate's reviewer
 // allowance, the crew surfacing and Forget — is covered by the live probes, the bridge tests and the crew suites.
 const runE2E = process.env.CREWHOUSE_LEARN_E2E === '1';
-(runE2E ? test : test.skip)('learning wiring: applied skill is on the learned record; Forget restores the collection', { timeout: 240_000 }, async () => {
+test('learning wiring: applied skill is on the learned record; Forget restores the collection', { timeout: 240_000,
+  skip: !runE2E && 'Opt-in CREWHOUSE_LEARN_E2E=1: OpenClaw 2026.8.1 apply/review grows without bound with a scripted model; real-model QA owns this chain.' }, async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-learn-wiring-'));
   const stub = await startModelStub();
   const runtime = new OpenClawRuntime(state, join(state, 'crew'));
