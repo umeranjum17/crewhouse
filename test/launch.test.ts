@@ -65,6 +65,16 @@ test('a foreign 403 is not crewd: the launcher falls through to its trouble page
   assert.equal(statSync(page).mode & 0o777, 0o600);
 });
 
+test('a foreign 403 with a JSON null body falls through to the trouble page instead of crashing', async (t) => {
+  const foreign = await answering(403, null);
+  t.after(() => foreign.close());
+  const fixture = install(true);
+  t.after(() => rmSync(fixture.root, { recursive: true, force: true }));
+  const code = await run(join(fixture.opt, 'launch.mjs'), [], { ...fixture.env, CREWHOUSE_PORT: String(foreign.port) });
+  assert.equal(code, 1);
+  assert.ok(existsSync(join(fixture.state, 'crewhouse', 'trouble.html')));
+});
+
 test('crewd answering with no person key in this state dir: the window opens the bare address, no crash', async (t) => {
   const crewd = await answering(403, { error: 'Open Crewhouse from this computer’s app menu.', code: 'no-authority' });
   t.after(() => crewd.close());
