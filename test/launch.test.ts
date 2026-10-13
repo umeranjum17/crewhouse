@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 
 const repo = join(import.meta.dirname, '..');
-const GATE = 'Open Crewhouse from this computer’s app menu.';
 const KEY = 'ab'.repeat(32);
 
 async function answering(status: number, body: object) {
@@ -36,7 +35,7 @@ function run(script: string, args: string[], env: Record<string, string>) {
 }
 
 test('crewd’s own gate 403 counts as up, so the launcher starts nothing and opens nothing', async (t) => {
-  const crewd = await answering(403, { error: GATE });
+  const crewd = await answering(403, { error: 'Open Crewhouse from this computer’s app menu.', code: 'no-authority' });
   t.after(() => crewd.close());
   const fixture = install(true);
   t.after(() => rmSync(fixture.root, { recursive: true, force: true }));

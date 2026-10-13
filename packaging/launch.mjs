@@ -14,10 +14,11 @@ const url = `http://127.0.0.1:${process.env.CREWHOUSE_PORT || 7711}`;
 // The helpers' tools install with the bundled npm, so it goes first on the PATH crewd and its tools see.
 const env = { ...process.env, PATH: `${join(root, 'node', 'bin')}:${process.env.PATH ?? ''}`, CREWHOUSE_PACKAGED: process.env.CREWHOUSE_PACKAGED ?? '1' };
 
-// Liveness only: crewd answers this unauthenticated probe with its gate's 403 and its own words; anything else is not crewd.
-const GATE = 'Open Crewhouse from this computer’s app menu.';
+// Liveness only: crewd answers this unauthenticated probe with its gate's 403 and its own code; anything else is not crewd.
+const { loadConfig } = await import(join(app, 'src', 'config.ts'));
+const stateDir = loadConfig().stateDir;
 const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) })
-  .then(async (r) => r.status === 403 && (await r.json().catch(() => ({}))).error === GATE, () => false);
+  .then(async (r) => r.status === 403 && (await r.json().catch(() => ({}))).code === 'no-authority', () => false);
 // CREWHOUSE_NO_SERVICE=1 (tests): never touch the login services of whoever runs this.
 const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
 
@@ -59,8 +60,8 @@ if (!(await up())) {
     if (process.argv.includes('--no-open')) { console.error(`Crewhouse didn't start; see ~/.local/state/crewhouse/crewd.log`); process.exit(1); }
     const page = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'trouble.html');
     mkdirSync(dirname(page), { recursive: true });
-    const keyFile = await import(join(app, 'src', 'config.ts')).then(({ loadConfig }) => join(loadConfig().stateDir, 'person.key'), () => null);
-    const key = keyFile && existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '';
+    const keyFile = join(stateDir, 'person.key');
+    const key = existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '';
     rmSync(page, { force: true });
     writeFileSync(page, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crewhouse</title>
@@ -98,6 +99,5 @@ p{margin:0 0 1rem;color:var(--ink2)}
 }
 
 if (!process.argv.includes('--no-open')) {
-  const { loadConfig } = await import(join(app, 'src', 'config.ts'));
-  show(`${url}/#person=${readFileSync(join(loadConfig().stateDir, 'person.key'), 'utf8')}`);
+  show(`${url}/#person=${readFileSync(join(stateDir, 'person.key'), 'utf8')}`);
 }
