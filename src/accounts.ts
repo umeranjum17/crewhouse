@@ -82,8 +82,7 @@ export class Accounts {
     return this.excluded.has(account);
   }
 
-  /** Start the engine's sign-in for the person's account; the wizard's steps become the card's words (`via:
-   *  'key'` waits for a pasted plan key the kit's own choice saves instead). */
+  /** Start the engine's sign-in; the wizard's steps become the card's words (`via: 'key'` waits for a pasted plan key instead). */
   async login(account: string, via: 'browser' | 'code' | 'key' = 'browser', fresh = false) {
     if (!PROVIDERS[account]) throw Object.assign(new Error('no such AI account'), { status: 404 });
     if (this.running.has(account)) return this.view(account);
