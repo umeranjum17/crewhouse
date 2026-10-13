@@ -3,7 +3,7 @@
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
 import { DeviceLink, LinkError, browserDeviceStore, pairWithCode, type DeviceGrant } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
-import { readTyped } from './typed.ts';
+import { NO_COMPUTER, NO_RELAY, readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
 import { setBadge, turnOffNotifications } from './pwa.ts';
 
@@ -25,13 +25,13 @@ export async function pair(text: string, onWords: (w: string) => void) {
   let grant: DeviceGrant;
   // A relay that is off fails the fetch itself ('Failed to fetch'), so the person gets the app's words instead.
   if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short).catch((e) => {
-    throw e instanceof TypeError ? new Error("Could not reach your computer's relay. Check it is on and try again.") : e;
+    throw e instanceof TypeError ? new Error(NO_RELAY) : e;
   }), t.code, o);
   // The 12-letter code dials this page's own address: the computer's link serves the app (`./crewhouse phones web`), and
   // an https page may dial only wss. Off the computer's network that gets through only with the relay's code; a wrong
   // host fails the handshake, so any other page loses nothing.
   else grant = await pairWithCode(`${location.origin.replace(/^http/, 'ws')}/link`, t.code, o).catch((e) => {
-    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the relay code your computer shows if it has one, or scan the QR on your computer instead.`) : e;
+    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(NO_COMPUTER) : e;
   });
   await store.save(grant);
 }

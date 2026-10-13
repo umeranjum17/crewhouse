@@ -19,6 +19,7 @@ import { startRelay } from '../relay/main.ts';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
 import { pair } from '../web/src/link.ts';
+import { NO_COMPUTER } from '../web/src/typed.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -143,11 +144,11 @@ test('a mistyped 12-letter code says it has a typo, not that it is cut off', asy
   await assert.rejects(pair('BCDF-GHJK-MNP1', () => {}), { message: 'That code has a typo. Check the 12 letters on your computer and try again.' });
 });
 
-test('a 12-letter code the computer cannot be reached at names the relay code or the QR as the next step', async () => {
+test('a 12-letter code the computer cannot be reached at says to scan the QR, in the words the phone uses too', async () => {
   // The page's own origin is the computer's link (web/src/link.ts `pair`): nothing listens on this one.
   Object.assign(globalThis, { location: new URL('http://127.0.0.1:1/') });
   try {
-    await assert.rejects(pair('BCDF-GHJK-MNPQ', () => {}), { message: /^.+ On another network\? Paste the relay code your computer shows if it has one, or scan the QR on your computer instead\.$/ });
+    await assert.rejects(pair('BCDF-GHJK-MNPQ', () => {}), { message: NO_COMPUTER });
   } finally {
     delete (globalThis as { location?: unknown }).location;
   }

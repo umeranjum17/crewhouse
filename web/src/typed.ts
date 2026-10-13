@@ -11,6 +11,8 @@ export type Typed =
 const CODES = 18; // the relay's short code (6) then link's pairing code (12)
 const MISSING = 'That code is missing a part. Copy the whole code from your computer, then try again.';
 const TYPO = 'That code has a typo. Check the 12 letters on your computer and try again.';
+export const NO_COMPUTER = 'Your phone could not find your computer on this Wi-Fi. Scan the QR on your computer instead.';
+export const NO_RELAY = "Could not reach your computer's relay. Check it is on and try again.";
 
 // A dotted host with an optional port: the only bare host readTyped takes back as https://host (the rest keep their scheme).
 const HOST = /^([a-z0-9-]+\.)+[a-z0-9-]+(:\d+)?$/i;

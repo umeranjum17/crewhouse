@@ -2,7 +2,7 @@
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
 import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
-import { readTyped } from '../../web/src/typed.ts';
+import { NO_COMPUTER, NO_RELAY, readTyped } from '../../web/src/typed.ts';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
@@ -58,7 +58,9 @@ export async function pairTypedCode(text: string, onWords: (w: string) => void):
   const t = readTyped(text);
   if (t.kind === 'unknown') throw new Error(t.words);
   const o = { name: (Device.deviceName || Device.modelName || 'Phone').slice(0, 40), onWords };
-  const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short), t.code, o);
+  const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short).catch((e) => {
+    throw e instanceof TypeError ? new Error(NO_RELAY) : e;
+  }), t.code, o);
   await store.save(g);
   return g;
 }
@@ -69,18 +71,17 @@ export async function pairTypedCode(text: string, onWords: (w: string) => void):
  *  withdraw its codes. */
 async function pairOnWifi(code: string, o: { name: string; onWords: (w: string) => void }): Promise<Grant> {
   const found = await scan({ type: 'crewhouse', protocol: 'tcp', domain: 'local.', ms: 3000 }).catch(() => []);
-  let last: unknown = new Error("Couldn't find your computer on this Wi-Fi. Join the same Wi-Fi as your computer and try again, or scan the QR on your computer instead.");
+  let wrong: LinkError | null = null; // "didn't match" says more than "can't reach"
   for (const s of found) {
     const urls = new Set([s.txt.url, ...s.addresses.filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).map((a) => `ws://${a}:${s.port}/link`)]);
     for (const url of [...urls].filter((u) => u?.startsWith('ws://'))) {
       try { return await pairWithCode(url, code, o); } catch (e) {
         if (!(e instanceof LinkError) || !['unreachable', 'timeout', 'wrong-code'].includes(e.code)) throw e; // a dropped address times out
-        if (!(last instanceof LinkError && last.code === 'wrong-code')) last = e; // "didn't match" says more than "can't reach"
-        if (e.code === 'wrong-code') break;
+        if (e.code === 'wrong-code') { wrong = e; break; }
       }
     }
   }
-  throw last;
+  throw wrong ?? new Error(NO_COMPUTER);
 }
 
 /** The live link, for a bot's screen: its signaling rides a stream on it (src/link.ts `desktop`). */
