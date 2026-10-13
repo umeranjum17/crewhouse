@@ -14,7 +14,8 @@ What the relay can and can't see:
 - **Metadata:** which computers are registered, when phones connect to them, and browsers' push addresses.
 
 There is no hosted Crewhouse relay, and the app has no relay address built in. You run your own and set it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
-`CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off.
+`CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off. A cloud machine whose provider fronts the relay at another
+origin also sets `CREWHOUSE_RELAY_PUBLIC=https://provider.example` at install; phones use that origin, and Settings relay changes keep it.
 
 ## Without Tailscale's servers: Headscale
 

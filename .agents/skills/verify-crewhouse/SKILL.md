@@ -140,6 +140,12 @@ POST without authority. Wait for its recorded shell result, then witness denial 
 unchanged ask, rather than waiting for the old success event. Never send real mail.
 This is API-only proof: no changed screen, screenshots or motion required.
 
+## Cloud public relay address
+
+See [Public relay pairing](features/relay-public.md): real crewd on the stub engine dials a private relay,
+while its offer and typed code advertise a separate public proxy. The kit's phone side resolves and pairs
+through that proxy, reads the public route and gets a finished Chief turn. This is backend/API-only proof.
+
 ## Review evidence (fleet standard)
 
 Every user-visible change carries its own proof, so no one has to ask for it twice. On

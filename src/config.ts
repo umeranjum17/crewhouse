@@ -19,6 +19,7 @@ export interface Config {
   /** A relay the person runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
    *  Settings, Phones overrides it. */
   relay: string;
+  relayPublic: string;
   /** 'openclaw' for the real engine, 'stub' for tests: the scripted model, no quota. */
   engine: 'openclaw' | 'stub';
   /** Max concurrent bot runs. */
@@ -34,6 +35,11 @@ function envPath(name: string, fallback: string): string {
   return v && v.trim() ? resolve(v.trim().replace(/^~(?=\/|$)/, homedir())) : fallback;
 }
 
+export function relayOrigin(value: string | null): string | null {
+  if (value && (!URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });
+  return value && new URL(value).origin;
+}
+
 export function loadConfig(): Config {
   const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state');
   return {
@@ -45,6 +51,7 @@ export function loadConfig(): Config {
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
     linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? 7712),
     relay: process.env.CREWHOUSE_RELAY?.trim() ?? '',
+    relayPublic: relayOrigin(process.env.CREWHOUSE_RELAY_PUBLIC?.trim() || null) ?? '',
     engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'openclaw',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY

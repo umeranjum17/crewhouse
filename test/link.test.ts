@@ -5,10 +5,13 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { createServer as http1, request as http1Request } from 'node:http';
-import { createServer, type AddressInfo } from 'node:net';
+import { connect, createServer, type AddressInfo, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { DeviceLink, pairWithOffer, type DeviceGrant, type LinkStatus, parseOffer } from '@byokit/pair';
+import { DeviceLink, pairWithCode, pairWithOffer, type DeviceGrant, type LinkStatus, parseOffer } from '@byokit/pair';
+import { findHost } from '@byokit/relay/device';
+import { startRelay } from '../relay/main.ts';
+import { readTyped } from '../web/src/typed.ts';
 import { Link, NEWS } from '../src/link.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
@@ -145,9 +148,10 @@ const port = await free();
 const linkPort = await free();
 const base = `http://127.0.0.1:${port}`;
 let pushUrl = '';
+let relayPublic = '';
 const startDaemon = () => spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], {
   env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '3000', CREWHOUSE_HOLD_MS: '5000', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: String(linkPort),
-    CREWHOUSE_PUSH_URL: pushUrl, CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
+    CREWHOUSE_PUSH_URL: pushUrl, CREWHOUSE_RELAY_PUBLIC: relayPublic, CREWHOUSE_LINK_HOST: '127.0.0.1', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 let daemon = startDaemon();
@@ -394,7 +398,7 @@ test('a direct typed code and exact local CLI words pair once', async () => {
   assert.match(cli('code'), /Works once; expires/);
 });
 
-test('the relay address: none built in, the family can set their own, and phones cannot', async () => {
+test('the relay address: local dial, public offers and typed phone pairing, with no hosted default', async (t) => {
   await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const relay = async (url?: unknown, headers?: Record<string, string>) => (await http('PUT', '/api/phones/relay', { url }, headers));
   assert.equal((await http('GET', '/api/phones/link')).body.relay, '', 'no relay unless the family sets one');
@@ -402,6 +406,72 @@ test('the relay address: none built in, the family can set their own, and phones
   assert.equal((await relay('ftp://nope')).status, 400);
   assert.equal((await relay('wss://elsewhere.example', {})).status, 403, 'only this computer changes it');
   assert.deepEqual((await relay(null)).body.relay, '', 'back to the default');
+
+  const local = await startRelay({ port: 0, dataDir: join(root, 'relay'), ownerToken: 'lab-owner' });
+  // A disposable provider-like public port forwards HTTP and WebSocket bytes to the same local relay.
+  const sockets = new Set<Socket>();
+  let publicConnections = 0;
+  const front = createServer((socket) => {
+    publicConnections++;
+    sockets.add(socket);
+    const target = connect((local.server.address() as AddressInfo).port, '127.0.0.1');
+    const close = () => { sockets.delete(socket); socket.destroy(); target.destroy(); };
+    socket.on('error', close).on('close', close);
+    target.on('error', close);
+    socket.pipe(target).pipe(socket);
+  });
+  t.after(async () => {
+    await relay(null);
+    for (const s of sockets) s.destroy();
+    await new Promise<void>((r) => front.close(() => r()));
+    await local.close();
+  });
+  await new Promise<void>((r) => front.listen(0, '127.0.0.1', r));
+  const publicUrl = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
+  relayPublic = publicUrl;
+  const exited = new Promise((r) => daemon.once('exit', r));
+  daemon.kill();
+  await exited;
+  daemon = startDaemon();
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
+  const invitation = await fetch(`${local.url}/relay/v1/enrolments`, { method: 'POST', headers: { authorization: 'Bearer lab-owner' }, body: '{}' });
+  assert.equal(invitation.status, 201);
+  const configured = await http('PUT', '/api/phones/relay', { url: local.url, enrol: (await invitation.json()).token });
+  assert.deepEqual([configured.status, configured.body.relay, configured.body.relayPublic], [200, local.url, publicUrl]);
+  await until(async () => (await http('GET', '/api/phones/link')).body.relayStatus === 'online');
+  assert.equal(publicConnections, 0, 'crewd registers by the local address, never by the public proxy');
+  const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
+  const publicLink = offer.urls.find((u: string) => u.startsWith(publicUrl.replace(/^http/, 'ws')));
+  assert.ok(publicLink, 'the advertised offer carries the public link');
+  assert.ok(!offer.urls.some((u: string) => u.startsWith(local.url.replace(/^http/, 'ws'))), 'the loopback relay dial address is not advertised');
+  assert.deepEqual(parseOffer(offer.qr).urls, offer.urls, 'the QR carries the same public address');
+  const typed = (await http('POST', '/api/phones/code', { role: 'control' })).body;
+  assert.equal(typed.relay, publicUrl, 'the single typed code names the public origin');
+  const code = readTyped(A.phoneTyped(typed));
+  assert.equal(code.kind, 'relay');
+  if (code.kind !== 'relay') throw new Error('expected a relay code');
+  const resolved = await findHost(code.base, code.short);
+  assert.equal(resolved, publicLink, 'phone-side findHost resolves through the public proxy');
+  let words = '';
+  const paired = pairWithCode(resolved, code.code, { name: 'Umer cloud phone', onWords: (w) => { words = w; } });
+  const asking = await until(async () => (await http('GET', '/api/phones/pending')).body.find((a: any) => a.name === 'Umer cloud phone'));
+  assert.equal(asking.words, words, 'both ends show the same Noise verification words');
+  assert.equal((await http('POST', '/api/phones/answer', { id: asking.id, yes: true })).status, 200);
+  const grant = await paired;
+  assert.ok(grant.urls.includes(publicLink));
+  const phone = open(grant);
+  t.after(() => phone.link.stop());
+  const reach = await phone.req('GET', '/api/reach', { via: 'relay' });
+  assert.equal(reach.status, 200);
+  assert.ok(reach.body.urls.includes(publicLink), 'the paired phone learns the public route too');
+  assert.equal((await phone.req('PUT', '/api/phones/relay', { url: local.url })).status, 403, 'public routing does not grant phone admin');
+  const posted = await phone.req('POST', '/api/bots/chief/messages', { text: 'Hello from Umer on the cloud link' });
+  assert.equal(posted.status, 200);
+  await until(async () => (await phone.req('GET', '/api/bots/chief')).body.tasks.some((job: any) => job.id === posted.body.task && job.state === 'done'));
+  assert.ok(publicConnections > 0, 'the phone really used the public proxy');
+  console.log(JSON.stringify({ proof: 'relayPublic', local: local.url, public: publicUrl, advertised: publicLink, typedResolved: resolved, phone: 'paired', chief: 'done', engine: 'stub' }));
+  const saved = await relay(local.url);
+  assert.equal(saved.body.relayPublic, publicUrl, 'a Settings relay save keeps the install-time public origin');
 });
 
 test('a bot\'s screen over the link: a watch-only phone may open it, and crewd answers as on the computer\'s own socket', async () => {
