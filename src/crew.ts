@@ -6,7 +6,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
-import { Desktops, browserBin, missing as desktopMissing, type Watcher } from './desktop.ts';
+import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS } from './connections.ts';
 import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
@@ -280,6 +280,7 @@ export class Crew {
     }
     if (!this.person().onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null);
     this.timer = setInterval(() => this.tick(), 1500);
+    probeEngine();
     this.recover();
     // A cold boot replays the sleep line: the last tick survived in settings, so a gap still names the
     // missed routines once and starts wake chores, on this computer or a cloud one.

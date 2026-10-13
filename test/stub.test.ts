@@ -13,7 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import * as A from '../web/src/adapter.ts';
 import { startServer } from '../src/server.ts';
-import { loaderRefused, missing, readiness } from '../src/desktop.ts';
+import { missing, probeEngine } from '../src/desktop.ts';
 
 const root = temp('crewhouse-test');
 // A port the OS says is free, not a random guess that another run may hold.
@@ -153,8 +153,7 @@ test('desktop setup refuses a loader failure in doctor, the tool kit and the liv
       assert.match(out.stdout, new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
       assert.doesNotMatch(out.stdout, /desklink engine are ready|\nReady\./);
       assert.match(out.stdout, /Computer \(desklink\).*missing system library/, 'the kit row uses the same runtime check');
-      await readiness();
-      assert.equal(loaderRefused(), true);
+      assert.equal(probeEngine().refused, true);
       assert.match(missing().join('\n'), new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}`));
       const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/state`, {
         headers: { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` },
