@@ -3,10 +3,8 @@
 // Answers are short TOON (`name[N]{fields}:` then rows). The gate (src/policy.ts) reads the command: looking is free, adding and moving ask, cancelling asks as a delete.
 import { createHash } from 'node:crypto';
 import { tool } from './engine.ts';
-
 /** Google Calendar's REST API; its events scope is the one a Calendar connection already has. */
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
-
 const HELP = [
   'calendar                      today, and what is next',
   'calendar week [--from <day>]  seven days of events',
@@ -17,10 +15,8 @@ const HELP = [
   'calendar cancel <id>',
   '<day> is YYYY-MM-DD, today or tomorrow; <when> is a <day> alone (all day) or "<day> HH:MM", local time',
 ];
-
 type Event = { id: string; start: Date; end: Date; allDay: boolean; title: string; where: string };
 type Token = () => Promise<string | null>;
-
 const pad = (n: number) => String(n).padStart(2, '0'), ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`, addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes()), plain = (s: unknown, n = 80) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 /** "2026-10-03", "today", "tomorrow", optionally followed by " HH:MM" or "THH:MM", in this computer's time zone. */
@@ -33,23 +29,19 @@ export function parseWhen(s: string): { at: Date; allDay: boolean } | null {
   if (Number.isNaN(at.getTime()) || (m[2] && (Number(m[2]) > 23 || Number(m[3]) > 59))) return null;
   return { at, allDay: !m[2] };
 }
-
 export function whenOf(e: Pick<Event, 'start' | 'end' | 'allDay'>) {
   const day = `${e.start.toLocaleDateString('en-GB', { weekday: 'short' })} ${ymd(e.start)}`;
   return e.allDay ? `${day} (all day)` : `${day} ${hm(e.start)}-${hm(e.end)}`;
 }
-
 /** A TOON table; a value with a comma, quote or leading space is quoted. */
 export function table(name: string, fields: string[], rows: Record<string, string | number>[]) {
   const cell = (v: string | number) => (/[,"\\]|^\s|\s$|^$/.test(String(v)) ? JSON.stringify(v) : v);
   return [`${name}[${rows.length}]{${fields.join(',')}}:`, ...rows.map((r) => '  ' + fields.map((f) => cell(r[f] ?? '')).join(','))].join('\n');
 }
-
 const toEvent = (e: any): Event => {
   const allDay = !e.start?.dateTime, start = allDay ? parseWhen(e.start?.date ?? '')?.at ?? new Date(NaN) : new Date(e.start.dateTime), end = allDay ? parseWhen(e.end?.date ?? '')?.at ?? addDays(start, 1) : new Date(e.end?.dateTime ?? start);
   return { id: String(e.id), start, end, allDay, title: plain(e.summary) || 'Busy', where: plain(e.location, 60) };
 };
-
 async function call(token: Token, method: string, path: string, body?: object) {
   const t = await token();
   if (!t) throw new Error('Google Calendar is not connected any more. Ask the person to connect it again (crew_connect).');
@@ -61,14 +53,16 @@ async function call(token: Token, method: string, path: string, body?: object) {
   if (!res.ok) throw new Error(`Google Calendar said ${res.status}. Try again in a moment.`);
   return res.status === 204 ? {} : res.json() as Promise<any>;
 }
-
 /** Events between two times, soonest first, cancelled ones left out. */
 export async function events(token: Token, from: Date, to: Date, extra: Record<string, string> = {}) {
   const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50', ...extra });
-  const { items = [] } = await call(token, 'GET', `?${q}`);
-  return (items as any[]).filter((e) => e.status !== 'cancelled').map(toEvent);
+  const items: any[] = []; let page: string | undefined;
+  do {
+    if (page) q.set('pageToken', page);
+    const out = await call(token, 'GET', `?${q}`); items.push(...(out.items ?? [])); page = out.nextPageToken;
+  } while (page);
+  return items.filter((e) => e.status !== 'cancelled').map(toEvent);
 }
-
 const span = (at: Date, allDay: boolean, end: Date) => (allDay ? { start: { date: ymd(at) }, end: { date: ymd(end) } } : { start: { dateTime: at.toISOString() }, end: { dateTime: end.toISOString() } });
 
 /** `--name value` options, and the words left over. */
@@ -80,7 +74,6 @@ export function options(args: string[]) {
   }
   return { o, rest };
 }
-
 export async function runCalendar(token: Token, args: string[]): Promise<string> {
   const [cmd = 'today', ...more] = args;
   const { o, rest } = options(more);
@@ -142,7 +135,6 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
   }
   return bad(`no command "${cmd}"`);
 }
-
 export const calendarTool = (token: Token) =>
   tool('calendar', "The person's own Google Calendar (calendar-axi): see the day or week, find free time, add, move or cancel events. Pass the command's arguments as a list, without the program name.",
     { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },

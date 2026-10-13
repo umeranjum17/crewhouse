@@ -1,13 +1,10 @@
 // Plain-words schedules: "every Monday 9:00", "weekdays at 8am", "every day 7:30pm", "every 2 hours".
 // Times are the computer's local time, so a routine keeps its wall-clock hour across daylight saving.
-
 /** Either a clock time on some weekdays (0 = Sunday), or a fixed interval in minutes. */
 export type Schedule = { days: number[]; at: number; guessed?: boolean } | { every: number };
-
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const bad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a schedule; try "every Monday 9:00", "weekdays at 8am" or "every 2 hours"`), { status: 400 });
 const whenBad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a time; try "Friday 9:00", "tomorrow 8am" or "in 20 minutes"`), { status: 400 });
-
 const NUMS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'], numOf = (w: string) => NUMS.indexOf(w) + 1;
 
 export function parseSchedule(text: string): Schedule {
@@ -57,7 +54,6 @@ export function parseSchedule(text: string): Schedule {
   // "every Monday" means the start of the working day; `guessed` says the words never named a time, so a card asks about it.
   return { days: [...days].sort(), at: at ?? tod ?? 9 * 60, guessed: at === undefined && tod === undefined };
 }
-
 export const hhmm = (at: number) => new Date(2000, 0, 1, Math.floor(at / 60), at % 60).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 
 /** The schedule back in plain words: "Every Monday at 9:00 am". */
@@ -68,10 +64,8 @@ export function describe(s: Schedule) {
     : `Every ${s.days.map((x) => NAMES[x]).join(', ').replace(/, ([^,]*)$/, ' and $1')}`;
   return `${days} at ${hhmm(s.at)}`;
 }
-/** What a watch or quiet check-in waits for, from a task phrased the way crew_routine asks ("tell me if the price drops
- *  below $900"): "Tells you if the price drops below $900". '' when the task names no condition. */
+/** What a watch or quiet check-in waits for, from a task phrased the way crew_routine asks ("tell me if the price drops  below $900"): "Tells you if the price drops below $900". '' when the task names no condition. */
 export const looksFor = (task = '') => (/^(?:please\s+)?(?:tell|let|alert|notify|warn)\s+(?:me|the person)(?:\s+know)?\s+((?:if|when|once|as soon as)\s.+?)[.!]?$/i.exec(String(task).trim().split(/\n|(?<=[.!?])\s/)[0])?.[1] ?? '').replace(/^./, (c) => `Tells you ${c}`);
-
 /** The first run in words, naming its day unless it is today: "Thu 8:00 am", so it never reads as some other day. */
 export function firstRun(at: number, now = Date.now()) {
   const d = new Date(at);
@@ -80,7 +74,6 @@ export function firstRun(at: number, now = Date.now()) {
   return `${day} ${hhmmOf(d)}`;
 }
 const hhmmOf = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
-
 /** The first run strictly after `after` (epoch ms). */
 export function nextRun(s: Schedule, after: number) {
   if ('every' in s) return after + s.every * 60_000;
@@ -91,29 +84,27 @@ export function nextRun(s: Schedule, after: number) {
   }
   throw new Error('unreachable: a schedule always has a day');
 }
-
-/** The moment a one-off reminder is due, in the person's own words: "in 20 minutes" counts from now, and "today",
- *  "tomorrow" and a weekday name ("friday 9:00") are the same clock the routines keep. */
+/** The moment a one-off reminder is due, in the person's own words: "in 20 minutes" counts from now, and "today",  "tomorrow" and a weekday name ("friday 9:00") are the same clock the routines keep. */
 export function reminderAt(text: string, now = Date.now()) {
   const day = (n: number) => DAYS[(new Date(now).getDay() + n) % 7], s = String(text).toLowerCase().trim().replace(/\btomorrow\b/, () => day(1)).replace(/\btoday\b/, () => day(0)), rel = /^in\s+(\d{1,4})\s*(minutes?|mins?|hours?|hrs?)$/.exec(s);
   if (rel) return now + Number(rel[1]) * (rel[2][0] === 'h' ? 60 : 1) * 60_000;
   try { return nextRun(parseSchedule(s.replace(/^(at|on)\s+/, '')), now); } catch { throw whenBad(text); }
 }
-
-/** A local event that starts a routine instead of (or as well as) a time: a file arriving in the helper's
- *  inbox, or the computer waking. The inbox is fixed per helper, so the words never carry a path. */
-export type Trigger = { file: true } | { wake: true };
-
-const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
+/** Event starts use the existing connections; file inboxes stay fixed per helper. */
+export type Trigger = { file: true } | { wake: true } | { mail: true; from: string; subject: string } | { calendar: number };
+const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when an email from the bank arrives", "10 minutes before each meeting", "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
 
 export function parseTrigger(text: string): Trigger {
-  const s = String(text).toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = String(text).replace(/\s+/g, ' ').trim(), s = words.toLowerCase();
+  const calendar = /^(?:when (?:a |each |every )?(?:calendar event|meeting) starts|(\d{1,4}) minutes? before (?:each|every|a) (?:meeting|calendar event))$/i.exec(words);
+  if (calendar && Number(calendar[1] ?? 0) <= 1440) return { calendar: Number(calendar[1] ?? 0) };
+  const mail = /^when (?:a new |an? |new )?(?:email|mail)(?: from (.+?))?(?: (?:with (?:the )?subject|about) (.+?))? (?:arrives|arrive)$/i.exec(words);
+  if (mail) return { mail: true, from: (mail[1] ?? '').replace(/^the /i, ''), subject: mail[2] ?? '' };
   if (!s.startsWith('when ')) throw triggerBad(text);
   if (/\b(wake|wakes|woke|waking)\b/.test(s) && /\b(computer|machine|laptop|mac|pc)\b/.test(s)) return { wake: true };
   if (/\b(file|files|photo|photos|picture|pictures|receipt|receipts|attachment|document)\b/.test(s) &&
     /\b(arrive|arrives|arriving|land|lands|landing|drop|dropped|added|appear|appears|show|shows)\b/.test(s)) return { file: true };
   throw triggerBad(text);
 }
-
 /** The trigger back in plain words; `who` is the helper's display name, whose inbox the file trigger watches. */
-export const describeTrigger = (t: Trigger, who: string) => 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';
+export const describeTrigger = (t: Trigger, who: string) => 'mail' in t ? `When an email${t.from ? ` from ${t.from}` : ''}${t.subject ? ` with subject ${t.subject}` : ''} arrives` : 'calendar' in t ? t.calendar ? `${t.calendar} minutes before each meeting` : 'When a calendar event starts' : 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';
