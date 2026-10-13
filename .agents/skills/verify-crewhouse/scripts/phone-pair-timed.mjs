@@ -7,7 +7,7 @@
 //                                [--serial <id>] [--base http://127.0.0.1:$PORT] [--cps 2] [--runs 1]
 //
 // Unlike phone-pair.mjs it never clears or reinstalls the app, so it runs on a real phone as the app stands: it starts
-// from the chooser ("Pair with a computer") or phone-only mode ("Use a computer", which keeps the phone's own key).
+// from "Where should I work?" ("On my computer") or phone-only mode ("Use a computer", which keeps the phone's own key).
 // --cps is keystrokes a second, one `input text` per letter, so typing time is a person's, not adb's paste.
 // The computer side is the real one: POST /api/phones/pair (the card's code) and POST /api/phones/answer (the card's
 // "Yes, the words match"). It does not forget the computer afterwards; the phone's Settings › Forget does that.
@@ -45,10 +45,10 @@ for (let run = 1; run <= RUNS; run++) {
   adb('shell', 'am', 'force-stop', PKG); // a cold start, so no half-typed box from an earlier try
   adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
   await sleep(3000);
-  // phone-only chat → chooser → Pair screen → the code box, whichever of those the app opens on
+  // phone-only chat → "Where should I work?" → Pair screen → the code box, whichever of those the app opens on
   for (let step = 0; ; step++) {
     if (step > 6) throw new Error('never reached the code box');
-    const n = await tapWhen(/^(Use a computer instead|Pair with a computer|Type a code)$/);
+    const n = await tapWhen(/^(Use a computer instead|On my computer|Pair with a computer|Type a code)$/);
     if ((n.text || n.desc) === 'Type a code') break;
     await sleep(800);
   }
