@@ -52,7 +52,7 @@ const { qrMatrix } = require('@byokit/ui-core');
 const adb = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8' }).trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const api = async (path, body) => {
-  const r = await fetch(`${BASE}${path}`, body ? { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(STATE, 'person.key'), 'utf8')}` }, body: JSON.stringify(body) } : undefined);
+  const r = await fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(STATE, 'person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
   const out = await r.json(); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out;
 };
 const shot = async (name) => { await new Promise((res, rej) => { const s = spawn('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p']); const out = []; s.stdout.on('data', (d) => out.push(d)); s.on('close', () => { writeFileSync(join(OUT, name), Buffer.concat(out)); res(); }); s.on('error', rej); }); return name; };

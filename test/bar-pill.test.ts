@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AddressInfo } from 'node:net';
 
@@ -10,6 +13,9 @@ const empty = { text: '', tooltip: '', class: 'quiet' };
 
 test('desktop bar reads only the owner and exposes counts, then clears stale status', async (t) => {
   const bot = (id: string, task: unknown) => ({ id, display: `Private ${id}`, template: 'scout', state: 'on', task });
+  const stateDir = await mkdtemp(join(tmpdir(), 'bar-pill-'));
+  const key = 'a'.repeat(64);
+  await writeFile(join(stateDir, 'person.key'), key);
   let state: unknown = {
     person: { id: 1 }, tasks: [], asks: [], events: [],
     bots: [bot('scout', { state: 'working', title: 'Private tax return' }), { ...bot('other', null), live: 'working' }],
@@ -18,6 +24,10 @@ test('desktop bar reads only the owner and exposes counts, then clears stale sta
   const server = createServer((req, res) => {
     assert.equal(req.url, '/api/state');
     assert.equal(req.headers['x-crewhouse-member'], undefined);
+    if (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${key}`) {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'forbidden' }));
+    }
     res.writeHead(code, { 'content-type': 'application/json', location: 'http://127.0.0.1:1/' });
     res.end(JSON.stringify(state));
   });
@@ -26,7 +36,7 @@ test('desktop bar reads only the owner and exposes counts, then clears stale sta
   const port = String((server.address() as AddressInfo).port);
   const run = async (value = port) => {
     const { stdout, stderr } = await exec(process.execPath, ['packaging/bar-pill.mjs'], {
-      env: { ...process.env, CREWHOUSE_PORT: value }, timeout: 5000,
+      env: { ...process.env, CREWHOUSE_PORT: value, CREWHOUSE_STATE_DIR: stateDir }, timeout: 5000,
     });
     assert.equal(stderr, '');
     assert.equal(stdout.trim().split('\n').length, 1);
@@ -43,6 +53,8 @@ test('desktop bar reads only the owner and exposes counts, then clears stale sta
   assert.deepEqual(await run(), empty, 'malformed snapshots clear the bar');
   for (const failure of [503, 302]) { code = failure; assert.deepEqual(await run(), empty); }
   assert.deepEqual(await run('7711/other'), empty, 'the port cannot redirect the request');
+  await writeFile(join(stateDir, 'person.key'), 'b'.repeat(64));
+  assert.deepEqual(await run(), empty, 'a stale key is refused');
   await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
   assert.deepEqual(await run(), empty, 'offline clears the bar');
 });

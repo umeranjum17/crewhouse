@@ -35,7 +35,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   Object.assign(cfg, { port: 0, host: '127.0.0.1', linkPort: 0, repoDir: parent });
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
+  const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
   await api('POST', '/api/onboard', { address: 'Umer' });
   assert.equal((await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' })).id, 'scout');
 

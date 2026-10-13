@@ -22,7 +22,7 @@ The Apps screen carries Herdr's own row under Plugins with three states.
 Preconditions: onboarded person; a `herdr` binary on crewd's PATH answering
 `status server --json` (a two-line shell script echoing `{"running":true}` is enough for the stub run).
 
-- **Row.** `curl -fsS "$B/api/herdr"` → `{"ready":true,"connected":true,...}`;
+- **Row.** `curl -fsS "${H[@]}" "$B/api/herdr"` → `{"ready":true,"connected":true,...}`;
   without the binary → `{"ready":false,...}` with the install line as `howto`.
 - **Hire.** `POST /api/bots/chief/messages` with
   `[tool crew_recruit {"template":"cto","name":"CTO"}]`; `/api/state` lists `cto`.

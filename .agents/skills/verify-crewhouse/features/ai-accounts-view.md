@@ -18,7 +18,7 @@ with no real sign-in anywhere.
 
 Preconditions: stub engine (no real sign-ins touched), except the explicitly authorized real-account check below.
 
-- **API.** `curl -fsS "$B/api/accounts"` → per-provider rows; on the stub, all providers but `grok` are ready, `grok` shows its sign-in state. Response carries no commands, paths, model or engine ids (the plain-words contract, `test/stub.test.ts`).
+- **API.** `curl -fsS "${H[@]}" "$B/api/accounts"` → per-provider rows; on the stub, all providers but `grok` are ready, `grok` shows its sign-in state. Response carries no commands, paths, model or engine ids (the plain-words contract, `test/stub.test.ts`).
 - **UI.** Browser → settings → AI accounts: the card shows each provider by name with a state; `eval` the card's `innerText` and check it against the machinery-word list (`test/ui.test.ts`'s vocabulary — relay, token, daemon, port… must not appear).
 - **Widths.** 1440 and 390 screenshots; at 320 record the card's actual wrap behavior with the longest provider row.
 

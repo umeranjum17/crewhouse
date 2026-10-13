@@ -155,7 +155,7 @@ after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function http(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -188,7 +188,7 @@ function open(grant: DeviceGrant) {
 }
 
 test('an unmarked old phone reads only the update notice; a marked current phone reads the crew and can act', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const phone = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Build check'));
   const live = new DatabaseSync(join(root, 'state', 'crew.db'));
   const ask = live.prepare("INSERT INTO asks (bot, kind, title, detail) VALUES ('chief', 'propose', 'Private question', '{}')").run().lastInsertRowid;
@@ -225,7 +225,7 @@ test('an unmarked old phone reads only the update notice; a marked current phone
 });
 
 test('pairing with a yes at the computer, grants, approvals from the phone, and removal', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   assert.equal(statSync(join(root, 'state', 'link.key')).mode & 0o777, 0o600, 'the link key is private to the owner');
   assert.deepEqual((await http('GET', '/api/phones')).body, [], 'docs/ui-contract.md: a list');
 
@@ -363,7 +363,7 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
 });
 
 test('a direct typed code and exact local CLI words pair once', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const cli = (...args: string[]) => execFileSync(join(import.meta.dirname, '..', 'crewhouse'), ['phones', ...args],
     { encoding: 'utf8', env: { ...process.env, CREWHOUSE_PORT: String(port), CREWHOUSE_STATE_DIR: join(root, 'state') } });
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
@@ -395,7 +395,7 @@ test('a direct typed code and exact local CLI words pair once', async () => {
 });
 
 test('the relay address: none built in, the family can set their own, and phones cannot', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const relay = async (url?: unknown, headers?: Record<string, string>) => (await http('PUT', '/api/phones/relay', { url }, headers));
   assert.equal((await http('GET', '/api/phones/link')).body.relay, '', 'no relay unless the family sets one');
   assert.equal((await relay('https://relay.example/ignored/path')).body.relay, 'https://relay.example', 'kept as an origin');
@@ -405,7 +405,7 @@ test('the relay address: none built in, the family can set their own, and phones
 });
 
 test('a bot\'s screen over the link: a watch-only phone may open it, and crewd answers as on the computer\'s own socket', async () => {
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Watcher');
   const w = open(grant);
   await until(async () => w.status() === 'online');
@@ -455,7 +455,7 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
   after(() => expo.close());
   pushUrl = `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`;
   daemon = startDaemon();
-  await until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const a = open(aGrant); const b = open(bGrant); const view = open(viewGrant);
   try {
     await until(async () => b.status() === 'removed');

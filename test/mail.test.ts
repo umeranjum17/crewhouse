@@ -101,9 +101,9 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
   const who = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ email: 'umer@sender.example', email_verified: true })); });
   await new Promise<void>(r => who.listen(0, '127.0.0.1', r)); identity = `http://127.0.0.1:${(who.address() as any).port}`;
   const server = await startServer(cfg, db, crew), base = `http://127.0.0.1:${(server.address() as any).port}`;
-  // Person authority (Main-slice #387): local non-GET /api calls carry the launcher's bearer, the way ./crewhouse open does.
+  // Person authority (Main-slice #387): local /api calls carry the launcher's bearer, the way ./crewhouse open does.
   const person = `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`;
-  const http = async (method: string, path: string, body?: object) => { const r = await real(base + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: method === 'GET' ? '' : person }, body: body && JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
+  const http = async (method: string, path: string, body?: object) => { const r = await real(base + path, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: person }, body: body && JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
   let phone: DeviceLink | undefined, view: DeviceLink | undefined;
   const pair = async (role: 'control' | 'view') => {
     const offer = await http('POST', '/api/phones/pair', { role });

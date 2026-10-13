@@ -24,7 +24,7 @@ const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', '
 });
 const base = `http://127.0.0.1:${port}`;
 const http = async (method: string, path: string, body?: unknown) => {
-  const response = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: response.status, body: await response.json() as any };
 };
 const until = async <T>(what: string, get: () => Promise<T | undefined | false>): Promise<T> => {
@@ -39,7 +39,7 @@ const until = async <T>(what: string, get: () => Promise<T | undefined | false>)
 after(() => daemon.kill());
 
 test('revoking a phone prevents its cached protected reply from being fetched again', async () => {
-  await until('Crewhouse ready', async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+  await until('Crewhouse ready', async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   const offer = (await http('POST', '/api/phones/pair', { role: 'control' })).body;
   const paired = pairWithOffer(offer.qr, { name: 'Revoked phone', onWords: () => {} });
   const asking = await until('pair request', async () => (await http('GET', '/api/phones/link')).body.asking.find((x: any) => x.name === 'Revoked phone'));

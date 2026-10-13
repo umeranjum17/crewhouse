@@ -137,9 +137,10 @@ import { loadConfig } from './src/config.ts';
 try {
   const c = loadConfig(), key = join(c.stateDir, 'person.key');
   if (!existsSync(key)) process.exit(1);
-  const r = await fetch(`http://${c.host}:${c.port}/api/state`);
+  const authority = readFileSync(key, 'utf8');
+  const r = await fetch(`http://${c.host}:${c.port}/api/state`, { headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` } });
   if (!r.ok) process.exit(1);
-  console.log(`http://${c.host}:${c.port}/#person=${readFileSync(key, 'utf8')}`);
+  console.log(`http://${c.host}:${c.port}/#person=${authority}`);
 } catch { process.exit(1); }
 NODE
     }

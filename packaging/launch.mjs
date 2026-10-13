@@ -3,7 +3,7 @@
 // First run also makes crewd start by itself at login (a systemd user service), so after a reboot it is simply there.
 //   --no-open   start and wait, but open no window (tests)
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -14,7 +14,12 @@ const url = `http://127.0.0.1:${process.env.CREWHOUSE_PORT || 7711}`;
 // The helpers' tools install with the bundled npm, so it goes first on the PATH crewd and its tools see.
 const env = { ...process.env, PATH: `${join(root, 'node', 'bin')}:${process.env.PATH ?? ''}`, CREWHOUSE_PACKAGED: process.env.CREWHOUSE_PACKAGED ?? '1' };
 
-const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok, () => false);
+// Liveness only: crewd answers this unauthenticated probe with its gate's 403 and its own code (or a 200 from a pre-gate build); anything else is not crewd.
+const { loadConfig } = await import(join(app, 'src', 'config.ts'));
+const stateDir = loadConfig().stateDir;
+const keyFile = join(stateDir, 'person.key');
+const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) })
+  .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({})))?.code === 'no-authority'), () => false);
 // CREWHOUSE_NO_SERVICE=1 (tests): never touch the login services of whoever runs this.
 const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
 
@@ -56,6 +61,8 @@ if (!(await up())) {
     if (process.argv.includes('--no-open')) { console.error(`Crewhouse didn't start; see ~/.local/state/crewhouse/crewd.log`); process.exit(1); }
     const page = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'trouble.html');
     mkdirSync(dirname(page), { recursive: true });
+    const key = existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '';
+    rmSync(page, { force: true });
     writeFileSync(page, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crewhouse</title>
 <style>
@@ -83,15 +90,14 @@ p{margin:0 0 1rem;color:var(--ink2)}
 <h1>Crewhouse didn't start</h1>
 <p class="lead">Give it another try, or restart your computer.</p>
 <p class="why"><b>What happened:</b> ${why}.</p>
-<a class="btn" href="${url}">Open Crewhouse again</a>
+<a class="btn" href="${url}${key ? `/#person=${key}` : ''}">Open Crewhouse again</a>
 <p class="mute">Still nothing? Open Crewhouse from your app menu.</p>
-</main>`);
+</main>`, { mode: 0o600 });
     show(`file://${page}`);
     process.exit(1);
   }
 }
 
 if (!process.argv.includes('--no-open')) {
-  const { loadConfig } = await import(join(app, 'src', 'config.ts'));
-  show(`${url}/#person=${readFileSync(join(loadConfig().stateDir, 'person.key'), 'utf8')}`);
+  show(existsSync(keyFile) ? `${url}/#person=${readFileSync(keyFile, 'utf8')}` : url);
 }

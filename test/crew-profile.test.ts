@@ -63,7 +63,7 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
   const server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = async (path: string, body: object, method = 'POST') => {
-    const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) });
     assert.equal(res.status, 200);
     return res.json();
   };
@@ -114,10 +114,10 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
       const parts = db.all('SELECT id, bot FROM tasks WHERE parent = ?', campaign.task);
       for (const part of parts.filter((p) => p.bot !== 'scout')) await settled(db, part.id);
       await holding(crew, 'scout');
-      assert.equal(A.cards(await (await fetch(base + '/api/state')).json()).length, 0, 'the campaign review waits for the last part to finish');
+      assert.equal(A.cards(await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json()).length, 0, 'the campaign review waits for the last part to finish');
       await release(crew, 'scout', 'Research finished with sources.');
       for (const part of parts) await settled(db, part.id);
-      const state = await (await fetch(base + '/api/state')).json();
+      const state = await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json();
       assert.equal(state.asks.length, 1, 'one existing draft card for both posts');
       const card = A.cards(state)[0];
       assert.equal(card.helper, 'chief', 'the person decides only through Chief');
@@ -126,7 +126,7 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
       assert.equal(card.campaign?.poster?.url, '/files/reel/poster.png');
       assert.equal(A.office(state).crew.find((h) => h.id === 'scribe')?.ask, undefined, 'no helper Needs-you badge for a draft');
       await api(`/api/asks/${card.id}/answer`, { answer });
-      const after = await (await fetch(base + '/api/state')).json();
+      const after = await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json();
       assert.equal(A.cards(after).length, 0, 'the approval card closes');
       const outcome = A.campaignOutcomes(after).at(-1)!;
       assert.equal(outcome.approved, answer === 'allow');
@@ -168,7 +168,7 @@ test('the record reads and writes through crewdâ€™s API', async () => {
   try {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const api = async (method: string, path: string, body?: object) => {
-      const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       return { status: res.status, body: await res.json() };
     };
     assert.equal((await api('GET', '/api/profile')).body.text, '');

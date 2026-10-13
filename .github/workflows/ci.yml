@@ -107,7 +107,7 @@ jobs:
           grep -q '^Exec=/opt/crewhouse/node/bin/node /opt/crewhouse/launch.mjs$' /usr/share/applications/crewhouse.desktop
       - run: CREWHOUSE_ENGINE=stub CREWHOUSE_PACKAGED=0 CREWHOUSE_NO_SERVICE=1 crewhouse-app --no-open
       - run: |
-          curl -fsS http://127.0.0.1:7711/api/state | grep -q '"person"'
+          curl -fsS -H 'x-crewhouse: 1' -H "Authorization: Bearer $(cat "${XDG_STATE_HOME:-$HOME/.local/state}/crewhouse/person.key")" http://127.0.0.1:7711/api/state | grep -q '"person"'
       - run: |
           curl -fsS http://127.0.0.1:7711/ | grep -qi '<html'
 

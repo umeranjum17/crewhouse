@@ -39,7 +39,7 @@ after(() => daemon.kill());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = { 'x-crewhouse': '1' }) {
-  const res = await fetch(base + path, { method, headers: { authorization: method === 'GET' ? '' : `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, body: await res.json() };
 }
 async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): Promise<T> {
@@ -50,7 +50,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
 const finished = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
-const ready = () => until(async () => (await fetch(`${base}/api/state`).catch(() => null))?.ok);
+const ready = () => until(async () => (await api('GET', '/api/state').catch(() => null))?.body.person);
 // Whatever crewd sends, nothing a person reads may show a path, a command, an engine name or a percentage.
 const FORBIDDEN = /fc-list|2>&1|\| ?head|\bBash\b|claude|anthropic|codex|sonnet|haiku|opus|gpt-|mcp__|\/home\/|~\/|files\/|\.md\b|\bpane\b|terminal|\d+ ?%|a command|ffmpeg|magick|\bls -la\b|```|`|\besc\b|529/i;
 

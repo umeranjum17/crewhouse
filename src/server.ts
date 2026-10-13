@@ -149,7 +149,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
 
       if (p.startsWith('/api/')) {
         // The public header prevents browser CSRF; it never establishes person authority.
-        if (req.method !== 'GET' && (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`)) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu to make changes.' });
+        if (req.headers['x-crewhouse'] !== '1' || req.headers.authorization !== `Bearer ${authority}`) return send(res, 403, { error: 'Open Crewhouse from this computer’s app menu.', code: 'no-authority' });
         // Phones: pairing and grants answer on this computer only, never over the phone link.
         if (p === '/api/phones' && req.method === 'GET') return send(res, 200, link.devices());
         if (p === '/api/phones/link' && req.method === 'GET') return send(res, 200, link.status());
@@ -452,8 +452,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   server.on('upgrade', (req, socket, head) => {
     const origin = req.headers.origin;
     if (!localHost(req.headers.host) || (origin && !localHost(new URL(origin).host)) || !req.url?.startsWith('/ws')) return socket.destroy();
+    if (req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     const bot = /^\/ws\/desktop\/([a-z0-9-]+)$/.exec(req.url)?.[1];
-    if (bot && req.headers['sec-websocket-protocol'] !== `crewhouse-person.${authority}`) return socket.destroy();
     if (bot) return desk.handleUpgrade(req, socket, head, (ws) => watch(ws, bot));
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
   });

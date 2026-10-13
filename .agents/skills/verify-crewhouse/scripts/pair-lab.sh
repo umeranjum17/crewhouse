@@ -23,7 +23,7 @@ case "${1:-}" in
     (cd "$REPO" && mask CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK_PORT" CREWHOUSE_LINK_HOST=127.0.0.1 \
       CREWHOUSE_RELAY="http://127.0.0.1:$RPORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
       node src/main.ts >"$LAB/crewd.log" 2>&1 & echo $! >"$LAB/crewd.pid")
-    wait_for "curl -fsS http://127.0.0.1:$PORT/api/state | grep -q person"
+    wait_for "curl -fsS -H x-crewhouse:1 -H \"Authorization: Bearer \$(cat '$LAB/state/person.key')\" http://127.0.0.1:$PORT/api/state | grep -q person"
     (cd "$REPO" && exec node .agents/skills/verify-crewhouse/scripts/serve-web.mjs web/dist >"$LAB/web.log" 2>&1 & echo $! >"$LAB/web.pid")
     wait_for "grep -q serving $LAB/web.log"
     WEB=$(grep -o 'http://[^ ]*' "$LAB/web.log")
