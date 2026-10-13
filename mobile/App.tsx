@@ -591,7 +591,7 @@ const pairWords = (e: any): string => {
   const m = String(e?.message ?? e ?? '');
   if (/isn't a pairing code/i.test(m)) return "That's not a Crewhouse code. Point the camera at the code on your computer, then try again.";
   if (/run out|expired/i.test(m)) return 'That code has run out. Show a new one on your computer, then try again.';
-  if (/copy the whole code|same Wi-Fi/i.test(m)) return m; // already said for the person
+  if (/copy the whole code|typo|same Wi-Fi/i.test(m)) return m; // already said for the person
   if ((Object.values(LINK_WORDS) as string[]).includes(m)) return m; // the link's own sentence for this exact failure
   if (/match|refus|wrong|no such|not found|unknown/i.test(m)) return "That code didn't match. Show a fresh one and try again.";
   if (/reach|network|timeout|address|relay|host/i.test(m)) return "Couldn't reach your computer. Check it's awake, then try again.";

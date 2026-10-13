@@ -1,6 +1,6 @@
 // The phone's end of the link: @byokit/pair's device side, its grant in secure storage, and the transport that
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
-import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, offerText, decodeOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
+import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from '../../web/src/typed.ts';
 import * as Device from 'expo-device';
@@ -53,12 +53,10 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
 }
 
 /** Typed instead of scanned: one box takes any code, and the person never types an address. The computer's 12-letter
- *  code is found on this Wi-Fi; a relay code names its relay inside itself (readTyped); an older computer's long
- *  envelope carries its addresses. */
+ *  code is found on this Wi-Fi; a relay code names its relay inside itself (readTyped). */
 export async function pairTypedCode(text: string, onWords: (w: string) => void): Promise<Grant> {
   const t = readTyped(text);
-  if (t.kind === 'direct') return pair(offerText(decodeOffer(t.text)), onWords);
-  if (t.kind === 'unknown') throw new Error('That code is missing a part. Copy the whole code from your computer, then try again.');
+  if (t.kind === 'unknown') throw new Error(t.words);
   const o = { name: (Device.deviceName || Device.modelName || 'Phone').slice(0, 40), onWords };
   const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short), t.code, o);
   await store.save(g);
@@ -71,7 +69,7 @@ export async function pairTypedCode(text: string, onWords: (w: string) => void):
  *  withdraw its codes. */
 async function pairOnWifi(code: string, o: { name: string; onWords: (w: string) => void }): Promise<Grant> {
   const found = await scan({ type: 'crewhouse', protocol: 'tcp', domain: 'local.', ms: 3000 }).catch(() => []);
-  let last: unknown = new Error("Couldn't find your computer on this Wi-Fi. Join the same Wi-Fi as your computer and try again, or scan the code instead.");
+  let last: unknown = new Error("Couldn't find your computer on this Wi-Fi. Join the same Wi-Fi as your computer and try again, or scan the QR on your computer instead.");
   for (const s of found) {
     const urls = new Set([s.txt.url, ...s.addresses.filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).map((a) => `ws://${a}:${s.port}/link`)]);
     for (const url of [...urls].filter((u) => u?.startsWith('ws://'))) {

@@ -138,3 +138,17 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
 test('a well-formed code whose relay cannot be reached says so in plain words and pairs nothing', async () => {
   await assert.rejects(pair('VBF8PJ-G4S7-KC97-H5GM@http://127.0.0.1:1', () => {}), { message: "Could not reach your computer's relay. Check it is on and try again." });
 });
+
+test('a mistyped 12-letter code says it has a typo, not that it is cut off', async () => {
+  await assert.rejects(pair('BCDF-GHJK-MNP1', () => {}), { message: 'That code has a typo. Check the 12 letters on your computer and try again.' });
+});
+
+test('a 12-letter code the computer cannot be reached at names the relay code or the QR as the next step', async () => {
+  // The page's own origin is the computer's link (web/src/link.ts `pair`): nothing listens on this one.
+  Object.assign(globalThis, { location: new URL('http://127.0.0.1:1/') });
+  try {
+    await assert.rejects(pair('BCDF-GHJK-MNPQ', () => {}), { message: /^.+ On another network\? Paste the relay code your computer shows if it has one, or scan the QR on your computer instead\.$/ });
+  } finally {
+    delete (globalThis as { location?: unknown }).location;
+  }
+});

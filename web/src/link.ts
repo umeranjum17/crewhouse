@@ -1,7 +1,7 @@
 // The installed web app's end of the link, as the phone's (mobile/src/link.ts): @byokit/pair's device side, its grant
 // sealed in this browser's IndexedDB. Paired, the link carries every call, the live events and a bot's screen
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
-import { DeviceLink, LinkError, browserDeviceStore, decodeOffer, offerText, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/pair';
+import { DeviceLink, LinkError, browserDeviceStore, pairWithCode, type DeviceGrant } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
@@ -16,29 +16,25 @@ export async function resume() {
   if (grant) start(grant);
 }
 
-/** The paste box: the computer's 12-letter code, a relay code (`SHORT-CODE@relay`) or an older direct envelope, split by
- *  shape (readTyped). Resolves once the person at the computer says yes, with the grant saved; `onWords` gets the two
- *  words to check meanwhile. */
+/** The paste box: the computer's 12-letter code or a relay code (`SHORT-CODE@relay`), split by shape (readTyped). Resolves
+ *  once the person at the computer says yes, with the grant saved; `onWords` gets the two words to check meanwhile. */
 export async function pair(text: string, onWords: (w: string) => void) {
   const t = readTyped(text.trim());
   const o = { name: deviceName(), onWords };
-  if (t.kind === 'unknown') throw new Error('That code is missing a part. Copy the whole code from your computer, then try again.');
+  if (t.kind === 'unknown') throw new Error(t.words);
   let grant: DeviceGrant;
   // A relay that is off fails the fetch itself ('Failed to fetch'), so the person gets the app's words instead.
   if (t.kind === 'relay') grant = await pairWithCode(await findHost(t.base, t.short).catch((e) => {
     throw e instanceof TypeError ? new Error("Could not reach your computer's relay. Check it is on and try again.") : e;
   }), t.code, o);
   // The 12-letter code dials this page's own address: the computer's link serves the app (`./crewhouse phones web`), and
-  // an https page may dial only wss. An older direct code also dials the computer's own addresses. Off the computer's
-  // network neither gets through; the relay's code can. A wrong host fails the handshake, so any other page loses nothing.
-  else grant = await (t.kind === 'code' ? pairWithCode(own(), t.code, o) : pairWithOffer(offerText(withOwn(decodeOffer(t.text))), o)).catch((e) => {
-    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the second code the command printed instead.`) : e;
+  // an https page may dial only wss. Off the computer's network that gets through only with the relay's code; a wrong
+  // host fails the handshake, so any other page loses nothing.
+  else grant = await pairWithCode(`${location.origin.replace(/^http/, 'ws')}/link`, t.code, o).catch((e) => {
+    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(`${e.message} On another network? Paste the relay code your computer shows if it has one, or scan the QR on your computer instead.`) : e;
   });
   await store.save(grant);
 }
-
-const own = () => `${location.origin.replace(/^http/, 'ws')}/link`;
-const withOwn = (offer: ReturnType<typeof decodeOffer>) => ({ ...offer, urls: [own(), ...offer.urls].slice(0, 8) });
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 export async function unpair(link: DeviceLink) {

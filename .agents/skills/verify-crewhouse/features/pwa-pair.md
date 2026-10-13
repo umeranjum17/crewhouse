@@ -2,7 +2,7 @@
 
 The public shell's way out of the demo (`web/src/link.ts`, `PairSheet` in `web/src/flows.tsx`). The demo's Home and
 Settings show "Pair — yes, let's go", which opens a card with the desktop commands and one paste box. The box takes the
-relay code (`SHORT-CODE@relay`) or the computer's 12-letter code (an older computer's long direct code too), told apart by shape (`web/src/typed.ts` `readTyped`, which the
+relay code (`SHORT-CODE@relay`) or the computer's 12-letter code, told apart by shape (`web/src/typed.ts` `readTyped`, which the
 phone uses too). `@byokit/pair` pairs the browser and shows the two words while the person says yes at the computer.
 The grant is sealed in IndexedDB (`browserDeviceStore('crewhouse.grant')`), and the same installed app reloads on real
 data: every call, live event and desktop stream rides the link (`web/src/api.ts` `setLink`). Unpair forgets the grant,
@@ -59,11 +59,10 @@ The recording is `motion/demo-pair-real-unpair.webm`.
 
 ## Limits
 
-- The 12-letter code dials only the page's own origin (`wss://<host>/link` on an https page); an older long direct
-  code also dials the computer's own addresses (plain `ws://`), which an https page may not dial. So the typed code
+- The 12-letter code dials only the page's own origin (`wss://<host>/link` on an https page). So the typed code
   works only when the page is the computer's own link (`./crewhouse phones web`, [ipad-tailscale.md](ipad-tailscale.md)); off it, the
   relay code over an https relay is the way in. This lab's shell is a separate `*.localhost` origin, so its own-origin
   try fails and the plan pastes the relay code; `test/pwa-pair.test.ts` loads the shell from crewd's link port for the
   12-letter code.
 - A relay-code pairing bakes only the relay address into the grant, so with the relay off that app is stranded
-  offline until it unpairs; a direct-code grant carries every address (link kit behaviour, not Crewhouse's).
+  offline until it unpairs.

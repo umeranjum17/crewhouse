@@ -78,7 +78,7 @@ An iPad or phone can install Crewhouse's web app and use your crew from its Home
 4. Open Crewhouse from the Home Screen and tap **Pair — yes, let's go**. Paste the code from `./crewhouse phones code`.
 5. Check that the app shows the same two words as `./crewhouse phones pending`, then run `./crewhouse phones approve '<two words>'`.
 
-The direct code works from this page: the app dials the link at its own https address first. A relay code works from it only when your relay is served over https. `./crewhouse phones web off` stops serving the address.
+The 12-letter code works from this page: the app dials the link at its own https address first. A relay code works from it only when your relay is served over https. `./crewhouse phones web off` stops serving the address.
 
 The installed web app (Add to Home Screen on iOS 16.4+, or install on Android) can get the same content-free news as a web push through your own relay. Turn it on under Settings, Phones, "Notifications on this device". A paired installed app has the same switch on its own Settings, under the computer's name. It needs a relay.
 
