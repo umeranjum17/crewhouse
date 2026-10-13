@@ -1,8 +1,9 @@
 // CH-6: one house-wide per-task token ceiling, checked where usage is summed.
 // A task that reaches it stops with plain words; ordinary jobs never notice it.
 // A run the engine goes silent in stops by itself too: Chief says so once, and the next message runs. A helper gone
-// quiet is Chief's to ask about (Stop / Take over / Leave it in his thread), its live line says what the rail says,
-// and a Stop gets one line from Chief with the helper free again on the rail and in the office counts.
+// quiet is Chief's to ask about (Stop / Take over / Leave it in his thread) while it still reads working everywhere
+// (one status: working beats gone quiet), and a Stop gets one line from Chief with the helper free again on the rail
+// and in the office counts.
 // Runs on the stub model: no account, no network, no quota.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -50,7 +51,7 @@ test('a run that hangs ends itself: Chief says so once, and the next message car
   }
 });
 
-test('a helper gone quiet: Chief asks, the live line agrees with the rail, and Stop gets one line from Chief', { timeout: 60_000 }, async () => {
+test('a helper gone quiet: Chief asks, the helper reads working everywhere, and Stop gets one line from Chief', { timeout: 60_000 }, async () => {
   const { db, crew } = lab();
   crew.onboard('Umer');
   crew.recruit('scout', 'Scout', 'person');
@@ -62,12 +63,16 @@ test('a helper gone quiet: Chief asks, the live line agrees with the rail, and S
   db.run('UPDATE tasks SET updated_at = updated_at - 600000 WHERE id = ?', task);
   let state = crew.snapshot(), team = A.crew(state), v = A.office(state);
   const scout = () => v.crew.find((c) => c.id === 'scout')!;
-  assert.equal(A.statusOf(scout(), v).word, 'Gone quiet');
+  // One status: the rail, the office counts, the Chats row and its working line all say working, never "Gone quiet".
+  assert.deepEqual([A.statusOf(scout(), v).word, A.groupOf(scout(), v)], ['At work', 'work']);
+  const row = A.chats(state).find((c) => c.id === 'scout')!;
+  assert.deepEqual([row.status, row.cls, row.working], ['At work', 'work', 'Scout is working · Getting started…'], 'the row and its working line agree');
+  assert.match(A.summaryOf(v), /1 at work/);
+  assert.equal(A.chiefStatus(v).word, 'Needs you', 'the Stop card waits on the person, in Chief\'s thread');
   assert.deepEqual(A.stuckIn(team, 'chief').map((x) => x.id), ['scout'], '(a) Stop / Take over / Leave it is in Chief\'s thread');
   assert.deepEqual(A.stuckIn(team, 'scout').map((x) => x.id), ['scout'], 'and in Scout\'s own');
   const ln = A.liveLine({ id: 'scout', name: 'Scout', crew: team, tasks: state.tasks, events: state.events, heard: [], writing: new Map() });
-  assert.equal(ln?.state, 'working');
-  assert.equal(A.goneQuiet(ln, team, 'scout'), true, '(b) the live line reads "Gone quiet" like the rail, not "still working"');
+  assert.equal(ln?.state, 'working', '(b) the live line says working, like the rail');
 
   const alerts = () => db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'alert'")!.n;
   const before = alerts();

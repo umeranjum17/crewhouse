@@ -334,8 +334,8 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 36px; color: var(--mute); font-size: 12px; }
 .chat-end .badge { margin: 0; }
 .need-dot { width: 6px; height: 6px; background: var(--pink); border-radius: 50%; }
-.stack-faces { display: flex; align-items: center; width: 40px; flex: none; }
-.stack-faces .face + .face { margin-left: -12px; box-shadow: 0 0 0 2px var(--solid); }
+.stack-faces { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; } /* the crew room's own 40px disc, ring as every row */
+.stack-faces .face { background: transparent !important; } .stack-faces .face + .face { margin-left: -4px; } /* two 22px faces fill the 40px disc, neither helmet covered */
 .needs-more { display: none; }
 .needs-quiet { padding: 16px; color: var(--ink2); }
 /* An empty list: a small mark and a plain line, never a blank box. */
@@ -953,7 +953,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 .p-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); flex: none; }
 .p-state.needs { color: var(--pink); } .p-state.needs i { background: var(--pink); }
 .p-state.work { color: var(--ok); } .p-state.work i { background: var(--ok); }
-.p-state.quiet { color: var(--amber); } .p-state.quiet i { background: var(--amber); }
 .p-state.failed { color: var(--danger); } .p-state.failed i { background: var(--danger); }
 .p-state.done, .p-state.rest { gap: 0; } .p-state.done i, .p-state.rest i { display: none; }
 .p-body { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
@@ -1008,7 +1007,7 @@ details.card[open] > summary { margin-bottom: 10px; }
   .side-seat.seat-needs i, .side-seat.seat-chat i { background: var(--pink); }
   .side-seat.seat-working i, .side-seat.seat-done i { background: var(--ok); }
   .side-seat { min-width: 0; }
-  .side-seat.seat-failed i, .side-seat.seat-quiet i { background: var(--danger); }
+  .side-seat.seat-failed i { background: var(--danger); }
   .side-seat.seat-next i { background: var(--amber); }
 }
 @media (min-width: 1200px) {
@@ -1098,9 +1097,15 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .office-main > .phone-only .home-section { margin-top: 18px; }
 
 .home-chat .dock, .home .dock { bottom: 0; }
+/* Office on a phone (mock 2): What happened and the gear on the title's row, then the counts and the switch full width
+   on the title's left edge, never pushed right when larger text wraps them. */
 @media (max-width: 899px) {
+  .home-bar:not(.is-chat) .home-tools { display: contents; }
   .home-bar:not(.is-chat) .home-tools .home-gear { display: inline-grid; }
-  .home-bar:not(.is-chat) .home-tools { flex-direction: row; flex-wrap: wrap; }
+  .office-bar .office-title { flex: 1 1 auto; }
+  .office-bar .office-counts { order: 1; flex-basis: 100%; }
+  .office-bar .home-mode { order: 2; flex: 1 1 100%; display: flex; }
+  .office-bar .home-mode button { flex: 1; justify-content: center; }
 }
 
 @media (min-width: 900px) {
@@ -1182,7 +1187,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
 .ch-badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px/1 var(--ui); font-style: normal; color: #fff; border: 2px solid var(--solid); background: var(--mute); }
-.ch-badge.needs, .ch-badge.chat, .ch-badge.failed, .ch-badge.quiet { background: #D63A1E; }
+.ch-badge.needs, .ch-badge.chat, .ch-badge.failed { background: #D63A1E; }
 .ch-badge.working { background: #1F9D62; }
 .ch-badge.done { background: #3B6FE0; }
 .ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }

@@ -216,7 +216,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
           // One status per member: the header counts every member once by the word its row shows, Chief too (his
           // "Needs you" counts as waiting).
-          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' || w === 'Gone quiet' ? 1 : 3;
+          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' ? 1 : 3;
           const seen = [0, 0, 0, 0];
           for (const w of m.words as string[]) seen[groupOf(w)]++;
           const extra = m.nums.map((x: number, i: number) => x - seen[i]);
@@ -345,7 +345,7 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   // The rail's own words, mapped to the four Office groups the summary counts.
   const group = (w: string) => w.startsWith('Done') ? 'done'
     : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 'waiting'
-    : w === 'At work' || w === 'Gone quiet' ? 'at work'
+    : w === 'At work' ? 'at work'
     : 'free';
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     await b.open(`demo=${demo}&day#/crew`);
