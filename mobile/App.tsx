@@ -1365,10 +1365,20 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
   return null;
 }
 
-/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock. */
+/** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock —
+ *  except a hire, which wears the new helper's own face and role line (mock 1) until the person says yes. */
 function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
   const t = useLook();
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  const hire = c.hire;
+  if (hire) return <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+    <Face who={{ kind: hire.kind, name: hire.name }} size={48} />
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <T style={{ ...fw('600'), color: t.pinkInk }}>{c.words}</T>
+      {!!hire.role ? <T tone="ink2" style={s.small}>{hire.role}</T>
+        : <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>}
+    </View>
+  </View>;
   return <View style={{ gap: 2 }}>
     <T style={{ ...fw('600'), color: t.pinkInk }}>{name}</T>
     <View style={s.askStatus}><View style={[s.statusDot, { backgroundColor: t.pink }]} /><T tone="ink2" style={s.small}>{c.status}</T></View>
@@ -1439,7 +1449,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   return (
     <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
-      <T style={s.askWords}>{question}</T>
+      {!c.hire && <T style={s.askWords}>{question}</T>}
       {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
         <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
         : <AskEvidence c={c} open={false} readAll={<Link label="Read all" onPress={() => open(c)} />} />)}
@@ -1540,7 +1550,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           <View style={[s.grabber, { backgroundColor: t.line2 }]} />
           <ScrollView style={{ flexShrink: 1, flexGrow: 0 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           <AskHead c={c} who={who} />
-          <T style={s.askQ}>{question}</T>
+          {!c.hire && <T style={s.askQ}>{question}</T>}
           {/* The exact text that goes out, whole: never cut to a preview here. */}
           {edit.box || <AskEvidence c={c} open />}
           {c.mailTo && <MailSetup c={c} canAct={canAct} done={onClose} />}

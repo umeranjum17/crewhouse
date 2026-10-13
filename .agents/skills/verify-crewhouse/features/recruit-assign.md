@@ -7,7 +7,7 @@ thread gets exactly one `All done.` wrap-up line carrying any delivered files as
 ## Sub-features
 
 - `recruit` — Chief's `crew_recruit` tool creates the bot and its folder.
-- `create` — Chief's `crew_create` proposes a new helper with a five-part job; one yes creates its folder and starts its first task. Adapting a recruited helper is a different outcome, not proof of a new hire.
+- `create` — Chief's `crew_create` proposes a new helper with a five-part job; its own face and role head the Will do / Won't do / First step for you / First job card. One yes creates its folder and starts its first task; matching won't-do lines keep the browser/computer grants off. Adapting a recruited helper is a different outcome, not proof of a new hire.
 - `refuse-cross-recruit` — a helper asking for a recruit is refused; only Chief recruits.
 - `assign` — `crew_assign` queues the helper's task; it settles `done` and reports back.
 - `wrapup-card` — one `All done.` line in Chief's thread per Chief job, with delivered-file cards.
@@ -51,6 +51,29 @@ frame. The owned browser and server close at test exit. This proves relay wordin
 the web app, not the native phone, sign-ins, or timing. On the old rule both cases say
 `The result is ready.`; the candidate must show the invoice opening and
 `Water bill due Friday…` instead, without changing helper replies or other relay rules.
+
+## Hire card on the stub engine (web, installed PWA, native)
+
+Send Chief `[tool crew_create <json>]` with `name`, `role`, the five-part `job`,
+`will_do`/`wont_do`, `first_step` and `first_job`. Before yes, `/api/state` must publish
+`detail.hireId`, `role` and those four sections, with no new helper yet. Capture the
+helper's face left of the title and its role below, at 390/1440 in both themes through
+`scripts/screens.sh`; scroll `.hire-head` into view. With no role, show A new helper.
+Install the actual PWA through `features/pwa-shell.md`; require standalone=true,
+not an ordinary Chrome capture. For native, build this candidate's APK, pair the
+emulator through `features/phone-pairing.md`, and open Chief. At this revision the
+chooser says **On my computer** (not Pair with a computer). Use an isolated
+`CREWHOUSE_LINK_HOST=127.0.0.1` and `adb reverse` for the lab's link port.
+Run `scripts/look-check.mjs web --person <key> --then
+'document.querySelector(".hire-head")?.scrollIntoView({block:"start"})'` and
+`SERIAL=<owned> node scripts/look-check.mjs android --scroll-to
+'Shall I take on Echo?'`: both themes, 360 wide, largest text. Native `--width 390
+--text 1.3` gives the additional requested phone-width captures. `--scroll-to` checks
+positive visible bounds (Android may retain offscreen text with reversed bounds).
+Open all shots and pair them with mock 1. Answer yes through the real API; with
+`wont_do: ["Post for you"]`, the new helper's bot.json must lack browser, while
+unmatched grants stay. The first job belongs to it and reports to Chief. The existing
+Crew integration journey in `test/unit.test.ts` pins this and the face's stability.
 
 ## Registered crew tool arguments (real engine)
 

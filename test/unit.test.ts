@@ -1285,12 +1285,20 @@ test("Chief's hire card shows will/won't/first-step/first-job, and a won't-post 
   assert.equal(view.detail.first_step, echo.first_step);
   assert.equal(view.detail.first_job, echo.first_job);
   const shown = A.card(view, crew.snapshot());
-  assert.deepEqual(shown.hire, { will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
+  assert.deepEqual(shown.hire, { name: 'Echo', kind: shown.hire!.kind, role: echo.role, will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
+  assert.ok(['pip', 'bow', 'cap', 'specs', 'scarf'].includes(shown.hire!.kind), 'a made-up look of its own');
   await crew.answer(card()!.id, { answer: 'allow' });
   assert.ok(crew.bot('echo'), 'yes hires Echo');
+  assert.equal(A.kindOf(crew.bot('echo'), crew.snapshot().bots), shown.hire!.kind, 'its card and hired face agree');
   assert.ok(!disk.botConfig(crew['cfg'], 'echo').tools.includes('browser'), 'won\'t post switches the posting grant off');
   assert.ok(disk.botConfig(crew['cfg'], 'echo').tools.includes('computer'), 'an unmatched grant stays');
   await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'echo'")!.id);
+  const next = (await crew.post('chief', create({ ...echo, name: 'Reel' })))!;
+  await settled(db, next.task);
+  const offered = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
+  await crew.answer(card()!.id, { answer: 'allow' });
+  assert.equal(A.kindOf(crew.bot('reel'), crew.snapshot().bots), offered.hire!.kind, 'a name matching a template still keeps its custom face');
+  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'reel'")!.id);
   done();
 });
 

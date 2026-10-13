@@ -22,8 +22,8 @@ export type Card = {
   /** Chief's offered routine: the lines to confirm (cadence, what, quiet, first run), the schedule words to edit, and
    *  the time-zone line when the home computer's clock sits in another zone from this device's. */
   lines?: string[]; schedule?: string; zoneNote?: string;
-  /** Chief's hire in a glance (mock 1): what the helper will and won't do, the person's first step, its first job. */
-  hire?: { will_do: string[]; wont_do: string[]; first_step?: string; first_job?: string };
+  /** Chief's hire in a glance (mock 1): its face and role line, what it will and won't do, the person's first step, its first job. */
+  hire?: { name: string; kind: Kind; role?: string; will_do: string[]; wont_do: string[]; first_step?: string; first_job?: string };
   /** A reminder is the person's own one moment: the card says when it is, and offers nothing else to remember. */
   remind?: boolean;
   /** A checkout: the inbox opens the review before any yes, and the sheet's yes names the order.
@@ -812,7 +812,8 @@ export function card(a: Json, state: Json): Card {
     const will_do = (Array.isArray(d.will_do) ? d.will_do : []).map((l: string) => plain(l)).filter(Boolean).slice(0, 6);
     const wont_do = (Array.isArray(d.wont_do) ? d.wont_do : []).map((l: string) => plain(l)).filter(Boolean).slice(0, 6);
     const first_step = plain(d.first_step ?? '').trim() || undefined, first_job = plain(d.first_job ?? '').trim() || undefined;
-    const hire = will_do.length || wont_do.length || first_step || first_job ? { will_do, wont_do, first_step, first_job } : undefined;
+    const role = plain(d.role ?? '').trim() || undefined;
+    const hire = will_do.length || wont_do.length || first_step || first_job || role ? { name: plain(d.hire), kind: kindOf(state.bots?.find((b: Json) => b.id === d.hireId) ?? { id: d.hireId ?? d.hire, template: 'helper' }, state.bots), role, will_do, wont_do, first_step, first_job } : undefined;
     return { ...base, kind: 'ok', status: d.adapt ? 'A new job' : 'A new helper', head: plain(d.words ?? a.title), words: plain(d.words ?? a.title),
       ...(hire ? { hire } : {}),
       lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean),

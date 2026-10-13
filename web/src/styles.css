@@ -220,6 +220,10 @@ textarea.input { resize: vertical; }
 .hire-first { display: flex; gap: 10px; align-items: baseline; color: var(--ink2); }
 .hire-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--solid); display: inline-grid; place-items: center; font-size: 13px; font-weight: 600; transform: translateY(4px); }
 .hire-foot { font: 400 13px/18px var(--ui); color: var(--mute); margin-top: 4px; }
+/* The hire's own face sits left of the title; its role reads under it, in place of the status flag. */
+.ask-head .face { flex: none; }
+.hire-head .grow { display: block; }
+.hire-role { font: 400 15px/20px var(--ui); color: var(--ink2); }
 .order-row { display: flex; gap: 12px; justify-content: space-between; }
 .order-row.total { font-weight: 600; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
 .ask-note { font: 400 13px/18px var(--ui); color: var(--mute); text-align: center; margin: 10px 0 0; }
@@ -1439,6 +1443,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .card.ask .ask-words, .chat .card.ask .ask-lines { order: -2; font: 600 15px/20px var(--ui); }
   .chat .card.ask .ask-head { order: -1; }
   .chat .card.ask:has(.ask-lines) .ask-head, .chat .ask-head > .face, .chat .ask-head > .app-ic, .chat .ask-head b, .chat .ask-head time, .chat .ask-status i { display: none; }
+  /* A hire keeps its own header in chat (mock 1): the helper's face left of the title, its role under it. */
+  .chat .card.ask .ask-head.hire-head > .face { display: inline-grid; }
+  .chat .card.ask .ask-head.hire-head b { display: inline; color: var(--ink); font-size: 17px; line-height: 24px; }
   .chat .card.ask .ask-status { color: var(--mute); }
   .chat .card.ask .ask-lines { display: block; }
   .chat .card.ask .ask-line { display: inline; font: 400 13px/18px var(--ui); color: var(--mute); }
