@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
-import { api, demo, pairable, paired, subscribe, type Json } from './api.ts';
+import { api, demo, pairable, paired, subscribe, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
@@ -12,7 +12,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, SiteSignIn } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
@@ -1712,6 +1712,9 @@ function App() {
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
+  // A bare bookmark or typed address has no authority, so every read is refused with 403 no-authority while the
+  // computer is up: one plain screen, never the offline one (which keeps a retry loop for a computer truly gone).
+  const [noauth, setNoauth] = useState(false);
   setAway(offline);
   const [party, setParty] = useState<{ title: string; helper: string } | null>(null);
   const accounts = useAccounts(0, tick);
@@ -1719,7 +1722,8 @@ function App() {
   const heard = useRef(0); // when the home computer last answered
   const { look, setLook, night } = useLook();
   const refresh = useCallback(() => {
-    api.state().then((s) => { setState(s); setOffline(false); heard.current = Date.now(); }).catch(() => setOffline(true));
+    api.state().then((s) => { setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); })
+      .catch((e) => { if (trouble(e) === 'noauth') { setNoauth(true); setOffline(false); } else setOffline(true); });
     setTick((t) => t + 1);
   }, []);
   useEffect(() => {
@@ -1759,8 +1763,8 @@ function App() {
   // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL (Main2036). An anchored
   // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
   useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
-  const splash = <Splash done={!!ctx || offline} />;
-  if (!ctx) return <>{splash}{offline && <Unreachable retry={refresh} />}</>;
+  const splash = <Splash done={!!ctx || offline || noauth} />;
+  if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;

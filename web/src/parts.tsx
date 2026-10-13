@@ -67,6 +67,7 @@ const FRIENDLY = {
   missing: "That isn't ready yet. It arrives with the next Crewhouse update.",
   offline: "Can't reach the home computer right now. Check it's on, then try again.",
   failed: 'That didn’t work. Please try again.',
+  noauth: 'Open Crewhouse from this computer’s app menu.',
 };
 
 // ---------- dialogs ----------

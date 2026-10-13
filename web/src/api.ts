@@ -39,12 +39,15 @@ async function http(method: string, path: string, body?: Json) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const out = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(out.error ?? `HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(out.error ?? `HTTP ${res.status}`), { status: res.status, code: out.code });
   return out;
 }
 
-/** What went wrong, in the three ways a screen cares about: the home computer is unreachable, crewd doesn't do that yet, or it failed. */
-export const trouble = (e: any): 'offline' | 'missing' | 'failed' => (e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');
+/** What went wrong, in the four ways a screen cares about: the home computer is unreachable, this page opened
+ *  without the person's authority (a bare bookmark or typed address answers every read with 403 no-authority),
+ *  crewd doesn't do that yet, or it failed. */
+export const trouble = (e: any): 'offline' | 'missing' | 'failed' | 'noauth' =>
+  (e?.status === 403 && e?.code === 'no-authority' ? 'noauth' : e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');
 
 export const api = {
   state: () => call('GET', '/api/state'),
