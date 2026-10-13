@@ -69,12 +69,10 @@ test('the account list is the one crewd really serves: every route, none made up
   assert.doesNotMatch(A.AI_ROUTES, /API key|bill|\broutes?\b|provider/i, 'no billing or machinery words under the account list');
   for (const ai of A.AIS) assert.doesNotMatch(ai.cli ?? '', /\bCLI\b/, `${ai.name}'s prerequisite names a product, never an acronym`);
   // Name and billing come from the kit's own catalogue, so a new kit route lands labelled and nothing drifts.
-  // OpenCode Go's row comes from the kit's route catalogue, like crewd's own list (src/accounts.ts).
+  for (const ai of A.AIS) if (ROUTES[ai.key]) assert.deepEqual([ai.name, ai.billing], [ROUTES[ai.key].name, ROUTES[ai.key].billing], `${ai.key} is the kit's own row`);
+  // OpenCode Go's row comes from the kit's plan-key route, like crewd's own list (src/accounts.ts).
   const GO = route('opencode:plan_key:opencode-go'), GO_KEY = GO.aliases?.[0] ?? 'opencode-go';
-  for (const ai of A.AIS) {
-    const row = ROUTES[ai.key] ?? (ai.key === GO_KEY ? { name: GO.name, billing: GO.billing } : undefined);
-    if (row) assert.deepEqual([ai.name, ai.billing], [row.name, row.billing], `${ai.key} is the kit's own row`);
-  }
+  assert.deepEqual(A.AIS.filter((ai) => ai.key === GO_KEY).map((ai) => [ai.name, ai.billing]), [[GO.name, GO.billing]], "OpenCode Go's row is the kit's own");
   // Every route says honestly how the person pays: a plan they already have, or charged per use.
   const listed = A.aiList(rows).more.map((r) => ({ name: r.ai.name, cli: r.ai.cli, says: r.says }));
   for (const row of listed) {
@@ -86,7 +84,7 @@ test('the account list is the one crewd really serves: every route, none made up
   const phone = readFileSync(join(import.meta.dirname, '..', 'mobile', 'App.tsx'), 'utf8');
   assert.match(phone, /<Label>Your AI accounts<\/Label>/);
   assert.match(phone, /\{row\(A\.AIS\[0\]\)\}/, 'ChatGPT, the front door, is named first');
-  assert.match(phone, /\{A\.AIS\.slice\(1\)\.map\(row\)\}/, 'the phone shows the same seven routes, not a second list');
+  assert.match(phone, /\{A\.AIS\.slice\(1\)\.map\(row\)\}/, 'the phone shows the same six routes, not a second list');
   assert.match(phone, /\{A\.AI_ROUTES\}/, 'the pay-for-each-use limitation reaches the phone');
   assert.match(phone, /Signing in happens on the home computer, in Settings\. This phone can't tell whether an account is signed in\./, 'no invented phone sign-in state');
   assert.match(phone, /onPress=\{\(\) => go\(\{ view: 'phone' \}\)\} accessibilityRole="button" accessibilityLabel="Check AI account sign-in/, 'Home leads to the disclosure');
