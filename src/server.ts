@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
@@ -69,7 +69,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const authorityFile = join(cfg.stateDir, 'person.key');
   if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
   const authority = readFileSync(authorityFile, 'utf8');
-  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority');
+  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority'); const filesToken = createHmac('sha256', authority).update('files').digest('hex');
   const installing = new Map<string, Promise<boolean>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
@@ -156,6 +156,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         // Pairing always adds a phone to the person's crew.
         if (p === '/api/phones/pair' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await link.offer(b.role ?? 'control')); }
         if (p === '/api/phones/refresh' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await api(req.method, p, url.searchParams, b)); }
+        if (p === '/api/files/session' && req.method === 'POST') { res.setHeader('set-cookie', `crewhouse-files=${filesToken}; HttpOnly; SameSite=Strict; Path=/files`); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/pending' && req.method === 'GET') return send(res, 200, link.status().asking);
         if (p === '/api/phones/approve' && req.method === 'POST') { link.approve(String((await readJson(req)).words ?? '')); return send(res, 200, { ok: true }); }
         if (p === '/api/phones/lan' && req.method === 'PUT') { await link.setLan(!!(await readJson(req)).on); return send(res, 200, link.status()); }
@@ -179,11 +180,10 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         return res.end(resultPage('Crewhouse', words, /connected\./.test(words)));
       }
-
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
-        const rel = join('files', decodeURIComponent(file[2])); if (rel !== 'files' && !rel.startsWith('files/')) return send(res, 404, { error: 'no such file' });
-        if (!crew.fileFor(file[1], rel)) return send(res, 403, { error: 'not delivered to you' });
+        const rel = join('files', decodeURIComponent(file[2])); if (rel !== 'files' && !rel.startsWith('files/')) return send(res, 404, { error: 'no such file' }); const sent = /(?:^|; )crewhouse-files=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? '')?.[1];
+        if (!sent || !timingSafeEqual(Buffer.from(sent), Buffer.from(filesToken)) || !crew.fileFor(file[1], rel)) return send(res, 403, { error: 'not delivered to you' });
         const full = disk.insideBot(cfg, file[1], rel);
         if (!existsSync(full)) return send(res, 404, { error: 'no such file' });
         return sendFile(req, res, full);
