@@ -246,12 +246,12 @@ export class Link {
   get relay(): string { return this.setting('link.relay') ?? this.cfg.relay; }
   get relayPublic(): string { return this.cfg.relayPublic || this.relay; }
   setRelay(url: string | null, enrol?: string) {
-    const before = this.relay, next = relayOrigin(url);
+    const next = relayOrigin(url);
     if (next === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
     else this.put('link.relay', next);
     if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
     this.db.event('link.relay', null, { on: !!this.relay });
-    if (this.relay !== before || this.relayStatus !== 'online' || enrol?.trim()) this.dial();
+    this.dial();
     this.follow();
   }
 
