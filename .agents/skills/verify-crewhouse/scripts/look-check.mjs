@@ -40,6 +40,7 @@ const profile = mkdtempSync(join(tmpdir(), 'look-check-'));
 const chrome = spawn(process.env.CHROME ?? 'chromium', ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore', env: { PATH: process.env.PATH, HOME: profile } });
 const done = (code) => { chrome.kill('SIGTERM'); chrome.once('exit', () => { rmSync(profile, { recursive: true, force: true }); process.exit(code); }); };
+for (const s of ['SIGINT', 'SIGTERM']) process.once(s, () => done(2)); // a stopped run still closes its browser and profile
 let port;
 for (let i = 0; i < 300 && !port; i++) { await sleep(100); try { port = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch { /* not yet */ } }
 if (!port) { console.error('look-check: Chromium never opened its DevTools port'); done(2); await new Promise(() => {}); }
