@@ -3,7 +3,7 @@
 #   bash .agents/skills/verify-crewhouse/scripts/files-gate.sh <repo> <out-dir> [--no-browser]
 # Real crewd on the stub engine, isolated per SKILL.md's Launch (web/dist built first). Reel makes a PNG, a PDF and an
 # mp4 in its own shell, registers them with crew_deliver, and writes an xlsx with crew_workbook. Then:
-#   1. curl matrix from the host (no header, public header, wrong key, range, the person's key);
+#   1. curl matrix from the host (no header, public header, wrong key, wrong cookie, the person's browser cookie, the key alone);
 #   2. the real attack: Tracer's own sandboxed shell curls Reel's delivered files over the shared loopback;
 #   3. (unless --no-browser) the person's app: the picture, the video, the PDF tab and the spreadsheet download, plus
 #      the thread at 1440 and 390, night and day, and the demo's sheet panel.
@@ -66,11 +66,12 @@ check() { local label=$1 f=$2 code leak=no; shift 2
     check 'wrong key' "$f" -H 'Authorization: Bearer nope'
     check 'range, no key' "$f" -H 'Range: bytes=0-15'
     check 'wrong cookie' "$f" -H 'Cookie: crewhouse-files=0000000000000000000000000000000000000000000000000000000000000000'
-    check "person's browser cookie" "$f" -H "Cookie: $COOKIE"
-    check "range, person's browser cookie" "$f" -H "Cookie: $COOKIE" -H 'Range: bytes=0-15'
-    check "person's key alone" "$f" "${H[@]}"
+    check "person browser cookie" "$f" -H "Cookie: $COOKIE"
+    check "range, person browser cookie" "$f" -H "Cookie: $COOKIE" -H 'Range: bytes=0-15'
+    check "person key alone" "$f" "${H[@]}"
   done; } > "$OUT/curl-matrix.tsv"
 cat "$OUT/curl-matrix.tsv"
+awk -F'\t' 'NR>1 { ok = $1 == "person browser cookie" ? 200 : $1 == "range, person browser cookie" ? 206 : 403; if ($3 != ok) bad = 1 } END { exit bad }' "$OUT/curl-matrix.tsv" || { echo "curl matrix: a helper caller got bytes, or the person's cookie was refused"; exit 1; }
 
 # 2. The real attack: Tracer's own sandboxed shell reads Reel's delivered files over the shared loopback.
 steal=""
