@@ -31,20 +31,21 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   for (const d of ['src', 'templates', 'tools', 'skills', 'package.json']) symlinkSync(join(repo, d), join(parent, d));
   const built = spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), join(parent, 'web')], { encoding: 'utf8' });
   assert.equal(built.status, 0, built.stderr);
+  let server: Awaited<ReturnType<typeof startServer>> | undefined, browser: ReturnType<typeof taskBrowser> | undefined, ws: WebSocket | undefined;
+  // A failed browser close must not keep the server (and so the process) alive: the suite then waits out its file bound and kills it.
+  // Registered before setup's own after(done), so the server and its phone link's 30 s timer stop before the database closes.
+  after(async () => { ws?.close(); try { await browser?.close(); } finally { server?.closeAllConnections(); await new Promise((r) => server ? server.close(r) : r(null)); done(); } });
   const { cfg, db, crew, done } = setup();
   Object.assign(cfg, { port: 0, host: '127.0.0.1', linkPort: 0, repoDir: parent });
-  const server = await startServer(cfg, db, crew);
+  server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
   await api('POST', '/api/onboard', { address: 'Umer' });
   assert.equal((await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' })).id, 'scout');
 
   const profile = mkdtempSync(join(tmpdir(), 'chat-live-browser-'));
-  const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
+  browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,900', 'about:blank'], profile);
-  let ws: WebSocket | undefined;
-  // A failed browser close must not keep the server (and so the process) alive: the suite then waits out its file bound and kills it.
-  after(async () => { ws?.close(); try { await browser.close(); } finally { server.closeAllConnections(); await new Promise((r) => server.close(r)); done(); } });
   const portFile = join(profile, 'DevToolsActivePort');
   // In CI the gateway lane's boots run beside this browser and starve its start past 30 s (CI 2026-10-09).
   await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 60_000);
