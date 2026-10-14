@@ -2189,10 +2189,10 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   </View></View>;
 }
 
-function Head({ children, onBack }: { children: ReactNode; onBack: () => void }) {
+function Head({ children, onBack, wrap }: { children: ReactNode; onBack: () => void; wrap?: boolean }) {
   const t = useLook();
   return (
-    <View style={[s.head, { borderColor: t.line }]}>
+    <View style={[s.head, { borderColor: t.line }, wrap && { flexWrap: 'wrap' }]}>
       <Pressable onPress={onBack} hitSlop={12} accessibilityLabel="Back"><Text style={{ fontSize: 30, color: t.ink, paddingRight: 4 }}>‹</Text></Pressable>
       {children}
     </View>
@@ -2261,6 +2261,11 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   const trail = A.steps(page?.trail ?? []);
   // Opened from the bubble ('screen' after taking the wheel, or 'watch'): the screen leads and opens by itself.
   const screenFirst = tab === 'screen' || tab === 'watch';
+  // When the screen is narrow for its text (a large font) the name's column no longer has room beside the two
+  // controls, so the role wrapped to one word a line. The controls drop to their own row below and the name and
+  // role keep the full width, the switch the phone's head already makes (`PhoneHead`).
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360;
   const screen = h.computer && desktopAvailable && <>
     <T style={s.b}>{`See ${h.name}'s screen`}</T>
     <Screen bot={{ ...page?.bot, ...b }} canAct={canAct} showing={A.showing(state, id)} watchNow={screenFirst} refresh={() => { refresh(); void load(); }} />
@@ -2268,11 +2273,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   return (
     <View style={{ flex: 1 }}>
       {tab === 'chat' ? <>
-        <Head onBack={back}>
+        <Head onBack={back} wrap={narrow}>
           <Face who={h} size={32} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>{h.name}</T><T tone="ink2" style={s.small}>{ctx.offline ? OUT : h.role}</T></View>
-          {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
-          <Btn ghost label="Details" onPress={() => setTab('details')} />
+          <View style={{ flex: 1, minWidth: 0 }}><T style={s.rowTitle}>{h.name}</T><T tone="ink2" style={s.small}>{ctx.offline ? OUT : h.role}</T></View>
+          <View style={[s.row, { gap: 12 }, narrow && { width: '100%', justifyContent: 'flex-end' }]}>
+            {b?.task && canAct && <Btn label="Stop" onPress={() => attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)} />}
+            <Btn ghost label="Details" onPress={() => setTab('details')} />
+          </View>
         </Head>
         <Chat key={id} {...ctx} id={id} m={m} />
       </> : <>
