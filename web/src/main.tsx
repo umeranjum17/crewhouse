@@ -1840,7 +1840,7 @@ function App() {
   const stranded = !!ctx && here.view === 'helper' && !!here.id && here.id !== 'chief'
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
   useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
-  useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) go('#/chief'); }, [route, ctx]);
+  useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
   // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL (Main2036). An anchored
   // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
   useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
