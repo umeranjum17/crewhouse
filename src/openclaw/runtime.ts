@@ -20,9 +20,6 @@ const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', co
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
 };
-const CODE_CHOICE: Record<string, string> = {
-  chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
-};
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
@@ -99,7 +96,8 @@ export class OpenClawRuntime implements AgentRuntime {
         .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
       return { paste() {}, cancel() { cancelled = true; } };
     }
-    const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
+    // Only ChatGPT's code path differs from its own route (its device code); every other account signs in on AUTH_CHOICE.
+    const authChoice = via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
     if (!authChoice) {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
