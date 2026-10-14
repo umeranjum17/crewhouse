@@ -1704,6 +1704,7 @@ export function aiList(accounts: Json[] | null) {
     const says = g.state === 'ready'
       ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
       : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
+      : 'keyEntry' in ai && ai.keyEntry && g.signedOut ? 'Signed out. The key stays saved on this computer, so the crew uses it again after a restart until an update can remove it.'
       : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
       : ai.billing === 'api' ? `Not set up. Charged per use on your ${ai.name} account.`
