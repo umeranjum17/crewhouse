@@ -1174,6 +1174,15 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .c-clip { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink2); }
 .c-clip:disabled { opacity: .45; cursor: not-allowed; }
 .c-chip { height: 28px; max-width: 160px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--solid); font: 500 12.5px/26px var(--ui); color: var(--ink2); white-space: nowrap; }
+/* Files waiting to send ride over the words as one chip each: the name wraps in full (never cut), the kind and
+   size sit under it, and ✕ takes one back. */
+.c-files { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 6px; }
+.c-file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 5px 4px 5px 10px; border: 1px solid var(--line2); border-radius: 10px; background: var(--sunken); font: 500 12.5px/18px var(--ui); color: var(--ink); }
+.c-file b { overflow-wrap: anywhere; font-weight: 600; }
+.c-file .mute { white-space: nowrap; }
+.c-file button { border: 0; background: none; color: var(--ink2); font-size: 13px; padding: 2px 6px; }
+/* A sent file's kind and size under its name, in full. */
+.doc-sub { display: block; font-weight: 400; }
 
 /* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor, the serif name,
    his own line in a bubble, the crew with a badge each. The figure's box keeps headroom over the hat for his poses, so it

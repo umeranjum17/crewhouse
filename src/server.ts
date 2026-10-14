@@ -231,7 +231,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.model, b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.model, b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updatePerson(body);
     if (m === 'GET' && p === '/api/accounts') {
       // The person's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
