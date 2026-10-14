@@ -317,7 +317,9 @@ function FileChip({ name, kind, size, remove }: { name: string; kind: string; si
   const narrow = width / fontScale < 360; // large text: the tag goes over the name, never squeezes it
   const tag = <View style={[s.fileTag, { backgroundColor: t.softAccent }]}><Text style={[s.small, s.b, { color: t.pink }]}>{kind}</Text></View>;
   const x = remove && <Pressable onPress={remove} accessibilityLabel={`Remove ${name}`} hitSlop={10}><T tone="ink2">✕</T></Pressable>;
-  const words = <View style={{ flexShrink: 1, minWidth: 0 }}><T style={s.b} lines={narrow ? 2 : 1}>{name}</T><T tone="mute" style={s.small} lines={narrow ? undefined : 1}>{`${kind} · ${A.fileSize(size)}`}</T></View>;
+  // Narrow: the whole name wraps, and the tag above already says the kind, so the size alone keeps its one line.
+  const sz = A.fileSize(size).replace(' ', '\u00a0');
+  const words = <View style={{ flexShrink: 1, minWidth: 0 }}><T style={s.b} lines={narrow ? undefined : 1}>{name}</T><T tone="mute" style={s.small} lines={1}>{narrow ? sz : `${kind} · ${sz}`}</T></View>;
   return <View style={[s.fileChip, { backgroundColor: t.solid, borderColor: t.line }, narrow ? { gap: 6 } : s.row]}>
     {narrow ? <><View style={[s.row, { justifyContent: 'space-between' }]}>{tag}{x}</View>{words}</> : <>{tag}{words}{x}</>}
   </View>;
