@@ -77,10 +77,12 @@ export const api = {
   /** A finished video in pieces for the phone, which can't reach this computer's /files address: base64 slices
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,
-  /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. `said` is what the
-   *  person wrote, when the ask the helper reads is not their own words (the bubble builds one): the thread shows
-   *  `said`, the helper gets `text`. */
-  post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }, said?: string) => call('POST', `/api/bots/${id}/messages`, { text, ...(said ? { said } : {}), ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}) }),
+  /** `photos`: up to four, each `{type: 'image/jpeg' | 'image/png' | 'image/webp', data: base64}`. `files`:
+   *  up to four documents alongside them, each `{name?, type, data: base64}` (PDF, docx, xlsx, csv, txt, md; 10 MB each;
+   *  `name` is the person's own filename for display only — crewd never uses it as a path).
+   *  `said` is what the person wrote, when the ask the helper reads is not their own words (the bubble builds one):
+   *  the thread shows `said`, the helper gets `text`. */
+  post: (id: string, text: string, photos?: { type: string; data: string }[] | { room: boolean }, said?: string, files?: { name?: string; type: string; data: string }[]) => call('POST', `/api/bots/${id}/messages`, { text, ...(said ? { said } : {}), ...(Array.isArray(photos) && photos.length ? { photos } : {}), ...(!Array.isArray(photos) && photos ? photos : {}), ...(files?.length ? { files } : {}) }),
   /** A chat with Chief on the phone alone, carried to Chief here as one message (mobile/src/phone-only.ts `chatToMove`).
    *  `move` is that chat's one id: a resend stores nothing twice. Bounded, so a computer that went quiet is a failure. */
   moveChat: (text: string, move: string) => call('POST', '/api/bots/chief/messages', { text, move }, { timeoutMs: 30_000 }),

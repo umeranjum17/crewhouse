@@ -142,19 +142,20 @@ export function changed(before: string, now: string, cap = 1500) {
   return `Before: ${around(before)}\nNow: ${around(now)}`;
 }
 
-/** A photo sent with a message: its bytes and file ending, checked at the edge. */
-export type Photo = { bytes: Buffer; ext: string; mime: string };
-const PHOTO_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-/** At most four photos of 5 MB each, JPEG, PNG or WebP: anything else is refused in plain words. */
+/** A file sent with a message: its bytes and file ending, checked at the edge. `photo: false` marks a document; `name` is the client's display-only label, never a path. */
+export type Photo = { bytes: Buffer; ext: string; mime: string; photo?: boolean; name?: string };
+const FILE_TYPES: Record<string, [string, boolean]> = { 'image/jpeg': ['jpg', true], 'image/png': ['png', true], 'image/webp': ['webp', true], 'application/pdf': ['pdf', false],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx', false], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['xlsx', false], 'text/csv': ['csv', false], 'text/plain': ['txt', false], 'text/markdown': ['md', false] };
+/** At most four files — photos (5 MB each, as before) or documents (10 MB each) — refused in plain words otherwise; the client's file name never becomes a path. */
 export function checkPhotos(photos: unknown): Photo[] {
   if (photos === undefined || photos === null) return [];
-  if (!Array.isArray(photos) || photos.length > 4) throw fail('send up to four photos at a time');
+  if (!Array.isArray(photos) || photos.length > 4) throw fail('send up to four files at a time');
   return photos.map((p: any) => {
-    const ext = PHOTO_TYPES[String(p?.type ?? '')];
-    const bytes = typeof p?.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.alloc(0);
-    if (!ext || !bytes.length) throw fail('that photo could not be read; try a JPEG or PNG');
-    if (bytes.length > 5 << 20) throw fail('that photo is too big; try a smaller one');
-    return { bytes, ext, mime: String(p.type) };
+    const [ext, photo] = FILE_TYPES[String(p?.type ?? '')] ?? [], bytes = typeof p?.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.alloc(0);
+    const label = String(p?.name ?? '').split(/[\\/]/).pop()!.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 80);
+    if (!ext || !bytes.length) throw fail('that file could not be read; try a photo, a PDF or a document');
+    if (bytes.length > (photo ? 5 << 20 : 10 << 20)) throw fail(photo ? 'that photo is too big; try a smaller one' : 'that file is too big; try one under 10 MB');
+    return { bytes, ext, mime: String(p.type), ...(photo ? {} : { photo: false }), ...(label ? { name: label } : {}) };
   });
 }
 
@@ -1052,14 +1053,13 @@ export class Crew {
     return id;
   }
 
-  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole.
-   *  `photos` ride along with the words; `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
-  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false) {
+  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
+  async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false, files?: unknown) {
     const bot = this.bot(botId);
     if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
-    const pics = checkPhotos(photos);
+    const pics = [...checkPhotos(photos), ...checkPhotos(files)];
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
-    const words = text.trim() || (pics.length === 1 ? 'Here is a photo.' : 'Here are some photos.');
+    const words = text.trim() || (pics.some((p) => p.photo === false) ? `Here ${pics.length === 1 ? 'is a file.' : 'are some files.'}` : `Here ${pics.length === 1 ? 'is a photo.' : 'are some photos.'}`);
     if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
     if (botId === CHIEF && !moved && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
       this.say(CHIEF, 'person', words, null);
@@ -1167,16 +1167,18 @@ export class Crew {
       const id = Number(r.lastInsertRowid);
       const parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
       this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ?, hops = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), link.hops ?? 0, id);
-      // Photos are kept in the helper's files (so they show in the person's Things) and shown in the chat by that path.
+      // Uploads are kept in the helper's files — photos where they were, documents in its inbox for the documents tool — under crewd's own `<task>-<n>.<ext>` names, and shown in the chat by that path.
       const kept = pics.map((p, i) => {
-        const rel = `files/photos/${id}-${i + 1}.${p.ext}`;
-        mkdirSync(join(disk.botDir(this.cfg, bot), 'files', 'photos'), { recursive: true });
+        const photo = p.photo !== false;
+        const rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
+        mkdirSync(join(disk.botDir(this.cfg, bot), 'files', photo ? 'photos' : 'inbox'), { recursive: true });
         writeFileSync(join(disk.botDir(this.cfg, bot), rel), p.bytes);
-        this.db.event('file.delivered', bot, { task: id, path: rel, note: 'your photo', size: p.bytes.length, photo: true });
+        this.db.event('file.delivered', bot, { task: id, path: rel, note: photo ? 'your photo' : 'your file', size: p.bytes.length, ...(photo ? { photo: true } : { input: true }), ...(p.name ? { name: p.name } : {}) });
         return rel;
       });
-      if (kept.length) this.db.run('UPDATE tasks SET photos = ? WHERE id = ?', JSON.stringify(kept), id);
-      shown = kept.map((k) => `\n[photo ${bot}] ${k}`).join('');
+      if (kept.length) this.db.run('UPDATE tasks SET photos = ? WHERE id = ?', JSON.stringify(kept.filter((_, i) => pics[i].photo !== false)), id);
+      shown = kept.map((k, i) => pics[i].photo !== false ? `\n[photo ${bot}] ${k}` : `\n[file ${bot}] ${k} ${pics[i].bytes.length}B${pics[i].name ? ` ${pics[i].name}` : ''}`).join('');
+      if (kept.some((_, i) => pics[i].photo === false)) this.db.run('UPDATE tasks SET body = body || ? WHERE id = ?', `\nFiles attached (in files/inbox; read them with the documents tool): ${kept.filter((_, i) => pics[i].photo === false).join(', ')}`, id);
       // The thread shows the routine's own words, never Crewhouse's note to the bot (a watch's page and its before and after).
       if (routine) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id);
       else this.say(bot, origin === 'person' ? 'person' : origin, said + shown, id);

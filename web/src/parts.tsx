@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSource, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -318,14 +318,16 @@ export function ReviewCard({ f }: { f: FileView }) {
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
-  if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a><ReviewCard f={f} /></div>;
+  if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span></span><b>Open</b></a><ReviewCard f={f} /></div>;
   if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
       : <button className={`media cover ${big ? 'big' : ''}`} onClick={() => setPlay(true)} aria-label={`Play ${f.name}`}><span>{f.name}</span><i>▶</i></button>;
   }
-  return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a>;
+  // A sent file (a PDF, a receipt, a letter): its name, what kind it is and how big, then Open.
+  const chip = fileTarget(f)?.chip, sub = [chip, f.size ? fileSize(f.size) : ''].filter(Boolean).join(' · ');
+  return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic" aria-hidden>▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span>{sub && <span className="mute small doc-sub">{sub}</span>}</span><b>Open</b></a>;
 }
 
 // ---------- previews: spreadsheets and documents crewd read for the app ----------
@@ -534,20 +536,34 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
 /** How long a send may wait unanswered before the box says the words are held, not gone. */
 const HOLD_MS = 4000;
 
+/** A file waiting to send: the picker's own name and size for its chip, its bytes for crewd (which names it itself). */
+type Pick = { name: string; type: string; size: number; data: string };
+const PICK_ACCEPT = '.pdf,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.webp';
+/** Read the picked files as base64 for crewd; one too big is left out with a toast, never sent half-read. */
+const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map((f) => new Promise<Pick | null>((resolve) => {
+  if (f.size > 10 << 20) { toast(`“${f.name}” is too big; try one under 10 MB.`); resolve(null); return; }
+  const r = new FileReader();
+  r.onload = () => resolve({ name: f.name, type: f.type, size: f.size, data: String(r.result ?? '').split(',')[1] ?? '' });
+  r.onerror = () => resolve(null);
+  r.readAsDataURL(f);
+}))).then((ps) => ps.filter((p): p is Pick => !!p?.data));
+
 /**
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts). A send the computer hasn't
  * answered in a few seconds says so ("Reconnecting…"), so a stall never looks like a dead button.
  */
-/** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (not available yet, and it says so), a
- *  starter or two that fill the box without sending, then the mic and send. */
-export function Composer({ placeholder, onSend, chat, chips }: { placeholder: string; onSend: (t: string) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[] }) {
+/** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (a PDF, a document or a photo,
+ *  shown as chips until sent), a starter or two that fill the box without sending, then the mic and send. */
+export function Composer({ placeholder, onSend, chat, chips }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[] }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [held, setHeld] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [picked, setPicked] = useState<Pick[]>([]);
+  const picker = useRef<HTMLInputElement>(null);
   const hold = useRef<any>(null);
   const hear = (on: boolean, words: string) => { // he listens while focused with words, 1.5 s after it ends
     clearTimeout(hold.current);
@@ -556,35 +572,38 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
   };
   const change = (t: string) => { setText(t); setFailed(false); hear(focused, t); if (chat) keepDraft(chat, t); };
   const send = async () => {
-    const t = text.trim();
-    if (!t || busy || away) return;
+    const t = text.trim(), at = picked;
+    if ((!t && !at.length) || busy || away) return;
     setBusy(true); setFailed(false); setHeld(false);
     // The words leave the box the moment you send: the thread echoes them right away (and marks them sending), so
     // they are never in the box and the thread at once. A send that comes back failed puts them straight back with
     // a Retry, so nothing typed is lost.
-    setText(''); if (chat) keepDraft(chat, '');
+    setText(''); setPicked([]); if (chat) keepDraft(chat, '');
     // A send still unanswered after HOLD_MS is held, not dead: say so while the same request stays in flight, so Retry
     // is only ever offered once it has settled and can never send the words twice.
     const stall = setTimeout(() => setHeld(true), HOLD_MS);
     let ok = false;
-    try { ok = !!(await onSend(t)); } catch { ok = false; }
+    try { ok = !!(await onSend(t, at.length ? at : undefined)); } catch { ok = false; }
     clearTimeout(stall);
     setBusy(false); setHeld(false);
-    if (ok) { hear(focused, ''); } else { setText(t); setFailed(true); if (chat) sent(chat, false, t); }
+    if (ok) { hear(focused, ''); } else { setText(t); setPicked(at); setFailed(true); if (chat) sent(chat, false, t); }
   };
+  const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
+      {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file"><b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       {chips && <div className="c-bar">
-        <button type="button" className="c-clip" disabled aria-label="Attach a file: not available yet" title="Attaching files isn't available yet"><span className="desk-only"><Icon name="clip" size={18} /></span><span className="phone-only"><Icon name="plus" size={20} /></span></button>
+        <button type="button" className="c-clip" aria-label="Attach a file" title="Attach a PDF, a document or a photo" onClick={() => picker.current?.click()}><span className="desk-only"><Icon name="clip" size={18} /></span><span className="phone-only"><Icon name="plus" size={20} /></span></button>
+        <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
       {voice}
-      <button className="send" aria-label="Send" disabled={!away && (!text.trim() || busy)} aria-disabled={away || undefined}>↑</button>
+      <button className="send" aria-label="Send" disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>
     </form>
   );
 }

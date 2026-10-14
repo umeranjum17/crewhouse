@@ -45,7 +45,9 @@ export type Card = {
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
-export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review };
+export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review; size?: number };
+/** An upload's size in its chip: "47 KB", "1.2 MB". */
+export const fileSize = (n = 0) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 /** One tab of a delivered workbook, read back by crewd: its headings, its first rows, how many it has,
  *  and the parallel row numbers and cell roles (`head`, `in`, `calc`, or empty) the panel reads. */
 export type Sheet = { name: string; head: string[]; rows: string[][]; total: number; nums: number[]; roles: string[][] };
@@ -226,11 +228,11 @@ export function reviews(state: Json) {
   return out;
 }
 
-export function fileView(bot: string, path: string, review?: Review): FileView {
+export function fileView(bot: string, path: string, review?: Review, size?: number, name?: string): FileView {
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc', ...(review ? { review } : {}) };
+  return { url, name: name || pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc', ...(review ? { review } : {}), ...(size ? { size } : {}) };
 }
 
 /** Where a tap on a delivered file goes: the read-only panel for a page or sheet, the file itself (a PDF, a download)
@@ -664,9 +666,10 @@ export type Chat = { id: string; name: string; who: Helper | 'chief'; line: stri
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
 export function preview(last: Json | null | undefined, status = '') {
   if (!last) return status || 'Say hello';
-  const n = photos(String(last.text ?? '')).length;
-  const said = String(last.text ?? '').replace(PHOTO, '').trim();
-  const text = n && (!said || /^Here (is a photo|are some photos)\.$/.test(said)) ? (n === 1 ? 'Photo' : `${n} photos`) : said;
+  const n = photos(String(last.text ?? '')).length, u = uploads(String(last.text ?? '')).length;
+  const said = String(last.text ?? '').replace(ATTACH, '').trim();
+  const bare = !said || BARE_UPLOAD.test(said);
+  const text = bare ? (u && !n ? (u === 1 ? 'File' : `${u} files`) : n ? (n === 1 ? 'Photo' : `${n} photos`) : said) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
   return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
@@ -1388,9 +1391,18 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
 }
 
 // ---------- a chat ----------
-/** Photos sent with a message ride in its text as `[photo <bot>] files/photos/…` lines: pictures, not words. */
-const PHOTO = /\n?\[photo ([a-z0-9-]+)\] (files\/\S+)/g;
-const photos = (text: string) => [...text.matchAll(PHOTO)].map((m) => fileView(m[1], m[2]));
+/** Files sent with a message ride in its text as `[photo <bot>] files/…` or `[file <bot>] files/… <bytes>B <name>` lines:
+ *  attachments, not words. The byte count is crewd's own, written when it saved the file, and the name is the
+ *  person's own filename for display only (the path stays crewd's). */
+const ATTACH = /\n?\[(photo|file) ([a-z0-9-]+)\] (files\/\S+)(?: ([0-9]+B)(?: ([^\n]*))?)?/g;
+const attached = (text: string) => [...text.matchAll(ATTACH)].map((m) => m[1] === 'photo' || !m[4]
+  ? { kind: m[1], view: fileView(m[2], m[3]) }
+  : { kind: m[1], view: fileView(m[2], m[3], undefined, Number(m[4].slice(0, -1)), m[5]?.trim() || undefined) });
+const photos = (text: string) => attached(text).filter((a) => a.kind === 'photo').map((a) => a.view);
+/** Every upload on the line, photos and documents alike, with crewd's byte count where it wrote one. */
+const uploads = (text: string) => attached(text).map((a) => a.view);
+/** The words crewd files a bare upload under, photo or document. */
+const BARE_UPLOAD = /^(Here is a photo|Here are some photos|Here is a file|Here are some files)\.$/;
 
 export function room(page: Json, state: Json) {
   const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])]));
@@ -1407,7 +1419,7 @@ export function room(page: Json, state: Json) {
  *  words never are — inline code (`--branch`), bullets and emphasis stay. Only engine events still go: a tool
  *  call or raw JSON blob is never a sentence (`noTools`, per line so the list stays a list). Crewhouse's own
  *  status lines keep the full plain-words scrub (`plain`); the test engine's echo is still never an answer. */
-const chatWords = (text: string) => STUB.test(text) ? 'On it.' : text.split('\n').map((l) => noTools(l)).join('\n').trim();
+const chatWords = (text: string) => STUB.test(text) ? 'On it.' : text.replace(ATTACH, '').split('\n').map((l) => noTools(l)).join('\n').trim();
 
 /** A Chief hand-off's ask for the person's eye: the words themselves, with any label an older hand-off wrapped them
  *  in ("The person's words verbatim: …") and their quotes off, short enough for one collapsed line. */
@@ -1416,8 +1428,8 @@ const handOff = (title: string, body: string) =>
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const checks = reviews(state);
   return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
-    const pics = photos(String(m.text ?? ''));
-    const text = String(m.text ?? '').replace(PHOTO, '').trim();
+    const pics = uploads(String(m.text ?? ''));
+    const text = String(m.text ?? '').replace(ATTACH, '').trim();
     // Every line carries its time: notes and cards are placed among the messages by when they happened (Main2036).
     const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
@@ -1438,7 +1450,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}),
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && /^Here (is a photo|are some photos)\.$/.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
   }).filter((l: Line) => l.text || l.files.length);
 }
 

@@ -380,7 +380,7 @@ function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
   // opens scrolled past its room.
   const pick = (m: HomeMode) => { homeMode = m; setMode(m); scrollTo(0, 0); };
   const g = A.account(accounts);
-  const toChief = async (t: string) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
+  const toChief = async (t: string, files?: { name: string; type: string; data: string }[]) => { const ok = await attempt(() => api.post('chief', t, undefined, undefined, files), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const waiting = live.crew.filter(A.waitsOnYou).length;
   const bar = <HomeBar ctx={ctx} mode={mode} pick={pick} />;
   // The nudges under the bar: over Chief's thread they stay with it; in Office only the bar stays put and these scroll
@@ -542,7 +542,7 @@ function cardFor(c: A.Card, h: Helper | undefined, state: Json, refresh: () => v
 }
 function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const [page, setPage] = useState<Json>(null);
-  const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
+  const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
   const [partial, setPartial] = useState('');
   // The live line's own feed: crewd's pushed events with the moment they were heard, and which replies are streaming.
   const [heard, setHeard] = useState<Json[]>([]);
@@ -560,7 +560,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
   const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
-  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
+  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && (A.plain(x.text) === A.plain(pending.text) || (!!pending.files && /\[file [a-z0-9-]+ files\/\S+/.test(x.text))));
   const waiting = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
   useEffect(() => subscribe((e) => {
@@ -646,10 +646,10 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   // An answered card leaves a muted outcome in time order, above the result it let through (A.receiptSlots).
   const receiptSlots = A.receiptSlots(lines, receipts);
   const last = lines.at(-1);
-  const send = async (t: string) => {
-    setPending({ text: t, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
+  const send = async (t: string, files?: { name: string; type: string; data: string }[]) => {
+    setPending({ text: t || (files ?? []).map((f) => f.name).join(', '), files: !!files?.length, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
-    const ok = await attempt(() => api.post(id, t), undefined, true);
+    const ok = await attempt(() => api.post(id, t, undefined, undefined, files?.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
     return ok;
   };

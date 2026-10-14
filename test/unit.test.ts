@@ -1380,7 +1380,7 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   crew.recruit('reel', 'Reel', 'person');
   const png = { type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
   await assert.rejects(crew.post('reel', 'x', undefined, [png, png, png, png, png]), /up to four/);
-  await assert.rejects(crew.post('reel', 'x', undefined, [{ type: 'image/gif', data: png.data }]), /JPEG or PNG/);
+  await assert.rejects(crew.post('reel', 'x', undefined, [{ type: 'image/gif', data: png.data }]), /could not be read/);
   await assert.rejects(crew.post('reel', '  ', undefined, []), /empty message/);
 
   const { task: t } = (await crew.post('reel', '', undefined, [png]))!;
@@ -1415,4 +1415,24 @@ test('a search landing on an old line: botPage opens a window around it', async 
   assert.ok(ids.includes(5), 'the anchored line is in it');
   assert.deepEqual(ids.filter((n: number) => n < 5), [1, 2, 3, 4], 'a little before');
   assert.ok(ids.includes(104), 'a little after');
+});
+
+test('documents with a message: kept in the helper inbox, shown in the chat, refused at the edge', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64') };
+  await assert.rejects(crew.post('scout', 'x', undefined, undefined, false, undefined, undefined, false, [{ type: 'application/x-msdownload', data: pdf.data }]), /could not be read/);
+  await assert.rejects(crew.post('scout', 'x', undefined, undefined, false, undefined, undefined, false, [{ type: 'application/pdf', data: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64') }]), /too big/);
+
+  // A hostile client name never becomes a path: crewd names the upload `<task>-<n>.<ext>` itself.
+  const { task: t } = (await crew.post('scout', '', undefined, undefined, false, undefined, undefined, false, [{ ...pdf, name: '../../evil.pdf', path: '/tmp/evil.pdf' } as any]))!;
+  assert.ok(String(task(db, t).body).startsWith('Here is a file.'));
+  assert.match(String(task(db, t).body), new RegExp(`Files attached \\(in files/inbox.*files/inbox/${t}-1\\.pdf`));
+  assert.deepEqual(JSON.parse(task(db, t).photos ?? '[]'), [], 'documents never ride to the model as vision');
+  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'scout', 'files', 'inbox', `${t}-1.pdf`)));
+  assert.ok(!existsSync(join(cfg.crewDir, 'bots', 'scout', 'files', 'inbox', 'evil.pdf')));
+  assert.match(db.get("SELECT text FROM messages WHERE task_id = ? AND author = 'person'", t)!.text, new RegExp(`\\[file scout\\] files/inbox/${t}-1\\.pdf \\d+B evil\\.pdf$`));
+  await settled(db, t);
+  done();
 });
