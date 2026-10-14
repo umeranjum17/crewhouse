@@ -15,8 +15,7 @@ Then, by hand:
 - `src/openclaw/trusted-skills.json` — re-read each `SKILL.md` the install policy trusts, then regenerate its
   sha256 and bump `version` to the new engine version. A new skill is a human decision, never an automatic add.
 - `docs/supported-subscriptions.md` — the matrix is pin-bound. Re-run it against the new pin: what the kit now
-  offers, what Crewhouse maps (`src/openclaw/runtime.ts` `PROVIDER_OF` / `AUTH_CHOICE` / `CODE_CHOICE`), and each
-  route's status. A route the kit newly offers lands as a kit account in `src/accounts.ts` (`offered([...])`, or a
+  offers, what Crewhouse maps (`src/openclaw/runtime.ts` `PROVIDER_OF` / `AUTH_CHOICE`), and each route's status. A route the kit newly offers lands as a kit account in `src/accounts.ts` (`offered([...])`, or a
   `route('<id>')` row as OpenCode Go does, which takes its name and billing from the kit), with its billing carried
   through, before it can be offered in the app.
 
