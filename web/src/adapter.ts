@@ -657,8 +657,9 @@ export function crew(state: Json) {
   return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])) as Helper[];
 }
 
-/** Chief pinned, then latest talk first. Last line and office status stay separate; only Chief carries a badge. */
-export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; unread: number; ring: Helper['ring'];
+/** Chief first, then the crew in the Office's group order (latest talk first inside a group), The crew last. Last line
+ *  and office status stay separate; only Chief carries a badge: `asks`, what waits on the person in his thread. */
+export type Chat = { id: string; name: string; who: Helper | 'chief'; line: string; at: number; asks: number; ring: Helper['ring'];
   status: string; cls: 'needs' | 'work' | 'failed' | 'done' | 'rest'; working?: string };
 /** A thread's last line as the list shows it: "You: …", "Sent “Birthday video”", or the bot's words. */
 export function preview(last: Json | null | undefined, status = '') {
@@ -687,16 +688,17 @@ export function chats(state: Json): Chat[] {
   const glow = (s: Status): Chat['cls'] => s.seat === 'needs' ? 'needs' : s.seat === 'working' ? 'work'
     : s.seat === 'done' ? 'done' : s.seat === 'failed' ? 'failed' : 'rest';
   const cs = chiefStatus(v);
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, unread: bot('chief').unread ?? 0, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' ? { working: 'Chief is working' } : {}) };
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, asks: v.counts.needs, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' ? { working: 'Chief is working' } : {}) };
+  const rank = (c: Chat) => GROUP_ORDER.indexOf(groupOf(member(c.id), v));
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id), s = statusOf(member(h.id), v), m = member(h.id);
     const working = m.seat === 'working' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
     return { id: h.id, name: h.name, who: h, line: preview(b.last, h.role), at: at(b.last?.at ?? 0) || 0,
-      unread: b.unread ?? 0, ring: h.ring === 'needs' ? '' : h.ring, status: s.word, cls: glow(s), ...(working ? { working } : {}) };
-  }).sort((a, b) => b.at - a.at);
+      asks: 0, ring: h.ring === 'needs' ? '' : h.ring, status: s.word, cls: glow(s), ...(working ? { working } : {}) };
+  }).sort((a, b) => rank(a) - rank(b) || b.at - a.at);
   const room = state.room ?? {};
-  const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), unread: 0, ring: room.busy?.length ? 'working' : '', status: '', cls: 'rest' };
-  return [lead, pin, ...rest];
+  const pin: Chat = { id: 'room', name: 'The crew', who: 'chief', line: room.last ? plain(room.last.text) : 'Watch the crew work together', at: at(room.last?.at ?? 0), asks: 0, ring: room.busy?.length ? 'working' : '', status: '', cls: 'rest' };
+  return [lead, ...rest, pin];
 }
 /** Crewd owns the unread boundary; select the first retained, rendered message at or beyond it. */
 export function newDivider(page: Json, bot: string): number {
@@ -1752,9 +1754,8 @@ export type OfficeView = { chief: ChiefView; lead: Seat; crew: OfficeMember[]; d
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-/** Who has Stop / Take over / Leave it in this thread: a helper gone quiet in its own, and every one in Chief's (only
- *  Chief asks the person). */
-export const stuckIn = (crew: Helper[], id: string) => crew.filter((x) => x.stuckFor > 0 && (x.id === id || id === 'chief'));
+/** Who has Stop / Take over / Leave it in this thread: every helper gone quiet, in Chief's alone (only Chief asks the person). */
+export const stuckIn = (crew: Helper[], id: string) => (id === 'chief' ? crew.filter((x) => x.stuckFor > 0) : []);
 /** The one word for each state, on every screen: Chief's header, the rail, the live line, the Office (panels, groups,
  *  header counts), Chats and the phone. Only Chief says "Needs you"; "resting" is only ever an account's word. */
 export const WORDS = { needs: 'Needs you', work: 'At work', wait: 'Waiting', next: 'Up next', done: 'Done',
@@ -1763,6 +1764,7 @@ export const WORDS = { needs: 'Needs you', work: 'At work', wait: 'Waiting', nex
  *  the person, or held), at work, done today, or free. */
 export type Group = 'wait' | 'work' | 'done' | 'free';
 export const GROUP_TITLES: Record<Group, string> = { wait: 'Waiting', work: 'At work', done: 'Done today', free: 'Free' };
+const GROUP_ORDER = Object.keys(GROUP_TITLES) as Group[];
 /** One member's status: its word, its group and the rail's seat class (a finish today is `done`). */
 export type Status = { word: string; group: Group; seat: Seat | 'done' };
 /** A helper's status (the rail, the panel, the phone's list and pill, the crew page and Chats all read it). A crew member

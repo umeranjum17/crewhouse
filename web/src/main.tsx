@@ -177,11 +177,11 @@ function Chats({ state, desk }: { state: Json; desk?: boolean }) {
       {shown.map((c) => {
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
-            {c.id === 'room' ? <span className={`face stack-faces ${c.ring}`} style={{ background: crew[0] ? discOf(crew[0]) : undefined }}>{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={22} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
-            <span className="grow chat-preview"><b>{c.name}</b><span className="small">{c.line}</span></span>
+            {c.id === 'room' ? <span className={`face stack-faces ${c.ring}`} style={{ background: crew[0] ? discOf(crew[0], true) : undefined }}>{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={22} />)}</span> : <Face who={c.who} size={40} ring={c.ring} row />}
+            <span className="grow chat-preview"><b>{c.name}</b><span className="small clamp1">{c.line}</span></span>
             <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>
-              {c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}
-              {c.id === 'chief' && c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
+              {c.asks > 0 ? <span className="badge" aria-label={`${c.asks} for you`}>{A.unreadBadge(c.asks)}</span>
+                : c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}</span>
           </a>
           {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
         </div>;

@@ -52,6 +52,20 @@ const state = {
   routines: [{ id: 1, bot: 'reel', kind: 'task', name: 'Weekly demo', words: 'Every Monday at 9:00', state: 'on', next_at: now, brain: 'claude:haiku', history: [] }],
 };
 
+test('Chats run as mock 2: Chief with his asks as a count, the crew by Office group (latest first inside one), The crew last', () => {
+  const said = (at: number) => ({ last: { author: 'bot', text: 'Hello.', at } });
+  const s = { ...state, room: {}, events: [], ideas: [], routines: [],
+    bots: [bot('chief', said(now)), bot('tracer', { template: 'tracer', ...said(now) }), bot('scribe', { template: 'scribe', ...said(now - 1000) }),
+      bot('scout', { task: { id: 6, title: 'Flights', state: 'working' }, ...said(now - 5000) }), bot('reel', { task: { id: 5, title: 'Video', state: 'working' }, ...said(now - 2000) }),
+      bot('pip', { template: 'pip', task: { id: 7, title: 'Taxes', state: 'needs_you' }, ...said(now - 9000) })],
+    tasks: [{ id: 4, bot: 'scribe', title: 'Cover letter', state: 'done', updated_at: now, files: ['files/letter.docx'], result: 'Your cover letter is ready.' }],
+    asks: [{ id: 9, bot: 'pip', task_id: 7, kind: 'permission', at: now, title: 'Pip would like to read a file', detail: { tool: 'Read', summary: 'taxes.pdf' } }] };
+  const rows = A.chats(s);
+  assert.deepEqual(rows.map((c) => [c.id, c.status]), [['chief', 'Needs you'], ['pip', 'Waiting'], ['reel', 'At work'], ['scout', 'At work'],
+    ['scribe', 'Done'], ['tracer', 'Free'], ['room', '']]);
+  assert.deepEqual(rows.map((c) => c.asks), [1, 0, 0, 0, 0, 0, 0], 'only Chief carries a badge: the asks in his thread');
+});
+
 test('the account list is the one crewd really serves: every route, none made up', () => {
   // The honest matrix: every subscription route /api/accounts serves renders on Settings — no route hidden,
   // none invented, and ChatGPT (the verified front door) first.

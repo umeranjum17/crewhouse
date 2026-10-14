@@ -10,7 +10,7 @@ question, is never stopped this way: only a turn in flight counts.
 
 Before that bound, a helper with no news past `CREWHOUSE_STUCK_MS` (3 minutes) still reads "At work" on the rail, in Chats
 (beside its working line) and on its live line: working beats gone quiet, one status everywhere. Only Chief asks the person: the Stop / Take over /
-Leave it card sits in Chief's thread for every helper gone quiet (`A.stuckIn`), and in that helper's own, never under the
+Leave it card sits in Chief's thread for every helper gone quiet (`A.stuckIn`), never in that helper's own nor under the
 helper's Chats row (`test/office.test.ts` "live Chats…"). Stop gets one
 plain line from Chief ("I stopped Scout's “…”, as you asked. Anything made so far is kept, and your next message carries
 on.", no alert), and the helper reads "Free" on the rail, counted as free in the office summary.
@@ -21,7 +21,7 @@ on.", no alert), and the helper reads "Free" on the rail, counted as free in the
 the task ends `failed` with nobody pressing Stop, Chief's line appears exactly once (also after another tick), and the
 next message to Chief is prompted, carries the line, and finishes. Fails on the old code (the task never settles).
 The second test there backdates a held Scout turn past the quiet limit and reads crewd's own snapshot through the
-adapter: Stop card in Chief's thread and Scout's, Scout "At work" on the rail, the Chats row (with its working line) and the live line, then `resetBot` gives one
+adapter: Stop card in Chief's thread and none in Scout's, Scout "At work" on the rail, the Chats row (with its working line) and the live line, then `resetBot` gives one
 Chief line, no alert, and Scout "Free" on the rail and in the summary.
 
 ## Drive (real crewd, stub engine)
@@ -49,4 +49,4 @@ Chief line, no alert, and Scout "Free" on the rail and in the summary.
 
 Exactly one "stalled" line from Chief, task `failed` with the plain result, no line in the helper's chat, Chief no
 longer "at work", and the next message answered; a helper gone quiet reads "At work" on the rail, Chats and the live
-line alike, its card is in Chief's thread and not under its Chats row, and Stop gives one Chief line with Scout free — at 1440 and 390, day and night, and in the installed web app.
+line alike, its card is in Chief's thread, not in its own and not under its Chats row, and Stop gives one Chief line with Scout free — at 1440 and 390, day and night, and in the installed web app.
