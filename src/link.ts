@@ -62,7 +62,8 @@ export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
 const webAddress = (v: unknown): v is WebSubscription => typeof v === 'object' && v !== null, UPDATE_APP = 'Get the latest Crewhouse app to keep chatting.', currentPhone = (body: any) => body?.build === 'p9b';
 /** The relay's WebSocket origin, from the https/wss address Settings keeps. */
-const wsOrigin = (url: string) => url.replace(/^http/, 'ws'), pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined);
+const wsOrigin = (url: string) => url.replace(/^http/, 'ws'), pushOf = (v?: string) => (v === 'missing' || v === 'off' ? v : v ? 'on' : undefined),
+  fail404 = (m: string): never => { throw Object.assign(new Error(m), { status: 404 }); };
 /** A phone waiting at the computer for the person's yes: its name and the two words both screens show. */
 type Asking = { id: number; name: string; words: string; role: Role; offer?: string; answer: (yes: boolean) => void };
 export class Link {
@@ -126,7 +127,7 @@ export class Link {
       canView: (req) => req.op.startsWith('GET ') || req.op === 'desktop',
       handle: (req, g) => this.request(req.op, req.args, g, req.key),
       answers: this.answers,
-      stream: (s, req, g) => this.desktop(s, req.args, g),
+      stream: (s, req, g) => s.op === 'request' ? this.big(s, req.args, g) : this.desktop(s, req.args, g),
       onError: (e) => console.error('phone link:', e),
     });
     this.wss.on('connection', (ws) => this.host.accept(ws as any));
@@ -168,16 +169,8 @@ export class Link {
       setTimeout(() => done(false), PAIR_MS).unref();
     });
   }
-  answer(id: number, yes: boolean) {
-    const a = this.asking.get(id);
-    if (!a) throw Object.assign(new Error('that phone stopped waiting'), { status: 404 });
-    a.answer(yes);
-  }
-  approve(words: string) {
-    const a = [...this.asking.values()].find((a) => a.words === words.trim());
-    if (!a) throw Object.assign(new Error('those words do not match a waiting phone'), { status: 404 });
-    a.answer(true);
-  }
+  answer(id: number, yes: boolean) { (this.asking.get(id) ?? fail404('that phone stopped waiting')).answer(yes); }
+  approve(words: string) { ([...this.asking.values()].find((a) => a.words === words.trim()) ?? fail404('those words do not match a waiting phone')).answer(true); }
 
   private setting(key: string): string | undefined { return this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value; }
   private put(key: string, value: string) { this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, value); }
@@ -257,9 +250,7 @@ export class Link {
 
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
   private dial() {
-    this.client?.stop();
-    this.client = undefined;
-    this.relayStatus = 'off';
+    this.client?.stop(); this.client = undefined; this.relayStatus = 'off';
     if (!this.relay || !this.host) return;
     const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined;
     const c = this.client = new RelayClient(this.host, {
@@ -281,6 +272,15 @@ export class Link {
   desk?: Desk;
   /** Set by the server: the web app, which the link's own address serves (README, "The installed web app"). */
   page: (req: IncomingMessage, res: ServerResponse) => void = (_req, res) => { res.writeHead(404).end(); };
+  /** A request too big for one link frame (a phone's documents): its JSON body as one line in pieces, answered as one line. */
+  private big(s: import('@byokit/pair').LinkStream, args: any, g: Grant) {
+    const parts: Buffer[] = [];
+    s.onData = async (c) => {
+      parts.push(Buffer.from(c));
+      if (parts.reduce((n, p) => n + p.length, 0) > 64 << 20) return s.end('too-large'); // four 10 MB files, as base64
+      if (c.at(-1) === 10) { await s.write(JSON.stringify(await this.request(String(args?.op), JSON.parse(Buffer.concat(parts).toString()), g))); s.end(); }
+    };
+  }
   /** A phone watching (and, holding the controls, driving) a bot's screen: one JSON message per line each way,
    *  {id, method, params} in and {id, result | error} or {event} out, as on the computer's own socket. */
   private desktop(s: import('@byokit/pair').LinkStream, args: any, g: Grant) {

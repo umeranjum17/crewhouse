@@ -15,6 +15,7 @@ import * as art from '../web/src/art.ts';
 import { color, radius } from '../web/src/tokens.ts';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { desktopAvailable } from '@desklink/react-native/availability';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 
@@ -302,6 +303,27 @@ async function shrink(uri: string): Promise<Photo> {
   const r = await manipulateAsync(uri, [{ resize: { width: 1280 } }], { compress: 0.6, format: SaveFormat.JPEG, base64: true });
   return { type: 'image/jpeg', data: r.base64 ?? '', uri: r.uri };
 }
+/** A document sent with the words (docs/ui-contract.md `files`): crewd's own type by file ending, since a phone's
+ *  picker names a .md or .csv several ways; crewd keeps the allow-list and the 10 MB limit, and names the file itself. */
+type Doc = { name: string; type: string; size: number; data: string };
+const DOCS: Record<string, string> = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', txt: 'text/plain', md: 'text/markdown' };
+const ending = (name: string) => (name.split('.').pop() ?? '').toLowerCase();
+
+/** A file the person sent, as mock 3A draws it: its kind on a tag, then the name on one line over kind and size, as
+ *  the web's card says them (web/src/parts.tsx `Media`). `remove` takes one back out of the box before it is sent. */
+function FileChip({ name, kind, size, remove }: { name: string; kind: string; size: number; remove?: () => void }) {
+  const t = useLook(), { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360; // large text: the tag goes over the name, never squeezes it
+  const tag = <View style={[s.fileTag, { backgroundColor: t.softAccent }]}><Text style={[s.small, s.b, { color: t.pink }]}>{kind}</Text></View>;
+  const x = remove && <Pressable onPress={remove} accessibilityLabel={`Remove ${name}`} hitSlop={10}><T tone="ink2">✕</T></Pressable>;
+  // Narrow: the whole name wraps, and the tag above already says the kind, so the size alone keeps its one line.
+  const sz = A.fileSize(size).replace(' ', '\u00a0');
+  const words = <View style={{ flexShrink: 1, minWidth: 0 }}><T style={s.b} lines={narrow ? undefined : 1}>{name}</T><T tone="mute" style={s.small} lines={1}>{narrow ? sz : `${kind} · ${sz}`}</T></View>;
+  return <View style={[s.fileChip, { backgroundColor: t.solid, borderColor: t.line }, narrow ? { gap: 6 } : s.row]}>
+    {narrow ? <><View style={[s.row, { justifyContent: 'space-between' }]}>{tag}{x}</View>{words}</> : <>{tag}{words}{x}</>}
+  </View>;
+}
 
 /** The voice note to Chief: a mic in the box when this phone can hear on the phone itself (web/src/parts.tsx
  *  useVoice). What was said lands after what is already there, for the person to read and send; speaking sends nothing. */
@@ -340,33 +362,52 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
 }
 
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
- *  photos. A send that didn't go through keeps both with a Retry; each chat holds its own words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[]) => unknown; chat?: string; photos?: boolean; mic?: boolean; listen?: boolean; away?: boolean }) {
+ *  photos or, with `docs`, documents. A send that didn't go through keeps them all with a Retry; each chat holds its own
+ *  words (web/src/draft.ts). */
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: canDoc = false, away, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[], files: Doc[]) => unknown; chat?: string; photos?: boolean; docs?: boolean; mic?: boolean; listen?: boolean; away?: boolean }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const ready = !!text.trim() || pics.length > 0;
+  const ready = !!text.trim() || pics.length + docs.length > 0;
   // Chief's box (B1): the send stays dark while there is nothing to send, never a faded accent.
   const dark = chat === 'chief', on = ready && !busy && !away;
   const change = (x: string) => { setText(x); setFailed(false); if (chat) keepDraft(chat, x); };
   const send = async () => {
-    if (away || busy || (!text.trim() && !pics.length)) return;
-    const x = text.trim(), p = pics;
+    if (away || busy || !ready) return;
+    const x = text.trim(), p = pics, d = docs;
     setBusy(true);
-    setText(''); setPics([]); if (chat) keepDraft(chat, '');
+    setText(''); setPics([]); setDocs([]); if (chat) keepDraft(chat, '');
     let ok = false;
-    try { ok = !!(await onSend(x, p)); } catch { ok = false; }
+    try { ok = !!(await onSend(x, p, d)); } catch { ok = false; }
     setBusy(false);
-    if (!ok) { setFailed(true); setText(x); setPics(p); if (chat) { keepDraft(chat, x); sent(chat, false, x); } }
+    if (!ok) { setFailed(true); setText(x); setPics(p); setDocs(d); if (chat) { keepDraft(chat, x); sent(chat, false, x); } }
   };
+  const room = 4 - pics.length - docs.length;
   const pick = () => attempt(async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 4 - pics.length, quality: 1 });
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: room, quality: 1 });
     if (r.canceled) return;
-    const made = await Promise.all(r.assets.slice(0, 4 - pics.length).map((a) => shrink(a.uri)));
-    setPics((p) => [...p, ...made].slice(0, 4));
+    const made = await Promise.all(r.assets.slice(0, room).map((a) => shrink(a.uri)));
+    setPics((p) => [...p, ...made].slice(0, room + p.length));
   });
+  // One the box can't send is left out and said why, never sent half-read.
+  const pickDoc = () => attempt(async () => {
+    const r = await DocumentPicker.getDocumentAsync({ type: [DOCS.pdf, DOCS.docx, DOCS.xlsx, 'text/*'], multiple: true });
+    if (r.canceled) return;
+    const made = await Promise.all(r.assets.slice(0, room).map(async (a): Promise<Doc | null> => {
+      const type = DOCS[ending(a.name)];
+      if (!type) { say(`“${a.name}” can't be sent. Try a PDF, a Word or Excel file, or a text file.`); return null; }
+      if ((a.size ?? 0) > 10 << 20) { say(`“${a.name}” is too big. Try one under 10 MB.`); return null; }
+      const data = await new File(a.uri).base64();
+      return { name: a.name, type, size: a.size ?? Math.floor((data.length * 3) / 4), data };
+    }));
+    setDocs((d) => [...d, ...made.filter((m): m is Doc => !!m)].slice(0, room + d.length));
+  });
+  const [choosing, setChoosing] = useState(false), reduce = motion.useReduceMotion();
+  const attach = () => canDoc ? setChoosing(true) : void pick();
+  const choose = (fn: () => unknown) => { setChoosing(false); void fn(); };
   return (
     <View style={{ gap: 6 }}>
       {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
@@ -381,8 +422,20 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, away, mi
           </Pressable>
         ))}
       </View>}
+      {choosing && <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={() => setChoosing(false)}>
+        <Pressable style={s.scrim} onPress={() => setChoosing(false)}>
+          <Pressable style={[s.sheet, { backgroundColor: t.surface }]} onPress={() => {}}>
+            <View style={[s.grabber, { backgroundColor: t.line2 }]} />
+            <T style={s.h2}>Add to your message</T>
+            <Btn big label="A document: PDF, Word, Excel or text" onPress={() => choose(pickDoc)} />
+            <Btn big label="A photo" onPress={() => choose(pick)} />
+            <Btn ghost label="Cancel" onPress={() => setChoosing(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>}
+      {docs.length > 0 && <View style={{ gap: 6, paddingHorizontal: 8 }}>{docs.map((d, i) => <FileChip key={`${d.name}.${i}`} name={d.name} kind={ending(d.name).toUpperCase()} size={d.size} remove={() => setDocs((x) => x.filter((_, j) => j !== i))} />)}</View>}
       <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line, opacity: busy ? 0.7 : 1 }]}>
-        {canPhoto && <Pressable onPress={pick} disabled={pics.length >= 4} accessibilityLabel="Add a photo" style={[s.send, { backgroundColor: 'transparent' }]}>
+        {canPhoto && <Pressable onPress={attach} disabled={room <= 0} accessibilityLabel={canDoc ? 'Add a photo or a document' : 'Add a photo'} style={[s.send, { backgroundColor: 'transparent' }]}>
           <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
         </Pressable>}
         <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
@@ -436,8 +489,9 @@ function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
   const readable = A.phoneReadable(f);
   const word = f.kind === 'video' ? 'Play' : 'Read';
   const kind = f.kind === 'video' ? 'Video' : f.kind === 'image' ? 'Picture' : f.kind === 'sheet' ? 'Spreadsheet' : 'Document';
-  // The name gets the room: a tile, the name on up to two lines with its kind under it, then Read or Play.
-  const row = <View style={s.row}>
+  // A file the person sent is a chip (mock 3A). Otherwise the name gets the room: a tile, the name on up to two lines
+  // with its kind under it, then Read or Play.
+  const row = f.size ? <FileChip name={f.name} kind={A.fileTarget(f)?.chip ?? 'FILE'} size={f.size} /> : <View style={s.row}>
     <View style={[s.fileIc, { backgroundColor: t.solid, borderColor: t.line }]}><T tone={f.kind === 'sheet' ? undefined : 'ink2'} style={[s.fileGlyph, f.kind === 'sheet' && { color: t.ok }]}>{f.kind === 'video' ? '▶' : f.kind === 'image' ? '▣' : f.kind === 'sheet' ? '▦' : '▤'}</T></View>
     <View style={{ flex: 1, gap: 2 }}><T style={[s.rowTitle, s.b]} lines={2}>{f.name}</T><T tone="mute" style={s.small} lines={1}>{readable ? kind : `${kind} · on your computer`}</T></View>
     {readable && <View style={[s.fileOpen, { backgroundColor: t.solid, borderColor: t.line2 }]}><T style={s.btnText}>{word}</T></View>}
@@ -1752,7 +1806,7 @@ function Home(ctx: Ctx) {
   const chief = chiefNow(state, offline);
   const [mode, setMode] = useState(homeMode);
   const pick = (m: HomeMode) => { homeMode = m; setMode(m); };
-  const toChief = async (x: string, p: Photo[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
+  const toChief = async (x: string, p: Photo[] = [], d: Doc[] = []) => { const ok = await attempt(() => api.post('chief', x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true); if (ok) { refresh(); go({ view: 'chief' }); } return ok; };
   const [room, setRoom] = useState(0);
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   const [profile, setProfile] = useState(false);
@@ -1779,7 +1833,7 @@ function Home(ctx: Ctx) {
         <ChatList state={state} go={go} mood={chief.mood} />
         <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
-      {(canAct || ctx.writer) && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" away={offline} /></View>}
+      {(canAct || ctx.writer) && <View style={s.dock}><Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" docs away={offline} /></View>}
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
       {profile && <ChiefSheet view={view} {...ctx} onClose={() => setProfile(false)} />}
     </View>
@@ -1934,7 +1988,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const t = useLook();
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
-  const [pending, setPending] = useState<{ text: string; after: number; at: number } | null>(null);
+  const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
   const [partial, setPartial] = useState('');
   // The live line's own feed, the same one web chat reads: crewd's pushed events with the moment
   // they were heard, and which replies are streaming. Heard is every event, not just this thread's,
@@ -1962,7 +2016,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
 
   const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
-  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && A.plain(x.text) === A.plain(pending.text));
+  const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && (A.plain(x.text) === A.plain(pending.text) || (!!pending.files && /\[file [a-z0-9-]+\] files\//.test(x.text))));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   const crewNames = A.crew(state);
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
@@ -1992,10 +2046,10 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   // Seen: the chat's unread count goes once its newest line is on screen (a watch-only phone can't mark it).
   const newest = last?.id;
   useEffect(() => { if (canAct && mark.current !== null && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
-  const send = async (x: string, p: Photo[] = []) => {
-    setPending({ text: x, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
+  const send = async (x: string, p: Photo[] = [], d: Doc[] = []) => {
+    setPending({ text: x || d.map((f) => f.name).join(', '), files: d.length > 0, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
-    const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data }))), undefined, true);
+    const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
     return ok;
   };
@@ -2051,7 +2105,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-                {l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+                {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
                 {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <ChatText text={l.text} />)}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
                 {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
@@ -2066,7 +2120,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
         {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
       </ScrollView>
-      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} away={offline} /></View>
+      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
@@ -2776,6 +2830,8 @@ const s = StyleSheet.create({
   rowTitle: { fontSize: 15, lineHeight: 22, ...fw('500') },
   fileIc: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   fileGlyph: { fontSize: 20, lineHeight: 24 },
+  fileChip: { alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderRadius: radius.card, paddingVertical: 8, paddingHorizontal: 10 },
+  fileTag: { borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 },
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
   unread: { color: '#FFFFFF', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },

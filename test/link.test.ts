@@ -498,6 +498,28 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
 
 
 
+test('a phone sends a document too big for one link frame on a stream; it lands in the helper\'s inbox, and a watch-only phone cannot', async () => {
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
+  const c = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Statement sender'));
+  const w = open(await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Statement watcher'));
+  await until(async () => c.status() === 'online' && w.status() === 'online');
+  // 2 MB as base64 is more than one link frame (1 MB) carries, so the app sends it as mobile/src/link.ts `big` does.
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(2 << 20, 7)]), op = 'POST /api/bots/chief/messages';
+  const body = JSON.stringify({ text: 'Here is my statement.', files: [{ name: 'northbank-statement.pdf', type: 'application/pdf', data: pdf.toString('base64') }], build: 'p9b' });
+  const s = await c.link.stream('request', { op });
+  let out = '';
+  const ended = new Promise((r) => { s.onEnd = r; });
+  s.onData = (b) => { out += new TextDecoder().decode(b); };
+  await s.write(body + '\n');
+  assert.equal(await ended, undefined);
+  assert.equal(JSON.parse(out).status, 200, out.slice(0, 200));
+  const line = await until(async () => (await http('GET', '/api/bots/chief')).body.messages.map((m: any) => /\[file ([a-z0-9-]+)\] (files\/inbox\/\S+) (\d+)B northbank-statement\.pdf/.exec(m.text)).find(Boolean));
+  assert.equal(Number(line[3]), pdf.length);
+  assert.deepEqual(readFileSync(join(root, 'crew', 'bots', line[1], line[2])), pdf, 'the inbox file is the bytes the phone sent');
+  assert.equal(await w.link.stream('request', { op }).then(() => 'opened', (e) => e.code), 'view-only');
+  for (const x of [c, w]) { x.link.stop(); await http('DELETE', `/api/phones/${x.link.grant.device.id}`); }
+});
+
 test('phones, push and quiet hold survive a restart after the P1 migration', async () => {
   const aGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Kept phone');
   const bGrant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Former phone');
