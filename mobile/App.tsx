@@ -408,6 +408,20 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
   const [choosing, setChoosing] = useState(false), reduce = motion.useReduceMotion();
   const attach = () => canDoc ? setChoosing(true) : void pick();
   const choose = (fn: () => unknown) => { setChoosing(false); void fn(); };
+  // At the largest text the words take the whole box and the buttons drop to the row under them, so the placeholder
+  // and what is typed keep one line (the same switch the phone's head makes, `PhoneHead`).
+  const { width, fontScale } = useWindowDimensions();
+  const oneRow = width / fontScale >= 360;
+  const plus = canPhoto && <Pressable onPress={attach} disabled={room <= 0} accessibilityLabel={canDoc ? 'Add a photo or a document' : 'Add a photo'} style={[s.send, { backgroundColor: 'transparent' }]}>
+    <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
+  </Pressable>;
+  const rest = <>
+    <Mic on={mic} text={text} put={change} listen={listen} />
+    <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
+      <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
+    </Pressable>
+  </>;
+  const field = (full: boolean) => <TextInput style={[s.composerInput, { color: t.ink }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
   return (
     <View style={{ gap: 6 }}>
       {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
@@ -434,15 +448,9 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
         </Pressable>
       </Modal>}
       {docs.length > 0 && <View style={{ gap: 6, paddingHorizontal: 8 }}>{docs.map((d, i) => <FileChip key={`${d.name}.${i}`} name={d.name} kind={ending(d.name).toUpperCase()} size={d.size} remove={() => setDocs((x) => x.filter((_, j) => j !== i))} />)}</View>}
-      <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line, opacity: busy ? 0.7 : 1 }]}>
-        {canPhoto && <Pressable onPress={attach} disabled={room <= 0} accessibilityLabel={canDoc ? 'Add a photo or a document' : 'Add a photo'} style={[s.send, { backgroundColor: 'transparent' }]}>
-          <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
-        </Pressable>}
-        <TextInput style={[s.composerInput, { color: t.ink }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />
-        <Mic on={mic} text={text} put={change} listen={listen} />
-        <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
-          <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
-        </Pressable>
+      <View style={[s.composer, { backgroundColor: t.solid, borderColor: t.line, opacity: busy ? 0.7 : 1 }, !oneRow && { flexWrap: 'wrap', borderRadius: radius.control }]}>
+        {oneRow ? <>{plus}{field(false)}{rest}</>
+          : <>{field(true)}<View style={[s.row, { width: '100%', gap: 8 }]}>{plus}<View style={{ flex: 1 }} />{rest}</View></>}
       </View>
     </View>
   );
