@@ -387,6 +387,23 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .mic-stop { width: 12px; height: 12px; border-radius: 3px; background: currentColor; }
 @media (prefers-reduced-motion: no-preference) { .mic.on { animation: mic-on 1.2s var(--ease) infinite alternate; } }
 @keyframes mic-on { to { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pink) 35%, transparent); } }
+/* Talk with Chief: the empty box's send becomes Talk; a call takes the box's place until Stop. */
+.send.talk { background: var(--ink); color: var(--bg); display: grid; place-items: center; transform: none; }
+.call { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 8px; background: var(--solid); border: 1px solid var(--line2); border-radius: 22px; padding: 8px 8px 8px 18px; min-height: 52px; }
+.call-state { display: flex; align-items: center; gap: 8px; font: 600 13px/18px var(--ui); color: var(--ink2); min-width: 0; }
+.call-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--line2); flex: none; }
+.call.listening .call-state i { background: var(--pink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pink) 25%, transparent); }
+.call.speaking .call-state i { background: var(--ok); }
+.call-words { grid-column: 1 / -1; margin: 0 0 4px; font: 400 17px/24px var(--ui); color: var(--ink); overflow-wrap: anywhere; }
+.call-words.mute { color: var(--mute); }
+.call-voice > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: 999px; font: 500 13px/18px var(--ui); color: var(--ink2); background: var(--soft); white-space: nowrap; }
+.call-voice > summary::-webkit-details-marker { display: none; }
+.call-menu { position: absolute; right: 8px; bottom: calc(100% + 8px); z-index: 5; width: min(320px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--bg); box-shadow: var(--e2); }
+.call-menu label { display: grid; gap: 6px; font: 600 13px/18px var(--ui); color: var(--ink2); }
+.call-menu select { font: 400 16px/22px var(--ui); padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--solid); color: var(--ink); }
+.call-menu p { margin: 0; font: 400 13px/18px var(--ui); color: var(--mute); }
+.call-stop { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--danger); color: var(--bg); font: 600 15px/1 var(--ui); }
+.line.reading .bubble-text { border-left: 2px solid var(--ok); padding-left: 12px; }
 
 /* chat */
 .chat-head { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 4px 0 8px; }

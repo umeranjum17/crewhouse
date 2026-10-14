@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
-import { canHear, hear } from './voice.ts';
+import { canHear, hear, speak, voices } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
@@ -533,6 +533,78 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
 }
 
+/** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
+export type Talk = { lines: { id: number; from: string; text: string }[]; reading: (id: number) => void };
+type Now = { phase: 'listening' | 'thinking' | 'speaking'; words: string };
+/** This device's voice and speed for Chief, kept on the device (its voices are its own). */
+const VOICE = 'crewhouse.voice';
+const kept = (): { voice?: string; rate?: number } => { try { return JSON.parse(localStorage.getItem(VOICE) ?? '{}'); } catch { return {}; } };
+const SPEEDS: [string, number][] = [['Slower', 0.8], ['Normal', 1], ['Faster', 1.25], ['Fastest', 1.5]];
+const spoken = (t: string) => t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>|]+/g, '');
+
+/** Talking with Chief: listen, send the words once the person stops, read his reply aloud, then listen again. It never
+ *  listens while it reads, so it can't hear itself; Stop ends it at any point, and every word stays in the chat. */
+function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean>) {
+  const [can, setCan] = useState(false);
+  const [now, setNow] = useState<Now | null>(null);
+  const lines = useRef(talk?.lines ?? []);
+  lines.current = talk?.lines ?? [];
+  const arrived = useRef(() => {});
+  const run = useRef<{ stopped: boolean; cut: () => void } | null>(null);
+  useEffect(() => arrived.current(), [talk?.lines]);
+  useEffect(() => { if (talk) void Promise.all([canHear(), voices()]).then(([h, v]) => setCan(h && v.length > 0)); }, [!!talk]);
+  const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
+  useEffect(() => stop, []); // leaving the chat ends the call
+  const show = (n: Now) => { setNow(n); setListen('chief', n.phase === 'listening'); };
+  const start = async () => {
+    const r = run.current = { stopped: false, cut: () => {} }, mark = talk?.reading ?? (() => {});
+    const chief = () => lines.current.filter((l) => l.from === 'them' && l.text); // his words in his own thread
+    let read = chief().at(-1)?.id ?? 0, quiet = 0, end = 'Call ended.';
+    try {
+      while (!r.stopped) {
+        const next = chief().find((l) => l.id > read);
+        if (next) { // Chief's new lines first, one at a time, before the mic opens again
+          read = next.id;
+          const vs = await voices();
+          const s = speak(spoken(next.text), () => ({ voice: vs.find((v) => v.name === kept().voice) ?? vs[0], rate: kept().rate ?? 1 }), (w) => show({ phase: 'speaking', words: w }));
+          mark(next.id); r.cut = s.stop; await s.done; mark(0);
+          continue;
+        }
+        show({ phase: 'listening', words: '' });
+        const h = hear((w) => show({ phase: 'listening', words: w }));
+        r.cut = h.stop;
+        const said = await h.words;
+        if (r.stopped) break;
+        if (!said) { if (++quiet < 2) continue; end = "Call ended. I didn't hear anything."; break; }
+        quiet = 0;
+        show({ phase: 'thinking', words: '' });
+        if (!(await send(said))) { end = 'Not sent, so the call ended. Your words are in the box.'; break; }
+        await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || chief().some((l) => l.id > read)) go(); }; arrived.current(); });
+      }
+    } catch (e: any) { end = e.message === 'blocked' ? 'Allow the microphone for this page, then try again.' : "Speaking isn't ready on this computer. Type instead."; }
+    run.current = null; mark(0); setNow(null); setListen('chief', false); toast(end);
+  };
+  return { can: can && !!talk, now, start, stop };
+}
+
+/** The call in the box's place: what's happening, the words being heard or read, this device's voice and speed, Stop. */
+function CallPanel({ now, stop }: { now: Now; stop: () => void }) {
+  const [vs, setVs] = useState<SpeechSynthesisVoice[]>([]);
+  const [pick, setPick] = useState(kept);
+  useEffect(() => { void voices().then(setVs); }, []);
+  const choose = (k: { voice?: string; rate?: number }) => { const n = { ...pick, ...k }; setPick(n); try { localStorage.setItem(VOICE, JSON.stringify(n)); } catch { /* kept for this call only */ } };
+  const lang = (l: string) => { try { return new Intl.DisplayNames([navigator.language], { type: 'language' }).of(l) ?? l; } catch { return l; } };
+  return <div className={`call ${now.phase}`} role="group" aria-label="Call with Chief">
+    <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: 'Chief is thinking', speaking: 'Chief is speaking' }[now.phase]}</span>
+    <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
+      <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
+      <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>
+      <p>Your voice stays on this device. Only the words go to Chief.</p></div></details>
+    <button type="button" className="call-stop" onClick={stop}><i className="mic-stop" />Stop</button>
+    {(now.words || now.phase === 'listening') && <p className={`call-words${now.words ? '' : ' mute'}`}>{now.words || 'Go ahead, I’m listening.'}</p>}
+  </div>;
+}
+
 /** How long a send may wait unanswered before the box says the words are held, not gone. */
 const HOLD_MS = 4000;
 
@@ -555,7 +627,7 @@ const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).
  */
 /** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (a PDF, a document or a photo,
  *  shown as chips until sent), a starter or two that fill the box without sending, then the mic and send. */
-export function Composer({ placeholder, onSend, chat, chips }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[] }) {
+export function Composer({ placeholder, onSend, chat, chips, talk }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
@@ -588,6 +660,13 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
     setBusy(false); setHeld(false);
     if (ok) { hear(focused, ''); } else { setText(t); setPicked(at); setFailed(true); if (chat) sent(chat, false, t); }
   };
+  const call = useCall(talk, async (said) => {
+    let ok = false;
+    try { ok = !!(await onSend(said)); } catch { ok = false; }
+    if (!ok) { setText(said); setFailed(true); if (chat) sent(chat, false, said); }
+    return ok;
+  });
+  if (call.now) return <CallPanel now={call.now} stop={call.stop} />;
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
@@ -603,7 +682,9 @@ export function Composer({ placeholder, onSend, chat, chips }: { placeholder: st
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
       {voice}
-      <button className="send" aria-label="Send" disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>
+      {call.can && !text.trim() && !picked.length && !busy
+        ? <button type="button" className="send talk" aria-label="Talk with Chief" title="Talk with Chief" onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
+        : <button className="send" aria-label="Send" disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
     </form>
   );
 }
