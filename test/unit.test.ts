@@ -711,6 +711,20 @@ test('locked PDF: one that opens with no password is unlocked without a card, an
   done();
 });
 
+test('locked PDF: a file that fails to open for another reason gets no password card', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'x.pdf'), '%PDF-1.7\ntrailer << /Encrypt 2 0 R >>\n%%EOF\n');
+  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, '#!/bin/bash\nexit 4\n'); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read it ${call('crew_unlock', { files: ['files/inbox/x.pdf'] })}`, 'chief').task;
+  await settled(lab.db, t);
+  assert.equal(openAsk(lab.db)?.kind, undefined, 'no card: a password cannot open a corrupt file');
+  assert.match((lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/inbox\/x\.pdf"\}/);
+  lab.done();
+});
+
 test('locked PDF: a wrong password gets a plain retry line, keeps the card open and leaks nowhere',{ skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
   const { db, crew, t, c, leaks, copy, done } = await unlockAsk();
   await assert.rejects(crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400 && e.message === "That password didn't open the file. Check it and try again.");
