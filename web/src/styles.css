@@ -400,7 +400,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .call-voice > summary::-webkit-details-marker { display: none; }
 .call-menu { position: absolute; right: 8px; bottom: calc(100% + 8px); z-index: 5; width: min(320px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--bg); box-shadow: var(--e2); }
 .call-menu label { display: grid; gap: 6px; font: 600 13px/18px var(--ui); color: var(--ink2); }
-.call-menu select { font: 400 16px/22px var(--ui); padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--solid); color: var(--ink); }
+.call-menu select { min-width: 0; width: 100%; font: 400 16px/22px var(--ui); padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--solid); color: var(--ink); }
 .call-menu p { margin: 0; font: 400 13px/18px var(--ui); color: var(--mute); }
 .call-stop { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--danger); color: var(--bg); font: 600 15px/1 var(--ui); }
 .line.reading .bubble-text { border-left: 2px solid var(--ok); padding-left: 12px; }

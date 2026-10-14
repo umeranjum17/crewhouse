@@ -3,7 +3,7 @@
 // dark, measured for the defects a person sees — stretched or squashed pictures, clipped text, overlapping boxes, parts
 // off the screen, blank strips at its edges — and put next to its approved mock. Any hit fails, with the element and a crop.
 //
-//   node look-check.mjs web --out <dir> [--person <person.key>] [--width 360] [--height 780] [--text 1.3] [--then <js>] <slug>=<url>…
+//   node look-check.mjs web --out <dir> [--person <person.key>] [--width 360] [--height 780] [--text 1.3] [--then <js>] [--init <js file>] <slug>=<url>…
 //   SERIAL=<emulator> node look-check.mjs android --out <dir> [--text <scale>] [--then '<tap regex>>><tap regex>'] <slug>   (taps reach the screen after each theme switch)
 //   node look-check.mjs native --out <dir> --xml <uiautomator xml> <slug>=<png>   (replay a saved capture: the tree and pixel checks)
 //   node look-check.mjs shot --out <dir> <slug>=<png|jpg>…   (someone's phone shot: the strip check and the mock only)
@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2), mode = argv.shift();
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : argv.splice(i, 2)[1]; };
-const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), REVERSE = opt('reverse'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text'), XML = opt('xml');
+const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), REVERSE = opt('reverse'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text'), XML = opt('xml'), INIT = opt('init');
 const ROOT = opt('root', join(import.meta.dirname, '..', '..', '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
 if (!OUT || !['web', 'android', 'shot', 'native', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|native|fonts --out <dir> …'); process.exit(2); }
@@ -349,6 +349,7 @@ try {
     const app = await page(), text = +(TEXT ?? 1.3);
     await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: DPR, mobile: true }, app);
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }, app);
+    if (INIT) { await send('Page.enable', {}, app); await send('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(INIT, 'utf8') }, app); } // a stand-in device, before the app boots
     const settle = () => run(app, async () => { // fonts in, then the DOM still for 400 ms (bounded at 10 s)
       await document.fonts.ready; let last = Date.now(); const mo = new MutationObserver(() => { last = Date.now(); }); mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
       for (const end = Date.now() + 10000; Date.now() - last < 400 && Date.now() < end;) await new Promise((r) => setTimeout(r, 50)); mo.disconnect(); });
