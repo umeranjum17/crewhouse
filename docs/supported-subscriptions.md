@@ -32,7 +32,7 @@ home actually holds.
 | GitHub Copilot | `github-copilot` | `github-copilot` (+ `github-copilot-enterprise` where the plan is enterprise) | Upstream documents VS Code's client as the sanctioned route; sign-in happens in the engine's own isolated home | **WIRED** | Choice ids verified in the tarball; **UNTESTED-no-account** |
 | OpenRouter | `openrouter` | `openrouter-oauth` | OpenRouter documents sign-in for any app; pay-as-you-go credits, not a plan | **WIRED** | Choice id verified in the tarball; **UNTESTED-no-account** |
 | MiniMax (global / CN) | `minimax` | `minimax-global-oauth` / `minimax-cn-oauth` | None beyond the provider's own page | **WIRED** | Choice ids verified in the tarball; **UNTESTED-no-account** |
-| OpenCode Go (your OpenCode Go plan) | `opencode-go` | `opencode-go` — plan key pasted on the card (`via: plan_key`; the kit's `addKey`) | Your OpenCode Go plan key, pasted once; the engine holds it | **WIRED** (paste route; Chief and helpers run on the kit's saved model, currently `muse-spark-1.3-contributor`, so there is no model choice yet) | Choice id, key-error ids and billing verified in the kit's `routes.json` (2026.8.1 metadata); **UNTESTED-no-account**: no live key run yet |
+| OpenCode Go (your OpenCode Go plan) | `opencode-go` | `opencode-go` — plan key pasted on the card (`via: plan_key`; the kit's `addKey`) | Your OpenCode Go plan key, pasted once; the engine holds it | **WIRED** (paste route; a run on this account uses the model it names, else the kit's pinned default, so there is no model picker yet) | Choice id, key-error ids and billing verified in the kit's `routes.json` (2026.8.1 metadata); **UNTESTED-no-account**: no live key run yet |
 | Claude (subscription) | `anthropic` | `anthropic-cli` — Claude CLI reuse; `setup-token` | The `claude` CLI installed **and** logged in inside the engine's own folder — said plainly on the card (`PROVIDERS.claude.cli`), which fails the naive bar until that flow is improved | **WIRED** (route) — **PROVEN-live** (a Chief answer through this route, on a real `claude` CLI login) | Choice ids verified in the tarball; the CLI prerequisite is labelled in the offered-account record; the engine is given the one folder holding the `claude` CLI (`enginePath`), since its own PATH is `/usr/bin:/bin` |
 
 ## API-key routes (not subscriptions; shown, never substituted)
@@ -51,7 +51,7 @@ key when a subscription route exists; they surface only as explicit "more option
 - Every route is now reachable through the same sign-in drive (`src/openclaw/runtime.ts` auth-choice table); the
   distinction that remains is verified-login (ChatGPT) versus **UNTESTED-no-account** (the rest), which only the
   QA home's real accounts can close.
-- OpenCode Go's model is the kit's saved one (`muse-spark-1.3-contributor`) and the kit refuses others; a model choice waits for the kit.
+- OpenCode Go runs the model a run names when it names one (any model of the Go provider), else the kit's pinned default (`opencode-go/deepseek-v4-pro`); an in-app model picker waits for the kit.
 - Claude's routes carry a terminal-login prerequisite that fails the naive-user bar; the offered-account record
   labels that honestly instead of hiding it.
 - Not subscriptions and deliberately absent: channels, Control UI, Tailscale serve, cloud workers — unchanged by

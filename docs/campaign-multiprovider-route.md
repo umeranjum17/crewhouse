@@ -61,8 +61,9 @@ and noted per item; the rest is for the next provider:
    `OpenClawRuntime.keyIn` pastes through the kit's `addKey`, and
    `Accounts.login` takes `via: 'key'`. Credentials stay engine-held
    throughout; nothing here mints or touches one.
-3. Run path — done for OpenCode Go: `run()` sends it the kit's saved model
-   (`auth: 'apiKey'`, no `provider/model`). Open: the bot's `models` entry
+3. Run path — done for OpenCode Go: `run()` sends it `auth: 'apiKey'` with the
+   model the run names as `opencode-go/<model>`, else the kit's saved default.
+   Open: the bot's `models` entry
    (campaign brains still default to `['chatgpt']` in `src/bots.ts`). No crew
    change: `usable`, `run` and `pause` are provider-generic.
 4. UI — done: the `AIS` row and its key-entry card in `web/src/adapter.ts`,

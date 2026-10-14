@@ -118,9 +118,7 @@ export class OpenClawRuntime implements AgentRuntime {
     let cancelled = false;
     const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'invalid' ? on({ waiting: true, error: `That key didn't work. Check it and paste it again.` }) : on({ waiting: false, error: status === 'retry' ? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` : `Sign-in for ${PROVIDERS[account]?.name ?? account} is not connected yet` })));
     return {
-      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then(async (r) => {
-        if (cancelled) { if (r.status === 'ok') await this.signOut(account).catch(() => {}); } else step(r.status);
-      }).catch(() => step('retry')),
+      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
       cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
     };
   }
@@ -155,11 +153,11 @@ export class OpenClawRuntime implements AgentRuntime {
   }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
-    const register = opts?.register !== false, provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's)
+    const register = opts?.register !== false, provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
     if (register) this.runs.set(spec.key, spec);
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && provider !== 'opencode-go' ? { thinking: spec.thinking } : {}), register },
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && provider !== 'opencode-go' ? { thinking: spec.thinking } : {}), register },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
