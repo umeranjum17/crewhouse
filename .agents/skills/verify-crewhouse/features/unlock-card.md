@@ -11,7 +11,8 @@ resume the helper with the copies' paths. The phone app points to the computer o
 ## Gate
 
 `node --test --test-name-pattern="locked PDF" test/unit.test.ts`: the card, the resume, the receipt, and the password
-absent from every table row, the database files, the model's turn, the log and the snapshot; a wrong one keeps the card.
+absent from every table row, the database files, the model's turn, the log and the snapshot; a wrong one keeps the card;
+a PDF that opens with no password gets no card, and a damaged one gets none either (the `locked PDF:` tests cover both).
 
 ## Drive (real crewd, stub engine)
 
