@@ -638,3 +638,36 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await until('opened the read thread', () => b.run("!!document.querySelector('.chat-page .line.them')"));
   assert.equal(await b.run("!!document.querySelector('.new-divider')"), false, 'a read thread has no NEW on the next visit');
 });
+
+// The demo banner (main.tsx PairRow) at the hardest size a phone gets: 360 wide with the largest text. Its Pair
+// button drops under the words, the words stay inside their own column and all of them stay on screen — on main the
+// button held its width, the column collapsed to 6px and the words drew under the button, then off the top region.
+test('the demo banner stacks its Pair button under its words at 360 wide and the largest text', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable');
+  await b.send('Emulation.setDeviceMetricsOverride', { width: 360, height: 780, deviceScaleFactor: 3, mobile: true });
+  await b.open('demo=plan&day');
+  await until('the demo banner', () => b.run("!!document.querySelector('.pair-row .btn')"), 30_000);
+  // look-check's own text scaling: every size read before any is written, because computed styles are live.
+  const m = await b.run(`(() => {
+    const all = [...document.querySelectorAll('body, body *')].map((e) => { const cs = getComputedStyle(e); return [e, cs.fontSize, cs.lineHeight]; });
+    for (const [e, f, l] of all) { e.style.setProperty('font-size', parseFloat(f) * 2 + 'px', 'important'); if (l !== 'normal') e.style.setProperty('line-height', parseFloat(l) * 2 + 'px', 'important'); }
+    const card = document.querySelector('.pair-row'), span = card.querySelector('.grow'), btn = card.querySelector('.btn');
+    const rg = document.createRange(); rg.selectNodeContents(span);
+    const ink = [...rg.getClientRects()], s = span.getBoundingClientRect(), p = btn.getBoundingClientRect();
+    const meets = (a, c) => Math.min(a.right, c.right) - Math.max(a.left, c.left) > 1 && Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top) > 1;
+    const onScreen = (q) => { let r = { left: q.left, top: q.top, right: q.right, bottom: q.bottom };
+      for (let a = span.parentElement; a && r.right > r.left && r.bottom > r.top; a = a.parentElement) { const cs = getComputedStyle(a);
+        if (/hidden|clip|auto|scroll/.test(cs.overflowX + cs.overflowY)) { const w = a.getBoundingClientRect();
+          r = { left: Math.max(r.left, w.left), top: Math.max(r.top, w.top), right: Math.min(r.right, w.right), bottom: Math.min(r.bottom, w.bottom) }; } }
+      return r.right - r.left > 1 && r.bottom - r.top > 1; };
+    return { card: card.getBoundingClientRect().height, stacked: p.top >= s.bottom - 1,
+      spill: ink.filter((q) => q.right > s.right + 1 || q.left < s.left - 1).length,
+      covered: ink.filter((q) => meets(q, p)).length, hidden: ink.filter((q) => !onScreen(q)).length };
+  })()`);
+  assert.equal(m.spill, 0, `the banner's words stay inside their column (${Math.round(m.card!)}px card)`);
+  assert.equal(m.covered, 0, "the Pair button covers none of the banner's words");
+  assert.equal(m.hidden, 0, 'every one of the banner\'s word lines stays on screen (main hid three at 2x)');
+  assert.equal(m.stacked, true, 'the Pair button sits under the words at this size');
+  assert.ok(m.card! < 400, `the banner stays short: ${Math.round(m.card!)}px, against main's 562px at this size`);
+});
