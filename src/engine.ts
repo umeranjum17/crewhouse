@@ -69,7 +69,7 @@ export const sandboxed = (space: string, readOnly: string[], env: Record<string,
 export const runSandboxed = (space: string, readOnly: string[], env: Record<string, string>, command: string, net?: string, timeout = 1_200_000, stdin = '') =>
   new Promise<{ code: number; tail: string }>((resolve) => void execFile('bash', ['-c', sandboxed(space, readOnly, env, command, net)],
     { cwd: space, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, timeout, maxBuffer: 64 << 20 },
-    (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })).stdin?.end(stdin));
+    (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })).stdin?.on('error', () => {}).end(stdin));
 
 /** The shell as one crewd-owned tool: a timeout and an output tail, like the engine's own bash was. */
 export const bashTool = (space: string, readOnly: string[], env: Record<string, string>, net?: string) =>

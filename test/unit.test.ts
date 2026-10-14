@@ -664,7 +664,7 @@ test('Done on a sign-in hands the wheel back: the site is kept, the card answere
 /** A helper whose inbox holds a password-locked PDF, asking through Chief (crew_unlock). The Documents tool's python is a
  *  stand-in that opens the file only for the right password on stdin, so the test needs no download; the sandbox is real. */
 const PASSWORD = 'Northbank-7319!';
-async function unlockAsk(ownerOnly = false) {
+async function unlockAsk(ownerOnly = false, standIn = '') {
   const lab = setup(), logged: string[] = [], { log, error, warn } = console;
   for (const k of ['log', 'error', 'warn'] as const) console[k] = (...a: unknown[]) => { logged.push(a.map(String).join(' ')); };
   lab.crew.onboard('Umer');
@@ -672,7 +672,7 @@ async function unlockAsk(ownerOnly = false) {
   const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
   mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'march.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
   const bare = ownerOnly ? '[ -z "$P" ] || ' : '';
-  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n${bare}[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n${standIn}${bare}[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
   const t = lab.crew.assign('scribe', `read my statement ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
   await (ownerOnly ? settled(lab.db, t) : until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe')));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
@@ -723,6 +723,12 @@ test('locked PDF: a file that fails to open for another reason gets no password 
   assert.equal(openAsk(lab.db)?.kind, undefined, 'no card: a password cannot open a corrupt file');
   assert.match((lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/inbox\/x\.pdf"\}/);
   lab.done();
+});
+
+test('locked PDF: a Python error on the empty try still gets the password card', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { c, done } = await unlockAsk(false, '[ -n "$P" ] || exit 1\n');
+  assert.deepEqual(c.unlock?.files, [{ path: 'files/inbox/march.pdf', name: 'march.pdf' }], 'a file that did not open is still the person\'s to unlock');
+  done();
 });
 
 test('locked PDF: a wrong password gets a plain retry line, keeps the card open and leaks nowhere',{ skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
