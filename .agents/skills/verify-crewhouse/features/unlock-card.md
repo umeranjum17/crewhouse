@@ -4,7 +4,7 @@ A helper whose PDF is password-locked calls `crew_unlock {files}`; crewd opens a
 (`askUnlock` in `src/crew.ts`), shown in Chief's thread as mock 3A (`UnlockCard` in `web/src/parts.tsx`): the helper's
 face, "2 files are locked", one password field per file under the name the person sent it with, the forgotten-on-this-
 computer note and **Unlock 2 files** (Not now under ⋯). The passwords travel only in that one answer; crewd hands each to
-the pypdfium2 that comes with the Documents tool's pinned markitdown[pdf] on stdin in the helper's sandbox, which writes `files/unlocked/<path with / as ->`, e.g. `files/inbox/2-1.pdf` to `files/unlocked/files-inbox-2-1.pdf` (`unlock`).
+the pypdfium2 that comes with the Documents tool's pinned markitdown[pdf] on stdin in the helper's sandbox, which writes `files/unlocked/<encodeURIComponent of the path>`, e.g. `files/inbox/2-1.pdf` to `files/unlocked/files%2Finbox%2F2-1.pdf` (`unlock`).
 A wrong one is a plain 400 and the card keeps only the files still locked; the right ones leave "Unlocked · <time>" and
 resume the helper with the copies' paths. The phone app points to the computer or the web app.
 

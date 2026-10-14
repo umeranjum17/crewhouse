@@ -683,7 +683,7 @@ async function unlockAsk(ownerOnly = false) {
     const model = JSON.stringify((lab.crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)) + (lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`);
     return [JSON.stringify(rows), ...files, model, logged.join('\n'), JSON.stringify(lab.crew.snapshot())].filter((x) => x.includes(PASSWORD)).length;
   };
-  return { ...lab, t, c, leaks, copy: join(disk.botDir(lab.cfg, 'scribe'), 'files', 'unlocked', 'files-inbox-march.pdf'), done: () => { Object.assign(console, { log, error, warn }); lab.done(); } };
+  return { ...lab, t, c, leaks, copy: join(disk.botDir(lab.cfg, 'scribe'), 'files', 'unlocked', 'files%2Finbox%2Fmarch.pdf'), done: () => { Object.assign(console, { log, error, warn }); lab.done(); } };
 }
 
 test('locked PDF: the card in Chief\'s thread takes the password, the helper reads an unlocked copy, and nothing keeps the password', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
@@ -697,7 +697,7 @@ test('locked PDF: the card in Chief\'s thread takes the password, the helper rea
   await settled(db, t);
   assert.equal(task(db, t).state, 'done', 'the helper resumed by itself and finished');
   assert.ok(existsSync(copy), 'the unlocked copy is in the helper\'s files');
-  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /unlocked: files\/unlocked\/files-inbox-march\.pdf/);
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /unlocked: files\/unlocked\/files%2Finbox%2Fmarch\.pdf/);
   assert.match(A.answeredReceipts(crew.snapshot())[0].line, /^Unlocked · \d{1,2}:\d\d [ap]m$/, 'where the card was: Unlocked and the time (mock 3A)');
   assert.equal(leaks(), 0, 'the password is in no row, database file, model turn, log or snapshot');
   done();
@@ -707,7 +707,7 @@ test('locked PDF: one that opens with no password is unlocked without a card, an
   const { db, crew, t, copy, done } = await unlockAsk(true);
   assert.equal(openAsk(db)?.kind, undefined, 'no card: there is nothing to type');
   assert.ok(existsSync(copy), 'the copy is in the helper\'s files');
-  assert.match((crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/unlocked\/files-inbox-march\.pdf"\}/);
+  assert.match((crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/unlocked\/files%2Finbox%2Fmarch\.pdf"\}/);
   done();
 });
 
@@ -725,7 +725,7 @@ test('locked PDF: Not now after a copy is already open names that copy to the he
   mkdirSync(join(copy, '..'), { recursive: true }); writeFileSync(copy, 'unlocked');
   await crew.answer(c.id, { answer: 'deny' });
   await settled(db, t);
-  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /not now; unlocked: files\/unlocked\/files-inbox-march\.pdf/);
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /not now; unlocked: files\/unlocked\/files%2Finbox%2Fmarch\.pdf/);
   done();
 });
 
@@ -741,7 +741,7 @@ test('locked PDF: two locked files with one basename keep separate copies, and a
   const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
   await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
-  const copyA = join(bot, 'files', 'unlocked', 'files-inbox-a-statement.pdf');
+  const copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf');
   assert.ok(existsSync(copyA), 'a opened with no password, so its copy exists before any card');
   assert.deepEqual(c.unlock?.files.map((f) => f.path), ['files/inbox/b/statement.pdf']);
   await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400);

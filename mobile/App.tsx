@@ -1480,9 +1480,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {c.mailTo && <MailSetup c={c} canAct={canAct && !offline} done={onDone} />}
       {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
-        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'signin' ? (
+        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'signin' || c.kind === 'unlock' ? (
         <View style={{ gap: 8 }}>
-          <T tone="mute" style={s.small}>Sign in from the computer or the web app: it's waiting in Chief's chat there.</T>
+          <T tone="mute" style={s.small}>{c.kind === 'unlock' ? 'Type the passwords' : 'Sign in'} from the computer or the web app: it's waiting in Chief's chat there.</T>
           <Btn label="Not now" onPress={() => act({ answer: 'deny' })} />
         </View>
       ) : c.kind === 'connect' ? (

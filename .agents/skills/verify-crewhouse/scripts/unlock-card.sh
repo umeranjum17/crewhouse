@@ -87,7 +87,7 @@ THEN=$(show .answered) bash .agents/skills/verify-crewhouse/scripts/screens.sh "
 chrome-devtools-axi eval "JSON.stringify({ local: Object.keys(localStorage), session: Object.keys(sessionStorage), receipt: [...document.querySelectorAll('.answered')].map((e) => e.textContent) })" | tee -a "$EV/transcript.txt"
 
 for f in 2-1 2-2; do
-  c="$LAB/crew/bots/penny/files/unlocked/files-inbox-$f.pdf"
+  c="$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$f.pdf"
   log "$f: copy $( [ -f "$c" ] && echo present || echo MISSING ); encrypted: $(qpdf --is-encrypted "$c" && echo yes || echo no); reads: $("$LAB/tools/documents/venv/bin/markitdown" "$c" | head -1)"
 done
 api "$B/api/bots/penny" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const b=JSON.parse(s);console.log('penny task', JSON.stringify(b.tasks[0] && { state: b.tasks[0].state, body: b.tasks[0].body }))})" | tee -a "$EV/transcript.txt"
