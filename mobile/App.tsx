@@ -1307,7 +1307,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
   }
   const offline = status !== 'online';
   const canAct = grant.device.role === 'control' && !offline;
-  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: setSheet, writer: grant.device.role === 'control' };
+  const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: (c) => (c.kind === 'unlock' ? go({ view: 'chief' }) : setSheet(c)), writer: grant.device.role === 'control' };
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
@@ -1534,9 +1534,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {c.mailTo && <MailSetup c={c} canAct={canAct && !offline} done={onDone} />}
       {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
-        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'signin' ? (
+        : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T> : c.kind === 'signin' || c.kind === 'unlock' ? (
         <View style={{ gap: 8 }}>
-          <T tone="mute" style={s.small}>Sign in from the computer or the web app: it's waiting in Chief's chat there.</T>
+          <T tone="mute" style={s.small}>{c.kind === 'unlock' ? 'Type the passwords' : 'Sign in'} from the computer or the web app: it's waiting in Chief's chat there.</T>
           <Btn label="Not now" onPress={() => act({ answer: 'deny' })} />
         </View>
       ) : c.kind === 'connect' ? (
@@ -1747,7 +1747,7 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
           {!!price && <T style={[s.serif, { fontSize: 32, lineHeight: 36 }]}>{price}</T>}
         </View>
         <View style={s.chips}>
-          <Btn go label={yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}\u2026` : 'Review\u2026'} onPress={() => open(c)} />
+          <Btn go label={c.kind === 'unlock' ? "Open in Chief's chat" : yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}\u2026` : 'Review\u2026'} onPress={() => open(c)} />
           <Btn label="Ask Chief" onPress={() => { keepDraft('chief', `About ${name}'s question (${c.head}): `); go({ view: 'chief' }); }} />
           <Btn ghost label="Not now" onPress={() => (cards.length > 1 ? setLater([...later.filter((x) => x !== c.id), c.id]) : setFolded(c.id))} />
         </View>

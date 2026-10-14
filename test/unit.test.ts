@@ -661,6 +661,114 @@ test('Done on a sign-in hands the wheel back: the site is kept, the card answere
   done();
 });
 
+/** A helper whose inbox holds a password-locked PDF, asking through Chief (crew_unlock). The Documents tool's python is a
+ *  stand-in that opens the file only for the right password on stdin, so the test needs no download; the sandbox is real. */
+const PASSWORD = 'Northbank-7319!';
+async function unlockAsk(ownerOnly = false, standIn = '') {
+  const lab = setup(), logged: string[] = [], { log, error, warn } = console;
+  for (const k of ['log', 'error', 'warn'] as const) console[k] = (...a: unknown[]) => { logged.push(a.map(String).join(' ')); };
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'march.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
+  const bare = ownerOnly ? '[ -z "$P" ] || ' : '';
+  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n${standIn}${bare}[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read my statement ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
+  await (ownerOnly ? settled(lab.db, t) : until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe')));
+  const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
+  /** Every place a password could be kept: every row of every table, the database files on disk, what the model was sent, and the log. */
+  const leaks = () => {
+    const rows = lab.db.all("SELECT name FROM sqlite_master WHERE type = 'table'").flatMap((x: any) => lab.db.all(`SELECT * FROM "${x.name}"`));
+    const files = readdirSync(lab.cfg.stateDir).filter((f) => f.startsWith('crew.db')).map((f) => readFileSync(join(lab.cfg.stateDir, f), 'latin1'));
+    const model = JSON.stringify((lab.crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)) + (lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`);
+    return [JSON.stringify(rows), ...files, model, logged.join('\n'), JSON.stringify(lab.crew.snapshot())].filter((x) => x.includes(PASSWORD)).length;
+  };
+  return { ...lab, t, c, leaks, copy: join(disk.botDir(lab.cfg, 'scribe'), 'files', 'unlocked', 'files%2Finbox%2Fmarch.pdf'), done: () => { Object.assign(console, { log, error, warn }); lab.done(); } };
+}
+
+test('locked PDF: the card in Chief\'s thread takes the password, the helper reads an unlocked copy, and nothing keeps the password', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, leaks, copy, done } = await unlockAsk();
+  assert.equal(c.helper, 'chief', 'the person hears it from Chief, never from the helper');
+  assert.deepEqual(c.unlock?.files, [{ path: 'files/inbox/march.pdf', name: 'march.pdf' }]);
+  assert.match(c.words, /never goes into the chat or to the AI/);
+  assert.deepEqual([c.head, c.choices[0].label], ['A file is locked', 'Unlock the file']);
+  assert.ok(A.needsYou(crew.snapshot()).some((x) => x.id === c.id), 'and it is counted under Needs you');
+  await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done', 'the helper resumed by itself and finished');
+  assert.ok(existsSync(copy), 'the unlocked copy is in the helper\'s files');
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /unlocked: files\/unlocked\/files%2Finbox%2Fmarch\.pdf/);
+  assert.match(A.answeredReceipts(crew.snapshot())[0].line, /^Unlocked · \d{1,2}:\d\d [ap]m$/, 'where the card was: Unlocked and the time (mock 3A)');
+  assert.equal(leaks(), 0, 'the password is in no row, database file, model turn, log or snapshot');
+  done();
+});
+
+test('locked PDF: one that opens with no password is unlocked without a card, and the helper is told where the copy is', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, copy, done } = await unlockAsk(true);
+  assert.equal(openAsk(db)?.kind, undefined, 'no card: there is nothing to type');
+  assert.ok(existsSync(copy), 'the copy is in the helper\'s files');
+  assert.match((crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/unlocked\/files%2Finbox%2Fmarch\.pdf"\}/);
+  done();
+});
+
+test('locked PDF: a file that fails to open for another reason gets no password card', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'x.pdf'), '%PDF-1.7\ntrailer << /Encrypt 2 0 R >>\n%%EOF\n');
+  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, '#!/bin/bash\nexit 4\n'); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read it ${call('crew_unlock', { files: ['files/inbox/x.pdf'] })}`, 'chief').task;
+  await settled(lab.db, t);
+  assert.equal(openAsk(lab.db)?.kind, undefined, 'no card: a password cannot open a corrupt file');
+  assert.match((lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/inbox\/x\.pdf"\}/);
+  lab.done();
+});
+
+test('locked PDF: a Python error on the empty try still gets the password card', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { c, done } = await unlockAsk(false, '[ -n "$P" ] || exit 1\n');
+  assert.deepEqual(c.unlock?.files, [{ path: 'files/inbox/march.pdf', name: 'march.pdf' }], 'a file that did not open is still the person\'s to unlock');
+  done();
+});
+
+test('locked PDF: a wrong password gets a plain retry line, keeps the card open and leaks nowhere',{ skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, leaks, copy, done } = await unlockAsk();
+  await assert.rejects(crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400 && e.message === "That password didn't open the file. Check it and try again.");
+  assert.equal(openAsk(db)?.kind, 'unlock', 'the card stays open for another try');
+  assert.ok(task(db, t).state === 'needs_you' && !existsSync(copy));
+  assert.equal(leaks(), 0, 'the wrong password, which contains the right one, is kept nowhere either');
+  done();
+});
+
+test('locked PDF: Not now after a copy is already open names that copy to the helper', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, copy, done } = await unlockAsk();
+  mkdirSync(join(copy, '..'), { recursive: true }); writeFileSync(copy, 'unlocked');
+  await crew.answer(c.id, { answer: 'deny' });
+  await settled(db, t);
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /not now; unlocked: files\/unlocked\/files%2Finbox%2Fmarch\.pdf/);
+  done();
+});
+
+test('locked PDF: two locked files with one basename keep separate copies, and a wrong password on one keeps the other\'s copy', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const bot = disk.botDir(lab.cfg, 'scribe'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  const enc = '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n';
+  for (const d of ['a', 'b']) { mkdirSync(join(bot, 'files', 'inbox', d), { recursive: true }); writeFileSync(join(bot, 'files', 'inbox', d, 'statement.pdf'), enc); }
+  mkdirSync(join(py, '..'), { recursive: true });
+  writeFileSync(py, `#!/bin/bash\nP="$(cat)"\ncase "$4" in *'/a/'*) [ -z "$P" ] || exit 3 ;; *) [ "$P" = '${PASSWORD}' ] || exit 3 ;; esac\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
+  await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
+  const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
+  const copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf');
+  assert.ok(existsSync(copyA), 'a opened with no password, so its copy exists before any card');
+  assert.deepEqual(c.unlock?.files.map((f) => f.path), ['files/inbox/b/statement.pdf']);
+  await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400);
+  assert.ok(existsSync(copyA), 'b\'s failure leaves a\'s copy alone');
+  lab.done();
+});
+
 test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {
   const { db, crew, cfg, done } = setup();
   try {

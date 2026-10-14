@@ -18,6 +18,7 @@ export const ICONS = {
   // The first screen's marks (mock C): where Chief works, and the sign-in-yourself promise.
   cloud: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 11.1 3.5 3.5 0 0 0 7 18z"/>',
   computer: '<rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   shield: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

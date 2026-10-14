@@ -41,6 +41,8 @@ let moved = false; // this session has navigated inside the app, so Back has som
 const back = () => { if (moved && history.length > 1) history.back(); else go('#/'); };
 /** ?splash keeps the boot splash up, for design review. */
 const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/room' : `#/h/${id}`);
+/** A locked-file card lives in Chief's thread only, so its rows and links open there, never the approval sheet. */
+const askHref = (c: A.Card) => (c.kind === 'unlock' ? '#/chief' : `#/ask/${c.id}`);
 /** Chief's own trail (his learned notes, each with Undo): his page is Home now, so Home carries the link. */
 const CHIEF_TRAIL = '#/h/chief/did';
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
@@ -207,7 +209,7 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
   return (
     <>
       {shown.map((c) => (
-        <a key={c.id} className="needs-row list-row" href={`#/ask/${c.id}`}>
+        <a key={c.id} className="needs-row list-row" href={askHref(c)}>
           <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
           <span className="grow"><b className="clamp1">{c.head}</b><span className="small clamp1">{c.words}</span></span>
           <span className="chat-end"><time>{A.briefTime(c.at)}</time><i className="need-dot" /></span>
@@ -307,7 +309,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
         {price && <span className="nb-price">{price}</span>}
       </div>}
       <div className="nb-acts">
-        <a className="btn go" href={`#/ask/${c.id}`}><Icon name="check" />{yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
+        <a className="btn go" href={askHref(c)}><Icon name="check" />{c.kind === 'unlock' ? "Open in Chief's chat" : yes ? yes.label.replace(shown, price) : c.reply ? `Answer ${name}…` : 'Review…'}</a>
         <button className="btn" onClick={ask}>Ask Chief</button>
         {onLater && <button className="btn ghost" onClick={() => onLater(c.id)}>Not now</button>}
       </div>
@@ -1838,6 +1840,7 @@ function App() {
   const stranded = !!ctx && here.view === 'helper' && !!here.id && here.id !== 'chief'
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
   useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
+  useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
   // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL (Main2036). An anchored
   // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
   useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
@@ -1887,7 +1890,7 @@ function App() {
         </main>
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
-      {sheet && !sheet.site && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}

@@ -15,7 +15,9 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock'; head: string; words: string;
+  /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
+  unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
   site?: { host: string; icon: string; bot: string };
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
@@ -42,7 +44,7 @@ export type Card = {
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
-export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review; size?: number };
@@ -771,6 +773,13 @@ export function card(a: Json, state: Json): Card {
       words: `${who} needs you signed in to ${host} to carry on. You sign in yourself on ${who}'s screen, then tap Done.`,
       choices: [{ label: `Sign in to ${host}`, body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'unlock') {
+    const who = state.bots.find((b: Json) => b.id === d.bot), n = d.files.length;
+    return { ...base, kind: 'unlock', unlock: { helper: { kind: kindOf(who ?? {}, state.bots), name: crewName(state, d.bot) }, files: d.files.map((f: string, i: number) => ({ path: f, name: d.names?.[i] ?? f.split('/').pop() ?? f })) },
+      head: plain(a.title), status: `${crewName(state, d.bot)} needs ${n > 1 ? 'each password to read them' : 'its password to read it'}`,
+      words: "What you type here opens the file on this computer, then it's forgotten. It never goes into the chat or to the AI.",
+      choices: [{ label: n > 1 ? `Unlock ${n} files` : 'Unlock the file', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -870,7 +879,7 @@ export function card(a: Json, state: Json): Card {
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
-const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered' };
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
  *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {
@@ -900,7 +909,7 @@ function receiptAction(kind: string, detail: Json): string {
 export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
-    const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
+    const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.

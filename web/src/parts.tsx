@@ -784,8 +784,32 @@ function SignInCard({ c, onDone }: { c: Card; onDone: () => void }) {
   );
 }
 
+/** A helper's locked files (mock 3A): a password field per file. What is typed lives only in this card's state and the one
+ *  answer that opens the files; it is cleared after every try and never stored, sent to the chat or shown to the crew. */
+function UnlockCard({ c, onDone }: { c: Card; onDone: () => void }) {
+  const u = c.unlock!, [typed, setTyped] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [oops, setOops] = useState('');
+  const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
+  const go = () => {
+    setBusy(true); setOops('');
+    api.answer(c.id, { answer: 'allow', passwords: u.files.map((f) => typed[f.path] ?? '') })
+      .then(onDone, (e) => { setOops(e?.status ? e.message : "Can't reach the home computer right now."); onDone(); })
+      .finally(() => { setTyped({}); setBusy(false); });
+  };
+  return (
+    <form className="card ask unlock-card" onSubmit={(e) => { e.preventDefault(); if (!busy) go(); }}>
+      <div className="ask-head hire-head"><Face who={u.helper} size={40} /><div className="grow"><b>{c.head}</b><div className="hire-role">{c.status}</div></div></div>
+      {u.files.map((f) => <label key={f.path} className="unlock-field"><span>{f.name}</span>
+        <input className="input" type="password" autoComplete="off" placeholder="Password" value={typed[f.path] ?? ''} onChange={(e) => setTyped({ ...typed, [f.path]: e.target.value })} /></label>)}
+      <p className="unlock-note"><Icon name="lock" size={16} /><span>{c.words}</span></p>
+      {oops && <div className="send-failed" role="alert">{oops}</div>}
+      <div className="btns"><button className="btn go" disabled={busy || u.files.some((f) => !typed[f.path])}>{c.choices[0].label}</button><More title={c.head} sub={c.status} acts={[{ label: 'Not now', run: no }]} /></div>
+    </form>
+  );
+}
+
 export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
   if (c.kind === 'signin') return <SignInCard c={c} onDone={onDone} />;
+  if (c.kind === 'unlock') return <UnlockCard c={c} onDone={onDone} />;
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);

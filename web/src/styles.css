@@ -224,6 +224,12 @@ textarea.input { resize: vertical; }
 .ask-head .face { flex: none; }
 .hire-head .grow { display: block; }
 .hire-role { font: 400 15px/20px var(--ui); color: var(--ink2); }
+/* A helper's locked files (mock 3A): a field per file and the note on where the password goes. */
+.unlock-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font: 400 13px/18px var(--ui); color: var(--ink2); }
+.unlock-field span { overflow-wrap: anywhere; }
+.unlock-field .input { background: var(--bg); color: var(--ink); padding: 11px 12px; }
+.unlock-note { display: flex; gap: 10px; margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--soft-accent); font: 400 13px/18px var(--ui); color: var(--ink); }
+.unlock-note svg { flex: none; margin-top: 1px; color: var(--go); }
 .order-row { display: flex; gap: 12px; justify-content: space-between; }
 .order-row.total { font-weight: 600; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
 .ask-note { font: 400 13px/18px var(--ui); color: var(--mute); text-align: center; margin: 10px 0 0; }

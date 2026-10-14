@@ -170,7 +170,7 @@ export const api = {
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
   /** Herdr's setup state for its own row on the Apps screen: missing, installed, or answering. */
   herdr: () => call('GET', '/api/herdr'),
-  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string; remind?: boolean }) => call('POST', `/api/asks/${ask}/answer`, body),
+  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string; remind?: boolean; passwords?: string[] }) => call('POST', `/api/asks/${ask}/answer`, body),
   skills: () => call('GET', '/api/skills'),
   skillSearch: (q: string) => call('GET', `/api/skills/search?q=${encodeURIComponent(q)}`),
   skillSwitch: (slug: string, on: boolean) => call('POST', `/api/skills/${slug}/${on ? 'on' : 'off'}`, {}),

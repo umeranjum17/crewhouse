@@ -84,8 +84,9 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   assert.doesNotMatch(prompt, /on every line/, 'the soul never permits an occasional Sir');
   assert.match(prompt, /no "Sir", no "Madam"/, 'Chief never titles the person');
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
-  // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3).
-  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2745, 'TOOLS descriptions grew past 2745 chars');
+  // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3), then from 2745
+  // for crew_unlock's (+59).
+  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 2804, 'TOOLS descriptions grew past 2804 chars');
   for (const tpl of disk.listTemplates(cfg)) {
     if (tpl.hidden) continue;
     crew.recruit(tpl.id, tpl.display, 'person');
