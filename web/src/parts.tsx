@@ -510,6 +510,8 @@ export function Steps({ steps, max = 6, onUndo, onForget }: { steps: Step[]; max
   );
 }
 
+const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.";
+
 /** The voice note to Chief: a mic in the box when this browser can hear on this device. What was said lands in the
  *  box after what is already there, for the person to read and send; nothing is sent by speaking. */
 function useVoice(on: boolean, text: string, put: (t: string) => void) {
@@ -525,7 +527,7 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
     setEar(h);
     setListen('chief', true);
     h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
-      (e) => toast(e.message === 'blocked' ? 'Allow the microphone for this page, then try again.' : "Speaking isn't ready on this computer. Type instead."))
+      (e) => toast(heardWrong(e)))
       .finally(() => { setEar(null); setListen('chief', false); });
   };
   return <button type="button" className={`mic${ear ? ' on' : ''}`} aria-label={ear ? 'Stop listening' : 'Speak to Chief'} aria-pressed={!!ear}
@@ -581,7 +583,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
         if (!(await send(said))) { end = 'Not sent, so the call ended. Your words are in the box.'; break; }
         await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || chief().some((l) => l.id > read)) go(); }; arrived.current(); });
       }
-    } catch (e: any) { end = e.message === 'blocked' ? 'Allow the microphone for this page, then try again.' : "Speaking isn't ready on this computer. Type instead."; }
+    } catch (e) { end = heardWrong(e); }
     run.current = null; mark(0); setNow(null); setListen('chief', false); toast(end);
   };
   return { can: can && !!talk, now, start, stop };

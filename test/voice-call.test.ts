@@ -19,14 +19,14 @@ import { startServer } from '../src/server.ts';
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
 
-// The device: a recognizer that hears "hi" once and then waits, and a voice list with an online voice beside this
+// The device: a recognizer that hears "hi" once, then waits, then finds no microphone, and a voice list with an online voice beside this
 // device's own. Each turn lands in window.turns; "ECHO" would mean the mic opened while Chief was being read.
 const DEVICE = `(() => {
   const turns = window.turns = []; let speaking = false, heard = 0;
   localStorage.setItem('crewhouse.voice', JSON.stringify({ rate: 1.25 }));
   window.SpeechRecognition = class {
     static available = async () => 'available'; static install = async () => true;
-    start() { turns.push('listen'); if (speaking) turns.push('ECHO'); if (++heard === 1) setTimeout(() => { this.onresult({ results: [[{ transcript: 'hi' }]] }); this.onend(); }, 100); }
+    start() { turns.push('listen'); if (speaking) turns.push('ECHO'); if (++heard === 1) setTimeout(() => { this.onresult({ results: [[{ transcript: 'hi' }]] }); this.onend(); }, 100); if (heard > 2) setTimeout(() => { this.onerror({ error: 'audio-capture' }); this.onend(); }, 50); }
     stop() { setTimeout(() => this.onend(), 0); }
   };
   const voices = [{ name: 'Online', lang: 'en-US', localService: false }, { name: 'Here', lang: 'en-GB', localService: true }];
@@ -40,7 +40,7 @@ const DEVICE = `(() => {
   } });
 })()`;
 
-test('a call with Chief listens, sends, reads the reply aloud, listens again, and Stop ends it', { skip: !bin && 'no Chromium here' }, async () => {
+test('a call with Chief listens, sends, reads the reply aloud, listens again, Stop ends it, and a missing microphone says so', { skip: !bin && 'no Chromium here' }, async () => {
   const parent = temp('voice-call');
   cpSync(join(repo, 'web'), join(parent, 'web'), { recursive: true, filter: (s) => !/[/\\]dist([/\\]|$)/.test(s) });
   for (const d of ['src', 'templates', 'tools', 'skills', 'package.json']) symlinkSync(join(repo, d), join(parent, d));
@@ -103,4 +103,8 @@ test('a call with Chief listens, sends, reads the reply aloud, listens again, an
   assert.match(await run("document.querySelector('.toast')?.textContent ?? ''"), /Call ended\./);
   assert.deepEqual(db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person'").map((m: any) => m.text), ['hi'], 'what was said is in the chat, once');
   assert.equal(await run("[...document.querySelectorAll('.line .bubble-text')].some((b) => b.textContent === 'Hi. What would you like to work on?')"), true, 'Chief\'s reply stays in the chat');
+
+  await run("document.querySelector('.chat .dock button.send.talk').click()");
+  await until('a call with no microphone to end and say so', () => run("!document.querySelector('.call') && /microphone/.test(document.querySelector('.toast')?.textContent ?? '')"), 10_000);
+  assert.match(await run("document.querySelector('.toast').textContent"), /I can't hear a microphone on this computer\. Type instead\./);
 });
