@@ -1903,7 +1903,7 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   </View></View>;
   function end(c: A.Chat) {
     return <View style={narrow ? [s.row, { gap: 10, flexWrap: 'wrap', marginTop: 4 }] : { alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
-      {c.asks > 0 ? <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.asks)}</Text>
+      {c.asks > 0 ? <Text style={[s.unread, { backgroundColor: t.pink, minWidth: 20 * fontScale, height: 20 * fontScale, lineHeight: 20 * fontScale, borderRadius: 10 * fontScale }]}>{A.unreadBadge(c.asks)}</Text>
         : c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
           {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
           <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
@@ -2778,7 +2778,7 @@ const s = StyleSheet.create({
   fileGlyph: { fontSize: 20, lineHeight: 24 },
   fileOpen: { borderRadius: radius.control, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
-  unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
+  unread: { color: '#FFFFFF', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },
   // A chats row's one office status word, and a live helper's "<name> is working" line under its row.
   statusWord: { fontSize: 12, lineHeight: 16, ...fw('600') },
   workingLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, paddingLeft: 66, paddingRight: 14, paddingBottom: 10 },
