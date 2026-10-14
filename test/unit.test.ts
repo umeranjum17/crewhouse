@@ -720,6 +720,15 @@ test('locked PDF: a wrong password gets a plain retry line, keeps the card open 
   done();
 });
 
+test('locked PDF: Not now after a copy is already open names that copy to the helper', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, copy, done } = await unlockAsk();
+  mkdirSync(join(copy, '..'), { recursive: true }); writeFileSync(copy, 'unlocked');
+  await crew.answer(c.id, { answer: 'deny' });
+  await settled(db, t);
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /not now; unlocked: files\/unlocked\/march\.pdf/);
+  done();
+});
+
 test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {
   const { db, crew, cfg, done } = setup();
   try {
