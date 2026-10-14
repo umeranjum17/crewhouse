@@ -540,7 +540,8 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
 }
 /** A crew message's card: the connect prompt for an app, or the ask's own card. */
 function cardFor(c: A.Card, h: Helper | undefined, state: Json, refresh: () => void) {
-  return c.kind === 'connect' ? <ConnectCard key={c.id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} c={c} who={h} onDone={refresh} />;
+  const id = `ask${c.id}`; // the thread lands on the newest open ask by this id when a footer would push it off the top
+  return c.kind === 'connect' ? <ConnectCard key={c.id} id={id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} id={id} c={c} who={h} onDone={refresh} />;
 }
 function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const [page, setPage] = useState<Json>(null);
@@ -590,6 +591,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   }, [ticking, ln?.since, now]);
   useEffect(() => { if ((page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.text === partial)) setPartial(''); }, [page, partial]);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
+  const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
   const box = useRef<HTMLDivElement>(null);
   // Whether the thread is at its newest line, so a line arriving while the person reads up never yanks them down.
   const pinned = useRef(true);
@@ -601,8 +603,9 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     onScroll();
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
-  // A new chat opens at its own newest line, whatever the last thread was left at.
-  useEffect(() => { pinned.current = true; }, [id]);
+  // A new chat opens at its own newest line, whatever the last thread was left at; its open ask may be landed on again.
+  const asked = useRef('');
+  useEffect(() => { pinned.current = true; asked.current = ''; }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
   // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096); a new
@@ -612,7 +615,17 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (around) return;
     const el = box.current;
     if (!el) return;
-    const stick = () => { if (pinned.current) el.scrollTop = el.scrollHeight; };
+    // The newest open ask is new to this view on a thread open or when it just arrived: land on it then,
+    // never while the person reads an older part of the thread. Only when it sits off the top: a footer card
+    // (Add your phone) at the bottom can push the ask that needs them out of sight.
+    const newestAsk = cards.at(-1), askId = newestAsk ? `ask${newestAsk.id}` : '', card = askId ? el.querySelector<HTMLElement>(`#${askId}`) : null;
+    const land = !!askId && asked.current !== askId; asked.current = askId;
+    const stick = () => {
+      if (!pinned.current) return;
+      el.scrollTop = el.scrollHeight;
+      const over = card?.isConnected ? card.getBoundingClientRect().top - el.getBoundingClientRect().top : 0;
+      if (land && over < 0) el.scrollTop += over;
+    };
     stick();
     const raf = requestAnimationFrame(stick);
     const ro = new ResizeObserver(stick);
@@ -622,7 +635,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     const mo = new MutationObserver(() => { watch(); stick(); });
     mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'class', 'style'] });
     return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); };
-  }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial, quiet]);
+  }, [lines.length, around, !!echoed, ln?.state, ln?.todos.length, partial, quiet, cards.at(-1)?.id]);
   // The landing itself: the matched line, centred, with the one motion that explains where you are.
   useEffect(() => {
     if (!around || !lines.length) return;
@@ -641,7 +654,6 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const newest = lines.at(-1)?.id;
   useEffect(() => { if (newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [newest, b?.unread, id, refresh]);
   const trail = live && page ? A.steps(page.trail ?? [], live.id, true) : [];
-  const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
   // Each ask's card sits at the end of the turn that raised it, before the next message the person sent (A.cardSlots).
   const slots = A.cardSlots(lines, cards);
   const receipts = page ? A.answeredReceipts(state).filter((r) => r.helper === id) : [];

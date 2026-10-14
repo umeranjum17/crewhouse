@@ -268,14 +268,14 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
 
 /** The in-chat offer, only when a task needs the app: one ask card (§4.4, connect). "Connect {App}" opens the app's
  *  page in that tap. */
-export function ConnectCard({ c, helper, state, onDone }: { c: A.Card; helper?: string; state: Json; onDone: () => void }) {
+export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helper?: string; state: Json; onDone: () => void; id?: string }) {
   const [open, setOpen] = useState<Window | null | false>(sheet === 'connect' ? null : false);
   const app = c.app!;
   const who = A.crew(state).find((x) => x.id === c.helper);
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const yes = () => void api.answer(c.id, { answer: 'allow' }).catch(() => {}).then(onDone);
   return (
-    <div className="card ask">
+    <div className="card ask" id={id}>
       <div className="ask-head">
         {who ? <Face who={{ ...who, mood: 'ask' }} size={28} /> : <span className="app-ic"><img className="app-logo" src={app.logo} alt="" /></span>}
         <div className="grow"><b>{who?.name ?? helper ?? 'The crew'}</b><div className="ask-status"><i />{c.status}</div></div>

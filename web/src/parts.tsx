@@ -773,10 +773,10 @@ export function SiteIcon({ site }: { site: { host: string; icon: string } }) {
 }
 
 /** A helper's sign-in ask: the site's name and icon and one button, which opens the helper's screen to sign in on. */
-function SignInCard({ c, onDone }: { c: Card; onDone: () => void }) {
+function SignInCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: string }) {
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   return (
-    <div className="card ask signin-card">
+    <div className="card ask signin-card" id={id}>
       <div className="ask-head"><SiteIcon site={c.site!} /><div className="grow"><b>{c.head}</b><div className="ask-status"><i />{c.status}</div></div><time className="mute small">{clock(c.at)}</time></div>
       <p className="ask-words">{c.words}</p>
       <div className="btns"><a className="btn go" href={`#/ask/${c.id}`}>{c.choices[0].label}</a><More title={c.head} sub={c.status} acts={[{ label: 'Not now', run: no }]} /></div>
@@ -786,7 +786,7 @@ function SignInCard({ c, onDone }: { c: Card; onDone: () => void }) {
 
 /** A helper's locked files (mock 3A): a password field per file. What is typed lives only in this card's state and the one
  *  answer that opens the files; it is cleared after every try and never stored, sent to the chat or shown to the crew. */
-function UnlockCard({ c, onDone }: { c: Card; onDone: () => void }) {
+function UnlockCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: string }) {
   const u = c.unlock!, [typed, setTyped] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [oops, setOops] = useState('');
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const go = () => {
@@ -796,7 +796,7 @@ function UnlockCard({ c, onDone }: { c: Card; onDone: () => void }) {
       .finally(() => { setTyped({}); setBusy(false); });
   };
   return (
-    <form className="card ask unlock-card" onSubmit={(e) => { e.preventDefault(); if (!busy) go(); }}>
+    <form className="card ask unlock-card" id={id} onSubmit={(e) => { e.preventDefault(); if (!busy) go(); }}>
       <div className="ask-head hire-head"><Face who={u.helper} size={40} /><div className="grow"><b>{c.head}</b><div className="hire-role">{c.status}</div></div></div>
       {u.files.map((f) => <label key={f.path} className="unlock-field"><span>{f.name}</span>
         <input className="input" type="password" autoComplete="off" placeholder="Password" value={typed[f.path] ?? ''} onChange={(e) => setTyped({ ...typed, [f.path]: e.target.value })} /></label>)}
@@ -807,9 +807,9 @@ function UnlockCard({ c, onDone }: { c: Card; onDone: () => void }) {
   );
 }
 
-export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; onDone: () => void }) {
-  if (c.kind === 'signin') return <SignInCard c={c} onDone={onDone} />;
-  if (c.kind === 'unlock') return <UnlockCard c={c} onDone={onDone} />;
+export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
+  if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);
@@ -831,7 +831,7 @@ export function AskCard({ c, who, onDone }: { c: Card; who: Helper | undefined; 
   const routine = c.kind === 'routine' ? c.lines : undefined;
   const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
   return (
-    <div className={`card ask${c.campaign ? ' campaign' : ''}`}>
+    <div className={`card ask${c.campaign ? ' campaign' : ''}`} id={id}>
       <AskHead c={c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
