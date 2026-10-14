@@ -586,6 +586,16 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   const live = await row();
   assert.equal(live.word, 'At work'); assert.match(live.working, /Scout is working/);
   assert.match(live.line, /^You: Check my Friday flights/); assert.ok(live.time); assert.equal(live.badge, false);
+  // Scout goes quiet past the limit: still one status on its row, no ask card under it; the ask is Chief's alone.
+  lab.db.run('UPDATE tasks SET updated_at = updated_at - 300000 WHERE id = ?', job);
+  const chief = () => b.run(`document.querySelector('[aria-label="Chats"] a[href="#/chief"] .p-state')?.textContent`);
+  await until('Chief asks about Scout', async () => (await chief()) === 'Needs you', 30_000);
+  assert.deepEqual([(await row()).word, await b.run(`!!document.querySelector('[aria-label="Chats"] a[href="#/h/scout"]').parentElement.querySelector('.stuck')`)],
+    ['At work', false], 'a quiet helper\'s Chats row carries its status and no ask card');
+  await b.run('location.hash = "#/chief"');
+  await until("the Stop card in Chief's thread", () => b.run(`[...document.querySelectorAll('.stuck')].some((e) => /Scout has been quiet/.test(e.textContent))`), 30_000);
+  await b.run('location.hash = "#/"');
+  await toOffice(b);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
   await until('last reply in the row', async () => (await row())?.line === 'Three Friday flights are ready.', 30_000);
   assert.equal((await row()).word, 'Done');

@@ -166,15 +166,15 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
 }
 
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
-function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; desk?: boolean }) {
+function Chats({ state, desk }: { state: Json; desk?: boolean }) {
   const crew = A.crew(state), list = A.chats(state);
-  // The desk feed shows the two most recent (B1), and any helper gone quiet, so Stuck's choices never hide.
+  // The desk feed shows the two most recent (B1). A helper gone quiet is Chief's ask, in his row and thread, never a
+  // card under the helper's own row: a crew row only ever carries its one status.
   const [all, setAll] = useState(false);
-  const shown = desk && !all ? list.filter((c, i) => i < 2 || (c.who !== 'chief' && c.who.stuckFor)) : list;
+  const shown = desk && !all ? list.slice(0, 2) : list;
   return <section className={`home-section${desk ? '' : ' phone-only'}`} aria-label="Chats">
     <div className="section-head"><span className="label">Chats</span>{desk && list.length > shown.length && !all && <button className="link" onClick={() => setAll(true)}>{`See all ${list.length}`}</button>}{desk && all && <button className="link" onClick={() => setAll(false)}>Show less</button>}</div><div className="list-group chats">
       {shown.map((c) => {
-        const h = c.who === 'chief' ? undefined : c.who;
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
             {c.id === 'room' ? <span className={`face stack-faces ${c.ring}`} style={{ background: crew[0] ? discOf(crew[0]) : undefined }}>{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={22} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
@@ -184,7 +184,6 @@ function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; des
               {c.id === 'chief' && c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
           </a>
           {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
-          {h && <Stuck h={h} refresh={refresh} />}
         </div>;
       })}
     </div>
@@ -406,14 +405,14 @@ function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
         <Office state={state} live={live} night={ctx.night} />
         <div className="phone-only">
           <OnItNow live={live} />
-          <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
+          <Chats state={state} /><JobList state={state} phone refresh={refresh} />
         </div>
       </div>
       <aside className="feed desk-only" aria-label="What's going on">
         <div className="feed-list">
           {tonight()}
           <OnItNow live={live} />
-          <Chats state={state} refresh={refresh} desk />
+          <Chats state={state} desk />
           <JobList state={state} few refresh={refresh} />
         </div>
         <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
