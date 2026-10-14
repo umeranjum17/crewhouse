@@ -157,7 +157,7 @@ export class OpenClawRuntime implements AgentRuntime {
     if (register) this.runs.set(spec.key, spec);
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && provider !== 'opencode-go' ? { thinking: spec.thinking } : {}), register },
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }

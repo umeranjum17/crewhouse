@@ -198,7 +198,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
-      <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
+      <p className="ask-words">{g.recovery || ('keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
       <div className="ai-picks">{pick(ai, 'btn go')}</div>
       <details className="more-ways">
         <summary><span className="grow">Use another account</span><span className="ai-stack">{others.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>
