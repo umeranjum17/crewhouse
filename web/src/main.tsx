@@ -625,7 +625,9 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     // reading an older part of is pinned off and never moved.
     const newestAsk = cards.at(-1), askId = newestAsk ? `ask${newestAsk.id}` : '', card = askId ? el.querySelector<HTMLElement>(`#${askId}`) : null;
     if (askId && asked.current !== askId) { asked.current = askId; askedAt.current = lines.length; touched.current = false; }
-    const land = !!askId && askedAt.current === lines.length;   // this view's ask; the person's own hand is read live below
+    // The ask's own arrival: the thread as it stands while it is still the newest thing that happened. A line, a
+    // stream or the person's own hand since then means the thread has moved on and must keep its bottom (Main2036).
+    const land = !!askId && askedAt.current === lines.length && !partial && !echoed;
     const stick = () => {
       if (!pinned.current) return;
       el.scrollTop = el.scrollHeight;
