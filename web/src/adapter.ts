@@ -909,7 +909,7 @@ function receiptAction(kind: string, detail: Json): string {
 export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
-    const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown === 'not now' || shown === 'change it';
+    const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.

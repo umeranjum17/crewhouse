@@ -2268,7 +2268,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
   private async askUnlock(botId: string, files: unknown) {
-    const space = disk.botDir(this.cfg, botId), paths = [typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => disk.insideBot(this.cfg, botId, String(f ?? '')));
+    const space = disk.botDir(this.cfg, botId), paths = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => disk.insideBot(this.cfg, botId, String(f ?? ''))))];
     const candidates = paths.filter((f) => { if (!existsSync(f)) throw fail(`there is no file at ${relative(space, f)}`); return !existsSync(join(space, unlockedAs(f))) && /^%PDF-[^]*\/Encrypt\b/.test(readFileSync(f, 'latin1')); });
     const locked: string[] = [];
     for (const f of candidates) if (!(sandboxReady() && existsSync(unlockPy(this.cfg.toolsDir)) && (await this.unlocking(space, relative(space, f), '')) === 0)) locked.push(relative(space, f));
@@ -2287,7 +2287,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
 
-  private unlocking(space: string, f: string, password: string) { mkdirSync(join(space, 'files', 'unlocked'), { recursive: true }); return runSandboxed(space, [this.cfg.toolsDir], {}, `${q(unlockPy(this.cfg.toolsDir))} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, password).then((r) => r.code); }
+  private unlocking(space: string, f: string, password: string) { mkdirSync(join(space, 'files', 'unlocked'), { recursive: true }); return runSandboxed(space, [this.cfg.toolsDir], {}, `${q(unlockPy(this.cfg.toolsDir))} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, password).then((r) => { if (r.code) rmSync(join(space, unlockedAs(f)), { force: true }); return r.code; }); }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
    *  fresh worktree seeded with a copy of the helper's installed node_modules. The model's word about its tests never counts. */
