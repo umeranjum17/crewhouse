@@ -91,7 +91,7 @@ const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).m
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
 /** Opens one locked PDF with the Documents tool's own pinned pypdfium2: the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
-const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockedAs = (f: string) => join('files', 'unlocked', basename(f)), lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
+const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => join('files', 'unlocked', basename(f)), lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
@@ -2267,24 +2267,27 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   }
 
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
-  private askUnlock(botId: string, files: unknown) {
+  private async askUnlock(botId: string, files: unknown) {
     const space = disk.botDir(this.cfg, botId), paths = [typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => disk.insideBot(this.cfg, botId, String(f ?? '')));
-    const locked = paths.filter((f) => { if (!existsSync(f)) throw fail(`there is no file at ${relative(space, f)}`); return !existsSync(join(space, unlockedAs(f))) && /^%PDF-[^]*\/Encrypt\b/.test(readFileSync(f, 'latin1')); });
-    if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked.map((f) => relative(space, f)) }, 'unlock');
+    const candidates = paths.filter((f) => { if (!existsSync(f)) throw fail(`there is no file at ${relative(space, f)}`); return !existsSync(join(space, unlockedAs(f))) && /^%PDF-[^]*\/Encrypt\b/.test(readFileSync(f, 'latin1')); });
+    const locked: string[] = [];
+    for (const f of candidates) if (!(sandboxReady() && existsSync(unlockPy(this.cfg.toolsDir)) && (await this.unlocking(space, relative(space, f), '')) === 0)) locked.push(relative(space, f));
+    if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked, all: locked }, 'unlock');
     return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${paths.map((f) => existsSync(join(space, unlockedAs(f))) ? unlockedAs(f) : relative(space, f)).join(', ')}` };
   }
 
   /** Each password opens its file in the helper's sandbox, through stdin only, and is gone: no row, log, event or model ever holds it. A wrong one keeps that file on the card. */
   private async unlock(ask: Row, d: Row, passwords: unknown) {
-    const space = disk.botDir(this.cfg, d.bot), py = join(this.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+    const space = disk.botDir(this.cfg, d.bot);
     if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
-    if (!sandboxReady() || !existsSync(py)) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
-    mkdirSync(join(space, 'files', 'unlocked'), { recursive: true });
-    const codes = await Promise.all(d.files.map((f: string, i: number) => runSandboxed(space, [this.cfg.toolsDir], {}, `${q(py)} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, passwords[i]).then((r) => r.code)));
+    if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir))) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
+    const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i])));
     const wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
-    return `unlocked: ${d.files.map(unlockedAs).join(', ')}`;
+    return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
+
+  private unlocking(space: string, f: string, password: string) { mkdirSync(join(space, 'files', 'unlocked'), { recursive: true }); return runSandboxed(space, [this.cfg.toolsDir], {}, `${q(unlockPy(this.cfg.toolsDir))} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, password).then((r) => r.code); }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a
    *  fresh worktree seeded with a copy of the helper's installed node_modules. The model's word about its tests never counts. */

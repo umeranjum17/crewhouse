@@ -19,8 +19,8 @@ import { join } from 'node:path';
 // Raised 6876 -> 6927 for the packaged download's first-use tool install (ch-ob-desktop-deb, owner
 // exception): the admission wait, the shared install map with its 10-minute stall bound and group kill,
 // and the shutdown cleanup. No trim paired: the install path is the feature.
-// Raised 6927 -> 6951 for the locked-PDF unlock card (ch-secret-card, owner exception, no trim lane).
-const BUDGET = 6951;
+// Raised 6927 -> 6954 for the locked-PDF unlock card (ch-secret-card, owner exception per Main-crewhouse decisions A and review-2, no trim lane).
+const BUDGET = 6954;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
