@@ -872,6 +872,15 @@ details.card[open] > summary { margin-bottom: 10px; }
   .stat b { font-size: 18px; line-height: 22px; }
 }
 .home .card.nudge { margin-top: 8px; }
+/* The demo's pair nudge (main.tsx PairRow): the words keep a readable column and the button drops under them
+   when the two no longer fit beside each other — a narrow phone, or the largest text. On main the button held
+   its full width while the column collapsed to one word a line, so the card grew three screens tall and pushed
+   the thread below it out of sight. 220px is the column's own floor (same as the pair sheet's row); below that
+   the row wraps instead of squeezing. A px floor, not em: at 2× the text's own em grows, and an em floor would
+   keep the column wider than the card. */
+.pair-row { flex-wrap: wrap; }
+.pair-row > .grow { min-width: 220px; }
+.pair-row > .btn { max-width: 100%; white-space: normal; text-align: center; }
 .list-row { transition: background 120ms var(--ease); }
 
 
