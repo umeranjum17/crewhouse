@@ -90,7 +90,7 @@ const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).m
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
-/** Opens one locked PDF with the pypdfium2 that comes with the Documents tool's pinned markitdown[pdf]: the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
+/** Opens one locked PDF with the pypdfium2 that comes with the Documents tool's pinned markitdown[pdf] (through pdfplumber, unpinned): the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
 const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => join('files', 'unlocked', encodeURIComponent(f)), lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
