@@ -83,3 +83,6 @@ night's sunken sits near it. The app's own night page colours (bg, sunken) at a 
 - Background images check the first layer only.
 - A sticky bar is excused only while the page itself scrolls. A bar over an inner scroller still fails;
   confirm by eye that the content can scroll out.
+- Words cut by an inner scroller's own top edge, and a text box's placeholder wrapping onto two lines, pass the
+  checks (Chief's chat on main, 2026-10-14: "Add your phone" under "What happened", "Ask Chief anything" in two
+  lines). Look at the shot.

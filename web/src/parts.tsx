@@ -318,7 +318,7 @@ export function ReviewCard({ f }: { f: FileView }) {
 export function Media({ f, big }: { f: FileView; big?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
-  if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow">{f.name}</span><b>Open</b></a><ReviewCard f={f} /></div>;
+  if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span></span><b>Open</b></a><ReviewCard f={f} /></div>;
   if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
   if (f.kind === 'video') {
     return play
@@ -327,7 +327,7 @@ export function Media({ f, big }: { f: FileView; big?: boolean }) {
   }
   // A sent file (a PDF, a receipt, a letter): its name, what kind it is and how big, then Open.
   const chip = fileTarget(f)?.chip, sub = [chip, f.size ? fileSize(f.size) : ''].filter(Boolean).join(' · ');
-  return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic" aria-hidden>▤</span><span className="grow">{f.name}{sub && <span className="mute small doc-sub">{sub}</span>}</span><b>Open</b></a>;
+  return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic" aria-hidden>▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span>{sub && <span className="mute small doc-sub">{sub}</span>}</span><b>Open</b></a>;
 }
 
 // ---------- previews: spreadsheets and documents crewd read for the app ----------

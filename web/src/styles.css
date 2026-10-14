@@ -268,7 +268,9 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .review.bad { border-color: var(--danger); background: var(--softAccent); color: var(--ink); }
 .review.bad b { color: var(--danger); }
 .review .btn { justify-self: start; margin-top: 6px; }
-.doc .grow { font-weight: 600; overflow-wrap: anywhere; }
+.doc .grow { font-weight: 600; min-width: 0; }
+/* A file's name holds one line and ends in an ellipsis, never broken at a hyphen. */
+.doc-name, .c-file b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .doc-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--danger); font-size: 22px; flex: none; }
 
 /* splash and party (A's ASCII moments, always on the night palette) */
@@ -1174,11 +1176,11 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .c-clip { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink2); }
 .c-clip:disabled { opacity: .45; cursor: not-allowed; }
 .c-chip { height: 28px; max-width: 160px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--solid); font: 500 12.5px/26px var(--ui); color: var(--ink2); white-space: nowrap; }
-/* Files waiting to send ride over the words as one chip each: the name wraps in full (never cut), the kind and
-   size sit under it, and ✕ takes one back. */
+/* Files waiting to send ride over the words as one chip each: the name on one line, then the kind and size,
+   and ✕ takes one back. */
 .c-files { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 6px; }
 .c-file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 5px 4px 5px 10px; border: 1px solid var(--line2); border-radius: 10px; background: var(--sunken); font: 500 12.5px/18px var(--ui); color: var(--ink); }
-.c-file b { overflow-wrap: anywhere; font-weight: 600; }
+.c-file b { min-width: 0; font-weight: 600; }
 .c-file .mute { white-space: nowrap; }
 .c-file button { border: 0; background: none; color: var(--ink2); font-size: 13px; padding: 2px 6px; }
 /* A sent file's kind and size under its name, in full. */
@@ -1525,7 +1527,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat > .home-top { padding: 0; }
   .home-chat .chief-hero { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
   /* No band under the switch: the thread's fade is 12px and its first day line sits at the top. */
-  .home-chat .lines, .page.chat-page.home-chat:has(> .chat) .lines { padding-top: 12px; mask-image: linear-gradient(transparent, #000 12px); }
+  /* Words scrolled up fade out under the header (in em, so the fade grows with the text) rather than cut hard. */
+  .home-chat .lines, .page.chat-page.home-chat:has(> .chat) .lines { padding-top: 1.5em; mask-image: linear-gradient(transparent, #000 1.5em); }
   .home-chat .lines > .day:first-child, .home-chat .lines > :first-child > .day:first-child { margin-top: 0; }
   .home-chat .ch-row { position: relative; display: grid; grid-template-columns: 1fr auto auto 1fr; grid-template-rows: 40px auto; gap: 0; align-self: stretch; }
   .home-chat .ch-row::before { content: ''; grid-column: 2 / 4; grid-row: 2; justify-self: stretch; align-self: stretch; margin: 0 -14px; border-radius: 19px; background: var(--tint); }
@@ -1601,6 +1604,16 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .dock .c-clip:disabled { opacity: 1; }
   .chat .dock .mic { width: 36px; height: 36px; margin: 0 4px 4px -48px; }
   .chat .dock .send, .chat .dock .send:disabled { width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: var(--bg); font: 600 20px/1 var(--ui); transform: none; }
+  /* When the row is too narrow for its words (the largest text, a narrow phone), the box takes a row of its own
+     over +, mic and send, so its words never wrap into a squashed pill. */
+  .chat .dock { container-type: inline-size; }
+  @container (max-width: 20em) {
+    .chat .dock .composer, .chat .dock .composer.has-bar { flex-wrap: wrap; }
+    .chat .dock .composer textarea { order: -1; flex-basis: 100%; }
+    .chat .dock .composer > :is(.c-files, .send-away, .send-failed) { order: -2; }
+    .chat .dock .composer:has(> .mic) textarea { padding-right: 16px; }
+    .chat .dock .mic { margin: 4px 0 4px auto; }
+  }
 
   /* The ⋯ sheet: rules on 16, words on 32, 17 and 13. */
   .more-sheet { background: var(--bg); }
