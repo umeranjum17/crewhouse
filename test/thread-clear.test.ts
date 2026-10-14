@@ -81,9 +81,14 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     await run("(document.querySelector('.chat .card.ask .more-ways > summary').click(), true)");
     await until('every account shown', () => run("document.querySelector('.chat .card.ask .more-ways').open"), 30_000);
     await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
-    // It opens at its latest line (Main2036), and the sign-in card's own form growing after it lands keeps it there.
-    await until('the thread at its newest line', () => run(`(() => { const el = document.querySelector('.chat .lines');
-      return el && el.scrollHeight - el.scrollTop - el.clientHeight <= 2; })()`), 10_000);
+    // It opens at its latest line (Main2036), or — when the newest open ask would sit off the top under a footer card
+    // — on that ask's own top (ch-ask-card-in-view); signed out, the newest ask here is a proposal card above the
+    // sign-in card, and the sign-in card's form has just opened. Either way it must settle, and stay there.
+    await until('the thread settled on its line or its ask', () => run(`(() => { const el = document.querySelector('.chat .lines');
+      if (!el) return false;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight <= 2) return true;
+      const top = el.getBoundingClientRect().top;
+      return [...el.querySelectorAll('.card.ask')].some((c) => { const t = c.getBoundingClientRect().top - top; return t >= -1 && t <= 8; }); })()`), 10_000);
 
     // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
     const scrollThread = (f: number) => run(`(() => {

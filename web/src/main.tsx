@@ -595,17 +595,21 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const box = useRef<HTMLDivElement>(null);
   // Whether the thread is at its newest line, so a line arriving while the person reads up never yanks them down.
   const pinned = useRef(true);
+  const onScroll = () => { const el = box.current; if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; };
+  // The person's own hand in this thread: from the first touch on, the thread never moves itself again (Main2036).
+  const touched = useRef(false);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; };
+    const driving = () => { touched.current = true; };
     el.addEventListener('scroll', onScroll, { passive: true });
+    for (const e of ['pointerdown', 'wheel', 'touchmove', 'click', 'keydown']) el.addEventListener(e, driving, { passive: true });
     onScroll();
-    return () => el.removeEventListener('scroll', onScroll);
+    return () => { el.removeEventListener('scroll', onScroll); for (const e of ['pointerdown', 'wheel', 'touchmove', 'click', 'keydown']) el.removeEventListener(e, driving); };
   }, []);
   // A new chat opens at its own newest line, whatever the last thread was left at; its open ask may be landed on again.
-  const asked = useRef('');
-  useEffect(() => { pinned.current = true; asked.current = ''; }, [id]);
+  const asked = useRef(''), askedAt = useRef(-1);
+  useEffect(() => { pinned.current = true; asked.current = ''; askedAt.current = -1; touched.current = false; }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
   // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096); a new
@@ -615,16 +619,18 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (around) return;
     const el = box.current;
     if (!el) return;
-    // The newest open ask is new to this view on a thread open or when it just arrived: land on it then,
-    // never while the person reads an older part of the thread. Only when it sits off the top: a footer card
-    // (Add your phone) at the bottom can push the ask that needs them out of sight.
+    // The newest open ask is new to this view on a thread open or when it just arrived: while it is off the top, land
+    // on it instead of the bottom, because the footer card (Add your phone) can push the ask that needs them out of
+    // sight. Landing stops at the person's own hand and at the first new line the thread takes; a thread they are
+    // reading an older part of is pinned off and never moved.
     const newestAsk = cards.at(-1), askId = newestAsk ? `ask${newestAsk.id}` : '', card = askId ? el.querySelector<HTMLElement>(`#${askId}`) : null;
-    const land = !!askId && asked.current !== askId; asked.current = askId;
+    if (askId && asked.current !== askId) { asked.current = askId; askedAt.current = lines.length; touched.current = false; }
+    const land = !!askId && askedAt.current === lines.length;   // this view's ask; the person's own hand is read live below
     const stick = () => {
       if (!pinned.current) return;
       el.scrollTop = el.scrollHeight;
       const over = card?.isConnected ? card.getBoundingClientRect().top - el.getBoundingClientRect().top : 0;
-      if (land && over < 0) el.scrollTop += over;
+      if (land && !touched.current && over < 0) { el.scrollTop += over; pinned.current = false; }   // on the ask now, not the bottom
     };
     stick();
     const raf = requestAnimationFrame(stick);
