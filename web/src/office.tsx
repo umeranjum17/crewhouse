@@ -19,11 +19,11 @@ const { landed, groupOf } = A;
 
 /** The panel's state word is the member's one status (A.statusOf, A.chiefStatus), the same the header counts and the
  *  rail rows read; only its glow class is the panel's own. A finish today also says when. */
-export type Glow = { word: string; cls: 'needs' | 'work' | 'quiet' | 'failed' | 'done' | 'rest' };
+export type Glow = { word: string; cls: 'needs' | 'work' | 'failed' | 'done' | 'rest' };
 export const glowOf = (c: A.OfficeMember, v: A.OfficeView): Glow => {
   const s = A.statusOf(c, v);
   if (s.group === 'wait') return { word: s.word, cls: A.waitsOnYou(c) ? 'needs' : 'rest' };
-  if (s.group === 'work') return { word: s.word, cls: s.seat === 'quiet' ? 'quiet' : 'work' };
+  if (s.group === 'work') return { word: s.word, cls: 'work' };
   if (s.group === 'done') return { word: `${s.word} ${A.clock(landed(c, v)!.at)}`, cls: 'done' };
   return { word: s.word, cls: s.seat === 'failed' ? 'failed' : 'rest' };
 };
@@ -101,7 +101,7 @@ function GroupRow({ c, live, jobTitle }: { c: A.OfficeMember; live: A.OfficeView
   const glow = glowOf(c, live);
   const line = A.waitsOnYou(c) ? jobTitle || c.step || A.NO_JOB : g === 'done' && done!.summary ? done!.summary : c.status;
   // A done row says what it finished, never a waiting status.
-  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle
+  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && A.seatOf(c) === 'working' ? jobTitle
     : g === 'done' ? done!.title : c.status;
   const meta = meta0 === line ? '' : meta0;
   return (
@@ -161,7 +161,7 @@ function HelperPanel({ c, live, job, role }: { c: A.OfficeMember; live: A.Office
   const glow = glowOf(c, live);
   // Done leads with the finished work itself, as the board does; waiting leads with what it is on; anything else its line.
   const line = A.waitsOnYou(c) ? job?.title || c.step || A.NO_JOB : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
-  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? job.title
+  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && A.seatOf(c) === 'working' ? job.title
     : glow.cls === 'done' ? done!.title : c.status || role || '';
   const meta = meta0 === line ? '' : meta0;
   const file = !c.ask && c.things[0] ? c.things[0] : undefined;

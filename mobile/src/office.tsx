@@ -40,7 +40,7 @@ function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
   const st = A.statusOf(c, v), g = st.group;
   const done = g === 'done' ? landed(c, v) : undefined;
   const word = done ? `✓ ${st.word} ${A.clock(done.at)}` : g === 'free' && st.seat === 'free' ? `○ ${st.word}` : st.word;
-  const col = g === 'wait' ? t.pink : g === 'work' ? (A.seatOf(c) === 'quiet' ? t.amber : t.green)
+  const col = g === 'wait' ? t.pink : g === 'work' ? t.green
     : A.seatOf(c) === 'failed' ? t.danger : g === 'done' ? t.ink : t.mute;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 }}>
@@ -58,7 +58,7 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
   // Done leads with the finished work itself, as the web panels do; waiting leads with what it is on.
   const line = A.waitsOnYou(c) ? jobTitle || c.step || A.NO_JOB : g === 'done' && done!.summary ? done!.summary : c.status;
   // A done row says what it finished, never a waiting status.
-  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && (A.seatOf(c) === 'working' || A.seatOf(c) === 'quiet') ? jobTitle
+  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : jobTitle && A.seatOf(c) === 'working' ? jobTitle
     : g === 'done' ? done!.title : c.status;
   const meta = meta0 === line ? '' : meta0;
   return (

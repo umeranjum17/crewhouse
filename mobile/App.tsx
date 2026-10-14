@@ -1641,15 +1641,14 @@ function HomeBar({ state, view, go, mode, pick }: { state: Json; view: A.OfficeV
       <T tone={mode === m ? undefined : 'ink2'} style={[s.small, s.b]}>{l}</T>
     </Pressable>)}
   </View>;
-  const tools = <View style={[s.row, { justifyContent: 'space-between' }]}>{gear}{seg()}</View>;
   // Chat opens on Chief: one compact header line, then the switch as its own full-width row under it.
   if (mode === 'chat') return <ChiefHero live={view} state={state} gear={gear} below={seg(true)} />;
-  // Office is a slim header: the title, the count line, then the switch.
+  // Office is a slim header as mock 2: the title (gear at its end), the count line, then the full-width switch.
   return (
     <View style={{ gap: 6 }}>
-      <T style={[s.serif, { fontSize: 28, lineHeight: 32 }]}>Office</T>
+      <View style={[s.row, { justifyContent: 'space-between' }]}><T style={[s.serif, { fontSize: 28, lineHeight: 32 }]}>Office</T>{gear}</View>
       <T tone="ink2" style={s.small}>{A.summaryOf(view)}</T>
-      {tools}
+      {seg(true)}
     </View>
   );
 }
@@ -1884,13 +1883,14 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   const crew = A.crew(state);
   const { width, fontScale } = useWindowDimensions();
   const narrow = width / fontScale < 360; // large text: time and status go under the preview, never squeeze it
-  const statusColor = (cls: string) => cls === 'needs' ? t.pink : cls === 'work' ? t.green : cls === 'quiet' ? t.amber
+  const statusColor = (cls: string) => cls === 'needs' ? t.pink : cls === 'work' ? t.green
     : cls === 'failed' ? t.danger : cls === 'done' ? t.ink : t.mute;
   return <View><Label>Chats</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.chats(state).map((c, i) => <View key={c.id}>
       <Pressable style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
         onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.id === 'chief' && c.unread ? `, ${c.unread} new` : ''}`}>
-        {c.id === 'room' ? <View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View>
+        {c.id === 'room' ? <View style={{ width: 40, height: 40, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface,
+          borderWidth: c.ring ? 2 : 0, borderColor: t.green }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -4 : 0 }}><Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={22} /></View>)}</View>
           : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
         <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small}>{c.line}</T>{narrow && (c.at > 0 || c.id !== 'room') && end(c)}</View>
         {!narrow && end(c)}
@@ -1901,7 +1901,7 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   function end(c: A.Chat) {
     return <View style={narrow ? [s.row, { gap: 10, flexWrap: 'wrap', marginTop: 4 }] : { alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
       {c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
-        {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'quiet' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
+        {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
         <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
       </View>}
       {c.id === 'chief' && c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>;

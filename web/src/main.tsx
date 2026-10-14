@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
+import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, discOf, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, SiteSignIn } from './screen.tsx';
@@ -166,25 +166,24 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
 }
 
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
-function Chats({ state, refresh, desk }: { state: Json; refresh: () => void; desk?: boolean }) {
+function Chats({ state, desk }: { state: Json; desk?: boolean }) {
   const crew = A.crew(state), list = A.chats(state);
-  // The desk feed shows the two most recent (B1), and any helper gone quiet, so Stuck's choices never hide.
+  // The desk feed shows the two most recent (B1). A helper gone quiet is Chief's ask, in his row and thread, never a
+  // card under the helper's own row: a crew row only ever carries its one status.
   const [all, setAll] = useState(false);
-  const shown = desk && !all ? list.filter((c, i) => i < 2 || (c.who !== 'chief' && c.who.stuckFor)) : list;
+  const shown = desk && !all ? list.slice(0, 2) : list;
   return <section className={`home-section${desk ? '' : ' phone-only'}`} aria-label="Chats">
     <div className="section-head"><span className="label">Chats</span>{desk && list.length > shown.length && !all && <button className="link" onClick={() => setAll(true)}>{`See all ${list.length}`}</button>}{desk && all && <button className="link" onClick={() => setAll(false)}>Show less</button>}</div><div className="list-group chats">
       {shown.map((c) => {
-        const h = c.who === 'chief' ? undefined : c.who;
         return <div key={c.id}>
           <a className="list-row" href={hrefOf(c.id)}>
-            {c.id === 'room' ? <span className="stack-faces">{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={26} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
+            {c.id === 'room' ? <span className={`face stack-faces ${c.ring}`} style={{ background: crew[0] ? discOf(crew[0]) : undefined }}>{crew.slice(0, 2).map((x) => <Face key={x.id} who={x} size={22} />)}</span> : <Face who={c.who} size={40} ring={c.ring} />}
             <span className="grow chat-preview"><b>{c.name}</b><span className="small">{c.line}</span></span>
             <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>
               {c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}
               {c.id === 'chief' && c.unread > 0 && <span className="badge" aria-label={`${c.unread} new`}>{A.unreadBadge(c.unread)}</span>}</span>
           </a>
           {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
-          {h && <Stuck h={h} refresh={refresh} />}
         </div>;
       })}
     </div>
@@ -406,14 +405,14 @@ function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
         <Office state={state} live={live} night={ctx.night} />
         <div className="phone-only">
           <OnItNow live={live} />
-          <Chats state={state} refresh={refresh} /><JobList state={state} phone refresh={refresh} />
+          <Chats state={state} /><JobList state={state} phone refresh={refresh} />
         </div>
       </div>
       <aside className="feed desk-only" aria-label="What's going on">
         <div className="feed-list">
           {tonight()}
           <OnItNow live={live} />
-          <Chats state={state} refresh={refresh} desk />
+          <Chats state={state} desk />
           <JobList state={state} few refresh={refresh} />
         </div>
         <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
@@ -579,8 +578,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
-  const gone = A.goneQuiet(ln, crewNames, id);
-  const quiet = !gone && ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
+  const quiet = ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
   // A live line waiting on the person carries no clock and stays still.
   useEffect(() => {
@@ -706,7 +704,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
-        {ln && <LiveRow ln={ln} quiet={quiet} gone={gone} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
@@ -733,10 +731,10 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
  *  A job passed to a helper links to that helper's chat. */
 const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 const QUIET_MS = 4000;
-function LiveRow({ ln, quiet, gone }: { ln: A.LiveLine; quiet: boolean; gone: boolean }) {
+function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
-  const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : gone ? A.WORDS.quiet : LIVE_WORD[ln.state];
+  const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;

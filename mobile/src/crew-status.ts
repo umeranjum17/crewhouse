@@ -1,7 +1,7 @@
 // The phone crew list's status word and dot: the web rail's own (A.statusOf, A.chiefStatus), so the
 // phone and the web rail agree for the same member — same word and same dot colour. The dot colours
 // mirror the rail's own seat classes (web/src/styles.css `.side-seat.seat-*`: working a hollow ink
-// ring, done ink, quiet/failed red, next amber, waiting/free grey) and Chief's own line
+// ring, done ink, failed red, next amber, waiting/free grey) and Chief's own line
 // (`.side-status`: grey, pink only for Needs you). A member missing from the office view across a
 // refresh (added or leaving between the snapshot and the live events) falls back to the helper's own
 // words rather than crashing; that fallback is the only place the raw status may appear, never a
@@ -17,7 +17,7 @@ export type CrewPillTone = 'ok' | 'wait' | 'off' | 'danger' | 'amber' | 'ink' | 
 export const railTone = (seat: A.Seat | 'done'): CrewPillTone =>
   seat === 'done' ? 'ink'
   : seat === 'working' ? 'work'
-  : seat === 'quiet' || seat === 'failed' ? 'danger'
+  : seat === 'failed' ? 'danger'
   : seat === 'next' ? 'amber'
   : 'off';
 

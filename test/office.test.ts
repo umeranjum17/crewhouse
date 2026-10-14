@@ -216,7 +216,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
           // One status per member: the header counts every member once by the word its row shows, Chief too (his
           // "Needs you" counts as waiting).
-          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' || w === 'Gone quiet' ? 1 : 3;
+          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' ? 1 : 3;
           const seen = [0, 0, 0, 0];
           for (const w of m.words as string[]) seen[groupOf(w)]++;
           const extra = m.nums.map((x: number, i: number) => x - seen[i]);
@@ -345,7 +345,7 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   // The rail's own words, mapped to the four Office groups the summary counts.
   const group = (w: string) => w.startsWith('Done') ? 'done'
     : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 'waiting'
-    : w === 'At work' || w === 'Gone quiet' ? 'at work'
+    : w === 'At work' ? 'at work'
     : 'free';
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     await b.open(`demo=${demo}&day#/crew`);
@@ -586,6 +586,16 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   const live = await row();
   assert.equal(live.word, 'At work'); assert.match(live.working, /Scout is working/);
   assert.match(live.line, /^You: Check my Friday flights/); assert.ok(live.time); assert.equal(live.badge, false);
+  // Scout goes quiet past the limit: still one status on its row, no ask card under it; the ask is Chief's alone.
+  lab.db.run('UPDATE tasks SET updated_at = updated_at - 300000 WHERE id = ?', job);
+  const chief = () => b.run(`document.querySelector('[aria-label="Chats"] a[href="#/chief"] .p-state')?.textContent`);
+  await until('Chief asks about Scout', async () => (await chief()) === 'Needs you', 30_000);
+  assert.deepEqual([(await row()).word, await b.run(`!!document.querySelector('[aria-label="Chats"] a[href="#/h/scout"]').parentElement.querySelector('.stuck')`)],
+    ['At work', false], 'a quiet helper\'s Chats row carries its status and no ask card');
+  await b.run('location.hash = "#/chief"');
+  await until("the Stop card in Chief's thread", () => b.run(`[...document.querySelectorAll('.stuck')].some((e) => /Scout has been quiet/.test(e.textContent))`), 30_000);
+  await b.run('location.hash = "#/"');
+  await toOffice(b);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
   await until('last reply in the row', async () => (await row())?.line === 'Three Friday flights are ready.', 30_000);
   assert.equal((await row()).word, 'Done');

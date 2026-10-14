@@ -8,7 +8,7 @@ groups). No screen keeps a word table of its own. The words (`A.WORDS`):
 |--------|------|------------|
 | Chief has a card needing your yes | `Needs you` (Chief only) | waiting (Chief counted once) |
 | waiting on Chief, or queued | `Waiting` / `Up next` | waiting |
-| on a job | `At work` / `Gone quiet` | at work |
+| on a job (also one gone quiet: that is Chief's ask, not a second status) | `At work` | at work |
 | finished something today | `Done` | done |
 | nothing to do, or a failed job | `Free` / `Didn't finish` / `Not sure` | free |
 
@@ -34,8 +34,8 @@ moment with `scripts/screens.sh`, and read the words above from the DOM at 1440 
 3. "Ask Scout to find flights for next week": the result in Chief's thread; Scout `Done`, no unread badge on Scout's chat.
 4. `[tool crew_routine {"bot":"scout","when":"every day 9:00","task":"…"}]` to Chief: the routine card makes Chief
    `Needs you` (header, rail, badge, Chats ring) and the count line counts him as 1 waiting; deny it.
-5. "ask permission to find hotels for next week" to Scout, wait 15 s (`Gone quiet`, Chief `Needs you` for the Stop
-   card), then `POST /api/bots/scout/reset`: Scout `Free` on the rail and in the count line, never `1 resting`.
+5. "ask permission to find hotels for next week" to Scout, wait 15 s (Scout still `At work` with its working line on Chats,
+   the rail and Office; Chief `Needs you` for the Stop card), then `POST /api/bots/scout/reset`: Scout `Free` on the rail and in the count line, never `1 resting`.
 6. "Compare the two phone plans, hit every limit" to Chief: the job pauses; Chief `Waiting`, the strip "All your AI
    accounts are resting until …", and the count line counts Chief as waiting.
 
