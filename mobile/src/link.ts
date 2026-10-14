@@ -168,6 +168,21 @@ export async function canPush(): Promise<boolean> {
   }
 };
 
+/** One link frame carries about 1 MB: a bigger body (documents, as base64) rides a stream in pieces instead, its JSON as
+ *  one line, answered as one line (src/link.ts `big`). */
+const BIG = 256 << 10;
+async function big(link: DeviceLink, op: string, body: unknown) {
+  const s = await link.stream('request', { op });
+  const utf8 = new TextDecoder();
+  let out = '';
+  const reply = new Promise<{ status: number; body: any }>((resolve, reject) => {
+    s.onData = (c) => { out += utf8.decode(c, { stream: true }); };
+    s.onEnd = (e) => { try { if (e) throw e === 'too-large' ? new Error('That is too much to send at once. Try fewer files.') : new LinkError('unreachable'); resolve(JSON.parse(out)); } catch (x) { reject(x); } };
+  });
+  await s.write(JSON.stringify({ ...body as object, build: 'p9b' }) + '\n');
+  return reply;
+}
+
 function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => void) {
   // The computer says where else it can be reached (Tailscale came up, its home address moved): remember each one.
   const heard = (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else { liveListeners.forEach((fn) => fn(e)); onEvent(e); } };
@@ -184,7 +199,7 @@ function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => 
   const call = async (method: string, path: string, body?: unknown, o?: { timeoutMs: number }) => {
     let r: { status: number; body: any };
     const bound = o && { timeoutMs: o.timeoutMs, notValidAfter: Date.now() + o.timeoutMs };
-    try { r = (await link.request(`${method} ${path}`, { ...body as object, build: 'p9b' }, bound)) as typeof r; } catch (e) {
+    try { r = (await (JSON.stringify(body ?? {}).length > BIG ? big(link, `${method} ${path}`, body) : link.request(`${method} ${path}`, { ...body as object, build: 'p9b' }, bound))) as typeof r; } catch (e) {
       // No status means "can't reach the home computer"; a view-only phone is told it can't, as crewd would.
       throw Object.assign(new Error((e as Error).message), e instanceof LinkError && e.code === 'view-only' ? { status: 403 } : {});
     }

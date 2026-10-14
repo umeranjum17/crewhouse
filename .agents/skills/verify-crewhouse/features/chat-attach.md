@@ -19,6 +19,24 @@ shows a file card above the person's words: the name on one line with an ellipsi
    plain shots, the default (360, 1.3x) with slug `chief-attach` for the largest text beside mock 3A, and the
    installed app at 390 per [pwa-shell.md](pwa-shell.md).
 
+## Phone (Android emulator)
+
+The app's + opens its own sheet, "A document: PDF, Word, Excel or text" or "A photo"; a document goes through the
+system's document picker and sits in the box as a chip (kind tag, name, `PDF · 1.1 MB`, ✕). A body over 256 KB
+(base64) rides a link stream rather than one request frame (`src/link.ts` `big`, `test/link.test.ts`).
+
+1. Your own emulator; a lab crewd with its relay (`LAB=<scratch> scripts/pair-lab.sh up .`), then
+   `LAB=$LAB node scripts/phone-pair-typed.mjs --serial <emulator> --apk <release apk>` (the typed relay code; the
+   emulator has no mDNS). That script installs with `-g` and grants notifications; where a brief forbids grants,
+   `adb install` the APK plainly and walk the same screens with `phone-ui.mjs`. `adb push` a PDF over 1 MB into `/sdcard/Download/` so the big-body path runs.
+2. `scripts/phone-ui.mjs`: tap `Add a photo or a document`, `^A document`, the file's name; type the words, Send.
+3. Same SQLite and `cmp` checks as step 3 above (a plain request lands in Chief's own inbox: `[file chief]`).
+4. Shots: the sheet, the chip in the box and the thread, day and night (`cmd uimode night`). Largest text:
+   `SERIAL=<emulator> look-check.mjs android --out <dir> chief-attach` on the thread beside mock 3A. Its density
+   and font change restart the app, so a staged chip is lost: for the box at the largest text set `wm density`
+   and `font_scale` yourself, stage the file, shoot, and reset both. At large text the chip's tag goes over the
+   name, which then takes two lines.
+
 ## Refusals
 
 `node --test test/unit.test.ts` covers allow, a refused type, a refused size and a hostile file name.
