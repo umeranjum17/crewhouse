@@ -395,8 +395,10 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin-bottom: 6px; justify-content: flex-start; }
 .chat { display: flex; flex-direction: column; min-height: calc(100dvh - 190px); }
 .chat > .dock { margin-left: -16px; margin-right: -16px; }
-/* Room under the newest line so the box you type in never sits on a card. */
-.lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 28px; }
+/* Room under the newest line so the box you type in never sits on a card. The right gutter keeps every line clear of
+   the thread's scrollbar: the installed app always draws one, an overlay bar the browser paints over the right edge
+   without taking any layout space, so the scroller reserves the room itself. */
+.lines { flex: 1; display: flex; flex-direction: column; padding-bottom: 28px; padding-right: 6px; }
 /* The transcript: a name column beside plain words, every line named, the clock kept for screen readers. */
 .line { max-width: 640px; margin-top: 20px; }
 .line:has(> .line-by) { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 10px; align-items: start; }
@@ -1313,7 +1315,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   /* The chat reserves its own floor: a 140px thread plus the dock (its composer may wrap to two lines at 320). The base
      .chat minimum (100dvh - 190px) and a scroller's content height must never size it (d868bb4). */
   .home-chat > .chat { flex: 1 1 0; min-height: calc(140px + 94px + env(safe-area-inset-bottom)); }
-  .home-chat .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 10px; }
+  .home-chat .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px 0; }
   .home-chat .lines > :first-child { margin-top: auto; }
   .home-chat .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; }
   .home-chat .day { margin-top: 12px; }
@@ -1391,7 +1393,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 @media (max-width: 899px) {
   .page.chat-page.room-page { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .room-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-  .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 10px; }
+  .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px 0; }
   .room-page .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
 }
 
