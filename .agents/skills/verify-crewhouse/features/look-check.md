@@ -25,6 +25,10 @@ change is flipped away and back once after 20 s. Exit 2 means it never settled; 
 **Someone's shot** (a phone photo, a bug report): `shot <slug>=<file>` runs the strip check and the mock pairing.
 The theme comes from the file name (`day|light`, `night|dark`), or from the page colour nearest the shot's middle.
 
+**A saved Android capture** (no emulator): `native --xml <uiautomator xml> <slug>=<png>` replays the tree
+(`nativeHits`) and pixel (`nativeCut`) checks the Android mode runs, so a capture can be re-judged offline. The
+fixture test `test/look-check-native.test.ts` drives it over `test/fixtures/chief-header-truncated.*`.
+
 **Bundled phone fonts.** `fonts --out <dir>` (no emulator, no screenshot) guards the Android bold-weight
 mechanism: every weight the phone asks for (`...fw()` in `mobile/`) must resolve to a static family in
 `mobile/src/font.ts` that `useFonts` loads from a bundled file, and no bare `fontWeight` may remain outside that
@@ -77,6 +81,13 @@ Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme
 The pixel check (`nativeCut`) covers it instead: a last line ending in the native "…" dots while the node
 reports the whole string fails, as does ink sliced through the node's own edge where the node reaches its
 container's edge (proved on the pre-#475 phone header: `DeepSeek` drawn `DeepS…`, fail before, pass after).
+- A cut can also draw as one dot, a few pixels inside the node's own edge: Chief's status "Needs you" at the
+largest text in a tight header drew "Needs .", the ellipsis' trailing bearing 11 px short of the node's box, and
+the older check (dots only, hard against the edge) reported zero hits. The check now also fails a single small
+round dot standing clear of the line's last glyph, where the node's own words end in no dot — a glyph's own low
+tail (the leg of a "k", a comma) stays joined to its stem or ends in its own dot, so it does not count.
+`test/fixtures/chief-header-truncated.*` is that capture; `test/look-check-native.test.ts` fails on the older
+check and passes on this one.
 - Overlap compares siblings only, and on Android only nodes with words. A box over a cousin's words passes.
 - A solid black band always fails, in every look: (near-)pure black is never the app's page, even though
 night's sunken sits near it. The app's own night page colours (bg, sunken) at a padded edge still pass.

@@ -1761,20 +1761,28 @@ function NeedsPin({ state, cards, open, go }: { state: Json; cards: A.Card[]; op
  *  that line — then the Chief | Office switch as its own full-width row under it. The crew faces live in Office. */
 function ChiefHero({ live, gear, below }: { live: A.OfficeView; state: Json; gear?: ReactNode; below?: ReactNode }) {
   const t = useLook();
+  // At the largest text the name and the status can no longer share the gear's line, so the status wraps under the
+  // name (ChatList's own rule) instead of being cut to "Needs …". Normal size keeps them on the one line.
+  const { width, fontScale } = useWindowDimensions();
+  const narrow = width / fontScale < 360;
   // Chief's one status, the rail's own (A.chiefStatus): the dot is pink while he needs you, green at work, else grey.
   const st = A.chiefStatus(live), needs = st.seat === 'needs';
+  const status = (
+    <View style={[s.row, { gap: 6, flexShrink: narrow ? 0 : 1, minWidth: 0 }]}>
+      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : st.group === 'work' ? t.green : t.line2 }} />
+      <T lines={narrow ? undefined : 1} style={[s.small, { ...fw('500'), color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
+    </View>
+  );
   return (
     <View accessibilityLabel="Chief" style={{ gap: 8 }}>
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
         <ChiefArt mood={live.chief.mood} size={56} whole />
         <T style={[s.serif, { fontSize: 22, lineHeight: 26 }]}>Chief</T>
-        <View style={[s.row, { gap: 6, flexShrink: 1, minWidth: 0 }]}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: needs ? t.pink : st.group === 'work' ? t.green : t.line2 }} />
-          <T lines={1} style={[s.small, { ...fw('500'), color: needs ? t.pinkInk : t.ink2 }]}>{st.word}</T>
-        </View>
+        {!narrow && status}
         <View style={{ flex: 1 }} />
         {gear}
       </View>
+      {narrow && <View style={{ paddingLeft: 66 }}>{status}</View>}
       {below}
     </View>
   );

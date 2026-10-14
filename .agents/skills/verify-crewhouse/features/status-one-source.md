@@ -23,6 +23,13 @@ Chief's header (`.ch-status`, the phone/iPad hero), the desk rail (`.side-status
 line (`.live-word`), Office (`.p-state`, `.office-counts`, the phone groups), Chats (`.chat-row` lines and badges),
 `#/crew`, and the native app (`mobile/src/crew-status.ts`, `mobile/src/office.tsx`, `mobile/App.tsx`).
 
+The phone's Chief header keeps Chief's status word whole at every text size. At the largest text the name and the
+status can no longer share the gear's line, so `ChiefHero` (`mobile/App.tsx`) wraps the status under the name
+(`width / fontScale < 360`, `ChatList`'s own rule) instead of letting `numberOfLines` cut "Needs you" to "Needs ."
+(the single-dot cut `nativeCut` now fails). Drive: on an owned emulator at the system's largest `font_scale`,
+`look-check.mjs android` Chief's thread, light and dark — both must pass, and by eye "Needs you" reads whole beside
+the gear (`test/fixtures/chief-header-truncated.*` is that capture).
+
 ## Drive (real crewd, stub engine)
 
 Launch per SKILL.md with `CREWHOUSE_STUCK_MS=15000`; `POST /api/onboard {"address":"Umer"}`,

@@ -5,12 +5,15 @@
 //
 //   node look-check.mjs web --out <dir> [--person <person.key>] [--width 360] [--height 780] [--text 1.3] [--then <js>] <slug>=<url>…
 //   SERIAL=<emulator> node look-check.mjs android --out <dir> [--text <scale>] [--then '<tap regex>>><tap regex>'] <slug>   (taps reach the screen after each theme switch)
+//   node look-check.mjs native --out <dir> --xml <uiautomator xml> <slug>=<png>   (replay a saved capture: the tree and pixel checks)
 //   node look-check.mjs shot --out <dir> <slug>=<png|jpg>…   (someone's phone shot: the strip check and the mock only)
 //
 // web: its own headless Chromium (throwaway profile), ?day and ?night per screen (the app's own theme switch), every
 // text box's font-size and line-height × --text (Android Chrome's text scaling). android: the emulator at 360 dp
 // (`wm density`), the system's largest font_scale and `cmd uimode night`, read back from uiautomator and screencap;
 // both are reset afterwards. Mocks: mocks.tsv beside this script (slug → path under $FM_HOME, {theme} = day|night, {look} = light|dark).
+// native: replay a saved android capture (its png and uiautomator xml) through the same tree and pixel checks, so a
+// capture can be re-judged without an emulator (the fixture test/test/look-check-native.test.ts).
 // Writes <out>/<slug>-<theme>.png, <slug>-<theme>-vs-mock.png, hits/<slug>-<theme>-<n>-<kind>.png, look-check.json.
 // Exit 0 clean, 1 a defect, 2 could not run.
 import { execFileSync, spawn } from 'node:child_process';
@@ -20,10 +23,10 @@ import { dirname, join } from 'node:path';
 
 const argv = process.argv.slice(2), mode = argv.shift();
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : argv.splice(i, 2)[1]; };
-const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), REVERSE = opt('reverse'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text');
+const OUT = opt('out'), PERSON = opt('person'), THEN = opt('then'), SCROLL_TO = opt('scroll-to'), REVERSE = opt('reverse'), W = +opt('width', 360), H = +opt('height', 780), TEXT = opt('text'), XML = opt('xml');
 const ROOT = opt('root', join(import.meta.dirname, '..', '..', '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
-if (!OUT || !['web', 'android', 'shot', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|fonts --out <dir> …'); process.exit(2); }
+if (!OUT || !['web', 'android', 'shot', 'native', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|native|fonts --out <dir> …'); process.exit(2); }
 mkdirSync(join(OUT, 'hits'), { recursive: true });
 const FM = process.env.FM_HOME ?? `${process.env.HOME}/.treehouse/firstmate`;
 const mocks = Object.fromEntries(readFileSync(join(import.meta.dirname, 'mocks.tsv'), 'utf8').split('\n')
@@ -184,7 +187,9 @@ async function strips(src, frac, sets, theme) {
 /** A text line the native shell drew cut. uiautomator reports a node's full text, so a drawn ellipsis
  *  ("DeepS…" at the largest font) or a sliced glyph is invisible to the tree: read the drawn pixels instead.
  *  A hard cut touches the node's own edge; a native ellipsis ends the last drawn line with its dots while the
- *  node reports the whole string. Inputs skip their own text (typed dots, passwords) and the status bar. */
+ *  node reports the whole string, and it need not reach the node's own edge — the drawing keeps the ellipsis's
+ *  trailing bearing, and a squeezed box can even draw the ellipsis as one dot. Inputs skip their own text
+ *  (typed dots, passwords) and the status bar. */
 async function nativeCut(src, xml) {
   // Each text node with its parent's bounds: a hard cut only counts where the text reaches its container's edge
   // (tightly wrapped text like a centred "Chief" ends at its own ink; that is not a cut).
@@ -238,25 +243,37 @@ async function nativeCut(src, xml) {
     if (lh < 6) continue;
     let reach = -1;
     for (let px = w - 1; px >= 0 && reach < 0; px--) for (let py = top; py <= bot; py++) if (ink(px, py)) { reach = px; break; }
-    // A line ending well short of the node's edge cannot be cut by it.
-    if (reach < 0 || w - 1 - reach > 8) continue;
-    // (b) a drawn ellipsis: the line's tail (one line tall at most) ends in 2+ small ink groups low on the
-    // line with no ink above them — the native cut marker. A normal ending ("k", ".", ":") is tall or single.
+    // A line ending well short of the node's edge cannot be cut by it. Three drawn dots are the native "…" and sit
+    // at the edge (near); a one-dot cut keeps more of the line's trailing bearing, so it is allowed a little further
+    // in (nearish), and either way the cut's own bearing is a few percent of the line, never half of it.
+    const gap = w - 1 - reach, near = gap <= 8, nearish = gap <= Math.max(10, Math.round(lh * 0.4));
+    if (reach < 0 || !nearish) continue;
+    // (b) a drawn cut marker: the last line's tail ends in small ink groups low on the line with no ink above them.
+    // Two or more are the native "…"; a single small round dot standing apart from the line's last glyph (a box too
+    // tight for the full ellipsis) is the same cut drawn with one dot, and counts only where the node's own words end
+    // in no dot of their own — a real period or comma is the node's last glyph, not a marker. A glyph's own low tail
+    // (the leg of a "k") stays joined to its stem, so a marker must have clear space before it.
     const span = Math.min(w, Math.max(16, Math.round(lh * 0.8))), x0 = w - span, mid = top + lh * 0.45;
     const groups = [];
     for (let px = x0; px < w; px++) {
-      let tall = false, low = 0;
-      for (let py = top; py <= bot; py++) if (ink(px, py)) { if (py < mid) { tall = true; break; } low++; }
+      let tall = false, low = 0, lo = -1, hi = -1;
+      for (let py = top; py <= bot; py++) if (ink(px, py)) { if (py < mid) { tall = true; break; } low++; if (lo < 0) lo = py; hi = py; }
       if (tall) groups.push({ tall: true });
-      else if (low >= 2) { if (!groups.length || groups[groups.length - 1].tall || px - groups[groups.length - 1].end > 2) groups.push({ tall: false, start: px, end: px, wide: 1 });
-        else { groups[groups.length - 1].end = px; groups[groups.length - 1].wide++; } }
+      else if (low >= 2) { const g = groups[groups.length - 1];
+        if (!g || g.tall || px - g.end > 2) groups.push({ tall: false, start: px, end: px, wide: 1, miny: lo, maxy: hi });
+        else { g.end = px; g.wide++; if (lo < g.miny) g.miny = lo; if (hi > g.maxy) g.maxy = hi; } }
     }
     const tail = [];
     for (let i = groups.length - 1; i >= 0 && !groups[i].tall; i--) tail.unshift(groups[i]);
     const dots = tail.filter((t) => t.wide <= Math.max(8, lh * 0.2)).length;
-    if (dots >= 2) out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60),
+    const m = tail[tail.length - 1];
+    let before = -1;
+    if (m) for (let px = m.start - 1; px >= 0 && before < 0; px--) for (let py = top; py <= bot; py++) if (ink(px, py)) { before = px; break; }
+    const cut = tail.length === 1 && m.wide >= 3 && m.wide <= Math.max(8, lh * 0.35) && m.maxy - m.miny >= 3 && m.maxy - m.miny <= Math.max(6, lh * 0.35)
+      && m.maxy >= bot - Math.max(2, lh * 0.08) && m.start - before >= Math.max(3, Math.round(lh * 0.1)) && !/[.,;:…·•‧‥-]\s*$/.test(n.text.trim());
+    if ((dots >= 2 && near) || cut) out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60),
       box: { x: x + x0, y: y + top, w: span, h: lh },
-      detail: `drawn cut (ends "…" on screen) but reports its full text "${n.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` });
+      detail: `${dots >= 2 && near ? 'drawn cut (ends "…" on screen)' : 'drawn cut (one dot on screen)'} but reports its full text "${n.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` });
   }
   return out;
 }
@@ -353,6 +370,14 @@ try {
         report.push(await finish(slug, theme, file, dom, DPR));
       }
     }
+  } else if (mode === 'native') { // a saved android capture: the tree and pixel checks the android mode runs, replayed offline
+    if (!XML) throw new Error('native mode needs --xml <uiautomator xml>');
+    const xml = readFileSync(XML, 'utf8');
+    for (const a of argv) { const slug = a.slice(0, a.indexOf('=')), file = a.slice(a.indexOf('=') + 1);
+      const png = readFileSync(file), theme = /night|dark/.test(file) ? 'night' : /day|light/.test(file) ? 'day' : 'day';
+      const src = `data:image/png;base64,${png.toString('base64')}`;
+      report.push(await finish(slug, theme, file,
+        [...nativeHits(xml, png.readUInt32BE(16), png.readUInt32BE(20)), ...(await run(img, nativeCut, src, xml))], 1)); }
   } else if (mode === 'shot') { // a phone photo or any capture: the pixel checks alone (strips), beside its mock
     for (const a of argv) { const slug = a.slice(0, a.indexOf('=')), file = a.slice(a.indexOf('=') + 1), theme = /night|dark/.test(file) ? 'night' : /day|light/.test(file) ? 'day' : 'auto';
       report.push(await finish(slug, theme, file, [], 1)); }

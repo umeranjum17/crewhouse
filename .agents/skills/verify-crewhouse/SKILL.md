@@ -311,9 +311,10 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 
 - `scripts/screens.sh <dest> <slug> <url> [query]` — the four design-bar captures of one
   changed screen (dark and light, 1440 and 390), after the mandatory personal-voice check.
-- `node scripts/look-check.mjs web|android|shot --out <dir> …` — the mandatory look check (above): 360 wide,
+- `node scripts/look-check.mjs web|android|shot|native --out <dir> …` — the mandatory look check (above): 360 wide,
   largest text, light and dark; stretched, clipped, overlapping, off-screen and edge-strip hits with crops, each shot
-  beside its approved mock (`scripts/mocks.tsv`). Exit 0 clean / 1 a hit / 2 could not run.
+  beside its approved mock (`scripts/mocks.tsv`). `native --xml <uiautomator xml> <slug>=<png>` replays a saved Android
+  capture through the same tree and pixel checks with no emulator. Exit 0 clean / 1 a hit / 2 could not run.
 - `node .agents/skills/verify-crewhouse/scripts/personal-voice.mjs [paths…] [--self-test]` — the mandatory personal-voice check
   (one person, one assistant) over the demo seed, the screens and the prompts: exit 0 clean /
   1 a hit to fix at the producer / 2 could not run. `--self-test` is its negative test.
