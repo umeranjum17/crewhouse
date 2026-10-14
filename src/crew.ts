@@ -90,6 +90,8 @@ const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).m
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
+/** Opens one locked PDF with the Documents tool's own pinned pypdfium2: the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
+const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockedAs = (f: string) => join('files', 'unlocked', basename(f)), lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
@@ -462,7 +464,7 @@ export class Crew {
   private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}');
     const covers = d.key ? coversOf(d.key) : null;
-    if (a.kind === 'connect' || a.kind === 'signin') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : { app: d.app, words: d.words } };
+    if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.db.get("SELECT json_extract(data, '$.name') AS n FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ?", d.bot, f)?.n ?? null) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
@@ -1581,7 +1583,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const task = this.activeTask(botId);
     const text = cleanReply(reply.trim());
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id);
     const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
       if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
@@ -1888,7 +1890,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean }, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
@@ -1913,8 +1915,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       }
     }
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
+    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', shown = change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once', held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', shown = opened || (change ? 'change it' : body.answer === 'deny' ? 'not now' : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
@@ -1925,7 +1928,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id)) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id)) this.setTask(task, 'working');
       if (detail.pass) this.wrap(detail.pass.root);
       if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
@@ -1944,9 +1947,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       return this.dispatch();
     }
     if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
-    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin')", task.id)) return;
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id)) return;
     const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin') ORDER BY id", task.id);
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock') ORDER BY id", task.id);
     this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
@@ -2056,6 +2059,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
         'The person sees a Sign in card, signs in on your screen themselves and taps Done; never type a password or code. End your turn with one short line; you are resumed when they are done.', (p) => this.askSignin(botId, String(p.site ?? ''))));
+      own.push(tool('crew_unlock', 'A PDF in your folder is password-locked (reading it fails on a password): call this with `files`, their paths in your folder. Never ask for a password in words: the person types each one on a card in Chief\'s chat, Crewhouse opens the file on this computer into an unlocked copy in files/unlocked/ and forgets it. End your turn with one short line; you are resumed with the copies when they are done.', (p) => this.askUnlock(botId, p.files)));
       own.push(tool('crew_routine', 'Offer the person a recurring check of your own: the same task on a schedule, which nothing runs until they say ' +
         'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
@@ -2260,6 +2264,26 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!host) throw fail("give the site's address, like example.com");
     if (!this.db.get("SELECT 1 FROM asks WHERE kind = 'signin' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), `Sign in to ${host}`, { bot: botId, host, origin: u!.origin }, 'signin');
     return { asked: true, note: 'The person sees a Sign in card now. End your turn with one short line; you will be told when they hand your screen back.' };
+  }
+
+  /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
+  private askUnlock(botId: string, files: unknown) {
+    const space = disk.botDir(this.cfg, botId), paths = [typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => disk.insideBot(this.cfg, botId, String(f ?? '')));
+    const locked = paths.filter((f) => { if (!existsSync(f)) throw fail(`there is no file at ${relative(space, f)}`); return !existsSync(join(space, unlockedAs(f))) && /^%PDF-[^]*\/Encrypt\b/.test(readFileSync(f, 'latin1')); });
+    if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked.map((f) => relative(space, f)) }, 'unlock');
+    return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${paths.map((f) => existsSync(join(space, unlockedAs(f))) ? unlockedAs(f) : relative(space, f)).join(', ')}` };
+  }
+
+  /** Each password opens its file in the helper's sandbox, through stdin only, and is gone: no row, log, event or model ever holds it. A wrong one keeps that file on the card. */
+  private async unlock(ask: Row, d: Row, passwords: unknown) {
+    const space = disk.botDir(this.cfg, d.bot), py = join(this.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+    if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
+    if (!sandboxReady() || !existsSync(py)) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
+    mkdirSync(join(space, 'files', 'unlocked'), { recursive: true });
+    const codes = await Promise.all(d.files.map((f: string, i: number) => runSandboxed(space, [this.cfg.toolsDir], {}, `${q(py)} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, passwords[i]).then((r) => r.code)));
+    const wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
+    if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
+    return `unlocked: ${d.files.map(unlockedAs).join(', ')}`;
   }
 
   /** crew_verify: crewd applies the check alone to the base (it must fail), then the whole patch (it must pass), each in a

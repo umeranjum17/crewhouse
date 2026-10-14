@@ -661,6 +661,56 @@ test('Done on a sign-in hands the wheel back: the site is kept, the card answere
   done();
 });
 
+/** A helper whose inbox holds a password-locked PDF, asking through Chief (crew_unlock). The Documents tool's python is a
+ *  stand-in that opens the file only for the right password on stdin, so the test needs no download; the sandbox is real. */
+const PASSWORD = 'Northbank-7319!';
+async function unlockAsk() {
+  const lab = setup(), logged: string[] = [], { log, error, warn } = console;
+  for (const k of ['log', 'error', 'warn'] as const) console[k] = (...a: unknown[]) => { logged.push(a.map(String).join(' ')); };
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'march.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
+  mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, `#!/bin/bash\n[ "$(cat)" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read my statement ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
+  await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
+  const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
+  /** Every place a password could be kept: every row of every table, the database files on disk, what the model was sent, and the log. */
+  const leaks = () => {
+    const rows = lab.db.all("SELECT name FROM sqlite_master WHERE type = 'table'").flatMap((x: any) => lab.db.all(`SELECT * FROM "${x.name}"`));
+    const files = readdirSync(lab.cfg.stateDir).filter((f) => f.startsWith('crew.db')).map((f) => readFileSync(join(lab.cfg.stateDir, f), 'latin1'));
+    const model = JSON.stringify((lab.crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)) + (lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`);
+    return [JSON.stringify(rows), ...files, model, logged.join('\n'), JSON.stringify(lab.crew.snapshot())].filter((x) => x.includes(PASSWORD)).length;
+  };
+  return { ...lab, t, c, leaks, copy: join(disk.botDir(lab.cfg, 'scribe'), 'files', 'unlocked', 'march.pdf'), done: () => { Object.assign(console, { log, error, warn }); lab.done(); } };
+}
+
+test('locked PDF: the card in Chief\'s thread takes the password, the helper reads an unlocked copy, and nothing keeps the password', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, leaks, copy, done } = await unlockAsk();
+  assert.equal(c.helper, 'chief', 'the person hears it from Chief, never from the helper');
+  assert.deepEqual(c.unlock?.files, [{ path: 'files/inbox/march.pdf', name: 'march.pdf' }]);
+  assert.match(c.words, /never goes into the chat or to the AI/);
+  assert.deepEqual([c.head, c.choices[0].label], ['A file is locked', 'Unlock the file']);
+  assert.ok(A.needsYou(crew.snapshot()).some((x) => x.id === c.id), 'and it is counted under Needs you');
+  await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done', 'the helper resumed by itself and finished');
+  assert.ok(existsSync(copy), 'the unlocked copy is in the helper\'s files');
+  assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /unlocked: files\/unlocked\/march\.pdf/);
+  assert.match(A.answeredReceipts(crew.snapshot())[0].line, /^Unlocked · \d{1,2}:\d\d [ap]m$/, 'where the card was: Unlocked and the time (mock 3A)');
+  assert.equal(leaks(), 0, 'the password is in no row, database file, model turn, log or snapshot');
+  done();
+});
+
+test('locked PDF: a wrong password gets a plain retry line, keeps the card open and leaks nowhere', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, leaks, copy, done } = await unlockAsk();
+  await assert.rejects(crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400 && e.message === "That password didn't open the file. Check it and try again.");
+  assert.equal(openAsk(db)?.kind, 'unlock', 'the card stays open for another try');
+  assert.ok(task(db, t).state === 'needs_you' && !existsSync(copy));
+  assert.equal(leaks(), 0, 'the wrong password, which contains the right one, is kept nowhere either');
+  done();
+});
+
 test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {
   const { db, crew, cfg, done } = setup();
   try {

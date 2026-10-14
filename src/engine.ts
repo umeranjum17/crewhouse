@@ -10,7 +10,7 @@ export const PARAMETERS = {
   crew_app: Type.Object({ tool: Type.String(), input: Type.Optional(Type.Object({}, { additionalProperties: true })) }), crew_web_fetch: Type.Object({ url: Type.String() }), crew_web_search: Type.Object({ query: Type.String() }),
   crew_read: Type.Object({ path: Type.String() }), crew_write: Type.Object({ path: Type.String(), content: Type.String() }), crew_edit: Type.Object({ path: Type.String(), oldText: Type.String(), newText: Type.String() }),
   crew_ls: Type.Object({ path: Type.Optional(Type.String()) }), crew_grep: Type.Object({ path: Type.String(), pattern: Type.String() }), crew_find: Type.Object({ path: Type.Optional(Type.String()) }),
-  crew_connect: Type.Object({ app: Type.String() }), crew_signin: Type.Object({ site: Type.String() }), crew_outcome: Type.Object({ worked: Type.Boolean(), seen: Type.String() }), crew_report: Type.Object({ text: Type.String() }),
+  crew_connect: Type.Object({ app: Type.String() }), crew_signin: Type.Object({ site: Type.String() }), crew_unlock: Type.Object({ files: Type.Union([Type.Array(Type.String()), Type.String()]) }), crew_outcome: Type.Object({ worked: Type.Boolean(), seen: Type.String() }), crew_report: Type.Object({ text: Type.String() }),
   crew_deliver: Type.Object({ path: Type.String(), note: Type.Optional(Type.String()) }),
   crew_workbook: Type.Object({ name: Type.String(), sheets: Type.Array(Type.Object({ name: Type.String(), columns: Type.Array(Type.Object({ header: Type.String(), width: Type.Optional(Type.Number()), options: Type.Optional(Type.Array(Type.String())) })), rows: Type.Array(Type.Array(Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]))) })) }),
   crew_batch: Type.Object({ question: Type.String(), items: Type.Array(Type.String()) }),
@@ -66,10 +66,10 @@ export const sandboxed = (space: string, readOnly: string[], env: Record<string,
     q(net ? `/run/crewhouse/node -e ${q(BRIDGE)} /run/crewhouse/net.sock >/dev/null 2>&1 & for _ in $(seq 100); do [ -e /tmp/.crewhouse-net ] && break; sleep 0.05; done; ${command}` : command)].join(' ');
 };
 /** One command in the sandbox, run by crewd itself: its exit code and the tail of its output are crewd's to read. */
-export const runSandboxed = (space: string, readOnly: string[], env: Record<string, string>, command: string, net?: string, timeout = 1_200_000) =>
-  new Promise<{ code: number; tail: string }>((resolve) => execFile('bash', ['-c', sandboxed(space, readOnly, env, command, net)],
+export const runSandboxed = (space: string, readOnly: string[], env: Record<string, string>, command: string, net?: string, timeout = 1_200_000, stdin = '') =>
+  new Promise<{ code: number; tail: string }>((resolve) => void execFile('bash', ['-c', sandboxed(space, readOnly, env, command, net)],
     { cwd: space, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, timeout, maxBuffer: 64 << 20 },
-    (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })));
+    (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })).stdin?.end(stdin));
 
 /** The shell as one crewd-owned tool: a timeout and an output tail, like the engine's own bash was. */
 export const bashTool = (space: string, readOnly: string[], env: Record<string, string>, net?: string) =>

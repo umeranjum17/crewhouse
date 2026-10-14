@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# The locked-PDF journey on a real crewd (stub engine), features/unlock-card.md: two locked statements sent to Penny, the
+# card in Chief's chat typed into in a real browser (wrong, then right), the copies read back, and every store searched.
+#   FM_HOME=<firstmate home> bash .agents/skills/verify-crewhouse/scripts/unlock-card.sh <evidence-dir>
+# Needs qpdf, ghostscript, bubblewrap, xvfb-run, chrome-devtools-axi, and the network once (the Documents tool's pip).
+set -euo pipefail
+EV=$(mkdir -p "$1" && cd "$1" && pwd); REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel); cd "$REPO"
+SCRATCH=${SCRATCH:-$HOME/.cache/fm-scratch/ch-secret-card}; mkdir -p "$SCRATCH" "$EV/screens"
+LAB=$(mktemp -d "$SCRATCH/l.XXXX"); mkdir -p "$LAB"/{home,state,crew,tools,run,pdf,profile}
+export CHROME_DEVTOOLS_AXI_SESSION=${CHROME_DEVTOOLS_AXI_SESSION:-ch-secret-card} CHROME_DEVTOOLS_AXI_USER_DATA_DIR="$LAB/profile"
+NODE=$(node -p process.execPath)   # the real binary: a version-manager shim fails under the masked env
+PW1='Northbank-7319!' PW2='CitySav 2026'   # the second has a space: the whole line is the password
+log() { printf '%s\n' "$*" | tee -a "$EV/transcript.txt"; }
+
+# Two real statements, each locked with its own password (AES-256, as banks send them).
+for s in "northbank-march:Northbank statement, March:$PW1" "citysavings-april:City Savings statement, April:$PW2"; do
+  IFS=: read -r name title pw <<<"$s"
+  printf '/Helvetica findfont 14 scalefont setfont 72 720 moveto (%s) show 72 696 moveto (Tesco groceries 42.10) show 72 672 moveto (Rent 1200.00) show showpage\n' "$title" > "$LAB/pdf/$name.ps"
+  gs -q -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile="$LAB/pdf/$name.plain.pdf" "$LAB/pdf/$name.ps"
+  qpdf --encrypt --user-password="$pw" --owner-password="$pw-owner" --bits=256 -- "$LAB/pdf/$name.plain.pdf" "$LAB/pdf/$name.pdf"
+  log "fixture $name.pdf: $(qpdf --show-encryption "$LAB/pdf/$name.pdf" --password='' 2>&1 | head -1)"
+done
+
+MASK=(env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_STATE_HOME="$LAB/home/.local/state"
+  XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache"
+  XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" CREWHOUSE_ENGINE=stub
+  CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools")
+"${MASK[@]}" "$NODE" src/tools.ts install documents 2>&1 | tail -2 | tee -a "$EV/transcript.txt"
+PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
+"${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts > "$EV/crewd.log" 2>&1 &
+CREWD=$!; trap '{ kill -TERM $CREWD; wait $CREWD; chrome-devtools-axi stop; chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+B="http://127.0.0.1:$PORT"
+for _ in $(seq 600); do [ -s "$LAB/state/person.key" ] && curl -fsS -o /dev/null -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")" "$B/api/state" 2>/dev/null && break; sleep 0.2; done
+H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")")
+api() { curl -fsS "${H[@]}" "$@"; }
+until_js() { for _ in $(seq 300); do api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const state=JSON.parse(s);process.exit(($1)?0:1)})" && return 0; sleep 0.2; done; log "timed out: $1"; return 1; }
+
+api -X POST -d '{"address":"Umer"}' "$B/api/onboard" >/dev/null
+api -X POST -d '{"text":"I need help with my money paperwork [tool crew_recruit {\"template\":\"helper\",\"name\":\"Penny\"}]"}' "$B/api/bots/chief/messages" >/dev/null
+until_js "state.bots.some((b) => b.id === 'penny') && !state.bots.find((b) => b.id === 'chief').task"
+# Both statements sent in Penny's thread land as files/inbox/<task>-<n>.pdf; her job is task 2 (1 was Chief's hire).
+"$NODE" -e 'const [a, b] = process.argv.slice(1).map((f) => require("fs").readFileSync(f).toString("base64"));
+console.log(JSON.stringify({ text: "Read my two statements [tool crew_unlock {\"files\":[\"files/inbox/2-1.pdf\",\"files/inbox/2-2.pdf\"]}]",
+  files: [{ type: "application/pdf", name: "Northbank March.pdf", data: a }, { type: "application/pdf", name: "City Savings April.pdf", data: b }] }))' \
+  "$LAB/pdf/northbank-march.pdf" "$LAB/pdf/citysavings-april.pdf" | api -X POST -d @- "$B/api/bots/penny/messages" >/dev/null
+until_js "state.asks.some((a) => a.kind === 'unlock' && a.bot === 'chief')"
+api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log('ask', JSON.stringify(JSON.parse(s).asks.find((a)=>a.kind==='unlock'))))" | tee -a "$EV/transcript.txt"
+
+chrome-devtools-axi pages >/dev/null; chrome-devtools-axi selectpage 1 >/dev/null   # a kept profile starts with no tab selected
+chrome-devtools-axi open "$B/#person=$(<"$LAB/state/person.key")" >/dev/null
+show() { printf '(async () => { for (let i = 0; i < 50 && !document.querySelector("%s"); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector("%s")?.scrollIntoView({ block: "center" }); return true; })()' "$1" "$1"; }
+THEN=$(show .unlock-card) bash .agents/skills/verify-crewhouse/scripts/screens.sh "$EV/screens" unlock-card "$B/#/chief" >/dev/null
+# Refs without their snapshot generation: every action bumps it, so a gN: prefix is stale after the first fill.
+fields() { chrome-devtools-axi snapshot --full | awk '/textbox "[^"]*\.pdf"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1}'; }
+button() { chrome-devtools-axi snapshot --full | awk -v n="$1" '$0 ~ "button \"" n {sub(/uid=(g[0-9]+:)?/,"",$1); print $1; exit}'; }
+# The look check at the hardest size (360 wide, text x1.3, day and night), each shot beside mock 3A (FM_HOME holds it).
+node .agents/skills/verify-crewhouse/scripts/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$(show .unlock-card)" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+# At 390, a wrong password for April and the right one for March: March opens, the card keeps only April and says so plainly.
+chrome-devtools-axi resize 390 844 >/dev/null; chrome-devtools-axi open "$B/?day#/chief" >/dev/null; chrome-devtools-axi wait "it's forgotten" >/dev/null
+mapfile -t F < <(fields); chrome-devtools-axi fill "@${F[0]}" "$PW1" >/dev/null; chrome-devtools-axi fill "@${F[1]}" 'CitySav 2025' >/dev/null
+chrome-devtools-axi click "@$(button 'Unlock 2 files')" >/dev/null
+chrome-devtools-axi wait "didn't open" >/dev/null
+chrome-devtools-axi eval "document.querySelector('.unlock-card [role=alert]')?.textContent" | tee -a "$EV/transcript.txt"
+chrome-devtools-axi eval "$(show .unlock-card)" >/dev/null; chrome-devtools-axi screenshot "$EV/screens/unlock-wrong-day-390.png" >/dev/null
+chrome-devtools-axi open "$B/?night#/chief" >/dev/null; chrome-devtools-axi wait "it's forgotten" >/dev/null; chrome-devtools-axi eval "$(show .unlock-card)" >/dev/null; chrome-devtools-axi screenshot "$EV/screens/unlock-retry-night-390.png" >/dev/null
+# The installed app (headed, under Xvfb): Settings' own Install, Chromium's sheet, the card, then April's password typed on film.
+node -e '
+const [B, key, LAB, EV, SK, THEN, PW] = process.argv.slice(1), steps = [
+  { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, settle: 3000 },
+  { name: "settings", url: `${B}/#/settings`, wait: "!!document.querySelector(\".install .btn\")", timeout: 20000 },
+  { name: "install", click: ".install .btn", settle: 3000 }, { name: "sheet", xshot: `${EV}/pwa/install-sheet.png` },
+  { name: "tab", key: "Tab" }, { name: "return", key: "Return", settle: 3000 }, { name: "window", xshot: `${EV}/pwa/installed-window.png` },
+  { name: "attach", attachApp: B }];
+for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 900]])
+  steps.push({ name: `card-${look}-${w}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: `${B}/?${look}#/chief`, wait: "!!document.querySelector(\".unlock-card\")", timeout: 20000,
+    eval: `[matchMedia("(display-mode: standalone)").matches, ${THEN}][0]`, out: `${EV}/pwa/unlock-card-${look}-${w}.png` });
+steps.push({ name: "film", w: 390, h: 844, dpr: 2, mobile: true, url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, record: `${EV}/pwa/unlock-type.webm`, seconds: 8 },
+  { name: "type", eval: `(() => { const t = document.querySelector(".unlock-card input"); t.closest("form").scrollIntoView({ block: "center" }); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(t, ${JSON.stringify(PW)}); t.dispatchEvent(new Event("input", { bubbles: true })); return t.value.length; })()` },
+  { name: "unlock", click: ".unlock-card .btn.go", settle: 3000 }, { name: "filmed", recwait: true, wait: "!!document.querySelector(\".answered\")", out: `${EV}/pwa/unlocked-day-390.png` });
+console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, recorder: `${SK}/record.mjs`, args: ["--window-size=1400,950", "--force-device-scale-factor=1", "about:blank"], steps }));
+' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$EV" "$REPO/.agents/skills/verify-crewhouse/scripts" "$(show .unlock-card)" "$PW2" > "$LAB/pwa-plan.json"
+mkdir -p "$EV/pwa" "$LAB/pwa/home/run"; xvfb-run -a -s "-screen 0 1920x1200x24" node .agents/skills/verify-crewhouse/scripts/pwa-shell.mjs "$LAB/pwa-plan.json" > "$EV/pwa/run.json"
+node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log("pwa", JSON.stringify(r.filter((x) => "value" in x || x.error)))' "$EV/pwa/run.json" | tee -a "$EV/transcript.txt"
+until_js "!state.asks.some((a) => a.kind === 'unlock')"
+until_js "!state.bots.find((b) => b.id === 'penny').task"
+THEN=$(show .answered) bash .agents/skills/verify-crewhouse/scripts/screens.sh "$EV/screens" unlocked "$B/#/chief" >/dev/null
+chrome-devtools-axi eval "JSON.stringify({ local: Object.keys(localStorage), session: Object.keys(sessionStorage), receipt: [...document.querySelectorAll('.answered')].map((e) => e.textContent) })" | tee -a "$EV/transcript.txt"
+
+for f in 2-1 2-2; do
+  c="$LAB/crew/bots/penny/files/unlocked/$f.pdf"
+  log "$f: copy $( [ -f "$c" ] && echo present || echo MISSING ); encrypted: $(qpdf --is-encrypted "$c" && echo yes || echo no); reads: $("$LAB/tools/documents/venv/bin/markitdown" "$c" | head -1)"
+done
+api "$B/api/bots/penny" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const b=JSON.parse(s);console.log('penny task', JSON.stringify(b.tasks[0] && { state: b.tasks[0].state, body: b.tasks[0].body }))})" | tee -a "$EV/transcript.txt"
+kill -TERM $CREWD; wait $CREWD 2>/dev/null || true; chrome-devtools-axi stop >/dev/null 2>&1 || true
+
+# Everything kept: the database and its WAL, crewd's log, the crew and state folders, the browsers' own profiles.
+for s in "March's:$PW1" "April's:$PW2" "the wrong one:CitySav 2025"; do
+  who=${s%%:*} pw=${s#*:}
+  hits=$({ grep -rlaF -- "$pw" "$LAB/state" "$LAB/crew" "$LAB/profile" "$LAB/pwa" "$EV/crewd.log" 2>/dev/null || true; } | wc -l)
+  log "password search, $who: $hits files hold it"
+done
+cp "$LAB/pdf/northbank-march.pdf" "$LAB/pdf/citysavings-april.pdf" "$EV/" && log "evidence: $EV"
