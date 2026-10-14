@@ -51,7 +51,11 @@ export function speak(text: string, how: () => { voice?: SpeechSynthesisVoice; r
       if (stopped) return;
       if (!s.trim()) continue;
       reading(s.trim());
-      await new Promise((r) => synth?.speak(Object.assign(new SpeechSynthesisUtterance(s), { ...how(), onend: r, onerror: r })));
+      const h = how();
+      await new Promise<void>((r) => { // Chromium on Linux may only say a sentence ended once another is queued: a deadline
+        const late = setTimeout(() => { synth?.cancel(); r(); }, 2000 + (s.length * 100) / h.rate);
+        synth?.speak(Object.assign(new SpeechSynthesisUtterance(s), { ...h, onend: () => { clearTimeout(late); r(); }, onerror: () => { clearTimeout(late); r(); } }));
+      });
     }
   })();
   return { done, stop: () => { stopped = true; synth?.cancel(); } };
