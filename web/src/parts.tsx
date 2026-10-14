@@ -197,11 +197,12 @@ export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.K
  *  as rects (art.helmetSvg: the same cells, eyes and scan as the chat's text helmet), because text
  *  glyphs shrink to noise below ~9px and these faces sit at 20-64px. */
 /** A face's disc. It stays neutral in both themes: the board leaves pastel colour out. Night tints the
- *  raised surface faintly and seats Chief on warm dark; day seats every face on the raised surface. */
-export const discOf = (who: 'chief' | { kind: art.Kind }) => night ? (who === 'chief' ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].soft} 16%, var(--solid))`) : color.day.surface;
-export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string }) {
+ *  raised surface faintly and seats Chief on warm dark; day seats every face on the raised surface, or one step
+ *  down on a `row` that is itself raised (the Chats list, mock 2). */
+export const discOf = (who: 'chief' | { kind: art.Kind }, row = false) => night ? (who === 'chief' ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].soft} 16%, var(--solid))`) : row ? color.day.sunken : color.day.surface;
+export function Face({ who, size = 44, ring = '', row }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
   const chief = who === 'chief';
-  const soft = discOf(who);
+  const soft = discOf(who, row);
   const mode = art.helmetOf(chief ? chiefMood : who.mood);
   const svg = useMemo(() => art.helmetSvg(24, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined }), [mode]);
   return (

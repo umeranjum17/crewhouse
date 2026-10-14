@@ -70,7 +70,7 @@ test('a helper gone quiet: Chief asks, the helper reads working everywhere, and 
   assert.match(A.summaryOf(v), /1 at work/);
   assert.equal(A.chiefStatus(v).word, 'Needs you', 'the Stop card waits on the person, in Chief\'s thread');
   assert.deepEqual(A.stuckIn(team, 'chief').map((x) => x.id), ['scout'], '(a) Stop / Take over / Leave it is in Chief\'s thread');
-  assert.deepEqual(A.stuckIn(team, 'scout').map((x) => x.id), ['scout'], 'and in Scout\'s own');
+  assert.deepEqual(A.stuckIn(team, 'scout'), [], 'never in Scout\'s own: only Chief asks the person');
   const ln = A.liveLine({ id: 'scout', name: 'Scout', crew: team, tasks: state.tasks, events: state.events, heard: [], writing: new Map() });
   assert.equal(ln?.state, 'working', '(b) the live line says working, like the rail');
 

@@ -150,17 +150,20 @@ function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size:
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
 }
 /** A round face: Chief or a pal, with a ring when it's working or needs you. */
-function Face({ who, size = 44, mood }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood }) {
+function Face({ who, size = 44, mood, row }: { who: A.Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; mood?: art.Mood; row?: boolean }) {
   const t = useLook();
   const chief = who === 'chief';
   const ring = chief || !('ring' in who) ? '' : who.ring;
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      backgroundColor: chief && t.night ? '#2A2622' : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
+      backgroundColor: chief && t.night ? '#2A2622' : row ? rowDisc(t, chief ? undefined : who.kind) : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
       <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.52} />
     </View>
   );
 }
+/** A face's disc on a list row, itself the raised surface (web/src/parts.tsx discOf): one step down by day, the
+ *  surface tinted with the pal's own colour by night. */
+const rowDisc = (t: Look, kind?: art.Kind) => t.night ? (kind ? mix(art.PALS[kind].soft, t.surface, 0.16) : '#2A2622') : t.soft;
 /** The dot colour for a tone: the app's own ok green, wait pink, off grey, plus the crew rail's
  *  colours (danger red, amber, ink, and work — the rail's hollow ink ring). */
 function pillDot(t: Look, tone: 'ok' | 'wait' | 'off' | 'danger' | 'amber' | 'ink' | 'work') {
@@ -1888,23 +1891,23 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
   return <View><Label>Chats</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.chats(state).map((c, i) => <View key={c.id}>
       <Pressable style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
-        onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.id === 'chief' && c.unread ? `, ${c.unread} new` : ''}`}>
-        {c.id === 'room' ? <View style={{ width: 40, height: 40, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface,
+        onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })} accessibilityLabel={`${c.name}${c.asks ? `, ${c.asks} for you` : ''}`}>
+        {c.id === 'room' ? <View style={{ width: 40, height: 40, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: rowDisc(t, crew[0]?.kind),
           borderWidth: c.ring ? 2 : 0, borderColor: t.green }}>{crew.slice(0, 2).map((h, n) => <View key={h.id} style={{ marginLeft: n ? -4 : 0 }}><Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={22} /></View>)}</View>
-          : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} />}
-        <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small}>{c.line}</T>{narrow && (c.at > 0 || c.id !== 'room') && end(c)}</View>
+          : <Face who={c.who} size={40} mood={c.id === 'chief' ? mood : undefined} row />}
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>{c.name}</T><T tone="ink2" style={s.small} lines={1}>{c.line}</T>{narrow && (c.at > 0 || c.id !== 'room') && end(c)}</View>
         {!narrow && end(c)}
       </Pressable>
-      {!!c.working && <View style={s.workingLine}><View style={[s.statusDot, { backgroundColor: t.green }]} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{c.working}</T></View>}
+      {!!c.working && <View style={s.workingLine}><View style={[s.statusDot, { backgroundColor: t.green, marginTop: (18 * fontScale - 6) / 2 }]} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{c.working}</T></View>}
     </View>)}
   </View></View>;
   function end(c: A.Chat) {
     return <View style={narrow ? [s.row, { gap: 10, flexWrap: 'wrap', marginTop: 4 }] : { alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
-      {c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
-        {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
-        <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
-      </View>}
-      {c.id === 'chief' && c.unread > 0 && <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.unread)}</Text>}</View>;
+      {c.asks > 0 ? <Text style={[s.unread, { backgroundColor: t.pink, color: t.surface }]}>{A.unreadBadge(c.asks)}</Text>
+        : c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
+          {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
+          <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
+        </View>}</View>;
   }
 }
 
@@ -2778,7 +2781,7 @@ const s = StyleSheet.create({
   unread: { minWidth: 20, height: 20, borderRadius: 10, color: '#2e2a40', fontSize: 12, ...fw('900'), textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, lineHeight: 20 },
   // A chats row's one office status word, and a live helper's "<name> is working" line under its row.
   statusWord: { fontSize: 12, lineHeight: 16, ...fw('600') },
-  workingLine: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingLeft: 66, paddingRight: 14, paddingBottom: 10 },
+  workingLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, paddingLeft: 66, paddingRight: 14, paddingBottom: 10 },
   offline: { paddingVertical: 7, paddingHorizontal: 16 },
   offlineText: { textAlign: 'center', fontSize: 13, ...fw('700') },
   toast: { position: 'absolute', bottom: 84, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, ...fw('500'), overflow: 'hidden', maxWidth: '90%' },
