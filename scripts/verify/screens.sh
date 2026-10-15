@@ -36,6 +36,12 @@ mkdir -p "$DEST"
 # The browser tool prints diagnostics on stdout: silent on success, loud on
 # failure, with one retry for a transient CDP miss (both attempts are printed).
 axi() { local out rc n=0; while :; do out=$(chrome-devtools-axi "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && return 0; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
+# A run can inherit a session whose tabs have no selection (a run that died
+# mid-capture leaves them behind), and `open` then refuses: take the first
+# tab, or open one when there is none.
+pages_out=$(chrome-devtools-axi pages 2>&1) || { echo "screens.sh: could not list pages: $pages_out" >&2; exit 1; }
+first=$(printf '%s\n' "$pages_out" | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
+if [ -n "$first" ]; then axi selectpage "$first"; else axi newpage about:blank; fi
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
 for theme in night day; do
