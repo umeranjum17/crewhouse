@@ -164,8 +164,7 @@ export class Link {
     if ((p.meta as any)?.first) {
       const f = this.first;
       if (!f || f.claimed || f.expires <= Date.now() || (p.meta as any).first !== f.token || this.setting('link.owner') || this.host.devices().length) return false;
-      f.claimed = true; // reserve synchronously: concurrent handshakes cannot both become the owner
-      return true;
+      f.claimed = true; return true; // reserve synchronously: concurrent handshakes cannot both become the owner
     }
     return new Promise<boolean>((resolve) => {
       const id = ++this.n, done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
