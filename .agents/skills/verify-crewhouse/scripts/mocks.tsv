@@ -9,3 +9,7 @@ cloud-key	data/ch-cloud-onboarding-mock/png/signin-key-{look}.png
 computer	data/ch-cloud-onboarding-mock/png/computer-{look}.png
 chief-attach	data/ch-grok-samples/mocks/png/3a-expenses-chief-390-{theme}.png
 unlock-card	data/ch-grok-samples/mocks/png/3a-expenses-chief-390-{theme}.png
+call-idle	data/ch-voice-call/mocks/png/idle-390-{theme}.png
+call-listening	data/ch-voice-call/mocks/png/listening-390-{theme}.png
+call-speaking	data/ch-voice-call/mocks/png/speaking-390-{theme}.png
+call-voice	data/ch-voice-call/mocks/png/voice-390-{theme}.png
