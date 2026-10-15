@@ -1,4 +1,4 @@
-// A stand-in device for Talk with Chief (features/voice-call.md), loaded before the app boots (look-check.mjs --init):
+// A stand-in device for Talk with Chief (docs/verification/voice-call.md), loaded before the app boots (look-check.mjs --init):
 // ears you feed words to (window.ctl.heard(words, final)) and two of the device's own voices that read each sentence
 // in 3 s. Headless Chromium has no voices of its own, so without this there is no Talk to look at.
 (() => {

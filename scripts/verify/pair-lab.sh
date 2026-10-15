@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The pairing lab (features/pwa-pair.md): an isolated crewd on the stub engine (its own HOME, every XDG dir, TMPDIR),
+# The pairing lab (docs/verification/pwa-pair.md): an isolated crewd on the stub engine (its own HOME, every XDG dir, TMPDIR),
 # the repo's own relay (relay/main.ts, open signup) that crewd dials, and the built web shell served from a public-style
 # origin (http://crewhouse.localhost:<port>/, scripts/serve-web.mjs). Never the owner's HOME.
 #   pair-lab.sh up <repo>    start all three; writes $LAB/env (PORT, LINK_PORT, RELAY, WEB, B)

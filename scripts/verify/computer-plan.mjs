@@ -1,4 +1,4 @@
-// Chief's computer in the installed app (features/chief-computer.md), a plan for pwa-shell.mjs against a running
+// Chief's computer in the installed app (docs/verification/chief-computer.md), a plan for pwa-shell.mjs against a running
 // pair-lab.sh whose web/dist was built with CREWHOUSE_CLOUD=1:
 //   node computer-plan.mjs <lab dir> <evidence dir> > plan.json
 // Pairs the public shell by the relay code (yes at the computer), names the person Umer, installs the app from

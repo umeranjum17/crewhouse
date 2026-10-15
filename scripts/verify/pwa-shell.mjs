@@ -1,4 +1,4 @@
-// The home-screen app proof (features/pwa-shell.md): one isolated Chromium driven over CDP from a plan.
+// The home-screen app proof (docs/verification/pwa-shell.md): one isolated Chromium driven over CDP from a plan.
 //   node pwa-shell.mjs <plan.json>     (headed installs: under `xvfb-run -a`, with "headless": false)
 // plan: { profile, home, headless?, args?, xkey?, recorder?, steps: [{ name, w, h, dpr, mobile, ua, platform, touch,
 //   insets, inject, run, url, reload, offline, settle, click, key, xshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant }] }

@@ -1,4 +1,4 @@
-// Plan for pwa-shell.mjs proving the installed app's cold relaunch returns to the last place (features/pwa-resume.md):
+// Plan for pwa-shell.mjs proving the installed app's cold relaunch returns to the last place (docs/verification/pwa-resume.md):
 //   node resume-plan.mjs <WEB origin> <evidence dir> <lab dir> > plan.json
 // Serves the built shell on a *.localhost origin (serve-web.mjs), installs it for real, then drives: open a thread,
 // cold-launch back to it (day/night), a named link wins, a gone thread falls back to Home, 320 px, 1.3x text, offline.

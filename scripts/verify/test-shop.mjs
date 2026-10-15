@@ -1,4 +1,4 @@
-// A local test shop with a sign-in page, for the site sign-in proof (features/site-signin.md). Usage: node test-shop.mjs <port>
+// A local test shop with a sign-in page, for the site sign-in proof (docs/verification/site-signin.md). Usage: node test-shop.mjs <port>
 // Any email and password signs in; nothing is stored. Serves its own icon at /favicon.ico.
 import { createServer } from 'node:http';
 

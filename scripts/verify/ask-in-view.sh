@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Chief's chat opens on the ask that needs the person (features/thread-hygiene.md): an open unlock ask in Chief's
+# Chief's chat opens on the ask that needs the person (docs/verification/thread-hygiene.md): an open unlock ask in Chief's
 # thread with the "Add your phone" card below it, driven so the card's own top is measured against the thread box at
 # 390 and 1440, day and night, and recorded as the ask arrives while the chat is open.
 #   FM_HOME=<firstmate home> bash scripts/verify/ask-in-view.sh <evidence-dir>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Continue on your computer (features/phone-continue.md): a chat with Chief on the phone alone goes to Chief on the
+// Continue on your computer (docs/verification/phone-continue.md): a chat with Chief on the phone alone goes to Chief on the
 // paired computer as one message, and the phone copy goes only once the computer stored it. Drives the real release
 // app on a task-owned emulator (google_apis image: `adb root` reads and seeds the app's own files) against the lab crewd
 // from pair-lab.sh, paired by the typed code (`adb reverse` carries the code's loopback link address).

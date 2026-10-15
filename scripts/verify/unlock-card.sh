@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The locked-PDF journey on a real crewd (stub engine), features/unlock-card.md: two locked statements sent to Penny, the
+# The locked-PDF journey on a real crewd (stub engine), docs/verification/unlock-card.md: two locked statements sent to Penny, the
 # card in Chief's chat typed into in a real browser (wrong, then right), the copies read back, and every store searched.
 #   FM_HOME=<firstmate home> bash scripts/verify/unlock-card.sh <evidence-dir>
 # Needs qpdf, ghostscript, bubblewrap, xvfb-run, chrome-devtools-axi, and the network once (the Documents tool's pip).

@@ -1,6 +1,6 @@
 // Captures of the sign-in card on a live crewd, in a private headless Chromium (own profile, own CDP port).
 //   node scripts/verify/signin-card.ts "$PWD" "http://127.0.0.1:$PORT" "$LAB/state/person.key" "$EV/screens" [slug]
-// Recipe and what to read: ../features/signin-card.md. SCRATCH (default: the OS temp dir) holds the browser profile.
+// Recipe and what to read: ../../docs/verification/signin-card.md. SCRATCH (default: the OS temp dir) holds the browser profile.
 // Shots: card as shown and with "Use another account" opened, night/day, 1440 and 390. Plus one recording of the tap.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

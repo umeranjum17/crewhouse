@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A chart in a finished workbook (features/workbook-chart.md).
+# A chart in a finished workbook (docs/verification/workbook-chart.md).
 #   bash scripts/verify/workbook-chart.sh <repo> <out-dir> [--before]
 # Real crewd on the stub engine, isolated per SKILL.md's Launch (web/dist built first). Quill makes one money answer with
 # crew_workbook and two charts (a bar of the months, a pie of where it went). Then:
@@ -99,7 +99,7 @@ look=0
 node "$L" web --out "$OUT/look" --person "$LAB/state/person.key" --then "(async () => { $WAIT })()" chart-panel="$B/#/f/quill/files%2F$XLSX" || look=$?
 node "$L" web --out "$OUT/look" --person "$LAB/state/person.key" --then "(async () => { $WAIT document.querySelectorAll('.wb-tab')[1].click(); $WAIT })()" chart-panel-pie="$B/#/f/quill/files%2F$XLSX" || look=$?
 echo "look check exit: $look" | tee "$OUT/look/exit.txt"
-# PWA=1: the same panel in the installed home-screen app (features/pwa-shell.md's real install, headed under Xvfb):
+# PWA=1: the same panel in the installed home-screen app (docs/verification/pwa-shell.md's real install, headed under Xvfb):
 # the app's own Install, the real sheet, then each look and width inside the standalone window (pwa/).
 if [ "${PWA:-}" = 1 ]; then
   mkdir -p "$OUT/pwa"; S="$REPO/scripts/verify"; F="$B/?THEME#/f/quill/files%2F$XLSX"

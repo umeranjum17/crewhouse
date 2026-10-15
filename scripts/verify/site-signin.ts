@@ -1,7 +1,7 @@
 // A helper's site sign-in, end to end on a live crewd, in a private headless browser (own profile, own CDP port).
 //   SITE_URL=http://shop.localhost:<port> node scripts/verify/site-signin.ts "$PWD" "$B" "$LAB/state" "$EV" [bot] [day-1440,…]
 // One pass per fresh lab (run.sh): a lab's earlier answered lines would sit in the next pass's shots. The report appends.
-// Recipe and what to read: ../features/site-signin.md. SCRATCH (default: the OS temp dir) holds the browser profile.
+// Recipe and what to read: ../../docs/verification/site-signin.md. SCRATCH (default: the OS temp dir) holds the browser profile.
 // Per theme and width: the card in Chief's thread, the large screen, the signed-in page with Done, the answered line.
 // One recording of the whole flow (day, 1440). On the stub engine the helper's browser tool is headless, so the
 // shop's page reaches the helper's own screen through its display (xtype.py), standing in for its `browser goto`.

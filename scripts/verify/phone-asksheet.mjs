@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The approval sheet on the real paired app (features/phone-chat-keep.md): the exact outgoing text in full,
+// The approval sheet on the real paired app (docs/verification/phone-chat-keep.md): the exact outgoing text in full,
 // two answer buttons, no timer. Pairs a task-owned emulator to the lab crewd (pair-lab.sh) by the typed code
 // (`adb reverse` carries the code's loopback link address), opens a Reel file-write ask (the sheet) and a Reel email draft (its exact text).
 //

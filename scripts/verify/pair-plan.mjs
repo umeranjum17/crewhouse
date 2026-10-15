@@ -1,4 +1,4 @@
-// The installed-app pairing proof (features/pwa-pair.md) as a plan for pwa-shell.mjs, against a running pair-lab.sh:
+// The installed-app pairing proof (docs/verification/pwa-pair.md) as a plan for pwa-shell.mjs, against a running pair-lab.sh:
 //   node pair-plan.mjs <lab dir> <evidence dir> > plan.json
 // A real install from Settings, one recording (demo, the pair card, a relay code, the two words, yes at the computer,
 // real data, a message over the link, Unpair, demo), then the demo, pair card, two-words and paired shots, day and

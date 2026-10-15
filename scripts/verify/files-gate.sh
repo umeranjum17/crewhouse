@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A delivered file opens only with the person's authority (features/delivered-files.md).
+# A delivered file opens only with the person's authority (docs/verification/delivered-files.md).
 #   bash scripts/verify/files-gate.sh <repo> <out-dir> [--no-browser]
 # Real crewd on the stub engine, isolated per SKILL.md's Launch (web/dist built first). Reel makes a PNG, a PDF and an
 # mp4 in its own shell, registers them with crew_deliver, and writes an xlsx with crew_workbook. Then:
