@@ -66,8 +66,9 @@ const child = spawn('setpriv', ['--pdeathsig', 'KILL', '--', process.execPath, j
     CREWHOUSE_STATE_DIR: join(lab, 'state'), CREWHOUSE_CREW_DIR: join(lab, 'crew'), CREWHOUSE_TOOLS_DIR: join(lab, 'tools'),
   },
 });
-// setsid ran before spawn returned, so a live group named by crewd's pid is crewd's own.
-try { process.kill(-child.pid, 0); group = child.pid; } catch (e) { await end(1, `crewd's process group not found (pid ${child.pid}): ${e.message}`); }
+// The group is named by crewd's pid once it appears.
+for (let i = 0; i < 100; i++) { try { process.kill(-child.pid, 0); group = child.pid; break; } catch { await new Promise((r) => setTimeout(r, 50)); } }
+if (!group) await end(1, `crewd's process group never appeared (pid ${child.pid})`);
 
 const transcript = [];
 let capability = '';
