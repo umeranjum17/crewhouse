@@ -1729,7 +1729,7 @@ export function aiList(accounts: Json[] | null) {
       : `Not set up. Uses your own ${ai.name} plan.`;
     return { ai, g, says };
   });
-  const mine = rows.filter((r) => r.g.state === 'ready');
+  const mine = rows.filter((r) => r.g.state === 'ready' || r.g.notIncluded);
   const out = rows.filter((r) => r.g.signedOut);
   const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt');
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };

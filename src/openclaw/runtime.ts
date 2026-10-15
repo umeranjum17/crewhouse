@@ -118,7 +118,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     let cancelled = false;
-    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
+    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
     return {
       paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
       cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
