@@ -152,7 +152,7 @@ See [Chief's finished-action receipt](done-receipt.md): an approved order's actu
 
 ## Headless Linux host
 
-See [Headless host and first-phone authority](features/headless-host.md): portable-artifact setup, private tailnet relay, first-phone owner enrolment, scripted integration gate and the real phone's printed-code journey. Ordinary desktop pairing remains unchanged.
+See [Headless host and first-phone authority](headless-host.md): portable-artifact setup, private tailnet relay, first-phone owner enrolment, scripted integration gate and the real phone's printed-code journey. Ordinary desktop pairing remains unchanged.
 
 ## Person authority (shared ingress)
 
