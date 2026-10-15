@@ -28,7 +28,7 @@ const ABOUT: Record<string, string> = {
   shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.', crew_signin: 'Ask for a sign-in',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
-  mail: "The person's own Gmail, read-only: new mail, search, read, save an attachment to files/, as `args`; it cannot send mail.",
+  mail: "The person's own Gmail: new mail, search, read, save an attachment to files/, draft a reply (draft only, never sent), file under a label, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
