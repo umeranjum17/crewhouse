@@ -498,7 +498,16 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   }
   assert.equal(sched.guessed, false, 'words that named a time are not a guess');
   assert.equal(typeof sched.zone, 'string', 'the computer names its zone, so a screen away from home can too');
-  assert.equal((await api('GET', '/api/schedule?text=someday')).status, 400);
+  const bad = await api('GET', '/api/schedule?text=someday');
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.error, /"the 1st of every month 9:00"/, 'the refusal names a monthly example too');
+  // A date each month, not only a weekday: the same plain words, and the next run really lands on that date.
+  const monthly = (await api('GET', '/api/schedule?text=' + encodeURIComponent('on the 1st of every month at 9am'))).body;
+  assert.equal(monthly.words, 'On the 1st of every month at 9:00 am');
+  assert.equal(new Date(monthly.next).getDate(), 1, 'the next run lands on the 1st');
+  assert.equal(new Date(monthly.next).getHours(), 9);
+  assert.ok(dayWords(monthly.next, '9:00 am').includes(monthly.first), `a monthly first run never reads as some other day: ${monthly.first}`);
+  assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('every month on the 15th'))).body.words, 'On the 15th of every month at 9:00 am');
 
   // Chief's crew_routine is a confirmed request now: a card with cadence, what, quiet and first run — no routine yet.
   const t = (await say('chief', `every friday ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })}`)).body.task;
@@ -567,6 +576,13 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'copilot' })).body;
   assert.equal(own.thinks, 'GitHub Copilot');
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
+  // The person's own words for a date each month: the routine keeps that date, and the card's words are the preview's.
+  const bill = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'the 1st of every month 9am', task: 'Check the monthly statement' })).body;
+  assert.equal(bill.words, 'On the 1st of every month at 9:00 am');
+  assert.equal(new Date(bill.next_at).getDate(), 1);
+  assert.equal(new Date(bill.next_at).getHours(), 9);
+  assert.ok(bill.next_at > Date.now());
+  assert.equal((await api('DELETE', `/api/routines/${bill.id}`)).status, 200);
   assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
 });
 

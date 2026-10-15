@@ -2093,7 +2093,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       tool('crew_assign', `Hand a bot a task. Give it a short descriptive title, never a URL. \`account\` (${accounts}) only when a task plainly suits another AI. ` +
         'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
         (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.account, p.title, p.steps)),
-      tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "every 2 hours". ' +
+      tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "the 1st of every month 9:00", "every 2 hours". ' +
         'Set `once` for a one-off reminder they asked for ("remind me Friday 9am to pack the sports kit"): `when` is then the moment in their words ("Friday 9:00", "tomorrow 8am", "in 20 minutes"), `task` is what to remind them about, and it goes to them once, in your chat, without a helper. ' +
         '`on` starts it on a local event instead of a time: "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). ' +
         '`quiet`: a check-in that only speaks up when something needs the person. `watch`: a page address to keep an eye on; Crewhouse reads it on ' +

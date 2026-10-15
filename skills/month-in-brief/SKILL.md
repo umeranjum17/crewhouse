@@ -24,9 +24,10 @@ when the person wants it every month.
    places in words, never in links alone.
 5. The brief is a document, not a message trail: make it with `crew_document` and deliver it to their chat like any
    finished thing, so it keeps — next month's brief sits beside this one.
-6. If the person wants it standing, offer the monthly version yourself with `crew_routine`. Crewhouse's schedules count
-   days of the week, not dates in the month: offer `when` "every Monday 7:00" for a Monday-morning brief — the person
-   changes the time on the card if another day suits. This one speaks every time — a brief that arrives silently is
+6. If the person wants it standing, offer the monthly version yourself with `crew_routine`. A schedule keeps either a
+   weekday or a date in the month: offer `when` "the 1st of every month 7:00" for a first-of-the-month brief, or
+   "every Monday 7:00" when a Monday suits better — the person changes the time on the card if another date or day
+   does. This one speaks every time — a brief that arrives silently is
    not a brief — so it is not a `quiet` check-in. Nothing runs until the person says yes on the card.
 7. Never post, never sign up for anything to read a page, never reach through a sign-in nobody gave you: a page you
    cannot read is skipped, and named under what you did not check.

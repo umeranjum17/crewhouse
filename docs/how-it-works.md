@@ -34,7 +34,7 @@ Ask Chief to hire CTO to watch and nudge your terminal agents. It needs [Herdr](
 
 ## Routines, without the setup
 
-"Every Friday 5pm" or "weekdays 8am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your account.
+"Every Friday 5pm", "weekdays 8am" or "the 1st of every month 9am" become routines that run on the computer's own clock. If the computer slept through one, it catches up once. If the last run is still going, the next one is skipped, not stacked. A date a shorter month does not have (the 31st in February) is skipped, never pulled back to its last day. A quiet check-in only tells you when something changed. Chief's morning digest (what finished, what needs you, what's coming) is written by Crewhouse itself, so it uses none of your account.
 
 ## Sign in once, inside the app
 
