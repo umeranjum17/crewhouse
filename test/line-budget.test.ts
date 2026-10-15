@@ -32,7 +32,10 @@ import { join } from 'node:path';
 // This is this change's own net; paired trim lane ch-src-trim-slides restores BUDGET to 7010 in two slices.
 // Slice 1 joins adjacent declarations in artifact/supporting modules: src 7165 -> 7073 (net -92).
 // ch-src-trim-slides-final carries the remaining crew.ts trim back to 7010.
-const BUDGET = 7073;
+// Raised 7073 -> 7172 for Chief reply-as-draft and labels (ch-cap-email-reply-v2, mission-only exception): the +99
+// allocated against its measured base, where the mission's own net is +98 (src 7043 -> 7141 on this rebase).
+// Paired ch-src-trim-mail retires the allocation after landing.
+const BUDGET = 7172;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

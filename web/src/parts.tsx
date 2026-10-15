@@ -795,6 +795,7 @@ export function CampaignReceipt({ outcome: c }: { outcome: CampaignOutcome }) {
 
 function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: ReactNode }) {
   const body = c.preview?.body ?? '';
+  if (c.mailAction === 'draft') return <div className="ev"><ChatText text={body} /></div>;
   if (c.campaign) return <><CampaignPosts text={body} />{c.campaign.poster ? <Media f={c.campaign.poster} big /> : <p>The poster is not ready here yet.</p>}</>;
   if (c.review) return <div className="ev">{body.split('\n').map((l, i) => {
     const [text, amount] = splitAmount(l);

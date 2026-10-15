@@ -71,7 +71,7 @@ export async function newThreads(token: Token, after: number, limit = 25) {
 }
 
 export async function runMail(token: Token, args: string[], root?: string, filing?: MailSend, bot = 'chief'): Promise<string> {
-  const [cmd = 'inbox', ...more] = args, { o, rest } = options(more), bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
+  const [cmd = 'inbox', ...more] = args, { o, rest } = cmd === 'draft' || cmd === 'label' ? { o: {} as Record<string, string>, rest: more } : options(more), bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
   const idOf = (id: string, use: string) => (/^[a-f0-9]{8,32}$/i.test(id) ? null : bad(use));
   if (cmd === 'inbox') {
     const [label, list] = await Promise.all([get(token, '/labels/INBOX'), get(token, '/threads?labelIds=INBOX&maxResults=5')]);

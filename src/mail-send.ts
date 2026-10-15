@@ -2,6 +2,7 @@
 import type { Store, Row } from './db.ts';
 import type { Connections } from './connections.ts';
 import { GMAIL } from './mail.ts';
+import { Marked } from 'marked';
 import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
 const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status }), ATTEMPTED = 'This message was already sent or attempted. Check Gmail; it will not be sent again.';
@@ -51,11 +52,7 @@ export class MailSend {
     if (who.email_verified !== true) throw fail('Gmail has not confirmed your sending address. Nothing was sent.');
     return { token, from: address(who.email) };
   }
-  private async filing() {
-    const token = await this.connections.token('gmailwrite');
-    if (!token) throw fail('Connect Gmail drafts & labels in Settings first. Reading Gmail alone cannot draft or file.');
-    return token;
-  }
+  private async filing() { const token = await this.connections.token('gmailwrite'); if (!token) throw fail('Connect Gmail drafts & labels in Settings first. Reading Gmail alone cannot draft or file.'); return token; }
   private async g(path: string, token: string) {
     const res = await fetch(`${GMAIL}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
     if (res.status === 404) throw fail('No such conversation. Search again for its id.');
@@ -63,7 +60,7 @@ export class MailSend {
     return res.json() as Promise<any>;
   }
   private async sendAs(token: string) {
-    const list = await this.g('/settings/sendAs', token).catch(() => ({ sendAs: [] }));
+    const list = await this.g('/settings/sendAs', token);
     const mine = new Set((list.sendAs ?? []).flatMap((s: any) => { try { return [address(s.sendAsEmail)]; } catch { return []; } }));
     const pick = (list.sendAs ?? []).find((s: any) => s.isDefault) ?? (list.sendAs ?? [])[0] ?? {};
     const from = (() => { try { return address(pick.sendAsEmail); } catch { return null; } })();
@@ -85,7 +82,9 @@ export class MailSend {
     if (/[\r\n]/.test(subj)) throw fail('Gmail returned an unreadable subject. Nothing was drafted.'); const topic = /^re:/i.test(subj) ? subj : `Re: ${subj}`, subject = topic.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ');
     const mid = head(other, 'Message-Id').trim(); if (/[\r\n]/.test(mid)) throw fail('Gmail returned an unreadable reference. Nothing was drafted.');
     const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '';
-    const raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}${refs}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text}\r\n`).toString('base64url');
+    const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const html = new Marked({ renderer: { link({ tokens }) { return this.parser.parseInline(tokens); }, image() { return ''; } } }).parse(escape(text), { async: false });
+    const raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}${refs}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(html).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
     const res = await fetch(`${GMAIL}/drafts`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ message: { threadId, raw } }), signal: AbortSignal.timeout(20_000) });
     if (!res.ok) throw fail(`Gmail said ${res.status}. Nothing was sent; the draft was not created.`);
     const made = await res.json() as Row;
@@ -102,13 +101,13 @@ export class MailSend {
     let id = found?.id;
     if (!id) {
       const res = await fetch(`${GMAIL}/labels`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }), signal: AbortSignal.timeout(20_000) });
-      if (!res.ok) throw fail(`Gmail said ${res.status}. The label was not applied; nothing changed.`);
+      if (!res.ok) throw fail(`Gmail said ${res.status}. The label was not applied.`);
       id = (await res.json() as Row).id;
-      if (typeof id !== 'string' || !id) throw fail('Gmail did not confirm the label. Nothing changed.');
+      if (typeof id !== 'string' || !id) throw fail('Gmail did not confirm the label. Check Gmail before trying again.');
     }
     const mod = await fetch(`${GMAIL}/threads/${threadId}/modify`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ addLabelIds: [id] }), signal: AbortSignal.timeout(20_000) });
     if (mod.status === 404) throw fail('No such conversation. Search again for its id.');
-    if (!mod.ok) throw fail(`Gmail said ${mod.status}. The label was not applied; nothing changed.`);
+    if (!mod.ok) throw fail(`Gmail said ${mod.status}. The label was not applied; the label itself may already exist.`);
     this.db.event('mail.labelled', bot, { thread: threadId, label: name });
     return `labelled: {id: ${threadId}, label: ${name}}`;
   }

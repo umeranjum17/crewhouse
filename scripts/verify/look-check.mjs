@@ -136,6 +136,8 @@ async function probe(ratio) {
       const atop = document.elementsFromPoint(o.left + o.width / 2, o.top + o.height / 2).find((e) => kids[i].contains(e) || kids[j].contains(e));
       if (!atop) continue;
       const [up, low] = kids[i].contains(atop) ? [kids[i], kids[j]] : [kids[j], kids[i]];
+      // A modal's fixed scrim intentionally covers its sibling page; checks inside the dialog still run.
+      if (up.classList.contains('scrim') && getComputedStyle(up).position === 'fixed' && up.querySelector('[role="dialog"][aria-modal="true"]')) continue;
       // A sticky or fixed bar over a page that still scrolls is the content passing under it; at the page's end it counts.
       // ponytail: the page's own scroll only; a bar over an inner scroller still fails, add the scroller test when one does.
       if (/fixed|sticky/.test(getComputedStyle(up).position) && document.scrollingElement.scrollHeight - scrollY - innerHeight > 1) continue;

@@ -40,6 +40,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
@@ -80,7 +81,7 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 /** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
 export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
-export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
+export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key: Main2691) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
@@ -871,6 +872,11 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `${name} has a question`,
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
   }
+  if (d.mail?.action === 'draft' || d.mail?.action === 'label') {
+    const drafting = d.mail.action === 'draft';
+    return { ...base, kind: 'ok', mailAction: d.mail.action, status: 'Nothing will be sent', head: drafting ? 'Create this Gmail draft?' : 'File this email?', words: String(d.words), preview: d.preview,
+      choices: [{ label: drafting ? 'Create draft' : 'Apply label', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   const spend = !!d.spends || d.effect === 'spend';
   const words = d.words ? (d.preview?.verbatim ? String(d.words) : plain(d.words)) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
@@ -920,6 +926,7 @@ function receiptAction(kind: string, detail: Json): string {
   if (kind !== 'permission') return '';
   const d = detail ?? {};
   const site = (/ (?:at|on) (.+?)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
+  if (d.mail) return d.mail.action === 'draft' ? 'Allowed a Gmail draft' : 'Allowed email filing';
   if (d.effect === 'spend') return site ? `Placed the order at ${site}` : 'Placed the order';
   if (d.fill) return site ? `Filled in a form at ${site}` : 'Filled in a form';
   if (d.effect === 'send') return site ? `Sent a message at ${site}` : 'Sent a message';
@@ -1767,7 +1774,7 @@ const APPS: App[] = [
   { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
-export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
+export const apps = (state: Json): App[] => APPS.map((a) => { const on = !!state.connections?.includes?.(a.id); return { ...a, on, status: !on ? 'Not connected' : a.id === 'gmail' ? 'On · read only' : a.id === 'gmailwrite' ? 'On · changes ask first' : 'On' }; });
 
 /** Herdr's own row on the Apps screen: missing, installed but not answering, or answering. */
 export type HerdrSetup = { state: 'missing' | 'setup' | 'on'; says: string; howto: string };

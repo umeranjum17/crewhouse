@@ -8,7 +8,7 @@ export type Effect =
   | { kind: 'refuse'; why: string }
   /** `key` is what "For this task" and "Always" remember (spending has none, so it asks every time); `cost` caps a spend in dollars when stated up front. */
   | { kind: 'files' | 'send' | 'spend' | 'delete'; words: string; key?: string; covers?: string; cost?: number;
-      preview?: { head: string; body: string; verbatim?: boolean }; press?: boolean; fill?: boolean };
+      preview?: { head: string; body: string; verbatim?: boolean }; press?: boolean; fill?: boolean; mail?: { action: 'draft' | 'label'; id: string } };
 
 export interface Seen {
   bot: string;
@@ -121,11 +121,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (['inbox', 'search', 'read', 'attachments'].includes(cmd)) return { kind: 'safe' };
     if (cmd === 'draft' && /^[a-f0-9]{8,32}$/i.test(id)) {
       const body = tail.join(' ').trim();
-      if (body && body.length <= 12000) return { kind: 'send', words: `${s.bot} wants to draft a reply to email ${id}.`, preview: { head: 'Draft reply', body: body.slice(0, 1000) } };
+      if (body && body.length <= 12000) return { kind: 'send', mail: { action: 'draft', id }, words: `${s.bot} wants to create a reply in your Gmail drafts. Nothing will be sent.`, preview: { head: 'Draft reply', body } };
     }
     if (cmd === 'label' && /^[a-f0-9]{8,32}$/i.test(id)) {
       const name = tail.join(' ').replace(/\s+/g, ' ').trim();
-      if (/^[A-Za-z0-9 _-]{1,64}$/.test(name)) return { kind: 'send', words: `${s.bot} wants to file email ${id} under “${name}”.` };
+      if (/^[A-Za-z0-9 _-]{1,64}$/.test(name)) return { kind: 'send', mail: { action: 'label', id }, words: `${s.bot} wants to file this email under “${name}”. Nothing will be sent.` };
     }
     return { kind: 'refuse', why: 'Your email can: search, read, draft a reply, or file under a label (it cannot send mail).' };
   }

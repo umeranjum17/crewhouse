@@ -31,6 +31,7 @@ import { fileTool } from './files.ts';
 /** The four marks a first run is timed by, in crewd.log: the service, the engine, the sign-in, the first words. */
 export const stamp = (what: string) => console.log(`[${new Date().toISOString()}] crewd ${what}`);
 let firstWords = true;
+const permissionIdentity = (bot: string, task: unknown, words: string, d: Row) => JSON.stringify(d.mail ? [bot, task, words, d.mail, d.preview] : [bot, words]);
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
 export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
@@ -470,7 +471,7 @@ export class Crew {
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.db.get("SELECT json_extract(data, '$.name') AS n FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ?", d.bot, f)?.n ?? null) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}),
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
@@ -1765,7 +1766,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.db.event('money.refused', botId, { task: task?.id, cost: e.cost });
       return { block: true, reason: `That would take this month's spending past the $${this.moneyCap()} monthly limit. Tell the person, in one line; they can raise it in Settings.` };
     }
-    if (this.granted.delete(`${botId}\n${e.words}`)) return undefined; // answered "allow" after the turn had parked
+    if (this.granted.delete(permissionIdentity(botId, task?.id, e.words, e))) return undefined; // answered "allow" after the turn had parked
     const standing = e.key && [...(task && this.taskGrants.get(task.id) || []), ...(disk.botConfig(this.cfg, botId).allow ?? [])].includes(e.key);
     if (standing && task?.reask) this.db.run('UPDATE tasks SET reask = 0 WHERE id = ?', task.id); // acted, then restarted: this one asks
     else if (standing) {
@@ -1831,8 +1832,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { shop: string; total: number | null; basket: boolean }): Promise<string | null> {
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
-    const same = this.db.all("SELECT id FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id));
-    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}) });
+    const same = this.db.all("SELECT id,task_id,title,detail FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id) && (!e.mail || permissionIdentity(botId, task?.id, e.words, e) === permissionIdentity(botId, a.task_id, a.title, JSON.parse(a.detail))));
+    const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}), ...(e.mail ? { mail: e.mail } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
     const quiet = quietNow(this.person().quiet);
@@ -1918,7 +1919,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.setTask(task, 'queued');
       return this.dispatch();
     }
-    if (body.answer === 'allow') this.granted.add(`${ask.bot}\n${ask.title}`);
+    if (body.answer === 'allow') this.granted.add(permissionIdentity(ask.bot, ask.task_id, ask.title, detail));
     if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id)) return;
     const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
     const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock') ORDER BY id", task.id);

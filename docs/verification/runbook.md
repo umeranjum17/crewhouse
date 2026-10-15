@@ -150,6 +150,12 @@ row, not just a final screen); verify side effects where the feature has them (f
 
 See [Chief's finished-action receipt](done-receipt.md): an approved order's actual browser result, complete facts, muted approval outcome, and approved follow-up, with web/PWA/native proof and its runnable private-shop driver.
 
+## Gmail drafts and labels
+
+See [Reply as a Gmail draft, and file an email](mail-reply-labels.md): real app and
+published Connect grants against a private HTTP mailbox, one card per write, formatted
+own-sender drafts, parked approval identity, refusals, and normal/installed-PWA captures.
+
 ## Headless Linux host
 
 See [Headless host and first-phone authority](headless-host.md): portable-artifact setup, private tailnet relay, first-phone owner enrolment, scripted integration gate and the real phone's printed-code journey. Ordinary desktop pairing remains unchanged.
