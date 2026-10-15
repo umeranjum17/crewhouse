@@ -98,8 +98,8 @@ the bot `models` entry, the stub-engine campaign smoke and slice 4's QA.)
 3. Run slice: `run()` model mapping for the new provider + bot `models`
    entry. Proof: stub-engine campaign smoke (Chief assigns, helpers finish,
    one Needs-you card).
-4. Docs/QA slice: matrix status, `ui.test` pin, verify-crewhouse feature
-   entry for the new sign-in card.
+4. Docs/QA slice: matrix status, `ui.test` pin, done-done journey entry
+   for the new sign-in card.
 
 ## (e) Out of scope
 
