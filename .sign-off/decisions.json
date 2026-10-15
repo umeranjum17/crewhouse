@@ -5,8 +5,9 @@
       "filed": "2026-10-15T07:12:32.684Z",
       "key": "accept-the-tool-migration-go-live",
       "title": "Accept the tool migration go-live?",
-      "about": "verify-crewhouse is deleted; its checks live on as done-done journeys stub-drive, static-checks and screens, with a CI job that runs, checks and receipts them. learn-from-mistakes is initialized (agents on the OpenCode Go plan, never Claude; retro run 1 completed over 275 records with no repeated causes). No retro skill and no Lavish use existed to convert. Final done-done receipt is recorded for the merge head; see the PR Checks block.",
-      "recommend_value": "yes"
+      "about": "verify-crewhouse is deleted. Its checks are done-done journeys in .done-done.yaml: stub-drive, static-checks, screens and the feature journeys (delivered files, workbook chart, slides deck, unlock and sign-in cards, ask in view, site sign-in, installed-app pairing and plans, phone pairing; the two spending phone journeys ask first through done-done verify). CI runs stub-drive and static-checks on every code change and records a receipt. Each verification daemon runs in its own process group, ended and waited for before its test data is removed; test/verify-tools.test.ts fails if any child outlives it. learn-from-mistakes runs with both agents on the OpenCode Go plan, never Claude. No retro skill or Lavish use existed. The receipt for the merge head is in the PR's Checks block.",
+      "recommend_value": "yes",
+      "filer": "ch-tool-migration-v2"
     }
   ]
 }
