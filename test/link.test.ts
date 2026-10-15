@@ -2,8 +2,8 @@
 // daemon, with @byokit/pair's own device side as the phone. The Noise handshake and frames are the package's, tested there.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { execFile, execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer as http1, request as http1Request } from 'node:http';
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net';
 import { join } from 'node:path';
@@ -615,6 +615,72 @@ test('a null browser address is refused by the browser and by a phone alike', as
   assert.deepEqual(await link.request('POST /api/push', { build: 'p9b', web }, { id: 'pixel' }), { status: 200, body: { ok: true } });
   assert.deepEqual(calls.shift(), ['subscribe', 'pixel', { web }], 'a phone\'s browser address is still kept under the phone');
   db.close();
+});
+
+test('headless published relay accepts private LAN origins but refuses public IPv4', async () => {
+  const repo = join(import.meta.dirname, '..');
+  const setup = (ip: string) => new Promise<string>((yes, no) => execFile(process.execPath,
+    ['scripts/headless.mjs', 'setup', '--install-only'], { cwd: repo, env: { ...process.env, CREWHOUSE_RELAY_PUBLIC: `http://${ip}:7300` } },
+    (error, stdout) => error ? no(error) : yes(stdout)));
+  for (const ip of ['192.168.1.144', '10.0.0.1', '172.16.0.1', '172.31.255.254']) assert.match(await setup(ip), /Headless files ready/);
+  for (const ip of ['8.8.8.8', '172.15.0.1', '172.32.0.1']) await assert.rejects(setup(ip), /tailnet or private IPv4/);
+});
+
+for (const publicMode of [false, true]) test(`a headless runner pairs once and keeps owner authority across restart (${publicMode ? 'published relay, no Tailscale' : 'direct tailnet'})`, async (t) => {
+  const dir = temp(`headless-${publicMode}`), bin = join(dir, 'bin'), repo = join(import.meta.dirname, '..');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'tailscale'), publicMode ? `#!/bin/sh\ntouch '${join(dir, 'ts-called')}'\nexit 79\n` : '#!/bin/sh\nprintf \'%s\\n\' \'{"BackendState":"Running","Self":{"TailscaleIPs":["127.0.0.2"]}}\'\n', { mode: 0o755 });
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PAIR_MS: '3000',
+    CREWHOUSE_STATE_DIR: join(dir, 'state'), CREWHOUSE_CREW_DIR: join(dir, 'crew'), CREWHOUSE_TOOLS_DIR: join(dir, 'tools'),
+    CREWHOUSE_PORT: String(await free()), CREWHOUSE_LINK_PORT: String(await free()), CREWHOUSE_RELAY_PORT: String(await free()) };
+  if (publicMode) Object.assign(env, { CREWHOUSE_RELAY_PUBLIC: `http://127.0.0.2:${env.CREWHOUSE_RELAY_PORT}` });
+  let log = '', host: ReturnType<typeof spawn>, phone: ReturnType<typeof open> | undefined;
+  const boot = () => { host = spawn(process.execPath, ['scripts/headless.mjs'], { cwd: repo, env }); host.stdout!.on('data', (b) => log += b); host.stderr!.on('data', (b) => log += b); };
+  const stop = async () => { if (host?.exitCode === null) { host.kill('SIGTERM'); await new Promise(r => host.once('exit', r)); } };
+  t.after(async () => { phone?.link.stop(); await stop(); });
+  const cli = (...args: string[]) => new Promise<string>((yes, no) => execFile(join(repo, 'crewhouse'), ['headless', ...args], { env }, (e, stdout) => e ? no(e) : yes(stdout)));
+  const local = async (path: string, body?: object) => {
+    const r = await fetch(`http://127.0.0.1:${env.CREWHOUSE_PORT}/api/${path}`, { method: body ? 'POST' : 'GET', headers: {
+      'x-crewhouse': '1', 'content-type': 'application/json', authorization: `Bearer ${readFileSync(join(dir, 'state/person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
+    return { status: r.status, body: await r.json() };
+  };
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
+  assert.equal((await http('POST', '/api/phones/pair', { first: true })).status, 409, 'desktop flow cannot auto-enrol');
+  boot();
+  await until(async () => log.includes('headless host ready')).catch(e => { throw new Error(`${e.message}\n${log}`); });
+  assert.deepEqual((await local('phones/link')).body.hosts.sort(), publicMode ? [] : ['127.0.0.1', '127.0.0.2']);
+  assert.equal((await local('phones/pair', { first: true, role: 'view' })).status, 409);
+  const expired = (await local('phones/pair', { first: true })).body.qr;
+  await until(async () => Date.now() > parseOffer(expired, 0).expires);
+  await assert.rejects(pairWithOffer(expired, { name: 'Expired', onWords: () => {} }), /run out/);
+  const printed = await cli('pair'), typed = /Pairing code: (.+)/.exec(printed)![1];
+  assert.match(printed, /[▀▄█]/, 'terminal QR is printed too');
+  const decoded = readTyped(typed);
+  assert.equal(decoded.kind, 'relay', 'first-owner code uses the existing relay-code phone path');
+  if (decoded.kind !== 'relay') throw new Error('missing relay code');
+  assert.equal(new URL(decoded.base).hostname, '127.0.0.2');
+  const relay = await findHost(decoded.base, decoded.short);
+  const attempts = await Promise.allSettled(['Umer', 'Other'].map(name => pairWithCode(relay, decoded.code, { name, onWords: () => {} })));
+  assert.equal(attempts.filter(a => a.status === 'fulfilled').length, 1, 'only one phone gets the first offer');
+  const grant = (attempts.find(a => a.status === 'fulfilled') as PromiseFulfilledResult<DeviceGrant>).value;
+  phone = open(grant);
+  assert.equal((await phone.req('GET', '/api/accounts')).status, 200, 'owner has computer authority');
+  await phone.req('GET', '/api/reach', { ip: '100.64.0.2', via: 'relay' });
+  assert.equal((await phone.req('POST', '/api/phones/pair', { first: true })).status, 403, 'even owner cannot mint another first code');
+  assert.equal((await local('phones/pair', { first: true })).status, 409);
+  await phone.req('POST', '/api/bots/chief/messages', { text: 'hello headless Umer' });
+  await until(async () => (await phone!.req('GET', '/api/bots/chief')).body.messages.some((m: any) => m.author === 'bot' && m.text.includes('hello headless Umer')));
+  assert.ok(!log.includes(typed) && !log.includes(decoded.code), 'service logs contain no full pairing capability');
+  phone.link.stop(); await stop(); log = ''; boot();
+  await until(async () => log.includes('headless host ready'));
+  phone = open(grant);
+  assert.equal((await phone.req('POST', '/api/accounts/1/chatgpt/retry')).status, 200, 'owner authority survives a restart');
+  assert.equal((await phone.req('GET', '/api/phones')).body.length, 1);
+  assert.match(await cli('health'), /healthy/);
+  assert.equal((await local('phones/pair', { first: true })).status, 409);
+  await phone.req('DELETE', `/api/phones/${grant.device.id}`);
+  assert.equal((await local('phones/pair', { first: true })).status, 409, 'revoking the first phone does not reopen bootstrap');
+  if (publicMode) assert.equal(existsSync(join(dir, 'ts-called')), false, 'published mode never invokes Tailscale, including phone reach');
 });
 
 test('a paired browser asks for the push key over the link, and off really removes its address', async () => {

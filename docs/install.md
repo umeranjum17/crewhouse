@@ -8,7 +8,7 @@ Crewhouse is self-hosted only. There is no hosted service and no account with us
 
 GitHub's `/releases/latest` links don't apply yet: every release so far is a prerelease, which GitHub skips there.
 
-- **Computer (Ubuntu or Debian, 64-bit):** [crewhouse_0.1.0_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.0/crewhouse_0.1.0_amd64.deb) (about 200 MB). Open it and press **Install** in your software centre, then open **Crewhouse** from your app menu. It carries its own Node, the AI engine and the helpers' sandbox and screens, installs under `/opt/crewhouse`, and starts the crew by itself when you log in. A helper fetches its own tools (its web browser is the big one, about 170 MB) the first time it needs them. From a checkout, `npm run build:web && node scripts/package.mjs` builds the same `.deb` and a portable **`crewhouse-<version>-linux-x64.tar.gz`**; pushing a `linux-v<version>` tag publishes the `.deb` (`.github/workflows/release-linux.yml`).
+- **Computer (Ubuntu or Debian, 64-bit):** [crewhouse_0.1.0_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.0/crewhouse_0.1.0_amd64.deb) (about 200 MB). Open it and press **Install** in your software centre, then open **Crewhouse** from your app menu. It carries its own Node, the AI engine and the helpers' sandbox and screens, installs under `/opt/crewhouse`, and starts the crew by itself when you log in. A helper fetches its own tools (its web browser is the big one, about 170 MB) the first time it needs them. From a checkout, `npm run build:web && node scripts/package.mjs` builds the same `.deb` and a portable **`crewhouse-<version>-linux-x64.tar.gz`**; pushing a `linux-v<version>` tag publishes both downloads (`.github/workflows/release-linux.yml`).
 - **Phone app (Android, preview):** [CREWHOUSE-APK-1.0.0-preview.20261012.18-arm64-v8a.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261012.18/CREWHOUSE-APK-1.0.0-preview.20261012.18-arm64-v8a.apk) — v1.0.0-preview.20261012.18 (arm64-v8a), ~54 MiB, SHA-256 `176867cec5d3255cca129b980d1d046198cb9a7e6b4c0da43692a63f9e294f1e`. Debug-signed preview; updates the previous preview in place. The armeabi-v7a and x86_64 builds are beside it on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer (see [TRY-IT.md](../TRY-IT.md#3-the-phone-app)).
 
 The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
@@ -33,10 +33,31 @@ When run in a terminal, `setup` asks one thing:
 
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
+## Headless Linux host
+
+A cloud computer in **your own account** can run Chief without a desktop or browser. Sign the computer and phone into your Tailscale network first. Download and extract the portable Linux tarball from the [releases page](https://github.com/umeranjum17/crewhouse/releases), then run:
+
+```bash
+cd crewhouse/app
+./crewhouse setup --headless
+```
+
+The download includes its pinned Node, AI engine, web app and private relay; no git clone is needed. Setup starts `crewhouse-headless.service` and prints a private, single-use first-phone code and terminal QR, valid for two minutes. In the phone app choose **Pair with a computer**, then paste the code or scan the QR. This first phone becomes the owner without waiting for a confirmation on the computer. Its encrypted grant can manage the accounts and settings normally reserved for the computer. Other phones still require the owner's confirmation. Revoking the first phone does not reopen first-owner setup.
+
+The service keeps running without the setup terminal. Root installs use a system unit; other installs use a user unit (enable lingering if it must survive logout). Run under the account intended to own the install. The API stays on loopback with its private capability; by default the phone link and relay listen only on loopback/Tailscale, never the public interface. The relay enrols only this host, with public signup disabled. Both devices must be on the same tailnet; there is no relay hosted by us.
+
+For an installer that owns its systemd unit, use `./crewhouse setup --headless --install-only`, run the bundled Node on `scripts/headless.mjs serve` in `crewhouse/app`, then run `./crewhouse headless pair` from the host terminal. Keep pairing output out of installer logs. `./crewhouse headless health` exits zero only when the authenticated API, phone route and private relay are ready. If an unused code expires, `headless pair` prints a new one; once a phone has joined, it refuses. Stop or disable `crewhouse-headless.service` with the matching system or user `systemctl` before removing this headless install.
+
+For an operator-managed container behind a published tailnet port, set `CREWHOUSE_RELAY_PUBLIC=http://<tailnet-ip>:<published-relay-port>` consistently on setup and the service. This relay-only mode skips all Tailscale discovery and peer checks and keeps the API private. The relay binds all **container** interfaces; publish only that port on the tailnet interface, never on the public internet. The published address must be a tailnet, private-LAN or loopback IPv4 origin. An operator can publish on a private LAN for phones on the same Wi-Fi; that does not prove remote tailnet reach. Port publication and the tailnet identity belong to the operator, not Crewhouse.
+
+Sign-in uses BYOKit's existing account wizard on the host; an AI key never moves to the phone. Browser-only account redirects still return to the host, so choose a supported device-code/key route on a machine without a browser.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
+| `./crewhouse setup --headless [--install-only]` | Prepares a headless host and, unless install-only, starts its service and prints the first-phone code |
+| `./crewhouse headless serve\|pair\|health` | Runs the headless host, prints a fresh unused first-phone code, or checks readiness |
 | `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
 | `./crewhouse doctor` | Shows what's installed and what's missing |
 | `./crewhouse open` | Reopens Crewhouse in your browser |

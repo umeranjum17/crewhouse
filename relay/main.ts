@@ -46,7 +46,7 @@ export async function startRelay(o: RelaySettings): Promise<{ relay: Relay; serv
     void relay.request(req, res).then((ours) => { if (!ours) res.writeHead(404, { 'content-type': 'application/json' }).end('{"error":"not found"}'); });
   });
   server.on('upgrade', (req, socket, head) => { if (!relay.upgrade(req, socket, head)) socket.destroy(); });
-  await new Promise<void>((ok) => server.listen(o.port ?? 7300, o.host ?? '127.0.0.1', ok));
+  await new Promise<void>((ok, fail) => { server.once('error', fail); server.listen(o.port ?? 7300, o.host ?? '127.0.0.1', ok); });
   const { port } = server.address() as { port: number };
   return {
     relay, server, url: `http://${o.host === '0.0.0.0' ? '127.0.0.1' : o.host ?? '127.0.0.1'}:${port}`,

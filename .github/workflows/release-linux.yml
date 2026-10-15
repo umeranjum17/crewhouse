@@ -24,6 +24,6 @@ jobs:
       - run: npm run build:web
       - run: node scripts/package.mjs
       # The software centre reads the version out of package.json; the tag's own suffix stays off the package version.
-      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease dist/crewhouse_*_amd64.deb
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease dist/crewhouse_*_amd64.deb dist/crewhouse-*-linux-x64.tar.gz
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,7 +1,6 @@
-// The phone link: @byokit/pair's host (Noise IK pairing, durable grants, encrypted requests, revoke) on sockets crewd
-// opens itself. By default it listens on loopback and Tailscale only; the home network opens for the two minutes a
-// pairing code lasts, and stays open only when the owner turns it on. Crewhouse's part
-// is where it listens, what a phone may not do, and the person at the computer saying yes.
+// @byokit/pair owns encrypted pairing and grants. Crewhouse owns bind policy and person authority:
+// loopback and Tailscale, with temporary LAN access for desktop pairing only.
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -79,6 +78,7 @@ export class Link {
   private relayStatus: RelayStatus | 'off' = 'off';
   private told = ''; // the dial addresses paired phones were last told
   private watch?: NodeJS.Timeout;
+  private first?: { token: string; expires: number; claimed: boolean };
   private pairing = 0; // until when a pairing code holds the home network open
   private shut?: NodeJS.Timeout;
   private advertised = ''; // the address last advertised on the home network
@@ -101,8 +101,7 @@ export class Link {
     this.handle = handle;
   }
 
-  /** Completed answers, in SQLite so they survive a restart: one device's answer never serves another's,
-   *  and a malformed record refuses the replay rather than running it twice (link SECURITY.md item 6). */
+  /** Device-scoped durable answers; malformed records refuse replay (link SECURITY.md item 6). */
   readonly answers = {
     get: async (device: string, key: string): Promise<unknown> =>
       JSON.parse(this.db.get('SELECT value FROM settings WHERE key = ?', `link.ans.${device}.${key}`)?.value ?? 'null'),
@@ -145,6 +144,7 @@ export class Link {
       this.db.run('DELETE FROM devices');
       for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, g.created, g.lastSeen ?? null);
       for (const g of grants) if (!before.has(g.id)) {
+        if (this.first?.claimed && (g.meta as any)?.first === this.first.token) this.put('link.owner', g.id);
         this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role });
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
         if (value && (g.meta as any)?.offer) {
@@ -159,8 +159,13 @@ export class Link {
     });
   }
 
-  /** A phone scanned the code: nothing is stored until the person at the computer says yes (`answer`). */
+  /** Only the locally minted first-owner offer skips the computer's confirmation. */
   private confirm(p: PairRequest) {
+    if ((p.meta as any)?.first) {
+      const f = this.first;
+      if (!f || f.claimed || f.expires <= Date.now() || (p.meta as any).first !== f.token || this.setting('link.owner') || this.host.devices().length) return false;
+      f.claimed = true; return true; // reserve synchronously: concurrent handshakes cannot both become the owner
+    }
     return new Promise<boolean>((resolve) => {
       const id = ++this.n, done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
       this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, offer: (p.meta as any)?.offer, answer: done });
@@ -177,8 +182,7 @@ export class Link {
   private reached(id: string): Record<string, number> { return JSON.parse(this.setting(`phone.reach.${id}`) ?? '{}'); }
   get lan() { return this.db.get("SELECT value FROM settings WHERE key = 'link.lan'")?.value === '1'; }
   hosts() { return linkHosts(this.cfg.linkHost, this.lan || Date.now() < this.pairing, this.ifaces(), this.tailnetIPs); }
-  /** Listen on exactly the addresses `hosts()` names now, then tell paired phones if where to dial changed.
-   *  Rerun when the LAN setting changes, and every half minute for Tailscale coming up or the home address moving. */
+  /** Bind the current listeners and tell phones when their addresses change. */
   async bind() {
     if (!this.cfg.linkPort) return this.follow();
     const state = await kitTailscaleState({ bin: this.tailscaleBin, timeoutMs: 5000 });
@@ -348,25 +352,31 @@ export class Link {
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
-  /** A single-use QR for the person's phone, and the kit's 12-letter code to type instead (the phone finds this computer
-   *  on its Wi-Fi by `announce`): each single use, for two minutes, with the same two words and yes here. */
-  async offer(role: string, offer?: string): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
+  /** QR plus the kit's 12-letter Wi-Fi code; first-owner enrolment instead includes its relay address. */
+  async offer(role: string, offer?: string, first = false): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
-    // The home network opens for as long as the code lasts (and a phone that joins keeps its socket); Tailscale may have
-    // come up since crewd started.
-    this.pairing = Date.now() + PAIR_MS;
-    clearTimeout(this.shut);
-    this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
+    if (first && (process.env.CREWHOUSE_HEADLESS !== '1' || role !== 'control' || this.setting('link.owner') || this.host.devices().length || (this.first?.claimed && this.first.expires > Date.now()))) throw Object.assign(new Error('first-phone pairing is not available'), { status: 409 });
+    if (!first) {
+      this.pairing = Date.now() + PAIR_MS;
+      clearTimeout(this.shut);
+      this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
+    }
+    const token = first ? randomUUID() : undefined;
+    if (first) this.first = { token: token!, expires: Date.now() + PAIR_MS, claimed: false };
     await this.bind();
-    const urls = this.urls(), { text, expires } = this.host.offer({ role, urls, meta: { offer } });
-    return { qr: text, typed: this.host.code({ role, meta: { offer } }).code, expires, urls };
+    const urls = this.urls(), meta = { offer, ...(first ? { first: token } : {}) };
+    const { text, expires } = this.host.offer({ role, urls, meta });
+    const typed = first ? await this.typed(role, meta) : undefined;
+    if (first && this.first?.token !== token) throw Object.assign(new Error('another first-phone code replaced this one'), { status: 409 });
+    if (first) this.first!.expires = expires;
+    return { qr: text, typed: typed ? `${typed.short}-${typed.code}@${typed.relay}` : this.host.code({ role, meta }).code, expires, urls };
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */
-  async typed(role: string) {
+  async typed(role: string, meta?: object) {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     if (!this.client || this.relayStatus !== 'online') throw Object.assign(new Error('typing a code works once this computer is reachable from anywhere'), { status: 409 });
-    const { code: short, expires } = await this.client.code(), { code } = this.host.code({ role });
+    const { code: short, expires } = await this.client.code(), { code } = this.host.code({ role, meta });
     return { short, code, relay: this.relayPublic, expires };
   }
 
@@ -390,8 +400,7 @@ export class Link {
     if (this.client) await this.client.revoke(id); else await this.host.revoke(id);
   }
 
-  /** One request from a phone, as `METHOD /path`: answered like HTTP. `key` is the
-   *  device's idempotency key; mutating handlers record it with their effect (same transaction). */
+  /** Encrypted HTTP-shaped requests; mutations record the device's idempotency key with their effect. */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
     if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261012.18) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
@@ -406,7 +415,7 @@ export class Link {
     if (op === 'GET /api/reach') {
       const a = (body ?? {}) as { via?: unknown; ip?: unknown };
       if (ROUTES.includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
-      const peer = typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
+      const peer = !(process.env.CREWHOUSE_HEADLESS === '1' && process.env.CREWHOUSE_RELAY_PUBLIC) && typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
       return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
     }
     // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
@@ -423,12 +432,8 @@ export class Link {
       if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).catch(() => {}).then(() => ({ status: 200, body: { ok: true } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
-    // Settings stay on the computer: AI account sign-ins, people, Google setup, connecting apps
-    // (their sign-in pages come back to this computer's own address), and the phones themselves — except the person's
-    // phone renewing a code it is looking at, so the pairing card on the phone refreshes itself like the web card's.
-    if (op === 'POST /api/phones/refresh') return this.handle(method, path, body ?? {}, key).then(
-      (r) => ({ status: 200, body: r }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
-    if (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET')) return { status: 403, body: { error: 'do that on the computer' } };
+    // Only a headless host's enrolled owner gets computer authority; normal phones retain their existing limits.
+    if (op !== 'POST /api/phones/refresh' && !(g.role === 'control' && this.setting('link.owner') === g.id) && (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET'))) return { status: 403, body: { error: 'do that on the computer' } };
     try { return { status: 200, body: await this.handle(method, path, body ?? {}, key, g.id) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }

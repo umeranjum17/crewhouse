@@ -5,14 +5,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const NODE = '24.21.0';
 const NODE_SHA256 = 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6'; // node-v24.21.0-linux-x64.tar.xz
 
 const repo = new URL('..', import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
-const dist = join(repo, 'dist');
+const dist = resolve(process.argv[2] || join(repo, 'dist'));
 const stage = join(dist, 'stage');
 const opt = join(stage, 'opt', 'crewhouse');
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', ...opts });
@@ -32,12 +32,12 @@ sh('tar', ['-xJf', tarball, '-C', join(opt, 'node'), '--strip-components=1']);
 
 // crewd and what it reads at run time; production dependencies only, installed with the bundled npm.
 const app = join(opt, 'app');
-for (const part of ['src', 'templates', 'tools', 'skills', 'package.json', 'package-lock.json', '.npmrc']) {
+for (const part of ['src', 'templates', 'tools', 'skills', 'relay', 'crewhouse', 'package.json', 'package-lock.json', '.npmrc']) {
   if (existsSync(join(repo, part))) cpSync(join(repo, part), join(app, part), { recursive: true });
 }
 cpSync(join(repo, 'web', 'dist'), join(app, 'web', 'dist'), { recursive: true });
 mkdirSync(join(app, 'scripts'), { recursive: true });
-cpSync(join(repo, 'scripts/prepare-engine.mjs'), join(app, 'scripts/prepare-engine.mjs'));
+for (const name of ['prepare-engine.mjs', 'headless.mjs']) cpSync(join(repo, 'scripts', name), join(app, 'scripts', name));
 const bundledEnv = { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${process.env.PATH}` };
 sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: bundledEnv });
 const engineState = join(stage, 'engine-prepare');
