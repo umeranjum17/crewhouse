@@ -29,8 +29,10 @@ import { join } from 'node:path';
 // Raised 6999 -> 7010 for the OpenCode Go key sign-in through the kit (ch-opencode-go-route, owner exception):
 // OpenClawRuntime.keyIn and its addKey branch, the kit route row. No trim paired: the kit path is the feature.
 // Raised 7010 -> 7166 for finished slide decks (ch-cap-slides): the .pptx writer, crew_slides and preview readback.
-// This is this change's own net; paired trim lane ch-src-trim-slides restores BUDGET to 7010.
-const BUDGET = 7166;
+// This is this change's own net; paired trim lane ch-src-trim-slides restores BUDGET to 7010 in two slices.
+// Slice 1 joins adjacent declarations in artifact/supporting modules: src 7165 -> 7073 (net -92).
+// ch-src-trim-slides-final carries the remaining crew.ts trim back to 7010.
+const BUDGET = 7073;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

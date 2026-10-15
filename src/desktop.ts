@@ -29,8 +29,7 @@ export const missing = () => [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf in
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
 function xauthority(n: number | string, cookie: Buffer) {
-  const field = (b: Buffer) => { const len = Buffer.alloc(2); len.writeUInt16BE(b.length); return Buffer.concat([len, b]); };
-  const family = Buffer.from([0xff, 0xff]); // FamilyWild
+  const field = (b: Buffer) => { const len = Buffer.alloc(2); len.writeUInt16BE(b.length); return Buffer.concat([len, b]); }, family = Buffer.from([0xff, 0xff]); // FamilyWild
   return Buffer.concat([family, field(Buffer.alloc(0)), field(Buffer.from(String(n))), field(Buffer.from('MIT-MAGIC-COOKIE-1')), field(cookie)]);
 }
 
@@ -107,14 +106,11 @@ export class Desktops {
     let err = '';
     xvfb.stderr!.on('data', (c) => { err = (err + c).slice(-2000); });
     const n = await new Promise<number>((resolve, reject) => {
-      const done = (v: number | Error) => { clearTimeout(timer); v instanceof Error ? reject(v) : resolve(v); };
-      const failed = (why = err.trim().split('\n').pop()) => done(new Error(`Xvfb did not start: ${why || 'exited'}`));
-      const timer = setTimeout(() => failed('timed out reserving a display'), 5000);
+      const done = (v: number | Error) => { clearTimeout(timer); v instanceof Error ? reject(v) : resolve(v); }, failed = (why = err.trim().split('\n').pop()) => done(new Error(`Xvfb did not start: ${why || 'exited'}`)), timer = setTimeout(() => failed('timed out reserving a display'), 5000);
       xvfb.once('error', (e) => failed(e.message)); xvfb.once('exit', () => failed());
       let ready = '';
       xvfb.stdio[3]!.on('data', (c) => { ready += String(c); if (/^\d+\n$/.test(ready)) done(Number(ready.trim())); });
-    }).catch((e) => { xvfb.kill(); throw e; });
-    const desk: Desk = { bot, n, display: `:${n}`, xauth, xvfb, used: Date.now(), early: [] };
+    }).catch((e) => { xvfb.kill(); throw e; }), desk: Desk = { bot, n, display: `:${n}`, xauth, xvfb, used: Date.now(), early: [] };
     xvfb.on('exit', () => { if (this.desks.get(bot) === desk) this.stop(bot); });
     this.desks.set(bot, desk);
     try { writeFileSync(xauth, xauthority(n, cookie), { mode: 0o600 }); await this.browser(desk, botDir); } catch (e) { await this.stop(bot); throw e; }
@@ -145,8 +141,7 @@ export class Desktops {
     let said = '', buf = '', client: WebSocket | undefined, answered: ((bad?: string) => void) | undefined;
     child.stderr!.on('data', (c) => { said = (said + c).slice(-400); });
     child.on('error', (e) => { said = `${said}\n${e.message}`.slice(-400); });
-    const path = `/devtools/browser/${randomBytes(24).toString('hex')}`;
-    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0, path });
+    const path = `/devtools/browser/${randomBytes(24).toString('hex')}`, wss = new WebSocketServer({ host: '127.0.0.1', port: 0, path });
     await new Promise((r) => wss.once('listening', r));
     // Chromium's pipe carries one JSON message per NUL; one client at a time (a newer attach replaces the last).
     const toChrome = child.stdio[3] as NodeJS.WritableStream, fromChrome = child.stdio[4] as NodeJS.ReadableStream;
@@ -259,16 +254,13 @@ export class Desktops {
 
   /** crewd reads bare hosts (`www.` stripped, matching policy.ts), visible first; never trust the bot's sign-in claim. */
   async pages(bot: string): Promise<string[]> {
-    const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
-    const out: { host: string; on: boolean }[] = [];
+    const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } }, out: { host: string; on: boolean }[] = [];
     try {
       await this.withPipe(bot, async (call) => {
-        const { targetInfos } = await call('Target.getTargets');
-        const tabs = (targetInfos as { type: string; url: string; targetId: string }[]).filter((t) => t.type === 'page' && /^https?:/.test(t.url));
+        const { targetInfos } = await call('Target.getTargets'), tabs = (targetInfos as { type: string; url: string; targetId: string }[]).filter((t) => t.type === 'page' && /^https?:/.test(t.url));
         for (const t of tabs) {
           try {
-            const { sessionId } = await call('Target.attachToTarget', { targetId: t.targetId, flatten: true });
-            const v = await call('Runtime.evaluate', { expression: 'document.visibilityState', returnByValue: true }, sessionId);
+            const { sessionId } = await call('Target.attachToTarget', { targetId: t.targetId, flatten: true }), v = await call('Runtime.evaluate', { expression: 'document.visibilityState', returnByValue: true }, sessionId);
             out.push({ host: host(t.url), on: v?.result?.value === 'visible' });
           } catch { out.push({ host: host(t.url), on: false }); } // the tab went away while we read
         }
@@ -280,8 +272,7 @@ export class Desktops {
   /** Clear both site origins on this bot's page session; missing context or acknowledgment retains the marker. */
   async clearSite(bot: string, host: string) {
     return this.withPipe(bot, async (call) => {
-      const { targetInfos } = await call('Target.getTargets');
-      const page = targetInfos?.find((t: { type: string }) => t.type === 'page'), sessionId = page && (await call('Target.attachToTarget', { targetId: page.targetId, flatten: true }))?.sessionId;
+      const { targetInfos } = await call('Target.getTargets'), page = targetInfos?.find((t: { type: string }) => t.type === 'page'), sessionId = page && (await call('Target.attachToTarget', { targetId: page.targetId, flatten: true }))?.sessionId;
       if (!sessionId) return false;
       try {
         for (const scheme of ['https', 'http']) if (!await call('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }, sessionId)) return false;

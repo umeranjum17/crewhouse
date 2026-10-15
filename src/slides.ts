@@ -7,8 +7,7 @@ export type DeckSpec = { name: string; slides: SlideSpec[] };
 
 const MAX = { slides: 40, lines: 8, title: 120, line: 200, body: 420 };
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
-const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!)), XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"', P = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
 const RELS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"', T = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -48,8 +47,7 @@ const para = (text: string, size: number, bullet: boolean) =>
 
 /** One slide: a title along the top, its lines under it — plain text boxes, so nothing depends on a layout. */
 function slideXml(s: SlideSpec) {
-  const title = String(s?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX.title) || 'Untitled slide';
-  const lines = (Array.isArray(s?.bullets) ? s.bullets : []).map((b) => String(b ?? '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX.line)).filter(Boolean).slice(0, MAX.lines);
+  const title = String(s?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX.title) || 'Untitled slide', lines = (Array.isArray(s?.bullets) ? s.bullets : []).map((b) => String(b ?? '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX.line)).filter(Boolean).slice(0, MAX.lines);
   // Fewer words mean bigger words: a body that would run off the slide comes down a size.
   const len = lines.reduce((n, b) => n + b.length, 0), size = len > MAX.body ? 1400 : len > 260 ? 1600 : 1800;
   return XML + `<p:sld ${A} ${R} ${P}><p:cSld>${TREE}`
@@ -62,8 +60,7 @@ function slideXml(s: SlideSpec) {
 export async function buildDeck(file: string, spec: DeckSpec) {
   const slides = (Array.isArray(spec?.slides) ? spec.slides : []).slice(0, MAX.slides);
   if (!slides.length) throw new Error('say what the deck should cover: at least one slide with a title');
-  const JSZip = (await import('jszip')).default, n = slides.length, rel = (id: string, kind: string, target: string) => `<Relationship Id="${id}" Type="${T}/${kind}" Target="${target}"/>`;
-  const zip = new JSZip();
+  const JSZip = (await import('jszip')).default, n = slides.length, rel = (id: string, kind: string, target: string) => `<Relationship Id="${id}" Type="${T}/${kind}" Target="${target}"/>`, zip = new JSZip();
   zip.file('[Content_Types].xml', XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
     + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
     + '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
@@ -118,20 +115,14 @@ const says = (e: any) => all(e, 'a:t').map((t: any) => (t.elements ?? []).map((x
 /** Read a deck back for the app: one entry per slide, its title and its lines, words only — plus those same words
  *  flattened into parts, so a phone's document reader shows a deck too. Nothing but words leaves here. */
 export async function readDeck(file: string) {
-  const JSZip = (await import('jszip')).default;
-  const { xml2js } = await import('xml-js');
-  const zip = await JSZip.loadAsync((await import('node:fs')).readFileSync(file));
-  const num = (f: string) => Number(f.replace(/\D+/g, ''));
+  const JSZip = (await import('jszip')).default, { xml2js } = await import('xml-js'), zip = await JSZip.loadAsync((await import('node:fs')).readFileSync(file)), num = (f: string) => Number(f.replace(/\D+/g, ''));
   const names = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
   if (!names.length) throw new Error('no such deck');
   const read = await Promise.all(names.slice(0, MAX.slides).map(async (n) => {
-    const root = await xml2js(await zip.file(n)!.async('string'), {}) as any;
-    const groups = all(all(root, 'p:cSld')[0], 'p:sp').map((sp) => all(sp, 'a:p').map((p) => says(p).replace(/\s+/g, ' ').trim()).filter(Boolean)).filter((g) => g.length);
-    const title = (groups[0]?.[0] ?? '').slice(0, MAX.title);
+    const root = await xml2js(await zip.file(n)!.async('string'), {}) as any, groups = all(all(root, 'p:cSld')[0], 'p:sp').map((sp) => all(sp, 'a:p').map((p) => says(p).replace(/\s+/g, ' ').trim()).filter(Boolean)).filter((g) => g.length), title = (groups[0]?.[0] ?? '').slice(0, MAX.title);
     const lines = (groups.length > 1 ? groups.slice(1).flat() : (groups[0] ?? []).slice(1)).map((t: string) => t.slice(0, MAX.line)).slice(0, 2 * MAX.lines);
     return { title, lines };
-  }));
-  const slides = read.filter((s) => s.title || s.lines.length);
+  })), slides = read.filter((s) => s.title || s.lines.length);
   if (!slides.length) throw new Error('no such deck');
   return { slides, parts: slides.flatMap((s) => [{ kind: 'heading', text: s.title }, ...s.lines.map((text) => ({ kind: 'li', text }))]) };
 }

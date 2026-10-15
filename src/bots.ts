@@ -368,8 +368,7 @@ export function archiveSkill(cfg: Config, id: string, name: string) {
 }
 
 export function listFiles(cfg: Config, id: string, allowed?: Set<string>) {
-  const root = join(botDir(cfg, id), 'files'), out: { path: string; size: number; mtime: number }[] = [];
-  const walk = (d: string) => {
+  const root = join(botDir(cfg, id), 'files'), out: { path: string; size: number; mtime: number }[] = [], walk = (d: string) => {
     if (!existsSync(d)) return;
     for (const f of readdirSync(d)) {
       const p = join(d, f), st = statSync(p);

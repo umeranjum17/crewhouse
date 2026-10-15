@@ -46,8 +46,7 @@ export function registry(cfg: Config, only?: string[]): Tool[] {
 const lockOf = (cfg: Config, id: string) => join(cfg.repoDir, 'tools', id, 'package-lock.json');
 /** The pin a tool is installed at: the manifest's own install spec (and lockfile), so a changed pin reads as an update. */
 const pinOf = (cfg: Config, t: Tool) => JSON.stringify({ npm: t.install.npm, pip: t.install.pip, download: t.install.download, then: t.install.then,
-  lock: existsSync(lockOf(cfg, t.id)) ? createHash('sha256').update(readFileSync(lockOf(cfg, t.id))).digest('hex') : undefined });
-const pinFile = (cfg: Config, id: string) => join(cfg.toolsDir, id, '.pin');
+  lock: existsSync(lockOf(cfg, t.id)) ? createHash('sha256').update(readFileSync(lockOf(cfg, t.id))).digest('hex') : undefined }), pinFile = (cfg: Config, id: string) => join(cfg.toolsDir, id, '.pin');
 export const toolBin = (cfg: Config) => join(cfg.toolsDir, 'bin');
 
 /** Where a binary is: Crewhouse's own copy first, then the person's PATH. */
@@ -71,8 +70,7 @@ const fill = (s: string, vars: Record<string, string>) => s.replace(/\{([a-z.]+)
 
 export function toolStatus(cfg: Config, only?: string[]) {
   return registry(cfg, only).map((t) => {
-    const missing = t.source === 'planned' ? [] : [...t.bins.filter((b) => !binOf(cfg, t, b)), ...(t.id === 'computer' ? desktopEngineGaps() : [])];
-    const pinned = existsSync(pinFile(cfg, t.id)) ? readFileSync(pinFile(cfg, t.id), 'utf8') : null;
+    const missing = t.source === 'planned' ? [] : [...t.bins.filter((b) => !binOf(cfg, t, b)), ...(t.id === 'computer' ? desktopEngineGaps() : [])], pinned = existsSync(pinFile(cfg, t.id)) ? readFileSync(pinFile(cfg, t.id), 'utf8') : null;
     return {
       ...t, missing,
       ready: t.source !== 'planned' && !missing.length,
@@ -173,13 +171,10 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
 }
 
 if (process.argv[1] === import.meta.filename) {
-  const cfg = loadConfig();
-  const [cmd, ...ids] = process.argv.slice(2);
-  const kit = toolStatus(cfg);
+  const cfg = loadConfig(), [cmd, ...ids] = process.argv.slice(2), kit = toolStatus(cfg);
   if (cmd === 'install') {
     // --refresh (what `./crewhouse update` runs): only tools installed before whose pin has moved, never new ones.
-    const refresh = ids[0] === '--refresh' ? ids.shift() : undefined;
-    const pick = ids.length ? ids : kit.filter((t) => t.installable && (!t.ready || t.outdated) && (!refresh || existsSync(pinFile(cfg, t.id)))).map((t) => t.id);
+    const refresh = ids[0] === '--refresh' ? ids.shift() : undefined, pick = ids.length ? ids : kit.filter((t) => t.installable && (!t.ready || t.outdated) && (!refresh || existsSync(pinFile(cfg, t.id)))).map((t) => t.id);
     let failed = 0;
     for (const id of pick) await installTool(cfg, id, console.log).catch((e) => { failed++; console.error(`✗ ${id}: ${e.message}`); });
     if (!pick.length && !refresh) console.log('Nothing to install: every pinned tool is ready.');

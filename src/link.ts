@@ -162,8 +162,7 @@ export class Link {
   /** A phone scanned the code: nothing is stored until the person at the computer says yes (`answer`). */
   private confirm(p: PairRequest) {
     return new Promise<boolean>((resolve) => {
-      const id = ++this.n;
-      const done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
+      const id = ++this.n, done = (yes: boolean) => { if (this.asking.delete(id)) { this.db.event('device.asked', null, { id, done: true }); resolve(yes); } };
       this.asking.set(id, { id, name: p.name, words: p.words, role: p.role, offer: (p.meta as any)?.offer, answer: done });
       this.db.event('device.asked', null, { id, name: p.name }); // Settings shows the question
       setTimeout(() => done(false), PAIR_MS).unref();
@@ -252,8 +251,7 @@ export class Link {
   private dial() {
     this.client?.stop(); this.client = undefined; this.relayStatus = 'off';
     if (!this.relay || !this.host) return;
-    const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined;
-    const c = this.client = new RelayClient(this.host, {
+    const enrol = this.db.get("SELECT value FROM settings WHERE key = 'link.relay.enrol'")?.value || undefined, c = this.client = new RelayClient(this.host, {
       url: `${wsOrigin(this.relay)}/relay/v1/host`, enrol, name: 'Crewhouse',
       onStatus: (st) => {
         if (this.client !== c) return;
@@ -319,8 +317,7 @@ export class Link {
    *  Settings to say once; a phone Expo no longer knows loses its token. */
   private async expo(id: string, phones: [string, string][]) {
     const res = await fetch(this.pushUrl, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, signal: AbortSignal.timeout(10_000),
-      body: JSON.stringify(phones.map(([, to]) => ({ to, title: NEWS, sound: 'default', collapseId: id }))) });
-    const tickets: any[] = (await res.json().catch(() => null))?.data ?? [];
+      body: JSON.stringify(phones.map(([, to]) => ({ to, title: NEWS, sound: 'default', collapseId: id }))) }), tickets: any[] = (await res.json().catch(() => null))?.data ?? [];
     tickets.forEach((t, i) => {
       if (t?.status === 'ok') this.db.run("DELETE FROM settings WHERE key = 'push.refused'");
       else if (t?.details?.error === 'InvalidCredentials') this.put('push.refused', '1');
@@ -361,8 +358,7 @@ export class Link {
     clearTimeout(this.shut);
     this.shut = setTimeout(() => void this.bind(), PAIR_MS + 100).unref();
     await this.bind();
-    const urls = this.urls();
-    const { text, expires } = this.host.offer({ role, urls, meta: { offer } });
+    const urls = this.urls(), { text, expires } = this.host.offer({ role, urls, meta: { offer } });
     return { qr: text, typed: this.host.code({ role, meta: { offer } }).code, expires, urls };
   }
 
@@ -370,8 +366,7 @@ export class Link {
   async typed(role: string) {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     if (!this.client || this.relayStatus !== 'online') throw Object.assign(new Error('typing a code works once this computer is reachable from anywhere'), { status: 409 });
-    const { code: short, expires } = await this.client.code();
-    const { code } = this.host.code({ role });
+    const { code: short, expires } = await this.client.code(), { code } = this.host.code({ role });
     return { short, code, relay: this.relayPublic, expires };
   }
 

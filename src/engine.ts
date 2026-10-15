@@ -105,8 +105,7 @@ export const webTools = (may?: (u: URL) => boolean) => [
   tool('web_search', 'Search the web; returns titles, links and snippets.', PARAMETERS.crew_web_search,
     async (p, signal) => {
       if (may && !may(new URL('https://html.duckduckgo.com/'))) throw new Error("searching the web is not on this helper's list of places it may reach");
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(String(p.query))}`, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } });
-      const html = await res.text();
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(String(p.query))}`, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } }), html = await res.text();
       const hits = [...html.matchAll(/class="result__a" href="([^"]+)"[^>]*>([^]*?)<\/a>[^]*?class="result__snippet"[^>]*>([^]*?)<\/a>/g)].slice(0, 8)
         .map(([, href, title, snip]) => { const u = /uddg=([^&]+)/.exec(href)?.[1]; return `${plain(title)} — ${u ? decodeURIComponent(u) : href}\n  ${plain(snip)}`; });
       return hits.join('\n') || 'No results.';
