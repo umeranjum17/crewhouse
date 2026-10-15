@@ -15,7 +15,7 @@ import type { Server } from 'node:net';
 import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, describeTrigger, firstRun, hhmm, looksFor, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
-import { newThreads } from './mail.ts';
+import { mailTool, newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -1374,7 +1374,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
     const apps = await this.connections.tools();
     l.apps = apps.effects;
-    l.appTools = new Map(apps.tools.map((t) => [t.name, t]));
+    l.appTools = new Map(apps.tools.map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space) : t])); // mail saves into this run's own files
     const axi = g.axi.browser;
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
