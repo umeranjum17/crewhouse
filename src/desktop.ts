@@ -95,8 +95,8 @@ export class Desktops {
       if (!have.chrome || have.chrome.exitCode !== null) await this.browser(have, botDir);
       return have;
     }
-    const why = missing().find((m) => m.startsWith('Xvfb'));
-    if (why) throw new Error(`bot desktops need ${why}`);
+    const why = missing();
+    if (why.length) throw new Error(`bot desktops need ${why.join('; ')}`);
     const xauth = join(this.stateDir, 'desktops', `${bot}.xauth`), cookie = randomBytes(16);
     mkdirSync(join(this.stateDir, 'desktops'), { recursive: true });
     this.reapOrphan(xauth, botDir);
@@ -203,8 +203,8 @@ export class Desktops {
   }
 
   private async engine(d: Desk) {
-    const e = resolveEngine();
-    if (!e) throw refused(explainMissingEngine() ?? 'the desklink engine is missing', 'platform');
+    const gap = probeEngine().engine, e = resolveEngine();
+    if (gap || !e) throw refused(gap ?? explainMissingEngine() ?? 'the desklink engine is missing', 'platform');
     return EngineClient.start(e.command, e.args, {
       onEvent: (ev) => {
         d.engine?.drainEvents(); // delivered here; don't let the engine client's backlog grow
