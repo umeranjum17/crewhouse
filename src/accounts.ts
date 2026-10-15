@@ -112,7 +112,6 @@ export class Accounts {
     return this.view(account);
   }
   paste(account: string, text: string) { this.running.get(account)?.paste(text); }
-
   cancel(account: string) { return this.running.get(account)?.cancel(); }
   async logout(account: string) {
     this.views.delete(account);

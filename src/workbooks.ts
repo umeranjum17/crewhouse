@@ -24,9 +24,7 @@ function sheetName(raw: string, taken: Set<string>, n: number) {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Dark header, blue for a calculated cell, yellow for an input cell. */
 const FILL = {
-  header: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } },
-  formula: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } },
-  input: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } },
+  header: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } }, formula: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }, input: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } },
 } as const;
 
 /** YYYY-MM-DD becomes a real UTC-midnight date; null when the calendar says otherwise. */
@@ -40,8 +38,7 @@ const excel = () => import('exceljs').then((m: any) => m.default ?? m);
 
 /** Write a workbook the person can open and use: bold frozen headers, sensible widths, dropdowns where they help. */
 export async function buildWorkbook(file: string, spec: WorkbookSpec) {
-  const ExcelJS = await excel();
-  const sheets = Array.isArray(spec?.sheets) ? spec.sheets.slice(0, MAX.sheets) : [];
+  const ExcelJS = await excel(), sheets = Array.isArray(spec?.sheets) ? spec.sheets.slice(0, MAX.sheets) : [];
   if (!sheets.length) throw new Error('say what the workbook should have: at least one sheet with columns');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Crewhouse'; wb.created = new Date();
@@ -55,8 +52,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
     ws.views = [{ state: 'frozen', ySplit: 1 }];
     const rows = (Array.isArray(s.rows) ? s.rows : []).slice(0, MAX.rows).map((r) => (Array.isArray(r) ? r : [r]).slice(0, MAX.columns));
     ws.columns = cols.map((c, i) => {
-      const header = String(c?.header ?? '').trim().slice(0, 80) || `Column ${i + 1}`;
-      const widest = Math.max(header.length, ...rows.map((r) => String(r[i] ?? '').length), 0);
+      const header = String(c?.header ?? '').trim().slice(0, 80) || `Column ${i + 1}`, widest = Math.max(header.length, ...rows.map((r) => String(r[i] ?? '').length), 0);
       return { header, width: Math.min(MAX.width, Math.max(10, Number(c?.width) || Math.min(widest + 2, 42))) };
     });
     ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -72,8 +68,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
         return v ?? null;
       }));
       added.eachCell((cell: any) => {
-        const v = cell.value;
-        const formula = !!v && typeof v === 'object' && 'formula' in v;
+        const v = cell.value, formula = !!v && typeof v === 'object' && 'formula' in v;
         if (v instanceof Date) cell.numFmt = 'yyyy-mm-dd';
         else if (typeof v === 'string' && v.length > 60) cell.alignment = { wrapText: true };
         if (lively) cell.fill = { ...FILL[formula ? 'formula' : 'input'] };
@@ -111,9 +106,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
   return { sheets: wb.worksheets.map((w: any) => w.name) };
 }
 
-const RANGE = /^\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i;
-const colOf = (s: string) => [...s.toUpperCase()].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
-const absolute = (range: unknown) => String(range).trim().toUpperCase().replace(/\$/g, '').replace(/([A-Z]+)(\d+)/g, '$$$1$$$2');
+const RANGE = /^\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i, colOf = (s: string) => [...s.toUpperCase()].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0), absolute = (range: unknown) => String(range).trim().toUpperCase().replace(/\$/g, '').replace(/([A-Z]+)(\d+)/g, '$$$1$$$2');
 /** A range's cells as [row, column], in order: one column or one row of at most MAX.rows cells. */
 function cellsOf(range: unknown): [number, number][] {
   const m = RANGE.exec(String(range ?? '').trim());

@@ -70,8 +70,7 @@ export class Teacher {
   async start(bot: string, what: string, cdp: string, onTimeout: () => void) {
     this.stop(bot);
     const ws = new WebSocket(cdp, { perMessageDeflate: false });
-    const s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(),
-      timer: setTimeout(onTimeout, SHOW_MS) };
+    const s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(), timer: setTimeout(onTimeout, SHOW_MS) };
     this.shows.set(bot, s);
     ws.on('message', (raw) => {
       let m: any;

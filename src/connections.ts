@@ -38,8 +38,7 @@ export function connectError(name: string, error: unknown) {
 
 /** README's sealed adapter: the durable store receives ciphertext only, with each name authenticated inside it. */
 function deviceStore(cfg: Config): Keystore {
-  const dir = join(cfg.stateDir, 'people', '1', 'app-signins');
-  const seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true });
+  const dir = join(cfg.stateDir, 'people', '1', 'app-signins'), seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true });
   const file = (name: string) => {
     if (!/^(google-client|byokit\.connect\.[A-Za-z0-9_-]{43})$/.test(name)) throw new Error('Invalid sign-in name.');
     return join(dir, name);

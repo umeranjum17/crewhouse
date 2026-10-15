@@ -88,8 +88,7 @@ export type ToolState = ReturnType<typeof toolStatus>[number];
 
 /** Herdr's setup state for its own row on the Apps screen: here, and its server answering. Probed on demand, never in the snapshot. */
 export async function herdrStatus(cfg: Config) {
-  const t = toolStatus(cfg).find((x) => x.id === 'herdr');
-  const howto = t?.install.system ?? '';
+  const t = toolStatus(cfg).find((x) => x.id === 'herdr'), howto = t?.install.system ?? '';
   try {
     const connected = JSON.parse(await new Promise<string>((resolve, reject) => execFile(which(cfg, 'herdr')!, ['status', 'server', '--json'], { timeout: 5000, killSignal: 'SIGKILL' }, (err, stdout) => err ? reject(err) : resolve(stdout)))).running === true;
     return { ready: true, connected, howto: connected ? '' : howto };
@@ -115,8 +114,7 @@ export function resolveGrants(cfg: Config, grants: string[], vars: Record<string
 async function download(url: string, sha256: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${res.status} ${url}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  const got = createHash('sha256').update(buf).digest('hex');
+  const buf = Buffer.from(await res.arrayBuffer()), got = createHash('sha256').update(buf).digest('hex');
   if (got !== sha256) throw new Error(`checksum mismatch for ${url}: got ${got}`);
   return buf;
 }
@@ -129,10 +127,7 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   if (!t) throw new Error(`unknown tool ${id}`);
   if (t.source !== 'pinned') throw new Error(`${t.name} is not installed by Crewhouse${t.install.system ? `: ${t.install.system}` : ''}`);
   const dir = join(cfg.toolsDir, id);
-  if (existsSync(pinFile(cfg, id)) && readFileSync(pinFile(cfg, id), 'utf8') === pinOf(cfg, t) && t.bins.every((b) => existsSync(join(toolBin(cfg), b)))) {
-    log(`${t.name}: already installed`);
-    return;
-  }
+  if (existsSync(pinFile(cfg, id)) && readFileSync(pinFile(cfg, id), 'utf8') === pinOf(cfg, t) && t.bins.every((b) => existsSync(join(toolBin(cfg), b)))) { log(`${t.name}: already installed`); return; }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   mkdirSync(toolBin(cfg), { recursive: true });

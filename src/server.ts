@@ -17,14 +17,11 @@ import { lesson, Teacher } from './teach.ts';
 import { MailSend } from './mail-send.ts';
 
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
-  `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` +
-  (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
+  `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` + (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
 
 const TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
-  '.mp4': 'video/mp4', '.webm': 'video/webm', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
-  '.json': 'application/json', '.pdf': 'application/pdf', '.webmanifest': 'application/manifest+json',
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.pdf': 'application/pdf', '.webmanifest': 'application/manifest+json',
 };
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -118,8 +115,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
   };
   let update: { version: string; url: string } | null = null;
-  const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string;
-  const newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
+  const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string, newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
   const checkUpdate = () => fetch(process.env.CREWHOUSE_RELEASES || 'https://api.github.com/repos/umeranjum17/crewhouse/releases/latest', { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/vnd.github+json' } })
     .then((r) => (r.ok ? r.json() : null)).then((rel: any) => {
       const v = String(rel?.tag_name ?? '').replace(/^v/, '');

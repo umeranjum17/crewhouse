@@ -28,9 +28,7 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
       const level = Math.min(Math.max(Number(b.level) || 1, 1), 3);
       return [new Paragraph({ text: b.heading.slice(0, 200), heading: HeadingLevel[`HEADING_${level}` as const] })];
     }
-    if (Array.isArray(b?.bullets)) {
-      return b.bullets.slice(0, MAX.bullets).map((t: any) => new Paragraph({ text: words(t), bullet: { level: 0 } }));
-    }
+    if (Array.isArray(b?.bullets)) return b.bullets.slice(0, MAX.bullets).map((t: any) => new Paragraph({ text: words(t), bullet: { level: 0 } }));
     if (b?.table && Array.isArray(b.table.head)) {
       const dataRows = (Array.isArray(b.table.rows) ? b.table.rows : []).slice(0, MAX.rows), head = b.table.head.slice(0, MAX.cols).map((h: Cell) => new TableCell({ children: [cell(h, true)] }));
       const rows = [
@@ -39,9 +37,7 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
       ];
       return [new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })];
     }
-    if (typeof b?.text === 'string') {
-      return [new Paragraph({ children: [new TextRun({ text: words(b.text), bold: b.bold === true, italics: b.italic === true })] })];
-    }
+    if (typeof b?.text === 'string') return [new Paragraph({ children: [new TextRun({ text: words(b.text), bold: b.bold === true, italics: b.italic === true })] })];
     return [];
   });
   const doc = new Document({ creator: 'Crewhouse', sections: [{ children }] });
@@ -82,8 +78,7 @@ export async function readDocument(file: string) {
     walk(tc.elements, (p) => { if (p.name === 'w:p') { const r = runs(p); if (r.text) out.push(r.text); } });
     return out.join(' ');
   };
-  const root = await xml2js(xml, {}) as any, parts: Part[] = [];
-  const push = (p: Part) => { if (parts.length < MAX.parts) parts.push(p); };
+  const root = await xml2js(xml, {}) as any, parts: Part[] = [], push = (p: Part) => { if (parts.length < MAX.parts) parts.push(p); };
   const body = root?.elements?.[0]?.elements?.find((e: any) => e.type === 'element' && e.name === 'w:body');
   walk(body?.elements, (el) => {
     if (el.name === 'w:tbl') {

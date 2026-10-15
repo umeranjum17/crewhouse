@@ -485,8 +485,7 @@ export class Crew {
   }
 
   snapshot() {
-    const files = (task: number) => this.taskFiles(task).map((d) => d.path);
-    const person: Row = this.person();
+    const files = (task: number) => this.taskFiles(task).map((d) => d.path), person: Row = this.person();
     person.quietNow = quietNow(person.quiet);
     return {
       person,
@@ -544,11 +543,9 @@ export class Crew {
   private static UNSEEN = "author != 'person' AND (author != 'system' OR bot = 'chief' OR text LIKE 'Delivered %') AND (bot = 'chief' OR task_id IS NULL OR task_id NOT IN (SELECT id FROM tasks WHERE origin = 'chief' AND state = 'done'))";
   private speaker = (m: Row) => m.author === 'bot' && m.task_id ? this.db.get("SELECT bot FROM tasks t WHERE id = ? AND bot != ? AND NOT EXISTS (SELECT 1 FROM tasks o WHERE COALESCE(o.root, o.id) = COALESCE(t.root, t.id) AND o.id != t.id)", m.task_id, CHIEF)?.bot : undefined;
   private chat(bot: string) {
-    const mine = 'bot = ?';
-    const last = this.db.get(`SELECT author, text, at, task_id FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
+    const mine = 'bot = ?', last = this.db.get(`SELECT author, text, at, task_id FROM messages WHERE ${mine} ORDER BY id DESC LIMIT 1`, bot);
     if (last) Object.assign(last, { text: short(cleanReply(last.text), 160), task_id: undefined, helper: bot === CHIEF ? this.speaker(last) : undefined });
-    const seen = this.db.get('SELECT seen FROM reads WHERE bot = ?', bot)?.seen ?? 0;
-    const unseen = this.db.get(`SELECT COUNT(*) AS n, MIN(id) AS first FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!;
+    const seen = this.db.get('SELECT seen FROM reads WHERE bot = ?', bot)?.seen ?? 0, unseen = this.db.get(`SELECT COUNT(*) AS n, MIN(id) AS first FROM messages WHERE ${mine} AND id > ? AND ${Crew.UNSEEN}`, bot, seen)!;
     return { last: last ?? null, unread: unseen.n as number, firstUnread: unseen.first as number | null };
   }
 
@@ -582,8 +579,7 @@ export class Crew {
   week() {
     const share = SHARES[this.person().share ?? 'light'] ?? SHARES.light;
     if (!Number.isFinite(share)) return null;
-    const used = this.db.get('SELECT COALESCE(SUM(tokens), 0) AS n FROM usage WHERE day > ?', dayOf(Date.now() - 7 * 86_400_000))!.n as number;
-    const part = used / (dayBudget() * share * 7);
+    const used = this.db.get('SELECT COALESCE(SUM(tokens), 0) AS n FROM usage WHERE day > ?', dayOf(Date.now() - 7 * 86_400_000))!.n as number, part = used / (dayBudget() * share * 7);
     return part < 1 / 3 ? 'small' : part < 2 / 3 ? 'fair' : 'most';
   }
 
@@ -860,8 +856,7 @@ export class Crew {
       // The mail watch: only threads newer than the cursor start one quiet task; the first look is the baseline.
       if (r.mailwatch) {
         if (!this.connections.connected('gmail')) return seen('signed-out');
-        const after = Number(JSON.parse(r.cursor ?? 'null') ?? 0);
-        const fresh = await newThreads(() => this.connections.token('gmail'), after).catch(() => null);
+        const after = Number(JSON.parse(r.cursor ?? 'null') ?? 0), fresh = await newThreads(() => this.connections.token('gmail'), after).catch(() => null);
         if (!fresh) return seen('unreachable');
         this.db.run('UPDATE routines SET cursor = ? WHERE id = ?', JSON.stringify(fresh.length ? Math.max(...fresh.map((m) => m.at)) : Date.now()), r.id);
         if (r.cursor == null || !fresh.length) return seen(r.cursor == null ? 'started' : 'same');
@@ -872,8 +867,7 @@ export class Crew {
       try { const page = await readPage(r.watch); if (page.status >= 400) throw new Error(String(page.status)); now = page.text.trim(); }
       catch { this.outage(r, true); return seen('unreachable'); }
       this.outage(r, false);
-      const file = join(disk.botDir(this.cfg, r.bot), 'work', 'watch', `${r.id}.txt`);
-      const before = existsSync(file) ? readFileSync(file, 'utf8') : null;
+      const file = join(disk.botDir(this.cfg, r.bot), 'work', 'watch', `${r.id}.txt`), before = existsSync(file) ? readFileSync(file, 'utf8') : null;
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, now);
       if (before === null) return seen('started');
@@ -898,9 +892,7 @@ export class Crew {
 
   /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
   digest(since: number, day?: { at: number | null; title: string }[]) {
-    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, '');
-    const name = (id: string) => this.bot(id)?.display ?? id;
-    const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
+    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, ''), name = (id: string) => this.bot(id)?.display ?? id, list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
     const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     if (done.length) lines.push(`- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.`);
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -962,8 +954,7 @@ export class Crew {
 
   // ---- people ----
   onboard(address: string, ask?: string, bot?: string): { task: number } | void {
-    const a = needText(address, 40, 'say how Chief should address you');
-    const hello = ask?.trim();
+    const a = needText(address, 40, 'say how Chief should address you'), hello = ask?.trim();
     let to = CHIEF;
     if (hello) {
       // Hello goal taps hire their helper when the person's account supports it.
@@ -1028,8 +1019,7 @@ export class Crew {
   recruit(template: string, name: string | undefined, by: string) {
     const tpl = disk.loadTemplate(this.cfg, template);
     if (template === 'chief') throw Object.assign(new Error('there is only one Chief'), { status: 400 });
-    const display = (name || tpl.display).trim().slice(0, 32);
-    const id = disk.slug(display);
+    const display = (name || tpl.display).trim().slice(0, 32), id = disk.slug(display);
     if (this.bot(id) || id === CHIEF) throw Object.assign(new Error(`there is already a bot called ${display}`), { status: 409 });
     disk.createBotFolder(this.cfg, id, tpl, display);
     return this.seat(id, display, tpl.role, template, tpl.color);
@@ -1109,8 +1099,7 @@ export class Crew {
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
   private async route(text: string, model: string | undefined, pics: Photo[] = [], room = false, key?: string, said?: string) {
-    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[];
-    const lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF);
+    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[], lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF);
     const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
     if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, undefined, own, pics, { room, key });
@@ -1154,8 +1143,7 @@ export class Crew {
 
   /** `said` is what the thread shows, when it isn't the whole body. */
   private addTask(bot: string, body: string, origin: string, model: string | undefined, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string; key?: string } = {}) {
-    const brain = model ? disk.brainKey(disk.parseBrain(model)) : null;
-    const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
+    const brain = model ? disk.brainKey(disk.parseBrain(model)) : null, title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
     // A replayed phone request answers with its first result (the claim below lands in the same transaction as the task).
     if (link.key) {
@@ -1219,8 +1207,7 @@ export class Crew {
    *  tries again), anything else in its own chat. Never silent, and never a model call. A job that acted but couldn't
    *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
   private failedLine(task: Row, result: string, unsure = false) {
-    const b = this.bot(task.bot)?.display ?? task.bot;
-    const r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
+    const b = this.bot(task.bot)?.display ?? task.bot, r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
     const job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
     if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, null), result === HUNG && this.alert();
     if (r) {
@@ -1248,8 +1235,7 @@ export class Crew {
     // What the person already chose on drafts, in plain words, so the next job never asks twice.
     const decided = this.db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved', 'draft.rejected') ORDER BY seq DESC LIMIT 3")
       .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; });
-    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
-    const last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
+    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '', last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
@@ -1317,22 +1303,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private async run(task: Row) {
     const bot = this.bot(task.bot)!;
     try {
-      const choices = this.choices(task);
-      const brain = await this.usable(choices);
+      const choices = this.choices(task), brain = await this.usable(choices);
       if (!brain) return this.pause(task, choices);
       if (task.origin === 'routine' && this.overShare()) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.()) {
         const key = 'memory.limited.1';
-        if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) {
-          this.db.event('memory.limited', bot.id, { task: task.id });
-          this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'logged');
-        }
+        if (!this.db.get('SELECT 1 FROM settings WHERE key = ?', key)) { this.db.event('memory.limited', bot.id, { task: task.id }); this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', key, 'logged'); }
       }
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
-      const resumes = !!task.session && task.session.startsWith('agent:m1:');
-      const l = await this.open(bot, task, brain);
+      const resumes = !!task.session && task.session.startsWith('agent:m1:'), l = await this.open(bot, task, brain);
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain) });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
@@ -1381,15 +1362,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub';
       if (onScreen) await this.desktops.ensure(bot.id, space);
       // Its own HOME and XDG folders (the playwright daemon's state lives there), never the person's.
-      const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id });
-      const run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
+      const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id }), run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
       // The browser starts on first use. ponytail: a crewd that dies leaves a headless browser up until that bot's next
       // task reopens it; an idle timeout when the engine has one.
       let started: Promise<string> | undefined;
-      const start = async () => {
-        const cdp = onScreen ? (await this.desktops.ensure(bot.id, space)).cdp : undefined;
-        return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]);
-      };
+      const start = async () => { const cdp = onScreen ? (await this.desktops.ensure(bot.id, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); };
       l.browser = {
         run,
         end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
@@ -1537,8 +1514,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // One waiting line per words, judged by the speaker's own last line in that voice: Chief says his once per wait (every
       // account resting is his to say, whoever's job waits), notes the next ask in other words, then holds quietly (Main1325).
       const where = wake ? CHIEF : task.bot, said = voice === 'bot' ? cleanReply(words) : words;
-      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text;
-      const noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
+      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text, noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
       if (wake || voice === 'system' ? last !== said : last !== noted) this.say(where, voice, again ? noted : words, where === task.bot ? task.id : null);
     });
   }
@@ -1569,8 +1545,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Record automatic learning after a run; the person's learned list supplies its Forget action. */
   private async recordLearned(botId: string, l: Live) {
     if (this.cfg.engine === 'stub') return;
-    const learned = await this.runtime.learned().catch(() => [] as { id: string; skill: string; at: number; state: string }[]);
-    const applied = learned.filter((p) => p.state === 'applied');
+    const learned = await this.runtime.learned().catch(() => [] as { id: string; skill: string; at: number; state: string }[]), applied = learned.filter((p) => p.state === 'applied');
     for (const p of applied) {
       if (this.seenLearned.has(p.id)) continue;
       this.seenLearned.add(p.id);
@@ -1580,8 +1555,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A turn finished with a reply. */
   finish(botId: string, reply: string) {
-    const task = this.activeTask(botId);
-    const text = cleanReply(reply.trim());
+    const task = this.activeTask(botId), text = cleanReply(reply.trim());
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id);
     const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
@@ -1591,8 +1565,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
       // An action ends done only with crew_outcome; no confirmation means unsure.
-      const said = task.outcome ? JSON.parse(task.outcome) : null;
-      const b = this.bot(botId)!;
+      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!;
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       const unchecked = this.unchecked(task);
       if (unchecked || (said ? !said.worked : task.acted)) {
@@ -1671,15 +1644,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** The crew's half of a tool call, after the gate said yes. */
   private async toolCall(run: RunRef, tool: string, rawInput: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
-    const l = this.live.get(run.bot);
-    const space = disk.botDir(this.cfg, run.bot);
-    const [name, input] = this.unwrap(tool, rawInput);
+    const l = this.live.get(run.bot), space = disk.botDir(this.cfg, run.bot), [name, input] = this.unwrap(tool, rawInput);
         if (l?.shell && name === 'bash') return String(await l.shell.run(input, signal));
         if (l?.browserTool && name === 'browser') return String(await l.browserTool.run(input, signal));
         if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return fileTool(space, name, input);
         if (name === 'crew_web_fetch' || name === 'crew_web_search') {
-          const net = this.netOf(run.bot);
-          const selected = webTools(net?.may).find((entry) => entry.name === name.slice(5));
+          const net = this.netOf(run.bot), selected = webTools(net?.may).find((entry) => entry.name === name.slice(5));
           if (!selected) throw new Error('Unknown web tool');
           return String(await selected.run(input, signal));
         }
@@ -1838,16 +1808,14 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
     const pending = value === null ? l?.fills ?? [] : [];
     if (pending.length) {
-      const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`));
-      const n = pending.length;
+      const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`)), n = pending.length;
       return { ...e, fill: true,
         words: `${name} wants to fill in ${n} ${n === 1 ? 'line' : 'lines'} on the claim form at ${site}${signed ? ', a site you signed it in to' : ''}.`,
         preview: { head: `What ${name} will fill in on ${site}`, body: pending.map((f) => `${f.label}: ${f.value}`).join('\n') } };
     }
     const p = pressOf(l?.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''));
     if (!p) return e;
-    const shown = orderOf(l?.snapshot ?? '').shown;
-    const back = value === null ? claimOf(l?.snapshot ?? '') : null;
+    const shown = orderOf(l?.snapshot ?? '').shown, back = value === null ? claimOf(l?.snapshot ?? '') : null;
     return { ...e, ...(value !== null ? { fill: true } : {}),
       words: value !== null ? `${name} wants to fill “${p.label}” on ${site}, a site you signed it in to.`
         : `${name} wants to press “${p.label}” on ${site}, a site you signed it in to${shown ? `. The page shows ${shown}.` : '.'}`,
@@ -1975,8 +1943,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       name, description, parameters: name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
     });
-    const task = () => this.activeTask(botId)?.id;
-    const apps = Object.keys(this.connections.apps).join(', ');
+    const task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).join(', ');
     const own = [
       tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
         'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
@@ -2022,8 +1989,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
         (p) => {
           if (disk.botConfig(this.cfg, botId).memory === false) throw new Error('memory is off for this bot; the person turned it off');
-          const everyone = p.everyone === true;
-          const change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
+          const everyone = p.everyone === true, change = disk.remember(this.cfg, { bot: everyone ? null : botId }, String(p.text ?? ''), String(p.replaces ?? ''));
           this.db.event('memory.learned', botId, { task: task(), text: change.added.slice(2, 202), ...(everyone ? { everyone } : {}), ...change });
         }),
       tool('crew_draft', 'Show ONE finished message for approval; nothing is sent. `path`: a file containing ONLY the message body, with its line breaks, no subject, headings, variants or planning notes. ' +
@@ -2049,8 +2015,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         '`name`: two to four words; `description`: when to use it; `says`: what it does, in the person\'s plain words; `steps`: the steps, short and in plain words, as the person sees them. ' +
         'The person sees a card; it becomes one of your skills only if they say yes.',
         (p) => {
-          const d = disk.draftSkill(this.cfg, botId, p);
-          const b = this.bot(botId)!;
+          const d = disk.draftSkill(this.cfg, botId, p), b = this.bot(botId)!;
           return this.propose(botId, `${b.display} would like to remember how to do this: ${d.says}`,
             { skill: { name: d.slug, description: String(p.description), says: d.says, steps: d.steps }, preview: { head: `How ${b.display} would do it`, body: d.steps } });
         }),
@@ -2108,8 +2073,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         (p) => {
           const b = this.bot(String(p.bot ?? '').toLowerCase());
           if (!b) throw fail(`no bot called ${p.bot}; see crew_roster`, 404);
-          const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '');
-          const text = `# ${b.display}\n\n${body}`;
+          const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, ''), text = `# ${b.display}\n\n${body}`;
           if (!body || text.length > disk.SOUL_CAP) throw fail(`say it in a few lines, under ${disk.SOUL_CAP} characters`);
           return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
@@ -2149,8 +2113,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     });
   }
   private pass(from: string, to: string, text: string, files: unknown = []) {
-    const task = this.activeTask(from);
-    const b = this.bot(to);
+    const task = this.activeTask(from), b = this.bot(to);
     if (!task) throw fail('pass work on while you are working on a task');
     if (!b || to === CHIEF || to === from) throw fail(`no helper called ${to} to hand this to`, 404);
     if (!text.trim()) throw fail('say what they should do');
@@ -2190,8 +2153,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Writes the person's version of a draft over the helper's, never through a link out of the helper's folder: the
    *  helper can still be changing that folder, so the file opened is checked, not just the path beforehand. */
   private keepDraft(bot: string, path: string, text: string) {
-    const root = realpathSync(disk.botDir(this.cfg, bot)) + '/', full = disk.insideBot(this.cfg, bot, path);
-    const moved = () => fail('that draft has moved', 409);
+    const root = realpathSync(disk.botDir(this.cfg, bot)) + '/', full = disk.insideBot(this.cfg, bot, path), moved = () => fail('that draft has moved', 409);
     let fd: number;
     try { fd = openSync(join(realpathSync(dirname(full)), basename(full)), constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW, 0o644); } catch { throw moved(); }
     try {
@@ -2345,16 +2307,13 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
    *  run at once; the model merges the returned answers into one crew_workbook. A resting account stops new waves
    *  early with plain words, exactly as a normal turn would rest it. */
   private async batch(botId: string, question: string, items: string[]) {
-    const task = this.activeTask(botId);
-    const l = this.live.get(botId);
+    const task = this.activeTask(botId), l = this.live.get(botId);
     if (!task || !l) throw new Error('no task running');
     if (this.batching.has(task.id)) throw new Error('a batch item researches its one item itself; it cannot start another batch');
-    const q = clean(question, 500);
-    const list = items.map((s) => String(s).trim().slice(0, 200)).filter(Boolean);
+    const q = clean(question, 500), list = items.map((s) => String(s).trim().slice(0, 200)).filter(Boolean);
     if (!q) throw new Error('say the one question every item should answer');
     if (!list.length) throw new Error('list the items to research, each a short name');
-    const trimmed = list.slice(0, MAX_ITEMS);
-    const answers: BatchAnswer[] = new Array(trimmed.length);
+    const trimmed = list.slice(0, MAX_ITEMS), answers: BatchAnswer[] = new Array(trimmed.length);
     let at = 0, tired = 0;
     this.batching.add(task.id);
     try {
@@ -2399,8 +2358,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (!existsSync(disk.insideBot(this.cfg, botId, rel)) || this.db.get("SELECT json_extract(data, '$.task') AS t FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ? ORDER BY seq DESC LIMIT 1", botId, rel)?.t === task) return rel; } }
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
   private async workbook(botId: string, name: string, sheets: unknown, charts?: unknown) {
-    const title = clean(name, 60) || 'Workbook';
-    const rel = this.fileName(botId, disk.slug(title), 'xlsx');
+    const title = clean(name, 60) || 'Workbook', rel = this.fileName(botId, disk.slug(title), 'xlsx');
     const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     const built = await buildWorkbook(full, { name: title, sheets, charts } as any);
     await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`);
@@ -2424,8 +2382,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
   private async document(botId: string, name: string, blocks: unknown) {
-    const title = clean(name, 60) || 'Document';
-    const rel = this.fileName(botId, disk.slug(title), 'docx');
+    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, disk.slug(title), 'docx');
     const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
     const headings = (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string')
@@ -2454,8 +2411,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
-    const size = statSync(full).size;
-    const start = Math.max(0, Math.min(after, size));
+    const size = statSync(full).size, start = Math.max(0, Math.min(after, size));
     const end = Math.min(size, start + 600_000); // one link frame's worth, like the photo cap
     return { size, more: end < size, data: readFileSync(full).subarray(start, end).toString('base64') };
   }

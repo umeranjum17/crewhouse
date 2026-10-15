@@ -24,9 +24,9 @@ import { join } from 'node:path';
 // saving one into the helper's own files/ folder, with its size bound, sanitised name and plain refusals. The paired
 // trim lane ch-src-trim-s4 compacts single-use declarations back out of src/, restoring BUDGET to 6954.
 // Raised 6999 -> 7098 for charts in crew_workbook (ch-cap-charts, Firstmate decision A3): exceljs cannot write a chart,
-// so crewd adds the DrawingML chart parts itself and reads them back for the preview. Paired with the behaviour-neutral
-// trim lane ch-src-trim-charts, which takes those 99 lines back out after this lands.
-const BUDGET = 7098;
+// so crewd adds the DrawingML chart parts itself and reads them back for the preview. The paired trim lane ch-src-trim-charts
+// compacted single-use declarations back out of src/, restoring BUDGET to 6999.
+const BUDGET = 6999;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
