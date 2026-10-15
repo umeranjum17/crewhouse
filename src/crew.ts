@@ -19,6 +19,7 @@ import { mailTool, newThreads } from './mail.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
+import { buildDeck, readDeck } from './slides.ts';
 import { route, chiefWork, type Helper } from './route.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
@@ -1977,6 +1978,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
         + 'They read it right in Crewhouse on the web and on their phone, so one finished document is enough — never a shorter companion copy of it.',
         (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
+      tool('crew_slides', 'Make a slide deck (.pptx) in your files/ and deliver it: {name, slides: [{title, bullets: [...]}]}. '
+        + 'crewd writes the file, never make it yourself. For showing or reading aloud — a pitch, a training, a review; '
+        + 'keeping or sending is a document. Short lines; the first slide says what the deck is.',
+        (p) => this.deck(botId, String(p.name ?? ''), p.slides)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
         (p) => {
           const from = disk.insideBot(this.cfg, botId, String(p.from ?? ''));
@@ -2365,6 +2370,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return { ok: true, path: rel, sheets: built.sheets };
   }
 
+  /** crew_slides: crewd writes the .pptx itself (src/slides.ts) into the bot's files/ and delivers it like any other file. */
+  private async deck(botId: string, name: string, slides: unknown) {
+    const title = clean(name, 60) || 'Slides';
+    const rel = this.fileName(botId, disk.slug(title), 'pptx');
+    const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+    const built = await buildDeck(full, { name: title, slides } as any);
+    const heads = built.slides.map((s) => clean(s, 45).replace(/[.!?:;]+$/, '')).filter(Boolean);
+    await this.deliver(botId, rel, `${built.slides.length === 1 ? 'One slide' : `${built.slides.length} slides`}${heads.length ? `: ${heads.slice(0, 3).join(', ')}` : ''}`);
+    return { ok: true, path: rel, slides: built.slides };
+  }
+
   /** A raw file only opens after delivery, the same check the previews use. */
   fileFor(botId: string, path: string) {
     return !!this.db.get("SELECT 1 AS ok FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task') " +
@@ -2393,16 +2409,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     return { ok: true, path: rel, sections };
   }
 
-  /** The app's read-only preview of a document the bot delivered: plain parts for a .docx, the file's
-   *  own words for a delivered .md or .txt (for the shared safe renderer) — never a path, only after delivery. */
+  /** The app's read-only preview of a document the bot delivered: plain parts for a .docx, those plus one entry per
+   *  slide for a .pptx deck, the file's own words for a delivered .md or .txt (for the shared safe renderer) —
+   *  never a path, only after delivery. */
   async documentView(botId: string, path: string) {
     const rel = String(path ?? '');
     if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that document was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
-    if (!/\.(docx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
+    if (!/\.(docx|pptx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
     // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
-    // a .docx leaves as plain parts. Either way crewd reads the file, only after delivery.
-    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : readDocument(full);
+    // a .docx leaves as plain parts and a .pptx as its slides. Either way crewd reads the file, only after delivery.
+    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : /\.pptx$/i.test(full) ? readDeck(full) : readDocument(full);
   }
 
   /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only after delivery. */

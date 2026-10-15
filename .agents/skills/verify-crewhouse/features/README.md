@@ -59,6 +59,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | phone-composer | [phone-composer.md](phone-composer.md) | The phone's message box keeps its placeholder and words on one line at the largest text: at `width / fontScale < 360` the field takes the whole row and the buttons drop under it, unchanged at normal text |
 | phone-helper-header | [phone-helper-header.md](phone-helper-header.md) | A helper's chat header at the largest text: the name and role keep the full width and Stop/Details wrap to their own row under them (`width / fontScale < 360`), unchanged at normal text |
 | phone-continue | [phone-continue.md](phone-continue.md) | Paired phone offers "Continue on your computer": the phone-only chat (queued and stopped turns marked) reaches Chief as one message, the phone copy is archived only after the computer answers, Not now keeps it, sign-out erases the archive |
+| slides-deck | [slides-deck.md](slides-deck.md) | A helper's `crew_slides` becomes a real `.pptx` crewd writes itself (LibreOffice opens it, 5 pages), delivered like any finished file and previewed one frame per slide at 1440/390 day/night and in the installed app |
 
 ## Proof and skip reporting
 

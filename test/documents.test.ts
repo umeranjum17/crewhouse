@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { setup, settled, task } from './lab.ts';
 import { buildDocument, readDocument } from '../src/documents.ts';
+import { buildDeck, readDeck } from '../src/slides.ts';
 import * as disk from '../src/bots.ts';
 import * as A from '../web/src/adapter.ts';
 
@@ -103,6 +104,75 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.deepEqual(A.made(crew.snapshot(), 'quill').map((f) => A.fileSource(f.url)?.path), ['files/table.csv', 'files/weekly-dinners.md', rel]);
 });
 
+
+/** A deck the reference bar asks for: a stand-up someone can actually run. */
+const deckSpec = {
+  name: 'Weekend away',
+  slides: [
+    { title: 'Weekend away', bullets: ['Two nights by the sea', 'Train leaves at 09:12 on Saturday'] },
+    { title: 'What to pack', bullets: ['Warm coat', 'Trainers for the coastal path', 'The paper tickets'] },
+    { title: 'Costs', bullets: ['Train £42', 'B&B £120'] },
+  ],
+};
+
+test('the deck crewd writes is a real .pptx: the parts PowerPoint needs, its slides read back as slides and as parts', async () => {
+  const file = join(temp('deck'), 'weekend-away.pptx');
+  const built = await buildDeck(file, deckSpec);
+  assert.deepEqual(built.slides, ['Weekend away', 'What to pack', 'Costs']);
+  assert.equal(readFileSync(file).subarray(0, 2).toString(), 'PK', 'a real pptx, not a deck-shaped text file');
+
+  // Every part a presentation needs is there, and the presentation reaches every slide through the layout.
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(readFileSync(file));
+  for (const part of ['[Content_Types].xml', 'ppt/presentation.xml', 'ppt/presProps.xml', 'ppt/viewProps.xml', 'ppt/tableStyles.xml',
+    'ppt/theme/theme1.xml', 'ppt/slideMasters/slideMaster1.xml', 'ppt/slideLayouts/slideLayout1.xml', 'ppt/slides/slide3.xml']) {
+    assert.ok(zip.file(part), `${part} is missing`);
+  }
+  assert.equal((await zip.file('ppt/presentation.xml')!.async('string')).match(/<p:sldId /g)?.length, 3, 'one slide id per slide');
+  const rels = await zip.file('ppt/_rels/presentation.xml.rels')!.async('string');
+  assert.match(rels, /Target="slides\/slide1\.xml"/, 'the presentation reaches the first slide');
+  assert.match(rels, /Target="slideMasters\/slideMaster1\.xml"/);
+  const slide = await zip.file('ppt/slides/slide2.xml')!.async('string');
+  assert.match(slide, /<a:t>What to pack<\/a:t>/, 'the slide title is the title');
+  assert.match(slide, /<a:t>Warm coat<\/a:t>/, 'and its lines are its lines');
+  await assert.rejects(() => buildDeck(join(temp('empty-deck'), 'empty.pptx'), { name: 'Empty', slides: [] }), /at least one slide/, 'an empty deck is a plain refusal, no file');
+
+  // The preview JSON: one entry per slide, words only, plus the same words flattened as document parts.
+  const json = await readDeck(file) as any;
+  assert.deepEqual(json.slides.map((s: any) => s.title), ['Weekend away', 'What to pack', 'Costs']);
+  assert.deepEqual(json.slides[1].lines, ['Warm coat', 'Trainers for the coastal path', 'The paper tickets']);
+  assert.deepEqual(json.parts[0], { kind: 'heading', text: 'Weekend away' });
+  assert.deepEqual(json.parts.filter((p: any) => p.kind === 'li').map((p: any) => p.text), deckSpec.slides.flatMap((s) => s.bullets));
+  for (const s of json.slides) for (const w of [s.title, ...s.lines]) assert.doesNotMatch(w, /<p:|<\/a:|&lt;/, 'no raw markup in the preview');
+  assert.doesNotMatch(JSON.stringify(json), /xref|\/media\//, 'no machinery either');
+  assert.deepEqual(JSON.parse(JSON.stringify(json)), json, 'plain JSON: no library objects');
+});
+
+test('a helper makes a deck in its own chat: the .pptx lands in files/, is delivered, and only delivered files open', async () => {
+  const { cfg, db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const id = (await crew.post('quill', `make the weekend a slide deck ${call('crew_slides', deckSpec)}`))!.task;
+  await settled(db, id);
+  assert.equal(task(db, id).state, 'done');
+
+  const rel = 'files/weekend-away.pptx';
+  assert.ok(existsSync(join(disk.botDir(cfg, 'quill'), rel)), 'the deck is in the helper folder');
+  const delivered = db.all("SELECT data FROM events WHERE kind = 'file.delivered'").map((e: any) => JSON.parse(e.data));
+  assert.deepEqual(delivered.map((d: any) => d.path), [rel]);
+  assert.equal(delivered[0].note, '3 slides: Weekend away, What to pack, Costs', 'the card line says what is in it');
+
+  const view = await crew.documentView('quill', rel) as any;
+  assert.deepEqual(view.slides.map((s: any) => s.title), ['Weekend away', 'What to pack', 'Costs'], 'the same endpoint reads a deck, after delivery');
+  await assert.rejects(() => crew.documentView('quill', 'work/draft.pptx'), /not delivered to you/, 'a path nobody delivered is no window into the folder');
+
+  // The app's own reading of it: a written page the app opens in its panel, and a deck the panel draws as slides.
+  const f = A.fileView('quill', rel);
+  assert.ok(A.deckFile(f), 'a .pptx is a deck, not a document');
+  assert.equal(A.fileTarget(f)?.href, `#/f/quill/${encodeURIComponent(rel)}`, 'a deck opens the read-only panel, never the raw file');
+  assert.deepEqual(A.deck(view, f.name).slides.map((s) => s.title), ['Weekend away', 'What to pack', 'Costs']);
+  assert.equal(A.slideWords(3), '3 slides');
+});
 
 test('repeated requests for the same title get separate delivered files that both open', async () => {
   const { db, crew } = setup();

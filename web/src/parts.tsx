@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -335,17 +335,18 @@ export function Media({ f, big }: { f: FileView; big?: boolean }) {
  *  the panel open the same file, so they share one read instead of asking the home computer twice. */
 const previews = new Map<string, Promise<Json>>();
 function usePreview(f: FileView) {
-  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; text: string | null }>({ book: null, doc: null, text: null });
+  const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; deck: DeckView | null; text: string | null }>({ book: null, doc: null, deck: null, text: null });
   useEffect(() => {
     const src = fileSource(f.url);
     if (!src) return;
     let on = true;
     let got = previews.get(f.url);
-    if (!got) previews.set(f.url, got = f.kind === 'page' ? api.document(src.bot, src.path) : api.workbook(src.bot, src.path));
-    got.then((j) => on && setRead(f.kind === 'page'
-      ? (typeof j?.text === 'string' ? { book: null, doc: null, text: mdPlain(j.text) } : { book: null, doc: docView(j, f.name), text: null })
-      : { book: workbook(j, f.name), doc: null, text: null }))
-      .catch(() => on && setRead({ book: null, doc: null, text: null }));
+    if (!got) previews.set(f.url, got = f.kind === 'sheet' ? api.workbook(src.bot, src.path) : api.document(src.bot, src.path));
+    got.then((j) => on && setRead(f.kind === 'sheet' ? { book: workbook(j, f.name), doc: null, deck: null, text: null }
+      : deckFile(f) ? { book: null, doc: null, deck: deckView(j, f.name), text: null }
+      : typeof j?.text === 'string' ? { book: null, doc: null, deck: null, text: mdPlain(j.text) }
+      : { book: null, doc: docView(j, f.name), deck: null, text: null }))
+      .catch(() => on && setRead({ book: null, doc: null, deck: null, text: null }));
     return () => { on = false; };
   }, [f.url, f.name]);
   return read;
@@ -353,14 +354,14 @@ function usePreview(f: FileView) {
 
 const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
 /** The line under a file's name: what kind of thing it is, and how much is in it. */
-function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null) {
-  const kind = f.kind === 'page' ? 'Document' : 'Spreadsheet';
+function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null, deck: DeckView | null) {
+  const kind = deck ? 'Deck' : f.kind === 'page' ? 'Document' : 'Spreadsheet';
   if (book) {
     const rows = book.sheets.reduce((n, s) => n + (s.total || s.rows.length), 0);
     return rows ? `${kind} · ${rows === 1 ? '1 row' : `${rows} rows`}` : kind;
   }
-  const count = doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
-  return count ? `${kind} · ${pageWords(count)}` : kind;
+  const count = deck ? deck.slides.length : doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
+  return count ? `${kind} · ${deck ? slideWords(count) : pageWords(count)}` : kind;
 }
 
 /** A page's peek: its first heading that is not the title said twice, over a grey line for each of the next few parts,
@@ -376,7 +377,7 @@ function pagePeek(name: string, doc: DocView | null, text: string | null) {
 
 /** The card's peek inside: a sheet's top-left corner as a small grid, tinted the way the panel is, or a page's heading
  *  over its lines. Nothing to peek at yet (still opening, or empty) shows nothing. */
-export function Thumb({ name, book, doc, text }: { name: string; book: Workbook | null; doc: DocView | null; text: string | null }) {
+export function Thumb({ name, book, doc, deck, text }: { name: string; book: Workbook | null; doc: DocView | null; deck: DeckView | null; text: string | null }) {
   const s = book?.sheets[0];
   if (s && [s.head, ...s.rows].some((r) => r.some(Boolean))) {
     const rows = [s.head, ...s.rows].slice(0, 4);
@@ -384,7 +385,9 @@ export function Thumb({ name, book, doc, text }: { name: string; book: Workbook 
     return <span className="wb-thumb" aria-hidden style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>{rows.flatMap((r, j) => cols.map((c) =>
       <i key={`${j}-${c}`} className={s.roles[j]?.[c] || (j ? undefined : 'head')}>{r[c] ?? ''}</i>))}</span>;
   }
-  const page = doc || text ? pagePeek(name, doc, text) : null;
+  const first = deck?.slides[0];
+  const page = first ? { head: first.title, bars: first.lines.slice(0, 4).map((l) => Math.min(100, 30 + l.length / 2)) }
+    : doc || text ? pagePeek(name, doc, text) : null;
   if (!page || (!page.head && !page.bars.length)) return null;
   return <span className="wb-thumb leaf" aria-hidden>
     {page.head && <b>{page.head}</b>}
@@ -395,12 +398,12 @@ export function Thumb({ name, book, doc, text }: { name: string; book: Workbook 
 /** A finished file the helper made — a workbook or a document — in the chat: a peek inside, then what kind of file it
  *  is, its name, a line about it, and Open. */
 export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
-  const { book, doc, text } = usePreview(f);
+  const { book, doc, deck, text } = usePreview(f);
   const src = fileSource(f.url);
-  const about = aboutFile(f, book, doc);
+  const about = aboutFile(f, book, doc, deck);
   return (
     <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
-      <Thumb name={f.name} book={book} doc={doc} text={text} />
+      <Thumb name={f.name} book={book} doc={doc} deck={deck} text={text} />
       <span className={`wb-ic wb-${f.kind}`} aria-hidden>{src?.path.split('.').pop()?.toUpperCase().slice(0, 4)}</span>
       <span className="grow wb-what">
         <b>{f.name}</b>
@@ -488,20 +491,30 @@ function DocBody({ doc }: { doc: DocView }) {
   </div>;
 }
 
+/** The body of a deck preview: one frame per slide, its title and its lines, read-only. */
+function SlideBody({ deck }: { deck: DeckView }) {
+  return <div className="wb-rows slide-rows">
+    {deck.slides.map((s, i) => <section key={i} className="slide-frame">
+      {s.title && <h3><DocText text={s.title} /></h3>}
+      {s.lines.length > 0 && <ul>{s.lines.map((l, j) => <li key={j}><DocText text={l} /></li>)}</ul>}
+    </section>)}
+  </div>;
+}
+
 /**
  * A finished file read-only: a workbook is sheet tabs over a table; a document is its headings, paragraphs, lists and
- * tables. On a desk it is a panel beside the chat it came from; on a phone it is the whole screen. Reading edits
- * nothing, and Download hands over the file itself.
+ * tables; a deck is one frame per slide. On a desk it is a panel beside the chat it came from; on a phone it is the
+ * whole screen. Reading edits nothing, and Download hands over the file itself.
  */
 export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
   const f = fileView(bot, path);
-  const { book, doc, text } = usePreview(f);
+  const { book, doc, deck, text } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
-  const about = aboutFile(f, book, doc);
+  const about = aboutFile(f, book, doc, deck);
   return (
     <div className="scrim wb-scrim" onClick={onClose}>
       <div ref={box} className="wb-panel" role="dialog" aria-modal aria-label={f.name} onClick={(e) => e.stopPropagation()}>
@@ -511,7 +524,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
           <a className="btn go" href={f.url} target="_blank" rel="noreferrer">Download</a>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
-        {!book && !doc && text === null && <div className="mute">Opening “{f.name}”…</div>}
+        {!book && !doc && !deck && text === null && <div className="mute">Opening “{f.name}”…</div>}
         {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
         {doc && !doc.parts.length && <div className="mute">There is nothing in it to show yet.</div>}
         {s && <SheetTable s={s} />}
@@ -519,6 +532,7 @@ export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string
           {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${x === s ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
         </nav>}
         {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
+        {deck && <SlideBody deck={deck} />}
         {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
       </div>
     </div>

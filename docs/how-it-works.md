@@ -24,7 +24,7 @@ When a helper writes in your name (a reply to the clinic, a refund chase, a canc
 
 ## Real files, ready to use
 
-Ask for a spreadsheet or a document and you get a real `.xlsx` or `.docx`. The helper describes what goes in it, and Crewhouse builds the file. You can open it right in the chat to read it, or download it.
+Ask for a spreadsheet, a document or a slide deck and you get a real `.xlsx`, `.docx` or `.pptx`. The helper describes what goes in it, and Crewhouse builds the file. You can open it right in the chat to read it, or download it.
 
 ## A crew you can grow
 

@@ -838,6 +838,13 @@ details.card[open] > summary { margin-bottom: 10px; }
 .doc-rows ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
 .doc-rows a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .doc-rows .wb-grid { margin: 4px 0; max-width: none; }
+/* A deck: one frame per slide, title over its lines, in the same panel a document opens in. */
+.wb-rows.slide-rows { background: transparent; padding: 4px 2px 24px; gap: 14px; }
+.slide-frame { background: var(--solid); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px; display: grid; gap: 10px; max-width: 72ch; }
+.slide-frame h3 { margin: 0; font: 600 18px/1.35 var(--ui); letter-spacing: -.01em; color: var(--ink); }
+.slide-frame ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.slide-frame li { font-size: 16px; line-height: 1.5; color: var(--ink); }
+.slide-frame a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 @media (min-width: 900px) {
   /* a desk opens the workbook beside the chat it came from; a phone gets the whole screen */
   :root { --book: min(560px, 48vw); }
