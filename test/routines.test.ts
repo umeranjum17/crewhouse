@@ -83,6 +83,8 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   assert.throws(() => crew.updateRoutine(r.id, { schedule: 'blah' }), /can't read/);
   // A date each month rather than a weekday: the 31st fires in a 31-day month, a 30-day month skips it instead of pulling
   // it back to the 30th, and a 30th fires there. Each tick computes the next real date, so nothing drifts or catches up twice.
+  // These ticks are the test's own, on dates already past: crewd's 1.5 s clock would catch them up to today's month mid-wait.
+  clearInterval((crew as any).timer);
   const bill = crew.addRoutine({ bot: 'reel', schedule: 'every month on the 31st at 9am', task: 'Check the statements' }, 'person');
   assert.equal(crew.routines().find((x) => x.id === bill.id)!.words, 'On the 31st of every month at 9:00 am');
   const due = () => new Date(db.get('SELECT next_at FROM routines WHERE id = ?', bill.id)!.next_at);
