@@ -64,22 +64,24 @@ export class MailSend {
   }
   private async sendAs(token: string) {
     const list = await this.g('/settings/sendAs', token).catch(() => ({ sendAs: [] }));
+    const mine = new Set((list.sendAs ?? []).flatMap((s: any) => { try { return [address(s.sendAsEmail)]; } catch { return []; } }));
     const pick = (list.sendAs ?? []).find((s: any) => s.isDefault) ?? (list.sendAs ?? [])[0] ?? {};
     const from = (() => { try { return address(pick.sendAsEmail); } catch { return null; } })();
     const sig = String(pick.signature ?? '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 1000);
     if (!from) throw fail('Gmail has not confirmed your sending address. Nothing was sent; the draft was not created.');
-    return { from, sig };
+    return { from, sig, mine };
   }
   async draftReply(threadId: string, body: string, bot: string) {
     if (!/^[a-f0-9]{8,32}$/i.test(threadId)) throw fail('Give the email id from mail or mail search.', 400);
     if (!body.trim() || body.length > 12000) throw fail('Write the reply in at most 12,000 characters.', 400);
     const token = await this.filing(), t = await this.g(`/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-Id`, token);
-    const msgs: any[] = t.messages ?? [], first = msgs[0], last = msgs.at(-1);
+    const msgs: any[] = t.messages ?? [], first = msgs[0];
     const head = (m: any, n: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? '');
     if (!msgs.length) throw fail('This conversation has no messages. Nothing was drafted.');
-    const { from: me, sig } = await this.sendAs(token);
-    const other = [...msgs].reverse().find((m) => { const h = head(m, 'From'), a = (/<([^>]+)>/.exec(h)?.[1] ?? h.trim()).toLowerCase(); return !!a && a !== me; }) ?? last;
-    const from = head(other, 'From') || head(first, 'From'), to = address(/<([^>]+)>/.exec(from)?.[1] ?? from.trim()), subj = head(first, 'Subject') || '(no subject)';
+    const { from: me, sig, mine } = await this.sendAs(token);
+    const other = [...msgs].reverse().find((m) => { const h = head(m, 'From'), a = (/<([^>]+)>/.exec(h)?.[1] ?? h.trim()).toLowerCase(); return !!a && !mine.has(a); });
+    if (!other) throw fail('This conversation holds only your own messages. Nothing was drafted.');
+    const from = head(other, 'From'), to = address(/<([^>]+)>/.exec(from)?.[1] ?? from.trim()), subj = head(first, 'Subject') || '(no subject)';
     if (/[\r\n]/.test(subj)) throw fail('Gmail returned an unreadable subject. Nothing was drafted.'); const topic = /^re:/i.test(subj) ? subj : `Re: ${subj}`, subject = topic.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ');
     const mid = head(other, 'Message-Id').trim(); if (/[\r\n]/.test(mid)) throw fail('Gmail returned an unreadable reference. Nothing was drafted.');
     const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '';
