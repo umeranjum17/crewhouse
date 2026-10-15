@@ -10,8 +10,9 @@ says: Make a spreadsheet you can use straight away
 2. Call `crew_workbook` with the whole workbook finished, in this shape: `{name, sheets:[{name, columns:[{header,width?,options?}], rows}]}`. Two to five sheets, each with plain column headings and one example row that looks like a real one, so the person sees how to fill it in.
 3. Put what they look at first on the front sheet: a small dashboard of counts and totals, as formulas over the other sheets (`=COUNTIF(...)`, `=SUM(...)`), not numbers you typed in yourself.
 4. Turn a column into a dropdown (`options`) wherever the same few words keep coming back: statuses, paid or not, yes or no. Write dates as `YYYY-MM-DD` so they sort and can be counted.
-5. Two sheets beat one crowded one; five beat six. Every sheet earns its place or it goes.
-6. Deliver it, then say in one line what is inside and what to fill in first. Never stop at describing the workbook, and never write the file yourself — crewd makes it.
+5. When money, usage or a trend reads better as a picture than as rows, add `charts: [{type: "bar"|"line"|"pie", title, sheet, categories: "A2:A13", series: [{name?, values: "B2:B13"}]}]` beside `sheets`: one column or row per range, on the named sheet. A bar compares, a line shows change over time, a pie shows parts of one whole. The chart reads the cells, so the person's edits move it.
+6. Two sheets beat one crowded one; five beat six. Every sheet earns its place or it goes.
+7. Deliver it, then say in one line what is inside and what to fill in first. Never stop at describing the workbook, and never write the file yourself — crewd makes it.
 
 ## When they answer "reception": hotel guest reception
 

@@ -146,11 +146,12 @@ test('the preview JSON: every sheet, its headings and its first rows, as words a
   assert.deepEqual(JSON.parse(JSON.stringify(json)), json, 'plain JSON: no dates, no library objects');
 });
 
-test('a helper makes one in its own chat: the file lands in files/, is delivered, and only delivered files open', async () => {
+test('a helper makes one in its own chat: the file lands in files/, is delivered, carries its chart, and only delivered files open', async () => {
   const { cfg, db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  const id = (await crew.post('quill', `create an excel for reception ${call('crew_workbook', spec)}`))!.task;
+  const chart = { type: 'bar', title: 'Today at the desk', sheet: 'Daily dashboard', categories: 'A2:A3', series: [{ values: 'B2:B3' }] };
+  const id = (await crew.post('quill', `create an excel for reception ${call('crew_workbook', { ...spec, charts: [chart] })}`))!.task;
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
@@ -163,8 +164,25 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.match(delivered[0].note, /^3 sheets: Daily dashboard, Booking and check-in, Rooms and housekeeping$/, 'the card line says what is in it');
   assert.ok((db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'system' AND text LIKE 'Delivered%'") as any).text.startsWith(`Delivered ${rel}: 3 sheets:`));
 
+  // A real chart in the file: its own part, on the sheet it reads, pointing at those cells so the person's edits move it.
+  const zip = await JSZip.loadAsync(readFileSync(full));
+  const part = await zip.file('xl/charts/chart1.xml')!.async('string');
+  assert.match(part, /<c:barChart>/);
+  assert.match(part, /<c:f>'Daily dashboard'!\$B\$2:\$B\$3<\/c:f>/, 'the series reads the sheet, not a copy of it');
+  assert.match(await zip.file('xl/worksheets/sheet1.xml')!.async('string'), /<drawing r:id="rId1"\/>/);
+  assert.match(await zip.file('[Content_Types].xml')!.async('string'), /drawingml\.chart\+xml/);
   const view = await crew.workbookView('quill', rel);
   assert.deepEqual((view as any).sheets.map((s: any) => s.name), ['Daily dashboard', 'Booking and check-in', 'Rooms and housekeeping']);
+  assert.deepEqual((view as any).sheets[0].charts, [{ type: 'bar', title: 'Today at the desk', labels: ['Arrivals', 'Rooms ready'],
+    series: [{ name: 'Number', values: [6, 3] }] }], 'the preview reads the chart back, named from the heading over its numbers');
+  assert.deepEqual((view as any).sheets[1].charts, [], 'only the sheet it is on');
+
+  // A chart asked of a sheet that is not there is the helper's to fix, said plainly; nothing is delivered.
+  const bad = (await crew.post('quill', `and a chart ${call('crew_workbook', { ...spec, name: 'Bad', charts: [{ ...chart, sheet: 'Nowhere' }] })}`))!.task;
+  await settled(db, bad);
+  const said = db.all("SELECT data FROM events WHERE kind = 'run.call'").map((e: any) => JSON.parse(e.data)).find((c) => c.task === bad);
+  assert.deepEqual([said?.ok, said?.head], [false, 'error: there is no sheet called “Nowhere” to put the chart on'], 'the helper reads why');
+  assert.ok(!existsSync(join(disk.botDir(cfg, 'quill'), 'files', 'bad.xlsx')), 'no half-made file');
   await assert.rejects(() => crew.workbookView('quill', 'work/notes.md'), /not delivered to you/, 'a path nobody delivered is no window into the folder');
 
   // A delivered file that is not a workbook is not read as one.

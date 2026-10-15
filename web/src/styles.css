@@ -813,6 +813,16 @@ details.card[open] > summary { margin-bottom: 10px; }
 .wb-sheet th { font: 500 11px/16px var(--ui); color: var(--mute); background: var(--soft); text-align: center; padding: 3px 8px; border: 1px solid var(--line); }
 .wb-sheet thead th { position: sticky; top: -10px; z-index: 1; }
 .wb-sheet .wb-n { position: sticky; left: -10px; min-width: 34px; }
+/* A chart in the sheet sits over its table at the panel's width, and stays put while a wide table scrolls sideways. */
+.wb-rows:has(> .wb-chart) { grid-template-columns: minmax(0, 1fr); }
+.wb-chart { margin: 0; background: var(--solid); border-radius: 10px; padding: 12px; display: grid; gap: 8px; position: sticky; left: 0; }
+.wb-chart figcaption { font: 600 14px/20px var(--ui); color: var(--ink); }
+.wb-chart svg { width: 100%; max-width: 560px; max-height: 280px; justify-self: center; }
+.wb-chart svg.wb-pie { max-height: 200px; }
+.wb-chart .wb-axis { font: 400 15px var(--ui); fill: var(--mute); stroke: none; }
+.wb-axis line { stroke: var(--line); }
+.wb-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 13px/18px var(--ui); color: var(--ink2); }
+.wb-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
 .wb-sheet thead .wb-n { z-index: 2; }
 .wb-sheet th.head { font: 600 14px/20px var(--ui); color: var(--ink); background: var(--solid); text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--line2); }
 .wb-grid td.in, .wb-thumb .in { background: var(--cell-in); color: var(--ink); }
