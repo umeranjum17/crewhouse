@@ -19,7 +19,8 @@
     "write-article",
     "summarize-document",
     "make-spreadsheet",
-    "make-document"
+    "make-document",
+    "make-slides"
   ],
   "ideas": [
     {

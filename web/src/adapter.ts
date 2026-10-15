@@ -59,6 +59,9 @@ export type Workbook = { name: string; sheets: Sheet[] };
 /** One part of a delivered document, read back by crewd: a heading, a paragraph, a bullet, or a table. */
 export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
 export type DocView = { name: string; parts: DocPart[] };
+/** One slide of a delivered deck, read back by crewd: its title and its lines. */
+export type DeckSlide = { title: string; lines: string[] };
+export type DeckView = { name: string; slides: DeckSlide[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean; forget?: string };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
 export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean; event?: boolean;
@@ -236,8 +239,11 @@ export function fileView(bot: string, path: string, review?: Review, size?: numb
   const rel = path.replace(/^files\//, '');
   const url = /^(data:|\/)/.test(path) ? path : `/files/${bot}/${rel.split('/').map(encodeURIComponent).join('/')}`;
   if (path.startsWith('data:image/')) return { url, name: 'A picture', kind: 'image' };
-  return { url, name: name || pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc', ...(review ? { review } : {}), ...(size ? { size } : {}) };
+  return { url, name: name || pretty(rel), kind: /\.(mp4|webm|mov)$/i.test(rel) ? 'video' : /\.(png|jpe?g|webp|gif)$/i.test(rel) ? 'image' : /\.xlsx?$/i.test(rel) ? 'sheet' : /(\.docx?|\.pptx|\.md|\.txt)$/i.test(rel) ? 'page' : 'doc', ...(review ? { review } : {}), ...(size ? { size } : {}) };
 }
+
+/** Whether a delivered file the app reads as a written page is really a slide deck crewd built. */
+export const deckFile = (f: FileView) => /\.pptx$/i.test(f.url.split('?')[0]);
 
 /** Where a tap on a delivered file goes: the read-only panel for a page or sheet, the file itself (a PDF, a download)
  *  otherwise — a written page never opens as the raw file. The chip is the kind of thing it is, as a person meets it. */
@@ -280,6 +286,18 @@ export const column = (i: number) => String.fromCharCode(65 + i);
 export const sheetWords = (n: number) => (n === 1 ? 'One sheet' : n > 1 ? `${n} sheets` : 'A spreadsheet');
 /** How many sections a document has, said the way a person would: "3 sections", "One section", "A document". */
 export const pageWords = (n: number) => (n === 1 ? 'One section' : n > 1 ? `${n} sections` : 'A document');
+/** How many slides a deck has, said the way a person would: "9 slides", "One slide", "A deck". */
+export const slideWords = (n: number) => (n === 1 ? 'One slide' : n > 1 ? `${n} slides` : 'A deck');
+/** A deck crewd read for the app (docs/ui-contract.md): one entry per slide, its title and its lines, read-only. */
+export function deck(json: Json, name: string): DeckView {
+  return {
+    name,
+    slides: (Array.isArray(json?.slides) ? json.slides : []).slice(0, 40).map((s: Json) => ({
+      title: plain(String(s?.title ?? '')).slice(0, 140),
+      lines: (Array.isArray(s?.lines) ? s.lines : []).slice(0, 16).map((l: Json) => plain(String(l ?? '')).slice(0, 220)),
+    })),
+  };
+}
 
 /** Link only web URLs in document text — bare, or a written citation like [SEC](https://…) whose label becomes the
  *  link text — leaving punctuation, other schemes and unsafe-looking strings as literal text. */
@@ -1453,7 +1471,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`.
-      const card = /\.(xlsx|docx)$/i.test(f[1]);
+      const card = /\.(xlsx|docx|pptx)$/i.test(f[1]);
       return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`))], choices: [], at: at0 };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
@@ -1533,7 +1551,7 @@ export function savedNotes(events: Json[], lines: Line[], record?: string, msgs:
 
 /** A file build underway: the chat's task is live on a workbook or document job, and its file hasn't
  *  landed yet. The chat shows a skeleton card until the file's own card arrives. */
-const FILE_JOB = /\b(excel|spreadsheet|xlsx?|workbook|docx?|document)\b/i;
+const FILE_JOB = /\b(excel|spreadsheet|xlsx?|workbook|slides?|deck|pptx|docx?|document)\b/i;
 export function building(lines: Line[], live: Json): boolean {
   if (!live || live.state !== 'working') return false;
   if ((live.files ?? []).some((f: Json) => !f.photo && !f.input)) return false;
