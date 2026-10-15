@@ -11,7 +11,7 @@ add a card, never accept a store credit that costs the person anything. If the c
 
 1. Find what they paid, from the shop's own email: `mail search` for the shop's name or "order confirmation", then
    `mail read`. Note the item, the price paid, the order number, the day it was delivered, and the item's page link.
-   Gmail is read-only: never promise to tidy, label or clear the mail.
+   Never promise to tidy, clear, delete or send the mail — filing under a label (`mail label`) is its own card.
 2. If the confirmation is a file rather than an email, read it with the documents tool. If you cannot find the
    purchase at all, say what you looked for and ask for the receipt or the link — never guess a price.
 3. Check the shop's own terms before you promise anything: its price-adjustment or price-protection window (how many
