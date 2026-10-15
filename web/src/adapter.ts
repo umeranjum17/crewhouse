@@ -52,7 +52,9 @@ export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' 
 export const fileSize = (n = 0) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 /** One tab of a delivered workbook, read back by crewd: its headings, its first rows, how many it has,
  *  and the parallel row numbers and cell roles (`head`, `in`, `calc`, or empty) the panel reads. */
-export type Sheet = { name: string; head: string[]; rows: string[][]; total: number; nums: number[]; roles: string[][] };
+export type Sheet = { name: string; head: string[]; rows: string[][]; total: number; nums: number[]; roles: string[][]; charts: Chart[] };
+/** A chart in that sheet, read back by crewd from the file: its kind, title, labels and each series' numbers. */
+export type Chart = { type: 'bar' | 'line' | 'pie'; title: string; labels: string[]; series: { name: string; values: number[] }[] };
 export type Workbook = { name: string; sheets: Sheet[] };
 /** One part of a delivered document, read back by crewd: a heading, a paragraph, a bullet, or a table. */
 export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
@@ -264,7 +266,11 @@ export function workbook(json: Json, name: string): Workbook {
       const nums = (Array.isArray(s?.nums) ? s.nums : []).slice(0, 501).map((n: Json) => Number(n) || 0);
       const roles = (Array.isArray(s?.roles) ? s.roles : []).slice(0, 501)
         .map((r: Json) => (Array.isArray(r) ? r : []).slice(0, 24).map((c: Json) => ['head', 'in', 'calc'].includes(String(c)) ? String(c) : ''));
-      return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length, nums, roles };
+      const list = (x: Json) => (Array.isArray(x) ? x : []).slice(0, 500);
+      const charts = list(s?.charts).slice(0, 8).filter((c: Json) => ['bar', 'line', 'pie'].includes(c?.type)).map((c: Json) => ({
+        type: c.type, title: plain(String(c.title ?? '')).slice(0, 120), labels: list(c.labels).map((l: Json) => plain(String(l ?? '')).slice(0, 60)),
+        series: list(c.series).slice(0, 6).map((x: Json) => ({ name: plain(String(x?.name ?? '')).slice(0, 60), values: list(x?.values).map((v: Json) => Number(v) || 0) })) }));
+      return { name: plain(String(s?.name ?? '').trim()) || 'Sheet', head: rows[0] ?? [], rows: rows.slice(1), total: Number(s?.total) || rows.length, nums, roles, charts };
     }),
   };
 }

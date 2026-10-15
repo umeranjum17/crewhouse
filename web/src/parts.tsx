@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -411,12 +411,47 @@ export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
   );
 }
 
+const HUES = ['var(--go)', 'var(--ok)', 'var(--amber)', 'var(--danger)', 'var(--ink2)', 'var(--line2)'];
+const num = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+/** A chart the helper put in the sheet, drawn from the numbers crewd read out of it: bars, a line, or a pie, with a
+ *  legend in words under it. The downloaded file holds the real chart. */
+export function SheetChart({ c }: { c: Chart }) {
+  const W = 480, H = 240, L = 48, R = 12, T = 12, B = 30, n = Math.max(1, c.labels.length);
+  const all = c.series.flatMap((s) => s.values), step = 10 ** Math.floor(Math.log10(Math.max(1, ...all.map(Math.abs))));
+  const top = Math.ceil(Math.max(0, ...all) / step) * step, low = Math.floor(Math.min(0, ...all) / step) * step, span = top - low || 1; // round ends: 0 to 500, not 455
+  const y = (v: number) => T + ((top - v) / span) * (H - T - B), band = (W - L - R) / n, x = (i: number) => L + (i + 0.5) * band;
+  const every = Math.ceil(n / Math.floor((W - L - R) / 56)), short = (t: string) => (t.length > 8 ? `${t.slice(0, 7)}…` : t);
+  const pie = c.series[0]?.values.map((v) => Math.max(0, v)) ?? [], sum = pie.reduce((a, b) => a + b, 0) || 1;
+  let turn = 0;
+  const keys = c.type === 'pie' ? c.labels.map((l, i) => `${l} ${Math.round((pie[i] ?? 0) / sum * 100)}%`) : c.series.length > 1 ? c.series.map((s) => s.name) : [];
+  return <figure className="wb-chart">
+    {c.title && <figcaption>{c.title}</figcaption>}
+    <svg className={`wb-${c.type}`} viewBox={c.type === 'pie' ? '0 0 240 240' : `0 0 ${W} ${H}`} role="img" aria-label={`${c.type === 'pie' ? 'Pie' : c.type === 'bar' ? 'Bar' : 'Line'} chart${c.title ? `: ${c.title}` : ''}`}>
+      {c.type === 'pie' ? pie.map((v, i) => {
+        const a = (turn / sum) * 2 * Math.PI, b = ((turn += v) / sum) * 2 * Math.PI, p = (t: number) => `${120 + 110 * Math.sin(t)} ${120 - 110 * Math.cos(t)}`;
+        return v >= sum ? <circle key={i} cx="120" cy="120" r="110" fill={HUES[i % 6]} />
+          : <path key={i} d={`M120 120L${p(a)}A110 110 0 ${b - a > Math.PI ? 1 : 0} 1 ${p(b)}Z`} fill={HUES[i % 6]} />;
+      }) : <>
+        {[top, (top + low) / 2, low].map((v) => <g key={v} className="wb-axis"><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+          <text x={L - 6} y={y(v) + 4} textAnchor="end">{num(v)}</text></g>)}
+        {c.labels.map((l, i) => i % every ? null : <text key={i} className="wb-axis" x={x(i)} y={H - 10} textAnchor="middle">{short(l)}</text>)}
+        {c.series.map((s, k) => c.type === 'bar'
+          ? s.values.slice(0, n).map((v, i) => { const w = (band * 0.7) / c.series.length;
+            return <rect key={`${k}-${i}`} x={x(i) - band * 0.35 + k * w} width={w - 1} y={Math.min(y(v), y(0))} height={Math.abs(y(v) - y(0))} fill={HUES[k]} rx="2" />; })
+          : <polyline key={k} points={s.values.slice(0, n).map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" stroke={HUES[k]} strokeWidth="2.5" strokeLinejoin="round" />)}
+      </>}
+    </svg>
+    {keys.length > 0 && <ul className="wb-legend">{keys.map((k, i) => <li key={i}><i style={{ background: HUES[i % 6] }} />{k}</li>)}</ul>}
+  </figure>;
+}
+
 /** One sheet as a grid, read-only: letters over every column any row reaches, the file's own row numbers down the
  *  side, each cell tinted by its role, and what is not shown said under it. */
 export function SheetTable({ s }: { s: Sheet }) {
   const cols = [...Array(Math.max(...[s.head, ...s.rows].map((r) => r.length))).keys()];
   const more = s.total - s.rows.length - 1;
   return <div className="wb-rows">
+    {s.charts.map((c, i) => <SheetChart key={i} c={c} />)}
     <table className="wb-grid wb-sheet">
       <thead><tr><th className="wb-n" />{cols.map((c) => <th key={c}>{column(c)}</th>)}</tr></thead>
       <tbody>{[s.head, ...s.rows].map((r, i) => <tr key={i}><th className="wb-n" scope="row">{s.nums[i] ?? i + 1}</th>

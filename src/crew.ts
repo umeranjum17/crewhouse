@@ -1997,8 +1997,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       tool('crew_workbook', 'Make a real spreadsheet the person can use straight away (.xlsx), in your files/, and deliver it. `name` is the title; '
         + '`sheets` is [{ name, columns: [{ header, width?, options? }], rows: [[cell, …], …] }]. `options` on a column makes it a dropdown; a cell that '
         + 'starts with "=" is a formula. crewd writes the file, so never make the binary yourself. Make it finished: a real heading on every sheet and at '
-        + 'least one example row that shows the person how to fill it in.',
-        (p) => this.workbook(botId, String(p.name ?? ''), p.sheets)),
+        + 'least one example row that shows the person how to fill it in. When a chart explains the numbers better than the table, add `charts`: '
+        + '[{ type: "bar"|"line"|"pie", title, sheet, categories: "A2:A13", series: [{ name, values: "B2:B13" }], at? }], ranges on that sheet.',
+        (p) => this.workbook(botId, String(p.name ?? ''), p.sheets, p.charts)),
       tool('crew_batch', 'Research several items at once (up to 24) against the one `question`: `items` is the list, each a short name. ' +
         'Each item is researched in parallel and you get back one JSON array of {item, ok, text}. Put every answer — with a source column — into a single crew_workbook, delivered once. ' +
         'A batch item answers its own item only; it cannot start another batch.',
@@ -2397,11 +2398,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     for (let n = 1; ; n++) { const rel = join('files', `${slug}${n > 1 ? `-${n}` : ''}.${ext}`);
       if (!existsSync(disk.insideBot(this.cfg, botId, rel)) || this.db.get("SELECT json_extract(data, '$.task') AS t FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ? ORDER BY seq DESC LIMIT 1", botId, rel)?.t === task) return rel; } }
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
-  private async workbook(botId: string, name: string, sheets: unknown) {
+  private async workbook(botId: string, name: string, sheets: unknown, charts?: unknown) {
     const title = clean(name, 60) || 'Workbook';
     const rel = this.fileName(botId, disk.slug(title), 'xlsx');
     const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
-    const built = await buildWorkbook(full, { name: title, sheets } as any);
+    const built = await buildWorkbook(full, { name: title, sheets, charts } as any);
     await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`);
     return { ok: true, path: rel, sheets: built.sheets };
   }
