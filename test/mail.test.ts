@@ -31,8 +31,14 @@ const threads: Record<string, any> = {
       att('a1', 'statement.pdf', Buffer.byteLength(PDF)), att('a2', 'huge.zip', 12 * 1024 * 1024), att('a3', 'locked.pdf', 2048), att('a4', '../../.pi/settings.json', 8)] }),
   ] },
   '18c0b2f00d2e3b4a': { messages: [msg('m3', 'Shop <no-reply@shop.example>', 'Your order', 5, { mimeType: 'text/html', body: { data: b64(`<style>x{}</style><div>Order 42</div>${'word '.repeat(600)}`) } })] },
+  '18c0a1f00d2e3b4c': { messages: [msg('m9', 'School Office <office@school.example>', 'Hi\r\nBcc: evil@x.example', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b4d': { messages: [msg('m10', 'a@b.example\r\nCc: x@y.example', 'hello', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b4e': { messages: [] },
+  '18c0a1f00d2e3b4f': { messages: [msg('m11', 'Sam <sam@home.example>', 'caf\u00e9 update', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b50': { messages: [{ id: 'm12', internalDate: String(now - 60 * 60_000), payload: { headers: [{ name: 'From', value: 'Sam <sam@home.example>' }, { name: 'Subject', value: 'hello' }, { name: 'Message-Id', value: '<abc123@mail.example>' }], mimeType: 'text/plain', body: { data: b64('hi') } } }] },
 };
 const asked: string[] = [];
+const draftBodies: string[] = [];
 let identity = '';
 let sendOk = false;
 let sendRefusal = 404;
@@ -52,7 +58,7 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (path === '/settings/sendAs') return json({ sendAs: [{ sendAsEmail: 'umer@sender.example', isDefault: true, signature: '— Umer' }] });
   if (path === '/labels' && (init.method ?? 'GET') === 'GET') return json({ labels: [{ id: 'Label_1', name: 'School' }] });
   if (path === '/labels') return json({ id: 'Label_2', name: JSON.parse(String(init.body ?? '{}')).name ?? 'School' });
-  if (path === '/drafts') return json({ id: 'draft-1' });
+  if (path === '/drafts') { if (init.method === 'POST') draftBodies.push(String(init.body ?? '')); return json({ id: 'draft-1' }); }
   if (path.endsWith('/modify')) return json(threads[path.split('/threads/')[1].split('/')[0]] ?? {});
   const t = threads[path.split('/threads/')[1]];
   if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, sendRefusal);
@@ -142,6 +148,30 @@ test('Chief drafts a reply and files under a label: one card each, the guarded p
     assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
     assert.ok(asked.some((x) => x.startsWith('POST /drafts')), 'the draft landed');
     assert.ok(asked.some((x) => x.includes('/modify')), 'the label landed');
+  } finally { done(); }
+});
+
+test('draftReply hardens attacker-shaped thread headers: refuses splits, encodes the subject, omits absent refs', async () => {
+  const { db, done } = setup();
+  try {
+    const mail = new MailSend(db, { token: async () => 'tok' } as any);
+    asked.length = 0;
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4c', 'Thanks.', 'chief'), /unreadable subject/, 'a split subject never reaches the MIME');
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4d', 'Thanks.', 'chief'), /one work email address/, 'a split From is not an address');
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4e', 'Thanks.', 'chief'), /no messages/, 'an empty thread drafts nothing');
+    assert.equal(asked.filter((x) => x.startsWith('POST /drafts')).length, 0, 'no refusal drafted anything');
+    draftBodies.length = 0;
+    const out = await mail.draftReply('18c0a1f00d2e3b4f', 'Thanks, got it.', 'chief');
+    assert.match(out, /^drafted: \{id: draft-1/);
+    const head = Buffer.from(JSON.parse(draftBodies[0]).message.raw, 'base64url').toString('utf8').split('\r\n\r\n')[0];
+    assert.ok(head.includes('=?UTF-8?B?') && !head.includes('caf\u00e9'), 'the subject is encoded words, never raw bytes');
+    const words = [...head.replace(/\r\n /g, '').matchAll(/=\?UTF-8\?B\?([^?]+)\?=/g)].map((m) => Buffer.from(m[1], 'base64').toString('utf8')).join('');
+    assert.equal(words, 'Re: caf\u00e9 update', 'it decodes back to the reply subject');
+    assert.ok(!head.includes('In-Reply-To'), 'no Message-Id means no reference headers');
+    draftBodies.length = 0;
+    await mail.draftReply('18c0a1f00d2e3b50', 'Hello back.', 'chief');
+    const head2 = Buffer.from(JSON.parse(draftBodies[0]).message.raw, 'base64url').toString('utf8').split('\r\n\r\n')[0];
+    assert.ok(head2.includes('In-Reply-To: <abc123@mail.example>') && head2.includes('References: <abc123@mail.example>'), 'a present id threads the reply');
   } finally { done(); }
 });
 
