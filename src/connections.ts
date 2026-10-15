@@ -38,12 +38,10 @@ export function connectError(name: string, error: unknown) {
 
 /** README's sealed adapter: the durable store receives ciphertext only, with each name authenticated inside it. */
 function deviceStore(cfg: Config): Keystore {
-  const dir = join(cfg.stateDir, 'people', '1', 'app-signins'), seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true });
-  const file = (name: string) => {
+  const dir = join(cfg.stateDir, 'people', '1', 'app-signins'), seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true }), file = (name: string) => {
     if (!/^(google-client|byokit\.connect\.[A-Za-z0-9_-]{43})$/.test(name)) throw new Error('Invalid sign-in name.');
     return join(dir, name);
-  };
-  const ciphertextStore: Keystore = {
+  }, ciphertextStore: Keystore = {
     async get(name) { return existsSync(file(name)) ? readFileSync(file(name), 'utf8') : null; },
     async set(name, value) { writeFileAtomic(file(name), value); },
     async delete(name) { try { unlinkSync(file(name)); return true; } catch (e: any) { if (e.code === 'ENOENT') return false; throw e; } },
@@ -197,8 +195,7 @@ export class Connections {
   async today(): Promise<{ at: number | null; title: string }[] | null> {
     await this.ready;
     if (!this.connected('calendar')) return null;
-    const d = new Date(), from = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const list = await events(() => this.token('calendar'), from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)).catch(() => null);
+    const d = new Date(), from = new Date(d.getFullYear(), d.getMonth(), d.getDate()), list = await events(() => this.token('calendar'), from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)).catch(() => null);
     return list && list.slice(0, 12).map((e) => ({ at: e.allDay ? null : e.start.getTime(), title: e.title }));
   }
   async disconnect(id: string) {

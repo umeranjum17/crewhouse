@@ -23,8 +23,7 @@ const pad = (n: number) => String(n).padStart(2, '0'), ymd = (d: Date) => `${d.g
 export function parseWhen(s: string): { at: Date; allDay: boolean } | null {
   const m = /^(\d{4}-\d{2}-\d{2}|today|tomorrow)(?:[ T](\d{1,2}):(\d{2}))?$/i.exec(s.trim());
   if (!m) return null;
-  const now = new Date();
-  const [y, mo, d] = /^\d/.test(m[1]) ? m[1].split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate() + (/tomorrow/i.test(m[1]) ? 1 : 0)], at = new Date(y, mo - 1, d, m[2] ? Number(m[2]) : 0, m[3] ? Number(m[3]) : 0);
+  const now = new Date(), [y, mo, d] = /^\d/.test(m[1]) ? m[1].split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate() + (/tomorrow/i.test(m[1]) ? 1 : 0)], at = new Date(y, mo - 1, d, m[2] ? Number(m[2]) : 0, m[3] ? Number(m[3]) : 0);
   if (Number.isNaN(at.getTime()) || (m[2] && (Number(m[2]) > 23 || Number(m[3]) > 59))) return null;
   return { at, allDay: !m[2] };
 }
@@ -59,8 +58,7 @@ async function call(token: Token, method: string, path: string, body?: object) {
 
 /** Events between two times, soonest first, cancelled ones left out. */
 export async function events(token: Token, from: Date, to: Date, extra: Record<string, string> = {}) {
-  const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50', ...extra });
-  const { items = [] } = await call(token, 'GET', `?${q}`);
+  const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50', ...extra }), { items = [] } = await call(token, 'GET', `?${q}`);
   return (items as any[]).filter((e) => e.status !== 'cancelled').map(toEvent);
 }
 
@@ -77,9 +75,7 @@ export function options(args: string[]) {
 }
 
 export async function runCalendar(token: Token, args: string[]): Promise<string> {
-  const [cmd = 'today', ...more] = args;
-  const { o, rest } = options(more);
-  const bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`, today = parseWhen('today')!.at;
+  const [cmd = 'today', ...more] = args, { o, rest } = options(more), bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`, today = parseWhen('today')!.at;
   if (cmd === 'today') {
     const list = await events(token, today, addDays(today, 1)), next = list.find((e) => !e.allDay && e.start.getTime() > Date.now());
     return [table('today', ['id', 'when', 'title'], list.map((e) => ({ id: e.id, when: whenOf(e), title: e.title }))),
@@ -107,14 +103,12 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
   if (cmd === 'next') return table('next', ['id', 'when', 'title'],
     (await events(token, new Date(), addDays(new Date(), 14))).filter((e) => !e.allDay).slice(0, Math.max(1, Number(rest[0]) || 3)).map((e) => ({ id: e.id, when: whenOf(e), title: e.title })));
   if (cmd === 'add') {
-    const [title, when] = rest;
-    const start = parseWhen(when ?? '');
+    const [title, when] = rest, start = parseWhen(when ?? '');
     if (!plain(title) || !start) return bad('calendar add "<title>" <when>');
     const end = o.end ? parseWhen(o.end) : { at: start.allDay ? addDays(start.at, 1) : new Date(start.at.getTime() + 3_600_000), allDay: start.allDay };
     if (!end || end.allDay !== start.allDay || end.at <= start.at) return bad('--end must be after the start, in the same form');
     // Adding the same thing twice (a retry, a restart) finds the first one: a private key on the event.
-    const key = plain(o.key, 64) || createHash('sha256').update(`${plain(title)}|${start.at.toISOString()}`).digest('hex').slice(0, 16);
-    const [had] = await events(token, addDays(start.at, -400), addDays(start.at, 400), { privateExtendedProperty: `crewhouse=${key}` });
+    const key = plain(o.key, 64) || createHash('sha256').update(`${plain(title)}|${start.at.toISOString()}`).digest('hex').slice(0, 16), [had] = await events(token, addDays(start.at, -400), addDays(start.at, 400), { privateExtendedProperty: `crewhouse=${key}` });
     if (had) return `exists: {id: ${had.id}, when: ${whenOf(had)}}`;
     const made = toEvent(await call(token, 'POST', '', {
       summary: plain(title, 200), ...span(start.at, start.allDay, end.at), ...(o.where ? { location: plain(o.where, 200) } : {}),

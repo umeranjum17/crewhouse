@@ -106,8 +106,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
       : { kind: 'send', press: true, words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.` };
   }
   if (tool === 'calendar') {
-    const [cmd = 'today', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
-    const words = rest.filter((a, i) => !a.startsWith('--') && !rest[i - 1]?.startsWith('--')).map((w) => w.replace(/\s+/g, ' ').trim().slice(0, 80));
+    const [cmd = 'today', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String), words = rest.filter((a, i) => !a.startsWith('--') && !rest[i - 1]?.startsWith('--')).map((w) => w.replace(/\s+/g, ' ').trim().slice(0, 80));
     if (['today', 'week', 'free', 'next'].includes(cmd)) return { kind: 'safe' };
     const key = `app:Google Calendar:${cmd} an event`;
     if (cmd === 'add') return { kind: 'send', words: `${s.bot} wants to add “${words[0] ?? ''}” to your Google Calendar, ${words[1] ?? ''}.`, key, covers: coversOf(key) };
@@ -173,9 +172,7 @@ export function orderOf(snapshot: string): { items: string[]; more: number; tota
  *  today, both read by crewd from the page. null when the page doesn't write both — then the card says nothing about
  *  money at all (src/crew.ts `press` puts this line on the claim card). */
 export function claimOf(snapshot: string): { shown: string } | null {
-  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200);
-  const amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; };
-  const sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
+  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200), amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; }, sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
   const paid = sum(/\bpaid\b|you paid|bought for|price paid/i), today = sum(/\btoday\b|now |current price|price now|item total/i);
   if (!paid || !today || paid.sign !== today.sign || today.n >= paid.n || today.n <= 0) return null;
   return { shown: `${paid.sign}${(paid.n - today.n).toFixed(2)}` };
@@ -183,8 +180,7 @@ export function claimOf(snapshot: string): { shown: string } | null {
 
 /** What "For this task" or "Always" covers, from the gate's key, in plain words. */
 export function coversOf(key: string) {
-  const [kind, ...rest] = key.split(':');
-  const what = rest.join(':');
+  const [kind, ...rest] = key.split(':'), what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
   return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'your terminal agents' : 'this';
 }
@@ -201,8 +197,7 @@ export function pressOf(snapshot: string, target: string): { label: string; body
 }
 
 const PROGRAMS: Record<string, string> = { ffmpeg: 'Worked on a video', ffprobe: 'Checked a video', magick: 'Worked on an image', markitdown: 'Read a document',
-  'yt-dlp': 'Downloaded a video', rg: 'Searched its files', jq: 'Read some data', python3: 'Ran a small program', node: 'Ran a small program' };
-const host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a page'; } catch { return 'a page'; } };
+  'yt-dlp': 'Downloaded a video', rg: 'Searched its files', jq: 'Read some data', python3: 'Ran a small program', node: 'Ran a small program' }, host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a page'; } catch { return 'a page'; } };
 
 /** A line for the "What I did" trail. No commands, no paths: what a person would say they saw. Empty for the crew's own tools. */
 export function toolWords(tool: string, input: Record<string, any>): string {

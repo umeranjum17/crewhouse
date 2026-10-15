@@ -30,8 +30,7 @@ function send(res: ServerResponse, status: number, body: unknown) {
 }
 
 /** An installer's process group (its pid): gone once no member is left. */
-const alive = (pid: number) => { try { process.kill(-pid, 0); return true; } catch { return false; } };
-const killGroup = (pid: number) => { try { process.kill(-pid, 'SIGKILL'); } catch { /* the group already emptied */ } };
+const alive = (pid: number) => { try { process.kill(-pid, 0); return true; } catch { return false; } }, killGroup = (pid: number) => { try { process.kill(-pid, 'SIGKILL'); } catch { /* the group already emptied */ } };
 
 async function readJson(req: IncomingMessage): Promise<any> {
   let raw = '';
@@ -43,8 +42,7 @@ async function readJson(req: IncomingMessage): Promise<any> {
 const skillWords = (message: string) => /not one of the reviewed starter skills/.test(message) ? message
   : /starting up|still starting|not ready|ECONNREFUSED|connect/i.test(message) ? 'The crew is starting up; skills switch once it is ready.'
   : /not a trusted skill|trust/i.test(message) ? 'That skill has not been reviewed yet, so the crew leaves it alone.'
-  : 'That did not go through. Try again in a bit.';
-const FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
+  : 'That did not go through. Try again in a bit.', FRESH_BUNDLE = /-[\w-]{8}\.(?:js|css)$/;
 
 function sendFile(req: IncomingMessage, res: ServerResponse, path: string) {
   const { size, mtimeMs } = statSync(path), etag = `W/"${size.toString(16)}.${Math.floor(mtimeMs).toString(16)}"`, type = TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream', range = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
@@ -66,8 +64,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const authorityFile = join(cfg.stateDir, 'person.key');
   if (!existsSync(authorityFile)) writeFileSync(authorityFile, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
   const authority = readFileSync(authorityFile, 'utf8');
-  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority'); const filesToken = createHmac('sha256', authority).update('files').digest('hex');
-  const installing = new Map<string, Promise<boolean>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
+  if (!/^[a-f0-9]{64}$/.test(authority)) throw new Error('invalid person authority'); const filesToken = createHmac('sha256', authority).update('files').digest('hex'), installing = new Map<string, Promise<boolean>>(), teacher = new Teacher(), mail = new MailSend(db, crew.connections);
   /** "Done showing": the wheel goes back, and the bot gets the steps (and a few page pictures) to keep as a skill. */
   const shown = async (bot: string, keep: boolean) => {
     const s = teacher.stop(bot);
@@ -80,8 +77,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
    *  runs as its own process (src/tools.ts's own command): crewd keeps answering meanwhile. The result arrives as an event. */
   // An install that never finishes is stopped at this bound: its whole process group goes, and the job fails in one line.
-  const INSTALL_STALL_MS = Number(process.env.CREWHOUSE_INSTALL_STALL_MS) || 10 * 60_000;
-  const groups = new Set<number>(); // installer process groups still running, killed if crewd exits
+  const INSTALL_STALL_MS = Number(process.env.CREWHOUSE_INSTALL_STALL_MS) || 10 * 60_000, groups = new Set<number>(); // installer process groups still running, killed if crewd exits
   process.once('exit', () => groups.forEach(killGroup));
   const install = (id: string) => installing.get(id) ?? installing.set(id, new Promise<boolean>((resolve) => {
     db.event('tool.installing', null, { tool: id });
@@ -89,8 +85,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
       // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
       env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
-        CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
-    const pid = child.pid;
+        CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, detached: true, stdio: ['ignore', 'inherit', 'inherit'] }), pid = child.pid;
     if (pid) groups.add(pid);
     let stalled = false;
     const finish = (ok: boolean) => {
@@ -98,20 +93,17 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (pid) groups.delete(pid);
       db.event(ok ? 'tool.installed' : 'tool.failed', null, { tool: id });
       resolve(stalled);
-    };
-    const stall = setTimeout(async () => {
+    }, stall = setTimeout(async () => {
       stalled = true;
       if (pid) { killGroup(pid); for (let i = 0; i < 100 && alive(pid); i++) await new Promise((r) => setTimeout(r, 100)); }
       finish(false);
     }, INSTALL_STALL_MS);
     child.on('exit', (code) => { clearTimeout(stall); if (!stalled) finish(code === 0); });
     child.on('error', (e) => { console.error(`install ${id}:`, e); clearTimeout(stall); if (!stalled) finish(false); });
-  })).get(id)!;
-  const packaged = process.env.CREWHOUSE_PACKAGED === '1';
+  })).get(id)!, packaged = process.env.CREWHOUSE_PACKAGED === '1';
   // First-use tool installs: the downloaded app sets CREWHOUSE_PACKAGED, the terminal path's start sets CREWHOUSE_FIRST_USE_TOOLS.
   if (packaged || process.env.CREWHOUSE_FIRST_USE_TOOLS === '1') crew.fetchTools = async (grants) => {
-    const stalled = await Promise.all(toolStatus(cfg, grants).filter((t) => t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null)));
-    const t = stalled.find(Boolean);
+    const stalled = await Promise.all(toolStatus(cfg, grants).filter((t) => t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null))), t = stalled.find(Boolean);
     return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
   };
   let update: { version: string; url: string } | null = null;
@@ -137,8 +129,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   };
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', 'http://x');
-    const p = url.pathname;
+    const url = new URL(req.url ?? '/', 'http://x'), p = url.pathname;
     try {
       // DNS-rebinding guard: only answer requests addressed to loopback.
       if (!localHost(req.headers.host) || !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress ?? '')) return send(res, 403, { error: 'loopback only' });

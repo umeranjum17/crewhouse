@@ -29,8 +29,7 @@ const FILL = {
 
 /** YYYY-MM-DD becomes a real UTC-midnight date; null when the calendar says otherwise. */
 function dateOf(s: string) {
-  const [y, m, d] = s.split('-').map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d));
+  const [y, m, d] = s.split('-').map(Number), t = new Date(Date.UTC(y, m - 1, d));
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t : null;
 }
 /** exceljs is CommonJS, and only worth loading for the seconds it is used. */
@@ -86,13 +85,11 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
       }
     });
   });
-  const memo = new Map<string, unknown>(), placed = new Map<any, number>();
-  const charts = (Array.isArray(spec.charts) ? spec.charts : []).slice(0, MAX.charts).map((c) => {
+  const memo = new Map<string, unknown>(), placed = new Map<any, number>(), charts = (Array.isArray(spec.charts) ? spec.charts : []).slice(0, MAX.charts).map((c) => {
     if (!['bar', 'line', 'pie'].includes(c?.type)) throw new Error('a chart is a bar, line or pie chart');
     const ws = c.sheet ? named.get(String(c.sheet).trim().toLowerCase()) : wb.worksheets[0];
     if (!ws) throw new Error(`there is no sheet called “${c.sheet}” to put the chart on`);
-    const read = (range: unknown) => ({ ref: `'${ws.name.replace(/'/g, "''")}'!${absolute(range)}`, vals: cellsOf(range).map(([r, k]) => shown(wb, ws, ws.getCell(r, k), memo)) });
-    const series = (Array.isArray(c.series) ? c.series : []).slice(0, c.type === 'pie' ? 1 : MAX.series).map((x, i) => {
+    const read = (range: unknown) => ({ ref: `'${ws.name.replace(/'/g, "''")}'!${absolute(range)}`, vals: cellsOf(range).map(([r, k]) => shown(wb, ws, ws.getCell(r, k), memo)) }), series = (Array.isArray(c.series) ? c.series : []).slice(0, c.type === 'pie' ? 1 : MAX.series).map((x, i) => {
       const [[r, k]] = cellsOf(x?.values);
       return { name: String(x?.name ?? '').trim().slice(0, 60) || (r > 1 && shown(wb, ws, ws.getCell(r - 1, k), memo)) || `Series ${i + 1}`, ...read(x?.values) };
     });
@@ -100,8 +97,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
     placed.set(ws, (placed.get(ws) ?? 0) + 1);
     const at = c.at ? cellsOf(c.at)[0] : [17 * placed.get(ws)! - 15, ws.columnCount + 2];
     return { ws, at, xml: chartXml(c.type, String(c.title ?? '').trim().slice(0, 120), read(c.categories), series) };
-  });
-  const buf = await wb.xlsx.writeBuffer();
+  }), buf = await wb.xlsx.writeBuffer();
   writeFileSync(file, charts.length ? await withCharts(buf, charts) : Buffer.from(buf));
   return { sheets: wb.worksheets.map((w: any) => w.name) };
 }
@@ -109,28 +105,23 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
 const RANGE = /^\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i, colOf = (s: string) => [...s.toUpperCase()].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0), absolute = (range: unknown) => String(range).trim().toUpperCase().replace(/\$/g, '').replace(/([A-Z]+)(\d+)/g, '$$$1$$$2');
 /** A range's cells as [row, column], in order: one column or one row of at most MAX.rows cells. */
 function cellsOf(range: unknown): [number, number][] {
-  const m = RANGE.exec(String(range ?? '').trim());
-  const [r0, c0, r1, c1] = m ? [+m[2], colOf(m[1]), +(m[4] ?? m[2]), colOf(m[3] ?? m[1])] : [0, 0, -1, -1];
+  const m = RANGE.exec(String(range ?? '').trim()), [r0, c0, r1, c1] = m ? [+m[2], colOf(m[1]), +(m[4] ?? m[2]), colOf(m[3] ?? m[1])] : [0, 0, -1, -1];
   if (!m || (r0 !== r1 && c0 !== c1) || r1 < r0 || c1 < c0 || r1 - r0 + c1 - c0 >= MAX.rows) throw new Error(`“${range}” is not one column or row of cells, like B2:B13`);
   return Array.from({ length: r1 - r0 + c1 - c0 + 1 }, (_, i) => (r0 === r1 ? [r0, c0 + i] : [r0 + i, c0]));
 }
 
 // The chart parts exceljs cannot write: standard DrawingML (ECMA-376 part 1, §21.2), added to the file it wrote.
-const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
-const esc = (s: string) => s.replace(/[<>&"]/g, (c) => `&${({ '<': 'lt', '>': 'gt', '&': 'amp', '"': 'quot' } as any)[c]};`);
-const unesc = (s: string) => s.replace(/&(lt|gt|quot|apos|amp);/g, (_, e) => ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as any)[e]);
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
+const esc = (s: string) => s.replace(/[<>&"]/g, (c) => `&${({ '<': 'lt', '>': 'gt', '&': 'amp', '"': 'quot' } as any)[c]};`), unesc = (s: string) => s.replace(/&(lt|gt|quot|apos|amp);/g, (_, e) => ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as any)[e]);
 const rels = (xs: string[]) => `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${xs.join('')}</Relationships>`;
 type Cells = { ref: string; vals: string[] };
 /** The chart part: each series points at its cells (so the person's edits move it) and carries their values now. */
 function chartXml(type: string, title: string, cats: Cells, series: (Cells & { name: string })[]) {
   const cache = (tag: string, vs: string[]) => `<c:${tag}Cache>${tag === 'num' ? '<c:formatCode>General</c:formatCode>' : ''}<c:ptCount val="${vs.length}"/>${vs.map((v, i) =>
-    `<c:pt idx="${i}"><c:v>${esc(tag === 'num' ? String(Number(v) || 0) : v)}</c:v></c:pt>`).join('')}</c:${tag}Cache>`;
-  const ser = series.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:v>${esc(s.name)}</c:v></c:tx>${type === 'line' ? '<c:marker><c:symbol val="circle"/></c:marker>' : ''}`
+    `<c:pt idx="${i}"><c:v>${esc(tag === 'num' ? String(Number(v) || 0) : v)}</c:v></c:pt>`).join('')}</c:${tag}Cache>`, ser = series.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:v>${esc(s.name)}</c:v></c:tx>${type === 'line' ? '<c:marker><c:symbol val="circle"/></c:marker>' : ''}`
     + `<c:cat><c:strRef><c:f>${esc(cats.ref)}</c:f>${cache('str', cats.vals)}</c:strRef></c:cat><c:val><c:numRef><c:f>${esc(s.ref)}</c:f>${cache('num', s.vals)}</c:numRef></c:val>${type === 'line' ? '<c:smooth val="0"/>' : ''}</c:ser>`).join('');
   const axes = '<c:axId val="1"/><c:axId val="2"/>', ax = (tag: string, id: number, pos: string, more = '') =>
-    `<c:${tag}><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${pos}"/>${more}<c:crossAx val="${3 - id}"/></c:${tag}>`;
-  const plot = { bar: `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${ser}${axes}</c:barChart>`,
+    `<c:${tag}><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${pos}"/>${more}<c:crossAx val="${3 - id}"/></c:${tag}>`, plot = { bar: `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${ser}${axes}</c:barChart>`,
     line: `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${ser}<c:marker val="1"/>${axes}</c:lineChart>`,
     pie: `<c:pieChart><c:varyColors val="1"/>${ser}<c:firstSliceAng val="0"/></c:pieChart>` }[type];
   return `${XML}<c:chartSpace ${NS}><c:chart>${title ? `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${esc(title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>` : ''}`
@@ -142,8 +133,7 @@ async function withCharts(buf: ArrayBuffer, charts: { ws: any; at: number[]; xml
   const zip = await (await import('jszip')).default.loadAsync(buf), types: string[] = [];
   let n = 0;
   for (const ws of new Set(charts.map((c) => c.ws))) {
-    const mine = charts.filter((c) => c.ws === ws), sheet = `xl/worksheets/sheet${ws.id}.xml`;
-    const anchors = mine.map(({ at: [row, col], xml }, i) => {
+    const mine = charts.filter((c) => c.ws === ws), sheet = `xl/worksheets/sheet${ws.id}.xml`, anchors = mine.map(({ at: [row, col], xml }, i) => {
       zip.file(`xl/charts/chart${++n}.xml`, xml);
       types.push(`<Override PartName="/xl/charts/chart${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`);
       const cell = (r: number, k: number) => `<xdr:col>${k - 1}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${r - 1}</xdr:row><xdr:rowOff>0</xdr:rowOff>`;
@@ -179,28 +169,23 @@ function text(v: any): string {
 }
 
 /** The few sheet functions a helper's workbook uses, so a fresh file (no cached values) still reads as numbers. */
-const nums = (a: unknown[]) => a.flat(9).filter((v): v is number => typeof v === 'number');
-const meets = (v: unknown, crit: unknown) => {
-  const [, op = '=', rhs] = /^(<>|>=|<=|>|<|=)?(.*)$/s.exec(String(crit))!, n = Number(rhs);
-  const d = typeof v === 'number' && rhs.trim() && !Number.isNaN(n) ? v - n : String(v ?? '').toLowerCase() === rhs.toLowerCase() ? 0 : NaN;
+const nums = (a: unknown[]) => a.flat(9).filter((v): v is number => typeof v === 'number'), meets = (v: unknown, crit: unknown) => {
+  const [, op = '=', rhs] = /^(<>|>=|<=|>|<|=)?(.*)$/s.exec(String(crit))!, n = Number(rhs), d = typeof v === 'number' && rhs.trim() && !Number.isNaN(n) ? v - n : String(v ?? '').toLowerCase() === rhs.toLowerCase() ? 0 : NaN;
   return { '<>': d !== 0, '=': d === 0, '>': d > 0, '<': d < 0, '>=': d >= 0, '<=': d <= 0 }[op];
-};
-const FN: Record<string, (...a: any[]) => unknown> = {
+}, FN: Record<string, (...a: any[]) => unknown> = {
   SUM: (...a) => nums(a).reduce((s, n) => s + n, 0), COUNT: (...a) => nums(a).length, AVERAGE: (...a) => (FN.SUM(...a) as number) / nums(a).length,
   MIN: (...a) => Math.min(...nums(a), Infinity) % Infinity || 0, MAX: (...a) => Math.max(...nums(a), -Infinity) % Infinity || 0,
   COUNTA: (...a) => a.flat(9).filter((v) => v !== '').length, COUNTIF: (r, c) => [r].flat(9).filter((v) => meets(v, c)).length,
   SUMIF: (r, c, s = r) => [r].flat(9).reduce((t: number, v, i) => t + (meets(v, c) ? nums([[s].flat(9)[i]])[0] ?? 0 : 0), 0),
   ROUND: (n, d = 0) => Math.round(n * 10 ** d) / 10 ** d, ABS: Math.abs, IF: (c, a = true, b = false) => (c ? a : b),
-};
-const TOKEN = /\s+|([A-Z][A-Z0-9.]*)\(|(?:(?:'((?:[^']|'')+)'|(\w+))!)?(\$?[A-Z]{1,3}\$?\d+)(?::(\$?[A-Z]{1,3}\$?\d+))?|(\d+(?:\.\d+)?)(%?)|"((?:[^"]|"")*)"|(TRUE|FALSE)\b|(<>|<=|>=|[-+*/^&=<>(),])/y;
+}, TOKEN = /\s+|([A-Z][A-Z0-9.]*)\(|(?:(?:'((?:[^']|'')+)'|(\w+))!)?(\$?[A-Z]{1,3}\$?\d+)(?::(\$?[A-Z]{1,3}\$?\d+))?|(\d+(?:\.\d+)?)(%?)|"((?:[^"]|"")*)"|(TRUE|FALSE)\b|(<>|<=|>=|[-+*/^&=<>(),])/y;
 /** A formula's value from the cells it reads, or '' when it uses something this does not know: only whitelisted
  *  tokens become code, so a formula is never run as anything but arithmetic over the workbook's own cells. */
 function calc(wb: any, ws: any, cell: any, memo: Map<string, unknown>): unknown {
   const key = `${ws.name}!${cell.address}`;
   if (memo.has(key) || !cell.formula) return memo.get(key) ?? '';
   memo.set(key, ''); // a formula that reads itself reads an empty cell
-  const value = (w: any, c: any) => { const v = c.value; return v?.formula ? v.result ?? calc(wb, w, c, memo) : v instanceof Date ? v.getTime() / 864e5 + 25569 : typeof v === 'object' ? text(v) : v ?? ''; };
-  const ref = (sheet: string | null, a: string, b?: string) => {
+  const value = (w: any, c: any) => { const v = c.value; return v?.formula ? v.result ?? calc(wb, w, c, memo) : v instanceof Date ? v.getTime() / 864e5 + 25569 : typeof v === 'object' ? text(v) : v ?? ''; }, ref = (sheet: string | null, a: string, b?: string) => {
     const w = sheet === null ? ws : wb.getWorksheet(sheet), p = w.getCell(a.replace(/\$/g, '')), q = b && w.getCell(b.replace(/\$/g, ''));
     if (!q) { const v = value(w, p); return v === '' ? 0 : typeof v === 'string' && v.trim() && !Number.isNaN(Number(v)) ? Number(v) : v; }
     return Array.from({ length: q.row - p.row + 1 }, (_, r) => Array.from({ length: q.col - p.col + 1 }, (_, c) => value(w, w.getCell(p.row + r, p.col + c))));
@@ -223,11 +208,9 @@ const shown = (wb: any, ws: any, cell: any, memo: Map<string, unknown>) => { con
  *  plus row numbers (`nums`, gaps where blanks were skipped) and cell roles (`roles`: head/in/calc/empty, from
  *  formulas and validation only). Nothing but words and counts leaves here — no paths or commands on a screen. */
 export async function readWorkbook(file: string, max = { rows: MAX.rows, cols: MAX.columns }) {
-  const ExcelJS = await excel();
-  const wb = new ExcelJS.Workbook();
+  const ExcelJS = await excel(), wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
-  const memo = new Map<string, unknown>();
-  const sheets = wb.worksheets.slice(0, MAX.sheets).map((ws: any) => {
+  const memo = new Map<string, unknown>(), sheets = wb.worksheets.slice(0, MAX.sheets).map((ws: any) => {
     const rows: string[][] = [], nums: number[] = [], roles: string[][] = [];
     let total = 0;
     ws.eachRow({ includeEmpty: false }, (row: any, n: number) => {
@@ -248,13 +231,10 @@ export async function readWorkbook(file: string, max = { rows: MAX.rows, cols: M
   // the cells its series point at, under the sheet those cells are on. ponytail: regexes over DrawingML, not an XML parser.
   const zip = await (await import('jszip')).default.loadAsync(readFileSync(file));
   for (const f of Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f)).sort((a, b) => parseInt(a.slice(14)) - parseInt(b.slice(14)))) {
-    const xml = await zip.file(f)!.async('string'), type = /<c:(bar|line|pie)Chart>/.exec(xml)?.[1];
-    const at = (part: string) => {
+    const xml = await zip.file(f)!.async('string'), type = /<c:(bar|line|pie)Chart>/.exec(xml)?.[1], at = (part: string) => {
       const m = /^(?:'((?:[^']|'')+)'|([^!]+))!(.+)$/.exec(unesc(/<c:f>([^<]*)<\/c:f>/.exec(part)?.[1] ?? '')), ws = m && wb.getWorksheet(m[1]?.replace(/''/g, "'") ?? m[2]);
       try { return ws ? { ws, vals: cellsOf(m[3]).map(([r, k]) => shown(wb, ws, ws.getCell(r, k), memo)) } : null; } catch { return null; }
-    };
-    const series = [...xml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)].map(([, s]) => ({ s, val: at(/<c:val>([\s\S]*?)<\/c:val>/.exec(s)?.[1] ?? '') })).filter((x) => x.val);
-    const sheet = series[0] && sheets.find((s: any) => s.name === series[0].val!.ws.name);
+    }, series = [...xml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)].map(([, s]) => ({ s, val: at(/<c:val>([\s\S]*?)<\/c:val>/.exec(s)?.[1] ?? '') })).filter((x) => x.val), sheet = series[0] && sheets.find((s: any) => s.name === series[0].val!.ws.name);
     if (!type || !sheet) continue; // a chart kind the preview does not draw, or one reading no cells
     sheet.charts.push({ type, title: [...(/<c:title>([\s\S]*?)<\/c:title>/.exec(xml)?.[1] ?? '').matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => unesc(m[1])).join(''),
       labels: at(/<c:cat>([\s\S]*?)<\/c:cat>/.exec(series[0].s)?.[1] ?? '')?.vals ?? [],

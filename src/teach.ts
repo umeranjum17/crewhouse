@@ -69,8 +69,7 @@ export class Teacher {
    *  left running for 15 minutes. */
   async start(bot: string, what: string, cdp: string, onTimeout: () => void) {
     this.stop(bot);
-    const ws = new WebSocket(cdp, { perMessageDeflate: false });
-    const s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(), timer: setTimeout(onTimeout, SHOW_MS) };
+    const ws = new WebSocket(cdp, { perMessageDeflate: false }), s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(), timer: setTimeout(onTimeout, SHOW_MS) };
     this.shows.set(bot, s);
     ws.on('message', (raw) => {
       let m: any;
@@ -120,16 +119,14 @@ export class Teacher {
 
   /** Resolves once the page is being listened to, so nothing the person does after Start is missed. */
   private listen(s: Showing, sessionId: string, first: string) {
-    const call = (method: string, params: object = {}) => this.call(s, method, params, sessionId);
-    const snap = () => setTimeout(() => void call('Page.captureScreenshot', { format: 'jpeg', quality: 50 }).then((r) => {
+    const call = (method: string, params: object = {}) => this.call(s, method, params, sessionId), snap = () => setTimeout(() => void call('Page.captureScreenshot', { format: 'jpeg', quality: 50 }).then((r) => {
       if (r?.data && s.shots.length < 8) s.shots.push({ type: 'image/jpeg', data: r.data });
     }), 1200);
     // The show starts on the page the person took the wheel of, but where it starts is written down only when the
     // person actually does something there or the browser really moves on: attaching also replays the current state
     // of every page crewd's own tool or an old session left open, and that state is nobody's step.
     let begun = false, live = false;
-    const open = (url: string) => { begun = true; s.raw.push({ kind: 'open', url }); snap(); };
-    const begin = () => { if (!begun && !/^(about|chrome|devtools|data):/.test(first)) open(first); };
+    const open = (url: string) => { begun = true; s.raw.push({ kind: 'open', url }); snap(); }, begin = () => { if (!begun && !/^(about|chrome|devtools|data):/.test(first)) open(first); };
     s.pages.set(sessionId, (m) => {
       if (s.raw.length >= MAX_STEPS * 4) return;
       if (m.method === 'Page.frameStartedLoading') { live = true; return; } // the browser really moved, not the state replayed at attach

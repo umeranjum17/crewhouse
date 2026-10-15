@@ -12,9 +12,7 @@ export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const HELP = [
   'mail                               unread count and the newest in the inbox', 'mail search "<gmail query>" [--limit 10]   e.g. from:school newer_than:7d',
   'mail read <id> [--full]            a conversation: who wrote, and the latest message', 'mail attachments <id> [<n>]        what it has attached; with n, save it into your files/ folder',
-];
-const CUT = 1500, FULL = 8000;
-const ATTACH_MAX = 10 * 1024 * 1024; // enough for a statement or a form, and a helper has to read what it saves
+], CUT = 1500, FULL = 8000, ATTACH_MAX = 10 * 1024 * 1024; // enough for a statement or a form, and a helper has to read what it saves
 type Token = () => Promise<string | null>;
 
 async function get(token: Token, path: string) {
@@ -70,9 +68,7 @@ export async function newThreads(token: Token, after: number, limit = 25) {
 }
 
 export async function runMail(token: Token, args: string[], root?: string): Promise<string> {
-  const [cmd = 'inbox', ...more] = args;
-  const { o, rest } = options(more);
-  const bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
+  const [cmd = 'inbox', ...more] = args, { o, rest } = options(more), bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
   if (cmd === 'inbox') {
     const [label, list] = await Promise.all([get(token, '/labels/INBOX'), get(token, '/threads?labelIds=INBOX&maxResults=5')]);
     return [`unread: ${label.threadsUnread ?? 0}`, table('newest', ['id', 'from', 'subject', 'age'], await rows(token, list.threads ?? [])),
