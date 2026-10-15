@@ -149,7 +149,7 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   } else if (t.install.pip) {
     log(`${t.name}: pip ${t.install.pip}`);
     run('python3', ['-m', 'venv', join(dir, 'venv')]);
-    run(join(dir, 'venv', 'bin', 'pip'), ['install', '--quiet', '--disable-pip-version-check', t.install.pip]);
+    run(join(dir, 'venv', 'bin', 'pip'), ['install', '--quiet', '--disable-pip-version-check', ...t.install.pip.split(/\s+/)]);
     binDir = join(dir, 'venv', 'bin');
   } else if (t.install.download) {
     log(`${t.name}: ${t.install.download.url}`);
