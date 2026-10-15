@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
 
-type Phase = 'opening' | 'waiting' | 'code' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
+type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
 const pinned = demo ? (new URLSearchParams(location.search).get('phase') as Phase | null) : null;
 /** ?demo&sheet=signin|connect opens that sheet straight away. */
@@ -90,34 +90,46 @@ function useTab(first: Window | null | undefined) {
  */
 export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (typeof A.AIS)[number]; tab?: Window | null; onReady: () => void; onClose: () => void }) {
   const name = ai.name;
+  const keyed = 'keyEntry' in ai && ai.keyEntry === true;
   const { value, offline } = usePoll(() => api.accounts(), 1500);
   const g = A.account(value, ai.key);
   const [cancelled, setCancelled] = useState(false);
   const [keepWork, setKeepWork] = useState(false);
+  const [pasted, setPasted] = useState('');
   const tab = useTab(first);
-  const start = (body: { fresh?: boolean; via?: 'code' } = {}) => { setCancelled(false); void (async () => {
+  const start = (body: { fresh?: boolean; via?: 'code' | 'key' } = {}) => { setCancelled(false); void (async () => {
     if (body.via === 'code') await api.signInCancel(ai.key);
     await api.signIn(ai.key, body);
   })().catch(() => {}); };
-  const again = (body: { fresh?: boolean } = {}) => { tab.fresh(); start(body); };
-  useEffect(() => { if (!pinned) start(); }, []);
+  const again = (body: { fresh?: boolean } = {}) => { if (!keyed) tab.fresh(); start(keyed ? { via: 'key' } : body); };
+  useEffect(() => { if (!pinned) start(keyed ? { via: 'key' } : {}); }, []);
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
-    : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
+    : g.key ? 'key' : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
   // Signed in: the sheet says so, then gets out of the way; the waiting request is already under way.
   useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 1600); return () => clearTimeout(t); } }, [phase]);
   const cancel = () => { void api.signInCancel(ai.key).catch(() => {}); setCancelled(true); };
-  const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
+  const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code' || phase === 'key') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
   const page = g.signing?.url || (ai.key === 'chatgpt' ? 'https://auth.openai.com/codex/device' : '');
-  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' ? 1 : 0;
+  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' || phase === 'key' ? 1 : 0;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Sign in with ${name}`} onClose={close}>
-      {!['offline', 'busy'].includes(phase) && <Progress at={at} steps={[`Open ${name}`, 'Say yes', 'Done']} />}
-      <Mood phase={phase === 'code' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
+      {!['offline', 'busy'].includes(phase) && <Progress at={at} steps={phase === 'key' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
+      <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
+      {phase === 'key' && <>
+        <h2>Paste your {name} key</h2>
+        <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key'); }}>
+          <input className="input" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
+          <button className="btn go big" disabled={!pasted.trim()}>Sign in with {name}</button>
+        </form>
+        {g.key?.error && <p className="warn-line">{g.key.error}</p>}
+        <button className="link" onClick={cancel}>Cancel</button>
+      </>}
       {phase === 'waiting' && <>
         <h2>Say yes on {name}'s page</h2>
         <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
@@ -168,7 +180,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   const [signKey, setSignKey] = useState<string | null>(null);
   const list = A.aiList(accounts);
   const [{ ai, g }, ...others] = [...list.mine, ...list.more];
-  const pick = (r: typeof ai, cls: string) => <button key={r.key} className={cls} onClick={() => { setSignKey(r.key); setSigning(openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>;
+  const pick = (r: typeof ai, cls: string) => <button key={r.key} className={cls} onClick={() => { setSignKey(r.key); setSigning('keyEntry' in r && r.keyEntry === true ? null : openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>;
   const signAi = others.find((r) => r.ai.key === signKey)?.ai ?? ai;
   // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
   if ((!accounts || (g.state === 'ready' && !g.notIncluded)) && signing === false) return null;
@@ -186,7 +198,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   return (
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
-      <p className="ask-words">{g.recovery || <>Say yes once on your AI's page. Your job starts when you come back.</>}</p>
+      <p className="ask-words">{g.recovery || ('keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
       <div className="ai-picks">{pick(ai, 'btn go')}</div>
       <details className="more-ways">
         <summary><span className="grow">Use another account</span><span className="ai-stack">{others.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>

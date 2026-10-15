@@ -1,18 +1,19 @@
 # Campaign on a non-Claude provider: scope
 
-Status: design only. Nothing here changes campaign behaviour or ships a route.
+Status: the OpenCode Go account route ships (kit route
+`opencode:plan_key:opencode-go`: a key-paste sign-in card, runs on the kit's
+saved model; see `docs/supported-subscriptions.md`). The campaign on it is not
+yet proven: the run-brain default, the stub campaign smoke and the QA slice
+below are open. Campaign behaviour is unchanged.
 
 Gap: a campaign run (Chief + Scout/Scribe/Reel through `crew_assign`,
-`skills/run-a-marketing-campaign/SKILL.md`) has no sign-in route for a
-non-Claude provider. The provider-switch preflight found no Crewhouse
-Muse/opencode account mapping in `src/accounts.ts` PROVIDERS
-(`src/accounts.ts:18-21`) or `src/openclaw/runtime.ts` PROVIDER_OF /
-AUTH_CHOICE (`src/openclaw/runtime.ts:18-22`), while the kit advertises an
-`opencode-go` sign-in via `plan_key`. So a person whose only plan sits with a
-non-Claude provider cannot run a campaign at all: `Crew.usable`
-(`src/crew.ts:1493`) finds nothing signed in and the task parks in
-`Crew.pause` (`src/crew.ts:1503`). Campaign facts rules (only person-given or
-source-given facts) are untouched by this scope.
+`skills/run-a-marketing-campaign/SKILL.md`) needs a signed-in account. Before
+the OpenCode Go route, no Crewhouse account mapped the kit's `opencode-go`
+sign-in (`PROVIDERS` in `src/accounts.ts`, `PROVIDER_OF` / `AUTH_CHOICE` in
+`src/openclaw/runtime.ts`), so a person whose only plan was OpenCode Go had
+nothing signed in: `Crew.usable` found no account and the task parked in
+`Crew.pause`. Campaign facts rules (only person-given or source-given facts)
+are untouched by this scope.
 
 ## (a) User outcome
 
@@ -51,47 +52,42 @@ BYOKit already offers (nothing to build there):
   plus `kit.signedIn` / `kit.signOut` for status and `kit.addKey` for an
   explicitly supplied key.
 
-Crewhouse must add (all in-repo, at the producing code):
+Crewhouse must add (all in-repo, at the producing code). Done for OpenCode Go
+and noted per item; the rest is for the next provider:
 
-1. Account mapping — one row per new provider in `PROVIDERS`
-   (`src/accounts.ts:18-21`), its engine id in `PROVIDER_OF`
-   (`src/openclaw/runtime.ts:18`), and its wizard choice in `AUTH_CHOICE`
-   (`src/openclaw/runtime.ts:20-22`, `opencode-go` for the plan-key route).
-2. Credential provisioning — `OpenClawRuntime.signIn`
-   (`src/openclaw/runtime.ts:96-116`) currently passes only `browser`/`code`
-   through to the kit; a `plan_key` route needs the key-entry `via` passed
-   through and a key-entry card state in `Accounts.login`
-   (`src/accounts.ts:86-113`). The boundary type must widen first:
-   `AgentRuntime.signIn` allows only `'browser' | 'code'`
-   (`src/runtime.ts:29`). Credentials stay engine-held throughout; nothing
-   here mints or touches one.
-3. Run path — `run()`    (`src/openclaw/runtime.ts:147-157`) maps account to
-   `provider/model`; the non-Claude default needs the same treatment the
-   Claude branch already has (`src/openclaw/runtime.ts:150`). No crew change:
-   `usable` (`src/crew.ts:1493`), `run` (`src/crew.ts:1294`) and `pause`
-   (`src/crew.ts:1504`) are provider-generic and work once `signedIn`
-   answers true. Campaign brains default to `['chatgpt']`
-   (`src/bots.ts:63-65`); the new provider joins the bot's `models` list.
-4. UI — one row per account in `AIS` (`web/src/adapter.ts:1352-1359`) and the
-   sign-in rows (`web/src/adapter.ts:1398`); `test/ui.test.ts:134` pins the
-   `AIS` keys against `PROVIDERS`, so both change together; one matrix row in
-   `docs/supported-subscriptions.md` marking the route WIRED or
-   UNTESTED-no-account.
+1. Account mapping — done: `PROVIDERS` (from the kit's route row),
+   `PROVIDER_OF`, `AUTH_CHOICE`. Each new provider needs its own row.
+2. Credential provisioning — done: `AgentRuntime.signIn` takes `'key'`,
+   `OpenClawRuntime.keyIn` pastes through the kit's `addKey`, and
+   `Accounts.login` takes `via: 'key'`. Credentials stay engine-held
+   throughout; nothing here mints or touches one.
+3. Run path — done for OpenCode Go: `run()` sends it `auth: 'apiKey'` with the
+   model the run names as `opencode-go/<model>`, else the kit's saved default.
+   Open: the bot's `models` entry
+   (campaign brains still default to `['chatgpt']` in `src/bots.ts`). No crew
+   change: `usable`, `run` and `pause` are provider-generic.
+4. UI — done: the `AIS` row and its key-entry card in `web/src/adapter.ts`,
+   the `AIS` keys pinned by `test/ui.test.ts`, and the matrix row in
+   `docs/supported-subscriptions.md`.
 
 ## (c) Engine-side gaps (BYOKit/OpenClaw — named, never built here)
 
-- The `plan_key` wizard views themselves: key-entry screens, error words
-  (`key.invalid`, `key.notIncluded`), and expiry/retry copy belong to the
-  kit's wizard, not to a Crewhouse card.
-- Whether the pinned engine (2026.8.1) ships the `opencode-go` plugin and its
-  model catalog, and which models a campaign brain may name — a pin question
-  for BYOKit.
+- The `plan_key` error ids (`key.invalid`, `key.notIncluded`) are the kit's.
+  `keyIn` in `src/openclaw/runtime.ts` keeps the card waiting with "That key
+  didn't work" on any failed paste but a transport failure (which asks for
+  another tap); a plan without helpers has no card state of its own yet.
+- Which models a campaign brain may name on the shipped `opencode-go` plugin
+  (the pin's catalogue offers the route; an in-app model picker waits for the
+  kit) — a pin question for BYOKit.
 - Multi-account choice on `plan_key` routes: the catalogue marks every
   provider's multi-account terms grey, so account-picking UX is upstream's.
 - Any missing or renamed `authChoice` ids surface at the pin bump through the
   kit's own `prepare()` installer, not as Crewhouse patches.
 
 ## (d) Sliced build plan (each slice about one hour)
+
+(Slices 1–2 and slice 3's run mapping are in for OpenCode Go; see (b). Open:
+the bot `models` entry, the stub-engine campaign smoke and slice 4's QA.)
 
 1. Mapping slice: `PROVIDERS` + `PROVIDER_OF` + `AUTH_CHOICE` + `AIS` + matrix
    row. Proof: the sign-in card lists the account, `signedIn` false, no route

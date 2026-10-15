@@ -73,6 +73,8 @@ test('sign-in: giving up cancels its own wizard session, in the account\'s own w
     const end = await ending((on) => f.runtime.signIn('grok', 'code', on));
     assert.match(end.error ?? '', /took too long.*Grok/);
     assert.doesNotMatch(end.error ?? '', /ChatGPT/);
+    const start = f.fake.calls.find((c) => c.method === 'openclaw.setup.auth.start')!.params as any;
+    assert.equal(start.authChoice, 'xai-oauth', 'Grok\'s code path uses the kit route the engine offers');
     const cancels = f.fake.calls.filter((c) => c.method === 'wizard.cancel');
     assert.equal(cancels.length, 1, 'only this sign-in\'s own session is cancelled');
   } finally { await f.done(); }

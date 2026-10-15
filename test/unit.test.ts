@@ -492,7 +492,7 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.deepEqual(crew.snapshot().resting, {}, 'Copilot finished the job: no standing "resting" while nothing waits on it');
 
   // Every account resting: the task pauses with a wake-up time, Chief says when once, and it resumes by itself.
-  const others = ['copilot', 'openrouter', 'minimax', 'claude']; // the stub counts these as signed in; Grok is not
+  const others = Object.keys(PROVIDERS).filter((k) => k !== 'chatgpt' && k !== 'grok'); // every account the stub counts as signed in
   for (const k of others) await crew.accounts.failed(k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
   const b = crew.assign('scout', 'look it up again', 'chief').task, b2 = crew.assign('scout', 'and this', 'chief').task;
   await settled(db, b); await settled(db, b2);
@@ -974,7 +974,7 @@ test('accounts: the person keeps their address and every account rests together'
   assert.equal(task(db, a).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'grok');
   assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
-  for (const k of ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude']) crew.accounts.failed(k, 'usage limit, try again in 1 min');
+  for (const k of Object.keys(PROVIDERS)) crew.accounts.failed(k, 'usage limit, try again in 1 min');
   assert.ok(crew.restingUntil('chatgpt') > Date.now());
   const b = (await crew.post('reel', 'another demo'))!.task;
   await settled(db, b);
@@ -1090,6 +1090,20 @@ test('sign-in: one button shows a code, finishes by itself, and signs the person
   await crew.accounts.logout('grok');
   assert.equal(await crew.accounts.signedIn('grok'), false);
   await assert.rejects(crew.accounts.login('muse'), /no such AI account/, 'no Meta');
+  done();
+});
+
+test('sign-in: a plan-key account waits for the pasted key, and the card asks for it', async () => {
+  const { crew, done } = setup();
+  const shown = await crew.accounts.login('opencode-go', 'key');
+  assert.equal(shown?.state, 'waiting');
+  assert.equal(shown?.via, 'key');
+  assert.ok(!shown?.url && !shown?.code, 'no page and no code: the key is the whole sign-in');
+  assert.ok(A.account([{ account: 'opencode-go', name: 'x', signedIn: false, restingUntil: 0, signIn: shown }], 'opencode-go').key, 'the card is in its paste-a-key phase');
+  crew.accounts.paste('opencode-go', 'not-a-real-key');
+  await crew.accounts.finished('opencode-go');
+  assert.equal(crew.accounts.view('opencode-go')!.state, 'done');
+  await until('the account is ready', () => crew.accounts.signedIn('opencode-go'));
   done();
 });
 

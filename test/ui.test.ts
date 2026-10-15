@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PROVIDERS } from '../src/accounts.ts';
-import { PROVIDERS as ROUTES } from '@byokit/accounts';
+import { PROVIDERS as ROUTES, route } from '@byokit/accounts';
 import * as A from '../web/src/adapter.ts';
 import { color } from '../web/src/tokens.ts';
 
@@ -84,6 +84,9 @@ test('the account list is the one crewd really serves: every route, none made up
   for (const ai of A.AIS) assert.doesNotMatch(ai.cli ?? '', /\bCLI\b/, `${ai.name}'s prerequisite names a product, never an acronym`);
   // Name and billing come from the kit's own catalogue, so a new kit route lands labelled and nothing drifts.
   for (const ai of A.AIS) if (ROUTES[ai.key]) assert.deepEqual([ai.name, ai.billing], [ROUTES[ai.key].name, ROUTES[ai.key].billing], `${ai.key} is the kit's own row`);
+  // OpenCode Go's row comes from the kit's plan-key route, like crewd's own list (src/accounts.ts).
+  const GO = route('opencode:plan_key:opencode-go'), GO_KEY = GO.aliases?.[0] ?? 'opencode-go';
+  assert.deepEqual(A.AIS.filter((ai) => ai.key === GO_KEY).map((ai) => [ai.name, ai.billing]), [[GO.name, GO.billing]], "OpenCode Go's row is the kit's own");
   // Every route says honestly how the person pays: a plan they already have, or charged per use.
   const listed = A.aiList(rows).more.map((r) => ({ name: r.ai.name, cli: r.ai.cli, says: r.says }));
   for (const row of listed) {
@@ -102,6 +105,9 @@ test('the account list is the one crewd really serves: every route, none made up
   // The resting sentence names the account when it can and stays generic when it can't — both machinery-free.
   assert.match(A.resting({ resting: { chatgpt: now + 60_000 } }), /^Your ChatGPT is resting until /);
   assert.match(A.resting({ resting: { notARoute: now + 60_000 } }), /^Your AI accounts are resting until /);
+  // The runs-at-home line never names one account: with several sign-ins it cannot know which a job will use.
+  for (const line of A.atHome()) assert.doesNotMatch(line, /ChatGPT|Grok|Copilot|OpenRouter|MiniMax|Claude|OpenCode Go/, 'the privacy line names no provider');
+  assert.match(A.atHome()[2], /goes to the AI plan you picked/, "a job's words go to the picked plan");
 });
 
 test('the screens read view models only, and the mono face draws art only', () => {

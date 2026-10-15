@@ -6,6 +6,7 @@ export const MARKS: Record<string, number> = {
   openrouter: require('../assets/ai/openrouter.png'),
   minimax: require('../assets/ai/minimax.png'),
   claude: require('../assets/ai/claude.png'),
+  'opencode-go': require('../assets/ai/opencode-go.png'),
 };
 // The first screen's marks (mock C, made by `node scripts/icons.mjs`): line marks in white, tinted on screen, and Chief's
 // soft helmet in each look.

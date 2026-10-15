@@ -15,13 +15,10 @@ export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = resolve(import.meta.dirname, '../..');
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli' };
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
-  chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli',
-};
-const CODE_CHOICE: Record<string, string> = {
-  chatgpt: 'openai-device-code', grok: 'xai-device-code', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth',
+  chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
@@ -43,7 +40,7 @@ const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] }, compaction: { memoryFlush: { enabled: false } }, heartbeat: { every: '0m' } } },
   tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
-  plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai'], entries: {
+  plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai', 'opencode-go'], entries: {
     'memory-core': { config: { dreaming: { enabled: false } } },
     codex: { enabled: false },
   } },
@@ -54,7 +51,7 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost;
-  private runs = new Map<string, RunRef>();
+  private runs = new Map<string, RunRef & { account?: string }>();
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
@@ -65,14 +62,14 @@ export class OpenClawRuntime implements AgentRuntime {
       host: {
         // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
         gate: async (ref, tool, input) => {
-          const run = this.runs.get(ref.sessionKey);
+          const run = this.runOf(ref.sessionKey);
           if (!run) return { allow: true };
           if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
           const decision = await this.host.gate(run, crewName(tool), input);
           return decision.allow ? decision : { allow: false, reason: decision.reason };
         },
         call: async (ref, tool, input, signal) => {
-          const run = this.runs.get(ref.sessionKey);
+          const run = this.runOf(ref.sessionKey);
           if (!run || !this.host) throw new Error('Unknown run');
           return this.host.call(run, crewName(tool), input, signal);
         },
@@ -80,6 +77,8 @@ export class OpenClawRuntime implements AgentRuntime {
       ...o,
     });
   }
+  /** The run behind a callback: a key-lane run's engine key is the member's own under the kit's key-agent prefix. */
+  private runOf(sessionKey: string) { return this.runs.get(sessionKey) ?? this.runs.get(sessionKey.replace(/^agent:byokit-key-/, 'agent:')); }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
   signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
@@ -89,21 +88,23 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async signedIn(account: string) {
     const provider = PROVIDER_OF[account];
-    return provider ? this.kit.signedIn(ME, provider) : false;
+    return provider ? await this.kit.signedIn(ME, provider) : false;
   }
 
-  signIn(account: string, via: 'browser' | 'code', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
+  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
         .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
       return { paste() {}, cancel() { cancelled = true; } };
     }
-    const authChoice = via === 'code' ? CODE_CHOICE[account] ?? AUTH_CHOICE[account] : AUTH_CHOICE[account];
+    // Only ChatGPT's code path differs from its own route (its device code); every other account signs in on AUTH_CHOICE.
+    const authChoice = via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
     if (!authChoice) {
       queueMicrotask(() => on({ waiting: false, error: `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
     }
+    if (via === 'key') return this.keyIn(account, authChoice, on);
     const name = PROVIDERS[account]?.name ?? account;
     return this.kit.signIn(ME, { authChoice, via }, (v) => {
       if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
@@ -112,6 +113,16 @@ export class OpenClawRuntime implements AgentRuntime {
       else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
       else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed' });
     });
+  }
+
+  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
+  keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
+    let cancelled = false;
+    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
+    return {
+      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
+      cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
+    };
   }
 
   async signOut(account: string) {
@@ -144,17 +155,17 @@ export class OpenClawRuntime implements AgentRuntime {
   }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
-    const register = opts?.register !== false, provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's)
+    const register = opts?.register !== false, provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
     if (register) this.runs.set(spec.key, spec);
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
-        (e) => on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e));
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { if (register) this.runs.delete(spec.key); }
   }
-  steer(key: string, text: string) { return this.kit.steer(key, text); }
-  abort(key: string) { return this.kit.abort(key); }
+  steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
+  abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
   /** The person's applied learned skills (the workshop's proposals, applied state last). */
   async learned() {
     const { agentId } = await this.kit.ensureMember(ME);

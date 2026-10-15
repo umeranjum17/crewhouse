@@ -4,20 +4,22 @@ While no account is ready, Chief's sign-in card (`AccountCard` in `web/src/flows
 account as its only primary button and every other provider the kit offers under **Use another account** (a
 `<details class="more-ways">`, the same fold Settings uses for "More ways to sign in"). The recommendation is
 `A.aiList(accounts)`'s first row: the account this computer was signed in to (it signed out), else ChatGPT.
-No provider is dropped: all six "Sign in with …" buttons stay in the card.
+No provider is dropped: all seven "Sign in with …" buttons stay in the card.
 
 ## Gate
 
-- `node --test --test-name-pattern="sign-in card" test/ui.test.ts`: one `btn go`, six "Sign in with", ChatGPT first
-  on a fresh install, Claude first when Claude is the account that signed out.
-- `node --test test/thread-clear.test.ts`: with "Use another account" opened (the card's tallest form), every
-  button clears the composer at 390.
+- `node --test test/thread-clear.test.ts`: the real card in a browser (`?demo=longthread`, signed out) — every
+  provider's "Sign in with" button, and with "Use another account" opened (the card's tallest form) every button
+  clears the composer at 390.
+- `node --test test/unit.test.ts --test-name-pattern="sign-in"`: a plan-key account waits for the pasted key and the
+  card asks for it. `node --test test/ui.test.ts`: `A.AIS`, the card's own list, is the kit's routes, OpenCode Go's
+  row included.
 
 ## Drive (real crewd, stub engine)
 
 1. Isolated crewd per [SKILL.md](../SKILL.md#launch). The stub reports every account but Grok signed in, so sign
    the others out through the app's own API to bring the card up:
-   `for k in chatgpt copilot openrouter minimax claude; do curl -fsS -X POST "${H[@]}" -d '{}' "$B/api/accounts/1/$k/logout"; done`
+   `for k in chatgpt copilot openrouter minimax claude opencode-go; do curl -fsS -X POST "${H[@]}" -d '{}' "$B/api/accounts/1/$k/logout"; done`
    (`POST /api/onboard {"address":"Umer"}` first). All signed out lands ChatGPT first, the first row of `AIS`.
 2. `node .agents/skills/verify-crewhouse/scripts/signin-card.ts "$PWD" "http://127.0.0.1:$PORT" "$LAB/state/person.key" "$EV/screens"`
    runs its own headless Chromium (private profile and port) and writes, for night/day at 1440 and 390, the card
@@ -30,8 +32,8 @@ No provider is dropped: all six "Sign in with …" buttons stay in the card.
 
 ## Pass
 
-`geometry.json`: `primary` is the expected account, six buttons, `clippedOrUnder` empty and `sideways` 0 in every
-theme and width. Shots: one filled button, the other five marks beside "Use another account", and all five rows
+`geometry.json`: `primary` is the expected account, seven buttons, `clippedOrUnder` empty and `sideways` 0 in every
+theme and width. Shots: one filled button, the other six marks beside "Use another account", and all six rows
 whole once opened.
 
 ## Gotchas

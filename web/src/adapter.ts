@@ -2,7 +2,7 @@
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing. Crewhouse's own
 // status lines read in plain words (no commands, paths, model names, percentages or raw prompts);
 // a chat answer reads as written. test/ui.test.ts holds this.
-import { PROVIDERS as ROUTES } from '@byokit/accounts';
+import { PROVIDERS as ROUTES, route as kitRoute } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
@@ -189,15 +189,15 @@ export const dayLabel = (t: number, now = new Date()) => {
  * Each part is true of the code as it ships — the database, the crew's notes and everyone's sign-ins live on this
  * machine and crewd has no server of its own (README); a job's own words are the only thing sent to the person's own
  * AI account or a connected app (src/engine.ts, src/connections.ts); a phone notification carries no words at all (src/link.ts).
- * `home` names the machine from wherever the line is read, `plan` the one the crew thinks with (`planName`). Keep it
- * free of technical words; test/ui.test.ts pins it. The middle line is `awake`, the one condition every surface that
- * mentions the computer or pairing repeats word for word.
+ * `home` names the machine from wherever the line is read. The account is never named: with several sign-ins the
+ * line cannot know which one a job will use. Keep it free of technical words; test/ui.test.ts pins it. The middle
+ * line is `awake`, the one condition every surface that mentions the computer or pairing repeats word for word.
  */
 export const awake = (home = 'this computer') => `The crew works only while ${home} is on and connected to the internet.`;
-export const atHome = (home = 'this computer', plan = 'AI plan') => [
+export const atHome = (home = 'this computer') => [
   `Your helpers live on ${home} and use your own sign-ins.`,
   awake(home),
-  `Nothing you tell them is kept anywhere else — only what a job needs goes to your ${plan} or the app it's using.`,
+  `Nothing you tell them is kept anywhere else — only what a job needs goes to the AI plan you picked or the app it's using.`,
 ];
 /** The trust story where the fear is. `kept`: everything remembered about the person (the one Memory section,
  *  each helper's notes) shows line by line with Forget beside it. `home`: there is no Crewhouse server and no
@@ -1651,11 +1651,16 @@ const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: st
   openrouter: { bg: '#8b5cf6' },
   minimax: { bg: '#e11d48', name: 'MiniMax' },
   claude: { bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
+  'opencode-go': { bg: '#18181b' },
 };
-export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude'].map((key) => {
+/** OpenCode Go, by route id straight from the kit's catalogue like crewd's own list (src/accounts.ts): key, name and
+ *  billing land with the bump, never a local row. */
+const GO = kitRoute('opencode:plan_key:opencode-go'), GO_KEY = GO.aliases?.[0] ?? 'opencode-go';
+const GO_ON = GO.billing === 'subscription' || GO.billing === 'api';
+export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude', ...(GO_ON ? [GO_KEY] : [])].map((key) => {
   const mark = MARKS[key];
-  const route = ROUTES[key];
-  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription' };
+  const route = key === GO_KEY ? { name: GO.name, billing: GO.billing } : ROUTES[key];
+  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription', ...(key === GO_KEY ? { keyEntry: true as const } : {}) };
 });
 /** How one account is paid for, in the person's words: their own plan, or money charged for each use. */
 export function paysFor(ai: { name: string; billing: string }) {
@@ -1665,23 +1670,25 @@ export function paysFor(ai: { name: string; billing: string }) {
  *  them for each use. Built from the rows above, so a new route can never be left unlabelled. */
 export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS.filter((a) => a.billing === 'api').map((a) => a.name).join(' and ')}, where ${paysFor(AIS.find((a) => a.billing === 'api')!)}.`;
 
-/** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, or the fallback
- *  code); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers; a work account. */
+/** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, the fallback
+ *  code, or a pasted plan key); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { recovery: '', signing: null, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
+  const none = { recovery: '', signing: null, key: null as null | { error: string }, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
   const waiting = phase === 'waiting' || phase === 'code' || (phase === 'opening' && s?.state === 'waiting');
   const signing = phase === 'code' && s.code ? { url: s.url ?? '', code: s.code } : null;
+  // A plan-key wait (OpenCode Go) has no page and no code: the card asks for the pasted key instead.
+  const pasting = s?.via === 'key' && s?.state === 'waiting' ? { error: s?.error ? plain(s.error) : '' } : null;
   // Expiry stays an independent screen flag, based on the error words even when the reason also says busy or declined.
   const expired = s?.state === 'failed' && phaseOf({ signIn: { ...s, why: undefined } }) === 'expired';
   const declined = phase === 'cancelled';
   const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
-    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
@@ -1697,6 +1704,7 @@ export function aiList(accounts: Json[] | null) {
     const says = g.state === 'ready'
       ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
       : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
+      : 'keyEntry' in ai && ai.keyEntry && g.signedOut ? 'Signed out. The key stays saved on this computer: it works again after a restart, or paste a new key if it stopped working.'
       : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
       : ai.billing === 'api' ? `Not set up. Charged per use on your ${ai.name} account.`

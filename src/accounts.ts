@@ -1,23 +1,24 @@
 // The person's AI accounts: the engine holds the credentials, the sign-in wizard and the
 // cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
 // states the product words are built from (signed out, plan without helpers, resting until).
-import { REST_MS, classify, offered } from '@byokit/accounts';
+import { REST_MS, classify, offered, route } from '@byokit/accounts';
 import type { AgentRuntime, SignInStep } from './runtime.ts';
 
 export type Provider = { key: string; name: string; billing: 'subscription' | 'api'; cli?: string };
 
-/** Accounts the kit offers but the engine has no route for, or that need a tool on this computer: `cli` names it.
- *  Both sign in against a plan the person already pays for. */
+/** The kit's extras: accounts the engine has no route for, or needing a tool on this computer (`cli`), on plans the person already pays for. */
 const EXTRA: Record<string, Omit<Provider, 'billing'>> = {
   minimax: { key: 'minimax', name: 'MiniMax' },
   claude: { key: 'claude', name: 'Claude', cli: 'Claude Code, installed and signed in on this computer' },
 };
 
-/** The offered accounts, generated from the kit's own catalogue: names and how each one is billed come from there,
- *  so a new kit route lands with the bump. The sign-in card offers every one: one recommended, the rest a tap away. */
+/** The offered accounts, generated from the kit's own catalogue: names and billing come from there, so a new kit route
+ *  lands with the bump (OpenCode Go arrives by route id, never a local row). One recommended, the rest a tap away. */
+const GO = route('opencode:plan_key:opencode-go'), GO_KEY = GO.aliases?.[0] ?? 'opencode-go';
 export const PROVIDERS: Record<string, Provider> = Object.fromEntries([
   ...offered(['chatgpt', 'grok', 'copilot', 'openrouter']).map(({ key, name, billing }) => [key, { key, name, billing }]),
   ...Object.entries(EXTRA).map(([key, v]) => [key, { ...v, billing: 'subscription' as const }]),
+  ...(GO.billing === 'subscription' || GO.billing === 'api' ? [[GO_KEY, { key: GO_KEY, name: GO.name, billing: GO.billing }]] : []),
 ]);
 
 export function provider(key: string) {
@@ -29,7 +30,7 @@ export function provider(key: string) {
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
-type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code'; url?: string; code?: string; error?: string; why?: string };
+type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'key'; url?: string; code?: string; error?: string; why?: string };
 
 /** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
  *  engine's own wizard. The credentials themselves never pass through here. */
@@ -76,14 +77,13 @@ export class Accounts {
     return f;
   }
   rest(account: string, until: number) { this.rests.set(account, until); }
-  cleared(account: string) { this.rests.delete(account); this.expired.delete(account); }
   notIncluded(account: string, on?: boolean) {
     if (on !== undefined) on ? this.excluded.add(account) : this.excluded.delete(account);
     return this.excluded.has(account);
   }
 
-  /** Start the engine's sign-in for the person's account; the wizard's steps become the card's words. */
-  async login(account: string, via: 'browser' | 'code' = 'browser', fresh = false) {
+  /** Start the engine's sign-in; the wizard's steps become the card's words (`via: 'key'` waits for a pasted plan key instead). */
+  async login(account: string, via: 'browser' | 'code' | 'key' = 'browser', fresh = false) {
     if (!PROVIDERS[account]) throw Object.assign(new Error('no such AI account'), { status: 404 });
     if (this.running.has(account)) return this.view(account);
     const view: View = { state: 'waiting', via };

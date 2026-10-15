@@ -26,7 +26,9 @@ import { join } from 'node:path';
 // Raised 6999 -> 7098 for charts in crew_workbook (ch-cap-charts, Firstmate decision A3): exceljs cannot write a chart,
 // so crewd adds the DrawingML chart parts itself and reads them back for the preview. The paired trim lane ch-src-trim-charts
 // compacted single-use declarations back out of src/, restoring BUDGET to 6999.
-const BUDGET = 6999;
+// Raised 6999 -> 7010 for the OpenCode Go key sign-in through the kit (ch-opencode-go-route, owner exception):
+// OpenClawRuntime.keyIn and its addKey branch, the kit route row. No trim paired: the kit path is the feature.
+const BUDGET = 7010;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

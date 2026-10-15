@@ -14,13 +14,13 @@ import { host, house, legacyAuth, retired, sealed } from './migrate-house.ts';
 
 test('ChatGPT uses the canonical gateway auth provider for status, logout and migration confirmation', async () => {
   const { legacy, stop } = await house();
-  const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'openai' }] }) });
+  const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'openai', profiles: [{ profileId: 'openai:default', status: 'ok' }] }] }), 'models.authLogout': () => ({}) });
   try {
     await f.started;
     writeFileSync(legacy, legacyAuth());
     assert.equal(await f.runtime.signedIn('chatgpt'), true);
     await f.runtime.signOut('chatgpt');
-    assert.deepEqual(f.fake.calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai', agentId: 'm1' });
+    assert.deepEqual(f.fake.calls.find((c) => c.method === 'models.authLogout')?.params, { provider: 'openai', agentId: 'm1', profileIds: ['openai:default'] });
     assert.equal(await f.runtime.confirm(legacy), true);
     retired(legacy);
   } finally { await f.done(); await stop(); }
