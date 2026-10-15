@@ -30,9 +30,17 @@ const threads: Record<string, any> = {
         { mimeType: 'text/plain', body: { data: b64('Signed and sent.\n\nOn Tue, School Office wrote:\n> Please return the form.') } }] },
       att('a1', 'statement.pdf', Buffer.byteLength(PDF)), att('a2', 'huge.zip', 12 * 1024 * 1024), att('a3', 'locked.pdf', 2048), att('a4', '../../.pi/settings.json', 8)] }),
   ] },
+  '18c0a1f00d2e3b51': { messages: [msg('other', 'School Office <office@school.example>', 'Friday trip', 5, {}), msg('own1', 'Umer <umer@sender.example>', 'Re: Friday trip', 2, {}), msg('own2', 'Umer alias <alias@sender.example>', 'Re: Friday trip', 1, {})] },
+  '18c0a1f00d2e3b4b': { messages: [msg('own1', 'Umer <umer@sender.example>', 'My notes', 5, {}), msg('own2', 'Umer alias <alias@sender.example>', 'Re: My notes', 1, {})] },
   '18c0b2f00d2e3b4a': { messages: [msg('m3', 'Shop <no-reply@shop.example>', 'Your order', 5, { mimeType: 'text/html', body: { data: b64(`<style>x{}</style><div>Order 42</div>${'word '.repeat(600)}`) } })] },
+  '18c0a1f00d2e3b4c': { messages: [msg('m9', 'School Office <office@school.example>', 'Hi\r\nBcc: evil@x.example', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b4d': { messages: [msg('m10', 'a@b.example\r\nCc: x@y.example', 'hello', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b4e': { messages: [] },
+  '18c0a1f00d2e3b4f': { messages: [msg('m11', 'Sam <sam@home.example>', 'caf\u00e9 update', 60, { mimeType: 'text/plain', body: { data: b64('hi') } })] },
+  '18c0a1f00d2e3b50': { messages: [{ id: 'm12', internalDate: String(now - 60 * 60_000), payload: { headers: [{ name: 'From', value: 'Sam <sam@home.example>' }, { name: 'Subject', value: 'hello' }, { name: 'Message-Id', value: '<abc123@mail.example>' }], mimeType: 'text/plain', body: { data: b64('hi') } } }] },
 };
 const asked: string[] = [];
+const draftBodies: string[] = [];
 let identity = '';
 let sendOk = false;
 let sendRefusal = 404;
@@ -49,6 +57,11 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (path === '/threads') return json({ threads: u.searchParams.get('q') === 'from:school' ? [{ id: '18c0a1f00d2e3b4a' }] : [{ id: '18c0b2f00d2e3b4a' }, { id: '18c0a1f00d2e3b4a' }], resultSizeEstimate: u.searchParams.get('q') ? 1 : 2 });
   if (path === '/messages/m2/attachments/a1') return json({ size: Buffer.byteLength(PDF), data: b64(PDF) });
   if (path === '/messages/m2/attachments/a4') return json({ size: 8, data: b64('{"hi":1}') });
+  if (path === '/settings/sendAs') return json({ sendAs: [{ sendAsEmail: 'umer@sender.example', isDefault: true, signature: '— Umer' }, { sendAsEmail: 'alias@sender.example' }] });
+  if (path === '/labels' && (init.method ?? 'GET') === 'GET') return json({ labels: [{ id: 'Label_1', name: 'School' }] });
+  if (path === '/labels') return json({ id: 'Label_2', name: JSON.parse(String(init.body ?? '{}')).name ?? 'School' });
+  if (path === '/drafts') { if (init.method === 'POST') draftBodies.push(String(init.body ?? '')); return json({ id: 'draft-1' }); }
+  if (path.endsWith('/modify')) return json(threads[path.split('/threads/')[1].split('/')[0]] ?? {});
   const t = threads[path.split('/threads/')[1]];
   if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, sendRefusal);
   return t ? json(t) : json({}, 404);
@@ -65,7 +78,7 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
     'newest[2]{id,from,subject,age}:',
     '  18c0b2f00d2e3b4a,Shop <no-reply@shop.example>,Your order,5m',
     '  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h',
-    'help[4]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[4]:\n')[1]);
+    'help[6]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[6]:\n')[1]);
   assert.equal(await runMail(token, ['search', 'from:school']), 'threads[1]{id,from,subject,age}:\n  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h\ntotal: 1');
   assert.equal(await runMail(token, ['read', '18c0a1f00d2e3b4a']), [
     'subject: Trip on Friday, forms',
@@ -99,10 +112,121 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
 
   // Only Gmail's own ids reach the address; plain errors with the help.
   assert.match(await runMail(token, ['read', '../../settings/filters']), /^error: mail read <id>/);
-  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[4\]:/);
+  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[6\]:/);
   await assert.rejects(runMail(token, ['read', 'deadbeef00']), /No such conversation/);
   await assert.rejects(runMail(async () => null, []), /not connected any more/);
   assert.ok(asked.every((a) => a.startsWith('GET ') && !/settings|\.\./.test(a)), 'it only ever reads');
+});
+
+test('Chief drafts a reply and files under a label: one card each, the guarded path, nothing ever sent', async () => {
+  const { effectOf } = await import('../src/policy.ts');
+  const seen = { bot: 'Chief', space: '/tmp', secret: [] } as any;
+  const draft = effectOf('mail', { args: ['draft', '18c0a1f00d2e3b4a', 'Thanks, got it.'] }, seen) as any;
+  assert.equal(draft.kind, 'send', 'a draft asks');
+  assert.equal(draft.key, undefined, 'no standing grant covers a write');
+  assert.equal(draft.mail.id, '18c0a1f00d2e3b4a', 'one card bound to that one message, without exposing the internal id');
+  const label = effectOf('mail', { args: ['label', '18c0a1f00d2e3b4a', 'School'] }, seen) as any;
+  assert.equal(label.kind, 'send');
+  assert.equal(label.key, undefined, 'filing asks every time too');
+  assert.equal(label.mail.id, '18c0a1f00d2e3b4a');
+  assert.match(label.words, /School/, 'the card names the label');
+  assert.equal((effectOf('mail', { args: ['send', 'x'] }, seen) as any).kind, 'refuse', 'send stays refused');
+
+  // The surface delegates to the guarded MailSend path; without it, plain words ask to connect.
+  assert.match(await runMail(token, ['draft', '18c0a1f00d2e3b4a', 'hi']), /^error: Connect Gmail drafts & labels/);
+  assert.match(await runMail(token, ['label', '18c0a1f00d2e3b4a', 'School']), /^error: Connect Gmail drafts & labels/);
+  assert.match(await runMail(token, ['draft', 'nope', 'hi']), /^error: mail draft <id>/);
+  const { db, done } = setup();
+  try {
+    const { MailSend } = await import('../src/mail-send.ts');
+    const mail = new MailSend(db, { token: async () => 'tok' } as any);
+    asked.length = 0;
+    const drafted = await runMail(token, ['draft', '18c0a1f00d2e3b4a', 'Thanks, got it.'], undefined, mail, 'chief');
+    assert.match(drafted, /^drafted: \{id: draft-1, thread: 18c0a1f00d2e3b4a, from: umer@sender\.example/);
+    assert.match(drafted, /nothing was sent/i, 'it says plainly nothing went out');
+    const labelled = await runMail(token, ['label', '18c0a1f00d2e3b4a', 'School'], undefined, mail, 'chief');
+    assert.equal(labelled, 'labelled: {id: 18c0a1f00d2e3b4a, label: School}');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 1, 'the draft is witnessed');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.labelled'").length, 1, 'the label is witnessed');
+    assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
+    assert.ok(asked.some((x) => x.startsWith('POST /drafts')), 'the draft landed');
+    assert.ok(asked.some((x) => x.includes('/modify')), 'the label landed');
+  } finally { done(); }
+});
+
+test('draftReply hardens attacker-shaped thread headers: refuses splits, encodes the subject, omits absent refs', async () => {
+  const { db, done } = setup();
+  try {
+    const mail = new MailSend(db, { token: async () => 'tok' } as any);
+    asked.length = 0;
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4c', 'Thanks.', 'chief'), /unreadable subject/, 'a split subject never reaches the MIME');
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4d', 'Thanks.', 'chief'), /one work email address/, 'a split From is not an address');
+    await assert.rejects(mail.draftReply('18c0a1f00d2e3b4e', 'Thanks.', 'chief'), /no messages/, 'an empty thread drafts nothing');
+    assert.equal(asked.filter((x) => x.startsWith('POST /drafts')).length, 0, 'no refusal drafted anything');
+    draftBodies.length = 0;
+    const out = await mail.draftReply('18c0a1f00d2e3b4f', 'Thanks, got it.', 'chief');
+    assert.match(out, /^drafted: \{id: draft-1/);
+    const head = Buffer.from(JSON.parse(draftBodies[0]).message.raw, 'base64url').toString('utf8').split('\r\n\r\n')[0];
+    assert.ok(head.includes('=?UTF-8?B?') && !head.includes('caf\u00e9'), 'the subject is encoded words, never raw bytes');
+    const words = [...head.replace(/\r\n /g, '').matchAll(/=\?UTF-8\?B\?([^?]+)\?=/g)].map((m) => Buffer.from(m[1], 'base64').toString('utf8')).join('');
+    assert.equal(words, 'Re: caf\u00e9 update', 'it decodes back to the reply subject');
+    assert.ok(!head.includes('In-Reply-To'), 'no Message-Id means no reference headers');
+    draftBodies.length = 0;
+    await mail.draftReply('18c0a1f00d2e3b50', 'Hello back.', 'chief');
+    const head2 = Buffer.from(JSON.parse(draftBodies[0]).message.raw, 'base64url').toString('utf8').split('\r\n\r\n')[0];
+    assert.ok(head2.includes('In-Reply-To: <abc123@mail.example>') && head2.includes('References: <abc123@mail.example>'), 'a present id threads the reply');
+  } finally { done(); }
+});
+
+test('a helper drafts and files through crewd: one card per message, the yes writes, never sends', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  await signInApp(crew.connections, 'gmail');
+  await signInApp(crew.connections, 'gmailwrite');
+  assert.equal(A.apps(crew.snapshot()).find((a) => a.id === 'gmailwrite')!.status, 'On · changes ask first');
+  asked.length = 0;
+  const t = crew.assign('quill', 'reply [tool mail {"args":["draft","18c0a1f00d2e3b51","## Friday trip\\n\\n**Thanks.**\\n\\n- Form ready"]}]', 'chief').task;
+  await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
+  assert.match(db.get("SELECT title FROM asks WHERE state = 'open'")!.title, /create a reply in your Gmail drafts/, 'one plain card for that message');
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 0, 'nothing lands before the yes');
+  await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
+  await settled(db, t);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", t)!.text, /drafted: \{id: draft-1/, 'the draft landed after the yes');
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 1);
+  const raw = Buffer.from(JSON.parse(draftBodies.at(-1)!).message.raw, 'base64url').toString('utf8');
+  const html = Buffer.from(raw.split('\r\n\r\n')[1], 'base64').toString('utf8');
+  assert.match(raw, /To: office@school.example/, 'neither own send-as becomes the recipient');
+  assert.match(raw, /Content-Type: text\/html/); assert.match(html, /<h2>Friday trip<\/h2>/); assert.match(html, /<strong>Thanks\.<\/strong>/); assert.match(html, /<li>Form ready<\/li>/); assert.match(html, /— Umer/);
+  const u = crew.assign('quill', 'file it [tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open' AND title LIKE '%file this email%'"));
+  await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
+  await settled(db, u);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", u)!.text, /labelled: \{id: 18c0a1f00d2e3b4a, label: School\}/);
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.labelled'").length, 1);
+  assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
+  assert.ok(asked.some((x) => x.startsWith('POST /drafts')) && asked.some((x) => x.includes('/modify')), 'both writes landed');
+  for (const args of [['draft', 'bad-id', 'hi'], ['draft', '18c0a1f00d2e3b4a', 'x'.repeat(12001)], ['label', '18c0a1f00d2e3b4a', 'bad/label']]) {
+    const invalid = crew.assign('quill', `[tool mail ${JSON.stringify({ args })}]`, 'chief').task;
+    await settled(db, invalid); assert.equal(db.all("SELECT * FROM asks WHERE state='open'").length, 0, 'invalid arguments never ask or write');
+  }
+  const before = draftBodies.length, own = crew.assign('quill', '[tool mail {"args":["draft","18c0a1f00d2e3b4b","Hello"]}]', 'chief').task;
+  await until('own-only ask', () => db.get("SELECT * FROM asks WHERE state='open'"));
+  const ownAsk = db.get("SELECT * FROM asks WHERE state='open'")!;
+  const view = A.cards(crew.snapshot()).find((c) => c.id === ownAsk.id)!;
+  assert.equal(view.choices[0].label, 'Create draft'); assert.equal(view.status, 'Nothing will be sent');
+  await crew.answer(ownAsk.id, { answer: 'allow' }); await settled(db, own);
+  assert.equal(draftBodies.length, before, 'an all-own-address thread cannot create a draft');
+  assert.ok(db.all("SELECT text FROM messages WHERE task_id=? AND author='bot'", own).some((m) => /only your own messages/.test(m.text)), 'the real refusal reaches the chat');
+  const parked = crew.assign('quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  await until('parked approval', () => db.get("SELECT 1 FROM events WHERE kind='ask.parked' AND json_extract(data,'$.task')=?", parked));
+  await crew.answer(db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", parked)!.id, { answer: 'allow' }); await settled(db, parked);
+  const writes = asked.filter((x) => x.includes('/modify')).length;
+  const again = crew.assign('quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  await until('a new job needs its own card', () => db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", again));
+  assert.equal(asked.filter((x) => x.includes('/modify')).length, writes, 'a parked grant cannot cross task identity');
+  await crew.answer(db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", again)!.id, { answer: 'deny' }); await settled(db, again);
+  done();
 });
 
 test('a helper reads the connected Gmail through crewd: no Google MCP, the token stays with crewd, it never asks', async () => {

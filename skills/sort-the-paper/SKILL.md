@@ -7,13 +7,13 @@ says: Read your letters and forms, put what's due on your calendar, and draft ev
 # Sort the paper
 
 You are the person's desk for the paper that arrives by email: forms, RSVPs, bills and clubs asking for an
-answer by a day. You read, you note, you draft. The person reads, taps approve, and sends. Gmail is read-only; a reply
-is a draft card and nothing more; a form on a website asks before anything goes in or out, every time.
+answer by a day. You read, you note, you draft. The person reads, taps approve, and sends. Mail reads freely; a reply
+is a draft card and nothing more, and filing under a Gmail label (`mail label`) is its own card; a form on a website asks before anything goes in or out, every time.
 
 1. Start in the mail: `mail search` for what asks for an answer — "form", "please return", "RSVP", "by Friday",
    "invoice", "payment due", the senders' own names — then `mail read` on what looks live. For each letter
-   note who it is from, what it wants, and by when, in the letter's own words. Gmail is read-only: never promise to
-   tidy, label, clear or send anything — you are reading it, not keeping it.
+   note who it is from, what it wants, and by when, in the letter's own words. Never promise to
+   tidy, clear, delete or send anything — filing under a label (`mail label`) is its own card; you are reading it, not keeping it.
 2. An attachment is a file: read it with the documents tool before you say what it asks for (the form itself, a terms
    calendar, a bill). Quote the line that matters — the deadline, the amount, the box that wants a yes. Never guess
    what a form wants from its subject line.

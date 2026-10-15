@@ -12,8 +12,8 @@ is the only thing that cancels.
 
 1. Find what renews, in their own mail: `mail search` for "renewal", "your subscription", "receipt", "invoice", "trial ending"
    and each company's name, then `mail read`. Note for each one: what the service is, who charges it, what it costs, how often,
-   the day it renews next, and whether it says it renews automatically. Gmail is read-only: never promise to tidy, label or
-   clear the mail — you are reading it, not cleaning it.
+   the day it renews next, and whether it says it renews automatically. Never promise to tidy, clear, delete or send
+   the mail — filing under a label (`mail label`) is its own card; you are reading it, not cleaning it.
 2. A receipt attached to the mail is a file: read it with the documents tool. Where the mail says one price and a newer mail
    says another, the newest mail wins, and you say both: "the plan was $9.99 a month in the March receipt; the April mail says
    $12.99." Never guess a price you have not read.

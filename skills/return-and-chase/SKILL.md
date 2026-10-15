@@ -11,8 +11,8 @@ or payment page, never add a card, and never cancel an order — a cancellation 
 to, and until that card says yes nothing is cancelled. No money is spent at any step.
 
 1. Find the order first. If they have the order number or the item's page, start there. Otherwise `mail search` for the
-   shop's name or "order confirmation", then `mail read`. Gmail is read-only: never promise to tidy, label or clear the
-   mail. Note the item, what they paid, the order number and the day it was delivered.
+   shop's name or "order confirmation", then `mail read`. Never promise to tidy, clear, delete or send the mail —
+   filing under a Gmail label (`mail label`) is its own card. Note the item, what they paid, the order number and the day it was delivered.
 2. Guest lookup comes before sign-in: most shops show an order from the order number and the email it was bought with.
    Only where the shop needs the account do you work in the one the person signed you in to.
 3. Read the shop's own returns page before promising anything: the window (days from delivery), the state the item must

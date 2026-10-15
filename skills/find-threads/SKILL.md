@@ -27,7 +27,7 @@ that"), "<rival> alternative" for each rival, and the category words on their ow
 
 **Reddit is off.** Its anonymous JSON answers 403 and its RSS throttles. Offer once, in your own words: "Want me
 to read Reddit keyword alerts? Set up any free alert service that emails you, and connect Gmail." If they say
-yes and Gmail is connected, read the alert emails the read-only mail tool gives you.
+yes and Gmail is connected, read the alert emails the mail tool gives you.
 
 ## 3. Score each thread 0-3, out loud
 

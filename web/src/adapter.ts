@@ -40,6 +40,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
@@ -80,7 +81,7 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 /** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
 export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
-export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean };
+export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key: Main2691) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
@@ -545,7 +546,7 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 export const GOOGLE_STEPS = [
   { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
   { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar” and press Enable. Do the same for “Gmail” and “Google Drive”.' },
-  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email; for reply-as-draft and filing also add gmail.modify and gmail.compose. Under Audience press Publish app, so it says “In production”.' },
   { title: 'Make the sign-in', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
 
@@ -871,6 +872,11 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `${name} has a question`,
       words: d.question ? plain(d.question) : `${name} stopped to check something with you. Tell ${name} what to do:`, choices: [] };
   }
+  if (d.mail?.action === 'draft' || d.mail?.action === 'label') {
+    const drafting = d.mail.action === 'draft';
+    return { ...base, kind: 'ok', mailAction: d.mail.action, status: 'Nothing will be sent', head: drafting ? 'Create this Gmail draft?' : 'File this email?', words: String(d.words), preview: d.preview,
+      choices: [{ label: drafting ? 'Create draft' : 'Apply label', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   const spend = !!d.spends || d.effect === 'spend';
   const words = d.words ? (d.preview?.verbatim ? String(d.words) : plain(d.words)) : spend ? `${name} wants to use something that costs money. Is that all right?` : `${name} would like your OK to carry on.`;
   // A checkout is review-first: the inbox only opens the review and offers the way out; the sheet's yes names the order.
@@ -920,6 +926,7 @@ function receiptAction(kind: string, detail: Json): string {
   if (kind !== 'permission') return '';
   const d = detail ?? {};
   const site = (/ (?:at|on) (.+?)\s*$/.exec(String(d.preview?.head ?? '')) ?? [])[1] ?? '';
+  if (d.mail) return d.mail.action === 'draft' ? 'Allowed a Gmail draft' : 'Allowed email filing';
   if (d.effect === 'spend') return site ? `Placed the order at ${site}` : 'Placed the order';
   if (d.fill) return site ? `Filled in a form at ${site}` : 'Filled in a form';
   if (d.effect === 'send') return site ? `Sent a message at ${site}` : 'Sent a message';
@@ -1746,15 +1753,15 @@ export function planName(accounts: Json[] | null) {
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
-export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
+export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', gmailwrite: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
 /** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
 /** Person-attested eligibility; internal device ids never reach a screen. */
 export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.eligibility?.name ?? ''), kind: String(s.eligibility?.kind ?? 'unknown'), stopped: s.suppressed === true, note: s.suppressed ? 'On your do-not-email list.' : s.eligibility?.kind === 'corporate' ? 'You marked this organisation corporate-eligible.' : 'Unknown organisations, sole traders and small partnerships cannot be emailed.' });
-// v1: Drive, Calendar, Gmail and Gmail sending on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
-// connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
+// v1: Drive, Calendar, Gmail, Gmail sending and Gmail drafts & labels on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
+// connection at all. Calendar, Gmail, Gmail sending and Gmail drafts & labels show Google's "unverified app" screen, so their card warns first.
 // Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
 // drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
 const APPS: App[] = [
@@ -1762,11 +1769,12 @@ const APPS: App[] = [
   { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
   { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
   { id: 'gmailsend', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
+  { id: 'gmailwrite', name: 'Gmail drafts & labels', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can draft a reply you send yourself, and file mail under a label. Each draft and each label asks first; nothing is ever sent.' },
   { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
   { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
-export const apps = (state: Json): App[] => APPS.map((a) => ({ ...a, on: !!state.connections?.includes?.(a.id) }));
+export const apps = (state: Json): App[] => APPS.map((a) => { const on = !!state.connections?.includes?.(a.id); return { ...a, on, status: !on ? 'Not connected' : a.id === 'gmail' ? 'On · read only' : a.id === 'gmailwrite' ? 'On · changes ask first' : 'On' }; });
 
 /** Herdr's own row on the Apps screen: missing, installed but not answering, or answering. */
 export type HerdrSetup = { state: 'missing' | 'setup' | 'on'; says: string; howto: string };
