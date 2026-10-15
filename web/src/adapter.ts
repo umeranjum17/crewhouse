@@ -527,7 +527,7 @@ export const update = (state: Json) => (state.update ? { words: `A new Crewhouse
 export const GOOGLE_STEPS = [
   { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },
   { title: 'Switch on Calendar, Gmail and Drive', url: 'https://console.cloud.google.com/apis/library', says: 'Search “Google Calendar” and press Enable. Do the same for “Gmail” and “Google Drive”.' },
-  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email. Under Audience press Publish app, so it says “In production”.' },
+  { title: 'Describe the app', url: 'https://console.cloud.google.com/auth/overview', says: 'Pick External, call it “Crewhouse”, give your email. Under Data access add calendar.events, gmail.readonly and drive.file; for sending also add gmail.send, openid and email; for reply-as-draft and filing also add gmail.modify and gmail.compose. Under Audience press Publish app, so it says “In production”.' },
   { title: 'Make the sign-in', url: 'https://console.cloud.google.com/apis/credentials', says: 'Create credentials → OAuth client ID → type “Desktop app”. Paste the Client ID and Client secret below.' },
 ];
 
@@ -1720,15 +1720,15 @@ export function planName(accounts: Json[] | null) {
 }
 
 /** Whose sign-in page an app opens: "Google" for Gmail, Calendar and Drive. */
-export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
+export const signsInWith = (app: App) => ({ gmail: 'Google', gmailsend: 'Google', gmailwrite: 'Google', calendar: 'Google', drive: 'Google' } as Record<string, string>)[app.id] ?? app.name;
 export const appById = (state: Json, id: string) => apps(state).find((a) => a.id === id);
 /** Google's apps wait for the owner to switch Google on for your crew (once, in Settings). */
 export const needsHouse = (state: Json, app: App) => signsInWith(app) === 'Google' && state.house?.google === false;
 
 /** Person-attested eligibility; internal device ids never reach a screen. */
 export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.eligibility?.name ?? ''), kind: String(s.eligibility?.kind ?? 'unknown'), stopped: s.suppressed === true, note: s.suppressed ? 'On your do-not-email list.' : s.eligibility?.kind === 'corporate' ? 'You marked this organisation corporate-eligible.' : 'Unknown organisations, sole traders and small partnerships cannot be emailed.' });
-// v1: Drive, Calendar, Gmail and Gmail sending on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
-// connection at all. Calendar and Gmail show Google's "unverified app" screen, so their card warns first.
+// v1: Drive, Calendar, Gmail, Gmail sending and Gmail drafts & labels on the person's own Google app, then Notion and Canva. Sharing from the phone needs no
+// connection at all. Calendar, Gmail, Gmail sending and Gmail drafts & labels show Google's "unverified app" screen, so their card warns first.
 // Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
 // drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
 const APPS: App[] = [
@@ -1736,6 +1736,7 @@ const APPS: App[] = [
   { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
   { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
   { id: 'gmailsend', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
+  { id: 'gmailwrite', name: 'Gmail drafts & labels', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can draft a reply you send yourself, and file mail under a label. Each draft and each label asks first; nothing is ever sent.' },
   { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
   { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
