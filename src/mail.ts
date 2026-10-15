@@ -1,17 +1,20 @@
-// mail-axi: the person's own Gmail, read-only, as one small command-shaped tool in place of Google's hosted Gmail MCP
-// server (23 tool schemas, about 8,900 tokens on every turn). crewd runs it on the person's Gmail connection
-// (`gmail.readonly`): the token never leaves crewd, and nothing here can send, change or delete mail.
+// mail-axi: the person's own Gmail as one small command-shaped tool in place of Google's hosted Gmail MCP
+// server (23 tool schemas, about 8,900 tokens on every turn). crewd runs reads on the person's Gmail connection
+// (`gmail.readonly`): the token never leaves crewd. Drafts and labels run on the separate `gmailwrite` grant
+// through the guarded MailSend path (src/mail-send.ts); nothing here can send mail.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tool } from './engine.ts';
 import { writeBytes } from './files.ts';
 import { options, table } from './calendar.ts';
+import type { MailSend } from './mail-send.ts';
 
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 const HELP = [
   'mail                               unread count and the newest in the inbox', 'mail search "<gmail query>" [--limit 10]   e.g. from:school newer_than:7d',
   'mail read <id> [--full]            a conversation: who wrote, and the latest message', 'mail attachments <id> [<n>]        what it has attached; with n, save it into your files/ folder',
+  'mail draft <id> <reply>            write the reply as a Gmail draft you send yourself; nothing is sent', 'mail label <id> <label>            file it under a Gmail label',
 ], CUT = 1500, FULL = 8000, ATTACH_MAX = 10 * 1024 * 1024; // enough for a statement or a form, and a helper has to read what it saves
 type Token = () => Promise<string | null>;
 
@@ -67,8 +70,9 @@ export async function newThreads(token: Token, after: number, limit = 25) {
   return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
 }
 
-export async function runMail(token: Token, args: string[], root?: string): Promise<string> {
+export async function runMail(token: Token, args: string[], root?: string, filing?: MailSend, bot = 'chief'): Promise<string> {
   const [cmd = 'inbox', ...more] = args, { o, rest } = options(more), bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
+  const idOf = (id: string, use: string) => (/^[a-f0-9]{8,32}$/i.test(id) ? null : bad(use));
   if (cmd === 'inbox') {
     const [label, list] = await Promise.all([get(token, '/labels/INBOX'), get(token, '/threads?labelIds=INBOX&maxResults=5')]);
     return [`unread: ${label.threadsUnread ?? 0}`, table('newest', ['id', 'from', 'subject', 'age'], await rows(token, list.threads ?? [])),
@@ -110,10 +114,26 @@ export async function runMail(token: Token, args: string[], root?: string): Prom
     writeBytes(root, `files/${name}`, bytes);
     return `saved: {file: files/${name}, name: ${pick.name}, type: ${pick.type}, size: ${sizeWords(bytes.length)}}\nRead it with your own file tools.`;
   }
+  if (cmd === 'draft') {
+    const err = idOf(rest[0] ?? '', 'mail draft <id> <reply>, with the id from mail or mail search');
+    if (err) return err;
+    const body = rest.slice(1).join(' ').trim();
+    if (!body) return bad('mail draft <id> <reply>: write the reply after the id');
+    if (!filing) return bad('Connect Gmail drafts & labels in Settings first (crew_connect). Reading Gmail alone cannot draft.');
+    return filing.draftReply(rest[0], body, bot);
+  }
+  if (cmd === 'label') {
+    const err = idOf(rest[0] ?? '', 'mail label <id> <label>, with the id from mail or mail search');
+    if (err) return err;
+    const label = rest.slice(1).join(' ').trim();
+    if (!label) return bad('mail label <id> <label>: name the label after the id');
+    if (!filing) return bad('Connect Gmail drafts & labels in Settings first (crew_connect). Reading Gmail alone cannot file.');
+    return filing.applyLabel(rest[0], label, bot);
+  }
   return bad(`no command "${cmd}"`);
 }
 
-export const mailTool = (token: Token, root?: string) =>
-  tool('mail', "The person's own Gmail, read-only (mail-axi): what is new, search it, read a conversation, save an attachment into your own files. It cannot send, change or delete mail. Pass the command's arguments as a list, without the program name.",
+export const mailTool = (token: Token, root?: string, filing?: MailSend, bot = 'chief') =>
+  tool('mail', "The person's own Gmail (mail-axi): what is new, search it, read a conversation, save an attachment into your own files, write a reply as a Gmail draft you send yourself, or file it under a label. It cannot send mail. Pass the command's arguments as a list, without the program name.",
     { type: 'object', properties: { args: { type: 'array', items: { type: 'string' } } }, required: ['args'], additionalProperties: false },
-    (p) => runMail(token, (p.args ?? []).map(String), root).catch((e) => `error: ${e.message}`));
+    (p) => runMail(token, (p.args ?? []).map(String), root, filing, bot).catch((e) => `error: ${e.message}`));

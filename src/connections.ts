@@ -12,12 +12,13 @@ import { mailTool } from './mail.ts';
 
 export { CALENDAR };
 export type App = Provider & { google?: boolean; warns?: boolean; tool?: (token: () => Promise<string | null>) => CrewTool };
-/** The kit's presets request one Google service at a time; Gmail stays read-only. */
+/** The kit's presets request one Google service at a time; Gmail stays read-only, filing lives beside it. */
 export const APPS: Record<string, App> = {
   drive: { ...providers.drive, google: true },
   calendar: { ...providers.calendar, google: true, warns: true, tool: calendarTool },
   gmail: { ...providers.gmail, google: true, warns: true, tool: mailTool },
   gmailsend: { ...providers.gmail, id: 'gmailsend', name: 'Gmail sending', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'], google: true, warns: true },
+  gmailwrite: { ...providers.gmail, id: 'gmailwrite', name: 'Gmail drafts & labels', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/gmail.compose'], google: true, warns: true },
   notion: { ...providers.notion }, canva: { ...providers.canva },
 };
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
