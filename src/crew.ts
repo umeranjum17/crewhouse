@@ -1978,10 +1978,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
         + 'They read it right in Crewhouse on the web and on their phone, so one finished document is enough — never a shorter companion copy of it.',
         (p) => this.document(botId, String(p.name ?? ''), p.blocks)),
-      tool('crew_slides', 'Make a real slide deck the person can open and present (.pptx), in your files/, and deliver it. `name` is the title; '
-        + '`slides` is [{ title, bullets: ["point", …] }, …], one entry per slide. crewd writes the file, so never make the binary yourself. '
-        + 'Reach for a deck when the answer is shown or read aloud to other people — a pitch, a training, a review, a plan for a meeting — and '
-        + 'not for something the person keeps or sends: that is a document. Keep a slide to a few short lines, and say what the deck is on its first slide.',
+      tool('crew_slides', 'Make a slide deck (.pptx) in your files/ and deliver it: {name, slides: [{title, bullets: [...]}]}. '
+        + 'crewd writes the file, never make it yourself. For showing or reading aloud — a pitch, a training, a review; '
+        + 'keeping or sending is a document. Short lines; the first slide says what the deck is.',
         (p) => this.deck(botId, String(p.name ?? ''), p.slides)),
       tool('crew_copy', "Put a copy of a file from your folder into the person's own folders. `to` is the full path of the new file.",
         (p) => {

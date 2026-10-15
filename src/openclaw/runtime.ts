@@ -32,8 +32,7 @@ const ABOUT: Record<string, string> = {
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
-  crew_document: 'Write and deliver an editable document: pass {name: "title", blocks: [{heading: "Title"}, {text: "Paragraph"}, {bullets: ["Item"]}]}. Crewhouse writes the file; do not make it yourself.',
-  crew_slides: 'Write and deliver a slide deck (.pptx) the person can present: pass {name: "title", slides: [{title: "Slide title", bullets: ["Point"]}]}. Crewhouse writes the file; do not make it yourself.',
+  crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
 export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
 
