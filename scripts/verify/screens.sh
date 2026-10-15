@@ -42,6 +42,7 @@ axi() { local out rc n=0; while :; do out=$(chrome-devtools-axi "$@" 2>&1); rc=$
 pages_out=$(chrome-devtools-axi pages 2>&1) || { echo "screens.sh: could not list pages: $pages_out" >&2; exit 1; }
 first=$(printf '%s\n' "$pages_out" | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
 if [ -n "$first" ]; then axi selectpage "$first"; else axi newpage about:blank; fi
+echo "screens.sh: capturing $SLUG with tab ${first:-new}" >&2
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
 for theme in night day; do
@@ -49,6 +50,7 @@ for theme in night day; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
     # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
+    echo "screens.sh: $SLUG $theme $w" >&2
     axi open "$u" || true
     axi resize "$w" "$h"
     axi open "$u"
