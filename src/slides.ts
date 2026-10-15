@@ -5,7 +5,6 @@
 export type SlideSpec = { title: string; bullets?: string[] };
 export type DeckSpec = { name: string; slides: SlideSpec[] };
 
-// Bounds on what a model can ask for: a 400-slide deck is a mistake, not a deck.
 const MAX = { slides: 40, lines: 8, title: 120, line: 200, body: 420 };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
