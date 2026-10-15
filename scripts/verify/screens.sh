@@ -33,6 +33,9 @@ node "$VERIFY_DIR/personal-voice.mjs" || {
 
 DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
 mkdir -p "$DEST"
+# The browser tool prints diagnostics on stdout: silent on success, loud on
+# failure, with one retry for a transient CDP miss (both attempts are printed).
+axi() { local out rc n=0; while :; do out=$(chrome-devtools-axi "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && return 0; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
 for theme in night day; do
@@ -40,10 +43,10 @@ for theme in night day; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
     # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
-    chrome-devtools-axi open "$u" >/dev/null 2>&1 || true
-    chrome-devtools-axi resize "$w" "$h" >/dev/null
-    chrome-devtools-axi open "$u" >/dev/null
-    [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
+    axi open "$u" || true
+    axi resize "$w" "$h"
+    axi open "$u"
+    [ -z "${THEN:-}" ] || axi eval "$THEN"
     if [ "${EXPAND_MORE:-0}" = 1 ]; then
       # ponytail: eight More buttons; raise for longer replay threads.
       for ((n=0; n<8; n++)); do
@@ -52,10 +55,10 @@ for theme in night day; do
         chrome-devtools-axi click "@$ref" >/dev/null
       done
     fi
-    [ -z "${AFTER:-}" ] || chrome-devtools-axi eval "$AFTER" >/dev/null
+    [ -z "${AFTER:-}" ] || axi eval "$AFTER"
     out="$DEST/$SLUG-$theme-$w.png"
     flags=(); [ "${FULL_PAGE:-0}" != 1 ] || flags+=(--full-page)
-    chrome-devtools-axi screenshot "$out" "${flags[@]}" >/dev/null
+    axi screenshot "$out" "${flags[@]}"
     echo "$out"
   done
 done
