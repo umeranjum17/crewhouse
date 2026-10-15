@@ -35,7 +35,8 @@ DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
 mkdir -p "$DEST"
 # The browser tool prints diagnostics on stdout: silent on success, loud on
 # failure, with one retry for a transient CDP miss (both attempts are printed).
-axi() { local out rc n=0; while :; do out=$(chrome-devtools-axi "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && return 0; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
+# `timeout` bounds a hung CDP call (a dead tab never answers): 124 is timed out.
+axi() { local out rc n=0; while :; do out=$(timeout 120 chrome-devtools-axi "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && return 0; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
 # A run can inherit a session whose tabs have no selection (a run that died
 # mid-capture leaves them behind), and `open` then refuses: take the first
 # tab, or open one when there is none.
