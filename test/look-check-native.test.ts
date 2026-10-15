@@ -1,4 +1,4 @@
-// A regression on the look-check's native pixel cut detector (scripts/look-check.mjs nativeCut), through its offline
+// A regression on the look-check's native pixel cut detector (scripts/verify/look-check.mjs nativeCut), through its offline
 // "native" replay mode: the real Android capture of Chief's header at the largest text, where uiautomator reports the
 // node's full text "Needs you" while the screen drew "Needs ." — the ellipsis squeezed onto one dot, eleven pixels
 // short of the node's own edge. On main the tree-only check found nothing here; the drawn dot must be a `clipped` hit.
@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { browserBin } from '../src/desktop.ts';
 
 const repo = join(import.meta.dirname, '..');
-const script = join(repo, '.agents', 'skills', 'verify-crewhouse', 'scripts', 'look-check.mjs');
+const script = join(repo, 'scripts', 'verify', 'look-check.mjs');
 const fixture = join(repo, 'test', 'fixtures', 'chief-header-truncated');
 const bin = browserBin();
 

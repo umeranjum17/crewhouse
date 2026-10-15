@@ -1,0 +1,21 @@
+# done-done project config. `done-done init` never overwrites this file.
+# The app name finds this repo's evidence and receipts from every checkout.
+app: "crewhouse"
+# This repo's coding agent, over agent in ~/.done-done/config.yaml (model, effort and the other agent settings stay there).
+# agent: opencode
+# Commits touching only these keep evidence fresh (mirrors CI's docs-only skip):
+# a proof of HEAD still counts until a commit outside this list lands.
+evidence:
+  ignore_paths: ["docs/**", "data/**", "landing/**", "README.md", "TRY-IT.md", "LICENSE", "NOTICE"]
+# The repo's verification checks as re-runnable recipes. Every journey writes its
+# proof into its own run folder ($DONE_DONE_EVIDENCE_ROOT) and exits non-zero on
+# failure; `done-done run <journey>` then `done-done check` / `receipt` prove HEAD.
+# No matrix/dom/base_ref here on purpose: these journeys stay hermetic (no browser,
+# no model) so CI can run them; visual proof adds captures to a run folder by hand.
+journeys:
+  stub-drive:
+    command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
+  static-checks:
+    command: "node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1"
+  screens:
+    command: "scripts/verify/screens-smoke.sh $DONE_DONE_EVIDENCE_ROOT"

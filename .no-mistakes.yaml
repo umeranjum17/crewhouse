@@ -1,9 +1,10 @@
 # Per-repo no-mistakes overrides for Crewhouse.
 
-# The Test step's runtime proof is the documented real consumer journey in the
-# project-local verify-crewhouse skill — the same procedure a maintainer runs by
-# hand. The repo's own gates stay required; these instructions add to them and
-# never replace or weaken them.
+# The Test step's runtime proof is done-done: the repo's journeys drive the real
+# crewd the same way a maintainer runs it by hand (there is no verify skill left;
+# proof lines say "no verify skill - done-done journey <name>"). The repo's own
+# gates stay required; these instructions add to them and never replace or
+# weaken them.
 test:
   instructions: |
     Required, in order, from the run worktree with dependencies installed (npm ci):
@@ -12,15 +13,15 @@ test:
        required; exit 1 lists violations; exit 2 means the guard could not run and
        must be reported as such, never treated as clean.
     3. Runtime proof, for any change touching src/, web/src/, relay/, tools/ or the
-       phone-facing contract: read .agents/skills/verify-crewhouse/SKILL.md and follow
-       its Launch, Doctor, Drive, Evidence and Cleanup exactly — the real crewd on the
-       stub engine (CREWHOUSE_ENGINE=stub), full env mask (env -i; HOME and every XDG
-       var inside a throwaway lab; dead D-Bus path), OS-assigned port, data dirs
-       outside the repo. Drive the mapped feature the change touches (see
-       features/README.md); for UI work include 1440 and 390 widths plus the 320
-       narrow probe with the longest visible title, and record measured geometry and
-       API bodies, not impressions. A change with no runtime-facing surface says so
-       and skips this step.
+       phone-facing contract: `done-done run stub-drive` (the real crewd on the
+       stub engine, CREWHOUSE_ENGINE=stub, under the journey's own env mask and
+       OS-assigned port, driven through the app's own API journey) and
+       `done-done run static-checks` (the personal-voice copy check); for UI work
+       also `CHROME_DEVTOOLS_AXI_SESSION=<task> done-done run screens` (Chief's
+       thread and the Office view, day and night, 1440 and 390). Then
+       `done-done check --outcome "<what a user can now do>"` on the run's files
+       and `done-done receipt` on a clean tree. A change with no runtime-facing
+       surface says so and skips this step.
     Never sign in, spend, or touch the owner's real crewd install, home, keyring or
     ~/.pi; never run a second crewd on the default port 7711; evidence lives outside
     the worktree and survives cleanup; cleanup kills only processes this run started.
