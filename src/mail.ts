@@ -10,10 +10,8 @@ import { options, table } from './calendar.ts';
 export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 const HELP = [
-  'mail                               unread count and the newest in the inbox',
-  'mail search "<gmail query>" [--limit 10]   e.g. from:school newer_than:7d',
-  'mail read <id> [--full]            a conversation: who wrote, and the latest message',
-  'mail attachments <id> [<n>]        what it has attached; with n, save it into your files/ folder',
+  'mail                               unread count and the newest in the inbox', 'mail search "<gmail query>" [--limit 10]   e.g. from:school newer_than:7d',
+  'mail read <id> [--full]            a conversation: who wrote, and the latest message', 'mail attachments <id> [<n>]        what it has attached; with n, save it into your files/ folder',
 ];
 const CUT = 1500, FULL = 8000;
 const ATTACH_MAX = 10 * 1024 * 1024; // enough for a statement or a form, and a helper has to read what it saves
@@ -28,9 +26,7 @@ async function get(token: Token, path: string) {
   return res.json() as Promise<any>;
 }
 
-const header = (m: any, name: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '').replace(/\s+/g, ' ').trim();
-const parts = (p: any): any[] => (p ? [p, ...(p.parts ?? []).flatMap(parts)] : []);
-const sizeWords = (n: number) => n < 1024 ? `${n}B` : n < 1_048_576 ? `${Math.round(n / 1024)}KB` : `${(n / 1_048_576).toFixed(1)}MB`;
+const header = (m: any, name: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? '').replace(/\s+/g, ' ').trim(), parts = (p: any): any[] => (p ? [p, ...(p.parts ?? []).flatMap(parts)] : []), sizeWords = (n: number) => n < 1024 ? `${n}B` : n < 1_048_576 ? `${Math.round(n / 1024)}KB` : `${(n / 1_048_576).toFixed(1)}MB`;
 
 /** An attachment's own name, made safe: no folders, no hidden file, no control characters, a sane length. */
 function safeName(raw: unknown) {
@@ -49,8 +45,7 @@ export function ageOf(ms: number, now = Date.now()) {
 
 /** A message's words: its plain text (or its HTML without tags), without the quoted earlier messages. */
 export function bodyOf(payload: any): string {
-  const all = parts(payload);
-  const pick = all.find((p) => p.mimeType === 'text/plain' && p.body?.data) ?? all.find((p) => p.mimeType === 'text/html' && p.body?.data);
+  const all = parts(payload), pick = all.find((p) => p.mimeType === 'text/plain' && p.body?.data) ?? all.find((p) => p.mimeType === 'text/html' && p.body?.data);
   if (!pick) return '';
   let text = Buffer.from(pick.body.data, 'base64url').toString('utf8');
   if (pick.mimeType === 'text/html') {

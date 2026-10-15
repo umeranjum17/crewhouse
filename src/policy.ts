@@ -37,17 +37,13 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
  *  crew's file tools are NOT here: a write outside the bot's folder asks, exactly as it always did. */
 const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
-  'crew_connect', 'crew_signin', 'crew_unlock', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft',
-  'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_batch', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign',
-  'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile']);
+  'crew_connect', 'crew_signin', 'crew_unlock', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_pass', 'crew_batch', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_assign', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_profile']);
 /** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
 const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
 // (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
-const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close',
-  'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']);
-const BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload',
-  'dialog-accept', 'mousedown', 'mouseup']);
+const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close', 'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']);
+const BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload', 'dialog-accept', 'mousedown', 'mouseup']);
 /** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
 const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/, PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
 /** A flag's values in an argument list, as `--flag v` or `--flag=v`. */
@@ -94,9 +90,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   }
   if (tool === 'browser') {
     const [cmd = '', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String);
-    if ((!BROWSER_LOOKS.has(cmd) && !BROWSER_ACTS.has(cmd)) || rest.some((a) => BROWSER_OWN.test(a))) {
-      return { kind: 'refuse', why: "Your browser can't do that here. Use goto, snapshot, find, click, fill, type, press, select or screenshot." };
-    }
+    if ((!BROWSER_LOOKS.has(cmd) && !BROWSER_ACTS.has(cmd)) || rest.some((a) => BROWSER_OWN.test(a))) return { kind: 'refuse', why: "Your browser can't do that here. Use goto, snapshot, find, click, fill, type, press, select or screenshot." };
     // Web pages only: a file:// or chrome:// address would read the person's disk or the browser's own settings.
     const to = cmd === 'goto' || cmd === 'tab-new' ? rest.find((a) => !a.startsWith('-')) : undefined;
     if (to && /^[a-z][\w+.-]*:/i.test(to) && !/^(https?:|about:blank$)/i.test(to)) return { kind: 'refuse', why: 'Your browser opens web pages only (http or https).' };

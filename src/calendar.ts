@@ -8,14 +8,10 @@ import { tool } from './engine.ts';
 export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
 
 const HELP = [
-  'calendar                      today, and what is next',
-  'calendar week [--from <day>]  seven days of events',
-  'calendar free <day>           free slots between 08:00 and 20:00',
-  'calendar next [n]             the next n timed events (default 3)',
-  'calendar add "<title>" <when> [--end <when>] [--where <place>] [--note <text>] [--key <k>]   (adding twice is safe)',
-  'calendar move <id> <when>     keeps its length',
-  'calendar cancel <id>',
-  '<day> is YYYY-MM-DD, today or tomorrow; <when> is a <day> alone (all day) or "<day> HH:MM", local time',
+  'calendar                      today, and what is next', 'calendar week [--from <day>]  seven days of events',
+  'calendar free <day>           free slots between 08:00 and 20:00', 'calendar next [n]             the next n timed events (default 3)',
+  'calendar add "<title>" <when> [--end <when>] [--where <place>] [--note <text>] [--key <k>]   (adding twice is safe)', 'calendar move <id> <when>     keeps its length',
+  'calendar cancel <id>', '<day> is YYYY-MM-DD, today or tomorrow; <when> is a <day> alone (all day) or "<day> HH:MM", local time',
 ];
 
 type Event = { id: string; start: Date; end: Date; allDay: boolean; title: string; where: string };
@@ -28,8 +24,7 @@ export function parseWhen(s: string): { at: Date; allDay: boolean } | null {
   const m = /^(\d{4}-\d{2}-\d{2}|today|tomorrow)(?:[ T](\d{1,2}):(\d{2}))?$/i.exec(s.trim());
   if (!m) return null;
   const now = new Date();
-  const [y, mo, d] = /^\d/.test(m[1]) ? m[1].split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate() + (/tomorrow/i.test(m[1]) ? 1 : 0)];
-  const at = new Date(y, mo - 1, d, m[2] ? Number(m[2]) : 0, m[3] ? Number(m[3]) : 0);
+  const [y, mo, d] = /^\d/.test(m[1]) ? m[1].split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate() + (/tomorrow/i.test(m[1]) ? 1 : 0)], at = new Date(y, mo - 1, d, m[2] ? Number(m[2]) : 0, m[3] ? Number(m[3]) : 0);
   if (Number.isNaN(at.getTime()) || (m[2] && (Number(m[2]) > 23 || Number(m[3]) > 59))) return null;
   return { at, allDay: !m[2] };
 }
@@ -84,11 +79,9 @@ export function options(args: string[]) {
 export async function runCalendar(token: Token, args: string[]): Promise<string> {
   const [cmd = 'today', ...more] = args;
   const { o, rest } = options(more);
-  const bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`;
-  const today = parseWhen('today')!.at;
+  const bad = (why: string) => `error: ${why}\nhelp[${HELP.length}]:\n${HELP.map((h) => '  ' + h).join('\n')}`, today = parseWhen('today')!.at;
   if (cmd === 'today') {
-    const list = await events(token, today, addDays(today, 1));
-    const next = list.find((e) => !e.allDay && e.start.getTime() > Date.now());
+    const list = await events(token, today, addDays(today, 1)), next = list.find((e) => !e.allDay && e.start.getTime() > Date.now());
     return [table('today', ['id', 'when', 'title'], list.map((e) => ({ id: e.id, when: whenOf(e), title: e.title }))),
       `next: ${next ? `${hm(next.start)} ${next.title}` : 'nothing more today'}`, `help[${HELP.length}]:`, ...HELP.map((h) => '  ' + h)].join('\n');
   }
@@ -103,8 +96,7 @@ export async function runCalendar(token: Token, args: string[]): Promise<string>
     const day = parseWhen(rest[0] ?? '');
     if (!day) return bad('say which day: calendar free <day>');
     let at = new Date(day.at.getFullYear(), day.at.getMonth(), day.at.getDate(), 8);
-    const close = new Date(at.getFullYear(), at.getMonth(), at.getDate(), 20);
-    const slots: Record<string, string>[] = [];
+    const close = new Date(at.getFullYear(), at.getMonth(), at.getDate(), 20), slots: Record<string, string>[] = [];
     for (const e of (await events(token, at, close)).filter((x) => !x.allDay)) {
       if (e.start > at) slots.push({ from: hm(at), to: hm(e.start < close ? e.start : close) });
       if (e.end > at) at = e.end;

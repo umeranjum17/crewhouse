@@ -287,9 +287,7 @@ export class Link {
     if (!currentPhone(args)) return s.end(UPDATE_APP);
     const bot = String(args?.bot ?? '');
     if (s.op !== 'desktop' || !/^[a-z0-9-]+$/.test(bot) || !this.desk) return s.end('not-supported');
-    const desk = this.desk;
-    const send = (m: unknown) => { void s.write(JSON.stringify(m) + '\n').catch(() => {}); };
-    const watcher: Watcher = { send: (event) => send({ event }) };
+    const desk = this.desk, send = (m: unknown) => { void s.write(JSON.stringify(m) + '\n').catch(() => {}); }, watcher: Watcher = { send: (event) => send({ event }) };
     let buf = '';
     s.onData = async (chunk) => {
       buf += new TextDecoder().decode(chunk);
@@ -340,10 +338,7 @@ export class Link {
   /** What a phone hears about: a question, a job finished or stuck, and Chief speaking to the person. */
   private news(e: { seq: number; kind: string; data: any; bot: string | null }) {
     let news = e.kind === 'ask.opened' || e.kind === 'alert' || (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot');
-    if (e.kind === 'task.done') {
-      const t = this.db.get('SELECT bot, result FROM tasks WHERE id = ?', e.data.task);
-      news = !!t && t.bot !== 'chief' && t.result !== 'All clear';
-    }
+    if (e.kind === 'task.done') { const t = this.db.get('SELECT bot, result FROM tasks WHERE id = ?', e.data.task); news = !!t && t.bot !== 'chief' && t.result !== 'All clear'; }
     if (news) void this.tell(`e${e.seq}`);
   }
 

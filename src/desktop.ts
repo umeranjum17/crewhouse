@@ -181,8 +181,7 @@ export class Desktops {
     d.used = Date.now();
     if (method === 'session.open') {
       if (params.source !== undefined) throw refused('the client cannot choose the desktop source', 'source');
-      const perms: string[] = Array.isArray(params.permissions) ? params.permissions : ['view'];
-      const control = perms.includes('control');
+      const perms: string[] = Array.isArray(params.permissions) ? params.permissions : ['view'], control = perms.includes('control');
       if (control && !mayControl) throw refused('Take over first: the bot has the controls');
       await this.closeSession(d, 'another screen opened this desktop');
       d.engine ??= await this.engine(d);
@@ -282,8 +281,7 @@ export class Desktops {
   async clearSite(bot: string, host: string) {
     return this.withPipe(bot, async (call) => {
       const { targetInfos } = await call('Target.getTargets');
-      const page = targetInfos?.find((t: { type: string }) => t.type === 'page');
-      const sessionId = page && (await call('Target.attachToTarget', { targetId: page.targetId, flatten: true }))?.sessionId;
+      const page = targetInfos?.find((t: { type: string }) => t.type === 'page'), sessionId = page && (await call('Target.attachToTarget', { targetId: page.targetId, flatten: true }))?.sessionId;
       if (!sessionId) return false;
       try {
         for (const scheme of ['https', 'http']) if (!await call('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }, sessionId)) return false;

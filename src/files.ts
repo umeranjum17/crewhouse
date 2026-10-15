@@ -5,8 +5,7 @@ import { relative, resolve, sep } from 'node:path';
 // onto another file. Paths outside the bot's folder are fine — the gate asked for them (src/policy.ts) and the person
 // answered; the pinned walk still refuses to travel through a symlink, so nothing reaches a place the gate didn't see.
 function writeAll(fd: number, text: string) {
-  const bytes = Buffer.from(text);
-  if (bytes.length > 1_000_000) throw new Error('file is too large');
+  const bytes = Buffer.from(text); if (bytes.length > 1_000_000) throw new Error('file is too large');
   for (let at = 0; at < bytes.length;) at += writeSync(fd, bytes, at, bytes.length - at, at);
 }
 function within<T>(root: string, path: string, create: boolean, run: (parent: number, leaf: string) => T): T {
