@@ -7,15 +7,34 @@ app: "crewhouse"
 # a proof of HEAD still counts until a commit outside this list lands.
 evidence:
   ignore_paths: ["docs/**", "data/**", "landing/**", "README.md", "TRY-IT.md", "LICENSE", "NOTICE"]
-# The repo's verification checks as re-runnable recipes. Every journey writes its
-# proof into its own run folder ($DONE_DONE_EVIDENCE_ROOT) and exits non-zero on
-# failure; `done-done run <journey>` then `done-done check` / `receipt` prove HEAD.
-# No matrix/dom/base_ref here on purpose: these journeys stay hermetic (no browser,
-# no model) so CI can run them; visual proof adds captures to a run folder by hand.
 journeys:
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
     command: "node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1"
   screens:
-    command: "scripts/verify/screens-smoke.sh $DONE_DONE_EVIDENCE_ROOT"
+    command: 'scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  delivered-files:
+    command: 'timeout -k 10 600 bash scripts/verify/files-gate.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
+  workbook-chart:
+    command: 'PWA=1 timeout -k 10 600 bash scripts/verify/workbook-chart.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
+  unlock-card:
+    command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  ask-in-view:
+    command: 'timeout -k 10 600 bash scripts/verify/ask-in-view.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  signin-card:
+    command: 'timeout -k 10 300 node scripts/verify/signin-card.ts "$PWD" "${B:?owned daemon URL}" "${LAB:?owned lab}/state/person.key" "$DONE_DONE_EVIDENCE_ROOT"'
+  site-signin:
+    command: 'timeout -k 10 600 node scripts/verify/site-signin.ts "$PWD" "${B:?owned daemon URL}" "${LAB:?owned lab}/state" "$DONE_DONE_EVIDENCE_ROOT" "${BOT:?helper id}"'
+  pwa-pair:
+    command: 'timeout -k 10 600 bash scripts/verify/pwa-pair.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  pwa-plan:
+    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
+  phone-pair:
+    command: 'timeout -k 10 600 node scripts/verify/phone-pair.mjs --out "$DONE_DONE_EVIDENCE_ROOT" --state "${LAB:?owned lab}/state" --serial "${SERIAL:?owned emulator}" --base "${B:?owned daemon URL}" --apk "${APK:?release apk}" --record'
+  phone-chat-keep:
+    spends: 'live phone-only model calls on an explicitly authorized test account'
+    command: 'timeout -k 10 600 node scripts/verify/phone-chat-keep.mjs --serial "${SERIAL:?owned emulator}" --ev "$DONE_DONE_EVIDENCE_ROOT" --apk "${APK:?release apk}" --key-file "${KEY_FILE:?authorized test key file}" --offline --interrupted --seed-turns 52'
+  phone-continue:
+    spends: 'live phone-only model calls on an explicitly authorized test account'
+    command: 'timeout -k 10 600 node scripts/verify/phone-continue.mjs --serial "${SERIAL:?owned emulator}" --ev "$DONE_DONE_EVIDENCE_ROOT" --apk "${APK:?release apk}" --key-file "${KEY_FILE:?authorized test key file}"'

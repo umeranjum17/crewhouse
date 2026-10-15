@@ -18,7 +18,8 @@ a PDF that opens with no password gets no card, and a damaged one gets none eith
 
 Use the isolated launch and proof-server lifecycle in [signin-card.md](signin-card.md#drive-real-crewd-stub-engine).
 Keep captures alongside the `.done-done.yaml` journey evidence; a hermetic receipt alone does not prove this
-feature. The old skill and its capture script are retired. In the private lab, send two AES-256 statements
+feature. `done-done run unlock-card` runs the migrated `scripts/verify/unlock-card.sh` driver.
+In the private lab, send two AES-256 statements
 (ghostscript + qpdf) in Penny's thread, with the Documents tool installed pinned into the lab, then capture in a real browser
 `screens/unlock-card-*` (both themes, 390 and 1440), the look check beside mock 3A (`look/`), a right and a wrong
 password at 390 (`unlock-wrong-day-390.png`, `unlock-retry-night-390.png`), the installed app (`pwa/`) typing the last

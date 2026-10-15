@@ -22,7 +22,8 @@ loopback and an OS-assigned port, stub engine, and bounded readiness checks. For
 redirect stdout/stderr to evidence, retain its owned PID, bound commands, and terminate/wait for it on every
 exit. Never capture a long-running background server through command substitution with inherited stdout.
 Keep these feature captures alongside the `.done-done.yaml` journey evidence; the hermetic stub receipt
-alone does not prove browser geometry or installed-app behavior. The old skill and its capture scripts are retired.
+alone does not prove browser geometry or installed-app behavior. The old skill is retired;
+`B="$B" LAB="$LAB" done-done run signin-card` runs `scripts/verify/signin-card.ts` for the web captures.
 
 1. The stub reports every account but Grok signed in, so sign
    the others out through the app's own API to bring the card up:

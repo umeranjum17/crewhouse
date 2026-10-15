@@ -16,12 +16,24 @@ test:
        phone-facing contract: `done-done run stub-drive` (the real crewd on the
        stub engine, CREWHOUSE_ENGINE=stub, under the journey's own env mask and
        OS-assigned port, driven through the app's own API journey) and
-       `done-done run static-checks` (the personal-voice copy check); for UI work
-       also `CHROME_DEVTOOLS_AXI_SESSION=<task> done-done run screens` (Chief's
-       thread and the Office view, day and night, 1440 and 390). Then
-       `done-done check --outcome "<what a user can now do>"` on the run's files
-       and `done-done receipt` on a clean tree. A change with no runtime-facing
-       surface says so and skips this step.
+       `done-done run static-checks` (the personal-voice copy check).
+       These are baseline checks, never replacements for feature proof. Read
+       docs/verification/README.md and run every recipe affected by the diff,
+       including sibling actions and each changed web/PWA/native surface, using
+       docs/verification/runbook.md for launch, authority and cleanup. Use the
+       named .done-done.yaml primitives where provided; otherwise wrap the recipe's
+       real driver in `done-done run -- <command>` with outputs written under
+       $DONE_DONE_EVIDENCE_ROOT. Report selected feature IDs and evidence per ID.
+       For UI work capture EACH changed screen day/night at 390/1440, its
+       interaction recording and the 360-wide largest-text look check, including
+       installed/native proof where its recipe requires it. The `screens` smoke
+       alone cannot satisfy a changed feature. Keep required real-engine, iPad,
+       release-APK and authorization checks; unavailable prerequisites are NOT RUN,
+       never a smoke substitution. Send asks, reports and evidence via sign-off-axi.
+       Then `done-done check --outcome "<what a user can now do>" <evidence-files...>`
+       and `done-done receipt --outcome "<same outcome>" <same-evidence-files...>`
+       on a clean tree. A change with no runtime-facing surface says so and skips
+       this step.
     Never sign in, spend, or touch the owner's real crewd install, home, keyring or
     ~/.pi; never run a second crewd on the default port 7711; evidence lives outside
     the worktree and survives cleanup; cleanup kills only processes this run started.
