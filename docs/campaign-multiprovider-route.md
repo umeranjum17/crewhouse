@@ -72,10 +72,10 @@ and noted per item; the rest is for the next provider:
 
 ## (c) Engine-side gaps (BYOKit/OpenClaw — named, never built here)
 
-- The `plan_key` error ids (`key.invalid`, `key.notIncluded`) are the kit's.
-  `keyIn` in `src/openclaw/runtime.ts` keeps the card waiting with "That key
-  didn't work" on any failed paste but a transport failure (which asks for
-  another tap); a plan without helpers has no card state of its own yet.
+- The `plan_key` outcomes are the published kit's typed `addKey` result.
+  `keyIn` in `src/openclaw/runtime.ts` maps `not_included` to the existing
+  excluded account/card and "I've changed my plan" recovery. Invalid keys
+  keep the paste waiting; transient failures ask for another tap.
 - Which models a campaign brain may name on the shipped `opencode-go` plugin
   (the pin's catalogue offers the route; an in-app model picker waits for the
   kit) — a pin question for BYOKit.

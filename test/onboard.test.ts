@@ -101,6 +101,64 @@ test('a ChatGPT plan without helpers: said plainly with the way forward; "I chan
   done();
 });
 
+test('a Go key without helpers ends on the existing plan card; retry, reopen and other failures stay distinct', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { startServer } = await import('../src/server.ts');
+  const { faked } = await import('./kit-fake.ts');
+  const s = setup(), f = faked({}, { 'openclaw.setup.activate': (p) => ({ ok: false, status: p.apiKey === 'synthetic-invalid' ? 'auth' : p.apiKey === 'synthetic-network' ? 'network' : 'unavailable' }) });
+  s.cfg.port = 0; s.cfg.linkPort = 0;
+  s.crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
+  for (const key of Object.keys(PROVIDERS)) s.crew.accounts.ready.set(key, false);
+  const server = await startServer(s.cfg, s.db, s.crew);
+  const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+  const headers = { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` };
+  const api = async (path: string, body?: object) => {
+    const r = await fetch(base + '/api/' + path, { headers, ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}) });
+    assert.equal(r.status, 200); return r.json();
+  };
+  const rows = () => api('accounts');
+  const go = async () => (await rows()).find((r: any) => r.account === 'opencode-go');
+  const action = (act: string, body = {}) => api('accounts/1/opencode-go/' + act, body);
+  try {
+    await f.started;
+    await api('onboard', { address: 'Umer' });
+    for (let n = 0; n < 2; n++) {
+      await action('login', { via: 'key' });
+      await action('paste', { text: 'synthetic-no-helpers' });
+      await until('Go key result', async () => { const r = await go(); return r.notIncluded || r.signIn.error; });
+      const row = await go();
+      assert.equal(row.notIncluded, true, JSON.stringify(row));
+      assert.equal(row.signIn.state, 'failed', 'the key wait is over');
+      assert.equal(row.signedIn, false);
+      assert.equal(A.aiList(await rows()).mine[0].ai.key, 'opencode-go', 'the existing plan card names Go, even after returning to Chief');
+      await action('paste', { text: 'synthetic-no-helpers' });
+      assert.equal((await go()).notIncluded, true, 'repeat submission cannot restart a finished key wait');
+      await action('retry');
+      assert.equal((await go()).notIncluded, false, "I've changed my plan clears only the existing exclusion");
+    }
+    for (const [account, key, state, words] of [['opencode-go', 'synthetic-invalid', 'waiting', /That key didn't work/], ['opencode-go', 'synthetic-network', 'failed', /That didn't go through/]] as const) {
+      await api(`accounts/1/${account}/login`, { via: 'key' });
+      await api(`accounts/1/${account}/paste`, { text: key });
+      await until('distinct key failure', async () => (await rows()).find((r: any) => r.account === account).signIn.error);
+      const row = (await rows()).find((r: any) => r.account === account);
+      assert.equal(row.notIncluded, false);
+      assert.equal(row.signIn.state, state);
+      assert.match(row.signIn.error, words);
+      await api(`accounts/1/${account}/cancel`, {});
+    }
+    f.fake.handle('wizard.next', () => { throw new Error('Synthetic provider connection failed.'); });
+    await api('accounts/1/grok/login', { via: 'code' });
+    await until('other provider failure', async () => (await rows()).find((r: any) => r.account === 'grok').signIn.state === 'failed');
+    const other = (await rows()).find((r: any) => r.account === 'grok');
+    assert.equal(other.notIncluded, false);
+    assert.match(other.signIn.error, /Synthetic provider connection failed/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    s.done(); await f.done();
+  }
+});
+
 test('a sign-in that stopped working (a password change): signed out for real, said once, and the task waits for a new one', async () => {
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');

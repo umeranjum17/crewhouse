@@ -101,7 +101,7 @@ export class Accounts {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
       if (step.error) view.error = step.error;
-      if (step.done) done(true);
+      if (step.notIncluded) { this.excluded.add(account); done(false); } else if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);
     });
     this.running.set(account, {
