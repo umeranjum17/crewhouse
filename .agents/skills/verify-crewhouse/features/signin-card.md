@@ -8,10 +8,12 @@ No provider is dropped: all seven "Sign in with …" buttons stay in the card.
 
 ## Gate
 
-- `node --test --test-name-pattern="sign-in card" test/ui.test.ts`: one `btn go`, seven "Sign in with", ChatGPT first
-  on a fresh install, Claude first when Claude is the account that signed out.
-- `node --test test/thread-clear.test.ts`: with "Use another account" opened (the card's tallest form), every
-  button clears the composer at 390.
+- `node --test test/thread-clear.test.ts`: the real card in a browser (`?demo=longthread`, signed out) — every
+  provider's "Sign in with" button, and with "Use another account" opened (the card's tallest form) every button
+  clears the composer at 390.
+- `node --test test/unit.test.ts --test-name-pattern="sign-in"`: a plan-key account waits for the pasted key and the
+  card asks for it. `node --test test/ui.test.ts`: `A.AIS`, the card's own list, is the kit's routes, OpenCode Go's
+  row included.
 
 ## Drive (real crewd, stub engine)
 

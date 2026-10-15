@@ -62,14 +62,14 @@ export class OpenClawRuntime implements AgentRuntime {
       host: {
         // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
         gate: async (ref, tool, input) => {
-          const run = this.runs.get(ref.sessionKey);
+          const run = this.runOf(ref.sessionKey);
           if (!run) return { allow: true };
           if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
           const decision = await this.host.gate(run, crewName(tool), input);
           return decision.allow ? decision : { allow: false, reason: decision.reason };
         },
         call: async (ref, tool, input, signal) => {
-          const run = this.runs.get(ref.sessionKey);
+          const run = this.runOf(ref.sessionKey);
           if (!run || !this.host) throw new Error('Unknown run');
           return this.host.call(run, crewName(tool), input, signal);
         },
@@ -77,6 +77,8 @@ export class OpenClawRuntime implements AgentRuntime {
       ...o,
     });
   }
+  /** The run behind a callback: a key-lane run's engine key is the member's own under the kit's key-agent prefix. */
+  private runOf(sessionKey: string) { return this.runs.get(sessionKey) ?? this.runs.get(sessionKey.replace(/^agent:byokit-key-/, 'agent:')); }
   async start(host: ToolHost) { this.host = host; await this.kit.start(); }
   async stop() { await this.kit.stop(); }
   signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
@@ -116,7 +118,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     let cancelled = false;
-    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'invalid' ? on({ waiting: true, error: `That key didn't work. Check it and paste it again.` }) : on({ waiting: false, error: status === 'retry' ? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` : `Sign-in for ${PROVIDERS[account]?.name ?? account} is not connected yet` })));
+    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
     return {
       paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
       cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
