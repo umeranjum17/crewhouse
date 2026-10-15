@@ -52,6 +52,7 @@ evidence and cleanup live in [`../SKILL.md`](../SKILL.md); recipes assume an iso
 | phone-only-signout | [phone-only-signout.md](phone-only-signout.md) | On the release APK with no computer: the Chief chat header's Sign out (beside Use a computer) confirms once, removes the saved key and returns to the first chooser, where a relaunch stays; at 360 and 320 dp with 1.3× text |
 | phone-chat-keep | [phone-chat-keep.md](phone-chat-keep.md) | Phone-only chat kept in app storage: kill-proof turns (Stopped + Try again, Interrupted + Retry with one document file), the offline queue and banner, the exact-text approval sheet, and sign-out clearing the kept chat |
 | phone-composer | [phone-composer.md](phone-composer.md) | The phone's message box keeps its placeholder and words on one line at the largest text: at `width / fontScale < 360` the field takes the whole row and the buttons drop under it, unchanged at normal text |
+| phone-helper-header | [phone-helper-header.md](phone-helper-header.md) | A helper's chat header at the largest text: the name and role keep the full width and Stop/Details wrap to their own row under them (`width / fontScale < 360`), unchanged at normal text |
 | phone-continue | [phone-continue.md](phone-continue.md) | Paired phone offers "Continue on your computer": the phone-only chat (queued and stopped turns marked) reaches Chief as one message, the phone copy is archived only after the computer answers, Not now keeps it, sign-out erases the archive |
 
 ## Proof and skip reporting
