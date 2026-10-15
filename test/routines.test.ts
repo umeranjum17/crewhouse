@@ -80,6 +80,28 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   crew.updateRoutine(r.id, { schedule: 'every 2 hours' });
   assert.equal(crew.routines().find((x) => x.id === r.id)!.words, 'Every 2 hours');
   assert.throws(() => crew.updateRoutine(r.id, { schedule: 'blah' }), /can't read/);
+  // A date each month rather than a weekday: the 31st fires in a 31-day month, a 30-day month skips it instead of pulling
+  // it back to the 30th, and a 30th fires there. Each tick computes the next real date, so nothing drifts or catches up twice.
+  const bill = crew.addRoutine({ bot: 'reel', schedule: 'every month on the 31st at 9am', task: 'Check the statements' }, 'person');
+  assert.equal(crew.routines().find((x) => x.id === bill.id)!.words, 'On the 31st of every month at 9:00 am');
+  const due = () => new Date(db.get('SELECT next_at FROM routines WHERE id = ?', bill.id)!.next_at);
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', new Date(2026, 0, 31, 9).getTime(), bill.id); // January, 31 days
+  crew.schedule(new Date(2026, 0, 31, 9).getTime());
+  assert.equal(fired(db, bill.id).length, 1, 'the 31st fires in a 31-day month');
+  await settled(db, fired(db, bill.id)[0].task);
+  assert.equal(due().getMonth(), 2, 'February has no 31st, so the next run is March');
+  crew.schedule(due().getTime()); // March, 31 days too
+  assert.equal(fired(db, bill.id).length, 2, 'and again in the next 31-day month');
+  await settled(db, fired(db, bill.id)[1].task);
+  assert.equal(due().getMonth(), 4, 'April has 30 days: the 31st waits for May, never pulled back to the 30th');
+  const thirtieth = crew.addRoutine({ bot: 'reel', schedule: 'the 30th of each month 7:30am', task: 'Check the statements' }, 'person');
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', new Date(2026, 3, 30, 7, 30).getTime(), thirtieth.id);
+  crew.schedule(new Date(2026, 3, 30, 7, 30).getTime()); // April, 30 days
+  assert.equal(fired(db, thirtieth.id).length, 1, 'the 30th does fire in a 30-day month');
+  assert.equal(new Date(db.get('SELECT next_at FROM routines WHERE id = ?', thirtieth.id)!.next_at).getMonth(), 4, 'and the next run is May');
+  await settled(db, fired(db, thirtieth.id)[0].task);
+  crew.deleteRoutine(bill.id);
+  crew.deleteRoutine(thirtieth.id);
   crew.deleteRoutine(r.id);
   assert.equal(crew.routines().some((x) => x.id === r.id), false);
   done();
