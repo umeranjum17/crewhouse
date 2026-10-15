@@ -18,8 +18,11 @@ EV=${DONE_DONE_EVIDENCE_ROOT:?run through done-done}    # evidence, survives cle
 mkdir -p "$LAB/home" "$EV" "$LAB"/{state,crew,tools}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 
-# In the repo (deps installed, web built: npm ci && npm run build:web — web/dist is gitignored):
-env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+# In the repo (deps installed, web built: npm ci && npm run build:web — web/dist is gitignored).
+# crewd leads a process group of its own (setsid; with no job control setsid never forks, so
+# $! is crewd) and dies with this shell (setpriv's parent-death signal).
+set +m
+setsid setpriv --pdeathsig KILL -- env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -27,8 +30,11 @@ env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
   node src/main.ts > "$EV/crewd.log" 2>&1 &
 CREWD=$!; echo "$CREWD" > "$LAB/crewd.spawn.pid"
-cleanup() { kill -TERM "$CREWD" 2>/dev/null || true; wait "$CREWD" 2>/dev/null || true; rm -rf "$LAB"; }
-trap cleanup EXIT
+for _ in $(seq 100); do kill -0 -- "-$CREWD" 2>/dev/null && break; sleep 0.05; done   # the group exists: it is crewd's
+gone() { ! kill -0 -- "-$CREWD" 2>/dev/null; }
+drain() { kill "-$1" -- "-$CREWD" 2>/dev/null; for _ in $(seq 100); do gone && return; sleep 0.05; done; gone; }
+cleanup() { trap '' HUP INT TERM; drain TERM || drain KILL || { echo "crewd's group outlived KILL; keeping $LAB" >&2; return 1; }; rm -rf "$LAB"; }
+trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 ```
 
 - The env mask (`env -i` + full XDG set + dead D-Bus path) keeps the run off the owner's
@@ -38,8 +44,12 @@ trap cleanup EXIT
   "http://127.0.0.1:$PORT/api/state"` returning JSON with a `person` key.
   Every `/api` read needs the person's authority, like every write; loopback alone proves nothing.
   Poll for the condition; never a fixed sleep (CI disks are slow).
-- Teardown: `kill -TERM $(cat "$LAB/crewd.spawn.pid")` and wait for exit. crewd also
-  writes its own pid to `$LAB/state/crewd.pid` — only ever kill the process you spawned.
+- Teardown is `cleanup` above (`scripts/verify/screens-smoke.sh` and `stub-drive.mjs` do the
+  same; `test/verify-tools.test.ts` holds them to it): TERM to crewd's whole process group
+  (`kill -TERM -- -$CREWD`), KILL after a 5 s grace, then wait until `kill -0 -- -$CREWD` finds
+  no member. Only an empty group lets `$LAB` go; a group that outlives KILL keeps it. crewd also
+  writes its own pid to `$LAB/state/crewd.pid` — only ever signal the group you spawned, never
+  your shell's own, a shared one or another lab's.
 
 ## Doctor
 
@@ -122,7 +132,7 @@ A positive preflight does not witness a successful turn: the CLI may fail to ref
 expired OAuth session. If the turn parks, inspect its terminal failure in the engine log,
 retain pre/post results and stop; never infer admission from missing crewd tool events.
 This route is hosted, not a scripted provider.
-Stop crewd with TERM and await its exit before releasing the lock.
+Stop crewd's process group as in Launch (TERM, KILL after the grace, wait until it is empty) before releasing the lock.
 Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
 Quota errors mean the account rests: report the bound, never mint another sign-in.
 
@@ -301,9 +311,9 @@ evidence page.
 
 ## Cleanup
 
-Kill only what you started (`kill -TERM $(cat "$LAB/crewd.spawn.pid")`, wait, then the
-browser session: `chrome-devtools-axi` stop). Verify: the port no longer answers, no crewd
-process owns `$LAB/state/crewd.pid`, `$LAB` removed. Both `$EV` and the Review evidence
+Kill only what you started (crewd's process group as in Launch: TERM, KILL after the grace,
+wait until it is empty; then the browser session: `chrome-devtools-axi` stop). Verify: the
+port no longer answers, `kill -0 -- -$CREWD` finds no process group, `$LAB` removed. Both `$EV` and the Review evidence
 folder survive — a cleanup that eats the proof fails. Never kill by process name.
 
 ## Helpers
@@ -337,8 +347,12 @@ folder survive — a cleanup that eats the proof fails. Never kill by process na
 ## Selection and reporting
 
 Read [the feature map](README.md) before driving. Select every feature affected by the
-diff, not just one smoke screen. Run the named primitives in `.done-done.yaml` or wrap
-the recipe's command with `done-done run -- <command>`. For a multi-step manual recipe,
+diff, not just one smoke screen. Run the named primitives in `.done-done.yaml`
+(`done-done run <journey>`), or wrap a recipe that has none with `done-done run -- <command>`.
+A journey with `spends:` is the exception: `done-done run` refuses it, so start it with
+`done-done verify <journey> --outcome "<claim>"` and let the person approve or skip the spend
+([feature map](README.md#done-done-primitives-and-selection)); never drop `spends:` or wrap its
+driver to get around the ask. For a multi-step manual recipe,
 put its drive commands in a task-owned script and pass that script to `done-done run`;
 write proof under `$DONE_DONE_EVIDENCE_ROOT`, bound external commands with `timeout`,
 bound HTTP requests with `--max-time`/AbortSignal, and trap owned-process cleanup.

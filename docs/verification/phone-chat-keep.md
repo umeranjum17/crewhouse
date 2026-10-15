@@ -9,7 +9,9 @@ yet** and goes once, by itself, when the phone hears the provider again. Nothing
 
 `scripts/verify/phone-chat-keep.mjs` drives the release APK on a task-owned emulator (google_apis image, so
 `adb root` can seed and read the app's files) with the OpenRouter test key (pushed and typed on the
-device, never in argv or logs, erased at the end):
+device, never in argv or logs, erased at the end). It is the `phone-chat-keep` journey, which spends: start it
+with `done-done verify phone-chat-keep --outcome "<claim>"` and the person's spend approval
+([feature map](README.md#done-done-primitives-and-selection)); `done-done run` refuses it. The driver it runs:
 
 ```bash
 node scripts/verify/phone-chat-keep.mjs --serial <emulator> --ev "$EV" \

@@ -19,7 +19,9 @@ link's `notValidAfter`, so a computer that wakes later never starts it), keeps t
 still on this phone." Not now hides the card until the app opens again or pairs again.
 
 `scripts/verify/phone-continue.mjs` drives it on a task-owned google_apis emulator against the pairing lab
-(`scripts/verify/pair-lab.sh up`, stub engine), paired by the typed code:
+(`scripts/verify/pair-lab.sh up`, stub engine), paired by the typed code. It is the `phone-continue` journey, which
+spends: start it with `done-done verify phone-continue --outcome "<claim>"` and the person's spend approval
+([feature map](README.md#done-done-primitives-and-selection)); `done-done run` refuses it. The driver it runs:
 
 ```bash
 LAB=<lab> node scripts/verify/phone-continue.mjs --serial <emulator> --ev "$EV" \

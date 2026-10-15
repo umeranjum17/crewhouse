@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# A finished slide deck the person can open and present (features/slides-deck.md).
-#   bash .agents/skills/verify-crewhouse/scripts/slides-deck.sh <repo> <out-dir>
-# Real crewd on the stub engine, isolated per SKILL.md's Launch (web/dist built first). Quill is asked for a deck and
+# A finished slide deck the person can open and present (docs/verification/slides-deck.md).
+#   bash scripts/verify/slides-deck.sh <repo> <out-dir>
+# Real crewd on the stub engine, isolated per docs/verification/runbook.md's Launch (web/dist built first). Quill is asked for a deck and
 # crewd writes the .pptx itself, then delivers it. Proves: the file's own OOXML parts; LibreOffice opens it and every
 # slide renders; /api/document reads it back as slides and parts, and 403s a path nobody delivered; the chat card and
 # the panel at 1440/390, day and night; the look check at 360 with the largest text; the same panel in the installed app.
@@ -24,10 +24,10 @@ CREWD=$!
 cleanup() { kill -TERM "$CREWD" 2>/dev/null || true; wait "$CREWD" 2>/dev/null || true; chrome-devtools-axi stop >/dev/null 2>&1 || true; chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB"; }
 trap cleanup EXIT
 wait_for() { for _ in $(seq 1 400); do "$@" >/dev/null 2>&1 && return 0; kill -0 "$CREWD" 2>/dev/null || { echo "crewd exited"; tail "$OUT/crewd.log"; exit 1; }; sleep 0.2; done; echo "timed out: $*"; exit 1; }
-ready() { curl -fsS "$B/api/state" -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" | grep -q '"person"'; }
+ready() { curl --max-time 10 -fsS "$B/api/state" -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" | grep -q '"person"'; }
 wait_for ready
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")")
-api() { curl -fsS "${H[@]}" "$@"; }
+api() { curl --max-time 10 -fsS "${H[@]}" "$@"; }
 post() { api -X "$1" -d "$3" "$B$2" >/dev/null; }
 post PUT /api/people/1 '{"name":"Umer"}'
 post POST /api/onboard '{"address":"Umer"}'
@@ -62,7 +62,7 @@ api "$B/api/document?bot=quill&path=$REL" | "$NODE" -e 'let s="";process.stdin.o
   console.log("slide 2 lines:", JSON.stringify(j.slides[1].lines));
   console.log("parts:", j.parts.length, "first:", JSON.stringify(j.parts[0]));
   process.exit(j.slides.length===5 && j.parts[0].kind==="heading" ? 0 : 1)})' | tee -a "$OUT/api-document.txt"
-code=$(curl -sS -o /dev/null -w '%{http_code}' "${H[@]}" "$B/api/document?bot=quill&path=files/not-delivered.pptx")
+code=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' "${H[@]}" "$B/api/document?bot=quill&path=files/not-delivered.pptx")
 echo "undelivered path: $code" | tee -a "$OUT/api-document.txt"
 [ "$code" = 403 ] || { log 'an undelivered path answered'; exit 1; }
 
@@ -79,7 +79,7 @@ ax eval "$CARD" >/dev/null; ax screenshot "$OUT/screens/deck-card-night-1440.png
 ax resize 390 844 >/dev/null; ax open "$B/?day#/h/quill" >/dev/null; ax eval "$CARD" >/dev/null
 ax screenshot "$OUT/screens/deck-card-day-390.png" >/dev/null
 URL="$B/#/f/quill/files%2F$DECK"
-THEN="$PANEL" bash "$REPO/.agents/skills/verify-crewhouse/scripts/screens.sh" "$OUT/screens" deck-panel "$URL" | tee "$OUT/screens.txt"
+THEN="$PANEL" bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" deck-panel "$URL" | tee "$OUT/screens.txt"
 ax resize 1440 900 >/dev/null; ax open "$B/?night#/f/quill/files%2F$DECK" >/dev/null; ax eval "$PANEL" >/dev/null
 ax eval '(() => { const s = document.querySelectorAll(".slide-frame"); return { frames: s.length, first: s[0]?.textContent, about: document.querySelector(".wb-what .small")?.textContent, download: document.querySelector(".wb-head a")?.getAttribute("href") }; })()' | tee "$OUT/panel-check.txt"
 ax eval '(async () => { const a = [...document.querySelectorAll("a")].find((x) => x.textContent === "Download"); const b = new Uint8Array(await (await fetch(a.href)).arrayBuffer()); return { href: new URL(a.href).pathname.slice(0, 7), name: a.href.split("/").pop(), bytes: b.length, zip: String.fromCharCode(b[0], b[1]) }; })()' | tee -a "$OUT/panel-check.txt"
@@ -87,7 +87,7 @@ ax eval '(async () => { const a = [...document.querySelectorAll("a")].find((x) =
 # The look check at the hardest size (360 wide, text ×1.3, day and night). The workbook panel is the control: it is a
 # screen this change does not touch, and it wears the same modal, so a hit on both is the panel's, not the deck's.
 LOOK='(async () => { for (let i = 0; i < 100 && !document.querySelector(".slide-frame, .wb-panel td"); i++) await new Promise((r) => setTimeout(r, 100)); return true; })()'
-FM_HOME=${FM_HOME:-/home/umer/.treehouse/firstmate-8bf1b0/3/firstmate} node "$REPO/.agents/skills/verify-crewhouse/scripts/look-check.mjs" web --out "$OUT/look" --person "$LAB/state/person.key" --then "$LOOK" \
+FM_HOME=${FM_HOME:-/home/umer/.treehouse/firstmate-8bf1b0/3/firstmate} node "$REPO/scripts/verify/look-check.mjs" web --out "$OUT/look" --person "$LAB/state/person.key" --then "$LOOK" \
   "deck-panel=$B/#/f/quill/files%2F$DECK" "workbook-panel=$B/?demo#/f/scout/files%2Fflights-to-larkspur.xlsx" | tee "$OUT/look-check.txt" || log "look-check: exit $? (see look-check.txt)"
 ax stop >/dev/null 2>&1 || true
 
@@ -105,7 +105,7 @@ for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 90
   steps.push({ name: `deck-${look}-${w}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: url(look), wait: "!!document.querySelector(\".slide-frame\")", timeout: 20000,
     eval: `[matchMedia("(display-mode: standalone)").matches, ${THEN}][0]`, out: `${OUT}/pwa/deck-panel-installed-${look}-${w}.png` });
 console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, args: ["--window-size=1400,950", "--force-device-scale-factor=1", "about:blank"], steps }));
-' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$OUT" "$REPO/.agents/skills/verify-crewhouse/scripts" "$PANEL" "$DECK" > "$LAB/pwa-plan.json"
-mkdir -p "$OUT/pwa"; xvfb-run -a -s "-screen 0 1920x1200x24" "$NODE" "$REPO/.agents/skills/verify-crewhouse/scripts/pwa-shell.mjs" "$LAB/pwa-plan.json" > "$OUT/pwa/run.json"
+' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$OUT" "$REPO/scripts/verify" "$PANEL" "$DECK" > "$LAB/pwa-plan.json"
+mkdir -p "$OUT/pwa"; xvfb-run -a -s "-screen 0 1920x1200x24" "$NODE" "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa-plan.json" > "$OUT/pwa/run.json"
 "$NODE" -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const rows = r.filter((x) => "value" in x || x.error); console.log("pwa", JSON.stringify(rows)); process.exit(r.some((x) => x.error) ? 1 : 0)' "$OUT/pwa/run.json" | tee -a "$OUT/transcript.txt"
 ls "$OUT/screens" "$OUT/pwa"

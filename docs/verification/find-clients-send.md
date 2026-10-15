@@ -2,7 +2,7 @@
 
 Source: `src/mail-send.ts`, `src/server.ts`, `src/link.ts`, `mobile/App.tsx` (`MailSetup`),
 `web/src/adapter.ts` and `web/src/parts.tsx`. Finding and drafting remain in
-`skills/find-clients/runbook.md`; the draft itself never sends.
+`skills/find-clients/SKILL.md`; the draft itself never sends.
 
 ## Authority and prerequisites
 

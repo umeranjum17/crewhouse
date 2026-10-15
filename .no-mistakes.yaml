@@ -23,7 +23,11 @@ test:
        docs/verification/runbook.md for launch, authority and cleanup. Use the
        named .done-done.yaml primitives where provided; otherwise wrap the recipe's
        real driver in `done-done run -- <command>` with outputs written under
-       $DONE_DONE_EVIDENCE_ROOT. Report selected feature IDs and evidence per ID.
+       $DONE_DONE_EVIDENCE_ROOT. A journey marked `spends:` (phone-chat-keep,
+       phone-continue) is never started with `done-done run` (it refuses) or a
+       wrapper: it needs `done-done verify <journey> --outcome "..."` and the
+       person's spend approval, so without that approval it is NOT RUN.
+       Report selected feature IDs and evidence per ID.
        For UI work capture EACH changed screen day/night at 390/1440, its
        interaction recording and the 360-wide largest-text look check, including
        installed/native proof where its recipe requires it. The `screens` smoke

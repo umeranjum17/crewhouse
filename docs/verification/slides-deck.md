@@ -8,7 +8,7 @@ and the app previews it the way it previews the other finished files: one frame 
 **Drive and prove** (stub engine, web built with `npm run build:web`):
 
 ```bash
-bash .agents/skills/verify-crewhouse/scripts/slides-deck.sh . "$EV/slides-deck"
+done-done run slides-deck   # or: bash scripts/verify/slides-deck.sh . "$EV/slides-deck"
 ```
 
 It has Quill make a 5-slide kick-off deck with `crew_slides`, then writes:

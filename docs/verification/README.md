@@ -14,6 +14,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 |---|---|
 | delivered-files | `done-done run delivered-files` |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
+| slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
 | thread-hygiene | `done-done run ask-in-view` plus the recipe's other cases |
@@ -21,8 +22,8 @@ negative/security legs remain required; generic smoke is not their replacement.
 | pwa-pair | `done-done run pwa-pair` plus typed-code and push legs |
 | pwa-shell / pwa-offline / pwa-resume / chief-computer | `done-done run pwa-plan` with the recipe's task-owned `PLAN` |
 | phone-pairing | `done-done run phone-pair` plus typed/timed-code drivers |
-| phone-chat-keep | `done-done run phone-chat-keep` plus approval-sheet driver |
-| phone-continue | `done-done run phone-continue` |
+| phone-chat-keep | `done-done verify phone-chat-keep --outcome "<claim>"` once the person approves the spend (below), plus approval-sheet driver |
+| phone-continue | `done-done verify phone-continue --outcome "<claim>"` once the person approves the spend (below) |
 | All other rows | Drive the recipe through `done-done run -- <command>`; use its existing tests and `scripts/verify/` drivers, retaining every manual leg |
 
 Required input variables are explicit in `.done-done.yaml`; never use the owner's
@@ -30,6 +31,14 @@ instance or device. For a multi-step recipe use a task-owned drive script, expor
 its `EV=$DONE_DONE_EVIDENCE_ROOT`, trap cleanup and retain action, outcome and side
 effects. Each selected feature has its own evidence and NOT RUN reasons. The
 [runbook](runbook.md#selection-and-reporting) owns claims, receipts and sign-off.
+
+Journeys marked `spends:` in `.done-done.yaml` (phone-chat-keep, phone-continue) make live
+model calls, so `done-done run` refuses them (exit 2, nothing runs). Start one with
+`done-done verify <journey> --outcome "<claim>"`: it parks at `awaiting_approval` (exit 4,
+finding `spend-1`) until the person answers. `done-done respond --action approve --reason
+"<who approved the spend>"` runs it; `--action skip` ends the run `fail` with nothing spent.
+Without that approval the journey is NOT RUN; never drop `spends:` or wrap its driver in
+`done-done run --` to get past the ask.
 
 ## Baseline preconditions
 
@@ -69,6 +78,7 @@ effects. Each selected feature has its own evidence and NOT RUN reasons. The
 | desktop-start-refusal | [desktop-start-refusal.md](desktop-start-refusal.md) | Opening a helper's screen on a machine whose engine cannot load a system library refuses at start with the library named and the install hint (never a generic error, never "grant it on the Tools tab" for a granted computer); the same screen opens on a healthy machine |
 | reply-fold | [reply-fold.md](reply-fold.md) | A long chat reply folds behind More on whole items (no empty or half-cut bullet); More and Less toggle |
 | workbook-chart | [workbook-chart.md](workbook-chart.md) | A money answer with charts: `crew_workbook`'s `charts` become real chart parts in the .xlsx (LibreOffice draws them from the cells), `GET /api/workbook` reads them back, and the preview panel draws bar, line and pie over the sheet, at 1440/390, day and night, the largest text and in the installed app |
+| slides-deck | [slides-deck.md](slides-deck.md) | A helper's `crew_slides` becomes a real `.pptx` crewd writes itself (LibreOffice opens it, 5 pages), delivered like any finished file and previewed one frame per slide at 1440/390 day/night and in the installed app |
 | delivered-files | [delivered-files.md](delivered-files.md) | `/files/` answers only the browser cookie the person's key mints (403 to a helper's shell over the shared loopback, and to the bare key); the app still shows pictures and videos, opens PDFs and downloads sheets through plain `/files/` links with that cookie, at 1440 and 390, night and day |
 | pwa-demo-boot | [pwa-demo-boot.md](pwa-demo-boot.md) | The published static shell opens Chief's "Where should I work?" on a public origin (no backend), `?demo` the in-bundle demo, while crewd's loopback stays real; ?real overrides |
 | where-cloud | [where-cloud.md](where-cloud.md) | The first screen (mock C): Chief asks where to work — In my cloud (behind its build flag until BYOKit's cloud kit is published) / On my computer / Just on this phone — then the phone's cloud steps: pick boat.dev (Hetzner Soon), paste a key kept in the phone's own lock; web's cloud and phone rows point to the phone app |
