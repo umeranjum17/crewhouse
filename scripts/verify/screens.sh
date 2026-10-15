@@ -49,10 +49,11 @@ for theme in night day; do
   for wh in ${WIDTHS:-1440x900 390x844}; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
-    # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
+    # A page first: emulation has nothing to act on before one exists.
     echo "screens.sh: $SLUG $theme $w" >&2
     axi open "$u" || true
-    axi resize "$w" "$h"
+    if [ "$w" -le 500 ]; then vp="${w}x${h}x3,mobile,touch"; else vp="${w}x${h}x1"; fi
+    axi emulate --viewport "$vp"
     axi open "$u"
     [ -z "${THEN:-}" ] || axi eval "$THEN"
     if [ "${EXPAND_MORE:-0}" = 1 ]; then
