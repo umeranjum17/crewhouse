@@ -2523,7 +2523,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   async desktopSignal(botId: string, watcher: Watcher, method: string, params: Row, canControl = true) {
     const bot = this.needBot(botId);
     if (method === 'session.open') {
-      if (!disk.canUse(this.cfg, botId, 'computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
+      if (!disk.botConfig(this.cfg, botId).tools.includes('computer')) throw Object.assign(new Error(`${bot.display} has no computer; grant it on the Tools tab`), { code: 'no-screen' });
       await this.desktops.ensure(botId, disk.botDir(this.cfg, botId));
     }
     return this.desktops.signal(botId, watcher, method, params, canControl && this.held.has(botId));

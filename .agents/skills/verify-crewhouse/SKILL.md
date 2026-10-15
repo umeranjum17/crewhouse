@@ -65,7 +65,8 @@ the real HTTP server and doctor are driven against a task-private command that e
 the native loader's refusal for libevdev and for an unknown library. This synthetic
 prerequisite failure is not proof that the host itself lacks either library.
 Also run doctor and the live state on the normal engine; never remove a host library
-to reproduce the failure. No UI layout or motion changed by this CLI/API readiness check.
+to reproduce the failure. The desktop **start** refuses with the same words, at start:
+[desktop-start refusal](features/desktop-start-refusal.md). No UI layout or motion changed by this CLI/API readiness check.
 
 ## Drive
 
