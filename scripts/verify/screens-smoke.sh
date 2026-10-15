@@ -26,17 +26,19 @@ env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   node "$REPO/src/main.ts" > "$OUT/crewd-screens.log" 2>&1 &
 PID=$!
 PERSON=""
+DEADLINE=$((SECONDS + 60))
 for _ in $(seq 240); do
   if [ -f "$LAB/state/person.key" ]; then
     PERSON=$(cat "$LAB/state/person.key")
-    if curl -fsS -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B/api/state" 2>/dev/null | grep -q '"person"'; then break; fi
+    if curl -fsS --max-time 10 -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B/api/state" 2>/dev/null | grep -q '"person"'; then break; fi
   fi
+  [ "$SECONDS" -ge "$DEADLINE" ] && break
   sleep 0.25
 done
 [ -n "$PERSON" ] || { echo "screens-smoke: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
-curl -fsS "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard" > /dev/null
-curl -fsS "${H[@]}" -d '{"text":"smoke"}' "$B/api/bots/chief/messages" > /dev/null
+curl -fsS --max-time 10 "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard" > /dev/null
+curl -fsS --max-time 10 "${H[@]}" -d '{"text":"smoke"}' "$B/api/bots/chief/messages" > /dev/null
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 URL="$B/#person=$PERSON"
 bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" chief "$URL"

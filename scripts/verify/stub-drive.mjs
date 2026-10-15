@@ -53,6 +53,7 @@ const call = async (method, path, body) => {
   const r = await fetch(`${base}${path}`, {
     method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', ...(capability ? { Authorization: `Bearer ${capability}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10_000),
   });
   const text = await r.text();
   transcript.push({ method, path, status: r.status, body: JSON.parse(scrub(text)) });

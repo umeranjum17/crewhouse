@@ -37,11 +37,11 @@ mkdir -p "$DEST"
 # failure, with one retry for a transient CDP miss (both attempts are printed).
 # `timeout` bounds a hung CDP call (a dead tab never answers): TERM at 120s,
 # KILL 10s later, so a hung call always ends in a loud failure, never silence.
-axi() { local out rc n=0; while :; do out=$(timeout -k 10 120 chrome-devtools-axi "$@" 2>&1); rc=$?; [ $rc -eq 0 ] && return 0; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
+axi() { local out rc n=0; while :; do out=$(timeout -k 10 120 chrome-devtools-axi "$@" 2>&1); rc=$?; if [ $rc -eq 0 ]; then printf '%s\n' "$out"; return 0; fi; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
 # A run can inherit a session whose tabs have no selection (a run that died
 # mid-capture leaves them behind), and `open` then refuses: take the first
 # tab, or open one when there is none.
-pages_out=$(chrome-devtools-axi pages 2>&1) || { echo "screens.sh: could not list pages: $pages_out" >&2; exit 1; }
+pages_out=$(axi pages) || { echo "screens.sh: could not list pages" >&2; exit 1; }
 first=$(printf '%s\n' "$pages_out" | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
 if [ -n "$first" ]; then axi selectpage "$first"; else axi newpage about:blank; fi
 echo "screens.sh: capturing $SLUG with tab ${first:-new}" >&2
@@ -61,9 +61,9 @@ for theme in night day; do
     if [ "${EXPAND_MORE:-0}" = 1 ]; then
       # ponytail: eight More buttons; raise for longer replay threads.
       for ((n=0; n<8; n++)); do
-        ref=$(chrome-devtools-axi snapshot --full | awk '/button "More"/{sub(/uid=/,"",$1); print $1; exit}')
+        ref=$(axi snapshot --full | awk '/button "More"/{sub(/uid=/,"",$1); print $1; exit}')
         [ -n "$ref" ] || break
-        chrome-devtools-axi click "@$ref" >/dev/null
+        axi click "@$ref" >/dev/null
       done
     fi
     [ -z "${AFTER:-}" ] || axi eval "$AFTER"
