@@ -16,6 +16,7 @@ import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Ef
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, describeTrigger, firstRun, hhmm, looksFor, nextRun, parseSchedule, parseTrigger, reminderAt } from './routines.ts';
 import { mailTool, newThreads } from './mail.ts';
+import { MailSend } from './mail-send.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
@@ -243,6 +244,7 @@ export class Crew {
   private db: Store;
   /** The replaceable agent process: the real engine, or the scripted stub the tests run on. */
   readonly runtime: AgentRuntime;
+  private mailFiling: MailSend | undefined;
 
   constructor(cfg: Config, db: Store) {
     this.cfg = cfg; this.db = db;
@@ -1374,7 +1376,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
     const apps = await this.connections.tools();
     l.apps = apps.effects;
-    l.appTools = new Map(apps.tools.map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space) : t])); // mail saves into this run's own files
+    this.mailFiling ??= new MailSend(this.db, this.connections);
+    l.appTools = new Map(apps.tools.map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space, this.mailFiling, bot.id) : t])); // mail saves into this run's own files; drafts/labels reuse the guarded MailSend path
     const axi = g.axi.browser;
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.

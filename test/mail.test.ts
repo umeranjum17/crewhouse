@@ -49,6 +49,11 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (path === '/threads') return json({ threads: u.searchParams.get('q') === 'from:school' ? [{ id: '18c0a1f00d2e3b4a' }] : [{ id: '18c0b2f00d2e3b4a' }, { id: '18c0a1f00d2e3b4a' }], resultSizeEstimate: u.searchParams.get('q') ? 1 : 2 });
   if (path === '/messages/m2/attachments/a1') return json({ size: Buffer.byteLength(PDF), data: b64(PDF) });
   if (path === '/messages/m2/attachments/a4') return json({ size: 8, data: b64('{"hi":1}') });
+  if (path === '/settings/sendAs') return json({ sendAs: [{ sendAsEmail: 'umer@sender.example', isDefault: true, signature: '— Umer' }] });
+  if (path === '/labels' && (init.method ?? 'GET') === 'GET') return json({ labels: [{ id: 'Label_1', name: 'School' }] });
+  if (path === '/labels') return json({ id: 'Label_2', name: JSON.parse(String(init.body ?? '{}')).name ?? 'School' });
+  if (path === '/drafts') return json({ id: 'draft-1' });
+  if (path.endsWith('/modify')) return json(threads[path.split('/threads/')[1].split('/')[0]] ?? {});
   const t = threads[path.split('/threads/')[1]];
   if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, sendRefusal);
   return t ? json(t) : json({}, 404);
@@ -65,7 +70,7 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
     'newest[2]{id,from,subject,age}:',
     '  18c0b2f00d2e3b4a,Shop <no-reply@shop.example>,Your order,5m',
     '  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h',
-    'help[4]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[4]:\n')[1]);
+    'help[6]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[6]:\n')[1]);
   assert.equal(await runMail(token, ['search', 'from:school']), 'threads[1]{id,from,subject,age}:\n  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h\ntotal: 1');
   assert.equal(await runMail(token, ['read', '18c0a1f00d2e3b4a']), [
     'subject: Trip on Friday, forms',
@@ -99,10 +104,71 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
 
   // Only Gmail's own ids reach the address; plain errors with the help.
   assert.match(await runMail(token, ['read', '../../settings/filters']), /^error: mail read <id>/);
-  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[4\]:/);
+  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[6\]:/);
   await assert.rejects(runMail(token, ['read', 'deadbeef00']), /No such conversation/);
   await assert.rejects(runMail(async () => null, []), /not connected any more/);
   assert.ok(asked.every((a) => a.startsWith('GET ') && !/settings|\.\./.test(a)), 'it only ever reads');
+});
+
+test('Chief drafts a reply and files under a label: one card each, the guarded path, nothing ever sent', async () => {
+  const { effectOf } = await import('../src/policy.ts');
+  const seen = { bot: 'Chief', space: '/tmp', secret: [] } as any;
+  const draft = effectOf('mail', { args: ['draft', '18c0a1f00d2e3b4a', 'Thanks, got it.'] }, seen) as any;
+  assert.equal(draft.kind, 'send', 'a draft asks');
+  assert.equal(draft.key, undefined, 'no standing grant covers a write');
+  assert.match(draft.words, /18c0a1f00d2e3b4a/, 'one card for that one message');
+  const label = effectOf('mail', { args: ['label', '18c0a1f00d2e3b4a', 'School'] }, seen) as any;
+  assert.equal(label.kind, 'send');
+  assert.equal(label.key, undefined, 'filing asks every time too');
+  assert.match(label.words, /18c0a1f00d2e3b4a.*School/, 'the card names the message and the label');
+  assert.equal((effectOf('mail', { args: ['send', 'x'] }, seen) as any).kind, 'refuse', 'send stays refused');
+
+  // The surface delegates to the guarded MailSend path; without it, plain words ask to connect.
+  assert.match(await runMail(token, ['draft', '18c0a1f00d2e3b4a', 'hi']), /^error: Connect Gmail drafts & labels/);
+  assert.match(await runMail(token, ['label', '18c0a1f00d2e3b4a', 'School']), /^error: Connect Gmail drafts & labels/);
+  assert.match(await runMail(token, ['draft', 'nope', 'hi']), /^error: mail draft <id>/);
+  const { db, done } = setup();
+  try {
+    const { MailSend } = await import('../src/mail-send.ts');
+    const mail = new MailSend(db, { token: async () => 'tok' } as any);
+    asked.length = 0;
+    const drafted = await runMail(token, ['draft', '18c0a1f00d2e3b4a', 'Thanks, got it.'], undefined, mail, 'chief');
+    assert.match(drafted, /^drafted: \{id: draft-1, thread: 18c0a1f00d2e3b4a, from: umer@sender\.example/);
+    assert.match(drafted, /nothing was sent/i, 'it says plainly nothing went out');
+    const labelled = await runMail(token, ['label', '18c0a1f00d2e3b4a', 'School'], undefined, mail, 'chief');
+    assert.equal(labelled, 'labelled: {id: 18c0a1f00d2e3b4a, label: School}');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 1, 'the draft is witnessed');
+    assert.equal(db.all("SELECT * FROM events WHERE kind='mail.labelled'").length, 1, 'the label is witnessed');
+    assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
+    assert.ok(asked.some((x) => x.startsWith('POST /drafts')), 'the draft landed');
+    assert.ok(asked.some((x) => x.includes('/modify')), 'the label landed');
+  } finally { done(); }
+});
+
+test('a helper drafts and files through crewd: one card per message, the yes writes, never sends', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  await signInApp(crew.connections, 'gmail');
+  await signInApp(crew.connections, 'gmailwrite');
+  asked.length = 0;
+  const t = crew.assign('quill', 'reply [tool mail {"args":["draft","18c0a1f00d2e3b4a","Thanks, got it."]}]', 'chief').task;
+  await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
+  assert.match(db.get("SELECT title FROM asks WHERE state = 'open'")!.title, /draft a reply to email 18c0a1f00d2e3b4a/, 'one plain card for that message');
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 0, 'nothing lands before the yes');
+  await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
+  await settled(db, t);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", t)!.text, /drafted: \{id: draft-1/, 'the draft landed after the yes');
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 1);
+  const u = crew.assign('quill', 'file it [tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open' AND title LIKE '%file email%'"));
+  await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
+  await settled(db, u);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'quill' AND author = 'bot' AND task_id = ? ORDER BY id LIMIT 1", u)!.text, /labelled: \{id: 18c0a1f00d2e3b4a, label: School\}/);
+  assert.equal(db.all("SELECT * FROM events WHERE kind='mail.labelled'").length, 1);
+  assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
+  assert.ok(asked.some((x) => x.startsWith('POST /drafts')) && asked.some((x) => x.includes('/modify')), 'both writes landed');
+  done();
 });
 
 test('a helper reads the connected Gmail through crewd: no Google MCP, the token stays with crewd, it never asks', async () => {

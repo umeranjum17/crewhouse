@@ -51,6 +51,62 @@ export class MailSend {
     if (who.email_verified !== true) throw fail('Gmail has not confirmed your sending address. Nothing was sent.');
     return { token, from: address(who.email) };
   }
+  private async filing() {
+    const token = await this.connections.token('gmailwrite');
+    if (!token) throw fail('Connect Gmail drafts & labels in Settings first. Reading Gmail alone cannot draft or file.');
+    return token;
+  }
+  private async g(path: string, token: string) {
+    const res = await fetch(`${GMAIL}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
+    if (res.status === 404) throw fail('No such conversation. Search again for its id.');
+    if (!res.ok) throw fail(`Gmail said ${res.status}. Nothing was sent; the draft was not created and no label was applied.`);
+    return res.json() as Promise<any>;
+  }
+  private async sendAs(token: string) {
+    const list = await this.g('/settings/sendAs', token).catch(() => ({ sendAs: [] }));
+    const pick = (list.sendAs ?? []).find((s: any) => s.isDefault) ?? (list.sendAs ?? [])[0] ?? {};
+    const from = (() => { try { return address(pick.sendAsEmail); } catch { return null; } })();
+    const sig = String(pick.signature ?? '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 1000);
+    if (!from) throw fail('Gmail has not confirmed your sending address. Nothing was sent; the draft was not created.');
+    return { from, sig };
+  }
+  async draftReply(threadId: string, body: string, bot: string) {
+    if (!/^[a-f0-9]{8,32}$/i.test(threadId)) throw fail('Give the email id from mail or mail search.', 400);
+    if (!body.trim() || body.length > 12000) throw fail('Write the reply in at most 12,000 characters.', 400);
+    const token = await this.filing(), t = await this.g(`/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-Id`, token);
+    const msgs: any[] = t.messages ?? [], first = msgs[0], last = msgs.at(-1);
+    const head = (m: any, n: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? '');
+    const from = head(last, 'From') || head(first, 'From'), to = /<([^>]+)>/.exec(from)?.[1] ?? from.trim();
+    const subj = head(first, 'Subject') || '(no subject)', subject = /^re:/i.test(subj) ? subj : `Re: ${subj}`;
+    const mid = head(last, 'Message-Id'), { from: me, sig } = await this.sendAs(token);
+    const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim();
+    const raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text}\r\n`).toString('base64url');
+    const res = await fetch(`${GMAIL}/drafts`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ message: { threadId, raw } }), signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) throw fail(`Gmail said ${res.status}. Nothing was sent; the draft was not created.`);
+    const made = await res.json() as Row;
+    if (typeof made.id !== 'string' || !made.id) throw fail('Gmail did not confirm the draft. Nothing was sent.');
+    this.db.event('mail.drafted', bot, { thread: threadId, draft: made.id, from: me, to });
+    return `drafted: {id: ${made.id}, thread: ${threadId}, from: ${me}, to: ${to.slice(0, 80)}${sig ? '' : ', no signature found'}}\nYou send it yourself from Gmail; nothing was sent.`;
+  }
+  async applyLabel(threadId: string, label: string, bot: string) {
+    if (!/^[a-f0-9]{8,32}$/i.test(threadId)) throw fail('Give the email id from mail or mail search.', 400);
+    const name = label.replace(/\s+/g, ' ').trim();
+    if (!/^[A-Za-z0-9 _-]{1,64}$/.test(name)) throw fail('Name the label in letters, numbers, spaces, - or _ (at most 64).', 400);
+    const token = await this.filing(), labels = await this.g('/labels', token);
+    const found = (labels.labels ?? []).find((l: any) => String(l.name ?? '').toLowerCase() === name.toLowerCase());
+    let id = found?.id;
+    if (!id) {
+      const res = await fetch(`${GMAIL}/labels`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }), signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) throw fail(`Gmail said ${res.status}. The label was not applied; nothing changed.`);
+      id = (await res.json() as Row).id;
+      if (typeof id !== 'string' || !id) throw fail('Gmail did not confirm the label. Nothing changed.');
+    }
+    const mod = await fetch(`${GMAIL}/threads/${threadId}/modify`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ addLabelIds: [id] }), signal: AbortSignal.timeout(20_000) });
+    if (mod.status === 404) throw fail('No such conversation. Search again for its id.');
+    if (!mod.ok) throw fail(`Gmail said ${mod.status}. The label was not applied; nothing changed.`);
+    this.db.event('mail.labelled', bot, { thread: threadId, label: name });
+    return `labelled: {id: ${threadId}, label: ${name}}`;
+  }
   private openDraft(id: number) {
     if (this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft')=? AND state IN ('sending','uncertain') OR json_extract(detail,'$.send.draft')=? AND answer='sent'", id, id)) throw fail(ATTEMPTED);
     const draft = this.db.get("SELECT asks.* FROM asks JOIN bots ON bots.id=asks.bot WHERE asks.id=? AND bots.template='tracer' AND asks.kind='propose' AND asks.state='open'", id), d = JSON.parse(draft?.detail ?? '{}');

@@ -26,7 +26,10 @@ import { join } from 'node:path';
 // Raised 6999 -> 7098 for charts in crew_workbook (ch-cap-charts, Firstmate decision A3): exceljs cannot write a chart,
 // so crewd adds the DrawingML chart parts itself and reads them back for the preview. Paired with the behaviour-neutral
 // trim lane ch-src-trim-charts, which takes those 99 lines back out after this lands.
-const BUDGET = 7098;
+// Raised 7098 -> 7186 for Chief reply-as-draft plus label (ch-cap-email-reply): the guarded MailSend draft/label path
+// on the separate gmailwrite grant (modify plus compose), the mail surface, the one-card-per-message gate with no
+// standing key, and the crew wiring. Net +88; the paired trim lane cuts it back to 6999.
+const BUDGET = 7186;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
