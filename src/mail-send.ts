@@ -76,10 +76,13 @@ export class MailSend {
     const token = await this.filing(), t = await this.g(`/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-Id`, token);
     const msgs: any[] = t.messages ?? [], first = msgs[0], last = msgs.at(-1);
     const head = (m: any, n: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? '');
-    if (!msgs.length) throw fail('This conversation has no messages. Nothing was drafted.'); const from = head(last, 'From') || head(first, 'From'), to = address(/<([^>]+)>/.exec(from)?.[1] ?? from.trim()), subj = head(first, 'Subject') || '(no subject)';
+    if (!msgs.length) throw fail('This conversation has no messages. Nothing was drafted.');
+    const { from: me, sig } = await this.sendAs(token);
+    const other = [...msgs].reverse().find((m) => { const h = head(m, 'From'), a = (/<([^>]+)>/.exec(h)?.[1] ?? h.trim()).toLowerCase(); return !!a && a !== me; }) ?? last;
+    const from = head(other, 'From') || head(first, 'From'), to = address(/<([^>]+)>/.exec(from)?.[1] ?? from.trim()), subj = head(first, 'Subject') || '(no subject)';
     if (/[\r\n]/.test(subj)) throw fail('Gmail returned an unreadable subject. Nothing was drafted.'); const topic = /^re:/i.test(subj) ? subj : `Re: ${subj}`, subject = topic.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ');
-    const mid = head(last, 'Message-Id').trim(); if (/[\r\n]/.test(mid)) throw fail('Gmail returned an unreadable reference. Nothing was drafted.');
-    const { from: me, sig } = await this.sendAs(token), text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '';
+    const mid = head(other, 'Message-Id').trim(); if (/[\r\n]/.test(mid)) throw fail('Gmail returned an unreadable reference. Nothing was drafted.');
+    const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '';
     const raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}${refs}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text}\r\n`).toString('base64url');
     const res = await fetch(`${GMAIL}/drafts`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ message: { threadId, raw } }), signal: AbortSignal.timeout(20_000) });
     if (!res.ok) throw fail(`Gmail said ${res.status}. Nothing was sent; the draft was not created.`);

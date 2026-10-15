@@ -119,8 +119,14 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   if (tool === 'mail') {
     const [cmd = 'inbox', id = '', ...tail] = (Array.isArray(input.args) ? input.args : []).map(String);
     if (['inbox', 'search', 'read', 'attachments'].includes(cmd)) return { kind: 'safe' };
-    if (cmd === 'draft' && /^[a-f0-9]{8,32}$/i.test(id)) return { kind: 'send', words: `${s.bot} wants to draft a reply to email ${id}.`, preview: { head: 'Draft reply', body: tail.join(' ').slice(0, 1000) } };
-    if (cmd === 'label' && /^[a-f0-9]{8,32}$/i.test(id) && tail.join(' ').trim()) return { kind: 'send', words: `${s.bot} wants to file email ${id} under “${tail.join(' ').replace(/\s+/g, ' ').trim().slice(0, 64)}”.` };
+    if (cmd === 'draft' && /^[a-f0-9]{8,32}$/i.test(id)) {
+      const body = tail.join(' ').trim();
+      if (body && body.length <= 12000) return { kind: 'send', words: `${s.bot} wants to draft a reply to email ${id}.`, preview: { head: 'Draft reply', body: body.slice(0, 1000) } };
+    }
+    if (cmd === 'label' && /^[a-f0-9]{8,32}$/i.test(id)) {
+      const name = tail.join(' ').replace(/\s+/g, ' ').trim();
+      if (/^[A-Za-z0-9 _-]{1,64}$/.test(name)) return { kind: 'send', words: `${s.bot} wants to file email ${id} under “${name}”.` };
+    }
     return { kind: 'refuse', why: 'Your email can: search, read, draft a reply, or file under a label (it cannot send mail).' };
   }
   // The engine's skill workshop writes skills; that is the reviewer's job, not a run's. A run may read.
