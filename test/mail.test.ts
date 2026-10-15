@@ -3,12 +3,13 @@ import { signInApp } from './connect-fixture.ts';
 // history and cut to size; and the gate: everything it can do is reading, anything else is refused.
 import { test, after } from 'node:test';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DeviceLink, pairWithOffer } from '@byokit/pair';
 import { startServer } from '../src/server.ts';
 import assert from 'node:assert/strict';
 import { setup, settled, task, until } from './lab.ts';
+import { temp } from './tmp.ts';
 const A = await import('../web/src/adapter.ts');
 
 const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
@@ -16,16 +17,20 @@ const { MailSend } = await import('../src/mail-send.ts');
 const { Crew } = await import('../src/crew.ts');
 
 const b64 = (s: string) => Buffer.from(s).toString('base64url');
+const PDF = '%PDF-1.4 a form to read';
+const att = (id: string, filename: string, size: number) => ({ mimeType: 'application/pdf', filename, body: { attachmentId: id, size } });
 const now = Date.now();
-const msg = (from: string, subject: string, minsAgo: number, payload: object) => ({ internalDate: String(now - minsAgo * 60_000), payload: { headers: [{ name: 'From', value: from }, { name: 'Subject', value: subject }], ...payload } });
+const msg = (id: string, from: string, subject: string, minsAgo: number, payload: object) => ({ id, internalDate: String(now - minsAgo * 60_000), payload: { headers: [{ name: 'From', value: from }, { name: 'Subject', value: subject }], ...payload } });
 const threads: Record<string, any> = {
   '18c0a1f00d2e3b4a': { messages: [
-    msg('School Office <office@school.example>', 'Trip on Friday, forms', 3000, { mimeType: 'text/plain', body: { data: b64('Please return the form.') } }),
-    msg('Sam <sam@home.example>', 'Re: Trip on Friday, forms', 90, { mimeType: 'multipart/alternative', parts: [
-      { mimeType: 'text/html', body: { data: b64('<p>Signed &amp; sent.</p>') } },
-      { mimeType: 'text/plain', body: { data: b64('Signed and sent.\n\nOn Tue, School Office wrote:\n> Please return the form.') } }] }),
+    msg('m1', 'School Office <office@school.example>', 'Trip on Friday, forms', 3000, { mimeType: 'text/plain', body: { data: b64('Please return the form.') } }),
+    msg('m2', 'Sam <sam@home.example>', 'Re: Trip on Friday, forms', 90, { mimeType: 'multipart/mixed', parts: [
+      { mimeType: 'multipart/alternative', parts: [
+        { mimeType: 'text/html', body: { data: b64('<p>Signed &amp; sent.</p>') } },
+        { mimeType: 'text/plain', body: { data: b64('Signed and sent.\n\nOn Tue, School Office wrote:\n> Please return the form.') } }] },
+      att('a1', 'statement.pdf', Buffer.byteLength(PDF)), att('a2', 'huge.zip', 12 * 1024 * 1024), att('a3', 'locked.pdf', 2048), att('a4', '../../.pi/settings.json', 8)] }),
   ] },
-  '18c0b2f00d2e3b4a': { messages: [msg('Shop <no-reply@shop.example>', 'Your order', 5, { mimeType: 'text/html', body: { data: b64(`<style>x{}</style><div>Order 42</div>${'word '.repeat(600)}`) } })] },
+  '18c0b2f00d2e3b4a': { messages: [msg('m3', 'Shop <no-reply@shop.example>', 'Your order', 5, { mimeType: 'text/html', body: { data: b64(`<style>x{}</style><div>Order 42</div>${'word '.repeat(600)}`) } })] },
 };
 const asked: string[] = [];
 let identity = '';
@@ -42,6 +47,8 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   if (init.headers?.authorization !== 'Bearer tok') return json({}, 401);
   if (path === '/labels/INBOX') return json({ threadsUnread: 2 });
   if (path === '/threads') return json({ threads: u.searchParams.get('q') === 'from:school' ? [{ id: '18c0a1f00d2e3b4a' }] : [{ id: '18c0b2f00d2e3b4a' }, { id: '18c0a1f00d2e3b4a' }], resultSizeEstimate: u.searchParams.get('q') ? 1 : 2 });
+  if (path === '/messages/m2/attachments/a1') return json({ size: Buffer.byteLength(PDF), data: b64(PDF) });
+  if (path === '/messages/m2/attachments/a4') return json({ size: 8, data: b64('{"hi":1}') });
   const t = threads[path.split('/threads/')[1]];
   if (path === '/messages/send') return sendOk ? json({ id: 'sent-1' }) : json({}, sendRefusal);
   return t ? json(t) : json({}, 404);
@@ -58,12 +65,12 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
     'newest[2]{id,from,subject,age}:',
     '  18c0b2f00d2e3b4a,Shop <no-reply@shop.example>,Your order,5m',
     '  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h',
-    'help[3]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[3]:\n')[1]);
+    'help[4]:'].join('\n') + '\n' + (await runMail(token, [])).split('help[4]:\n')[1]);
   assert.equal(await runMail(token, ['search', 'from:school']), 'threads[1]{id,from,subject,age}:\n  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h\ntotal: 1');
   assert.equal(await runMail(token, ['read', '18c0a1f00d2e3b4a']), [
     'subject: Trip on Friday, forms',
     'messages[2]{from,age}:', '  School Office <office@school.example>,2d', '  Sam <sam@home.example>,2h',
-    'latest: Sam <sam@home.example>', 'body: |', '  Signed and sent.'].join('\n'), 'plain text first, and the quoted history left out');
+    'latest: Sam <sam@home.example>, 4 attached (mail attachments 18c0a1f00d2e3b4a)', 'body: |', '  Signed and sent.'].join('\n'), 'plain text first, and the quoted history left out');
   const long = await runMail(token, ['read', '18c0b2f00d2e3b4a']);
   assert.match(long, /body: \|\n {2}Order 42\n {2}word word/);
   assert.doesNotMatch(long, /style|x\{\}/);
@@ -71,9 +78,28 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
   assert.doesNotMatch(await runMail(token, ['read', '18c0b2f00d2e3b4a', '--full']), /more:/);
   assert.equal(bodyOf({ mimeType: 'text/plain', body: { data: b64('hi\r\n-----Original Message-----\r\nold') } }), 'hi');
 
+  // Attachments: listed, then a chosen one saved into the helper's own files folder; the refusals are plain words.
+  assert.equal(await runMail(token, ['attachments', '18c0a1f00d2e3b4a']), [
+    'attachments[4]{n,name,type,size}:', '  1,statement.pdf,application/pdf,23B', '  2,huge.zip,application/pdf,12.0MB', '  3,locked.pdf,application/pdf,2KB',
+    '  4,-..-.pi-settings.json,application/pdf,8B'].join('\n'));
+  const files = temp('mail-files');
+  assert.equal(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '1'], files),
+    'saved: {file: files/statement.pdf, name: statement.pdf, type: application/pdf, size: 23B}\nRead it with your own file tools.');
+  assert.equal(readFileSync(join(files, 'files', 'statement.pdf'), 'utf8'), PDF, 'the bytes Gmail gave are the bytes on disk');
+  assert.match(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '1'], files), /files\/statement \(2\)\.pdf/, 'an earlier file of the same name is kept');
+  assert.equal(await runMail(token, ['attachments', '18c0b2f00d2e3b4a']), 'No attachments on this conversation.');
+  assert.match(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '2'], files), /^error: “huge\.zip” is 12\.0MB, over the 10\.0MB crewd will save for you/);
+  assert.match(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '9'], files), /^error: this conversation has 4 attachments; n is 1 to 4/);
+  assert.match(await runMail(token, ['attachments', '18c0b2f00d2e3b4a', '1'], files), /^error: No attachments on this conversation\./);
+  assert.match(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '1']), /^error: saving an attachment writes into a helper’s own files folder/);
+  await assert.rejects(runMail(token, ['attachments', '18c0a1f00d2e3b4a', '3'], files), /No such conversation/, 'an attachment Gmail will not hand over says so');
+  // A hostile name from a stranger's mail never becomes a path: it lands one level down in files/, nothing else.
+  assert.match(await runMail(token, ['attachments', '18c0a1f00d2e3b4a', '4'], files), /files\/-\..-\.pi-settings\.json/);
+  assert.deepEqual(readdirSync(join(files, 'files')).sort(), ['-..-.pi-settings.json', 'statement (2).pdf', 'statement.pdf'], 'every saved file is in files/, under a name with no folders in it');
+
   // Only Gmail's own ids reach the address; plain errors with the help.
   assert.match(await runMail(token, ['read', '../../settings/filters']), /^error: mail read <id>/);
-  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[3\]:/);
+  assert.match(await runMail(token, ['send', 'x']), /^error: no command "send"\nhelp\[4\]:/);
   await assert.rejects(runMail(token, ['read', 'deadbeef00']), /No such conversation/);
   await assert.rejects(runMail(async () => null, []), /not connected any more/);
   assert.ok(asked.every((a) => a.startsWith('GET ') && !/settings|\.\./.test(a)), 'it only ever reads');
@@ -89,6 +115,14 @@ test('a helper reads the connected Gmail through crewd: no Google MCP, the token
   await settled(db, t);
   assert.match(task(db, t).result, /threads\[1\]\{id,from,subject,age\}:\n {2}18c0a1f00d2e3b4a/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
+  // The same helper saves the letter's attachment into its own files folder, with no card and no ask: it reads
+  // what it saved with its own file tools.
+  const saved = crew.assign('quill', 'keep [tool mail {"args":["attachments","18c0a1f00d2e3b4a","1"]}]', 'chief').task;
+  await settled(db, saved);
+  assert.equal(task(db, saved).state, 'done');
+  assert.equal(readFileSync(join(cfg.crewDir, 'bots', 'quill', 'files', 'statement.pdf'), 'utf8'), PDF, 'the attachment is a real file in the helper\u2019s own folder');
+  assert.match(task(db, saved).result, /saved: \{file: files\/statement\.pdf/);
+  assert.equal(db.all("SELECT * FROM events WHERE kind='run.call' AND json_extract(data,'$.tool')='mail'").length, 2, 'crewd\u2019s own record of both calls');
   assert.ok(asked.length > 0 && asked.every((a) => a.endsWith(' Bearer tok')), 'crewd adds the token to every call');
   done();
 });

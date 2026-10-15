@@ -20,7 +20,10 @@ import { join } from 'node:path';
 // exception): the admission wait, the shared install map with its 10-minute stall bound and group kill,
 // and the shutdown cleanup. No trim paired: the install path is the feature.
 // Raised 6927 -> 6954 for the locked-PDF unlock card (ch-secret-card, owner exception per Main-crewhouse decisions A and review-2, no trim lane).
-const BUDGET = 6954;
+// Raised 6954 -> 6999 for saving an email attachment (ch-gmail-attachments): listing a conversation's attachments and
+// saving one into the helper's own files/ folder, with its size bound, sanitised name and plain refusals. The paired
+// trim lane ch-src-trim-s4 compacts single-use declarations back out of src/, restoring BUDGET to 6954.
+const BUDGET = 6999;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

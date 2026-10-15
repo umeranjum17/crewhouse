@@ -28,6 +28,15 @@ function within<T>(root: string, path: string, create: boolean, run: (parent: nu
   } finally { closeSync(dir); }
 }
 
+/** Bytes into the bot's folder (a saved email attachment, say): the same pinned, no-symlink walk as a text write. */
+export function writeBytes(root: string, path: string, bytes: Buffer) {
+  return within(root, path, true, (parent, leaf) => {
+    if (leaf === '.') throw new Error('choose a file inside the bot folder');
+    const fd = openSync(`/proc/self/fd/${parent}/${leaf}`, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600);
+    try { for (let at = 0; at < bytes.length;) at += writeSync(fd, bytes, at, bytes.length - at, at); } finally { closeSync(fd); }
+  });
+}
+
 export function fileTool(root: string, name: string, input: Record<string, unknown>) {
   const path = String(input.path ?? '.');
   return within(root, path, name === 'crew_write', (parent, leaf) => {
