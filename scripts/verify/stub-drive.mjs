@@ -8,7 +8,13 @@
 // journey (state → onboard → Chief message → bot reply), writes api-transcript.jsonl,
 // summary.json and crewd.log to --out, then tears the instance down. The person's
 // capability is never written to evidence or stdout: transcripts scrub it.
-// Exit 0 on a full pass, 1 on any failure, 2 on usage error.
+// Exit 0 on a full pass, 1 on any failure, 2 on usage error, 128+n on signal n.
+//
+// crewd and everything it starts share one process group of their own (spawn's
+// `detached` is setsid), and every way out goes through `end`: TERM to the whole
+// group, KILL after a bounded grace, then wait until no member is left. Only an
+// empty group lets the lab go; a group that outlives KILL keeps it and fails the
+// run. If this script is SIGKILLed, setpriv's parent-death signal takes crewd too.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,9 +27,26 @@ mkdirSync(out, { recursive: true });
 
 const repo = join(import.meta.dirname, '..', '..');
 const lab = mkdtempSync(join(tmpdir(), 'crewhouse-stub-drive-'));
-const wipe = (dir) => { try { rmSync(dir, { recursive: true, force: true }); } catch (e) { console.error(`stub-drive: cleanup of ${dir} failed: ${e.message}`); } };
-const fail = (why) => { console.error(`stub-drive: ${why}`); wipe(lab); process.exit(1); };
-process.on('uncaughtException', (e) => fail(e.message));
+let group = 0; // crewd's own process group, once proven
+const gone = () => { try { process.kill(-group, 0); return false; } catch (e) { return e.code === 'ESRCH'; } };
+const drain = async (signal) => {
+  try { process.kill(-group, signal); } catch (e) { if (e.code !== 'ESRCH') console.error(`stub-drive: ${signal} to crewd's process group ${group}: ${e.message}`); }
+  for (const deadline = Date.now() + 5_000; !gone(); await new Promise((r) => setTimeout(r, 50))) if (Date.now() > deadline) return false;
+  return true;
+};
+let ending;
+const end = (code, line) => ending ??= (async () => {
+  if (code) console.error(`stub-drive: ${line}`);
+  if (group && !(await drain('SIGTERM'))) {
+    console.error(`stub-drive: crewd's process group ${group} outlived SIGTERM; sending SIGKILL`);
+    if (!(await drain('SIGKILL'))) { console.error(`stub-drive: crewd's process group ${group} outlived SIGKILL; keeping ${lab}`); process.exit(1); }
+  }
+  try { rmSync(lab, { recursive: true, force: true }); } catch (e) { console.error(`stub-drive: cleanup of ${lab} failed: ${e.message}`); }
+  if (!code) console.log(`stub-drive: ${line}`);
+  process.exit(code);
+})();
+process.on('uncaughtException', (e) => end(1, e.message));
+for (const [signal, n] of [['SIGHUP', 1], ['SIGINT', 2], ['SIGTERM', 15]]) process.on(signal, () => end(128 + n, `stopped by ${signal}`));
 
 for (const d of ['home', 'state', 'crew', 'tools', 'run']) mkdirSync(join(lab, d), { recursive: true });
 const port = await new Promise((res, rej) => { const s = net.createServer(); s.once('error', rej); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
@@ -31,8 +54,8 @@ const base = `http://127.0.0.1:${port}`;
 const logPath = join(out, 'crewd.log');
 const logFd = (await import('node:fs')).openSync(logPath, 'w');
 
-const child = spawn(process.execPath, [join(repo, 'src', 'main.ts')], {
-  cwd: repo, stdio: ['ignore', logFd, logFd],
+const child = spawn('setpriv', ['--pdeathsig', 'KILL', '--', process.execPath, join(repo, 'src', 'main.ts')], {
+  cwd: repo, detached: true, stdio: ['ignore', logFd, logFd],
   env: {
     PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C.UTF-8',
     HOME: join(lab, 'home'), TMPDIR: lab,
@@ -43,8 +66,8 @@ const child = spawn(process.execPath, [join(repo, 'src', 'main.ts')], {
     CREWHOUSE_STATE_DIR: join(lab, 'state'), CREWHOUSE_CREW_DIR: join(lab, 'crew'), CREWHOUSE_TOOLS_DIR: join(lab, 'tools'),
   },
 });
-let dead = false; child.once('exit', () => { dead = true; });
-const stop = async () => { if (!dead) { child.kill('SIGTERM'); for (let i = 0; i < 100 && !dead; i++) await new Promise((r) => setTimeout(r, 100)); } };
+// setsid ran before spawn returned, so a live group named by crewd's pid is crewd's own.
+try { process.kill(-child.pid, 0); group = child.pid; } catch (e) { await end(1, `crewd's process group not found (pid ${child.pid}): ${e.message}`); }
 
 const transcript = [];
 let capability = '';
@@ -89,8 +112,6 @@ try {
   }, 30_000);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ person: 'Owner', address: 'Sir', chief: true, reply }, null, 2) + '\n');
-} catch (e) { await stop(); fail(e.message); }
-await stop();
-wipe(lab);
+} catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
-console.log(`stub-drive: pass${leftovers} — ${transcript.length} calls in ${out}`);
+await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);
