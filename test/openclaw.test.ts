@@ -80,6 +80,16 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     const snapshot = await kit.call('config.get', {}) as { path: string };
     assert.ok(snapshot.path.startsWith(engine));
     await kit.ensureMember('m1');
+    // The app explicitly offers OpenRouter: its real wizard must yield a URL, not an allow-list rejection.
+    const steps: import('../src/runtime.ts').SignInStep[] = [];
+    const signIn = runtime.signIn('openrouter', 'code', (step) => steps.push(step));
+    try {
+      for (const end = Date.now() + 15_000; !steps.some((s) => s.url || s.error) && Date.now() < end;)
+        await new Promise((r) => setTimeout(r, 50));
+      assert.ok(steps.some((s) => s.url && new URL(s.url).origin === 'https://openrouter.ai'), JSON.stringify(steps));
+      assert.ok(!steps.some((s) => s.done), 'opening the route is not a completed sign-in');
+    } finally { signIn.cancel(); await signIn.done; }
+    assert.equal(await runtime.signedIn('openrouter'), false, 'cancelling the offer never signs in');
     // Empty isolated fixture only: prove the upstream weekly job can wake; production stays off until backup gates it.
     await runtime.setLearning(true);
     const jobs = await kit.call('cron.list', { limit: 100 }) as { jobs: { id: string; name: string; enabled: boolean; nextRunAtMs: number }[] };
