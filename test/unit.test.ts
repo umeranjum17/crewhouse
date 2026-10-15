@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync,  readdirSync, readFileSync, readlinkSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
@@ -767,6 +767,42 @@ test('locked PDF: two locked files with one basename keep separate copies, and a
   await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400);
   assert.ok(existsSync(copyA), 'b\'s failure leaves a\'s copy alone');
   lab.done();
+});
+
+test('locked PDF: a 200+-char nested accented name unlocks under a short hash name', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const bot = disk.botDir(lab.cfg, 'scribe'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  const rel = `files/inbox/april/${'relevé-de-compte-'.repeat(13)}statement.pdf`;
+  assert.ok(encodeURIComponent(rel).length > 200, 'the setup really passes the 200-char bound');
+  mkdirSync(join(bot, 'files', 'inbox', 'april'), { recursive: true });
+  writeFileSync(join(bot, rel), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
+  mkdirSync(join(py, '..'), { recursive: true });
+  writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read it ${call('crew_unlock', { files: [rel] })}`, 'chief').task;
+  await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
+  const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
+  await lab.crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(lab.db, t);
+  const hashed = `files/unlocked/${createHash('sha256').update(rel).digest('hex').slice(0, 32)}.pdf`;
+  assert.ok(existsSync(join(bot, hashed)), 'the copy lands under the short hash name');
+  assert.match((lab.crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', new RegExp(`unlocked: ${hashed.replace(/\//g, '\\/')}`));
+  lab.done();
+});
+
+test('locked PDF: replacing the source invalidates the old unlocked copy', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, copy, done } = await unlockAsk();
+  await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(db, t);
+  assert.ok(existsSync(copy), 'the first unlock leaves a copy');
+  writeFileSync(join(copy, '..', '..', 'inbox', 'march.pdf'), '%PDF-1.7\ntrailer << /Root 1 0 R /Encrypt 9 0 R >>\n%%EOF\n');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(copy, past, past);
+  const t2 = crew.assign('scribe', `read it again ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
+  await until('the second unlock ask', () => task(db, t2).state === 'needs_you' && !crew.busy.has('scribe'));
+  assert.equal(openAsk(db)?.kind, 'unlock', 'the replaced source asks for its password again, never the stale copy');
+  done();
 });
 
 test('Forget keeps synthetic sign-ins through unavailable, revoked and restored Computer', async () => {

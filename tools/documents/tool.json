@@ -9,7 +9,7 @@
   "license": "MIT",
   "source": "pinned",
   "install": {
-    "pip": "markitdown[pdf,docx,pptx,xlsx,xls,outlook]==0.1.8"
+    "pip": "markitdown[pdf,docx,pptx,xlsx,xls,outlook]==0.1.8 pypdfium2==5.14.0"
   },
   "asks": [
     "never: it only reads files into text"
