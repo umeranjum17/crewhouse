@@ -94,11 +94,13 @@ ax stop >/dev/null 2>&1 || true
 # The installed app, for real: Settings' own Install, then the same panel at 390 and 1440, day and night.
 "$NODE" -e '
 const [B, key, LAB, OUT, SK, THEN, DECK] = process.argv.slice(1), url = (q) => `${B}/?${q}#/f/quill/files%2F${DECK}`, steps = [
-  { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, settle: 3000 },
+  { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000,
+    eval: "({authority: sessionStorage.getItem(\"crewhouse.person\")?.length, launcherConsumed: !location.hash.startsWith(\"#person=\")})" },
   { name: "settings", url: `${B}/#/settings`, wait: "!!document.querySelector(\".install .btn\")", timeout: 20000 },
   { name: "install", click: ".install .btn", settle: 3000 }, { name: "sheet", xshot: `${OUT}/pwa/install-sheet.png` },
   { name: "tab", key: "Tab" }, { name: "return", key: "Return", settle: 3000 },
-  { name: "attach", attachApp: B }];
+  { name: "attach", attachApp: B },
+  { name: "app-authority", url: `${B}/#person=${key}`, reload: true, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000 }];
 for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 900]])
   steps.push({ name: `deck-${look}-${w}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: url(look), wait: "!!document.querySelector(\".slide-frame\")", timeout: 20000,
     eval: `[matchMedia("(display-mode: standalone)").matches, ${THEN}][0]`, out: `${OUT}/pwa/deck-panel-installed-${look}-${w}.png` });

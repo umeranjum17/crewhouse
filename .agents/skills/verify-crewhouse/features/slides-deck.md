@@ -23,6 +23,8 @@ It has Quill make a 5-slide kick-off deck with `crew_slides`, then writes:
 - `screens/`: `deck-card-{day-390,night-1440}.png`, `deck-panel-{day,night}-{1440,390}.png`, beside the `?demo` control.
 - `look/`: the look check at 360 with the largest text, deck panel beside the untouched workbook panel control.
 - `pwa/`: the same panel in the installed app at 390 and 1440, day and night, with `install-sheet.png`.
+  The launcher waits until its private fragment is consumed; the installed window gets its own launcher before capture.
+  `run.json` must show standalone mode true for all four panel captures, with no error rows.
 
 Open every screen: each slide frame shows its title over its lines, no clipped text or overlap, no raw markup,
 crew counts agreeing with the thread. The pinned tests are the two `deck` tests in `test/documents.test.ts`.
