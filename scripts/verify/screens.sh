@@ -51,9 +51,9 @@ for theme in night day; do
   for wh in ${WIDTHS:-1440x900 390x844}; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
-    # A page first: emulation has nothing to act on before one exists.
+    # The preamble holds a selected page, so emulate acts directly; one load
+    # per capture keeps renderer churn (and CDP timeouts) down.
     echo "screens.sh: $SLUG $theme $w" >&2
-    axi open "$u" || true
     if [ "$w" -le 500 ]; then vp="${w}x${h}x3,mobile,touch"; else vp="${w}x${h}x1"; fi
     axi emulate --viewport "$vp"
     axi open "$u"
