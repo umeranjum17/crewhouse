@@ -1,5 +1,5 @@
 // Capture the README's pictures, day and night, from the built-in demo (Maya and her crew).
-// Serve the app first (the verify-crewhouse skill's stub-engine crewd), then:
+// Serve the app first (a stub-engine crewd, as the done-done `stub-drive` journey boots it), then:
 //   CHROME_DEVTOOLS_AXI_SESSION=<yours> node scripts/capture-readme.mjs http://127.0.0.1:<port> [name ...]
 // Name the scenes to regenerate only those (e.g. `home-phone`); no names captures all.
 // The demo's own "You're trying a demo crew" nudge is hidden: it is not part of the app a person runs.

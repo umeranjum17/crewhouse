@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Design-bar captures of one changed screen: dark and light, at desktop and phone
+# width — four files, one screen, one call.
+#
+#   scripts/verify/screens.sh "$EV/screens" hello "http://127.0.0.1:$PORT/"            # app root
+#   scripts/verify/screens.sh "$EV/screens" office "http://127.0.0.1:$PORT/" "demo=office"  # with a query
+#
+# Theme comes from the app's own switch (?day / ?night, main.tsx `useLook`), not from
+# the OS colour scheme, so each capture is opened with the theme in the URL. Widths
+# are the two the app is designed at; `resize` then `open` re-renders, as the layout
+# is pure CSS. Set CHROME_DEVTOOLS_AXI_SESSION to your task-named session first.
+# EXPAND_MORE=1 opens up to eight long replies; AFTER runs after expansion (e.g. scroll .lines).
+# WIDTHS defaults to both sizes. FULL_PAGE=1 captures document scroll only, not nested .lines on desktop.
+# A screen that lives behind an in-memory switch (Home's Office view is never in the URL)
+# needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
+#   THEN="$(cat <<'JS'
+#   (async () => { document.querySelector('[data-mode=office]')?.click(); for (let i = 0; i < 50 && !document.querySelector('.office'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.office'); })()
+#   JS
+#   )" scripts/verify/screens.sh "$EV/screens" office "http://127.0.0.1:$PORT/"
+set -euo pipefail
+
+VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+[ $# -ge 3 ] || { echo "usage: screens.sh <dest-dir> <screen-slug> <app-url> [extra-query]" >&2; exit 2; }
+# Mandatory on every UI run, before the first capture: Crewhouse is a personal assistant
+# for ONE person, so no screen, seed or prompt may speak about several people sharing it.
+# A hit exits 1 and stops the run — fix the producer (the seed, the prompt, the component),
+# never edit the string out of a screenshot. --self-test is its own negative test.
+# (run from the repo top: the scan's default paths are relative to it)
+cd -- "$(git -C "$VERIFY_DIR" rev-parse --show-toplevel)"
+node "$VERIFY_DIR/personal-voice.mjs" --self-test >/dev/null
+node "$VERIFY_DIR/personal-voice.mjs" || {
+  echo "screens.sh: personal-voice check failed — fix the producer, then re-run" >&2; exit 1; }
+
+DEST=$1; SLUG=$2; URL=$3; EXTRA=${4:-}
+mkdir -p "$DEST"
+# The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
+withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
+for theme in night day; do
+  for wh in ${WIDTHS:-1440x900 390x844}; do
+    w=${wh%x*}; h=${wh#*x}
+    u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
+    # A page first: `resize` has nothing to act on before one exists, and the tool exits non-zero saying so.
+    chrome-devtools-axi open "$u" >/dev/null 2>&1 || true
+    chrome-devtools-axi resize "$w" "$h" >/dev/null
+    chrome-devtools-axi open "$u" >/dev/null
+    [ -z "${THEN:-}" ] || chrome-devtools-axi eval "$THEN" >/dev/null
+    if [ "${EXPAND_MORE:-0}" = 1 ]; then
+      # ponytail: eight More buttons; raise for longer replay threads.
+      for ((n=0; n<8; n++)); do
+        ref=$(chrome-devtools-axi snapshot --full | awk '/button "More"/{sub(/uid=/,"",$1); print $1; exit}')
+        [ -n "$ref" ] || break
+        chrome-devtools-axi click "@$ref" >/dev/null
+      done
+    fi
+    [ -z "${AFTER:-}" ] || chrome-devtools-axi eval "$AFTER" >/dev/null
+    out="$DEST/$SLUG-$theme-$w.png"
+    flags=(); [ "${FULL_PAGE:-0}" != 1 ] || flags+=(--full-page)
+    chrome-devtools-axi screenshot "$out" "${flags[@]}" >/dev/null
+    echo "$out"
+  done
+done

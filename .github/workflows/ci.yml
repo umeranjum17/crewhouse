@@ -73,6 +73,31 @@ jobs:
       - run: npm run build:web
       - run: npm test -- --group=${{ matrix.group }} # stub runner only: no Herdr, no CLI, no model calls
 
+  done-done:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # The merge gate calls done-done: fresh proof of this head from the repo's own
+    # journeys (stub engine, no browser, no model), checked and receipted, then
+    # re-verified. done-done-axi is pinned exactly like every other tool pin.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install -g --no-audit --no-fund done-done-axi@0.3.0
+      - run: npm run build:web
+      - run: done-done doctor
+      - run: done-done run stub-drive
+      - run: done-done run static-checks
+      - run: |
+          E="$HOME/.done-done/evidence/crewhouse"
+          done-done receipt --outcome "stub-engine crewd answers the app journey and copy stays one-person" "$E"/*/api-transcript.jsonl "$E"/*/summary.json "$E"/*/personal-voice.log --claim-id ci
+          done-done receipt --verify HEAD
+
   package:
     needs: changes
     if: needs.changes.outputs.code == 'true'

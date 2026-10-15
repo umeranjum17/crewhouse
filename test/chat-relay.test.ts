@@ -63,7 +63,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
     ['bullets', '- Water bill due Friday\n- Dentist bill due Friday\n- Phone bill due next month'],
   ]) {
     if (evidence && slug === 'long') {
-      recorder = spawn(process.execPath, [join(repo, '.agents/skills/verify-crewhouse/record.mjs'), `http://127.0.0.1:${port}`, base, join(evidence, 'relay.webm')]);
+      recorder = spawn(process.execPath, [join(repo, 'scripts', 'verify', 'record.mjs'), `http://127.0.0.1:${port}`, base, join(evidence, 'relay.webm')]);
       let output = ''; recorder.stdout!.on('data', (d) => { output += d; }); recorder.stderr!.on('data', (d) => { output += d; });
       await until('relay recording ready', () => output.includes('RECORDING'), 10_000);
       recorder.on('close', () => writeFileSync(join(evidence, 'recording.log'), output));
