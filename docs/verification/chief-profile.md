@@ -21,6 +21,11 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
   reaches any phone or browser.
 - Instructions (`#/h/chief/instructions`): read-only, Chief's soul and the plain-words limits of his job, no tool
   names; changes only through a card the person approves.
+- Things: Files, Links and Pictures rows with counts ("None yet" when empty) open `#/h/chief/files|links|pictures`,
+  one switch between the three; each list newest first with who and when ("You sent it", "Penny"), each with its
+  own empty state. Approved mock: `chief-things` (things.html). Driver: `scripts/verify/chief-things.sh`
+  (`<port> <state> <out> empty|filled`); seed a link and a photo + PDF in Chief's chat (`POST /api/bots/chief/messages`
+  with `photos`/`files`) and a helper delivery (a `crew_workbook` call in the helper's message on the stub engine).
 - On crew rows (Chats, the desk rail, the phone's chat list) a dot means working; only Chief's row shows unread or
   an ask ([crew-list.md](crew-list.md)).
 

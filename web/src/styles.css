@@ -1792,3 +1792,13 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .ai-page .cap { color: var(--mute); font-size: 13px; line-height: 18px; margin: 10px 4px 0; }
 .ai-page .row-item b { font-weight: 500; }
 .ai-page .row-item .small { display: block; }
+.cp-seg { display: flex; width: 100%; margin: 4px 0 14px; }
+.cp-seg button { flex: 1; justify-content: center; padding: 8px 4px; }
+.cp-thumb { width: 36px; height: 40px; flex: none; border-radius: 6px; object-fit: cover; background: var(--soft); }
+.chief-profile .row-item .grow .clamp1 { display: block; }
+/* The mock's marks: a spreadsheet green, a document blue, a PDF grey. */
+.chief-profile .file-chip:is([data-ext=XLSX], [data-ext=XLS], [data-ext=CSV]) { background: #1C7C47; color: #fff; }
+.chief-profile .file-chip:is([data-ext=DOCX], [data-ext=DOC]) { background: #2B5797; color: #fff; }
+.chief-profile .file-chip[data-ext=PDF] { background: #8A8478; color: #fff; }
+.cp-none { display: flex; flex-direction: column; gap: 4px; border-style: dashed; }
+.cp-none b { color: var(--ink); }

@@ -136,12 +136,15 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
   const JARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
   // A literal of all lower-case tokens (class names, import paths, hrefs) is never read as words on a screen.
   const TOKENY = /^[a-z0-9-./:]+( [a-z0-9-./:]+)*$/;
+  // The one exception: Chief's Things lists the web links said in his chat, a plain word on the approved Things mock
+  // (data/ch-chief-profile-gaps/board/mocks/chief-profile/things.html, Main lead's answer); these exact strings only.
+  const SAVED_LINKS = new Set(['Links', 'LINK', 'Links you or the crew share in the chat land here.']);
   const prose = (src: string) => {
     const bare = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, ' '); // comments are for us
     const lits = [...bare.matchAll(/(['"])((?:\\.|(?!\1)[^\\\n])*)\1/g)].map((m) => m[2]).filter((l) => !/^https?:/i.test(l.trim()));
     // JSX text: anything between tags that is not an expression fragment (&&, ===, x.y, "?) :" are code, not copy).
     const jsx = [...bare.matchAll(/>([^<>{}\n]{3,})</g)].map((m) => m[1]).filter((t) => !/&&|\?\?|===|\.\w|\)\s*[?:]/.test(t));
-    return [...lits, ...jsx].filter((l) => !TOKENY.test(l.trim()));
+    return [...lits, ...jsx].filter((l) => !TOKENY.test(l.trim()) && !SAVED_LINKS.has(l.trim()));
   };
   const srcDir = join(import.meta.dirname, '..', 'web', 'src');
   for (const f of ['main.tsx', 'parts.tsx', 'flows.tsx', 'office.tsx', 'dialog.ts', 'draft.ts', 'kept.ts', 'chat-md.ts', 'demo.ts', 'adapter.ts'])

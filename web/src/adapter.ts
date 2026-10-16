@@ -1577,6 +1577,23 @@ export function handChips(state: Json, lines: Line[]): { before: Map<number, Han
   return { before, tail };
 }
 
+/** One thing from Chief's chat, for his profile's Things: what it is called, who it came from and when, where a tap goes. */
+export type ChatThing = { key: string; name: string; by: string; at: number; href: string; chip: string; f?: FileView };
+/** Chief's Things (mock things.html), newest first and read-only: Files made or sent in his chat (the helpers' deliveries
+ *  his thread notes too), Links said in it, and Pictures, the photos and videos sent or made there. */
+export function chatThings(state: Json, page: Json) {
+  const ls = lines(page, 'chief', state), first = ls.find((l) => l.at)?.at ?? Infinity;
+  const said = (l: Line) => (l.from === 'me' ? 'You sent it' : l.helper ? crewName(state, l.helper) : 'Chief');
+  const all = [...ls.flatMap((l) => l.files.map((f) => ({ f, by: said(l), at: l.at ?? 0 }))),
+    ...things(state).filter((t) => t.helper !== 'chief' && at(t.at) >= first).flatMap((t) => t.files.map((f) => ({ f, by: crewName(state, t.helper), at: at(t.at) })))]
+    .sort((a, b) => b.at - a.at).filter((x, i, xs) => xs.findIndex((y) => y.f.url === x.f.url) === i)
+    .map(({ f, by, at }): ChatThing => ({ key: f.url, name: /^files\/photos\//.test(fileSource(f.url)?.path ?? '') ? 'A picture' : f.name, by, at, f, ...fileTarget(f)! }));
+  const pic = (x: ChatThing) => x.f!.kind === 'image' || x.f!.kind === 'video';
+  const links = ls.flatMap((l) => docLinks(l.text).filter((p) => p.href).map((p): ChatThing => ({ key: `${l.id}|${p.href}`, href: p.href!, chip: 'LINK',
+    name: p.text === p.href ? p.href!.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : p.text, by: said(l), at: l.at ?? 0 }))).sort((a, b) => b.at - a.at);
+  return { files: all.filter((x) => !pic(x)), links: links.filter((x, i) => links.findIndex((y) => y.href === x.href) === i), pictures: all.filter(pic) };
+}
+
 /** Where each ask's card falls in the thread (Main2036): a card belongs to the turn that raised it, so it shows after
  *  the reply and before the next message the person sent; a card with no later message follows the whole thread. Placing
  *  by the ask's own time alone floated the proposal card above the sentence that announced it. */

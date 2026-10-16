@@ -874,7 +874,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   // Chief has no helper card, but his Every-step trail (with Undo for what he learned) is the same view: admit him for it.
-  if (id === 'chief' && (tab === 'details' || tab === 'instructions')) return <ChiefProfile {...ctx} tab={tab} page={page} />;
+  if (id === 'chief' && ['details', 'instructions', ...THINGS.map(([k]) => k)].includes(tab)) return <ChiefProfile {...ctx} tab={tab} page={page} />;
   if (!h && id !== 'chief') return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
   const b = state.bots.find((x: Json) => x.id === id);
   const name = h?.name ?? 'Chief';
@@ -969,9 +969,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
 
 /** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
  *  his one notification switch, his instructions read-only, and his crew. Take control is on the first phone screen. */
+const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
+  ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   const { state, live, refresh, tab, page } = ctx;
   const crew = A.crew(state), all = A.routines(state), [adding, setAdding] = useState(false);
+  // ponytail: read from the chat crewd sends (its last 200 lines); an older file drops off, a things API if that matters.
+  const stuff = A.chatThings(state, page), list = THINGS.find(([k]) => k === tab);
   const [notify, setNotify] = useState<boolean | null>(null);
   useEffect(() => { api.notify().then((n) => setNotify(n.on)).catch(() => {}); }, []);
   // The computer to show: whoever is on one now, else the first helper with one.
@@ -983,6 +987,16 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
     <p className="lead">Plain words Chief reads before every job. Only you change them.</p>
     <h2 className="plate">Who Chief is</h2><div className="card"><ChatText text={page?.soul ?? ''} /></div>
     <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
+  if (list) return <div className="page helper">{head('Things')}<section className="detail rest-screen chief-profile">
+    <div className="seg cp-seg" role="tablist" aria-label="Things">{THINGS.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} className={k === tab ? 'on' : ''}
+      onClick={() => location.replace(`#/h/chief/${k}`)}>{l} {stuff[k].length}</button>)}</div>
+    {stuff[list[0]].length ? <><div className="card list">{stuff[list[0]].map((x) => { const out = !x.href.startsWith('#');
+      return <a key={x.key} className="row-item cp-link" href={x.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined}>
+        {x.f?.kind === 'image' ? <img className="cp-thumb" src={x.f.url} alt="" /> : <span className="file-chip" data-ext={x.chip}>{x.chip}</span>}
+        <span className="grow"><span className="clamp1">{x.name}</span><span className="mute small">{[x.by, x.at ? A.clock(x.at) : ''].filter(Boolean).join(' · ')}</span></span><span className="mute">›</span></a>; })}</div>
+      <p className="mute small">Everything made or read in your chat with Chief, newest first.</p></>
+      : <div className="card empty cp-none"><b>No {list[1].toLowerCase()} yet</b><span className="mute small">{list[2]}</span></div>}
+  </section></div>;
   return <div className="page helper">{head('Chat')}<section className="detail rest-screen chief-profile">
     <div className="cp-head"><ChiefArt mood={live.chief.mood} mascot /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
     <div className="label">Routines</div>
@@ -1014,6 +1028,9 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
           <span className="grow">{m.name}<span className="mute small clamp1">{working && <i className="cp-dot" aria-hidden />}{working && m.step ? `${r.word} · ${m.step}` : r.word}</span></span><span className="mute">›</span></a>;
       })}</div>
     </>}
+    <div className="label">Things</div>
+    <div className="card list">{THINGS.map(([k, l]) => <a key={k} className="row-item cp-link" href={`#/h/chief/${k}`}><span className="grow">{l}</span>
+      <span className="mute">{stuff[k].length || 'None yet'}</span><span className="mute">›</span></a>)}</div>
   </section></div>;
 }
 
