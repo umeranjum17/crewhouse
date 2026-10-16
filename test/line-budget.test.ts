@@ -37,7 +37,9 @@ import { join } from 'node:path';
 // ch-src-trim-slides-final joins the remaining crew.ts declarations (net -63): src 7171 -> 7108 on that rebase.
 // The pre-slides ceiling 7010 is not restored here: the email allocation above landed in between, so it stands until
 // ch-src-trim-mail retires its +98 (7108 - 98 = 7010).
-const BUDGET = 7108;
+// ch-src-trim-mail joins the 37 adjacent same-scope declarations left outside mail, mail-send, policy and the gate
+// (net -37): src 7108 -> 7071, every behavior-free join in scope. The 61 lines left to 7010 stay owed to the owner.
+const BUDGET = 7071;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

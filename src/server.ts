@@ -107,8 +107,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
   };
   let update: { version: string; url: string } | null = null;
-  const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string, newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
-  const checkUpdate = () => fetch(process.env.CREWHOUSE_RELEASES || 'https://api.github.com/repos/umeranjum17/crewhouse/releases/latest', { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/vnd.github+json' } })
+  const version = JSON.parse(readFileSync(join(cfg.repoDir, 'package.json'), 'utf8')).version as string, newer = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; }, checkUpdate = () => fetch(process.env.CREWHOUSE_RELEASES || 'https://api.github.com/repos/umeranjum17/crewhouse/releases/latest', { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/vnd.github+json' } })
     .then((r) => (r.ok ? r.json() : null)).then((rel: any) => {
       const v = String(rel?.tag_name ?? '').replace(/^v/, '');
       update = /^\d+\.\d+\.\d+$/.test(v) && newer(v, version) ? { version: v, url: String(rel.html_url) } : null;

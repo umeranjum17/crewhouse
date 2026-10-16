@@ -7,9 +7,7 @@ export type DeckSpec = { name: string; slides: SlideSpec[] };
 
 const MAX = { slides: 40, lines: 8, title: 120, line: 200, body: 420 };
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!)), XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-const A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"', P = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
-const RELS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"', T = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!)), XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"', P = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"', RELS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"', T = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 /** The empty shape tree every master, layout and slide starts with: PowerPoint expects one, and it draws nothing. */
 const TREE = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
@@ -115,12 +113,10 @@ const says = (e: any) => all(e, 'a:t').map((t: any) => (t.elements ?? []).map((x
 /** Read a deck back for the app: one entry per slide, its title and its lines, words only — plus those same words
  *  flattened into parts, so a phone's document reader shows a deck too. Nothing but words leaves here. */
 export async function readDeck(file: string) {
-  const JSZip = (await import('jszip')).default, { xml2js } = await import('xml-js'), zip = await JSZip.loadAsync((await import('node:fs')).readFileSync(file)), num = (f: string) => Number(f.replace(/\D+/g, ''));
-  const names = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
+  const JSZip = (await import('jszip')).default, { xml2js } = await import('xml-js'), zip = await JSZip.loadAsync((await import('node:fs')).readFileSync(file)), num = (f: string) => Number(f.replace(/\D+/g, '')), names = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => num(a) - num(b));
   if (!names.length) throw new Error('no such deck');
   const read = await Promise.all(names.slice(0, MAX.slides).map(async (n) => {
-    const root = await xml2js(await zip.file(n)!.async('string'), {}) as any, groups = all(all(root, 'p:cSld')[0], 'p:sp').map((sp) => all(sp, 'a:p').map((p) => says(p).replace(/\s+/g, ' ').trim()).filter(Boolean)).filter((g) => g.length), title = (groups[0]?.[0] ?? '').slice(0, MAX.title);
-    const lines = (groups.length > 1 ? groups.slice(1).flat() : (groups[0] ?? []).slice(1)).map((t: string) => t.slice(0, MAX.line)).slice(0, 2 * MAX.lines);
+    const root = await xml2js(await zip.file(n)!.async('string'), {}) as any, groups = all(all(root, 'p:cSld')[0], 'p:sp').map((sp) => all(sp, 'a:p').map((p) => says(p).replace(/\s+/g, ' ').trim()).filter(Boolean)).filter((g) => g.length), title = (groups[0]?.[0] ?? '').slice(0, MAX.title), lines = (groups.length > 1 ? groups.slice(1).flat() : (groups[0] ?? []).slice(1)).map((t: string) => t.slice(0, MAX.line)).slice(0, 2 * MAX.lines);
     return { title, lines };
   })), slides = read.filter((s) => s.title || s.lines.length);
   if (!slides.length) throw new Error('no such deck');

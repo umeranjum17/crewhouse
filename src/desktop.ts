@@ -17,15 +17,11 @@ let probed: { key: string; engine: string | null; refused: boolean; until: numbe
 export function probeEngine(now = Date.now()) {
   const key = [process.env.DESKLINK_ENGINE, process.env.MUXR_DESKLINK_ENGINE, process.env.PATH, process.env.LD_LIBRARY_PATH].join('\0');
   if (probed?.key === key && probed.until > now) return probed;
-  const explained = explainMissingEngine(), e = explained ? null : resolveEngine();
-  const p = e && spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 }), lib = p && p.status !== 0 ? /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr)?.[1] : undefined;
-  const engine = explained ?? (lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : p && p.status !== 0 ? p.error?.message || p.stderr.trim() || `engine capability check exited ${p.status}` : null);
-  const definite = !!p && (p.status === 0 || !!lib);
+  const explained = explainMissingEngine(), e = explained ? null : resolveEngine(), p = e && spawnSync(e.command, ['capabilities'], { env: { PATH: process.env.PATH, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH }, encoding: 'utf8', timeout: 3000 }), lib = p && p.status !== 0 ? /error while loading shared libraries: ([^:\s]+)/.exec(p.stderr)?.[1] : undefined, engine = explained ?? (lib ? `missing system library: ${lib} (Fedora: sudo dnf install '*/${lib}'${lib === 'libevdev.so.2' ? '; Debian/Ubuntu: sudo apt install libevdev2; Arch: sudo pacman -S libevdev' : ''})` : p && p.status !== 0 ? p.error?.message || p.stderr.trim() || `engine capability check exited ${p.status}` : null), definite = !!p && (p.status === 0 || !!lib);
   return probed = { key, engine, refused: !!lib, until: definite ? Infinity : now + 60_000 };
 }
 
-export const engineGaps = () => { const { engine } = probeEngine(); return engine ? [`the desklink engine: ${engine}`] : []; };
-export const missing = () => [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)', ...engineGaps()].filter((m): m is string => !!m);
+export const engineGaps = () => { const { engine } = probeEngine(); return engine ? [`the desklink engine: ${engine}`] : []; }, missing = () => [!onPath('Xvfb') && 'Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb)', ...engineGaps()].filter((m): m is string => !!m);
 
 /** An Xauthority file with one wildcard MIT-MAGIC-COOKIE-1 entry: only holders of this file may use the display. */
 function xauthority(n: number | string, cookie: Buffer) {

@@ -34,8 +34,7 @@ let firstWords = true;
 const permissionIdentity = (bot: string, task: unknown, words: string, d: Row) => JSON.stringify(d.mail ? [bot, task, words, d.mail, d.preview] : [bot, words]);
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
-export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
-export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
+export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text), inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
   /\b(sign[ -]?in|log[ -]?in)\b/i.test(text) && /\b(chatgpt|ai account|crewhouse)\b/i.test(text) ? 'signin' :
   /\b(connect|link|add)\b[\s\S]{0,45}\b(google calendar|calendar|gmail|drive|notion|canva)\b/i.test(text) ? 'app' :
   /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
@@ -84,8 +83,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
-const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; };
-const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
+const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; }, hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */
 const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.', fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
@@ -415,8 +413,7 @@ export class Crew {
   /** A working bot's latest step and how long it has been quiet; quiet past STUCK_MS reads as "stuck?". */
   private progress(bot: string, task: Row | undefined) {
     if (!task) return { step: null, quietSince: null, stuck: false };
-    const step = this.db.get(`SELECT seq, at, kind, data FROM events WHERE bot = ? AND kind IN ('run.tool', 'task.progress', 'file.delivered') AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1`, bot, task.id);
-    const quietSince = this.db.get("SELECT MAX(at) AS at FROM events WHERE bot = ? AND json_extract(data, '$.task') = ?", bot, task.id)?.at ?? task.updated_at ?? null;
+    const step = this.db.get(`SELECT seq, at, kind, data FROM events WHERE bot = ? AND kind IN ('run.tool', 'task.progress', 'file.delivered') AND json_extract(data, '$.task') = ? ORDER BY seq DESC LIMIT 1`, bot, task.id), quietSince = this.db.get("SELECT MAX(at) AS at FROM events WHERE bot = ? AND json_extract(data, '$.task') = ?", bot, task.id)?.at ?? task.updated_at ?? null;
     return { step: step ? { ...step, data: JSON.parse(step.data) } : null, quietSince, stuck: task.state === 'working' && Date.now() - quietSince > STUCK_MS };
   }
 
@@ -430,8 +427,7 @@ export class Crew {
         .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life',
           // Two of the person's Google apps name one thing: the row says "Google", not "Google and Google".
           needs: [...new Set(i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')))] }));
-    });
-    const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
+    }), hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
     // The six-row cap counts the jobs they can hand over now, hired or to hire; waiting rows ride along uncapped (ponytail: no template set has more than a screenful; cap them when one does).
     return [...rows.filter((r) => !r.needs.length).concat(hire).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
@@ -508,8 +504,7 @@ export class Crew {
 
   /** Only jobs started in the room or involving a helper-to-helper pass belong here. */
   room(before?: number) {
-    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0 OR EXISTS (SELECT 1 FROM asks a WHERE a.state = 'open' AND json_extract(a.detail, '$.pass.root') = tasks.root)`;
-    const lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
+    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0 OR EXISTS (SELECT 1 FROM asks a WHERE a.state = 'open' AND json_extract(a.detail, '$.pass.root') = tasks.root)`, lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
       WHERE t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
       from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
@@ -878,8 +873,7 @@ export class Crew {
 
   /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
   digest(since: number, day?: { at: number | null; title: string }[]) {
-    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, ''), name = (id: string) => this.bot(id)?.display ?? id, list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
-    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
+    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, ''), name = (id: string) => this.bot(id)?.display ?? id, list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`, done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     if (done.length) lines.push(`- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.`);
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     if (unsure.length) lines.push(`- Not sure it worked: ${list(unsure.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -1012,8 +1006,7 @@ export class Crew {
   async importGrok(slug: string, name?: string, skill?: string, source?: string, list = false, category?: string) {
     const mod = await import((await import('node:url')).pathToFileURL(join(this.cfg.repoDir, 'scripts', 'grok-recipe.mjs')).href);
     if (list) return mod.listAny(category);
-    const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); });
-    const was = this.bot(pre.id) ?? this.bots().find((b) => b.template === pre.template), id = was?.id ?? pre.id;
+    const pre = await mod.previewAny({ ref: skill ?? slug, name, apps: Object.fromEntries(Object.entries(APPS).map(([k, a]) => [k, a.name])), want: skill || /claude|skill/i.test(String(source ?? '')) ? 'skill' : undefined }).catch((e: any) => { throw fail(e instanceof Error ? e.message : String(e)); }), was = this.bot(pre.id) ?? this.bots().find((b) => b.template === pre.template), id = was?.id ?? pre.id;
     if (was && id === pre.id && was.template !== pre.template) throw Object.assign(new Error(`there is already a bot called ${pre.display}`), { status: 409 });
     mod.writePlanned({ crewDir: this.cfg.crewDir, id, plan: pre.plan, labels: disk.JOB_LABELS, update: !!was, seed: disk.loadTemplate(this.cfg, 'helper') });
     if (was) this.db.run('UPDATE bots SET display = ?, role = ?, color = ? WHERE id = ?', pre.display, pre.plan.role, pre.plan.color, id); else this.seat(id, pre.display, pre.plan.role, pre.template, pre.plan.color);
@@ -1031,8 +1024,7 @@ export class Crew {
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
   async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false, files?: unknown) {
-    const bot = this.needBot(botId);
-    const pics = [...checkPhotos(photos), ...checkPhotos(files)];
+    const bot = this.needBot(botId), pics = [...checkPhotos(photos), ...checkPhotos(files)];
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.some((p) => p.photo === false) ? `Here ${pics.length === 1 ? 'is a file.' : 'are some files.'}` : `Here ${pics.length === 1 ? 'is a photo.' : 'are some photos.'}`);
     if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
@@ -1078,8 +1070,7 @@ export class Crew {
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
   private async route(text: string, model: string | undefined, pics: Photo[] = [], room = false, key?: string, said?: string) {
-    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[], lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF);
-    const replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
+    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[], lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF), replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
     if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', model, undefined, own, pics, { room, key });
     // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
@@ -1382,8 +1373,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
-      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
-    const spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
+      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
@@ -1482,8 +1472,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.setTask(task, 'paused', state);
       // One waiting line per words, judged by the speaker's own last line in that voice: Chief says his once per wait (every
       // account resting is his to say, whoever's job waits), notes the next ask in other words, then holds quietly (Main1325).
-      const where = wake ? CHIEF : task.bot, said = voice === 'bot' ? cleanReply(words) : words;
-      const last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text, noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
+      const where = wake ? CHIEF : task.bot, said = voice === 'bot' ? cleanReply(words) : words, last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text, noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
       if (wake || voice === 'system' ? last !== said : last !== noted) this.say(where, voice, again ? noted : words, where === task.bot ? task.id : null);
     });
   }
@@ -1814,8 +1803,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   private defer(ask: Row) { // "Not now, remind me tomorrow": a one-shot routine, fired once by schedule(), then gone
     const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(9, 0, 0, 0);
-    const name = short(String(ask.title ?? 'a deferred question'), 60);
-    const id = this.db.run("INSERT INTO routines (bot, name, schedule, body, kind, next_at, created_at) VALUES (?, ?, '', ?, 'once', ?, ?)", ask.bot, name, `The person said not now and asked to be reminded: "${name}". Raise it with them again now.`, next.getTime(), Date.now()).lastInsertRowid;
+    const name = short(String(ask.title ?? 'a deferred question'), 60), id = this.db.run("INSERT INTO routines (bot, name, schedule, body, kind, next_at, created_at) VALUES (?, ?, '', ?, 'once', ?, ?)", ask.bot, name, `The person said not now and asked to be reminded: "${name}". Raise it with them again now.`, next.getTime(), Date.now()).lastInsertRowid;
     this.db.event('routine.created', ask.bot, { routine: Number(id), name, words: 'Reminds you tomorrow' });
   }
 
@@ -2047,8 +2035,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         (p) => {
           const was = p.bot ? this.bot(String(p.bot).toLowerCase()) : undefined;
           if (p.bot && (!was || was.id === CHIEF)) throw fail(`no helper called ${p.bot}; see crew_roster`, 404);
-          const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), will_do = hireList(p.will_do), wont_do = hireList(p.wont_do), first_step = clean(p.first_step, 200) || undefined, first_job = clean(p.first_job ?? p.first, 2000) || undefined;
-          const job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p.job?.[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
+          const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), will_do = hireList(p.will_do), wont_do = hireList(p.wont_do), first_step = clean(p.first_step, 200) || undefined, first_job = clean(p.first_job ?? p.first, 2000) || undefined, job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p.job?.[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
           disk.validateJob(job);
           if (!name || !/[a-z]/i.test(name) || !role) throw fail('give the helper a name and a role');
           if (!was && (this.bot(disk.slug(name)) || disk.slug(name) === 'helper')) throw fail(`there is already a helper called ${name}; pick another name`, 409);
@@ -2194,8 +2181,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
   private async askUnlock(botId: string, files: unknown) {
-    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))];
-    const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [];
+    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))], candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [];
     for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r);
     if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked, all: rels.filter((r) => locked.includes(r) || unlockedCurrent(space, r)) }, 'unlock');
     return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${rels.map((r) => unlockedCurrent(space, r) ? unlockedAs(r) : r).join(', ')}` };

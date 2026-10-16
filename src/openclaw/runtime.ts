@@ -19,8 +19,7 @@ const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', co
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
-};
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
+}, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
 
@@ -168,8 +167,7 @@ export class OpenClawRuntime implements AgentRuntime {
   abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
   /** The person's applied learned skills (the workshop's proposals, applied state last). */
   async learned() {
-    const { agentId } = await this.kit.ensureMember(ME);
-    const list = await this.kit.call('skills.proposals.list', { agentId }, { timeoutMs: 20_000 }).catch(() => undefined) as { proposals?: any[] } | undefined;
+    const { agentId } = await this.kit.ensureMember(ME), list = await this.kit.call('skills.proposals.list', { agentId }, { timeoutMs: 20_000 }).catch(() => undefined) as { proposals?: any[] } | undefined;
     return (list?.proposals ?? []).map((p) => ({
       id: String(p.id ?? ''),
       skill: String(p.skillName ?? p.title ?? ''),
@@ -214,9 +212,7 @@ export class OpenClawRuntime implements AgentRuntime {
    *  workshop window only for the person's own reviewer and its reconcile — one call wide — run the review, close
    *  it, and report kept/rewritten/dropped. */
   async runCollectionReview() {
-    const capture = this.captureLearned();
-    const jobs = await this.kit.call('cron.list', { limit: 100 }, { timeoutMs: 20_000 }) as { jobs?: { id: string; name: string; enabled: boolean }[] };
-    const job = jobs.jobs?.find((j) => j.name === `skill-collection-review-${ME}`);
+    const capture = this.captureLearned(), jobs = await this.kit.call('cron.list', { limit: 100 }, { timeoutMs: 20_000 }) as { jobs?: { id: string; name: string; enabled: boolean }[] }, job = jobs.jobs?.find((j) => j.name === `skill-collection-review-${ME}`);
     if (!job?.enabled) throw new Error('the collection review is not enabled');
     this.armCuration();
     try {

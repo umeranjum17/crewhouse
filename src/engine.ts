@@ -28,8 +28,7 @@ export const PARAMETERS = {
   crew_status: Type.Object({}), crew_suggest: Type.Object({ bot: Type.String(), text: Type.String() }),
   crew_create: Type.Object({ bot: Type.Optional(Type.String()), name: Type.Optional(Type.String()), role: Type.String(), job: Type.Object(Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, Type.String({ minLength: 1, maxLength: 600 })])), { additionalProperties: false }), personality: Type.Optional(Type.String()), first: Type.Optional(Type.String()), will_do: Type.Optional(Type.Array(Type.String())), wont_do: Type.Optional(Type.Array(Type.String())), first_step: Type.Optional(Type.String()), first_job: Type.Optional(Type.String()) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
-};
-export const HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'account', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
+}, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'account', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
 
 /** One tool a run may call: the spec the model sees, and crewd's own executor behind it. */
 export interface CrewTool { name: string; description: string; parameters: object; run: (input: any, signal?: AbortSignal) => Promise<unknown> }
@@ -105,8 +104,7 @@ export const webTools = (may?: (u: URL) => boolean) => [
   tool('web_search', 'Search the web; returns titles, links and snippets.', PARAMETERS.crew_web_search,
     async (p, signal) => {
       if (may && !may(new URL('https://html.duckduckgo.com/'))) throw new Error("searching the web is not on this helper's list of places it may reach");
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(String(p.query))}`, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } }), html = await res.text();
-      const hits = [...html.matchAll(/class="result__a" href="([^"]+)"[^>]*>([^]*?)<\/a>[^]*?class="result__snippet"[^>]*>([^]*?)<\/a>/g)].slice(0, 8)
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(String(p.query))}`, { signal: signal ?? AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0 Crewhouse' } }), html = await res.text(), hits = [...html.matchAll(/class="result__a" href="([^"]+)"[^>]*>([^]*?)<\/a>[^]*?class="result__snippet"[^>]*>([^]*?)<\/a>/g)].slice(0, 8)
         .map(([, href, title, snip]) => { const u = /uddg=([^&]+)/.exec(href)?.[1]; return `${plain(title)} — ${u ? decodeURIComponent(u) : href}\n  ${plain(snip)}`; });
       return hits.join('\n') || 'No results.';
     }),
