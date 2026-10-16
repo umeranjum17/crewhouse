@@ -61,6 +61,7 @@ export class StubRuntime implements AgentRuntime {
     return { paste: () => {}, cancel: () => { clearTimeout(timer); on({ waiting: false, error: 'The sign-in was cancelled.' }); } };
   }
   async signOut() {}
+  async models(account: string) { return ['grok', 'opencode-go'].includes(account) ? [] : [{ id: 'strong-1', name: 'Strong 1' }, { id: 'quick-1', name: 'Quick 1' }]; }
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     if (!this.host) throw new Error('Stub not started');
     this.specs.set(spec.key, spec); on({ type: 'started' });

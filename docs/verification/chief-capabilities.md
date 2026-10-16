@@ -17,7 +17,7 @@ note saying what grew and why. The words themselves need real model words: the s
    (OpenCode Go plan key, pasted into its Settings card; see `signin-card.md`). Name the route and model in the evidence.
 2. Same seed for every run: `PUT /api/profile {"text":"I am Umer, a solo founder building muxr, a phone app for driving
    coding agents. Its App Store release is due this week."}`, `POST /api/onboard {"address":"Umer"}`,
-   `PUT /api/bots/chief/models {"models":["<account>"]}`. Use a fresh state per run so "Earlier in this chat" is empty.
+   `PUT /api/accounts/1/<account>/model {"model":"<id>"}` (an id from `GET /api/accounts/1/<account>/model`). Use a fresh state per run so "Earlier in this chat" is empty.
 3. At `390x844x3,mobile,touch`, `?night`, type `What can you do?` in Chief's box and send. Wait on the task row
    (`tasks` for `chief` reaching `done`), not a sleep. Save the last bot message (`GET /api/bots/chief`) as text.
 4. Capture: tap More on the reply, use a taller phone viewport (`390x1400x3`) and screenshot the whole bubble.

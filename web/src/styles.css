@@ -1758,3 +1758,16 @@ a.ch-art, .ch-name a { color: inherit; text-decoration: none; }
 .screen-held { border-radius: 18px; box-shadow: 0 0 0 3px var(--go); }
 .hand-back { display: flex; flex-direction: column; gap: 10px; }
 .hand-back .btn { width: 100%; }
+
+/* One AI account's page (mock model-a): the crew's model as radio rows, the person's pick outlined. */
+a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
+.ai-page h2 { font-size: 22px; line-height: 28px; margin: 4px 0 4px; }
+.ai-page .label { font: 500 12px/16px var(--ui); letter-spacing: 0; text-transform: none; color: var(--mute); margin: 18px 4px 8px; }
+.pick { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--solid); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pick + .pick { margin-top: 10px; }
+.pick.on { border-color: var(--go); box-shadow: 0 0 0 1px var(--go) inset; }
+.radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line2); flex: none; }
+.pick.on .radio { border: 7px solid var(--go); }
+.ai-page .cap { color: var(--mute); font-size: 13px; line-height: 18px; margin: 10px 4px 0; }
+.ai-page .row-item b { font-weight: 500; }
+.ai-page .row-item .small { display: block; }

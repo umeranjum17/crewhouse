@@ -129,6 +129,11 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.kit.signOut(ME, provider);
   }
 
+  /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
+  async models(account: string) {
+    const provider = PROVIDER_OF[account], { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'default' }, { timeoutMs: 20_000 });
+    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && m.available !== false).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
+  }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }

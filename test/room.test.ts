@@ -223,8 +223,8 @@ test('Things foregrounds own output ahead of an untagged legacy handoff copy', a
 test('room replies rejoin a job; plain routed work stays out', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
-  const room = (await crew.post('scout', 'First request', undefined, undefined, true))!.task;
-  const follow = (await crew.post('scout', 'One more thing', undefined, undefined, true))!.task;
+  const room = (await crew.post('scout', 'First request', undefined, true))!.task;
+  const follow = (await crew.post('scout', 'One more thing', undefined, true))!.task;
   assert.equal(task(db, room).room, 1); assert.equal(task(db, follow).root, room);
   const plain = (await crew.post('scout', 'Private errand'))!.task;
   assert.equal(task(db, plain).room, 0);

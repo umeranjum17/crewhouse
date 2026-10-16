@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_ITEMS } from '../src/batch.ts';
-import { setup, settled, task } from './lab.ts';
+import { setup, settled, task, until } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 const batchKey = (bot: string, t: number, i: number) => `agent:m1:crewhouse:${bot}:${t}:batch:${i}`;
@@ -73,8 +73,8 @@ test('a resting account stops later waves early and says so in plain words', asy
   try {
     const items = Array.from({ length: 10 }, (_, i) => `Place ${i + 1}`);
     const id = (await crew.post('scout', `compare ${call('crew_batch', { question: 'hit the limit on prices today', items })}`))!.task;
-    await settled(db, id);
-    assert.equal(task(db, id).state, 'done', 'a tired account is a result the model reads, never a crashed run');
+    await until('waits on the limit', () => task(db, id).state === 'paused');
+    assert.match(task(db, id).result, /^Your ChatGPT reached its limit/, 'a tired account waits for the person\'s pick, never a crashed run');
     assert.ok(specOf(crew, batchKey('scout', id, 7)), 'the first wave of eight ran');
     assert.equal(specOf(crew, batchKey('scout', id, 8)), undefined, 'the second wave never started');
     const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);

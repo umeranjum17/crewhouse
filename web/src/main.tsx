@@ -16,7 +16,7 @@ import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTa
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -32,6 +32,7 @@ function parseRoute(): Route {
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
+  if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
   return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
@@ -1623,7 +1624,8 @@ function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; re
   const row = ({ ai, g, says }: ReturnType<typeof A.aiList>['more'][number]) => (
     <div key={ai.key} className="ai-row">
       <AiMark ai={ai} />
-      <div className="grow"><b>{ai.name}</b><div className="mute small">{says}</div></div>
+      {g.state === 'ready' ? <a className="grow ai-open" href={`#/settings/ai/${ai.key}`}><b>{ai.name}</b> <span className="mute" aria-hidden>›</span><div className="mute small">{says}</div></a>
+        : <div className="grow"><b>{ai.name}</b><div className="mute small">{says}</div></div>}
       {g.state === 'signed-out' && <button className={`btn ${mine.some((r) => r.ai === ai) ? 'go' : 'quiet'}`} onClick={() => signIn(ai)}>Sign in</button>}
       {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
     </div>
@@ -1636,6 +1638,37 @@ function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; re
     </details>}
     <p className="mute small">{A.AI_ROUTES}</p>
   </>);
+}
+
+/** One signed-in account (mock model-a): which of its plan's models the whole crew uses, picked by the person and
+ *  never switched behind their back; a limit waits for them here. */
+function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
+  const ai = A.AIS.find((a) => a.key === id), [cat, setCat] = useState<Json>(null), [their, setTheir] = useState<Record<string, string>>({});
+  const others = A.aiList(accounts).mine.filter((r) => r.ai !== ai && r.g.state === 'ready'), keys = others.map((r) => r.ai.key).join();
+  const load = () => api.models(id).then(setCat).catch(() => setCat({ models: [], picked: null }));
+  useEffect(() => { setCat(null); void load(); }, [id]);
+  // Each other account's own pick, by name: one catalog read each, as the page opens.
+  useEffect(() => { void Promise.all(others.map(async ({ ai: o }) => { const c = await api.models(o.key).catch(() => null); return [o.key, c?.models.find((m: Json) => m.id === c.picked)?.name] as const; }))
+    .then((rows) => setTheir(Object.fromEntries(rows.filter(([, n]) => n) as [string, string][]))); }, [keys]);
+  if (!ai) return null;
+  const g = A.account(accounts, id), plan = ai.billing === 'api' ? 'account' : 'plan';
+  const pick = (m: Json) => attempt(async () => { await api.pickModel(id, m.id); await load(); refresh(); }, `Your crew uses ${m.name} from now on`);
+  return (
+    <div className="page ai-page">
+      <a href="#/settings" className="back">‹ AI accounts</a>
+      <h2>{ai.name}</h2>
+      <p className="mute small">{g.state === 'signed-out' ? 'Not signed in' : `Signed in · your ${plan}`}{g.resting ? ` · ${g.resting}` : ''}</p>
+      <div className="label">Which model your crew uses</div>
+      {!cat ? <p className="mute small">Checking your plan…</p> : cat.models.length ? <div role="radiogroup" aria-label="Which model your crew uses">
+        {cat.models.map((m: Json) => <button key={m.id} role="radio" aria-checked={cat.picked === m.id} className={`pick ${cat.picked === m.id ? 'on' : ''}`} onClick={() => cat.picked !== m.id && pick(m)}>
+          <span className="radio" aria-hidden /><span className="grow">{m.name}</span></button>)}
+      </div> : null}
+      {cat && <p className="cap">{cat.models.length ? `The list comes from your ${plan} and updates by itself. ${cat.picked ? 'Chief and every helper use this one.' : 'Until you pick, your crew uses the plan’s default.'}` : `Your crew uses the model saved with this ${plan}.`}</p>}
+      {others.length > 0 && <><div className="label">Other accounts</div>
+        <div className="card list">{others.map(({ ai: o }) => <a key={o.key} className="row-item" href={`#/settings/ai/${o.key}`}><AiMark ai={o} />
+          <span className="grow"><b>{o.name}</b><span className="mute small">{their[o.key] ?? 'The plan’s default'}</span></span><Icon name="next" /></a>)}</div></>}
+    </div>
+  );
 }
 
 /** The monthly money cap. Helpers ask before every spend; past this they can't spend at all. */
@@ -1954,6 +1987,7 @@ function App() {
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} />}
           {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
+          {v.view === 'ai' && v.id && <AiAccount {...ctx} id={v.id} />}
           {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}

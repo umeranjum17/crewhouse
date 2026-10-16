@@ -44,7 +44,7 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
   patchConfig(cfg, id, { tools: [...new Set(['crew', ...tools])] });
 }
 
-/** An AI account a bot can think with, and optionally which of its models (set by Chief or a template, never shown). */
+/** An AI account a bot can think with, and optionally which of its models (the person's pick in Settings › AI accounts). */
 export interface Brain { provider: string; model?: string }
 
 export function parseBrain(s: string): Brain {

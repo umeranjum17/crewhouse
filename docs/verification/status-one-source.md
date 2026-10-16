@@ -43,8 +43,8 @@ moment with `scripts/verify/screens.sh`, and read the words above from the DOM a
    `Needs you` (header, rail, badge, Chats ring) and the count line counts him as 1 waiting; deny it.
 5. "ask permission to find hotels for next week" to Scout, wait 15 s (Scout still `At work` with its working line on Chats,
    the rail and Office; Chief `Needs you` for the Stop card), then `POST /api/bots/scout/reset`: Scout `Free` on the rail and in the count line, never `1 resting`.
-6. "Compare the two phone plans, hit every limit" to Chief: the job pauses; Chief `Waiting`, the strip "All your AI
-   accounts are resting until …", and the count line counts Chief as waiting.
+6. "Compare the two phone plans, hit every limit" to Chief: the job pauses; Chief `Waiting`, the strip "Your ChatGPT
+   is resting until …" (a limit pauses the job, never switches account), and the count line counts Chief as waiting.
 
 iPad: the same crewd through the reverse tunnel (pwa-resume.md, "On the iPad simulator"), the installed web app at
 moments 1, 3 and 4.
