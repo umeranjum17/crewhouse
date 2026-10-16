@@ -57,8 +57,7 @@ const dayBudget = () => Number(process.env.CREWHOUSE_DAY_TOKENS || 2_000_000);
 /** A job the person stopped (they know: no alert), or one crewd stopped when it stalled: Chief says so in one line. */
 const STOPPED = 'Stopped by you.', HUNG = 'It stalled, so I stopped it.';
 /** How crewd starts the line for a job that acted but couldn't confirm it worked; the app shows it apart from the rest. */
-const UNSURE = 'Not sure it worked:';
-const MONEY_CAP = 20; // dollars a month, until the owner changes it
+const UNSURE = 'Not sure it worked:', MONEY_CAP = 20; // dollars a month, until the owner changes it
 /** One run of crewd's own check, in a person's words: the verdict, why it failed, and never a path. */
 const verdictWords = (d: Record<string, unknown>) => d.passed ? 'passed its own check' : `did not pass its own check — ${d.missingDep ? 'the check could not run: something it needs is not installed' : Number(d.after) === 0 ? 'the check passes here but never failed before the change, so nothing was proved' : Number(d.before) === 0 ? 'the check passed before the change and fails after it: the change broke it' : 'the same check still fails after the change'}`;
 /** Local calendar day and month: the share resets at midnight here, the money cap on the 1st. */
@@ -67,8 +66,7 @@ const dayOf = (t = Date.now()) => new Date(t).toLocaleDateString('en-CA'), month
 export const MIN_EVERY = 15;
 
 /** crewd's tick is 1.5 s; a gap this long means the computer was asleep. */
-const SLEPT_MS = 60_000;
-const STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
+const SLEPT_MS = 60_000, STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
 /** Events that make up a bot's plain "what I did" trail. */
@@ -84,15 +82,13 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
-const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000;
-const clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
 const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; };
 const hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
  *  so eight parallel items don't each pay for the whole conversation. */
-const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.';
-const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
+const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.', fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
 /** Opens one locked PDF with the Documents tool's pinned pypdfium2: the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
 const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => { const n = encodeURIComponent(f); return join('files', 'unlocked', n.length > 200 ? `${sha(f).slice(0, 32)}.pdf` : n); }, unlockedCurrent = (space: string, f: string) => { try { return statSync(join(space, unlockedAs(f))).mtimeMs >= statSync(join(space, f)).mtimeMs; } catch { return false; } }, lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
@@ -119,8 +115,7 @@ export function relayResult(reply: string, note = '', acted = false) {
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
   // Prefer a full sentence or delivery note; never relay stale work-in-progress clauses.
   for (const source of [reply, note.length < 140 ? note : '']) {
-    const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [];
-    const full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && s.split(' ').length > 2 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
+    const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [], full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && s.split(' ').length > 2 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
     if (full) return `${full.replace(/[.!?;][”"']?$/, '').trim()}.`;
   }
   const opening = tidy(reply).split(/(?<=[.!?;])\s+|\n+/).map((s) => s.trim()).find((s) => /[\p{L}\p{N}]/u.test(s) && !STALE_PROGRESS.test(s));
@@ -156,8 +151,7 @@ export function checkPhotos(photos: unknown): Photo[] {
   if (photos === undefined || photos === null) return [];
   if (!Array.isArray(photos) || photos.length > 4) throw fail('send up to four files at a time');
   return photos.map((p: any) => {
-    const [ext, photo] = FILE_TYPES[String(p?.type ?? '')] ?? [], bytes = typeof p?.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.alloc(0);
-    const label = String(p?.name ?? '').split(/[\\/]/).pop()!.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 80);
+    const [ext, photo] = FILE_TYPES[String(p?.type ?? '')] ?? [], bytes = typeof p?.data === 'string' ? Buffer.from(p.data, 'base64') : Buffer.alloc(0), label = String(p?.name ?? '').split(/[\\/]/).pop()!.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 80);
     if (!ext || !bytes.length) throw fail('that file could not be read; try a photo, a PDF or a document');
     if (bytes.length > (photo ? 5 << 20 : 10 << 20)) throw fail(photo ? 'that photo is too big; try a smaller one' : 'that file is too big; try one under 10 MB');
     return { bytes, ext, mime: String(p.type), ...(photo ? {} : { photo: false }), ...(label ? { name: label } : {}) };
@@ -174,14 +168,12 @@ function paced(when: ReturnType<typeof parseSchedule>) {
 function inhibitor() {
   let child: ChildProcess | undefined;
   // Both let go by themselves if crewd dies without saying so: they only live as long as its pid.
-  const pid = String(process.pid);
-  const cmd = process.platform === 'darwin' ? ['caffeinate', '-i', '-w', pid]
+  const pid = String(process.pid), cmd = process.platform === 'darwin' ? ['caffeinate', '-i', '-w', pid]
     : ['systemd-inhibit', '--what=idle:sleep', '--who=Crewhouse', '--why=A helper is working', '--mode=block', 'tail', `--pid=${pid}`, '-f', '/dev/null'];
   return (on: boolean) => {
     if (!on) { child?.kill(); child = undefined; return; }
     if (child) return;
-    const c = child = spawn(cmd[0], cmd.slice(1), { stdio: 'ignore' });
-    const gone = () => { if (child === c) child = undefined; };
+    const c = child = spawn(cmd[0], cmd.slice(1), { stdio: 'ignore' }), gone = () => { if (child === c) child = undefined; };
     c.on('error', gone); // not installed: the computer's own sleep settings apply
     c.on('exit', gone);
   };
@@ -312,8 +304,7 @@ export class Crew {
 
   /** Stage the person's old sign-in offline; retire it only after the gateway witnesses the import. */
   private async eachLegacy(method: 'migrate' | 'confirm') {
-    const fn = (this.runtime as { migrate?: (path: string) => Promise<boolean>; confirm?: (path: string) => Promise<boolean> })[method];
-    const legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
+    const fn = (this.runtime as { migrate?: (path: string) => Promise<boolean>; confirm?: (path: string) => Promise<boolean> })[method], legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
     if (!fn || (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`) && !existsSync(`${legacy}.moved-to-engine.sealed`))) return;
     try { await fn.call(this.runtime, legacy); }
     catch (e) { console.error('engine migration:', e); }
@@ -432,8 +423,7 @@ export class Crew {
   /** Ideas are promises a hired bot can keep (tools granted and ready here, apps connected), shown with what they wait on;
    *  unhired templates offer up to 3 goal rows needing nothing, tagged with the template to hire (docs/ui-contract.md). */
   private ideas() {
-    const on = new Set(this.connections.on()), house = this.connections.houseGoogle(), hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template));
-    const rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
+    const on = new Set(this.connections.on()), house = this.connections.houseGoogle(), hired = new Set(this.bots().filter((b) => b.id !== CHIEF).map((b) => b.template)), rows = this.bots().filter((b) => b.id !== CHIEF).flatMap((b) => {
       const ready = new Set(disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id));
       // A tool the bot does not have: the promise is not made. An app they haven't connected: it is, with what's missing.
       return (disk.botConfig(this.cfg, b.id).ideas ?? []).filter((i) => i.needs.every((n) => ready.has(n) || APPS[n]))
@@ -466,8 +456,7 @@ export class Crew {
    *  A checkout adds the order's plain facts for the review sheet — what the page charges and whether crewd could read it,
    *  in the page's own currency; never the page's address. */
   private askView({ detail, ...a }: Row): Row {
-    const d = JSON.parse(detail || '{}');
-    const covers = d.key ? coversOf(d.key) : null;
+    const d = JSON.parse(detail || '{}'), covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.db.get("SELECT json_extract(data, '$.name') AS n FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ?", d.bot, f)?.n ?? null) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
@@ -536,8 +525,7 @@ export class Crew {
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
       ? `${t.acted ? '' : `${this.bot(t.bot)?.display ?? t.bot} finished. `}${relayResult(t.result || 'Done', '', !!t.acted)}`
-      : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`);
-    const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
+      : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`), text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
     this.say(CHIEF, 'bot', text, root);
     this.db.event('room.wrap', CHIEF, { root });
   }
@@ -660,13 +648,11 @@ export class Crew {
 
   /** A routine added by the person or Chief runs on the person's accounts. A reminder belongs to the person alone. */
   addRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; model?: string; name?: string; quiet?: unknown; watch?: string; once?: unknown }, by: string) {
-    const plan = this.planRoutine(b);
-    const words = plan.at ? `Reminds you once, at ${firstRun(plan.at)}` :
+    const plan = this.planRoutine(b), words = plan.at ? `Reminds you once, at ${firstRun(plan.at)}` :
       [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean).join('; ');
     return this.db.tx(() => {
       const r = this.db.run('INSERT INTO routines (bot, name, schedule, body, brain, quiet, watch, trigger, next_at, created_at, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        plan.bot.id, plan.name, plan.at ? '' : String(b.schedule ?? '').trim(), plan.body, plan.brain, plan.quiet ? 1 : 0, plan.watch, plan.at ? null : plan.on, plan.at ?? (plan.when ? nextRun(plan.when, Date.now()) : null), Date.now(), plan.at ? 'remind' : 'task');
-      const row = this.routine(Number(r.lastInsertRowid));
+        plan.bot.id, plan.name, plan.at ? '' : String(b.schedule ?? '').trim(), plan.body, plan.brain, plan.quiet ? 1 : 0, plan.watch, plan.at ? null : plan.on, plan.at ?? (plan.when ? nextRun(plan.when, Date.now()) : null), Date.now(), plan.at ? 'remind' : 'task'), row = this.routine(Number(r.lastInsertRowid));
       if (plan.on) mkdirSync(this.inbox(plan.bot.id), { recursive: true });
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
       if (by === CHIEF) {
@@ -689,11 +675,9 @@ export class Crew {
     });
     const host = plan.watch ? new URL(plan.watch).hostname.replace(/^www\./, '') : '', what = plan.watch ? `Keeps an eye on ${p.name?.trim() || host}` : `${plan.bot.display} will ${plan.first.charAt(0).toLowerCase()}${plan.first.slice(1)}`, start = [plan.when ? describe(plan.when) : '', plan.on ? describeTrigger(parseTrigger(plan.on), plan.bot.display) : ''].filter(Boolean);
     // Words that never named a time: say so and ask, rather than let Crewhouse's own hour pass as the person's.
-    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [];
-    const lines = [...start, ...ask, what,
+    const ask = plan.when && 'guessed' in plan.when && plan.when.guessed ? [`Did you mean ${'every' in plan.when ? '' : hhmm(plan.when.at)}?`] : [], lines = [...start, ...ask, what,
       (plan.quiet && looksFor(p.task)) || (plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs'),
-      ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])];
-    const words = `${start.join('; ')}, ${what}.`;
+      ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])], words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {
       routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, model: p.model, quiet: plan.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
@@ -707,8 +691,7 @@ export class Crew {
       throw Object.assign(new Error('only a helper\'s routine can be a quiet check-in'), { status: 400 });
     const state = b.state ?? r.state;
     if (!['on', 'paused'].includes(state)) throw Object.assign(new Error('a routine is on or paused'), { status: 400 });
-    const schedule = b.schedule?.trim() || r.schedule;
-    const next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? (r.kind === 'remind' ? reminderAt(schedule) : nextRun(paced(parseSchedule(schedule)), Date.now())) : null;
+    const schedule = b.schedule?.trim() || r.schedule, next = b.quiet !== undefined && b.state === undefined && b.schedule === undefined ? r.next_at : schedule ? (r.kind === 'remind' ? reminderAt(schedule) : nextRun(paced(parseSchedule(schedule)), Date.now())) : null;
     this.db.tx(() => {
       this.db.run('UPDATE routines SET quiet = ?, state = ?, schedule = ?, next_at = ? WHERE id = ?', b.quiet === undefined ? r.quiet : b.quiet ? 1 : 0, state, schedule, next, id);
       this.db.event(state !== r.state ? `routine.${state === 'on' ? 'resumed' : 'paused'}` : 'routine.changed', r.bot, { routine: id, name: r.name,
@@ -732,8 +715,7 @@ export class Crew {
       const out = this.fire(r, 'now');
       if (out) await out; // a Calendar-connected digest lands on its own promise
     }
-    const e = this.db.get("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? AND seq > ? ORDER BY seq DESC", r.id, seq);
-    const d = e ? JSON.parse(e.data) : {};
+    const e = this.db.get("SELECT kind, data FROM events WHERE kind IN ('routine.fired', 'routine.skipped') AND json_extract(data, '$.routine') = ? AND seq > ? ORDER BY seq DESC", r.id, seq), d = e ? JSON.parse(e.data) : {};
     if (e?.kind !== 'routine.fired' || (d.message && !this.db.get('SELECT 1 FROM messages WHERE id = ? AND bot = ?', d.message, CHIEF))) throw Object.assign(new Error(
       d.why === 'overlap' ? `The last run of “${r.name}” is still going.` : d.why === 'daily' ? `Today's “${r.name}” is already in Chief's chat.` : `“${r.name}” did not run.`), { status: 409 });
     return d;
@@ -910,8 +892,7 @@ export class Crew {
   }
 
   botPage(id: string, around?: number) {
-    const b = this.needBot(id);
-    const undone = new Set(this.db.eventsForBot(id, ['memory.undone'], 10000).map((e) => e.data.seq));
+    const b = this.needBot(id), undone = new Set(this.db.eventsForBot(id, ['memory.undone'], 10000).map((e) => e.data.seq));
     return {
       bot: { ...this.pub(b), ...this.chat(id) },
       job: disk.readJob(this.cfg, id),
@@ -919,8 +900,7 @@ export class Crew {
       phoneOffer: id === CHIEF && !around ? (() => {
         const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
         if (!value) return null;
-        const offer = JSON.parse(value);
-        const waiting = this.phoneLink?.status().asking.find((a) => a.offer === offer.token);
+        const offer = JSON.parse(value), waiting = this.phoneLink?.status().asking.find((a) => a.offer === offer.token);
         return { ...offer, waiting };
       })() : null,
       messages: (around
@@ -1051,8 +1031,7 @@ export class Crew {
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
   async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false, files?: unknown) {
-    const bot = this.bot(botId);
-    if (!bot) throw Object.assign(new Error('no such bot'), { status: 404 });
+    const bot = this.needBot(botId);
     const pics = [...checkPhotos(photos), ...checkPhotos(files)];
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.some((p) => p.photo === false) ? `Here ${pics.length === 1 ? 'is a file.' : 'are some files.'}` : `Here ${pics.length === 1 ? 'is a photo.' : 'are some photos.'}`);
@@ -1074,9 +1053,7 @@ export class Crew {
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
   private async addPhone() {
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
-    const token = randomBytes(16).toString('hex');
-    const { qr, typed, expires } = await this.phoneLink.offer('control', token);
-    const message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null);
+    const token = randomBytes(16).toString('hex'), { qr, typed, expires } = await this.phoneLink.offer('control', token), message = this.say(CHIEF, 'bot', 'Open Crewhouse on your phone and scan this, or type the code.', null);
     this.db.run("INSERT INTO settings (key, value) VALUES ('phone.offer.1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ qr, typed, expires, message, token }));
     return { shown: true }; // the model never sees the one-use ticket
   }
@@ -1086,9 +1063,7 @@ export class Crew {
     const old = JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value ?? 'null');
     if (!old || old.message !== message || old.joined) throw fail('that code is no longer showing', 409);
     if (!this.phoneLink) throw fail('Phone pairing is not ready yet', 503);
-    const token = randomBytes(16).toString('hex');
-    const { qr, typed, expires } = await this.phoneLink.offer('control', token);
-    const offer = { qr, typed, expires, message, token };
+    const token = randomBytes(16).toString('hex'), { qr, typed, expires } = await this.phoneLink.offer('control', token), offer = { qr, typed, expires, message, token };
     this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify(offer));
     return offer;
   }
@@ -1155,16 +1130,12 @@ export class Crew {
       if (prior) return JSON.parse(prior);
     }
     const id = this.db.tx(() => {
-      const now = Date.now();
-      const r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        bot, title, body, origin, 'queued', now, now, brain, routine?.id ?? null);
-      const id = Number(r.lastInsertRowid);
-      const parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
+      const now = Date.now(), r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, brain, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        bot, title, body, origin, 'queued', now, now, brain, routine?.id ?? null), id = Number(r.lastInsertRowid), parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
       this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ?, hops = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), link.hops ?? 0, id);
       // Uploads are kept in the helper's files — photos where they were, documents in its inbox for the documents tool — under crewd's own `<task>-<n>.<ext>` names, and shown in the chat by that path.
       const kept = pics.map((p, i) => {
-        const photo = p.photo !== false;
-        const rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
+        const photo = p.photo !== false, rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
         mkdirSync(join(disk.botDir(this.cfg, bot), 'files', photo ? 'photos' : 'inbox'), { recursive: true });
         writeFileSync(join(disk.botDir(this.cfg, bot), rel), p.bytes);
         this.db.event('file.delivered', bot, { task: id, path: rel, note: photo ? 'your photo' : 'your file', size: p.bytes.length, ...(photo ? { photo: true } : { input: true }), ...(p.name ? { name: p.name } : {}) });
@@ -1211,8 +1182,7 @@ export class Crew {
    *  tries again), anything else in its own chat. Never silent, and never a model call. A job that acted but couldn't
    *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
   private failedLine(task: Row, result: string, unsure = false) {
-    const b = this.bot(task.bot)?.display ?? task.bot, r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine);
-    const job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
+    const b = this.bot(task.bot)?.display ?? task.bot, r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine), job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
     if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, null), result === HUNG && this.alert();
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null);
@@ -1242,8 +1212,7 @@ export class Crew {
     const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '', last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
-      .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet';
-    const history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
+      .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet', history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
 return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
   }
@@ -1383,8 +1352,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
           started ??= start();
           const opened = await started;
           if (/^error:/m.test(opened)) { started = undefined; return opened; }
-          const out = await run((p.args ?? []).map(String), signal);
-          const page = /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1];
+          const out = await run((p.args ?? []).map(String), signal), page = /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1];
           if (page) l.page = page;
           return out;
         });
@@ -1411,10 +1379,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId); l.news = Date.now();
     // The bot's own words and job, its skills listed by name, and the connected app's tools it may call.
-    const skills = disk.listSkills(this.cfg, botId);
-    const apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
-      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`));
-    const system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
+    const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
     const spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
@@ -1458,8 +1424,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.setTask(task, 'queued');
       return this.dispatch();
     }
-    const name = disk.brainName({ provider: l.account });
-    const words = end.kind === 'resting' ? `${name} is resting until ${clock(end.until ?? Date.now() + 60 * 60_000)}`
+    const name = disk.brainName({ provider: l.account }), words = end.kind === 'resting' ? `${name} is resting until ${clock(end.until ?? Date.now() + 60 * 60_000)}`
       : end.kind === 'signed-out' ? `${name} needs you to sign in again`
       : end.kind === 'plan' ? `${name}'s plan doesn't include helpers` : '';
     if (!words) {
@@ -1500,8 +1465,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // Else the words stay plain, naming no provider at all.
     const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? (task.brain ? choices[0]?.provider : undefined) ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? PROVIDERS[key]?.name ?? key : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
     // Only accounts the person has: a resting one wakes up; one never signed in doesn't.
-    const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean);
-    const handoff = this.handoffs.get(task.id) ?? ''; this.handoffs.delete(task.id); // now or never: a wake-up runs on whichever account is back
+    const rests = choices.filter((b) => !this.accounts.unready(b.provider)).map((b) => this.restingUntil(b.provider)).filter(Boolean), handoff = this.handoffs.get(task.id) ?? ''; this.handoffs.delete(task.id); // now or never: a wake-up runs on whichever account is back
     let wake: number | null = null, state: string, words: string, voice: string;
     if (!rests.length) {
       state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
@@ -1562,8 +1526,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   finish(botId: string, reply: string) {
     const task = this.activeTask(botId), text = cleanReply(reply.trim());
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id);
-    const clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
       if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
@@ -1604,8 +1567,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       },
       gate: async (run, tool, rawInput) => {
         try {
-          const task = own(run);
-          const [name, input] = this.unwrap(tool, rawInput);
+          const task = own(run), [name, input] = this.unwrap(tool, rawInput);
           if (this.netOf(run.bot) && (name === 'web_fetch' || name === 'web_search')) {
             this.refusedNet(run.bot, name);
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
@@ -1694,8 +1656,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   // ---- the gate: every tool call, before it runs ----
   /** Policy classifies configured tools; offering/admission narrows them to the live run's installed grants. */
   private seen(botId: string, tools?: string[]) {
-    const conf = disk.botConfig(this.cfg, botId);
-    const granted = new Set(tools ?? conf.tools ?? []);
+    const conf = disk.botConfig(this.cfg, botId), granted = new Set(tools ?? conf.tools ?? []);
     return {
       bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
@@ -1731,8 +1692,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // Lines the helper types on a page nobody has approved yet (an unsigned register's form) are remembered for the
     // card of the press that sends them; a new page starts a new form.
     if (tool === 'browser' && e.kind === 'safe') {
-      const l = this.live.get(botId);
-      const cmd = String(Array.isArray(input.args) ? input.args[0] ?? '' : '');
+      const l = this.live.get(botId), cmd = String(Array.isArray(input.args) ? input.args[0] ?? '' : '');
       if (l && ['goto', 'tab-new', 'reload'].includes(cmd)) l.fills = undefined;
       if (l && cmd === 'fill') {
         const label = pressOf(l.snapshot ?? '', String(input.args?.[1] ?? '').replace(/^@/, ''))?.label ?? String(input.args?.[1] ?? '');
@@ -1783,12 +1743,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, site = this.siteName(l?.page, l?.snapshot);
     let shop = '';
     try { shop = new URL(l?.page ?? '').origin; } catch { /* no page yet */ }
-    const o = orderOf(l?.snapshot ?? '');
-    const few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
+    const o = orderOf(l?.snapshot ?? ''), few = o.items.slice(0, 3).map((i) => i.replace(/\s*[—–-]?\s*[$£€]\s?[\d,.]+\s*$/, '')).join(', ');
     // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
     // anything else says so in plain words, so a capped-looking yes can never hide a different currency.
-    const not$ = o.total !== null && o.currency !== '$';
-    const words = o.total === null ? `${name} wants to act on a checkout page at ${site}. I couldn't read the total on this page.`
+    const not$ = o.total !== null && o.currency !== '$', words = o.total === null ? `${name} wants to act on a checkout page at ${site}. I couldn't read the total on this page.`
       : `${name} wants to place this order at ${site}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
     const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
       o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
@@ -1836,8 +1794,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}), ...(e.mail ? { mail: e.mail } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
-    const quiet = quietNow(this.person().quiet);
-    const answer = await new Promise<string | null>((resolve) => {
+    const quiet = quietNow(this.person().quiet), answer = await new Promise<string | null>((resolve) => {
       const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, quiet ? 0 : HOLD_MS);
       this.holds.set(askId, (a) => { clearTimeout(t); resolve(a); });
     });
@@ -1947,9 +1904,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const tool = (name: keyof typeof PARAMETERS, description: string, fn: (p: any) => unknown): CrewTool => ({
       name, description, parameters: name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
-    });
-    const task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).join(', ');
-    const own = [
+    }), task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).join(', '), own = [
       tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
         'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
         (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
@@ -2128,8 +2083,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!text.trim()) throw fail('say what they should do');
     const hops = (task.hops ?? 0) + 1;
     if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
-    const checked = this.handFiles(from, files), paths = checked.map((f) => `files/${f.name}`);
-    const detail = { to, text: text.trim(), files: paths, root: task.root ?? task.id, parent: task.id, hops };
+    const checked = this.handFiles(from, files), paths = checked.map((f) => `files/${f.name}`), detail = { to, text: text.trim(), files: paths, root: task.root ?? task.id, parent: task.id, hops };
     if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
       `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${paths.length ? `, with ${paths.map((f) => basename(f)).join(', ')}` : ''}`,
       { pass: detail, preview: { head: `${this.bot(from)!.display} → ${b.display}`, body: text.trim() } });
@@ -2241,8 +2195,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
   private async askUnlock(botId: string, files: unknown) {
     const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))];
-    const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); });
-    const locked: string[] = [];
+    const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [];
     for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r);
     if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked, all: rels.filter((r) => locked.includes(r) || unlockedCurrent(space, r)) }, 'unlock');
     return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${rels.map((r) => unlockedCurrent(space, r) ? unlockedAs(r) : r).join(', ')}` };
@@ -2253,8 +2206,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const space = disk.botDir(this.cfg, d.bot);
     if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
     if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir))) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
-    const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i])));
-    const wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
+    const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i]))), wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
     return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
@@ -2265,22 +2217,18 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
    *  fresh worktree seeded with a copy of the helper's installed node_modules. The model's word about its tests never counts. */
   private async verify(botId: string, p: { repo: string; base: string; patch: string; tests: string[]; command: string }) {
     if (!sandboxReady()) throw new Error('this computer has no sandbox to run a check in');
-    const space = disk.botDir(this.cfg, botId), repo = disk.insideBot(this.cfg, botId, String(p.repo ?? '')), patch = disk.insideBot(this.cfg, botId, String(p.patch ?? ''));
-    const tests = (p.tests ?? []).map(String).filter(Boolean);
+    const space = disk.botDir(this.cfg, botId), repo = disk.insideBot(this.cfg, botId, String(p.repo ?? '')), patch = disk.insideBot(this.cfg, botId, String(p.patch ?? '')), tests = (p.tests ?? []).map(String).filter(Boolean);
     if (!existsSync(join(repo, '.git')) || !existsSync(patch)) throw new Error('`repo` must be a git checkout and `patch` a file, both in your folder');
     if (!tests.length || !/^[\w./-]+$/.test(String(p.base)) || !String(p.command ?? '').trim()) throw new Error('give the base commit, the check\'s paths and the command');
-    const task = this.activeTask(botId)?.id;
-    const run = (side: string, only: string[]) => {
+    const task = this.activeTask(botId)?.id, run = (side: string, only: string[]) => {
       const w = join(space, 'work', 'verify', `${task}-${side}`);
       return runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `rm -rf ${q(w)}; git -C ${q(repo)} worktree prune; ` +
         `git -C ${q(repo)} worktree add -q --detach ${q(w)} ${q(p.base)} && cd ${q(w)} && git apply ${only.map((t) => `--include=${q(t)} `).join('')}${q(patch)} || exit 97; (cd ${q(repo)} && find . -name node_modules -type d -prune -print0 | xargs -0 -r cp -a --reflink=auto --parents -t ${q(w)}); ` +
         `(${p.command}); e=$?; cd /; git -C ${q(repo)} worktree remove --force ${q(w)}; rm -rf ${q(w)}; exit $e`, this.netOf(botId)?.sock);
-    };
-    const before = await run('base', tests), after = await run('fix', []);
+    }, before = await run('base', tests), after = await run('fix', []);
     if (before.code === 97 || after.code === 97) throw new Error(`the patch doesn't apply to ${p.base}: ${(before.code === 97 ? before : after).tail}`);
     const missingDep = /Cannot find (?:package|module)|ERR_MODULE_NOT_FOUND/.test(before.tail), passed = before.code !== 0 && after.code === 0 && !missingDep; // red on a missing module proves nothing: a patch that deletes the import would pass it
-    const rel = patch.slice(space.length + 1);
-    const ev = this.db.event('verify.result', botId, { task, patch: rel, sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
+    const rel = patch.slice(space.length + 1), ev = this.db.event('verify.result', botId, { task, patch: rel, sha: sha(readFileSync(patch, 'utf8')), base: p.base, command: clean(p.command, 300), before: before.code, after: after.code, passed, ...(missingDep ? { missingDep } : {}) });
     // One verdict line per check run, and one that overturns an older says so: the newest word is the current verdict.
     const was = this.db.get("SELECT data FROM events WHERE kind = 'verify.result' AND bot = ? AND json_extract(data, '$.patch') = ? AND seq < ? ORDER BY seq DESC LIMIT 1", botId, rel, ev.seq);
     this.say(botId, 'system', `The suggested change ${verdictWords(ev.data)}${was && JSON.parse(String(was.data)).passed !== passed ? '. An earlier check said otherwise; this run is the current one' : ''}.`, task ?? null);
@@ -2329,8 +2277,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // Waves of at most MAX_PARALLEL: a resting account stops the later waves before they start.
       while (at < trimmed.length && tired < 2) {
         const wave = trimmed.slice(at, at + MAX_PARALLEL).map((item, k) => (async () => {
-          const i = at + k;
-          const end = await this.runtime.run({
+          const i = at + k, end = await this.runtime.run({
             key: `agent:m1:crewhouse:${botId}:${task.id}:batch:${i}`, bot: botId, task: task.id,
             account: l.account, cwd: disk.botDir(this.cfg, botId), system: BATCH_SYSTEM,
             message: subMessage(q, item), builtins: [],
@@ -2367,8 +2314,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (!existsSync(disk.insideBot(this.cfg, botId, rel)) || this.db.get("SELECT json_extract(data, '$.task') AS t FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ? ORDER BY seq DESC LIMIT 1", botId, rel)?.t === task) return rel; } }
   /** crew_workbook: crewd writes the .xlsx itself (src/workbooks.ts) into the bot's files/ and delivers it like any other file. */
   private async workbook(botId: string, name: string, sheets: unknown, charts?: unknown) {
-    const title = clean(name, 60) || 'Workbook', rel = this.fileName(botId, disk.slug(title), 'xlsx');
-    const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+    const title = clean(name, 60) || 'Workbook', rel = this.fileName(botId, disk.slug(title), 'xlsx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     const built = await buildWorkbook(full, { name: title, sheets, charts } as any);
     await this.deliver(botId, rel, `${built.sheets.length === 1 ? 'One sheet' : `${built.sheets.length} sheets`}: ${built.sheets.slice(0, 4).join(', ')}`);
     return { ok: true, path: rel, sheets: built.sheets };
@@ -2376,11 +2322,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** crew_slides: crewd writes the .pptx itself (src/slides.ts) into the bot's files/ and delivers it like any other file. */
   private async deck(botId: string, name: string, slides: unknown) {
-    const title = clean(name, 60) || 'Slides';
-    const rel = this.fileName(botId, disk.slug(title), 'pptx');
-    const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
-    const built = await buildDeck(full, { name: title, slides } as any);
-    const heads = built.slides.map((s) => clean(s, 45).replace(/[.!?:;]+$/, '')).filter(Boolean);
+    const title = clean(name, 60) || 'Slides', rel = this.fileName(botId, disk.slug(title), 'pptx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+    const built = await buildDeck(full, { name: title, slides } as any), heads = built.slides.map((s) => clean(s, 45).replace(/[.!?:;]+$/, '')).filter(Boolean);
     await this.deliver(botId, rel, `${built.slides.length === 1 ? 'One slide' : `${built.slides.length} slides`}${heads.length ? `: ${heads.slice(0, 3).join(', ')}` : ''}`);
     return { ok: true, path: rel, slides: built.slides };
   }
@@ -2402,13 +2345,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
   private async document(botId: string, name: string, blocks: unknown) {
-    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, disk.slug(title), 'docx');
-    const full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, disk.slug(title), 'docx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
     const headings = (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string')
-      .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean);
-    const sections = Math.max(1, headings.length);
-    const headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;
+      .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean), sections = Math.max(1, headings.length), headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;
     await this.deliver(botId, rel, headline);
     return { ok: true, path: rel, sections };
   }
@@ -2432,8 +2372,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!this.fileFor(botId, rel)) throw Object.assign(new Error('that video was not delivered to you'), { status: 403 });
     const full = disk.insideBot(this.cfg, botId, rel);
     if (!/\.(mp4|webm|mov)$/i.test(rel) || !existsSync(full) || !statSync(full).isFile()) throw Object.assign(new Error('no such video'), { status: 404 });
-    const size = statSync(full).size, start = Math.max(0, Math.min(after, size));
-    const end = Math.min(size, start + 600_000); // one link frame's worth, like the photo cap
+    const size = statSync(full).size, start = Math.max(0, Math.min(after, size)), end = Math.min(size, start + 600_000); // one link frame's worth, like the photo cap
     return { size, more: end < size, data: readFileSync(full).subarray(start, end).toString('base64') };
   }
 
@@ -2482,8 +2421,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       const missed = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind NOT IN ('digest', 'remind') AND next_at <= ? AND (last_task IS NULL OR last_task NOT IN " +
         "(SELECT id FROM tasks WHERE state IN ('queued', 'working', 'needs_you', 'paused'))) ORDER BY next_at", to);
       if (missed.length) {
-        const names = missed.map((r) => `“${r.name}”`);
-        const list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+        const names = missed.map((r) => `“${r.name}”`), list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
         this.say(CHIEF, 'bot', `The crew was off from ${clock(from)} to ${clock(to)}, so jobs paused. ` +
           `I'm running ${list} now, once, to catch up.`, null);
       }
@@ -2527,8 +2465,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const bot = this.needBot(botId);
     if (!this.held.has(botId)) throw fail(`${bot.display} already has the controls`, 409);
     // Done on a sign-in card: its site is kept as signed in (its presses ask), beside any the person ticked.
-    const asks = this.db.all("SELECT * FROM asks WHERE kind = 'signin' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId), hosts = asks.map((a) => String(JSON.parse(a.detail).host));
-    const tabs = keep?.length ? await this.desktops.pages(botId) : [], bad = keep?.find((h) => !tabs.includes(h));
+    const asks = this.db.all("SELECT * FROM asks WHERE kind = 'signin' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId), hosts = asks.map((a) => String(JSON.parse(a.detail).host)), tabs = keep?.length ? await this.desktops.pages(botId) : [], bad = keep?.find((h) => !tabs.includes(h));
     if (bad) throw Object.assign(new Error(`${bot.display}'s screen has no tab on ${bad}`), { status: 400 });
     const kept = [...new Set([...keep ?? [], ...hosts])];
     if (kept.length) disk.setSignedIn(this.cfg, botId, [...(disk.botConfig(this.cfg, botId).signedIn ?? []), ...kept]);
