@@ -13,6 +13,7 @@ import { findHost } from '@byokit/relay/device';
 import { startRelay } from '../relay/main.ts';
 import { readTyped } from '../web/src/typed.ts';
 import { Link, NEWS } from '../src/link.ts';
+import { sandboxReady } from '../src/engine.ts';
 import { Store } from '../src/db.ts';
 import { DatabaseSync } from 'node:sqlite';
 import * as A from '../web/src/adapter.ts';
@@ -226,7 +227,7 @@ test('an unmarked old phone reads only the update notice; a marked current phone
   } finally { live.prepare('DELETE FROM asks WHERE id = ?').run(ask); live.close(); phone.link.stop(); await http('DELETE', `/api/phones/${phone.link.grant.device.id}`); }
 });
 
-test('pairing with a yes at the computer, grants, approvals from the phone, and removal', async () => {
+test('pairing with a yes at the computer, grants, approvals from the phone, and removal', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
   await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   assert.equal(statSync(join(root, 'state', 'link.key')).mode & 0o777, 0o600, 'the link key is private to the owner');
   assert.deepEqual((await http('GET', '/api/phones')).body, [], 'docs/ui-contract.md: a list');
