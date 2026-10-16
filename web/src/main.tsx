@@ -993,7 +993,7 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
     {stuff[list[0]].length ? <><div className="card list">{stuff[list[0]].map((x) => { const out = !x.href.startsWith('#');
       return <a key={x.key} className="row-item cp-link" href={x.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined}>
         {x.f?.kind === 'image' ? <img className="cp-thumb" src={x.f.url} alt="" /> : <span className="file-chip" data-ext={x.chip}>{x.chip}</span>}
-        <span className="grow"><span className="clamp1">{x.name}</span><span className="mute small">{x.by} · {A.clock(x.at)}</span></span><span className="mute">›</span></a>; })}</div>
+        <span className="grow"><span className="clamp1">{x.name}</span><span className="mute small">{[x.by, x.at ? A.clock(x.at) : ''].filter(Boolean).join(' · ')}</span></span><span className="mute">›</span></a>; })}</div>
       <p className="mute small">Everything made or read in your chat with Chief, newest first.</p></>
       : <div className="card empty cp-none"><b>No {list[1].toLowerCase()} yet</b><span className="mute small">{list[2]}</span></div>}
   </section></div>;
