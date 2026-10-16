@@ -111,16 +111,13 @@ function cellsOf(range: unknown): [number, number][] {
 }
 
 // The chart parts exceljs cannot write: standard DrawingML (ECMA-376 part 1, §21.2), added to the file it wrote.
-const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
-const esc = (s: string) => s.replace(/[<>&"]/g, (c) => `&${({ '<': 'lt', '>': 'gt', '&': 'amp', '"': 'quot' } as any)[c]};`), unesc = (s: string) => s.replace(/&(lt|gt|quot|apos|amp);/g, (_, e) => ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as any)[e]);
-const rels = (xs: string[]) => `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${xs.join('')}</Relationships>`;
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n', OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"', esc = (s: string) => s.replace(/[<>&"]/g, (c) => `&${({ '<': 'lt', '>': 'gt', '&': 'amp', '"': 'quot' } as any)[c]};`), unesc = (s: string) => s.replace(/&(lt|gt|quot|apos|amp);/g, (_, e) => ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as any)[e]), rels = (xs: string[]) => `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${xs.join('')}</Relationships>`;
 type Cells = { ref: string; vals: string[] };
 /** The chart part: each series points at its cells (so the person's edits move it) and carries their values now. */
 function chartXml(type: string, title: string, cats: Cells, series: (Cells & { name: string })[]) {
   const cache = (tag: string, vs: string[]) => `<c:${tag}Cache>${tag === 'num' ? '<c:formatCode>General</c:formatCode>' : ''}<c:ptCount val="${vs.length}"/>${vs.map((v, i) =>
     `<c:pt idx="${i}"><c:v>${esc(tag === 'num' ? String(Number(v) || 0) : v)}</c:v></c:pt>`).join('')}</c:${tag}Cache>`, ser = series.map((s, i) => `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:v>${esc(s.name)}</c:v></c:tx>${type === 'line' ? '<c:marker><c:symbol val="circle"/></c:marker>' : ''}`
-    + `<c:cat><c:strRef><c:f>${esc(cats.ref)}</c:f>${cache('str', cats.vals)}</c:strRef></c:cat><c:val><c:numRef><c:f>${esc(s.ref)}</c:f>${cache('num', s.vals)}</c:numRef></c:val>${type === 'line' ? '<c:smooth val="0"/>' : ''}</c:ser>`).join('');
-  const axes = '<c:axId val="1"/><c:axId val="2"/>', ax = (tag: string, id: number, pos: string, more = '') =>
+    + `<c:cat><c:strRef><c:f>${esc(cats.ref)}</c:f>${cache('str', cats.vals)}</c:strRef></c:cat><c:val><c:numRef><c:f>${esc(s.ref)}</c:f>${cache('num', s.vals)}</c:numRef></c:val>${type === 'line' ? '<c:smooth val="0"/>' : ''}</c:ser>`).join(''), axes = '<c:axId val="1"/><c:axId val="2"/>', ax = (tag: string, id: number, pos: string, more = '') =>
     `<c:${tag}><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${pos}"/>${more}<c:crossAx val="${3 - id}"/></c:${tag}>`, plot = { bar: `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${ser}${axes}</c:barChart>`,
     line: `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${ser}<c:marker val="1"/>${axes}</c:lineChart>`,
     pie: `<c:pieChart><c:varyColors val="1"/>${ser}<c:firstSliceAng val="0"/></c:pieChart>` }[type];

@@ -86,15 +86,13 @@ export class Accounts {
     const view: View = { state: 'waiting', via };
     this.views.set(account, view);
     let over: () => void = () => {};
-    const finished = new Promise<void>((yes) => { over = yes; });
-    const done = (ok: boolean) => {
+    const finished = new Promise<void>((yes) => { over = yes; }), done = (ok: boolean) => {
       if (view.state !== 'waiting') return;
       view.state = ok ? 'done' : 'failed';
       if (ok) { this.ready.set(account, true); this.expired.delete(account); this.excluded.delete(account); this.rests.delete(account); this.onSignedIn?.(); }
       this.running.delete(account);
       over();
-    };
-    const handle = this.runtime.signIn(account, via, (step: SignInStep) => {
+    }, handle = this.runtime.signIn(account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
       if (step.error) view.error = step.error;
