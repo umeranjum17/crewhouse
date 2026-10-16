@@ -45,3 +45,4 @@ A phone on an older preview can open Chief's chat and use **Get the latest Crewh
 ## Known limits
 
 AI sign-ins and connecting apps stay on the computer. Android notifications need the builder's push credential; without it, news appears when you open Crewhouse. The iPhone build is not available yet.
+
