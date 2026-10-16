@@ -36,7 +36,7 @@ crew, both browser profiles and `crewd.log`.
 
 Card in Chief's thread only, words as above; no open unlock ask after the right one, Penny's task done; the kept copy
 (2-1) present, not encrypted and readable, and the forgotten one (2-2) gone from the folder with the chat's card and
-the plain "Removed …" note; the third statement's copy gone with its job under the default rule; every password search
+the plain "Removed …" note; the third statement's copy gone with its job once Remove it when the job ends is picked; every password search
 finds 0 files; browser storage holds no new key.
 
 ## Gotchas

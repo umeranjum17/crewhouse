@@ -35,8 +35,8 @@ adapter's `state.forgotten` filter in `test/ui.test.ts`.
 The retention rule lives on the locked-files card, so the [unlock-card](unlock-card.md) journey drives
 it: `done-done run unlock-card` types a wrong then the right password, shows **Keep them** picked on the two-file card
 (`screens/keep-them-*`), picks **Keep it** for April in the installed app (window shots `pwa/keep-it-1440.png`
-and `pwa/keep-it-narrow.png`, and on film), then forgets one kept copy from Penny's own chat and lets a third statement follow
-the default rule (its one-file card in `screens/keep-it-*`). To drive only this slice against your own crewd:
+and `pwa/keep-it-narrow.png`, and on film), then forgets one kept copy from Penny's own chat and picks Remove it when the job ends for a
+third statement, whose card starts on the standing Keep (its one-file card in `screens/keep-it-*`). To drive only this slice against your own crewd:
 
 ```bash
 FM_HOME=<firstmate home> EV=${DONE_DONE_EVIDENCE_ROOT:?run through done-done} \

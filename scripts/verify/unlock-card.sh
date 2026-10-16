@@ -109,7 +109,8 @@ chrome-devtools-axi click "@$(chrome-devtools-axi snapshot --full | awk '/button
 until_js "state.forgotten.some((f) => f.path === 'files/unlocked/files%2Finbox%2F2-2.pdf')"
 log "forgotten 2-2: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F2-2.pdf" ] && echo present || echo MISSING )"
 chrome-devtools-axi eval "JSON.stringify({ cards: document.querySelectorAll('.file-with-forget').length, note: [...document.querySelectorAll('.line.note')].map((e) => e.innerText).slice(-1) })" | tee -a "$EV/transcript.txt"
-# The default rule: a third statement nobody picks Keep for, so the job's own end takes its copy.
+# The other rule: the card now starts on Penny's standing Keep, so the person picks Remove it when the job ends,
+# and the job's own end takes the third statement's copy.
 T3=$("$NODE" -e 'const a = require("fs").readFileSync(process.argv[1]).toString("base64");
 console.log(JSON.stringify({ text: "Here is a file.", files: [{ type: "application/pdf", name: "City Savings May.pdf", data: a }] }))' "$LAB/pdf/citysavings-may.pdf" | api -X POST -d @- "$B/api/bots/penny/messages" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).task))")
 log "May's statement is task $T3"
@@ -122,9 +123,9 @@ THEN=$(show .unlock-keep) bash scripts/verify/screens.sh "$EV/screens" keep-it "
 chrome-devtools-axi open "$B/?day#/chief" >/dev/null; chrome-devtools-axi wait "it's forgotten" >/dev/null
 chrome-devtools-axi eval "JSON.stringify([...document.querySelectorAll('.unlock-keep .keep-opt')].map((e) => e.innerText.trim()))" | tee -a "$EV/transcript.txt"
 MAY=$(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const a=JSON.parse(s).asks.find((x)=>x.kind==='unlock');console.log(a.id)})")
-api -X POST -d "{\"answer\":\"allow\",\"passwords\":[\"$PW3\"]}" "$B/api/asks/$MAY/answer" >/dev/null
+api -X POST -d "{\"answer\":\"allow\",\"rule\":\"job\",\"passwords\":[\"$PW3\"]}" "$B/api/asks/$MAY/answer" >/dev/null
 until_js "!state.bots.find((b) => b.id === 'penny').task"
-log "default rule, May's copy: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$T3-1.pdf" ] && echo present || echo GONE ); recorded gone: $(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const g=JSON.parse(s).forgotten.filter((f)=>f.path.endsWith('$T3-1.pdf'));console.log(g.length)})")";
+log "remove-when-done rule, May's copy: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$T3-1.pdf" ] && echo present || echo GONE ); recorded gone: $(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const g=JSON.parse(s).forgotten.filter((f)=>f.path.endsWith('$T3-1.pdf'));console.log(g.length)})")";
 chrome-devtools-axi eval "JSON.stringify({ local: Object.keys(localStorage), session: Object.keys(sessionStorage), receipt: [...document.querySelectorAll('.answered')].map((e) => e.textContent) })" | tee -a "$EV/transcript.txt"
 
 for f in 2-1; do
