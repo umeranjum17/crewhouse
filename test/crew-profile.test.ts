@@ -46,7 +46,7 @@ test('chief, a built-in and an imported helper carry the record in the job conte
   assert.ok((crew as any).bot('testy-prospecting'), 'the imported helper joined the crew');
   disk.writeProfile(cfg, VOICE);
   for (const bot of ['chief', 'scribe', 'testy-prospecting']) {
-    const { task } = (crew as any).addTask(bot, 'Write one line, then stop.', 'person', undefined, undefined, 'Write one line.', [], {});
+    const { task } = (crew as any).addTask(bot, 'Write one line, then stop.', 'person', undefined, 'Write one line.', [], {});
     await settled(db, task);
     const session = db.get('SELECT session FROM tasks WHERE id = ?', task)?.session;
     const message = String((crew.runtime as any).specOf(session)?.message ?? '');

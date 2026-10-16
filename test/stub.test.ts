@@ -577,8 +577,7 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal(second.status, 409);
   assert.match(second.body.error, /already in Chief's chat/, 'the launcher is told what really happened');
   assert.equal((await thread()).length, before + 1, 'nothing was sent the second time');
-  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder', model: 'copilot' })).body;
-  assert.equal(own.thinks, 'GitHub Copilot');
+  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder' })).body;
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
   // The person's own words for a date each month: the routine keeps that date, and the card's words are the preview's.
   const bill = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'the 1st of every month 9am', task: 'Check the monthly statement' })).body;
@@ -762,7 +761,7 @@ test('the person’s bot page, events and live activity keep their delivered wor
       await api('PUT', '/api/bots/reel/notes', { text: 'my live notes' });
       const edited = await until(async () => received.find((e) => e.kind === 'memory.edited'));
       assert.equal(edited.data.member, undefined);
-      await api('PUT', '/api/bots/reel/models', { models: ['chatgpt'] });
+      await api('PUT', '/api/accounts/1/chatgpt/model', { model: 'strong-1' });
       const models = await until(async () => received.find((e) => e.kind === 'bot.models'));
       assert.deepEqual(models.data, { by: 'person' }, 'model choices emit only person-facing metadata');
       const state = (await api('GET', '/api/state')).body;

@@ -83,7 +83,7 @@ test('reachable from anywhere: enrol once, pair by typed code, talk through the 
   assert.doesNotMatch(JSON.stringify(pushed), /dentist|Chief|sir|tomorrow/);
 
   // A settings change with no task or member tag reaches the paired phone live and through history.
-  await http('PUT', '/api/bots/chief/models', { models: ['chatgpt'] });
+  await http('PUT', '/api/accounts/1/chatgpt/model', { model: 'strong-1' });
   const changed = await until('phone settings event', () => events.find((e) => e.kind === 'bot.models'));
   assert.deepEqual(changed.data, { by: 'person' });
   assert.ok((await req('GET /api/events')).body.some((e: any) => e.seq === changed.seq));

@@ -44,7 +44,7 @@ Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Dri
 ## Shared profile (real-model words)
 
 Use runbook.md's isolated real-engine launch and credential lock for the whole lifetime.
-Select the signed-in Claude account for Chief through `PUT /api/bots/chief/models`.
+Select the signed-in Claude account for the crew by picking one of its models: `PUT /api/accounts/1/claude/model` with an id from `GET /api/accounts/1/claude/model`.
 Onboard with `{address:"Umer", ask:"I run a bakery for local families. My business is called Morning Loaf. I am introducing myself, not asking for a helper or a job yet."}`.
 Await the settled Chief task; retain `GET /api/profile` and `GET /api/bots/chief`.
 The record must contain the bakery and audience, and Chief must plainly say what he noted.

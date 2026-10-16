@@ -42,7 +42,7 @@ test('a Chief hand-off in a helper chat carries its task title, for the collapse
   const { crew, db } = setup();
   crew.onboard('Owner');
   crew.recruit('scribe', 'Scribe', 'system');
-  const r = crew.assign('scribe', 'The person says: plan dinners for four.\nDone means: a plan document with the full cooking steps.', 'chief', undefined, 'Plan the dinners');
+  const r = crew.assign('scribe', 'The person says: plan dinners for four.\nDone means: a plan document with the full cooking steps.', 'chief', 'Plan the dinners');
   await settled(db, r.task);
   const m = crew.botPage('scribe').messages.find((x: any) => x.author === 'chief')!;
   assert.equal(m.title, 'Plan the dinners');

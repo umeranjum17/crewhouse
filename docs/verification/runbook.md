@@ -127,9 +127,11 @@ lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
 `/home/umer/lab-tmp/claude-test-cred/home/.claude/.credentials.json` into
 `$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
 Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
-Claude CLI preflight before sending; select `["claude"]` with `PUT /api/bots/chief/models`.
+Claude CLI preflight before sending; pick a Claude model with `PUT /api/accounts/1/claude/model` (an id from its `GET`).
 A positive preflight does not witness a successful turn: the CLI may fail to refresh an
-expired OAuth session. If the turn parks, inspect its terminal failure in the engine log,
+expired OAuth session. On kit 0.14 the engine's own detect (`claude auth status --text`, 3 s bound) must also
+see it before `POST /api/accounts/1/claude/login`, or the kit clears the folder's login files (your link) and starts a
+fresh `claude auth login`; a stale credential reads `Login: Expired` once the CLI tries its refresh. Stop there. If the turn parks, inspect its terminal failure in the engine log,
 retain pre/post results and stop; never infer admission from missing crewd tool events.
 This route is hosted, not a scripted provider.
 Stop crewd's process group as in Launch (TERM, KILL after the grace, wait until it is empty) before releasing the lock.

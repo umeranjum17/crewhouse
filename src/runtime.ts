@@ -28,6 +28,8 @@ export interface AgentRuntime {
   signedIn(account: string): Promise<boolean>;
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;
+  /** The live catalog of one signed-in account: the models the person can pick from, ids without the provider. */
+  models(account: string): Promise<{ id: string; name: string }[]>;
   run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd>;
   steer(key: string, text: string): Promise<void>;
   abort(key: string): Promise<void>;

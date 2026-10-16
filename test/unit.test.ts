@@ -445,11 +445,11 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   done();
 });
 
-test('accounts a bot thinks with: fallback order by name only, a per-task choice, Claude via the engine', async () => {
+test('accounts a bot thinks with: fallback order by name only, the person\'s one model per account, Claude via the engine', async () => {
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  assert.deepEqual(crew.thinks('reel').map((b) => b.name), ['ChatGPT']);
+  assert.deepEqual(disk.botConfig(cfg, 'reel').models, ['chatgpt']);
   // Claude is offered through the engine's own route; its sign-in says plainly it needs Claude Code on this computer.
   assert.equal(disk.setBrains(cfg, 'reel', ['claude']).includes('claude'), true, 'Claude is offered now');
   assert.equal(PROVIDERS.claude.cli !== undefined, true, 'its prerequisite is labelled');
@@ -457,22 +457,26 @@ test('accounts a bot thinks with: fallback order by name only, a per-task choice
   assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
   assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
-  assert.deepEqual(crew.thinks('reel'), [{ key: 'copilot', name: 'GitHub Copilot', restingUntil: 0 }, { key: 'chatgpt', name: 'ChatGPT', restingUntil: 0 }], 'never a model id');
-  assert.throws(() => crew.assign('reel', 'x', 'chief', 'pi'), /not an AI account/);
 
-  const a = crew.assign('reel', 'rename 400 files', 'chief', 'chatgpt').task;
+  const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data), specOf = (t: number) => (crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${t}`);
+  const a = crew.assign('reel', 'rename 400 files', 'chief').task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
-  const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data);
-  assert.deepEqual([started().account, started().name], ['chatgpt', 'ChatGPT']);
+  assert.deepEqual([started().account, started().name], ['copilot', 'GitHub Copilot'], 'the bot\'s first account');
   assert.match(lastSaid(db, 'reel'), /^stub reel: done/);
+  // The person picks ChatGPT's model in Settings: it leads every bot, a new recruit included, and runs exactly that model.
+  crew.pickModel('chatgpt', 'strong-1');
+  assert.deepEqual(disk.botConfig(cfg, 'reel').models, ['chatgpt:strong-1', 'copilot']);
+  assert.deepEqual(disk.botConfig(cfg, 'chief').models, ['chatgpt:strong-1']);
+  crew.recruit('scout', 'Scout', 'person');
+  assert.deepEqual(disk.botConfig(cfg, 'scout').models, ['chatgpt:strong-1'], 'a recruit sits on the crew\'s picks');
   const b = crew.assign('reel', 'judge which take is best', 'chief').task;
   await settled(db, b);
-  assert.equal(started().account, 'copilot', 'no per-task choice: the bot\'s first');
+  assert.deepEqual([started().account, specOf(b).model], ['chatgpt', 'strong-1']);
   done();
 });
 
-test('limits: a limit rests that account and the task carries on in the same conversation on the next; all resting pauses', async () => {
+test('limits: a limit pauses on that account and says so plainly; the person\'s pick carries on in the same conversation, never a switch by surprise', async () => {
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
@@ -483,36 +487,32 @@ test('limits: a limit rests that account and the task carries on in the same con
   assert.equal(classifyText('context window exceeded by your prompt'), null);
 
   const t = crew.assign('scout', 'dig deep, then hit the limit', 'chief').task;
-  await settled(db, t);
-  assert.equal(task(db, t).state, 'done');
-  const until = crew.restingUntil('chatgpt');
-  assert.ok(Math.abs((until ?? 0) - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
-  const said = db.all("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system'").map((m) => m.text);
-  assert.ok(said.some((x) => /^ChatGPT is resting until (?:[A-Z][a-z]{2} )?\d+:\d\d [ap]m\. Scout carries on with GitHub Copilot\.$/.test(x)), said.join('\n'));
-  const file = task(db, t).session;
-  assert.match(String(file), /^agent:m1:crewhouse:scout:\d+$/, 'the same session key, reopened');
-  assert.deepEqual(crew.snapshot().resting, {}, 'Copilot finished the job: no standing "resting" while nothing waits on it');
+  await until('paused on the limit', () => task(db, t).state === 'paused');
+  const until30 = crew.accounts.restingUntil('chatgpt');
+  assert.ok(Math.abs((until30 ?? 0) - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
+  assert.equal(task(db, t).wake_at, until30, 'starts again by itself when the rest ends');
+  assert.equal(task(db, t).result, `Your ChatGPT reached its limit and rests until ${clock(until30)}.`);
+  const runs = () => db.all("SELECT data FROM events WHERE kind = 'run.started'").map((e) => JSON.parse(e.data)).filter((d) => d.task === t);
+  assert.deepEqual(runs().map((d) => d.account), ['chatgpt'], 'Copilot is signed in, but nothing switched to it');
+  const told = db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'Your ChatGPT reached%'").map((m) => m.text);
+  assert.deepEqual(told, [`Your ChatGPT reached its limit and rests until ${clock(until30)}. Work starts again then by itself, or pick another model in Settings › AI accounts.`], 'Chief says it once');
+  assert.equal(crew.snapshot().resting.chatgpt, until30, 'standing state while the job waits');
+  const b = crew.assign('scout', 'look it up again', 'chief').task;
+  await until('also waiting', () => task(db, b).state === 'paused');
+  assert.equal(db.all("SELECT 1 FROM messages WHERE bot = 'chief' AND text LIKE 'Your ChatGPT reached%'").length, 1, 'once per wait');
 
-  // Every account resting: the task pauses with a wake-up time, Chief says when once, and it resumes by itself.
-  const others = Object.keys(PROVIDERS).filter((k) => k !== 'chatgpt' && k !== 'grok'); // every account the stub counts as signed in
-  for (const k of others) await crew.accounts.failed(k, `usage limit, try again in ${k === 'copilot' ? 1 : 2} min`);
-  const b = crew.assign('scout', 'look it up again', 'chief').task, b2 = crew.assign('scout', 'and this', 'chief').task;
-  await settled(db, b); await settled(db, b2);
-  assert.equal(task(db, b).state, 'paused');
-  assert.ok(Math.abs(task(db, b).wake_at - (Date.now() + 60_000)) < 1000, 'earliest reset: Copilot in a minute, not ChatGPT in half an hour');
-  assert.match(task(db, b).result, /All your AI accounts are resting until \d+:\d\d [ap]m/);
-  assert.equal(crew.snapshot().resting.chatgpt, until, 'standing state while the job waits');
-  const told = db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'All your AI%'").map((m) => m.text);
-  assert.deepEqual(told, [`All your AI accounts are resting until ${clock(task(db, b).wake_at)}. Work starts again then by itself.`], 'Chief says it once');
-  for (const k of ['chatgpt', ...others]) crew.accounts.rest(k, Date.now() - 1); // the reset time passes; nobody answers anything
-  db.run('UPDATE tasks SET wake_at = ? WHERE id IN (?, ?)', Date.now() - 1, b, b2);
-  crew.dispatch();
-  await settled(db, b); await settled(db, b2);
-  assert.deepEqual([task(db, b).state, task(db, b2).state], ['done', 'done']);
+  // The person picks Copilot's model: the same conversation carries on there, at once.
+  crew.pickModel('copilot', 'quick-1');
+  await settled(db, t); await settled(db, b);
+  assert.deepEqual([task(db, t).state, task(db, b).state], ['done', 'done']);
+  assert.deepEqual(runs().map((d) => d.account), ['chatgpt', 'copilot']);
+  assert.match(String(task(db, t).session), /^agent:m1:crewhouse:scout:\d+$/, 'the same session key, reopened');
+  assert.equal((crew.runtime as any).specOf(task(db, t).session).model, 'quick-1');
   assert.equal(db.get("SELECT COUNT(*) AS n FROM asks")!.n, 0, 'resumed without a new ask');
   assert.deepEqual(crew.snapshot().resting, {});
 
   // A bot set to an account the person doesn't have carries on with one they do.
+  crew.accounts.rest('chatgpt', 0);
   disk.setBrains(cfg, 'scout', ['grok']);
   const c = crew.assign('scout', 'one more', 'chief').task;
   await settled(db, c);
@@ -882,7 +882,7 @@ test('Forget this file: the person takes a document they sent back out of the he
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
   const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64'), name: 'statement.pdf' };
-  const { task: t } = (await crew.post('scout', '', undefined, undefined, false, undefined, undefined, false, [pdf]))!;
+  const { task: t } = (await crew.post('scout', '', undefined, false, undefined, undefined, false, [pdf]))!;
   const rel = `files/inbox/${t}-1.pdf`, full = join(disk.botDir(cfg, 'scout'), rel);
   await settled(db, t);
   assert.ok(existsSync(full), 'the document the person sent is in the helper\'s folder');
@@ -1071,12 +1071,12 @@ test('accounts: the person keeps their address and every account rests together'
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'grok');
   assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:reel:${a}`)?.message ?? '', /likes to be called "Sam"/);
   for (const k of Object.keys(PROVIDERS)) crew.accounts.failed(k, 'usage limit, try again in 1 min');
-  assert.ok(crew.restingUntil('chatgpt') > Date.now());
+  assert.ok(crew.accounts.restingUntil('chatgpt') > Date.now());
   const b = (await crew.post('reel', 'another demo'))!.task;
   await settled(db, b);
   assert.equal(task(db, b).state, 'paused');
-  assert.match(task(db, b).result, /All your AI accounts are resting/);
-  assert.ok(crew.snapshot().resting.chatgpt > 0);
+  assert.match(task(db, b).result, /^Your Grok reached its limit and rests until/);
+  assert.ok(crew.snapshot().resting.grok > 0);
   done();
 });
 
@@ -1118,7 +1118,7 @@ test('quiet hours park questions at once; settings validate', async () => {
   assert.equal(crew.updatePerson({ name: 'Alex', quiet: '00:00-23:59' }).name, 'Alex');
 
   const started = Date.now();
-  const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`, undefined))!.task;
+  const t = (await crew.post('reel', `copy it ${call('crew_write', { path: join(root, 'elsewhere', 'b.txt'), content: 'x' })}`))!.task;
   await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   assert.ok(Date.now() - started < 3000, 'no hold while they sleep');
   assert.equal(task(db, t).state, 'needs_you');
@@ -1633,11 +1633,11 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const png = { type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
-  await assert.rejects(crew.post('reel', 'x', undefined, [png, png, png, png, png]), /up to four/);
-  await assert.rejects(crew.post('reel', 'x', undefined, [{ type: 'image/gif', data: png.data }]), /could not be read/);
-  await assert.rejects(crew.post('reel', '  ', undefined, []), /empty message/);
+  await assert.rejects(crew.post('reel', 'x', [png, png, png, png, png]), /up to four/);
+  await assert.rejects(crew.post('reel', 'x', [{ type: 'image/gif', data: png.data }]), /could not be read/);
+  await assert.rejects(crew.post('reel', '  ', []), /empty message/);
 
-  const { task: t } = (await crew.post('reel', '', undefined, [png]))!;
+  const { task: t } = (await crew.post('reel', '', [png]))!;
   assert.equal(task(db, t).body, 'Here is a photo.');
   assert.deepEqual(JSON.parse(task(db, t).photos), [`files/photos/${t}-1.png`]);
   assert.ok(existsSync(join(cfg.crewDir, 'bots', 'reel', 'files', 'photos', `${t}-1.png`)));
@@ -1648,7 +1648,7 @@ test('photos with a message: kept in the helper\'s files, shown in the chat, see
   assert.ok(crew.snapshot().tasks.find((x: any) => x.id === t)!.files.includes(`files/photos/${t}-1.png`), 'and it is in Things');
 
   // Through Chief: the photo goes to the helper that takes the job, and shows in Chief's thread where it was sent.
-  const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', undefined, [png]))!;
+  const { task: c } = (await crew.post('chief', 'put this poster in the family video @Reel', [png]))!;
   assert.equal(task(db, c).bot, 'reel');
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'person' ORDER BY id DESC")!.text, new RegExp(`\\[photo reel\\] files/photos/${c}-1\\.png$`));
   await settled(db, c);
@@ -1676,11 +1676,11 @@ test('documents with a message: kept in the helper inbox, shown in the chat, ref
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
   const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64') };
-  await assert.rejects(crew.post('scout', 'x', undefined, undefined, false, undefined, undefined, false, [{ type: 'application/x-msdownload', data: pdf.data }]), /could not be read/);
-  await assert.rejects(crew.post('scout', 'x', undefined, undefined, false, undefined, undefined, false, [{ type: 'application/pdf', data: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64') }]), /too big/);
+  await assert.rejects(crew.post('scout', 'x', undefined, false, undefined, undefined, false, [{ type: 'application/x-msdownload', data: pdf.data }]), /could not be read/);
+  await assert.rejects(crew.post('scout', 'x', undefined, false, undefined, undefined, false, [{ type: 'application/pdf', data: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64') }]), /too big/);
 
   // A hostile client name never becomes a path: crewd names the upload `<task>-<n>.<ext>` itself.
-  const { task: t } = (await crew.post('scout', '', undefined, undefined, false, undefined, undefined, false, [{ ...pdf, name: '../../evil.pdf', path: '/tmp/evil.pdf' } as any]))!;
+  const { task: t } = (await crew.post('scout', '', undefined, false, undefined, undefined, false, [{ ...pdf, name: '../../evil.pdf', path: '/tmp/evil.pdf' } as any]))!;
   assert.ok(String(task(db, t).body).startsWith('Here is a file.'));
   assert.match(String(task(db, t).body), new RegExp(`Files attached \\(in files/inbox.*files/inbox/${t}-1\\.pdf`));
   assert.deepEqual(JSON.parse(task(db, t).photos ?? '[]'), [], 'documents never ride to the model as vision');

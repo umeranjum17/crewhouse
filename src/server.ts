@@ -71,7 +71,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (!s) throw Object.assign(new Error('nothing is being shown'), { status: 409 });
     await crew.giveBack(bot).catch(() => {});
     if (!keep || !s.steps.length) return { steps: s.steps.length };
-    await crew.post(bot, lesson(s.what, s.steps), undefined, s.shots);
+    await crew.post(bot, lesson(s.what, s.steps), s.shots);
     return { steps: s.steps.length };
   };
   /** Installs take minutes (the browser downloads Chromium) and run npm, pip and downloads one after another, so each
@@ -212,16 +212,22 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.model, b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updatePerson(body);
     if (m === 'GET' && p === '/api/accounts') {
-      // The person's AI accounts: signed in or not (the engine's own local check), resting until when, and any sign-in in progress.
-      // A work ChatGPT (Business, Enterprise, Edu) is flagged by its email, so the app can steer to a personal one.
+      // The person's AI accounts: signed in or not (the engine's own local check), resting until when, any sign-in in progress, the picked model.
       return Promise.all(Object.entries(PROVIDERS).map(async ([key, pr]) => {
         const signedIn = await crew.accounts.signedIn(key);
-        return { account: key, name: pr.name, signedIn, restingUntil: crew.restingUntil(key), signIn: crew.accounts.view(key),
-          notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key), work: false };
+        return { account: key, name: pr.name, signedIn, restingUntil: crew.accounts.restingUntil(key), signIn: crew.accounts.view(key),
+          notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key) };
       }));
+    }
+    // One model per account (Settings › AI accounts): the live catalog, and the person's pick, checked against it.
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/model$/)) && (m === 'GET' || m === 'PUT')) {
+      const key = provider(r[2]).key, models = await crew.runtime.models(key);
+      if (m === 'PUT' && !models.some((x) => x.id === body.model)) throw Object.assign(new Error('that model is not on this account'), { status: 400 });
+      if (m === 'PUT') crew.pickModel(key, body.model);
+      return { models, picked: disk.brains(cfg, 'chief').find((b) => b.provider === key)?.model ?? null };
     }
     // "Sign in with …": start (the page, or `via: 'code'` / `'key'`), paste the address or key, cancel, sign out; "I've changed my plan" (retry).
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/(login|paste|cancel|logout|retry)$/)) && m === 'POST') {
@@ -286,12 +292,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (m === 'POST') { const v = await crew.connections.connect(app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
       if (m === 'GET') return crew.connections.status(app);
       if (m === 'DELETE') { await crew.connections.cancel(app); return { ok: true }; }
-    }
-    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/models$/)) && m === 'PUT') {
-      crew.botPage(r[1]); // 404 for unknown bots
-      disk.setBrains(cfg, r[1], body.models);
-      db.event('bot.models', r[1], { by: 'person' });
-      return { thinks: crew.thinks(r[1]) };
     }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/job$/)) && m === 'PUT') {
       crew.botPage(r[1]);

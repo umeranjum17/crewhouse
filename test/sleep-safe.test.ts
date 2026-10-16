@@ -68,7 +68,7 @@ test("a replayed phone request returns its first answer: one job, even across a 
     first.crew.recruit('reel', 'Reel', 'person');
     const wire = (db: Store, crew: Crew) => new Link(first.cfg, db, (m, p, body, key?: string) => {
       const r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/);
-      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, undefined, false, key);
+      if (r && m === 'POST') return (crew as any).post(r[1], body.text, undefined, false, key);
       throw Object.assign(new Error('not found'), { status: 404 });
     });
     const via = { id: 'phone-1', role: 'control' } as any;
