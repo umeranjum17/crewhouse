@@ -67,10 +67,7 @@ const span = (at: Date, allDay: boolean, end: Date) => (allDay ? { start: { date
 /** `--name value` options, and the words left over. */
 export function options(args: string[]) {
   const o: Record<string, string> = {}, rest: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) o[args[i].slice(2)] = args[++i];
-    else rest.push(args[i]);
-  }
+  for (let i = 0; i < args.length; i++) { if (args[i].startsWith('--') && i + 1 < args.length) o[args[i].slice(2)] = args[++i]; else rest.push(args[i]); }
   return { o, rest };
 }
 

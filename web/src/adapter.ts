@@ -20,6 +20,8 @@ export type Card = {
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
   pick?: { deck: string; title: string; lines: string[]; styles: { id: string; label: string }[] };
+  /** The one plain rule for the copies an unlock leaves, picked on the same card: how long they stay in the folder. */
+  keep?: { line: string; rule: string; options: { label: string; rule: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
   site?: { host: string; icon: string; bot: string };
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
@@ -215,13 +217,16 @@ export const trust = {
 /** Hello's promise behind `trust.kept`: before the first job there is nothing to show, so it says where it will be. */
 export const keptWhere = 'Everything the crew remembers about you shows in Settings, where you can forget any line.';
 
-/** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". */
+/** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". An unlocked copy's own
+ *  name holds the path it came from, so it reads by the file's own name instead. */
 export function pretty(path: string) {
-  const b = (path.split('/').pop() ?? path).replace(/\.[a-z0-9]+$/i, '').replace(/[-_.]+/g, ' ').trim();
+  let decoded = path; if (/%[0-9a-f]{2}/i.test(path)) { try { decoded = decodeURIComponent(path); } catch { decoded = path; } }
+  const leaf = decoded.split('/').pop() ?? path;
+  const b = leaf.replace(/\.[a-z0-9]+$/i, '').replace(/[-_.]+/g, ' ').trim();
   return b ? b[0].toUpperCase() + b.slice(1) : 'A file';
 }
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
-export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
+export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); if (!m) return null; let path = m[2]; try { path = decodeURIComponent(m[2]); } catch { path = m[2]; } return { bot: m[1], path: `files/${path}` }; };
 
 /** Crewd's own check on a suggested change, as a person reads it: did it pass, when, and the job to start again.
  *  What the check found and which run counts are crewd's own thread line; the card never says them a second time. */
@@ -258,6 +263,8 @@ export function fileTarget(f?: FileView): { href: string; chip: string } | null 
     chip: (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? 'file').toUpperCase() };
 }
 
+/** A document the person sent in chat, waiting in the helper's inbox: theirs to keep or to forget. */
+export const sentFile = (f: FileView) => /^files\/(inbox|unlocked)\//.test(fileSource(f.url)?.path ?? '');
 /** What a phone opens in its own reader: the same crewd-parsed words the web's panel shows — a document, a written
  *  page, a spreadsheet — and a video, fetched over the link in pieces. Any other file really is on the computer. */
 export const phoneReadable = (f: FileView) => !!fileSource(f.url) && (f.kind === 'page' || f.kind === 'sheet' || f.kind === 'video');
@@ -405,12 +412,12 @@ export function kindOf(b: Json, crew: Json[] = []): Kind {
 
 /** A helper's desk: its active job's delivered files as views, own output first, one row per path where it
  *  last landed. Photos ride in the chat, never on the desk. */
-export function deskThings(id: string, task: Json | null): FileView[] {
+export function deskThings(id: string, task: Json | null, gone: Set<string> = new Set()): FileView[] {
   const paths = ((task?.files ?? []) as Json[])
     .filter((f) => !f?.photo && !String(f?.path ?? '').startsWith('files/photos/'))
     .map((f) => String(f?.path ?? ''))
     .filter(Boolean);
-  return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p));
+  return paths.filter((p, i) => paths.lastIndexOf(p) === i).map((p) => fileView(id, p)).filter((f: FileView) => !gone.has(f.url));
 }
 
 /** A job held for something other than the person's answer, in crewd's own words: their sign-in or plan, tomorrow's
@@ -424,7 +431,7 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
 /** One helper, from crewd's row and its jobs (`tasks`, newest first): the seat says only what crewd holds. A working job
  *  with no news past crewd's limit is still working (its `stuckFor` is Chief's to ask about); a held job waits, with
  *  crewd's reason; the last job that ended badly today says so until a newer one starts. */
-export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = []): Helper {
+export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = [], gone: Set<string> = new Set()): Helper {
   const own = asks.filter((a) => a.bot === b.id);
   const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft);
   const needs = b.task?.state === 'needs_you' && !chiefDraft;
@@ -444,7 +451,7 @@ export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: J
     mood: chiefDraft ? 'rest' : helperMood(b, seat, events), seat,
     ring: chiefDraft ? '' : needs ? 'needs' : b.task ? 'working' : '',
     stuckFor: stuck ? Math.max(1, Math.round((Date.now() - b.quietSince) / 60_000)) : 0, quietSince: b.quietSince ?? 0,
-    things: deskThings(b.id, b.task ?? null),
+    things: deskThings(b.id, b.task ?? null, gone),
   };
 }
 
@@ -685,7 +692,7 @@ export function zoneNote(state: Json) {
 
 /** The person's helpers. */
 export function crew(state: Json) {
-  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])) as Helper[];
+  return state.bots.filter((b: Json) => b.id !== 'chief').map((b: Json) => helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [], goneFiles(state))) as Helper[];
 }
 
 /** Chief first, then the crew in the Office's group order (latest talk first inside a group), The crew last. Last line
@@ -805,6 +812,8 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'unlock', unlock: { helper: { kind: kindOf(who ?? {}, state.bots), name: crewName(state, d.bot) }, files: d.files.map((f: string, i: number) => ({ path: f, name: d.names?.[i] ?? f.split('/').pop() ?? f })) },
       head: plain(a.title), status: `${crewName(state, d.bot)} needs ${n > 1 ? 'each password to read them' : 'its password to read it'}`,
       words: "What you type here opens the file on this computer, then it's forgotten. It never goes into the chat or to the AI.",
+      keep: { line: `The unlocked ${n > 1 ? 'copies are' : 'copy is'} not locked any more, so ${n > 1 ? 'they can' : 'it can'} sit in ${crewName(state, d.bot)}'s folder for good. How long should ${n > 1 ? 'they' : 'it'} stay?`, rule: d.rule === 'keep' ? 'keep' : 'job',
+        options: [{ label: n > 1 ? 'Remove them when the job ends' : 'Remove it when the job ends', rule: 'job' }, { label: n > 1 ? 'Keep them' : 'Keep it', rule: 'keep' }] },
       choices: [{ label: n > 1 ? `Unlock ${n} files` : 'Unlock the file', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'style' && d.pick) {
@@ -984,14 +993,15 @@ export function work(state: Json): Work[] {
   return state.bots.filter((b: Json) => mine.has(b.id) && (b.task || b.queued)).map((b: Json) => {
     const s = b.step && step(b.step);
     const needs = b.task?.state === 'needs_you';
-    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for your OK' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null) };
+    return { helper: b.id, title: plain(b.task?.title ?? 'Up next'), line: needs ? 'Waiting for your OK' : s ? s : b.task ? 'Getting started…' : 'Waiting its turn', waiting: !b.task || needs, things: deskThings(b.id, b.task ?? null, goneFiles(state)) };
   });
 }
 
 export function things(state: Json): Thing[] {
+  const gone = goneFiles(state);
   return state.tasks.filter((t: Json) => t.state === 'done' && (answerOf(t) || (t.files ?? []).length)).map((t: Json) => ({
     id: t.id, helper: t.bot, title: plain(t.title), at: t.updated_at, summary: answerOf(t).slice(0, 220),
-    files: (t.files ?? []).map((f: string) => fileView(t.bot, f)),
+    files: (t.files ?? []).map((f: string) => fileView(t.bot, f)).filter((g: FileView) => !gone.has(g.url)),
   }));
 }
 
@@ -1457,16 +1467,19 @@ const photos = (text: string) => attached(text).filter((a) => a.kind === 'photo'
 const uploads = (text: string) => attached(text).map((a) => a.view);
 /** The words crewd files a bare upload under, photo or document. */
 const BARE_UPLOAD = /^(Here is a photo|Here are some photos|Here is a file|Here are some files)\.$/;
+/** Files that are out of a helper's folder now — the person forgot one, or the job let an unlocked copy go: the chat
+ *  keeps no card for a file that is not there. */
+const goneFiles = (state: Json) => new Set(((state.forgotten ?? []) as Json[]).map((f: Json) => fileView(String(f.bot), String(f.path)).url));
 
 export function room(page: Json, state: Json) {
-  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [])]));
-  const checks = reviews(state);
+  const checks = reviews(state), gone = goneFiles(state);
+  const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [], gone)]));
   // Crewd's own lines (a delivery, a verdict, a reopen) are notes, here exactly as in a helper's chat: one style for
   // every line the person reads, whoever wrote it. Only a helper's or the person's own words are a bubble.
   return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
     to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
     from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))), at: at(m.at), author: m.author === 'system' ? 'note' : m.author }));
+    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))).filter((g: FileView) => !gone.has(g.url)), at: at(m.at), author: m.author === 'system' ? 'note' : m.author }));
 }
 
 /** A chat answer, as written: a helper's answer to the person is never scrubbed, just as the person's own
@@ -1480,20 +1493,21 @@ const chatWords = (text: string) => STUB.test(text) ? 'On it.' : text.replace(AT
 const handOff = (title: string, body: string) =>
   (title.replace(/^the\s+person(?:'s)?\s+(?:words\s+)?(?:verbatim|says?|words)\s*:\s*/i, '').replace(/^[“"']|[”"']$/g, '').trim() || plain(body.split('\n')[0])).slice(0, 80);
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
-  const checks = reviews(state);
+  const checks = reviews(state), gone = goneFiles(state);
   return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();
     // Every line carries its time: notes and cards are placed among the messages by when they happened (Main2036).
     const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
-      const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
+      const f = /^(?:Delivered|Kept) (files\/.+?)(?::\s|$)/.exec(text);
       if (!f) return { id: m.id, from: 'note', text: plain(text), event: bot === 'chief' && /^New routine “/.test(text), files: [], choices: [], at: at0 };
       const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
-      // phone's plainer card has no count, so it keeps them as `about`.
-      const card = /\.(xlsx|docx|pptx)$/i.test(f[1]);
-      return { id: m.id, from: 'note', text: card ? '' : words, about: card ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`))], choices: [], at: at0 };
+      // phone's plainer card has no count, so it keeps them as `about`. A kept copy reads by the file's own name; the
+      // card says "unlocked" on its sub line, so the name never grows a suffix that clips.
+      const card = /\.(xlsx|docx|pptx)$/i.test(f[1]), kept = text.startsWith('Kept '), name = kept ? words : undefined;
+      return { id: m.id, from: 'note', text: card || kept ? '' : words, about: card || kept ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`), undefined, name)], choices: [], at: at0 };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".
     if (!['person', 'bot', 'chief'].includes(m.author)) return { id: m.id, from: 'note', text: `${String(m.author).replace(/^./, (c) => c.toUpperCase())} asked: ${plain(text)}`, files: [], choices: [], at: at0 };
@@ -1505,7 +1519,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
-  }).filter((l: Line) => l.text || l.files.length);
+  }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)) })).filter((l: Line) => l.text || l.files.length);
 }
 
 /** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in Your things — only from a
@@ -1886,7 +1900,7 @@ const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) =>
 /** The member's Needs-you row: the first in Needs you's own order. */
 const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
 export function office(state: Json): OfficeView {
-  const helpers = crew(state);
+  const helpers = crew(state), gone = goneFiles(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
   const lines = new Map(work(state).map((w) => [w.helper, w]));
   const needs = needsYou(state);
@@ -1898,9 +1912,9 @@ export function office(state: Json): OfficeView {
     const now = task ? steps(events, task.id, true) : [];
     // The desk holds the task's delivered files first (they survive the 80-event window), then any live
     // arrival the snapshot predates; a path delivered again (a first look, then the finished one) is one thing.
-    const desk = deskThings(h.id, task);
+    const desk = deskThings(h.id, task, gone);
     const paths = task ? events.filter((e) => e.kind === 'file.delivered' && !e.data?.photo && e.data?.task === task.id).map((e) => String(e.data?.path ?? '')) : [];
-    const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url));
+    const extra = paths.filter((p, i) => paths.lastIndexOf(p) === i && !desk.some((f) => f.url === fileView(h.id, p).url)).filter((p) => !gone.has(fileView(h.id, p).url));
     const made = [...desk, ...extra.map((p) => fileView(h.id, p))];
     const w = lines.get(h.id);
     const second = kinds.has(h.kind);
@@ -1911,7 +1925,7 @@ export function office(state: Json): OfficeView {
   });
   const done = things(state);
   const lead = raw.get('chief');
-  return { chief: chief(state), lead: lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? []).seat : 'free', crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
+  return { chief: chief(state), lead: lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? [], gone).seat : 'free', crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
 /** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */

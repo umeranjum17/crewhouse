@@ -717,7 +717,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
           <div id={`m${l.id}`} className={`line ${l.from}${l.event ? ' chat-event' : ''}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${l.id === reading ? ' reading' : ''}`}>
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
-            {l.files.map((f) => <Media key={f.url} f={f} big />)}
+            {l.files.map((f) => <Media key={f.url} f={f} big forget />)}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
             {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
@@ -788,7 +788,7 @@ function Room(ctx: Ctx) {
   return <div className="page chat-page room-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
     <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}`} key={l.id}>
       {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} ring={l.who.ring} />}<b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
-      {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big />)}
+      {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>

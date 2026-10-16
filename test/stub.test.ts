@@ -773,6 +773,30 @@ test('the person’s bot page, events and live activity keep their delivered wor
   } finally { db.close(); }
 });
 
+test('Forget this file: the person takes a document back out of the helper\'s folder over the API', async () => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
+  const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64'), name: 'statement.pdf' };
+  const task = (await api('POST', '/api/bots/reel/messages', { text: '', files: [pdf] })).body.task;
+  await done('reel', task);
+  const rel = `files/inbox/${task}-1.pdf`, full = join(root, 'crew', 'bots', 'reel', rel);
+  assert.ok(existsSync(full), 'the document the person sent is in the helper\'s folder');
+  const card = async () => A.lines((await api('GET', '/api/bots/reel')).body, 'reel', (await api('GET', '/api/state')).body).flatMap((l) => l.files);
+  assert.deepEqual((await card()).map((f: any) => f.name), ['statement.pdf'], 'and it shows as a card in the chat');
+  const gone = await api('POST', '/api/bots/reel/forget-file', { path: rel });
+  assert.equal(gone.status, 200);
+  assert.ok(!existsSync(full), 'the file is out of the helper\'s folder');
+  assert.deepEqual(await card(), [], 'and the chat keeps no card for it');
+  assert.ok((await api('GET', '/api/bots/reel')).body.messages.some((m: any) => m.author === 'system' && /^Removed \S+ from Reel's folder\.$/.test(m.text)), 'the person is told, in plain words');
+  assert.ok((await api('GET', '/api/state')).body.forgotten.some((f: any) => f.path === rel), 'crewd records it as gone');
+  assert.ok((await api('GET', '/api/bots/reel')).body.messages.some((m: any) => /\(in files\/inbox/.test(m.text)), 'the person\'s own words are untouched');
+  assert.equal((await api('POST', '/api/bots/reel/forget-file', { path: rel })).status, 400, 'and a second try says it is not there');
+  assert.equal((await api('POST', '/api/bots/reel/forget-file', { path: 'soul.md' })).status, 400, 'only a file the helper holds');
+  assert.equal((await api('POST', '/api/bots/reel/forget-file', { path: '../state/crew.db' })).status, 400, 'never outside its folder');
+  const noKey = await fetch(`${base}/api/bots/reel/forget-file`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-crewhouse': '1' }, body: JSON.stringify({ path: rel }) });
+  assert.equal(noKey.status, 403, 'the person\'s authority is the only way to forget a file');
+});
+
 test('raw /files/ only opens delivered files, and only for the person', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });

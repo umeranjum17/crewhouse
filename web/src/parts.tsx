@@ -10,7 +10,7 @@ import * as art from './art.ts';
 import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -315,19 +315,37 @@ export function ReviewCard({ f }: { f: FileView }) {
   </div>;
 }
 
-export function Media({ f, big }: { f: FileView; big?: boolean }) {
+export function Media({ f, big, forget }: { f: FileView; big?: boolean; forget?: boolean }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
   if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span></span><b>Open</b></a><ReviewCard f={f} /></div>;
-  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} />;
+  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} forget={forget} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
       : <button className={`media cover ${big ? 'big' : ''}`} onClick={() => setPlay(true)} aria-label={`Play ${f.name}`}><span>{f.name}</span><i>▶</i></button>;
   }
-  // A sent file (a PDF, a receipt, a letter): its name, what kind it is and how big, then Open.
-  const chip = fileTarget(f)?.chip, sub = [chip, f.size ? fileSize(f.size) : ''].filter(Boolean).join(' · ');
-  return <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic" aria-hidden>▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span>{sub && <span className="mute small doc-sub">{sub}</span>}</span><b>Open</b></a>;
+  // A sent file (a PDF, a receipt, a letter): its name, what kind it is and how big, then Open. A kept unlocked copy
+  // says so on the same sub line, so its name stays the file's own name and never clips under a suffix.
+  const at = fileSource(f.url)?.path ?? '', copy = /^files\/unlocked\//.test(at), chip = fileTarget(f)?.chip,
+    sub = [chip, f.size ? fileSize(f.size) : '', copy ? 'unlocked' : ''].filter(Boolean).join(' · ');
+  const card = <a href={f.url} target="_blank" rel="noreferrer" className="doc"><span className="doc-ic" aria-hidden>▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span>{sub && <span className="mute small doc-sub">{sub}</span>}</span><b>Open</b></a>;
+  return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
+}
+
+/** "Forget this file": the person takes one file out of the helper's folder themselves. One tap arms it, the next
+ *  does it; nothing else in that folder changes, and the file's own card leaves the chat with it. */
+export function ForgetFile({ f }: { f: FileView }) {
+  const src = fileSource(f.url), [armed, setArmed] = useState(false), [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try { await api.forgetFile(src!.bot, src!.path); }
+    catch (e: any) { toast(e?.status ? e.message : "Can't reach the home computer right now."); setArmed(false); }
+    finally { setBusy(false); }
+  };
+  return armed
+    ? <span className="forget-file"><button className="link" disabled={busy} onClick={() => void run()}>{busy ? 'Removing…' : 'Forget it'}</button><button className="link mute" onClick={() => setArmed(false)}>Keep</button></span>
+    : <button className="link forget-file" onClick={() => setArmed(true)}>Forget this file</button>;
 }
 
 // ---------- previews: spreadsheets and documents crewd read for the app ----------
@@ -397,11 +415,11 @@ export function Thumb({ name, book, doc, deck, text }: { name: string; book: Wor
 
 /** A finished file the helper made — a workbook or a document — in the chat: a peek inside, then what kind of file it
  *  is, its name, a line about it, and Open. */
-export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
+export function PreviewCard({ f, big, forget }: { f: FileView; big?: boolean; forget?: boolean }) {
   const { book, doc, deck, text } = usePreview(f);
   const src = fileSource(f.url);
   const about = aboutFile(f, book, doc, deck);
-  return (
+  const card = (
     <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
       <Thumb name={f.name} book={book} doc={doc} deck={deck} text={text} />
       <span className={`wb-ic wb-${f.kind}`} aria-hidden>{src?.path.split('.').pop()?.toUpperCase().slice(0, 4)}</span>
@@ -412,6 +430,7 @@ export function PreviewCard({ f, big }: { f: FileView; big?: boolean }) {
       <b className="wb-open">Open</b>
     </a>
   );
+  return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
 }
 
 const HUES = ['var(--go)', 'var(--ok)', 'var(--amber)', 'var(--danger)', 'var(--ink2)', 'var(--line2)'];
@@ -921,10 +940,11 @@ function SignInCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: strin
  *  answer that opens the files; it is cleared after every try and never stored, sent to the chat or shown to the crew. */
 function UnlockCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: string }) {
   const u = c.unlock!, [typed, setTyped] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [oops, setOops] = useState('');
+  const [keep, setKeep] = useState(c.keep?.rule ?? 'job'); // the one plain rule: the copies go when the job ends
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const go = () => {
     setBusy(true); setOops('');
-    api.answer(c.id, { answer: 'allow', passwords: u.files.map((f) => typed[f.path] ?? '') })
+    api.answer(c.id, { answer: 'allow', passwords: u.files.map((f) => typed[f.path] ?? ''), rule: keep })
       .then(onDone, (e) => { setOops(e?.status ? e.message : "Can't reach the home computer right now."); onDone(); })
       .finally(() => { setTyped({}); setBusy(false); });
   };
@@ -934,6 +954,10 @@ function UnlockCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: strin
       {u.files.map((f) => <label key={f.path} className="unlock-field"><span>{f.name}</span>
         <input className="input" type="password" autoComplete="off" placeholder="Password" value={typed[f.path] ?? ''} onChange={(e) => setTyped({ ...typed, [f.path]: e.target.value })} /></label>)}
       <p className="unlock-note"><Icon name="lock" size={16} /><span>{c.words}</span></p>
+      {c.keep && <div className="unlock-keep" role="radiogroup" aria-label="How long the unlocked copies stay">
+        <span>{c.keep.line}</span>
+        {c.keep.options.map((o) => <label key={o.rule} className="keep-opt"><input type="radio" name={`keep-${c.id}`} value={o.rule} checked={keep === o.rule} onChange={() => setKeep(o.rule)} /><span>{o.label}</span></label>)}
+      </div>}
       {oops && <div className="send-failed" role="alert">{oops}</div>}
       <div className="btns"><button className="btn go" disabled={busy || u.files.some((f) => !typed[f.path])}>{c.choices[0].label}</button><More title={c.head} sub={c.status} acts={[{ label: 'Not now', run: no }]} /></div>
     </form>

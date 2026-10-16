@@ -401,6 +401,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // The give-back sheet's ticks: the hosts on its tabs, read only while the person holds the wheel.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/screen$/)) && m === 'GET') return { pages: await crew.tabHosts(r[1]) };
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/forget$/)) && m === 'POST') { await crew.forget(r[1], String(body.host ?? '')); return { ok: true }; }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/forget-file$/)) && m === 'POST') { crew.forgetFile(r[1], String(body.path ?? '')); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/reset$/)) && m === 'POST') { await crew.resetBot(r[1]); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/task\/(\d+)\/again$/)) && m === 'POST') return crew.reopen(r[1], Number(r[2])); // a review card's Start again: the same task, its findings in hand
     if (m === 'GET' && p === '/api/schedule') {

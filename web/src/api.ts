@@ -172,7 +172,9 @@ export const api = {
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
   /** Herdr's setup state for its own row on the Apps screen: missing, installed, or answering. */
   herdr: () => call('GET', '/api/herdr'),
-  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string; remind?: boolean; passwords?: string[] }) => call('POST', `/api/asks/${ask}/answer`, body),
+  /** "Forget this file": the person takes one file out of the helper's folder. */
+  forgetFile: (bot: string, path: string) => call('POST', `/api/bots/${bot}/forget-file`, { path }),
+  answer: (ask: number, body: { answer: 'allow' | 'deny'; scope?: 'once' | 'task' | 'always'; text?: string; remind?: boolean; passwords?: string[]; rule?: string }) => call('POST', `/api/asks/${ask}/answer`, body),
   skills: () => call('GET', '/api/skills'),
   skillSearch: (q: string) => call('GET', `/api/skills/search?q=${encodeURIComponent(q)}`),
   skillSwitch: (slug: string, on: boolean) => call('POST', `/api/skills/${slug}/${on ? 'on' : 'off'}`, {}),

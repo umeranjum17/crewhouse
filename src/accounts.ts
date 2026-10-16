@@ -77,10 +77,7 @@ export class Accounts {
     return f;
   }
   rest(account: string, until: number) { this.rests.set(account, until); }
-  notIncluded(account: string, on?: boolean) {
-    if (on !== undefined) on ? this.excluded.add(account) : this.excluded.delete(account);
-    return this.excluded.has(account);
-  }
+  notIncluded(account: string, on?: boolean) { if (on !== undefined) on ? this.excluded.add(account) : this.excluded.delete(account); return this.excluded.has(account); }
 
   /** Start the engine's sign-in; the wizard's steps become the card's words (`via: 'key'` waits for a pasted plan key instead). */
   async login(account: string, via: 'browser' | 'code' | 'key' = 'browser', fresh = false) {

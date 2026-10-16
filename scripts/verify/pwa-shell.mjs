@@ -1,7 +1,8 @@
 // The home-screen app proof (docs/verification/pwa-shell.md): one isolated Chromium driven over CDP from a plan.
 //   node pwa-shell.mjs <plan.json>     (headed installs: under `xvfb-run -a`, with "headless": false)
 // plan: { profile, home, headless?, args?, xkey?, recorder?, steps: [{ name, w, h, dpr, mobile, ua, platform, touch,
-//   insets, inject, run, url, reload, offline, settle, click, key, xshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant }] }
+//   insets, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant }] }
+// `win: [w, h]` sizes the real window (and drops any viewport override); `wshot` saves just that window off the X screen.
 // `run` is a shell command (the computer's side, e.g. `./crewhouse phones approve …`); its trimmed stdout replaces
 // `{{out}}` (as a JSON string) in later url/eval/wait steps. `wait` polls an expression until truthy, up to `timeout` ms.
 // Chromium gets a HOME and every XDG dir under plan.home and nothing from this shell: an install writes its desktop
@@ -34,6 +35,7 @@ const fill = (t) => t?.replaceAll('{{out}}', JSON.stringify(said));
 const evalJs = async (expr) => (await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }, s)).result.value;
 for (const st of plan.steps) {
   try {
+    if (st.win) { const { windowId } = await send('Browser.getWindowForTarget', { targetId: target.targetId }); await send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal', width: st.win[0], height: st.win[1] } }); await send('Emulation.clearDeviceMetricsOverride', {}, s); await sleep(800); }
     if (st.w) await send('Emulation.setDeviceMetricsOverride', { width: st.w, height: st.h, deviceScaleFactor: st.dpr ?? 1, mobile: !!st.mobile }, s);
     if (st.inject) await send('Page.addScriptToEvaluateOnNewDocument', { source: st.inject }, s);
     if (st.grant) { const o = new URL(await evalJs('location.origin')); await send('Browser.grantPermissions', { origin: o.origin, permissions: st.grant }); out.push({ granted: st.grant, origin: o.origin }); }
@@ -45,6 +47,7 @@ for (const st of plan.steps) {
     if (st.reload) { await send('Page.reload', {}, s); await sleep(st.settle ?? 1500); }
     if (st.offline !== undefined) { await send('Network.enable', {}, s); await send('Network.emulateNetworkConditions', { offline: st.offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, s); }
     if (st.click) { const r = await evalJs(`(()=>{const b=document.querySelector(${JSON.stringify(st.click)}).getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2}})()`); for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'left', clickCount: 1 }, s); await sleep(st.settle ?? 2000); }
+    if (st.wshot) { const { windowId } = await send('Browser.getWindowForTarget', { targetId: target.targetId }), { bounds: b } = await send('Browser.getWindowBounds', { windowId }); execFileSync('magick', ['import', '-window', 'root', '-crop', `${b.width}x${b.height}+${b.left}+${b.top}`, '+repage', st.wshot]); out.push({ wshot: st.wshot, bounds: b }); }
     if (st.xshot) { execFileSync('magick', ['import', '-window', 'root', st.xshot]); out.push({ xshot: st.xshot }); }
     if (st.key) { out.push({ key: execFileSync('python3', ['-I', plan.xkey, ...String(st.key).split(' ')]).toString() }); await sleep(4000); }
     if (st.attachApp) { const { targetInfos: ts } = await send('Target.getTargets'); out.push({ targets: ts.map((t) => [t.type, t.url.replace(/#.*/, '')]) }); const app = ts.filter((t) => t.type === 'page' && t.targetId !== target.targetId && t.url.startsWith(st.attachApp)).pop(); if (app) { target = app; ({ sessionId: s } = await send('Target.attachToTarget', { targetId: app.targetId, flatten: true })); await prep(); } }
