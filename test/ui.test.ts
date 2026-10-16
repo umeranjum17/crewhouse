@@ -225,3 +225,11 @@ test('reading text clears 4.5:1 against the surfaces it sits on, day and night',
   }
 
 });
+
+test('a job routed from Chief keeps its chip when its request is the first line of the thread', () => {
+  const state = { bots: [{ id: 'chief', name: 'Chief' }, { id: 'scout', name: 'Scout', template: 'scout' }], events: [], asks: [],
+    tasks: [{ id: 2, bot: 'scout', state: 'working', origin: 'chief', title: 'Check the Monday trains', created_at: 1792182079455 }] };
+  const line = (id: number, from: string, at: number) => ({ id, from, text: '', files: [], choices: [], at }) as A.Line;
+  const { tail } = A.handChips(state, [line(5, 'me', 1792182079456), line(6, 'chief', 1792182079456)]);
+  assert.deepEqual(tail.map((c) => c.task), [2], 'the job saved a moment before its request still gets its chip');
+});

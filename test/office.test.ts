@@ -393,14 +393,14 @@ test('your crew page reads the rail status: every row matches its rail row', { s
   }
 });
 
-test('a finished file opens beside its chat: the composer stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
+test('a finished file opens beside its chat: the chat\'s foot (a helper\'s Ask Chief about this) stays clear of the panel', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   await b.open(`demo&day#/f/scribe/${encodeURIComponent('files/monthly-budget.xlsx')}`);
-  const edges = "(() => { const c = document.querySelector('.composer'), p = document.querySelector('.wb-panel'); return c && p && p.querySelector('.wb-grid') ? { composer: c.getBoundingClientRect().right, panel: p.getBoundingClientRect().left } : null; })()";
+  const edges = "(() => { const c = document.querySelector('.chat-page .dock'), p = document.querySelector('.wb-panel'); return c && p && p.querySelector('.wb-grid') ? { composer: c.getBoundingClientRect().right, panel: p.getBoundingClientRect().left } : null; })()";
   await until('the chat and the open workbook', () => b.run(edges), 30_000);
   const { composer, panel } = await b.run(edges);
-  assert.ok(composer <= panel, `the composer ends at ${composer}px, left of the panel at ${panel}px`);
+  assert.ok(composer <= panel, `the chat's foot ends at ${composer}px, left of the panel at ${panel}px`);
 });
 
 test('a routine\'s switch keeps its knob inside the track, clear of its On or Paused words, day and night, phone and computer, text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
@@ -616,6 +616,7 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await b.run('location.hash = "#/h/scout"');
   await until("Scout's own thread", () => b.run(`!!document.querySelector('.line') && !document.querySelector('.stuck')`), 30_000);
   assert.equal(await b.run(`document.querySelectorAll('.stuck').length`), 0, 'Scout\'s own thread asks nothing: the Stop card is Chief\'s alone');
+  assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [true, 0], 'a helper\'s thread is read only: Ask Chief about this, no composer');
   await b.run('location.hash = "#/"');
   await toOffice(b);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
@@ -626,6 +627,7 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
   assert.equal((await api('/api/bots/scout')).bot.unread > 0, true);
   assert.equal(await b.run("document.querySelectorAll('.side-row .badge').length"), 0, 'no crew rail row carries a badge');
+  assert.match(await b.run("document.querySelector('.side-row').innerText"), /Done[^]*Three Friday flights are ready\./, 'the rail row carries its status word and last line');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await b.run('location.hash = "#/h/scout"');
   await until('opening NEW divider', () => b.run("!!document.querySelector('.new-divider')"), 30_000);
@@ -637,6 +639,17 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await b.run('location.hash = "#/h/scout"');
   await until('opened the read thread', () => b.run("!!document.querySelector('.chat-page .line.them')"));
   assert.equal(await b.run("!!document.querySelector('.new-divider')"), false, 'a read thread has no NEW on the next visit');
+
+  // A request routed to Scout through Chief is one hand-off chip after Chief's reply, under the limit from crewd's grants.
+  const next = (await api('/api/bots/chief/messages', { text: 'Scout, check the Monday trains; ask permission' })).task;
+  await holding(lab.crew, 'scout');
+  await b.run('location.hash = "#/chief"');
+  await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
+  const chip = await b.run(`(() => { const h = [...document.querySelectorAll('.hand-off')].at(-1), lines = [...document.querySelectorAll('.chat .lines > .line')];
+    return { limit: h.querySelector('.hand-limit').textContent, href: h.querySelector('a.hand').getAttribute('href'), after: lines.indexOf(h) > lines.findIndex((l) => /Monday trains/.test(l.textContent)) }; })()`);
+  assert.match(chip.limit, /^Scout .*can't pay or send anything without asking you\.$/);
+  assert.deepEqual([chip.href, chip.after], ['#/h/scout', true], 'the chip opens Scout\'s thread and sits after the request that handed it on');
+  await release(lab.crew, 'scout', 'Two trains on Monday.'); await settled(lab.db, next);
 });
 
 // The demo banner (main.tsx PairRow) at the hardest size a phone gets: 360 wide with the largest text. Its Pair
