@@ -1886,7 +1886,7 @@ function ChiefSheet({ view, state, offline, go, onClose }: Ctx & { view: A.Offic
           {computers.length > 0 && <Label>Crew computers</Label>}
           {computers.map((c) => {
             const k = A.seatOf(c), h = crew.find((x) => x.id === c.id)!;
-            return row(c.id, `${c.name}'s computer`, h.driving ? 'You have the wheel' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
+            return row(c.id, `${c.name}'s computer`, h.driving ? 'You have control' : `Watch ${c.name}`, () => to({ view: 'helper', id: c.id, tab: 'watch' }),
               <Pill tone={A.waitsOnYou(c) ? 'wait' : k === 'working' ? 'ok' : 'off'}>{offline ? OUT : A.waitsOnYou(c) ? 'Waiting' : k === 'working' ? 'Working' : 'Resting'}</Pill>, <Face who={h} size={36} />);
           })}
           {made.length > 0 && <Label>Outputs</Label>}
@@ -1938,7 +1938,7 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
           {/* Their own computer: watching is the default; taking the wheel pauses them until it is handed back. */}
           {!offline && h.computer && desktopAvailable && <View><Label>{`${c.name}'s computer`}</Label><View style={s.chips}>
             <Btn label={`Watch ${c.name}`} onPress={() => to({ view: 'helper', id, tab: 'watch' })} />
-            {canAct && <Btn label="Take the wheel" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
+            {canAct && <Btn label="Take control" onPress={() => void attempt(async () => { await api.takeOver(id); to({ view: 'helper', id, tab: 'screen' }); })} />}
           </View></View>}
         </ScrollView>
         {asking && c.ask && <AskSheet c={c.ask} who={h} chiefSays={state.asks.find((a: Json) => a.id === c.ask!.id)?.detail?.chief} canAct={canAct}
@@ -1975,7 +1975,8 @@ function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.
     return <View style={narrow ? [s.row, { gap: 10, flexWrap: 'wrap', marginTop: 4 }] : { alignItems: 'flex-end', gap: 4, maxWidth: '40%' }}><T tone="mute" style={s.time}>{c.at ? A.clock(c.at) : ''}</T>
       {c.asks > 0 ? <Text style={[s.unread, { backgroundColor: t.pink, minWidth: 20 * fontScale, height: 20 * fontScale, lineHeight: 20 * fontScale, borderRadius: 10 * fontScale }]}>{A.unreadBadge(c.asks)}</Text>
         : c.id !== 'room' && <View style={[s.row, { gap: 6 }]}>
-          {(c.cls === 'needs' || c.cls === 'work' || c.cls === 'failed') && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
+          {/* A crew row's dot means working only; Chief's row says the rest. */}
+          {(c.cls === 'work' || (c.id === 'chief' && (c.cls === 'needs' || c.cls === 'failed'))) && <View style={[s.statusDot, { backgroundColor: statusColor(c.cls) }]} />}
           <T style={[s.statusWord, { color: statusColor(c.cls), flexShrink: 1 }]}>{c.status}</T>
         </View>}</View>;
   }
@@ -2320,7 +2321,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   );
 }
 
-/** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take the wheel, Hand it back.
+/** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take control, Hand it back.
  *  Taking the wheel is the whole page: one status line, the screen, Hand it back pinned at the bottom. */
 function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null; watchNow?: boolean }) {
   const t = useLook();
@@ -2385,7 +2386,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
             <Btn label="Keyboard" onPress={() => session.showKeyboard()} />
             <Btn ghost label="?" onPress={() => setHelp((v) => !v)} />
           </View>
-          {help && <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>}
+          {help && <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking control pauses it, for a sign-in or anything it's stuck on; handing it back lets it carry on.</T>}
         </View>
       </View>
     </Modal>
@@ -2403,7 +2404,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       {!!err && <T tone="pinkInk">{err}</T>}
       <View style={s.chips}>
         {idle ? <Btn go label={`Watch ${bot.display}`} onPress={watch} /> : <Btn label="Close" onPress={stop} />}
-        {canAct && <Btn label="Take the wheel" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
+        {canAct && <Btn label="Take control" onPress={act(async () => { await api.takeOver(bot.id); watching.current = true; if (idle) watch(); })} />}
         {what === null && <Btn label={`Show ${bot.display} how`} onPress={() => setWhat('')} />}
       </View>
       {what !== null && (
@@ -2421,7 +2422,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
           <View style={s.chips}><Btn go label="Done showing" onPress={act(() => api.shown(bot.id, true))} /><Btn ghost label="Cancel" onPress={act(() => api.shown(bot.id, false))} /></View>
         </View>
       )}
-      <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it, for a sign-in or anything it's stuck on; handing back lets it carry on.</T>
+      <T tone="mute" style={s.small}>{bot.display} has its own computer at home, separate from yours. Taking control pauses it, for a sign-in or anything it's stuck on; handing it back lets it carry on.</T>
     </Card>
   );
 }

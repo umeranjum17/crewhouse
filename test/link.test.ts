@@ -569,6 +569,18 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
       await a.req('POST', '/api/bots/chief/messages', { text: 'hello after upgrade' });
       await until(async () => pushes.length >= 2);
       assert.ok(pushes.flat().every((p) => p.to === 'ExponentPushToken[kept]' && p.title === NEWS));
+      // Chief's profile switch, "Tell me when Chief finishes or needs me": off, Chief's reply sends nothing; on again, news resumes.
+      const replies = () => live.prepare("SELECT seq FROM events WHERE kind = 'message' AND bot = 'chief' AND json_extract(data, '$.author') = 'bot' ORDER BY seq").all().map((r: any) => `e${r.seq}`);
+      const told = () => pushes.flat().map((p) => p.collapseId);
+      assert.deepEqual((await a.req('GET', '/api/notify')).body, { on: true });
+      assert.deepEqual((await a.req('PUT', '/api/notify', { on: false })).body, { on: false });
+      const said = replies().length;
+      await a.req('POST', '/api/bots/chief/messages', { text: 'quiet now' });
+      await until(async () => replies().length > said);
+      assert.deepEqual((await http('PUT', '/api/notify', { on: true })).body, { on: true });
+      await a.req('POST', '/api/bots/chief/messages', { text: 'tell me again' });
+      await until(async () => replies().length > said + 1 && told().includes(replies()[said + 1]));
+      assert.ok(!told().includes(replies()[said]), 'switched off, Chief’s reply pushes nothing');
     } finally { live.close(); }
     assert.equal((await http('PUT', '/api/people/42', { name: 'Umer' })).status, 200, 'legacy route shape edits only the person');
     const snapshot = (await a.req('GET', '/api/state')).body;

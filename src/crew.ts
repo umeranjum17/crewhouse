@@ -909,10 +909,8 @@ export class Crew {
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
       // What this helper learned about the person.
-      notes: disk.readNotes(this.cfg, { bot: id }), profile: disk.readProfile(this.cfg),
-      notesCap: disk.NOTES_CAP,
-      soul: disk.readSoul(this.cfg, id),
-      soulCap: disk.SOUL_CAP,
+      notes: disk.readNotes(this.cfg, { bot: id }), profile: disk.readProfile(this.cfg), notesCap: disk.NOTES_CAP,
+      soul: disk.readSoul(this.cfg, id), soulCap: disk.SOUL_CAP, rules: id === CHIEF ? readFileSync(join(disk.botDir(this.cfg, id), 'AGENTS.md'), 'utf8').split('## Boundaries')[1]?.replace(/.*crew_.*/g, '').trim() : undefined, // Chief's job is tool wiring; his profile shows its plain-words limits
       skills: disk.listSkills(this.cfg, id),
       tools: disk.botTools(this.cfg, id),
       files: disk.listFiles(this.cfg, id, new Set(this.db.all(`SELECT json_extract(e.data, '$.path') AS path FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task')

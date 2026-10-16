@@ -9,7 +9,7 @@ one, and Chief's next prompt carries that line. A run the person holds the contr
 question, is never stopped this way: only a turn in flight counts.
 
 Before that bound, a helper with no news past `CREWHOUSE_STUCK_MS` (3 minutes) still reads "At work" on the rail, in Chats
-(beside its working line) and on its live line: working beats gone quiet, one status everywhere. Only Chief asks the person: the Stop / Take over /
+(beside its working line) and on its live line: working beats gone quiet, one status everywhere. Only Chief asks the person: the Stop / Take control /
 Leave it card sits in Chief's thread for every helper gone quiet (`A.stuckIn`), never in that helper's own nor under the
 helper's Chats row (`test/office.test.ts` "live Chats…"). Stop gets one
 plain line from Chief ("I stopped Scout's “…”, as you asked. Anything made so far is kept, and your next message carries

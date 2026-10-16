@@ -260,6 +260,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (body.id) await crew.runtime.forget?.(String(body.id), String(body.skill ?? ''));
       return { ok: true };
     }
+    if (p === '/api/notify') return link.notify(m === 'PUT' ? body.on !== false : undefined);
     if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
     if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
     // The reviewed starter skill set, its on/off as the engine sees it, and switching it the engine's own way.

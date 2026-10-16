@@ -10,7 +10,7 @@ type Helper = ReturnType<typeof A.crew>[number];
 import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, setNight, ChiefArt, Composer, discOf, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
-import { Screen, SiteSignIn } from './screen.tsx';
+import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
 import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
@@ -45,6 +45,8 @@ const hrefOf = (id: string) => (id === 'chief' ? '#/chief' : id === 'room' ? '#/
 const askHref = (c: A.Card) => (c.kind === 'unlock' ? '#/chief' : `#/ask/${c.id}`);
 /** Chief's own trail (his learned notes, each with Undo): his page is Home now, so Home carries the link. */
 const CHIEF_TRAIL = '#/h/chief/did';
+/** Chief's profile, one page: his hero's helmet and name open it. */
+const CHIEF_PROFILE = '#/h/chief/details';
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
@@ -157,10 +159,10 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
   if (!h.stuckFor || leftAlone.get(h.id) === h.quietSince) return null;
   return (
     <div className="stuck">
-      <span>{h.name} has been quiet for {h.stuckFor} minute{h.stuckFor === 1 ? '' : 's'}. Shall I stop, or would you like to take over?</span>
+      <span>{h.name} has been quiet for {h.stuckFor} minute{h.stuckFor === 1 ? '' : 's'}. Shall I stop, or would you like to take control?</span>
       <div className="btns">
         <button className="btn" onClick={() => attempt(async () => { await api.reset(h.id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>
-        {h.computer && <button className="btn" onClick={() => attempt(async () => { await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>Take over</button>}
+        {h.computer && <button className="btn" onClick={() => attempt(async () => { await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>Take control</button>}
         <button className="btn ghost" onClick={() => { leftAlone.set(h.id, h.quietSince); redraw((n) => n + 1); }}>Leave it</button>
       </div>
     </div>
@@ -183,7 +185,7 @@ function Chats({ state, desk }: { state: Json; desk?: boolean }) {
             <span className="grow chat-preview"><b>{c.name}</b><span className="small clamp1">{c.line}</span></span>
             <span className="chat-end"><time>{c.at ? A.clock(c.at) : ''}</time>
               {c.asks > 0 ? <span className="badge" aria-label={`${c.asks} for you`}>{A.unreadBadge(c.asks)}</span>
-                : c.id !== 'room' && <span className={`p-state ${c.cls}`}><i aria-hidden />{c.status}</span>}</span>
+                : c.id !== 'room' && <span className={`p-state ${c.cls}`}>{(c.id === 'chief' || c.cls === 'work') && <i aria-hidden />}{c.status}</span>}</span>
           </a>
           {c.working && <div className="chat-working"><i aria-hidden /><span>{c.working}</span></div>}
         </div>;
@@ -232,7 +234,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
   // Chief's own trail (his learned notes with Undo) stays reachable now his page is Home (Main2036).
   const did = <a className="link home-did" href={CHIEF_TRAIL}>What happened</a>;
-  const tools = <div className="home-tools">{did}{gear}{seg}</div>;
+  const tools = <div className="home-tools"><a className="link home-did" href={CHIEF_PROFILE}>Chief's profile</a>{did}{gear}{seg}</div>;
   // A phone header is one block (Term): the hero carries the gear top-right and the switch below its lines.
   // While the computer is out of reach its own words win; the sign-in wait rides along otherwise.
   const phone = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 899px)').matches;
@@ -330,8 +332,8 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
   return (
     <section className="chief-hero" aria-label="Chief">
       <div className="ch-row">
-        <span className="ch-art"><ChiefArt mood={chief.mood} hero mascot /></span>
-        <h2 className="ch-name">Chief</h2>
+        <a className="ch-art" href={CHIEF_PROFILE} aria-label="Chief's profile"><ChiefArt mood={chief.mood} hero mascot /></a>
+        <h2 className="ch-name"><a href={CHIEF_PROFILE}>Chief</a></h2>
         <p className={`ch-status${out || needs ? '' : s.group === 'work' ? ' work' : ' rest'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : s.word}</span></p>
         {side}
       </div>
@@ -845,6 +847,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   // Chief has no helper card, but his Every-step trail (with Undo for what he learned) is the same view: admit him for it.
+  if (id === 'chief' && (tab === 'details' || tab === 'instructions')) return <ChiefProfile {...ctx} tab={tab} page={page} />;
   if (!h && id !== 'chief') return <div className="page mute">{state.bots.some((b: Json) => b.id === id) ? '' : 'This helper has left the crew.'}</div>;
   const b = state.bots.find((x: Json) => x.id === id);
   const name = h?.name ?? 'Chief';
@@ -930,9 +933,61 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
         }, 'Forgotten')} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
+      {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
+        <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>Computer</b></div></header></div>}
       {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
     </div>
   );
+}
+
+/** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
+ *  his one notification switch, his instructions read-only, and his crew. Take control is on the first phone screen. */
+function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
+  const { state, live, refresh, tab, page } = ctx;
+  const crew = A.crew(state), all = A.routines(state), [adding, setAdding] = useState(false);
+  const [notify, setNotify] = useState<boolean | null>(null);
+  useEffect(() => { api.notify().then((n) => setNotify(n.on)).catch(() => {}); }, []);
+  // The computer to show: whoever is on one now, else the first helper with one.
+  const pc = crew.find((h) => h.computer && h.driving) ?? crew.find((h) => h.computer && h.seat === 'working') ?? crew.find((h) => h.computer);
+  const who = (r: Json) => (r.helper === 'chief' ? '' : `${crew.find((h) => h.id === r.helper)?.name ?? 'Chief'} does it`);
+  const head = (title: string) => <div className="sticky-top"><header className="chat-head">
+    <a href="#/chief" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b></div></header></div>;
+  if (tab === 'instructions') return <div className="page helper">{head('How Chief works for you')}<section className="detail rest-screen">
+    <p className="lead">Plain words Chief reads before every job. Only you change them.</p>
+    <h2 className="plate">Who Chief is</h2><div className="card"><ChatText text={page?.soul ?? ''} /></div>
+    <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
+  return <div className="page helper">{head('Chat')}<section className="detail rest-screen chief-profile">
+    <div className="cp-head"><Face who="chief" size={64} /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
+    <div className="label">Routines</div>
+    <div className="card list">
+      {all.slice(0, 2).map((r: Json) => <div key={r.id} className="row-item">
+        <a className="grow cp-link" href="#/routines"><span className="clamp1">{r.name}</span><span className="mute small">{[r.when, who(r)].filter(Boolean).join(' · ')}</span></a>
+        <input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => attempt(async () => { await api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }); refresh(); })} />
+      </div>)}
+      {all.length > 2 && <a className="row-item link" href="#/routines">See all {all.length}</a>}
+      <button className="row-item link" onClick={() => setAdding(!adding)}>+ Add routine</button>
+    </div>
+    {adding && <RoutineAsk />}
+    <div className="label">Computer</div>
+    {pc ? <div className="card cp-computer">
+      <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.seat === 'working' ? `${pc.name} is using it` : `${pc.name}'s computer`} />
+      <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>Take control</button>
+    </div> : <div className="card empty">No one on the crew has a computer yet.</div>}
+    <div className="label">Notifications</div>
+    <div className="card list"><label className="row-item"><span className="grow">Tell me when Chief finishes or needs me<span className="mute small">On every device with notifications on</span></span>
+      <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
+    <div className="label">Instructions</div>
+    <div className="card list"><a className="row-item cp-link" href="#/h/chief/instructions"><span className="grow">How Chief works for you<span className="mute small">Plain words Chief follows on every job. Only you change them.</span></span><span className="mute">›</span></a></div>
+    {live.crew.length > 0 && <>
+      <div className="label">Chief's crew</div>
+      <div className="card list">{A.roster(live.crew).map((m) => {
+        const r = A.statusOf(m, live), working = r.seat === 'working';
+        // A crew row's dot means working, and nothing else: only Chief's own row ever shows something for you.
+        return <a key={m.id} className="row-item cp-link" href={hrefOf(m.id)}><Face who={{ kind: m.kind, name: m.name, mood: m.mood }} size={36} />
+          <span className="grow">{m.name}<span className="mute small clamp1">{working && <i className="cp-dot" aria-hidden />}{working && m.step ? `${r.word} · ${m.step}` : r.word}</span></span><span className="mute">›</span></a>;
+      })}</div>
+    </>}
+  </section></div>;
 }
 
 /** A list of remembered lines with Forget, and a line to add one: a helper's notes on you, or what the whole crew knows about you. */
@@ -1787,12 +1842,12 @@ function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeV
       <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
       {A.roster(live.crew).map((h) => {
         const r = A.statusOf(h, live);
-        // Only Chief carries a badge or an ask; a crew row never does. The seat class is namespaced (`seat-…`) so a seat
+        // Only Chief carries a badge or an ask; a crew row never does, and its dot means working, nothing else. The seat class is namespaced (`seat-…`) so a seat
         // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
         // over the nav).
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={26} /><b className="clamp1 grow">{h.name}</b>
-          <span className={`side-seat seat-${r.seat}`}><i /><span className="clamp1">{r.word}</span></span>
+          <span className={`side-seat seat-${r.seat}`}>{r.seat === 'working' && <i />}<span className="clamp1">{r.word}</span></span>
         </a>;
       })}
       {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
