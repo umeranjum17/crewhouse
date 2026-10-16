@@ -46,4 +46,4 @@ finds 0 files; browser storage holds no new key.
   bubblewrap, so it answers the same there.
 - The stub calls `crew_unlock` from the person's message, so Chief's captures show only the card and the receipt.
 - The kept copies' cards are in **Penny's** thread (`#/h/penny`), not Chief's: the helper owns the folder.
-- `state.forgotten` keeps the newest 200 paths, so a forgotten file's card never comes back.
+- `state.forgotten` keeps the newest 200 paths; a forgotten file's card stays gone unless that path is delivered again, when its card returns.
