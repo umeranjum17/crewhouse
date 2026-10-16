@@ -85,7 +85,7 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 /** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
 export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
-export type App = { id: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
+export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key: Main2691) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
@@ -1793,13 +1793,13 @@ export const mailWords = (s: Json) => ({ org: String(s.org), name: String(s.elig
 // Each row carries that product's own logo (`logo`, an asset under web/marks/; see NOTICE for the source of each file),
 // drawn on the screen's neutral tile (styles.css `.app-ic`), never a home-made letter or glyph.
 const APPS: App[] = [
-  { id: 'drive', name: 'Google Drive', logo: '/marks/drive.png', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
-  { id: 'calendar', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
-  { id: 'gmail', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
-  { id: 'gmailsend', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
-  { id: 'gmailwrite', name: 'Gmail drafts & labels', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can draft a reply you send yourself, and file mail under a label. Each draft and each label asks first; nothing is ever sent.' },
-  { id: 'notion', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
-  { id: 'canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
+  { id: 'drive', line: 'Read and file your documents', name: 'Google Drive', logo: '/marks/drive.png', on: false, does: 'Helpers can save copies of what they make, and open files you pick.' },
+  { id: 'calendar', line: 'See your week and add things', name: 'Google Calendar', logo: '/marks/calendar.png', on: false, warns: true, does: 'Helpers can see your week and add things. You can undo any change.' },
+  { id: 'gmail', line: 'Read your mail to find things', name: 'Gmail', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can read your email to find things. They never send from it.' },
+  { id: 'gmailsend', line: 'Send one email after you approve it', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
+  { id: 'gmailwrite', line: 'Draft replies and file mail, each asks first', name: 'Gmail drafts & labels', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can draft a reply you send yourself, and file mail under a label. Each draft and each label asks first; nothing is ever sent.' },
+  { id: 'notion', line: 'Read and add to your pages', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
+  { id: 'canva', line: 'Make designs in your Canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */
 export const apps = (state: Json): App[] => APPS.map((a) => { const on = !!state.connections?.includes?.(a.id); return { ...a, on, status: !on ? 'Not connected' : a.id === 'gmail' ? 'On · read only' : a.id === 'gmailwrite' ? 'On · changes ask first' : 'On' }; });
@@ -1813,17 +1813,27 @@ export const herdr = (status: Json | null): HerdrSetup | null => {
   return { state: 'missing', says: 'Not installed.', howto: String(status.howto ?? '') };
 };
 
-/** One reviewed starter skill: its name, what it does, why it is in the set, what it needs, and whether it is on. */
-export type StarterSkill = { slug: string; name: string; what: string; why: string; needs: string[]; on: boolean; reviewed: boolean };
-/** The Skills screen's set: the reviewed skills as crewd lists them (`GET /api/skills`), plus catalog search rows. */
+/** One row of Add to your crew: a connected app, a reviewed skill or a plugin, in one shape. `purpose` is its section,
+ *  from crewd's reviewed list; a catalog row found by search has none and switches on only when it is reviewed. */
+export type CrewRow = { id: string; kind: 'app' | 'skill' | 'plugin'; name: string; logo?: string; line: string; purpose: string; on: boolean; reviewed: boolean; by?: string };
+/** The sections, in order: mail and calendar first. */
+export const PURPOSES: [string, string][] = [['mail', 'Mail, calendar and files'], ['home', 'Home'], ['code', 'Code'], ['design', 'Design']];
 const skillName = (s: Json) => String(s.name ?? String(s.slug).split('-').map((w) => w[0]?.toUpperCase() + w.slice(1)).join(' '));
-export const starterSkills = (skills: Json): StarterSkill[] => ((skills?.starter ?? []) as Json[]).map((s) => ({
-  slug: String(s.slug), name: skillName(s),
-  what: String(s.summary ?? ''), why: String(s.why ?? ''), needs: ((s.needs ?? []) as Json[]).map(String), on: s.on === true, reviewed: true }));
-export const skillSearch = (results: Json[], starter: StarterSkill[]): StarterSkill[] => (results as Json[]).map((r) => ({
-  slug: String(r.slug), name: skillName(r),
-  what: String(r.summary ?? ''), why: '', needs: [], on: starter.some((s) => s.slug === String(r.slug) && s.on),
-  reviewed: starter.some((s) => s.slug === String(r.slug)) }));
+/** Every reviewed row, ordered as crewd's reviewed list orders them (`GET /api/skills` `purposes`): apps from the
+ *  connections, skills from the starter set, Herdr from its own probe. A row the list does not place is not shown. */
+export const crewRows = (state: Json, skills: Json, herdrStatus: Json | null): CrewRow[] => {
+  const purposes: Record<string, string> = skills?.purposes ?? {}, order = Object.keys(purposes);
+  const rows: Omit<CrewRow, 'purpose'>[] = [...apps(state).map((a) => ({ id: a.id, kind: 'app' as const, name: a.name, logo: a.logo, line: a.line, on: a.on, reviewed: true })),
+    ...((skills?.starter ?? []) as Json[]).map((s) => ({ id: String(s.slug), kind: 'skill' as const, name: skillName(s), line: String(s.summary ?? ''), on: s.on === true, reviewed: true })),
+    ...(herdrStatus ? [{ id: 'herdr', kind: 'plugin' as const, name: 'Herdr', logo: '/marks/herdr.png', line: 'Runs coding agents side by side', on: herdr(herdrStatus)?.state === 'on', reviewed: true }] : [])];
+  return rows.filter((r) => purposes[r.id]).map((r) => ({ ...r, purpose: purposes[r.id] })).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+};
+/** The catalog's own matches (`GET /api/skills/search`): skills and plugins, each Add-able only when reviewed. */
+export const catalogRows = (results: Json[], rows: CrewRow[]): CrewRow[] => results.map((r) =>
+  (r.reviewed && rows.find((x) => x.kind === 'skill' && x.id === String(r.slug))) || { id: String(r.slug), kind: r.kind === 'plugin' ? 'plugin' : 'skill',
+    name: skillName(r), line: short(String(r.summary ?? '')), purpose: '', on: r.on === true, reviewed: false, by: String(r.owner ?? '') });
+/** A catalog summary is the publisher's own words, any length: kept to a card's line at a word break. */
+const short = (t: string) => t.length <= 140 ? t : `${t.slice(0, 140).replace(/\s+\S*$/, '')}…`;
 
 // ---------- the office ----------
 /** One helper in the person's office, from the plain-words adapter views. `ask` is that helper's first row in

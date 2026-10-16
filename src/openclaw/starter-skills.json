@@ -15,7 +15,7 @@
         "installs": 6518,
         "stars": 429
       },
-      "summary": "Current weather and forecasts, no API key needed.",
+      "summary": "Current weather and forecasts, no sign-in needed.",
       "verdict": "Read-only calls to two free public endpoints (wttr.in, open-meteo.com). No keys, no sign-in, no installer, nothing leaves the crew. Fits a morning check-in or a routine.",
       "version": "1.0.0",
       "why": "A personal crew answers “do I need a jacket” every day; this is the smallest honest way.",
@@ -57,7 +57,7 @@
         "installs": 4119,
         "stars": 459
       },
-      "summary": "Find and tidy notes in the person's Obsidian vault.",
+      "summary": "Find and tidy notes in your Obsidian vault.",
       "verdict": "Only touches the person's own note folder; ships no installer. Off until the person connects a vault: reading or changing their notes needs their say-so first, and the crew's own memory stays the record of what it learned.",
       "version": "1.0.0",
       "why": "People keep their lives in notes; a helper that can look something up there saves retyping.",
@@ -78,13 +78,19 @@
         "installs": 262,
         "stars": 16
       },
-      "summary": "Ask about and control the person's Home Assistant: lights, climate, presence, automations.",
+      "summary": "Lights, heating and who is home, from your Home Assistant.",
       "verdict": "Well-written with its own safety lines (locks, alarms and garage doors always ask first). Off until the person connects their home: the token lives in the crew's locked store, never in chat, and anything touching locks or alarms asks every time.",
       "version": "2.1.0",
       "why": "“Is anyone home, is the heating on” is a personal-crew question; this answers it where the person already runs Home Assistant.",
       "name": "Home Assistant"
     }
   ],
+  "purposes": {
+    "gmail": "mail", "calendar": "mail", "drive": "mail", "notion": "mail", "gmailwrite": "mail", "gmailsend": "mail", "obsidian": "mail",
+    "weather": "home", "homeassistant-skill": "home",
+    "github": "code", "herdr": "code",
+    "canva": "design"
+  },
   "rejected": [
     {
       "reason": "Sends mail and changes sheets as the person with broad sign-in scopes; the crew's Gmail stays read-only and every write goes on its own approval card.",

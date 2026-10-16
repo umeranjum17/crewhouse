@@ -3,7 +3,7 @@
 The CTO role holds the `herdr` system tool (user-installed binary, never bundled):
 listing and reading panes and agents asks once (a standing answer covers later
 looks); every drive names its pane or agent and the command, and asks every time.
-The Apps screen carries Herdr's own row under Plugins with three states.
+Add to your crew (`#/apps`) carries Herdr's own row in its Code section with three states.
 
 ## Sub-features
 
@@ -39,9 +39,9 @@ Preconditions: onboarded person; a `herdr` binary on crewd's PATH answering
 ## Capture
 
 Drive the real crewd to `#/apps` twice: once with no `herdr` on its PATH
-(missing row: install line + Connect + Retry) and once with the fake binary answering
-(a setup row when it reports not running, an On row when it reports running).
-Connect opens https://herdr.dev in a new tab; Retry re-probes. Four files per state
+(missing row: install line + Add) and once with the fake binary answering
+(a setup row with Retry when it reports not running, an Added row when it reports running).
+Add opens https://herdr.dev in a new tab; Retry re-probes. Four files per state
 (day/night × 390/1440). Pair each capture with a
 geometry eval proving the row is inside the viewport; open every PNG and require
 the install line to read whole (no cut, no raw path). The stub run proves the

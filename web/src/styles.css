@@ -244,6 +244,26 @@ textarea.input { resize: vertical; }
 .app-ic .app-logo { width: 60%; height: 60%; object-fit: contain; display: block; }
 .app-ic.sm { width: 28px; height: 28px; border-radius: 9px; font-size: 13px; margin-right: -6px; box-shadow: 0 0 0 2px var(--solid); }
 .app-row { display: inline-flex; padding-right: 6px; }
+/* Add to your crew (mock market-a): search, the "N added" chip and the purpose filter, section heads, Add/Added. */
+.add-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line2); border-radius: 12px; padding: 0 12px; background: var(--solid); color: var(--mute); margin-top: 12px; }
+.add-search svg { width: 18px; height: 18px; flex: none; }
+.add-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: 400 15px/20px var(--ui); padding: 11px 0; outline: none; }
+.add-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.add-chips button, .add-count { font: 500 13px/18px var(--ui); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line2); background: none; color: var(--ink2); }
+.add-chips button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.add-count { display: inline-flex; align-items: center; gap: 6px; background: var(--soft-accent); color: var(--go); border-color: transparent; font-weight: 600; }
+.app-ic.xs { width: 18px; height: 18px; border-radius: 5px; margin-left: -10px; box-shadow: 0 0 0 1.5px var(--soft-accent); }
+.app-ic.xs:first-child { margin-left: 0; }
+.app-ic b { color: #1D1B18; font: 700 15px/1 var(--ui); }
+.app-ic.xs b { font-size: 10px; }
+.add-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 22px 4px 0; }
+.add-head b { font: 600 15px/20px var(--ui); }
+.add-head .link { color: var(--go); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.add-crew .card.list { margin-top: 8px; }
+.add-line { overflow-wrap: anywhere; }
+.mini { font: 600 13px/18px var(--ui); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line2); background: var(--bg); color: var(--ink); flex: none; min-height: 32px; }
+.mini.added { border-color: transparent; background: none; color: var(--mute); padding: 6px 2px; }
+.mini.added:disabled { opacity: 1; cursor: default; }
 .job { display: flex; gap: 12px; align-items: center; padding: 10px 0; }
 .jobs > div + div .job, .jobs > div + .job, .jobs > .job + .job { border-top: 1px solid var(--line); }
 .job b { font-size: 15.5px; }

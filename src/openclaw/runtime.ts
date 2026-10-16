@@ -229,30 +229,28 @@ export class OpenClawRuntime implements AgentRuntime {
   /** The reviewed ClawHub starter set (starter-skills.json): what each one does, what it needs, and whether
    *  the engine already holds it in the workspace. Listing only — installs go through the engine's own gate. */
   starterSkills() {
-    let approved: any[] = [];
-    try { approved = JSON.parse(readFileSync(join(import.meta.dirname, 'starter-skills.json'), 'utf8')).approved ?? []; } catch { return []; }
-    return approved.map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version),
+    return (JSON.parse(readFileSync(join(import.meta.dirname, 'starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version),
       summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String),
       on: existsSync(join(this.workspaceOf(), String(s.slug))) }));
   }
   /** Switch one starter skill on or off the engine's own way: turning on installs it through the trust gate,
    *  turning off disables it. Anything outside the reviewed set is refused in plain words. */
   async setStarter(slug: string, on: boolean) {
-    let approved: any[] = [];
-    try { approved = JSON.parse(readFileSync(join(import.meta.dirname, 'starter-skills.json'), 'utf8')).approved ?? []; } catch {}
-    const found = approved.find((s) => s.slug === slug);
+    const found = this.starterSkills().find((s) => s.slug === slug);
     if (!found) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
     const { agentId } = await this.kit.ensureMember(ME);
     if (on) await this.kit.call('skills.install', { agentId, source: 'clawhub', slug: `@${found.owner}/${found.slug}`, version: found.version }, { timeoutMs: 120_000 });
-    else await this.kit.call('skills.update', { skillKey: String(found.slug), enabled: false }, { timeoutMs: 60_000 });
+    else await this.kit.call('skills.update', { skillKey: found.slug, enabled: false }, { timeoutMs: 60_000 });
   }
-  /** Search the public skill catalog the engine's own way; while the engine is still starting this answers empty. */
+  /** Search the public skill and plugin catalogs the engine's own way; while the engine is still starting this answers
+   *  empty. A plugin is never one of the reviewed rows, so it only ever shows as not reviewed. */
   async searchSkills(query: string) {
-    const r = await this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], on = new Set(this.starterSkills().filter((s) => s.on).map((s) => s.slug));
-    return items.slice(0, 10).map((i: any) => ({ slug: String(i.slug ?? ''), owner: String(i.ownerHandle ?? i.owner ?? ''),
-      summary: String(i.summary ?? i.description ?? ''), version: String(i.version ?? i.latestVersion ?? ''),
-      reviewed: this.starterSkills().some((s) => s.slug === String(i.slug ?? '')),
-      on: on.has(String(i.slug ?? '')) })).filter((i: any) => i.slug);
+    const [r, p] = await Promise.all([this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, this.kit.call('plugins.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined)]);
+    const items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], starter = this.starterSkills();
+    // Reviewed means this publisher's skill: another owner's skill of the same name is not the one that was read.
+    return [...items.slice(0, 10).map((i: any) => ({ slug: String(i.slug ?? ''), owner: String(i.ownerHandle ?? i.owner ?? ''), summary: String(i.summary ?? i.description ?? ''), version: String(i.version ?? i.latestVersion ?? '') }))
+      .map((i: any) => ({ ...i, reviewed: starter.some((s) => s.slug === i.slug && s.owner === i.owner), on: starter.some((s) => s.on && s.slug === i.slug && s.owner === i.owner) })),
+    ...(p?.results ?? []).map((i) => ({ slug: i.package.name, name: i.package.displayName, kind: 'plugin', summary: i.package.summary ?? '', version: i.package.latestVersion ?? '', reviewed: false, on: false }))].filter((i: any) => i.slug);
   }
   /** Forget one learned skill on every lane that holds it. A pending proposal is rejected in its own agent; a loaded
    *  one is captured, then put away in its lane's skills/.archive (the engine skips dot folders and its watcher drops
