@@ -1145,6 +1145,7 @@ export class Crew {
     if (state === 'done' || state === 'failed' || state === 'unsure') {
       this.taskGrants.delete(task.id);
       if (this.checkouts.get(task.bot)?.task === task.id) this.checkouts.delete(task.bot);
+      this.db.run("UPDATE asks SET state = 'withdrawn' WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock')", task.id);
       this.dropUnlocked(task);
     }
     this.db.run('UPDATE tasks SET state = ?, result = COALESCE(?, result), updated_at = ? WHERE id = ?', state, result ?? null, Date.now(), task.id);
@@ -1811,8 +1812,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const picked = ask.kind === 'style' && body.answer === 'allow' ? (detail.pick?.styles ?? []).find((s: { id: string }) => s.id === String(body.style ?? '')) : undefined;
     if (ask.kind === 'style' && body.answer === 'allow' && !picked) throw fail('pick one of the styles on the card');
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
-    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (rule) this.setFileRule(detail.bot, rule);
+    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (change ? 'change it' : body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
@@ -2164,6 +2165,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [], opened: string[] = [];
     for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r); else opened.push(r);
     for (const r of opened) this.db.event('file.unlocked', botId, { task: this.activeTask(botId)?.id, path: unlockedAs(r) });
+    if (this.fileRule(botId) === 'keep') for (const r of opened) { const kept = this.activeTask(botId)?.id; if (this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", botId, kept, unlockedAs(r))) continue; this.unforgotten(botId, unlockedAs(r)); this.db.event('file.delivered', botId, { task: kept, path: unlockedAs(r) }); this.say(botId, 'system', `Kept ${unlockedAs(r)}: ${this.knownName(botId, r)}`, kept ?? null); }
     if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked, all: rels.filter((r) => locked.includes(r) || unlockedCurrent(space, r)) }, 'unlock');
     return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${rels.map((r) => unlockedCurrent(space, r) ? unlockedAs(r) : r).join(', ')}` };
   }
@@ -2178,7 +2180,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
     // Kept, not removed with the job: every copy this job opened is a card in the helper's chat, with Forget this
     // file on it — including one an earlier try on this same card already opened.
-    if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f))) { this.db.event('file.delivered', d.bot, { task: ask.task_id, path: unlockedAs(f) }); this.say(d.bot, 'system', `Kept ${unlockedAs(f)}: ${this.knownName(d.bot, f)}`, ask.task_id); }
+    if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f)) && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f))) { this.unforgotten(d.bot, unlockedAs(f)); this.db.event('file.delivered', d.bot, { task: ask.task_id, path: unlockedAs(f) }); this.say(d.bot, 'system', `Kept ${unlockedAs(f)}: ${this.knownName(d.bot, f)}`, ask.task_id); }
     return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
 
@@ -2204,6 +2206,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Paths out of a helper's folder now (newest 200, in settings): the app keeps no card for a file that is not there. */
   private forgotten() { return JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'files.forgotten'")?.value ?? '[]') as { bot: string; path: string }[]; }
   private forgetLog(botId: string, rel: string) { this.db.run("INSERT INTO settings (key, value) VALUES ('files.forgotten', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify([{ bot: botId, path: rel }, ...this.forgotten().filter((f) => f.path !== rel || f.bot !== botId)].slice(0, 200))); }
+  private unforgotten(botId: string, rel: string) { const seen = this.forgotten(), rest = seen.filter((f) => f.path !== rel || f.bot !== botId); if (rest.length !== seen.length) this.db.run("INSERT INTO settings (key, value) VALUES ('files.forgotten', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify(rest)); }
 
   /** "Forget this file": the person takes one file out of the helper's folder themselves. Only a file inside that folder. */
   forgetFile(botId: string, path: string) {
@@ -2395,6 +2398,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!existsSync(full)) throw new Error(`no file at ${path}`);
     const rel = full.slice(disk.botDir(this.cfg, botId).length + 1), active = this.activeTask(botId), task = active?.id;
     if (task && this.db.get(`SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?`, botId, task, rel)) return { ok: true, already: true };
+    this.unforgotten(botId, rel);
     this.db.event('file.delivered', botId, { task, path: rel, note: short(clean(note, 1000), 200), size: statSync(full).size });
     this.say(botId, 'system', /\.(patch|diff)$/.test(rel) ? `Delivered ${rel}: Suggested change (for the maintainer to review)` : `Delivered ${rel}${note ? `: ${note}` : ''}`, task ?? null);
     return { ok: true };
