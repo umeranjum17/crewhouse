@@ -363,6 +363,10 @@ test('skills: the reviewed starter set lists with on/off; switching needs the re
     for (const words of [s.summary, s.why, ...s.needs])
       assert.doesNotMatch(words, /token|host\b|engine|grant|command|`|\/home\/|\.md\b|\/api\//i, `${s.slug} speaks plainly`);
   }
+  // Add to your crew: crewd's reviewed list places every reviewed row (app, skill, plugin) in a section, mail and calendar first.
+  const placed = Object.keys(skills.purposes), apps = Object.keys((await import('../src/connections.ts')).APPS);
+  for (const id of [...skills.starter.map((s: any) => s.slug), ...apps, 'herdr']) assert.ok(['mail', 'home', 'code', 'design'].includes(skills.purposes[id]), `${id} has a section`);
+  assert.deepEqual(placed.slice(0, 2), ['gmail', 'calendar'], 'mail and calendar lead the list');
   assert.deepEqual((await api('GET', '/api/skills/search?q=weather')).body, { results: [] }, 'search waits for the engine');
   const switched = await api('POST', '/api/skills/weather/on', {});
   assert.equal(switched.status, 400, 'the stand-in cannot switch');

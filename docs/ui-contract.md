@@ -136,17 +136,21 @@ A sign-in that fails ends as `signIn: {state: 'failed', error, why?}`: `why: 'de
 
 ## Herdr setup (today)
 
-On the computer's Apps screen (`#/apps`), Plugins has one Herdr row. `GET /api/herdr` returns `{ready, connected, howto}` on demand, never in the snapshot: `ready` means the binary was found; `connected` requires `herdr status server --json` to report `running: true`. The asynchronous probe is bounded to five seconds. `adapter.herdr()` maps missing to the manifest's install instructions + Connect + Retry, installed but not answering to Open Herdr once + Connect + Retry, and answering to On. Connect opens herdr.dev in a new tab; Retry re-probes. Only the CTO template grants the tool by default; the row reports setup, not a helper's grant. User setup is in [how-it-works.md](how-it-works.md#a-crew-you-can-grow).
+On Add to your crew (`#/apps`), the Code section has one Herdr row. `GET /api/herdr` returns `{ready, connected, howto}` on demand, never in the snapshot: `ready` means the binary was found; `connected` requires `herdr status server --json` to report `running: true`. The asynchronous probe is bounded to five seconds. `adapter.herdr()` maps missing to the manifest's install instructions + Add, installed but not answering to Open Herdr once + Retry, and answering to Added. Add opens herdr.dev in a new tab; Retry re-probes. Only the CTO template grants the tool by default; the row reports setup, not a helper's grant. User setup is in [how-it-works.md](how-it-works.md#a-crew-you-can-grow).
 
-## Skills (today)
+## Add to your crew (today)
 
-The Skills screen (`#/skills`, reached from Apps) lists the reviewed starter set and searches the public catalog.
-Nothing installs by itself: only reviewed skills switch on, through the engine's own install with the trust check.
+One screen (`#/apps`; the old `#/skills` lands there) lists every reviewed row, apps (the connections above), starter skills and
+the Herdr plugin, in sections by purpose: Mail, calendar and files first, then Home, Code and Design, each with Add/Added, a
+"See all N" past four, a filter chip per section and an "N added" chip. Each row's section and its order come from crewd's
+reviewed list (`purposes` in `src/openclaw/starter-skills.json`); a row it does not place is not shown. Search filters the list
+as you type and, on Search, asks the public skill and plugin catalogs. Nothing installs by itself: only reviewed skills switch
+on, through the engine's own install with the trust check; a catalog row outside the reviewed set says so and has no Add.
 
 | Call | Returns |
 |---|---|
-| `GET /api/skills` | `{live, starter: [{slug, owner, version, summary, why, needs, on}]}` — the reviewed set; `on` as the engine sees it. `live: false` on the stand-in engine (all off) |
-| `GET /api/skills/search?q=` | `{results: [{slug, owner, summary, version}]}` — the catalog's own matches, empty while the engine starts |
+| `GET /api/skills` | `{live, purposes, starter: [{slug, owner, version, summary, why, needs, on}]}` — the reviewed set; `on` as the engine sees it; `purposes` maps each reviewed row id (app, skill or plugin) to its section, in list order. `live: false` on the stand-in engine (all off) |
+| `GET /api/skills/search?q=` | `{results: [{slug, owner?, name?, kind?, summary, version, reviewed, on}]}` — the skill catalog's matches (`skills.search`), then the plugin catalog's (`plugins.search`, `kind: 'plugin'`, never reviewed); empty while the engine starts |
 | `POST /api/skills/:slug/on` | Switches a reviewed skill on through the engine's install (the trust check still applies); 400 in plain words otherwise |
 | `POST /api/skills/:slug/off` | Switches it off again |
 

@@ -317,22 +317,17 @@ export class Crew {
     await this.runtime.setLearning?.(on);
   }
 
-  /** The starter skill set for the app's Skills screen: the reviewed set with on/off as the engine sees it.
-   *  Switching and searching run on the real engine; the stand-in answers the list and says the rest needs it. */
+  /** The reviewed starter skill set for the app's Add to your crew screen, with on/off as the engine sees it, and each
+   *  reviewed row's purpose (skills, apps and plugins alike), which puts it in a section there. Switching and searching
+   *  run on the real engine; the stand-in answers the list, all off, and says the rest needs it. */
   starterSkills() {
     const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] };
-    if (runtime.starterSkills) return { starter: runtime.starterSkills(), live: true };
-    // The stand-in engine holds nothing: the reviewed set straight from the shipped file, all off.
-    try {
-      const approved = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8')).approved ?? [];
-      return { live: false, starter: approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
-        version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
-    } catch { return { starter: [], live: false }; }
+    const { approved, purposes } = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8'));
+    return { live: !!runtime.starterSkills, purposes, starter: runtime.starterSkills?.() ?? approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
+      version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
   }
   async setStarter(slug: string, on: boolean) {
-    let approved: any[] = [];
-    try { approved = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8')).approved ?? []; } catch {}
-    if (!approved.some((s) => s.slug === slug)) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
+    if (!this.starterSkills().starter.some((s: { slug: string }) => s.slug === slug)) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
     const runtime = this.runtime as { setStarter?: (slug: string, on: boolean) => Promise<unknown> };
     if (!runtime.setStarter) throw new Error('The crew is starting up; skills switch once it is ready');
     await runtime.setStarter(slug, on);

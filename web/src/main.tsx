@@ -16,7 +16,7 @@ import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTa
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'skills' | 'ask' | 'share' | 'pair' | 'computer';
+type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
@@ -33,7 +33,8 @@ function parseRoute(): Route {
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
-  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps', 'skills'].includes(a) ? a : 'home') as View };
+  if (a === 'skills') return { view: 'apps' };
+  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
 let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
@@ -1481,7 +1482,7 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
-const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Apps', 'apps'], ['#/crew', 'Your crew', 'chief'],
+const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Add to your crew', 'apps'], ['#/crew', 'Your crew', 'chief'],
   ...(cloudOn ? [['#/computer', A.computer(null).title, 'cloud'] as [string, string, IconName]] : [])];
 /** Paired: this installed app carries a crew from its own computer. Its notifications ride the same mailbox, so the
  *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
@@ -1520,8 +1521,8 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       <div className="label" id="setup-signin">Your AI accounts</div>
       <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />
 
-      <div className="label">Your apps</div>
-      <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} connected</span><b>›</b></a>
+      <div className="label">Add to your crew</div>
+      <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} apps connected</span><b>›</b></a>
 
       {/* Phones are this computer's to add and remove: crewd refuses them over the link. */}
       {!paired && <Phones tick={tick} />}
@@ -1726,84 +1727,78 @@ function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknow
   );
 }
 
+/** Add to your crew: every reviewed app, skill and plugin on one list, in sections by what it is for (mail and
+ *  calendar first), with search, a filter, the "N added" count and Add/Added on each row. Search also asks the
+ *  public catalogs; only reviewed rows switch on, anything else says so in plain words. */
 function Apps({ state, refresh }: Ctx) {
-  const list = A.apps(state);
-  const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
+  const [skills, setSkills] = useState<Json>(null);
   const [herdr, setHerdr] = useState<Json>(null);
-  useEffect(() => { void api.herdr().then(setHerdr).catch(() => setHerdr(false)); }, []);
-  const plugin = A.herdr(herdr);
-  return (
-    <div className="page">
-      <a href="#/settings" className="back">‹ Settings</a>
-      <h1>Your apps</h1>
-      <p className="lead">Connect an app when a helper asks for it.</p>
-      <div className="label">Apps</div><div className="card list apps-list">
-        {list.map((a) => <div key={a.id} className="row-item app-row-item"><span className="app-ic"><img className="app-logo" src={a.logo} alt="" /></span><div className="grow"><b>{a.name}</b><div className="mute small">{a.status}</div></div>
-          {a.on ? <button className="link" onClick={() => confirm(`Disconnect ${a.name}? Your helpers will stop using it.`) && attempt(async () => { await api.disconnect(a.id); refresh(); }, `${a.name} disconnected`)}>Turn off</button>
-            : <button className="btn go" onClick={() => setConnecting({ app: a, tab: A.needsHouse(state, a) ? null : openTab() })}>Connect</button>}</div>)}
-      </div>
-      {plugin && <><div className="label">Plugins</div><div className="card list">
-        <div className="row-item app-row-item stack-row"><span className="app-ic"><img className="app-logo" src="/marks/herdr.png" alt="" /></span><div className="grow"><b>Herdr</b>
-          {plugin.state === 'missing' && plugin.howto ? <><div className="mute small">{plugin.howto}</div><div className="mute small">{plugin.says}</div></>
-            : <div className="mute small">{plugin.says}</div>}</div>
-          {plugin.state === 'on' ? <span className="mute small">On</span>
-            : <><button className="btn go" onClick={() => { const tab = openTab(); if (tab) tab.location.href = 'https://herdr.dev'; }}>Connect</button>
-            <button className="btn" onClick={() => void attempt(async () => setHerdr(await api.herdr()), '')}>Retry</button></>}</div>
-      </div></>}
-      <div className="card row"><span className="o-ic" aria-hidden>↗</span>
-        <span className="grow"><b>Share to Crewhouse</b><div className="mute small">On your phone, tap Share in any app (WhatsApp, Photos, a web page), then Crewhouse. Nothing to connect.</div></span></div>
-      <a className="card row" href="#/skills"><span className="o-ic" aria-hidden>{art.STAR}</span><span className="grow"><b>Skills</b><div className="mute small">Extra abilities for your crew, each reviewed before it arrives.</div></span><b>›</b></a>
-      <p className="mute small center">Connecting opens the app's own sign-in page. That's all.</p>
-      {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
-    </div>
-  );
-}
-
-/** Extra abilities for the crew: the reviewed starter set with on/off each, plus catalog search.
- *  Only reviewed skills switch on; anything else says so in plain words. Plugins stay with the crew's own set. */
-function Skills({ refresh }: Ctx) {
-  const [got, setGot] = useState<Json>(null);
   const [q, setQ] = useState('');
-  const [found, setFound] = useState<A.StarterSkill[] | null>(null);
-  const load = () => api.skills().then(setGot).catch(() => setGot({ starter: [] }));
-  useEffect(() => { void load(); }, []);
-  const list = A.starterSkills(got ?? { starter: [] });
+  const [only, setOnly] = useState('');
+  const [all, setAll] = useState<string[]>([]);
+  const [found, setFound] = useState<A.CrewRow[] | null>(null);
+  const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
+  const load = () => api.skills().then(setSkills).catch(() => setSkills({ starter: [] }));
+  useEffect(() => { void load(); void api.herdr().then(setHerdr).catch(() => setHerdr(false)); }, []);
+  const rows = A.crewRows(state, skills, herdr), plugin = A.herdr(herdr), added = rows.filter((r) => r.on);
+  const words = q.trim().toLowerCase(), hits = rows.filter((r) => !words || `${r.name} ${r.line}`.toLowerCase().includes(words));
+  const sections = A.PURPOSES.map(([key, title]) => ({ key, title, rows: hits.filter((r) => r.purpose === key) })).filter((x) => x.rows.length);
+  // Switching answers in crewd's own words (the stand-in engine says it is still starting; the trust check names an
+  // unreviewed skill), so the failure toast carries the reason, not a generic line.
+  const flip = async (r: A.CrewRow, on: boolean) => {
+    try { await api.skillSwitch(r.id, on); await load(); refresh(); toast(`${r.name} is ${on ? 'added' : 'off'}`); }
+    catch (e: any) { toast(e?.status ? String(e.message) : "Can't reach the home computer right now. Check it's on, then try again."); }
+  };
+  const add = (r: A.CrewRow) => {
+    if (r.kind === 'skill') return void flip(r, true);
+    if (r.kind === 'plugin') { // Herdr is installed by the person: Add opens its page; once installed, Add asks it again.
+      if (plugin?.state === 'setup') return void attempt(async () => setHerdr(await api.herdr()), '');
+      const tab = openTab(); if (tab) tab.location.href = 'https://herdr.dev'; return;
+    }
+    const app = A.appById(state, r.id)!;
+    setConnecting({ app, tab: A.needsHouse(state, app) ? null : openTab() });
+  };
+  const remove = (r: A.CrewRow) => {
+    if (r.kind === 'plugin' || !confirm(`Turn off ${r.name}? Your crew will stop using it.`)) return;
+    if (r.kind === 'skill') return void flip(r, false);
+    void attempt(async () => { await api.disconnect(r.id); refresh(); }, `${r.name} is off`);
+  };
+  const mark = (r: A.CrewRow, cls = 'app-ic') => <span key={r.id} className={cls} aria-hidden>{r.logo ? <img className="app-logo" src={r.logo} alt="" /> : <b>{r.name[0]}</b>}</span>;
+  const row = (r: A.CrewRow, i?: number) => (
+    <div key={`${r.kind}-${r.id}-${i ?? ''}`} className="row-item app-row-item">{mark(r)}
+      <div className="grow"><b>{r.name}</b><div className="mute small add-line">{r.line}</div>
+        {r.id === 'herdr' && plugin && plugin.state !== 'on' && <div className="mute small">{plugin.state === 'missing' && plugin.howto ? plugin.howto : plugin.says}</div>}
+        {!r.reviewed && <div className="mute small">{r.by ? `By ${r.by}. ` : ''}Not reviewed yet, so the crew leaves it alone.</div>}</div>
+      {r.on ? <button className="mini added" disabled={r.kind === 'plugin'} aria-label={`${r.name} is added${r.kind === 'plugin' ? '' : '. Turn it off'}`} onClick={() => remove(r)}>Added ✓</button>
+        : r.reviewed && <button className="mini" aria-label={`Add ${r.name}`} onClick={() => add(r)}>{r.id === 'herdr' && plugin?.state === 'setup' ? 'Retry' : 'Add'}</button>}
+    </div>);
   const search = (e: { preventDefault(): void }) => {
     e.preventDefault();
-    if (q.trim().length < 2) return;
-    void attempt(async () => setFound(A.skillSearch((await api.skillSearch(q.trim())).results ?? [], list)), '');
+    if (words.length < 2) return;
+    void attempt(async () => setFound(A.catalogRows((await api.skillSearch(q.trim())).results ?? [], rows).filter((r) => !hits.includes(r))), '');
   };
-  // Switching answers in crewd's own words (the stand-in engine says it is still starting; the trust
-  // check names an unreviewed skill), so the failure toast carries the reason, not a generic line.
-  const flip = (s: A.StarterSkill, on: boolean) => (async () => {
-    try { await api.skillSwitch(s.slug, on); await load(); refresh(); toast(`${s.name} is ${on ? 'on' : 'off'}`); }
-    catch (e: any) { toast(e?.status ? String(e.message) : "Can't reach the home computer right now. Check it's on, then try again."); }
-  })();
-  const row = (s: A.StarterSkill, i: number) => (
-    <div key={`${s.slug}-${i}`} className="row-item">
-      <span className="grow"><b>{s.name}</b><div className="mute small">{s.what}</div>
-        {!!s.why && <div className="mute small">{s.why}</div>}
-        {!!s.needs.length && <div className="mute small">Needs: {s.needs.join(' · ')}</div>}
-        {!s.reviewed && <div className="mute small">Not reviewed yet, so the crew leaves it alone.</div>}</span>
-      {s.reviewed ? (s.on
-        ? <button className="link" onClick={() => void flip(s, false)}>Turn off</button>
-        : <button className="btn go" onClick={() => void flip(s, true)}>Turn on</button>)
-        : null}
-    </div>);
   return (
-    <div className="page">
-      <a href="#/apps" className="back">‹ Apps</a>
-      <h1>Skills</h1>
-      <p className="lead">Extra abilities for your crew. Each one was read and approved before it arrived here.</p>
-      <div className="label">Starter skills</div>
-      {got === null ? <div className="card mute">Checking…</div> : <div className="card list">{list.map(row)}{!list.length && <div className="row-item mute small">None yet.</div>}</div>}
-      <div className="label">Find more</div>
-      <form className="card form" onSubmit={search}>
-        <div className="row"><input className="input grow" value={q} onChange={(e) => setQ(e.target.value)} placeholder="What should the crew learn to do?" aria-label="Search skills" autoComplete="off" />
-          <button className="btn" disabled={q.trim().length < 2}>Search</button></div>
-      </form>
-      {found && <div className="card list">{found.map(row)}{!found.length && <div className="row-item mute small">Nothing found. Ask Chief instead.</div>}</div>}
-      <p className="mute small center">Only reviewed skills switch on. Anything new gets read first.</p>
+    <div className="page add-crew">
+      <a href="#/settings" className="back">‹ Settings</a>
+      <h1>Add to your crew</h1>
+      <form className="add-search" role="search" onSubmit={search}><Icon name="search" />
+        <input value={q} onChange={(e) => { setQ(e.target.value); setFound(null); }} placeholder="Search apps and skills" aria-label="Search apps and skills" autoComplete="off" enterKeyHint="search" /></form>
+      <div className="add-chips">
+        {!!added.length && <span className="add-count">{added.slice(0, 3).map((r) => mark(r, 'app-ic xs'))}{added.length} added</span>}
+        {[['', 'All'], ...A.PURPOSES.filter(([k]) => rows.some((r) => r.purpose === k))].map(([k, l]) =>
+          <button key={k || 'all'} className={only === k ? 'on' : ''} aria-pressed={only === k} onClick={() => setOnly(k)}>{l}</button>)}
+      </div>
+      {skills === null ? <div className="card mute">Checking…</div> : sections.filter((x) => !only || x.key === only).map((x) => {
+        const open = !!only || !!words || all.includes(x.key), shown = open ? x.rows : x.rows.slice(0, 4);
+        return <section key={x.key} aria-label={x.title}>
+          <div className="add-head"><b>{x.title}</b>{shown.length < x.rows.length && <button className="link" onClick={() => setAll([...all, x.key])}>See all {x.rows.length}</button>}</div>
+          <div className="card list">{shown.map((r) => row(r))}</div></section>;
+      })}
+      {skills !== null && !!words && !sections.length && !found?.length && <p className="card mute small">{found ? `Nothing found for “${q.trim()}”. Ask Chief instead.` : 'Nothing here by that name.'}
+        {!found && words.length > 1 && <> <button className="link" onClick={search}>Look in the catalog</button></>}</p>}
+      {!!found?.length && <section aria-label="In the catalog"><div className="add-head"><b>In the catalog</b></div><div className="card list">{found.map((r, i) => row(r, i))}</div></section>}
+      <p className="mute small center">Every app and skill here is reviewed. Adding one opens its own sign-in when it needs one.</p>
+      {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
     </div>
   );
 }
@@ -1932,7 +1927,7 @@ function App() {
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
-  const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Apps', 'apps', 0]];
+  const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Add to your crew', 'apps', 0]];
   const railOn = (h: string) => (h === '#/' ? ['home', 'chief'].includes(v.view) : h === `#/${v.view}`);
   const me = A.displayName(ctx.state.person), quiet = A.quietLine(ctx.state.person);
   return (
@@ -1961,7 +1956,6 @@ function App() {
           {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
           {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
-          {v.view === 'skills' && <Skills {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
       </div>
