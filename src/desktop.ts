@@ -126,8 +126,9 @@ export class Desktops {
     const bin = browserBin();
     if (!bin) return;
     d.devtools?.close();
-    const prefs = join(botDir, 'browser', 'Default', 'Preferences'); // it never offers to keep a password: a sign-in lives in cookies only
-    mkdirSync(join(prefs, '..'), { recursive: true }); writeFileSync(prefs, JSON.stringify({ ...(() => { try { return JSON.parse(readFileSync(prefs, 'utf8')); } catch { return {}; } })(), credentials_enable_service: false }));
+    // It never offers to keep a password (a sign-in lives in cookies only), nor to restore pages after any unclean end.
+    const prefs = join(botDir, 'browser', 'Default', 'Preferences'), was = (() => { try { return JSON.parse(readFileSync(prefs, 'utf8')); } catch { return {}; } })();
+    mkdirSync(join(prefs, '..'), { recursive: true }); writeFileSync(prefs, JSON.stringify({ ...was, credentials_enable_service: false, profile: { ...was.profile, exit_type: 'Normal', exited_cleanly: true } }));
     const child = spawn(bin, [
       // Last flag wins, so these beat a distro wrapper's own flags (for example a Wayland default).
       '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
@@ -290,11 +291,9 @@ export class Desktops {
       p && p.exitCode === null && p.signalCode === null ? new Promise((r) => p.once('exit', r)) : undefined)]);
     this.ends.set(bot, gone);
     void gone.finally(() => { if (this.ends.get(bot) === gone) this.ends.delete(bot); });
-    const chrome = d.chrome; chrome?.kill();
-    // A Chromium that won't finish shutting down is not left running.
-    if (chrome) setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref();
-    d.devtools?.close();
-    d.xvfb.kill();
+    // Chromium shuts down before its display goes (or a stuck one is killed); a lost display is a crash to it.
+    const chrome = d.chrome, up = chrome && chrome.exitCode === null && chrome.signalCode === null; chrome?.kill(); d.devtools?.close();
+    if (up) { chrome.once('exit', () => d.xvfb.kill()); setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref(); } else d.xvfb.kill();
     return gone;
   }
 

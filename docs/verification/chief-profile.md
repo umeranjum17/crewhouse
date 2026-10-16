@@ -13,6 +13,9 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
   whole **Take control** button on the first 390×844 screen. Take control holds the computer and lands on that
   helper's Screen: "You have control", the screen outlined, "Penny is paused until you hand it back.", a note and a
   big **Hand it back**; Hand it back returns the controls (`bot.controls` back to `bot`).
+- The header wears Chief's smooth helmet (`ChiefArt mascot`, `art.helmetSoft`) at 64px, crisp in both themes.
+- A computer that stopped any way (idle stop, crewd restarted or killed) starts again with no "Restore pages?"
+  bubble: the start path clears the profile's crash mark (`test/desktop.test.ts`, "give back…" pins it).
 - "Take control" / "Hand it back" everywhere: helper Details' Screen card, the stuck-helper line, the phone.
 - Notifications: "Tell me when Chief finishes or needs me" (`GET`/`PUT /api/notify`); off, no content-free news
   reaches any phone or browser.
@@ -35,6 +38,9 @@ query each time so the bundle reloads:
 2. `#/h/<helper>/details`; scroll the Screen card's "Take control" into view; screenshot.
 3. Back on the profile, click `.cp-take`; wait for `#/h/<helper>/screen` with `.hand-back` and "You have control";
    screenshot; click Hand it back and read `/api/state` until that bot's `controls` is `bot`.
+
+Restart: stop crewd's group (TERM) while the helper's computer is live, start it again on the same dirs, and repeat
+steps 1 and 3: neither shot shows the bubble.
 
 Pair each shot with its mock (mock left, app right) with `magick … +append`. Run the look check:
 `node scripts/verify/look-check.mjs web --out <dir> --person <key> --text 1.3 chief-profile=$B/#/h/chief/details …`.

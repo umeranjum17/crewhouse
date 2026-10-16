@@ -3,7 +3,7 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import WebSocket from 'ws';
@@ -338,6 +338,14 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   await crew.forget('reel', '127.0.0.1');
   assert.deepEqual(crew.botPage('reel').signedIn, [], 'Forget takes the site back off the list');
   assert.equal((await cookie()).length, 0, 'authorized page-level clear removes the fake HTTP cookie');
+
+  // A crewd that died left Chromium's crash mark: the computer's next start clears it, so no "Restore pages?" bubble.
+  await crew.desktops.stop('reel');
+  const prefs = join(space, 'browser', 'Default', 'Preferences'), exit = () => JSON.parse(readFileSync(prefs, 'utf8')).profile;
+  assert.notEqual(exit().exit_type, 'Crashed', 'a stop closes Chromium before its display');
+  writeFileSync(prefs, JSON.stringify({ ...JSON.parse(readFileSync(prefs, 'utf8')), profile: { ...exit(), exit_type: 'Crashed', exited_cleanly: false } }));
+  await crew.desktops.ensure('reel', space);
+  assert.deepEqual([exit().exit_type, exit().exited_cleanly], ['Normal', true], 'the restarted browser read a clean exit');
 });
 
 async function until(what: string, fn: () => unknown, ms = 15_000) {
