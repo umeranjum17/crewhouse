@@ -4,8 +4,7 @@
 /** Either a clock time on some weekdays (0 = Sunday), a date each month (`dom`, 1-31), or a fixed interval in minutes. */
 export type Schedule = { days: number[]; at: number; guessed?: boolean } | { dom: number; at: number; guessed?: boolean } | { every: number };
 
-const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const bad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a schedule; try "every Monday 9:00", "weekdays at 8am", "the 1st of every month 9:00" or "every 2 hours"`), { status: 400 }), whenBad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a time; try "Friday 9:00", "tomorrow 8am" or "in 20 minutes"`), { status: 400 });
+const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], bad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a schedule; try "every Monday 9:00", "weekdays at 8am", "the 1st of every month 9:00" or "every 2 hours"`), { status: 400 }), whenBad = (text: string) => Object.assign(new Error(`I can't read "${text}" as a time; try "Friday 9:00", "tomorrow 8am" or "in 20 minutes"`), { status: 400 });
 
 const NUMS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'], numOf = (w: string) => NUMS.indexOf(w) + 1, ord = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
 export function parseSchedule(text: string): Schedule {

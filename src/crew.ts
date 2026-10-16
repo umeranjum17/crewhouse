@@ -34,8 +34,7 @@ let firstWords = true;
 const permissionIdentity = (bot: string, task: unknown, words: string, d: Row) => JSON.stringify(d.mail ? [bot, task, words, d.mail, d.preview] : [bot, words]);
 
 /** Phone pairing stays with Chief, including 'pair my computer with you' said on the home computer. */
-export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text);
-export const inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
+export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|install)\b[\s\S]{0,65}\b(phone|mobile|computer|crewhouse app)\b|\b(phone|mobile|computer)\b[\s\S]{0,35}\b(pair|connect|link)\b/i.test(text), inlineHowTo = (text: string): 'signin' | 'app' | 'routine' | null =>
   /\b(sign[ -]?in|log[ -]?in)\b/i.test(text) && /\b(chatgpt|ai account|crewhouse)\b/i.test(text) ? 'signin' :
   /\b(connect|link|add)\b[\s\S]{0,45}\b(google calendar|calendar|gmail|drive|notion|canva)\b/i.test(text) ? 'app' :
   /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
@@ -428,8 +427,7 @@ export class Crew {
         .map((i) => ({ bot: b.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life',
           // Two of the person's Google apps name one thing: the row says "Google", not "Google and Google".
           needs: [...new Set(i.needs.filter((n) => !ready.has(n) && !on.has(n)).map((n) => (APPS[n] ? (APPS[n].google && !house ? 'Google' : APPS[n].name) : '')))] }));
-    });
-    const hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
+    }), hire = disk.listTemplates(this.cfg).filter((t) => !hired.has(t.id)).flatMap((t) => (t.ideas ?? []).filter((i) => !(i.needs ?? []).length).map((i) => ({ bot: t.id, promise: i.promise, ask: i.ask, title: i.title, line: i.line, group: i.group ?? 'life', needs: [], hire: t.id }))).sort((a, b) => Number(b.group === 'goal') - Number(a.group === 'goal')).slice(0, 3);
     // The six-row cap counts the jobs they can hand over now, hired or to hire; waiting rows ride along uncapped (ponytail: no template set has more than a screenful; cap them when one does).
     return [...rows.filter((r) => !r.needs.length).concat(hire).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
@@ -873,8 +871,7 @@ export class Crew {
 
   /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
   digest(since: number, day?: { at: number | null; title: string }[]) {
-    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, ''), name = (id: string) => this.bot(id)?.display ?? id, list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`;
-    const done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
+    const address = String(this.person().address ?? '').trim().replace(/[.!?]+$/, ''), name = (id: string) => this.bot(id)?.display ?? id, list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join('; ')} and ${xs.at(-1)}`, done = this.db.all("SELECT * FROM tasks WHERE bot != ? AND state = 'done' AND updated_at >= ? AND COALESCE(result, '') != ? ORDER BY id", CHIEF, since, ALL_CLEAR_RESULT), ended = (state: string) => this.db.all('SELECT * FROM tasks WHERE bot != ? AND state = ? AND updated_at >= ? ORDER BY id', CHIEF, state, since), failed = ended('failed'), unsure = ended('unsure'), asks = this.db.all("SELECT * FROM asks WHERE state = 'open' ORDER BY id"), learned = this.db.all("SELECT bot, data FROM events WHERE kind = 'memory.learned' AND at >= ? ORDER BY seq", since), soon = this.db.all("SELECT * FROM routines WHERE state = 'on' AND kind != 'digest' AND next_at <= ? ORDER BY next_at", Date.now() + 86_400_000), lines = [`Good ${partOfDay()}${address ? `, ${address}` : ''}. While you were away:`];
     if (done.length) lines.push(`- Finished: ${list(done.slice(0, 5).map((t) => `${name(t.bot)}, “${t.title}”`))}${done.length > 5 ? `, and ${done.length - 5} more` : ''}.`);
     if (failed.length) lines.push(`- Did not go well: ${list(failed.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
     if (unsure.length) lines.push(`- Not sure it worked: ${list(unsure.slice(0, 3).map((t) => `${name(t.bot)}, “${t.title}” (${String(t.result ?? '').slice(0, 80)})`))}.`);
@@ -1025,8 +1022,7 @@ export class Crew {
 
   /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
   async post(botId: string, text: string, model?: string, photos?: unknown, room = false, key?: string, said?: string, moved = false, files?: unknown) {
-    const bot = this.needBot(botId);
-    const pics = [...checkPhotos(photos), ...checkPhotos(files)];
+    const bot = this.needBot(botId), pics = [...checkPhotos(photos), ...checkPhotos(files)];
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.some((p) => p.photo === false) ? `Here ${pics.length === 1 ? 'is a file.' : 'are some files.'}` : `Here ${pics.length === 1 ? 'is a photo.' : 'are some photos.'}`);
     if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
@@ -1375,8 +1371,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
-      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : '');
-    const spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
+      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),

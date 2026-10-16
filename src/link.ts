@@ -364,9 +364,7 @@ export class Link {
     const token = first ? randomUUID() : undefined;
     if (first) this.first = { token: token!, expires: Date.now() + PAIR_MS, claimed: false };
     await this.bind();
-    const urls = this.urls(), meta = { offer, ...(first ? { first: token } : {}) };
-    const { text, expires } = this.host.offer({ role, urls, meta });
-    const typed = first ? await this.typed(role, meta) : undefined;
+    const urls = this.urls(), meta = { offer, ...(first ? { first: token } : {}) }, { text, expires } = this.host.offer({ role, urls, meta }), typed = first ? await this.typed(role, meta) : undefined;
     if (first && this.first?.token !== token) throw Object.assign(new Error('another first-phone code replaced this one'), { status: 409 });
     if (first) this.first!.expires = expires;
     return { qr: text, typed: typed ? `${typed.short}-${typed.code}@${typed.relay}` : this.host.code({ role, meta }).code, expires, urls };
