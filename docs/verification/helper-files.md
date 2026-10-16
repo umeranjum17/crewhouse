@@ -14,7 +14,7 @@ it opens (`file.unlocked`, password-less copies and a copy opened on a try where
 wrong included) and takes the task's copies back when that
 job ends, unless the person picked Keep. A kept copy is then a card in the helper's own
 chat — `Kept files/unlocked/<name>: <the file's own name>`, shown as that name with "unlocked" on its sub line, so a
-copy never reads as the file the person sent.
+copy never reads as the file the person sent. A kept copy is registered with crewd like any delivered file, so its card opens; the card starts on the pick the person already made for that helper, and an answer that carries no pick leaves that pick alone.
 
 Any document the person sent, and any kept copy, carries **Forget this file** in the chat. It calls
 `POST /api/bots/:id/forget-file {path}` (the person's own authority, no card, no bot tool), removes

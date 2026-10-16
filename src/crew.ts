@@ -457,7 +457,7 @@ export class Crew {
    *  in the page's own currency; never the page's address. */
   private askView({ detail, ...a }: Row): Row {
     const d = JSON.parse(detail || '{}'), covers = d.key ? coversOf(d.key) : null;
-    if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)) } : { app: d.app, words: d.words } };
+    if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)), rule: this.fileRule(d.bot) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, ${d.create.name} can take it on` : `Yes, take ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}),
@@ -1810,8 +1810,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
     const picked = ask.kind === 'style' && body.answer === 'allow' ? (detail.pick?.styles ?? []).find((s: { id: string }) => s.id === String(body.style ?? '')) : undefined;
     if (ask.kind === 'style' && body.answer === 'allow' && !picked) throw fail('pick one of the styles on the card');
-    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, String(body.rule ?? '')) : '';
-    if (ask.kind === 'unlock' && body.answer === 'allow') this.setFileRule(detail.bot, String(body.rule ?? '') === 'keep' ? 'keep' : 'job');
+    const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
+    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
+    if (rule) this.setFileRule(detail.bot, rule);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (change ? 'change it' : body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
@@ -2177,8 +2178,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
     // Kept, not removed with the job: every copy this job opened is a card in the helper's chat, with Forget this
     // file on it — including one an earlier try on this same card already opened.
-    if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f)))
-      this.say(d.bot, 'system', `Kept ${unlockedAs(f)}: ${this.knownName(d.bot, f)}`, ask.task_id);
+    if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f))) { this.db.event('file.delivered', d.bot, { task: ask.task_id, path: unlockedAs(f) }); this.say(d.bot, 'system', `Kept ${unlockedAs(f)}: ${this.knownName(d.bot, f)}`, ask.task_id); }
     return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
 

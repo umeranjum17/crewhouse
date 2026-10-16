@@ -836,7 +836,7 @@ test('locked PDF: replacing the source invalidates the old unlocked copy', { ski
 });
 
 test('helper files: the one plain rule is on the card in Chief\'s chat, and the copies follow what the person picked', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
-  const { db, crew, t, c, copy, done } = await unlockAsk();
+  const { db, crew, cfg, t, c, copy, done } = await unlockAsk();
   const keep = c.keep!;
   assert.match(keep.line, /not locked any more, so it can sit in Scribe's folder for good/, 'the rule, in plain words, on the card');
   assert.deepEqual(keep.options.map((o) => o.label), ['Remove it when the job ends', 'Keep it']);
@@ -848,7 +848,18 @@ test('helper files: the one plain rule is on the card in Chief\'s chat, and the 
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' ORDER BY ID DESC")!.text, /^Kept files\/unlocked\/files%2Finbox%2Fmarch\.pdf: march\.pdf$/);
   const kept = A.lines(crew.botPage('scribe'), 'scribe', crew.snapshot()).find((l) => l.files.length)!;
   assert.equal(kept.files[0].name, 'march.pdf', 'the kept copy reads by the name of the file it came from, never a path');
+  assert.ok(crew.fileFor('scribe', 'files/unlocked/files%2Finbox%2Fmarch.pdf'), 'and its card opens: the copy is registered with crewd like any delivered file');
+  // A later card for the same helper starts on the standing pick, so one tap on Unlock cannot quietly revert it.
+  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files', 'inbox', 'april.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
+  const t2 = crew.assign('scribe', `read it too ${call('crew_unlock', { files: ['files/inbox/april.pdf'] })}`, 'chief').task;
+  await until('the second unlock ask', () => task(db, t2).state === 'needs_you' && !crew.busy.has('scribe'));
+  const c2 = A.cards(crew.snapshot()).find((x) => x.kind === 'unlock')!;
+  assert.equal(c2.keep!.rule, 'keep', 'the card opens on the pick the person already made');
+  await crew.answer(c2.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(db, t2);
+  assert.ok(existsSync(join(disk.botDir(cfg, 'scribe'), 'files', 'unlocked', 'files%2Finbox%2Fapril.pdf')), 'and the copies that card opens follow it');
   // Forgotten: the person takes it out of the folder themselves, and the chat keeps no card for it.
+  crew.forgetFile('scribe', 'files/unlocked/files%2Finbox%2Fapril.pdf');
   crew.forgetFile('scribe', 'files/unlocked/files%2Finbox%2Fmarch.pdf');
   assert.ok(!existsSync(copy), 'Forget this file removed it from the helper\'s folder');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' ORDER BY id DESC")!.text, 'Removed march.pdf from Scribe\'s folder.');

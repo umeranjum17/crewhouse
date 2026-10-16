@@ -940,7 +940,7 @@ function SignInCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: strin
  *  answer that opens the files; it is cleared after every try and never stored, sent to the chat or shown to the crew. */
 function UnlockCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: string }) {
   const u = c.unlock!, [typed, setTyped] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [oops, setOops] = useState('');
-  const [keep, setKeep] = useState('job'); // the one plain rule: the copies go when the job ends
+  const [keep, setKeep] = useState(c.keep?.rule ?? 'job'); // the one plain rule: the copies go when the job ends
   const no = () => api.answer(c.id, { answer: 'deny' }).then(onDone, () => toast("Can't reach the home computer right now."));
   const go = () => {
     setBusy(true); setOops('');

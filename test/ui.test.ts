@@ -181,6 +181,8 @@ test('the one plain rule for a helper\'s files is asked on the card, in plain wo
   const ask = { id: 8, bot: 'chief', task_id: 5, kind: 'unlock', at: now, title: 'A file is locked', detail: { bot: 'reel', files: ['files/inbox/march.pdf'], all: ['files/inbox/march.pdf'] } };
   const c = A.card(ask, state);
   assert.match(c.keep!.line, /not locked any more, so it can sit in Reel's folder for good/, 'the rule, said once, in plain words');
+  assert.equal(c.keep!.rule, 'job', 'and the card starts on the standing pick: the default, until crewd says otherwise');
+  assert.equal(A.card({ ...ask, detail: { ...ask.detail, rule: 'keep' } }, state).keep!.rule, 'keep', 'a helper the person chose Keep for opens there');
   assert.deepEqual(c.keep!.options.map((o) => [o.label, o.rule]), [['Remove it when the job ends', 'job'], ['Keep it', 'keep']], 'and the person\'s pick');
   assert.deepEqual(c.choices.map((x) => x.label), ['Unlock the file', 'Not now']);
   // A kept copy reads by the name of the file it came from; only the person's own documents and the copies are theirs to forget.
@@ -192,6 +194,18 @@ test('the one plain rule for a helper\'s files is asked on the card, in plain wo
   const kept = A.lines(page, 'reel', state).flatMap((l) => l.files.map((f) => f.name));
   assert.deepEqual(kept, ['statement.pdf']);
   assert.deepEqual(A.lines(page, 'reel', { ...state, forgotten: [{ bot: 'reel', path: 'files/inbox/3-1.pdf' }] }).flatMap((l) => l.files), []);
+  // A file the person took out of the folder keeps no card anywhere else the app shows it: Your things, the shelf,
+  // the helper's desk and the office's own list.
+  const doc = { ...state, tasks: [{ id: 4, bot: 'reel', title: 'Eid collage', state: 'done', updated_at: now, files: ['files/eid-collage.png', 'files/march.pdf'], result: 'Ready.' }],
+    bots: [bot('chief'), bot('reel', { task: { id: 5, title: 'Make a birthday video for mum', state: 'working', files: [{ path: 'files/eid-collage.png' }] } })],
+    events: [{ seq: 1, at: now, kind: 'file.delivered', bot: 'reel', data: { task: 5, path: 'files/march.pdf' } }] };
+  const names = (fs: { name: string }[]) => fs.map((f) => f.name), gone = { ...doc, forgotten: [{ bot: 'reel', path: 'files/march.pdf' }] };
+  assert.deepEqual(names(A.things(doc).flatMap((t) => t.files)), ['Eid collage', 'March'], 'Your things carries every file the job left');
+  assert.deepEqual(names(A.things(gone).flatMap((t) => t.files)), ['Eid collage'], 'the forgotten one keeps no card there');
+  assert.deepEqual(names(A.made(gone, 'reel')), ['Eid collage'], 'nor on the shelf');
+  assert.deepEqual(names(A.work(gone).flatMap((w) => w.things)), ['Eid collage'], 'nor on the helper\'s desk');
+  assert.deepEqual(names(A.office(doc).crew.find((x) => x.id === 'reel')!.things), ['Eid collage', 'March'], 'the office desk carries it live too');
+  assert.deepEqual(names(A.office(gone).crew.find((x) => x.id === 'reel')!.things), ['Eid collage'], 'and drops it once it is gone');
 });
 
 test('reading text clears 4.5:1 against the surfaces it sits on, day and night', () => {
