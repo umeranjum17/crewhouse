@@ -168,8 +168,8 @@ export class OpenClawRuntime implements AgentRuntime {
     const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined);
     const lanes = (roster?.agents ?? []).filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') }));
     const rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
-      .map((p) => ({ id: p.id, skill: String(p.skillName ?? p.title ?? ''), key: p.skillKey, at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: p.status, lane }))))).flat();
-    return rows.filter((p) => p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md')))).sort((a, b) => b.at - a.at);
+      .map((p) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: p.status, lane }))))).flat();
+    return rows.filter((p) => p.id && p.key && (p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md'))))).sort((a, b) => b.at - a.at);
   }
   /** What the person sees learned: one row per skill name, whichever lane learned it; the newest copy wins. */
   async learned() {
