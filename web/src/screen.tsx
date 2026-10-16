@@ -1,4 +1,4 @@
-// A bot's own desktop, live through desklink: Watch, Take over, Give back (plan 3, section 3.15).
+// A bot's own desktop, live through desklink: Watch, Take control, Hand it back (plan 3, section 3.15).
 import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
@@ -26,6 +26,19 @@ function useBotScreen(bot: Json, control: boolean, setErr: (e: string) => void) 
   const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current));
   useEffect(() => () => { void session.close(); signaling.current?.close(); }, []);
   return { session, open, stop: () => session.close().then(() => signaling.current?.close()) };
+}
+
+/** Chief's profile: a live, watch-only look at the crew's computer, open while it is on screen. */
+export function ScreenPeek({ bot, who }: { bot: Json; who: string }) {
+  const [err, setErr] = useState('');
+  const { session, open } = useBotScreen(bot, false, setErr);
+  useEffect(() => { void open(); }, []);
+  const live = session.snapshot.status;
+  return <>
+    <div className="peek-head"><span className={`peek-live${live === 'live' ? ' on' : ''}`}>{live === 'live' ? 'Live' : STATUS[live] ?? 'Opening…'}</span><span className="mute small">{who}</span></div>
+    <DesktopView sessionId={session.nativeId} style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 12 }} accessibilityLabel={`${bot.display}'s screen`}
+      placeholder={<div className="screen-idle">{err || STATUS[live] || 'Opening…'}</div>} />
+  </>;
 }
 
 /** A helper's sign-in ask, answered (J8): the helper's screen over the whole window, already driving, the site on top
@@ -79,9 +92,10 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
   }, [control, bot.id]);
 
   const { session, open, stop: close } = useBotScreen(bot, control, setErr);
-  // Who holds the controls decides the permissions, so a change re-opens the session with the new ones.
+  // Who holds the controls decides the permissions, so a change re-opens the session with the new ones. Holding the
+  // controls always shows the screen: Take control on Chief's profile lands here already holding them.
   useEffect(() => {
-    if (watching.current) void session.close().then(open);
+    if (watching.current || control) { watching.current = true; void session.close().then(open); }
   }, [control]);
 
   const watch = () => { setErr(''); watching.current = true; void open(); };
@@ -94,11 +108,11 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
     <div className="card screen">
       <div className="row">
         <b className="grow">{bot.display}'s screen</b>
-        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have the wheel' : STATUS[live] ?? 'Opening…'}</Pill>
+        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have control' : STATUS[live] ?? 'Opening…'}</Pill>
       </div>
-      {control && <p className="nudge-line">You're driving. {bot.display} waits until you hand the wheel back.</p>}
+      {control && <p className="nudge-line">{bot.display} is paused until you hand it back.</p>}
       {/* desklink types through its own hidden textarea; a tap on the picture must focus it (a tap, not a pinch), or keys never reach the bot's desktop. */}
-      <div onClick={() => { if (control) session.showKeyboard(); }}>
+      <div className={control ? 'screen-held' : undefined} onClick={() => { if (control) session.showKeyboard(); }}>
         <DesktopView
           sessionId={session.nativeId}
           style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 16 }}
@@ -107,13 +121,13 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
         />
       </div>
       {err && <p className="nudge-line">{err}</p>}
-      <div className="btns">
+      {!control && <div className="btns">
         {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn" onClick={stop}>Stop watching</button>}
-        {!control && <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take the wheel</button>}
-        {!control && what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
-      </div>
+        <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take control</button>
+        {what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
+      </div>}
       {what !== null && !control && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })(); }}>
+        <form className="hand-back" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })(); }}>
           <input className="input grow" autoFocus value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What are you showing? For example: pull the newsletter stats" />
           <button className="btn go" disabled={!what.trim()}>Start</button>
           <button type="button" className="btn ghost" onClick={() => setWhat(null)}>Cancel</button>
@@ -125,9 +139,9 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
           <button className="btn ghost" onClick={act(() => api.shown(bot.id, false))}>Cancel</button></div>
       )}
       {control && !showing && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })(); }}>
-          <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`What did you do? ${bot.display} reads this when it carries on`} />
-          <button className="btn go">Hand it back</button>
+        <form className="hand-back" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.giveBack(bot.id, note, keep); setNote(''); })(); }}>
+          <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder={`Anything ${bot.display} should know?`} aria-label={`A note for ${bot.display}`} />
+          <button className="btn go big">Hand it back</button>
         </form>
       )}
       {control && !showing && tabs.length > 0 && (
@@ -141,7 +155,7 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
           ))}
         </div>
       )}
-      <p className="mute small">{bot.display} has its own computer at home, separate from yours. Taking the wheel pauses it; handing back lets it carry on.</p>
+      <p className="mute small">{control ? `${bot.display} picks up where it left off, and reads your note.` : `${bot.display} has its own computer at home, separate from yours. Taking control pauses it; handing it back lets it carry on.`}</p>
     </div>
   );
 }

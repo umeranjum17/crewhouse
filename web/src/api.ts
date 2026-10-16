@@ -118,6 +118,8 @@ export const api = {
   forgetLearned: (id: string, skill: string) => call('POST', '/api/learned/forget', { id, skill }),
   /** "Learn from how I work": the engine's own learning switch. */
   learning: () => call('GET', '/api/learning') as Promise<{ on: boolean }>,
+  /** Chief's profile: "Tell me when Chief finishes or needs me". Off, crewd sends no push at all. */
+  notify: (on?: boolean) => (on === undefined ? call('GET', '/api/notify') : call('PUT', '/api/notify', { on })) as Promise<{ on: boolean }>,
   setLearning: (on: boolean) => call('POST', '/api/learning', { on }),
   takeOver: (id: string) => call('POST', `/api/bots/${id}/takeover`),
   /** Teach by showing: take the wheel with a recorder on; then Done (the bot keeps it as a skill) or Cancel. */

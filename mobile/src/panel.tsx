@@ -157,7 +157,7 @@ function Body({ grant, still, box, used, listen }: { grant: Grant; still?: Share
       </View>}
       {/* Stuck on a sign-in or a page: that helper's own screen, to take the wheel or just watch. */}
       {top && online && <View style={s.chips}>
-        {canAct && <Btn label={`Take the wheel from ${top.name}`} onPress={() => void attempt(async () => { await api.takeOver(top.id); await open(`crewhouse://screen?bot=${top.id}`); })} />}
+        {canAct && <Btn label={`Take control from ${top.name}`} onPress={() => void attempt(async () => { await api.takeOver(top.id); await open(`crewhouse://screen?bot=${top.id}`); })} />}
         <Btn ghost label={`Watch ${top.name}`} onPress={() => void open(`crewhouse://screen?bot=${top.id}&watch=1`)} />
       </View>}
       {buttons.length > 0 && <View style={s.chips}>

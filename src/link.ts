@@ -82,8 +82,7 @@ export class Link {
   private pairing = 0; // until when a pairing code holds the home network open
   private shut?: NodeJS.Timeout;
   private advertised = ''; // the address last advertised on the home network
-  private mdns?: { stop(): Promise<void> };
-  private announcing = Promise.resolve();
+  private mdns?: { stop(): Promise<void> }; private announcing = Promise.resolve();
   /** This computer's network addresses, and its mDNS publisher; a test swaps in its own. */
   ifaces: () => Ifaces = networkInterfaces;
   bonjour?: Bonjour;
@@ -310,6 +309,7 @@ export class Link {
   /** Tell the person's phones there is news. Content-free: the words stay on this computer until the phone asks. In their
    *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
   private async tell(id: string) {
+    if (!this.notify().on) return; // Chief's profile: "Tell me when Chief finishes or needs me" is off
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
     const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE], phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
@@ -329,6 +329,7 @@ export class Link {
     });
   }
 
+  notify(on?: boolean) { if (on !== undefined) this.put('notify.chief', on ? 'on' : 'off'); return { on: this.setting('notify.chief') !== 'off' }; }
   /** Quiet hours over: one push for everything that came in during them, however much it was. */
   sendHeld(at = Date.now()) {
     if (this.quiet() || !this.setting('push.held.1')) return;

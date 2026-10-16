@@ -1323,8 +1323,8 @@ export function step(e: Json): string | null {
     case 'memory.undone': return `You undid: ${plain(d.text)}`;
     case 'soul.changed': return d.by === 'chief' ? 'Took on the personality Chief suggested' : d.reset ? 'Went back to how it started' : 'You changed how it comes across';
     case 'run.resumed': return 'Picked up where it left off';
-    case 'desktop.takeover': return 'You took the wheel';
-    case 'desktop.giveback': return 'You handed the wheel back';
+    case 'desktop.takeover': return 'You took control';
+    case 'desktop.giveback': return 'You handed it back';
     case 'task.paused': return `Paused “${plain(d.title)}” for now`;
     case 'task.done': return `Finished “${plain(d.title)}”`;
     case 'task.failed': return d.result === 'Stopped by you.' ? `You stopped “${plain(d.title)}”` : `Couldn't finish “${plain(d.title)}”`;
@@ -1843,7 +1843,7 @@ export type OfficeView = { chief: ChiefView; lead: Seat; crew: OfficeMember[]; d
  *  for something else (a sign-in, an account back later, the person at the wheel), or free. */
 export type Seat = 'needs' | 'chat' | 'working' | 'failed' | 'next' | 'waiting' | 'free';
 export const seatOf = (c: OfficeMember): Seat => (c.ask ? 'needs' : c.seat);
-/** Who has Stop / Take over / Leave it in this thread: every helper gone quiet, in Chief's alone (only Chief asks the person). */
+/** Who has Stop / Take control / Leave it in this thread: every helper gone quiet, in Chief's alone (only Chief asks the person). */
 export const stuckIn = (crew: Helper[], id: string) => (id === 'chief' ? crew.filter((x) => x.stuckFor > 0) : []);
 /** The one word for each state, on every screen: Chief's header, the rail, the live line, the Office (panels, groups,
  *  header counts), Chats and the phone. Only Chief says "Needs you"; "resting" is only ever an account's word. */
