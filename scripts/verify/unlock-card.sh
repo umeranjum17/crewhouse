@@ -9,11 +9,11 @@ SCRATCH=${SCRATCH:-$HOME/.cache/fm-scratch/ch-secret-card}; mkdir -p "$SCRATCH" 
 LAB=$(mktemp -d "$SCRATCH/l.XXXX"); mkdir -p "$LAB"/{home,state,crew,tools,run,pdf,profile}
 export CHROME_DEVTOOLS_AXI_SESSION=${CHROME_DEVTOOLS_AXI_SESSION:-ch-secret-card} CHROME_DEVTOOLS_AXI_USER_DATA_DIR="$LAB/profile"
 NODE=$(node -p process.execPath)   # the real binary: a version-manager shim fails under the masked env
-PW1='Northbank-7319!' PW2='CitySav 2026'   # the second has a space: the whole line is the password
+PW1='Northbank-7319!' PW2='CitySav 2026' PW3='CitySav 2027'   # the second has a space: the whole line is the password
 log() { printf '%s\n' "$*" | tee -a "$EV/transcript.txt"; }
 
 # Two real statements, each locked with its own password (AES-256, as banks send them).
-for s in "northbank-march:Northbank statement, March:$PW1" "citysavings-april:City Savings statement, April:$PW2"; do
+for s in "northbank-march:Northbank statement, March:$PW1" "citysavings-april:City Savings statement, April:$PW2" "citysavings-may:City Savings statement, May:$PW3"; do
   IFS=: read -r name title pw <<<"$s"
   printf '/Helvetica findfont 14 scalefont setfont 72 720 moveto (%s) show 72 696 moveto (Tesco groceries 42.10) show 72 672 moveto (Rent 1200.00) show showpage\n' "$title" > "$LAB/pdf/$name.ps"
   gs -q -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -sOutputFile="$LAB/pdf/$name.plain.pdf" "$LAB/pdf/$name.ps"
@@ -75,8 +75,10 @@ const [B, key, LAB, EV, SK, THEN, PW] = process.argv.slice(1), steps = [
 for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 900]])
   steps.push({ name: `card-${look}-${w}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: `${B}/?${look}#/chief`, wait: "!!document.querySelector(\".unlock-card\")", timeout: 20000,
     eval: `[matchMedia("(display-mode: standalone)").matches, ${THEN}][0]`, out: `${EV}/pwa/unlock-card-${look}-${w}.png` });
-steps.push({ name: "film", w: 390, h: 844, dpr: 2, mobile: true, url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, record: `${EV}/pwa/unlock-type.webm`, seconds: 8 },
+steps.push({ name: "film", w: 390, h: 844, dpr: 2, mobile: true, url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, record: `${EV}/pwa/unlock-type.webm`, seconds: 10 },
   { name: "type", eval: `(() => { const t = document.querySelector(".unlock-card input"); t.closest("form").scrollIntoView({ block: "center" }); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(t, ${JSON.stringify(PW)}); t.dispatchEvent(new Event("input", { bubbles: true })); return t.value.length; })()` },
+  { name: "keep", click: ".unlock-keep .keep-opt:last-child input", settle: 400, xshot: `${EV}/pwa/keep-them.png`,
+    eval: `[document.querySelector(".unlock-keep .keep-opt:last-child input").checked, document.querySelector(".unlock-keep .keep-opt:first-child input").checked].join("/")` },
   { name: "unlock", click: ".unlock-card .btn.go", settle: 3000 }, { name: "filmed", recwait: true, wait: "!!document.querySelector(\".answered\")", out: `${EV}/pwa/unlocked-day-390.png` });
 console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, recorder: `${SK}/record.mjs`, args: ["--window-size=1400,950", "--force-device-scale-factor=1", "about:blank"], steps }));
 ' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$EV" "$REPO/scripts/verify" "$(show .unlock-card)" "$PW2" > "$LAB/pwa-plan.json"
@@ -85,11 +87,37 @@ node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"
 until_js "!state.asks.some((a) => a.kind === 'unlock')"
 until_js "!state.bots.find((b) => b.id === 'penny').task"
 THEN=$(show .answered) bash scripts/verify/screens.sh "$EV/screens" unlocked "$B/#/chief" >/dev/null
+# Kept: both copies outlived the job, and each is a card in Penny's own chat with Forget this file on it.
+for f in 2-1 2-2; do log "kept copy $f: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$f.pdf" ] && echo present || echo MISSING )"; done
+SHOW=$(show .file-with-forget); chrome-devtools-axi open "$B/#/h/penny" >/dev/null; chrome-devtools-axi wait "· unlocked" >/dev/null
+chrome-devtools-axi eval "$(show .file-with-forget)" >/dev/null; chrome-devtools-axi screenshot "$EV/screens/kept-copy-day-390.png" >/dev/null
+THEN="$SHOW" bash scripts/verify/screens.sh "$EV/screens" kept-copy "$B/#/h/penny" >/dev/null
+node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$SHOW" kept-copy="$B/#/h/penny" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+chrome-devtools-axi eval "JSON.stringify([...document.querySelectorAll('.file-with-forget')].map((e) => e.innerText.replace(/\n/g, ' | ')))" | tee -a "$EV/transcript.txt"
+# The kept copy's own card (the last one), not the file the person sent: Forget this file, then Forget it.
+FORGET=$(chrome-devtools-axi snapshot --full | awk '/button "Forget this file"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1}' | tail -1)
+chrome-devtools-axi click "@$FORGET" >/dev/null; chrome-devtools-axi wait "Forget it" >/dev/null
+chrome-devtools-axi click "@$(chrome-devtools-axi snapshot --full | awk '/button "Forget it"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1; exit}')" >/dev/null
+until_js "state.forgotten.some((f) => f.path === 'files/unlocked/files%2Finbox%2F2-2.pdf')"
+log "forgotten 2-2: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F2-2.pdf" ] && echo present || echo MISSING )"
+chrome-devtools-axi eval "JSON.stringify({ cards: document.querySelectorAll('.file-with-forget').length, note: [...document.querySelectorAll('.line.note')].map((e) => e.innerText).slice(-1) })" | tee -a "$EV/transcript.txt"
+# The default rule: a third statement nobody picks Keep for, so the job's own end takes its copy.
+T3=$("$NODE" -e 'const a = require("fs").readFileSync(process.argv[1]).toString("base64");
+console.log(JSON.stringify({ text: "Here is a file.", files: [{ type: "application/pdf", name: "City Savings May.pdf", data: a }] }))' "$LAB/pdf/citysavings-may.pdf" | api -X POST -d @- "$B/api/bots/penny/messages" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).task))")
+log "May's statement is task $T3"
+"$NODE" -e 'const a = require("fs").readFileSync(process.argv[1]).toString("base64"), at = process.argv[2];
+console.log(JSON.stringify({ text: `Read my May statement [tool crew_unlock ${JSON.stringify({ files: [`files/inbox/${at}-1.pdf`] })}]`, files: [{ type: "application/pdf", name: "City Savings May.pdf", data: a }] }))' \
+  "$LAB/pdf/citysavings-may.pdf" "$T3" | api -X POST -d @- "$B/api/bots/penny/messages" >/dev/null
+until_js "state.asks.some((a) => a.kind === 'unlock' && a.bot === 'chief')"
+MAY=$(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const a=JSON.parse(s).asks.find((x)=>x.kind==='unlock');console.log(a.id)})")
+api -X POST -d "{\"answer\":\"allow\",\"passwords\":[\"$PW3\"]}" "$B/api/asks/$MAY/answer" >/dev/null
+until_js "!state.bots.find((b) => b.id === 'penny').task"
+log "default rule, May's copy: $( [ -f "$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$T3-1.pdf" ] && echo present || echo GONE ); recorded gone: $(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const g=JSON.parse(s).forgotten.filter((f)=>f.path.endsWith('$T3-1.pdf'));console.log(g.length)})")";
 chrome-devtools-axi eval "JSON.stringify({ local: Object.keys(localStorage), session: Object.keys(sessionStorage), receipt: [...document.querySelectorAll('.answered')].map((e) => e.textContent) })" | tee -a "$EV/transcript.txt"
 
-for f in 2-1 2-2; do
+for f in 2-1; do
   c="$LAB/crew/bots/penny/files/unlocked/files%2Finbox%2F$f.pdf"
-  log "$f: copy $( [ -f "$c" ] && echo present || echo MISSING ); encrypted: $(qpdf --is-encrypted "$c" && echo yes || echo no); reads: $("$LAB/tools/documents/venv/bin/markitdown" "$c" | head -1)"
+  log "kept $f: copy $( [ -f "$c" ] && echo present || echo MISSING ); encrypted: $(qpdf --is-encrypted "$c" && echo yes || echo no); reads: $("$LAB/tools/documents/venv/bin/markitdown" "$c" | head -1)"
 done
 api "$B/api/bots/penny" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const b=JSON.parse(s);console.log('penny task', JSON.stringify(b.tasks[0] && { state: b.tasks[0].state, body: b.tasks[0].body }))})" | tee -a "$EV/transcript.txt"
 crewd_stop; chrome-devtools-axi stop >/dev/null 2>&1 || true
@@ -100,4 +128,4 @@ for s in "March's:$PW1" "April's:$PW2" "the wrong one:CitySav 2025"; do
   hits=$({ grep -rlaF -- "$pw" "$LAB/state" "$LAB/crew" "$LAB/profile" "$LAB/pwa" "$EV/crewd.log" 2>/dev/null || true; } | wc -l)
   log "password search, $who: $hits files hold it"
 done
-cp "$LAB/pdf/northbank-march.pdf" "$LAB/pdf/citysavings-april.pdf" "$EV/" && log "evidence: $EV"
+cp "$LAB/pdf/northbank-march.pdf" "$LAB/pdf/citysavings-april.pdf" "$LAB/pdf/citysavings-may.pdf" "$EV/" && log "evidence: $EV"

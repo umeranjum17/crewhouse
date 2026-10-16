@@ -25,6 +25,8 @@ const fakeBin = (dir: string, ...names: string[]) => {
   for (const b of names) { writeFileSync(join(dir, b), '#!/bin/sh\necho "fake $0 $*"\n'); chmodSync(join(dir, b), 0o755); }
 };
 const openAsk = (db: any) => db.get("SELECT * FROM asks WHERE state = 'open'");
+/** The unlocked copies a job's unlock left behind, from crewd's own record of them. */
+const unlocked = (db: any, t: number) => db.all("SELECT json_extract(data, '$.path') AS path FROM events WHERE kind = 'file.unlocked' AND json_extract(data, '$.task') = ?", t).map((e: any) => e.path);
 /** A user message the stub model turns into one tool call. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 
@@ -696,7 +698,8 @@ test('locked PDF: the card in Chief\'s thread takes the password, the helper rea
   await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
   await settled(db, t);
   assert.equal(task(db, t).state, 'done', 'the helper resumed by itself and finished');
-  assert.ok(existsSync(copy), 'the unlocked copy is in the helper\'s files');
+  assert.deepEqual(unlocked(db, t), ['files/unlocked/files%2Finbox%2Fmarch.pdf'], 'crewd opened the copy it named to the helper');
+  assert.ok(!existsSync(copy), 'the one plain rule: the copy goes when the job ends');
   assert.match((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', /unlocked: files\/unlocked\/files%2Finbox%2Fmarch\.pdf/);
   assert.match(A.answeredReceipts(crew.snapshot())[0].line, /^Unlocked · \d{1,2}:\d\d [ap]m$/, 'where the card was: Unlocked and the time (mock 3A)');
   assert.equal(leaks(), 0, 'the password is in no row, database file, model turn, log or snapshot');
@@ -706,7 +709,7 @@ test('locked PDF: the card in Chief\'s thread takes the password, the helper rea
 test('locked PDF: one that opens with no password is unlocked without a card, and the helper is told where the copy is', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
   const { db, crew, t, copy, done } = await unlockAsk(true);
   assert.equal(openAsk(db)?.kind, undefined, 'no card: there is nothing to type');
-  assert.ok(existsSync(copy), 'the copy is in the helper\'s files');
+  assert.deepEqual(unlocked(db, t), ['files/unlocked/files%2Finbox%2Fmarch.pdf'], 'the copy was opened with no card, and the job\'s end takes it');
   assert.match((crew.runtime as any).transcript(`agent:m1:crewhouse:scribe:${t}`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/unlocked\/files%2Finbox%2Fmarch\.pdf"\}/);
   done();
 });
@@ -761,11 +764,18 @@ test('locked PDF: two locked files with one basename keep separate copies, and a
   const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
   await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
-  const copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf');
+  const copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf'), copyB = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fb%2Fstatement.pdf');
   assert.ok(existsSync(copyA), 'a opened with no password, so its copy exists before any card');
   assert.deepEqual(c.unlock?.files.map((f) => f.path), ['files/inbox/b/statement.pdf']);
   await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: [`${PASSWORD}x`] }), (e: any) => e.status === 400);
   assert.ok(existsSync(copyA), 'b\'s failure leaves a\'s copy alone');
+  // Kept: both copies — the one an earlier try opened and the one this answer opened — are cards in the helper's chat.
+  await lab.crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD], rule: 'keep' });
+  await settled(lab.db, t);
+  assert.ok(existsSync(copyA) && existsSync(copyB), 'both copies stay in the folder');
+  const kept = lab.db.all("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' AND text LIKE 'Kept %' ORDER BY id").map((m: any) => m.text);
+  assert.deepEqual(kept, ['Kept files/unlocked/files%2Finbox%2Fa%2Fstatement.pdf: statement.pdf', 'Kept files/unlocked/files%2Finbox%2Fb%2Fstatement.pdf: statement.pdf'],
+    'the copy opened with no card and the one this answer opened both read back by the file\'s own name');
   lab.done();
 });
 
@@ -786,7 +796,8 @@ test('locked PDF: a 200+-char nested accented name unlocks under a short hash na
   await lab.crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
   await settled(lab.db, t);
   const hashed = `files/unlocked/${createHash('sha256').update(rel).digest('hex').slice(0, 32)}.pdf`;
-  assert.ok(existsSync(join(bot, hashed)), 'the copy lands under the short hash name');
+  assert.deepEqual(unlocked(lab.db, t), [hashed], 'the copy landed under the short hash name');
+  assert.ok(!existsSync(join(bot, hashed)), 'and it goes when the job ends');
   assert.match((lab.crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${t}`)?.message ?? '', new RegExp(`unlocked: ${hashed.replace(/\//g, '\\/')}`));
   lab.done();
 });
@@ -795,13 +806,68 @@ test('locked PDF: replacing the source invalidates the old unlocked copy', { ski
   const { db, crew, t, c, copy, done } = await unlockAsk();
   await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
   await settled(db, t);
-  assert.ok(existsSync(copy), 'the first unlock leaves a copy');
+  mkdirSync(join(copy, '..'), { recursive: true }); writeFileSync(copy, 'unlocked'); // a copy the person chose to keep, from the job before
   writeFileSync(join(copy, '..', '..', 'inbox', 'march.pdf'), '%PDF-1.7\ntrailer << /Root 1 0 R /Encrypt 9 0 R >>\n%%EOF\n');
   const past = new Date(Date.now() - 60_000);
   utimesSync(copy, past, past);
   const t2 = crew.assign('scribe', `read it again ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
   await until('the second unlock ask', () => task(db, t2).state === 'needs_you' && !crew.busy.has('scribe'));
-  assert.equal(openAsk(db)?.kind, 'unlock', 'the replaced source asks for its password again, never the stale copy');
+  assert.equal(db.get("SELECT kind FROM asks WHERE state = 'open' AND kind = 'unlock'")?.kind, 'unlock', 'the replaced source asks for its password again, never the stale copy');
+  done();
+});
+
+test('helper files: the one plain rule is on the card in Chief\'s chat, and the copies follow what the person picked', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, copy, done } = await unlockAsk();
+  const keep = c.keep!;
+  assert.match(keep.line, /not locked any more, so it can sit in Scribe's folder for good/, 'the rule, in plain words, on the card');
+  assert.deepEqual(keep.options.map((o) => o.label), ['Remove it when the job ends', 'Keep them']);
+  // Kept: the job ends and the copy stays, named as a card in the helper\'s chat with Forget this file on it.
+  await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD], rule: 'keep' });
+  await settled(db, t);
+  assert.equal(db.get("SELECT value FROM settings WHERE key = 'files.rule.scribe'")!.value, 'keep', 'the person\'s pick is kept');
+  assert.ok(existsSync(copy), 'the copy stays in the helper\'s folder');
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' ORDER BY ID DESC")!.text, /^Kept files\/unlocked\/files%2Finbox%2Fmarch\.pdf: march\.pdf$/);
+  const kept = A.lines(crew.botPage('scribe'), 'scribe', crew.snapshot()).find((l) => l.files.length)!;
+  assert.equal(kept.files[0].name, 'march.pdf', 'the kept copy reads by the name of the file it came from, never a path');
+  // Forgotten: the person takes it out of the folder themselves, and the chat keeps no card for it.
+  crew.forgetFile('scribe', 'files/unlocked/files%2Finbox%2Fmarch.pdf');
+  assert.ok(!existsSync(copy), 'Forget this file removed it from the helper\'s folder');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' ORDER BY id DESC")!.text, 'Removed march.pdf from Scribe\'s folder.');
+  assert.ok(!A.lines(crew.botPage('scribe'), 'scribe', crew.snapshot()).some((l) => l.files.length), 'the card is gone from the chat too');
+  done();
+});
+
+test('helper files: the rule is to remove the copies when the job ends, unless the person chose to keep them', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const { db, crew, t, c, copy, done } = await unlockAsk();
+  await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(db, t);
+  assert.ok(!existsSync(copy), 'nobody was asked: the job\'s end takes the copy');
+  assert.equal(db.get("SELECT value FROM settings WHERE key = 'files.rule.scribe'"), undefined, 'and nothing is stored');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scribe' AND author = 'system' AND text LIKE 'Kept %'"), undefined, 'no note: nothing was kept');
+  done();
+});
+
+test('Forget this file: the person takes a document they sent back out of the helper\'s folder', async () => {
+  const { db, crew, cfg, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Scout', 'person');
+  const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64'), name: 'statement.pdf' };
+  const { task: t } = (await crew.post('scout', '', undefined, undefined, false, undefined, undefined, false, [pdf]))!;
+  const rel = `files/inbox/${t}-1.pdf`, full = join(disk.botDir(cfg, 'scout'), rel);
+  await settled(db, t);
+  assert.ok(existsSync(full), 'the document the person sent is in the helper\'s folder');
+  crew.forgetFile('scout', rel);
+  assert.ok(!existsSync(full), 'Forget this file takes it out again');
+  assert.deepEqual(crew.snapshot().forgotten, [{ bot: 'scout', path: rel }], 'crewd records that the file is gone');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' AND author = 'system' ORDER BY id DESC")!.text, "Removed statement.pdf from Scout's folder.", 'named as the person named it, never the folder\'s own name');
+  // The chat keeps the person\'s own words and loses the card for a file that is not there.
+  assert.deepEqual(A.lines(crew.botPage('scout'), 'scout', crew.snapshot()).flatMap((l) => l.files.map((f) => f.name)), []);
+  // Plain words, and nothing outside a file the helper holds: a folder, a path that escapes it, a bot that is not there.
+  assert.throws(() => crew.forgetFile('scout', 'soul.md'), /no file there/);
+  assert.throws(() => crew.forgetFile('scout', 'files/inbox'), /no file there/);
+  assert.throws(() => crew.forgetFile('scout', rel), /no file there/);
+  assert.throws(() => crew.forgetFile('scout', '../crew.db'), /outside the bot folder/);
+  assert.throws(() => crew.forgetFile('nope', rel), (e: any) => e.status === 404);
   done();
 });
 

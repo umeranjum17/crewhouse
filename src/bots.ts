@@ -64,10 +64,7 @@ export function brains(cfg: Config, id: string): Brain[] {
   return dedupe((c.models?.length ? c.models : ['chatgpt']).map(parseBrain));
 }
 
-export function dedupe(list: Brain[]) {
-  const seen = new Set<string>();
-  return list.filter((b) => !seen.has(brainKey(b)) && !!seen.add(brainKey(b)));
-}
+export function dedupe(list: Brain[]) { const seen = new Set<string>(); return list.filter((b) => !seen.has(brainKey(b)) && !!seen.add(brainKey(b))); }
 
 export function setBrains(cfg: Config, id: string, models: string[]) {
   if (!Array.isArray(models) || !models.length) throw Object.assign(new Error('pick at least one model'), { status: 400 });
@@ -100,10 +97,7 @@ export function botTools(cfg: Config, id: string) {
 /** A template's tools in plain words, for the recruit card. */
 export function templateKit(cfg: Config, tpl: Template) {
   const all = new Map(toolStatus(cfg).map((t) => [t.id, t]));
-  return tpl.tools.filter((id) => id !== 'crew' && all.has(id)).map((id) => {
-    const t = all.get(id)!;
-    return { id, name: t.name, asks: t.asks, ready: t.ready };
-  });
+  return tpl.tools.filter((id) => id !== 'crew' && all.has(id)).map((id) => { const t = all.get(id)!; return { id, name: t.name, asks: t.asks, ready: t.ready }; });
 }
 
 /** Granted and working on this machine. */
@@ -138,10 +132,7 @@ export function createBotFolder(cfg: Config, id: string, tpl: Template, display:
   if (existsSync(dir)) throw new Error(`a bot folder already exists at ${dir}`);
   mkdirSync(dir, { recursive: true });
   cpSync(join(templatesDir(cfg), tpl.id), dir, { recursive: true });
-  for (const f of ['AGENTS.md', 'soul.md']) {
-    const p = join(dir, f);
-    if (existsSync(p)) writeFileSync(p, renamed(readFileSync(p, 'utf8'), tpl.display, display));
-  }
+  for (const f of ['AGENTS.md', 'soul.md']) { const p = join(dir, f); if (existsSync(p)) writeFileSync(p, renamed(readFileSync(p, 'utf8'), tpl.display, display)); }
   for (const d of ['files', 'work', 'skills']) mkdirSync(join(dir, d), { recursive: true });
   // Copies, not links: the bot owns its skills and may refine them.
   for (const sk of tpl.skills ?? []) cpSync(join(cfg.repoDir, 'skills', sk), join(dir, 'skills', sk), { recursive: true });

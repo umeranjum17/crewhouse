@@ -30,10 +30,7 @@ export interface Config {
   repoDir: string;
 }
 
-function envPath(name: string, fallback: string): string {
-  const v = process.env[name];
-  return v && v.trim() ? resolve(v.trim().replace(/^~(?=\/|$)/, homedir())) : fallback;
-}
+function envPath(name: string, fallback: string): string { const v = process.env[name]; return v && v.trim() ? resolve(v.trim().replace(/^~(?=\/|$)/, homedir())) : fallback; }
 
 export function relayOrigin(value: string | null): string | null {
   if (value && (!URL.canParse(value) || !/^(https?|wss?):$/.test(new URL(value).protocol))) throw Object.assign(new Error('a relay address starts with https:// or wss://'), { status: 400 });

@@ -6,7 +6,12 @@ face, "2 files are locked", one password field per file under the name the perso
 computer note and **Unlock 2 files** (Not now under ⋯). The passwords travel only in that one answer; crewd hands each to
 the Documents tool's pinned pypdfium2 on stdin in the helper's sandbox, which writes `files/unlocked/<encodeURIComponent of the path>` (e.g. `files/inbox/2-1.pdf` to `files/unlocked/files%2Finbox%2F2-1.pdf`; a short hash name when that passes 200 characters), current only while not older than its source (`unlock`; `docs/ui-contract.md` owns the contract).
 A wrong one is a plain 400 and the card keeps only the files still locked; the right ones leave "Unlocked · <time>" and
-resume the helper with the copies' paths. The phone app points to the computer or the web app.
+resume the helper with the copies' paths. The same card carries the one plain rule for the helper's files — an unlocked
+copy is not locked any more, so it can sit in the helper's folder for good — with the person's pick, **Remove it when
+the job ends** (the default) or **Keep them**; the job's own end takes its copies back either way unless Keep them was
+picked, and a kept copy is a card in the helper's own chat named after the file it came from, its sub line saying "unlocked",
+with **Forget this file** on it (`POST /api/bots/:id/forget-file`, which takes the file out of the helper's folder and says so in plain words; the
+chat keeps no card for a file that is not there). The phone app points to the computer or the web app.
 
 ## Gate
 
@@ -29,8 +34,10 @@ crew, both browser profiles and `crewd.log`.
 
 ## Pass
 
-Card in Chief's thread only, words as above; no open unlock ask after the right one, Penny's task done, each copy
-present, not encrypted and readable; every password search finds 0 files; browser storage holds no new key.
+Card in Chief's thread only, words as above; no open unlock ask after the right one, Penny's task done; the kept copy
+(2-1) present, not encrypted and readable, and the forgotten one (2-2) gone from the folder with the chat's card and
+the plain "Removed …" note; the third statement's copy gone with its job under the default rule; every password search
+finds 0 files; browser storage holds no new key.
 
 ## Gotchas
 
@@ -38,3 +45,5 @@ present, not encrypted and readable; every password search finds 0 files; browse
   with `PATH=/usr/bin:/bin`; otherwise every unlock answers "This computer can't open locked files yet". macOS has no
   bubblewrap, so it answers the same there.
 - The stub calls `crew_unlock` from the person's message, so Chief's captures show only the card and the receipt.
+- The kept copies' cards are in **Penny's** thread (`#/h/penny`), not Chief's: the helper owns the folder.
+- `state.forgotten` keeps the newest 200 paths, so a forgotten file's card never comes back.

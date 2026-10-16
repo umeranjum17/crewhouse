@@ -177,6 +177,23 @@ test('no jargon anywhere: the machinery\'s words never reach a person', () => {
     assert.doesNotMatch(w, JARGON);
 });
 
+test('the one plain rule for a helper\'s files is asked on the card, in plain words, and a forgotten file keeps no card', () => {
+  const ask = { id: 8, bot: 'chief', task_id: 5, kind: 'unlock', at: now, title: 'A file is locked', detail: { bot: 'reel', files: ['files/inbox/march.pdf'], all: ['files/inbox/march.pdf'] } };
+  const c = A.card(ask, state);
+  assert.match(c.keep!.line, /not locked any more, so it can sit in Reel's folder for good/, 'the rule, said once, in plain words');
+  assert.deepEqual(c.keep!.options.map((o) => [o.label, o.rule]), [['Remove it when the job ends', 'job'], ['Keep them', 'keep']], 'and the person\'s pick');
+  assert.deepEqual(c.choices.map((x) => x.label), ['Unlock the file', 'Not now']);
+  // A kept copy reads by the name of the file it came from; only the person's own documents and the copies are theirs to forget.
+  assert.equal(A.pretty('files/unlocked/files%2Finbox%2Fmarch.pdf'), 'March');
+  assert.ok(A.sentFile(A.fileView('reel', 'files/inbox/3-1.pdf')) && A.sentFile(A.fileView('reel', 'files/unlocked/files%2Finbox%2Fmarch.pdf')));
+  assert.ok(!A.sentFile(A.fileView('reel', 'files/letter.docx')));
+  // A file the person forgot is gone from the folder, so the chat keeps no card for it.
+  const page = { messages: [{ id: 1, bot: 'reel', author: 'person', text: 'Here is a file.\n[file reel] files/inbox/3-1.pdf 12000B statement.pdf', at: now }] };
+  const kept = A.lines(page, 'reel', state).flatMap((l) => l.files.map((f) => f.name));
+  assert.deepEqual(kept, ['statement.pdf']);
+  assert.deepEqual(A.lines(page, 'reel', { ...state, forgotten: [{ bot: 'reel', path: 'files/inbox/3-1.pdf' }] }).flatMap((l) => l.files), []);
+});
+
 test('reading text clears 4.5:1 against the surfaces it sits on, day and night', () => {
   const lum = (hex: string) => { const c = hex.replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };

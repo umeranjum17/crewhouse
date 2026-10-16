@@ -277,6 +277,16 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .doc .grow { font-weight: 600; min-width: 0; }
 /* A file's name holds one line and ends in an ellipsis, never broken at a hyphen. */
 .doc-name, .c-file b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* A file the person may forget: the card, with its one action under it. */
+/* The one plain rule, on the unlock card: the copies are not locked any more, so how long do they stay? */
+.unlock-keep { display: grid; gap: 6px; margin-top: 12px; font-size: 15px; line-height: 1.45; }
+.keep-opt { display: flex; gap: 9px; align-items: center; font-weight: 500; }
+.keep-opt input { accent-color: var(--go); width: 17px; height: 17px; flex: none; }
+.file-with-forget { max-width: 480px; }
+.file-with-forget > * { max-width: none; width: 100%; }
+.ev-file { display: flex; gap: 10px; align-items: baseline; }
+.ev-file .forget-file { font-size: 14px; white-space: nowrap; }
+.forget-file { color: var(--mute); }
 .doc-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--danger); font-size: 22px; flex: none; }
 
 /* splash and party (A's ASCII moments, always on the night palette) */
