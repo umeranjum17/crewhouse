@@ -83,8 +83,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
-/** A file's own name, as the person knows it: an unlocked copy's name holds the path it came from. */
-const fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } };
+const fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } }; // a file's own name, as the person knows it
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
 const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; }, hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
@@ -2178,8 +2177,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i]))), wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
     d.files.forEach((f: string, i: number) => codes[i] || this.db.event('file.unlocked', d.bot, { task: ask.task_id, path: unlockedAs(f) })); // a copy that opened follows the rule, even on a try where another didn't
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
-    // Kept, not removed with the job: every copy this job opened is a card in the helper's chat, with Forget this
-    // file on it — including one an earlier try on this same card already opened.
+    // Kept, not removed with the job: every copy this job opened is a card in the helper's chat, with Forget this file on it.
     if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f)) && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f))) { this.unforgotten(d.bot, unlockedAs(f)); this.db.event('file.delivered', d.bot, { task: ask.task_id, path: unlockedAs(f) }); this.say(d.bot, 'system', `Kept ${unlockedAs(f)}: ${this.knownName(d.bot, f)}`, ask.task_id); }
     return `unlocked: ${d.all.map(unlockedAs).join(', ')}`;
   }
@@ -2192,8 +2190,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private dropUnlocked(task: Row) {
     if (this.fileRule(task.bot) === 'keep') return;
     const space = disk.botDir(this.cfg, task.bot);
-    for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
-      const rel = String(JSON.parse(e.data).path ?? '');
+    for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) { const rel = String(JSON.parse(e.data).path ?? '');
       if (!rel.startsWith('files/unlocked/')) continue;
       try { rmSync(join(space, rel), { force: true }); this.forgetLog(task.bot, rel); this.db.event('file.forgotten', task.bot, { task: task.id, path: rel, why: 'job' }); } catch { /* a copy that is already gone stays gone */ }
     }
