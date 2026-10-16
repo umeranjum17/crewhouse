@@ -1,7 +1,6 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
-import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type ToolSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
@@ -149,43 +148,42 @@ export class OpenClawRuntime implements AgentRuntime {
   }
 
   async setLearning(on: boolean) { await this.kit.patchConfig({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }); }
-  async learning() {
-    const s = await this.kit.call('config.get', {}, { timeoutMs: 20_000 }).catch(() => undefined) as { config?: any } | undefined;
-    return s?.config?.skills?.workshop?.autonomous?.mode !== 'off';
-  }
 
-  async run(spec: RunSpec, on: (event: RunEvent) => void, opts?: { register?: boolean }): Promise<RunEnd> {
-    const register = opts?.register !== false, provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
-    if (register) this.runs.set(spec.key, spec);
+  async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
+    const provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
+    this.runs.set(spec.key, spec);
     try {
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}), register },
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}) },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
-    finally { if (register) this.runs.delete(spec.key); }
+    finally { this.runs.delete(spec.key); }
   }
   steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
   abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
-  /** The person's applied learned skills (the workshop's proposals, applied state last). */
+  /** The workshop's pending and loaded skills on every lane that learns them: the member agent and, once a plan key
+   *  made it, its key agent (`byokit-key-<member>`, the kit's README), each with its own proposals and skills root
+   *  from the engine's roster. Newest first; a forgotten one has left its skills root, so it is gone here too. */
+  private async proposals() {
+    const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 });
+    const lanes = roster.agents.filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') }));
+    const rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
+      .map((p) => ({ id: p.id, skill: p.skillName, key: p.skillKey, at: Date.parse(p.updatedAt) || 0, state: p.status, lane }))))).flat();
+    return rows.filter((p) => p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md')))).sort((a, b) => b.at - a.at);
+  }
+  /** What the person sees learned: one row per skill name, whichever lane learned it; the newest copy wins. */
   async learned() {
-    const { agentId } = await this.kit.ensureMember(ME);
-    const list = await this.kit.call('skills.proposals.list', { agentId }, { timeoutMs: 20_000 }).catch(() => undefined) as { proposals?: any[] } | undefined;
-    return (list?.proposals ?? []).map((p) => ({
-      id: String(p.id ?? ''),
-      skill: String(p.skillName ?? p.title ?? ''),
-      at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0,
-      state: String(p.status ?? ''),
-    })).filter((p) => p.id);
+    const rows = await this.proposals();
+    return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state }));
   }
 
-  /** The person's learned-skills folder, and its pre-change capture: crewhouse's own git versioning. A capture that
-   *  cannot be verified throws, and the caller must refuse the review — the data stays. */
+  /** The member lane's learned-skills folder, and a lane's pre-change capture: crewhouse's own git versioning. A
+   *  capture that cannot be verified throws, and the caller must refuse the change — the data stays. */
   workspaceOf() { return join(this.stateDir, 'openclaw/workspaces', ME, 'skills'); }
-  captureLearned(): string {
-    const dir = this.workspaceOf();
+  captureLearned(dir = this.workspaceOf(), why = 'Before the skill collection review'): string {
     if (!existsSync(join(dir, '.git'))) mkdirSync(dir, { recursive: true });
-    const hash = commit(dir, ['.'], 'Before the skill collection review', true);
-    if (!hash) throw new Error('the learned-skills capture failed; the review was refused');
+    const hash = commit(dir, ['.'], why, true);
+    if (!hash) throw new Error('the learned-skills capture failed; nothing was changed');
     return hash;
   }
   /** Bring one learned skill back from the capture history, even after later edits or reviews. The target is the
@@ -193,8 +191,8 @@ export class OpenClawRuntime implements AgentRuntime {
    *  inside it (`<name>/SKILL.md`, never `skills/<name>/SKILL.md`). The capture is read before anything is written —
    *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
    *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
-  restoreLearned(name: string, hash?: string) {
-    const dir = this.workspaceOf(), git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' }), at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
+  restoreLearned(name: string, hash?: string, dir = this.workspaceOf()) {
+    const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' }), at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
     try { body = git(['show', `${at}:${name}/SKILL.md`]); }
     catch { throw new Error(`no learned-skill capture holds "${name}"; nothing was restored`); }
@@ -259,17 +257,20 @@ export class OpenClawRuntime implements AgentRuntime {
       reviewed: this.starterSkills().some((s) => s.slug === String(i.slug ?? '')),
       on: on.has(String(i.slug ?? '')) })).filter((i: any) => i.slug);
   }
-  /** Forget one learned skill. Pending proposals are rejected directly; an applied one is restored by a one-shot
-   *  turn whose only possible tool is the workshop's own restore (spec §5.4) — no other tool can run on it. */
+  /** Forget one learned skill on every lane that holds it. A pending proposal is rejected in its own agent; a loaded
+   *  one is captured, then put away in its lane's skills/.archive (the engine skips dot folders and its watcher drops
+   *  it), so restoreLearned brings it back byte for byte and nothing is deleted. The engine has no single-skill
+   *  removal of an applied skill; this stands in until it does. */
   async forget(id: string, skill = '') {
-    const { agentId } = await this.kit.ensureMember(ME);
-    for (const method of ['skills.proposals.reject', 'skills.proposals.quarantine'] as const) {
-      const ok = await this.kit.call(method, { agentId, proposalId: id } as any, { timeoutMs: 20_000 }).then(() => true).catch(() => false);
-      if (ok) return;
+    const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name));
+    if (!copies.length) throw Object.assign(new Error(`"${skill || id}" is no longer a learned skill; nothing was forgotten`), { status: 404 });
+    for (const p of copies) {
+      const at = { agentId: p.lane.agentId, proposalId: p.id }, timeoutMs = 20_000;
+      if (p.state === 'pending') { await this.kit.call('skills.proposals.reject', { ...at, expectedRevisionHash: (await this.kit.call('skills.proposals.inspect', at, { timeoutMs })).revisionHash ?? '' }, { timeoutMs }); continue; }
+      const capture = this.captureLearned(p.lane.skills, `Before forgetting ${p.key}`);
+      mkdirSync(join(p.lane.skills, '.archive'), { recursive: true });
+      renameSync(join(p.lane.skills, p.key), join(p.lane.skills, '.archive', `${p.key}-${Date.now()}`));
+      commit(p.lane.skills, ['.'], `Forgot ${p.key}; restore from ${capture}`);
     }
-    // Applied: a one-shot turn, unregistered (so the gate allows only the workshop's restore), then forgotten for good.
-    const end = await this.run({ key: `agent:${ME}:crewhouse:forget:${randomUUID()}`, bot: 'chief', task: 0, account: 'chatgpt',
-      cwd: '', system: 'You are the crew\'s own workshop assistant. Use skill_workshop with action "restore_collection" and nothing else.', message: `Forget the learned skill "${skill}" (proposal ${id}): use skill_workshop with action "restore_collection" and nothing else.`, builtins: [] }, () => {}, { register: false });
-    if (!end.ok) throw new Error('Forget failed');
   }
 }

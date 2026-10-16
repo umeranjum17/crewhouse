@@ -189,7 +189,7 @@ Both retry by themselves and say "Back in touch" when it answers again.
 
 ## Learning and the work trail
 
-`GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from your work (`state: 'applied'` is what the rows show); `POST /api/learned/forget {id, skill}` puts one back the way it was (the engine's own restore; nothing else runs). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
+`GET /api/learned` → `[{id, skill, at, state}]` — the skills the engine learned from your work on any model lane (the member agent and the OpenCode Go key agent), one row per skill name, the newest copy winning: pending ones and the applied ones still loaded; `POST /api/learned/forget {id, skill}` forgets it on every lane that holds it (a pending one is rejected; an applied one is captured, then put away in that lane's `skills/.archive`, never deleted). The bot page's settings show these as **Learned · Forget** rows under the **Learn from how I work** switch.
 `GET /api/learning` → `{on}` and `POST /api/learning {on}` are that switch: the engine's own learning mode, on by default. The switch applies to your crew.
 `GET /api/task/:id/trail` → `[{at, words, ok}]` — one plain-words row per tool call of one task, recorded by crewd itself (`run.call`), redacted to words. The "How I did it" drawer renders it collapsed by default.
 
