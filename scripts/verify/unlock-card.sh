@@ -55,7 +55,7 @@ THEN=$(show .unlock-card) bash scripts/verify/screens.sh "$EV/screens" unlock-ca
 fields() { chrome-devtools-axi snapshot --full | awk '/textbox "[^"]*\.pdf"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1}'; }
 button() { chrome-devtools-axi snapshot --full | awk -v n="$1" '$0 ~ "button \"" n {sub(/uid=(g[0-9]+:)?/,"",$1); print $1; exit}'; }
 # The look check at the hardest size (360 wide, text x1.3, day and night), each shot beside mock 3A (FM_HOME holds it).
-node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$(show .unlock-card)" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$(show .unlock-card)" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt"
 # Two files: the pick reads Keep them, picked in each theme and width; the next fresh open resets the card to the default.
 KEEP='(async () => { for (let i = 0; i < 50 && !document.querySelector(".unlock-keep"); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector(".unlock-keep .keep-opt:last-child input").click(); document.querySelector(".unlock-card").scrollIntoView({ block: "start" }); return true; })()'
 THEN="$KEEP" bash scripts/verify/screens.sh "$EV/screens" keep-them "$B/#/chief" >/dev/null
@@ -100,7 +100,7 @@ for f in 2-1 2-2; do log "kept copy $f: $( [ -f "$LAB/crew/bots/penny/files/unlo
 SHOW=$(show .file-with-forget); chrome-devtools-axi open "$B/#/h/penny" >/dev/null; chrome-devtools-axi wait "· unlocked" >/dev/null
 chrome-devtools-axi eval "$(show .file-with-forget)" >/dev/null; chrome-devtools-axi screenshot "$EV/screens/kept-copy-day-390.png" >/dev/null
 THEN="$SHOW" bash scripts/verify/screens.sh "$EV/screens" kept-copy "$B/#/h/penny" >/dev/null
-node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$SHOW" kept-copy="$B/#/h/penny" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$SHOW" kept-copy="$B/#/h/penny" | tee -a "$EV/transcript.txt"
 chrome-devtools-axi eval "JSON.stringify([...document.querySelectorAll('.file-with-forget')].map((e) => e.innerText.replace(/\n/g, ' | ')))" | tee -a "$EV/transcript.txt"
 # The kept copy's own card (the last one), not the file the person sent: Forget this file, then Forget it.
 FORGET=$(chrome-devtools-axi snapshot --full | awk '/button "Forget this file"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1}' | tail -1)

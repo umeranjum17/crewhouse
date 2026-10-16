@@ -134,7 +134,7 @@ ax eval '(async () => { const a = [...document.querySelectorAll("a")].find((x) =
 # screen this change does not touch, and it wears the same modal, so a hit on both is the panel's, not the deck's.
 LOOK='(async () => { for (let i = 0; i < 100 && !document.querySelector(".slide-frame, .wb-panel td"); i++) await new Promise((r) => setTimeout(r, 100)); return true; })()'
 FM_HOME=${FM_HOME:-/home/umer/.treehouse/firstmate-8bf1b0/3/firstmate} node "$REPO/scripts/verify/look-check.mjs" web --out "$OUT/look" --person "$LAB/state/person.key" --then "$LOOK" \
-  "deck-panel=$B/#/f/quill/files%2F$DECK" "workbook-panel=$B/?demo#/f/scout/files%2Fflights-to-larkspur.xlsx" | tee "$OUT/look-check.txt" || log "look-check: exit $? (see look-check.txt)"
+  "deck-panel=$B/#/f/quill/files%2F$DECK" "workbook-panel=$B/?demo#/f/scout/files%2Fflights-to-larkspur.xlsx" | tee "$OUT/look-check.txt"
 ax stop >/dev/null 2>&1 || true
 
 # The installed app, for real: Settings' own Install, then the same panel at 390 and 1440, day and night.
