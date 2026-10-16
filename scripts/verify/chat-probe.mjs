@@ -27,6 +27,8 @@ const run = async (e) => (await send('Runtime.evaluate', { expression: e, return
 await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 1, mobile: +W < 600 });
 await send('Page.navigate', { url: base + path });
 await until(() => run("!!document.querySelector('.dock textarea')"));
+// CHAT_PROBE_FIRST: what the person does before typing, as a page expression (e.g. Not now on the Add your phone card).
+if (process.env.CHAT_PROBE_FIRST) await until(() => run(process.env.CHAT_PROBE_FIRST));
 await sleep(1500);
 // crewd's push, as the app hears it
 const push = new WebSocket(base.replace('http', 'ws') + '/ws', `crewhouse-person.${PERSON}`);

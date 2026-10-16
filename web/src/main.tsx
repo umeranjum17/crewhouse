@@ -599,8 +599,15 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   const cards = page ? A.cards(state).filter((c) => c.helper === id) : [];
   const box = useRef<HTMLDivElement>(null);
   // Whether the thread is at its newest line, so a line arriving while the person reads up never yanks them down.
-  const pinned = useRef(true);
-  const onScroll = () => { const el = box.current; if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; };
+  // Only a scroll up lets go of it: a scroll event is read a frame after the box moved, and a composer that grew in
+  // that frame (typing, the phone's keyboard) once read as reading up and left the live line under the fold for good.
+  const pinned = useRef(true), top = useRef(0);
+  const onScroll = () => {
+    const el = box.current;
+    if (!el) return;
+    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40 || (pinned.current && el.scrollTop >= top.current);
+    top.current = el.scrollTop;
+  };
   // The person's own hand in this thread: from the first touch on, the thread never moves itself again (Main2036).
   const touched = useRef(false);
   useEffect(() => {
@@ -614,7 +621,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   }, []);
   // A new chat opens at its own newest line, whatever the last thread was left at; its open ask may be landed on again.
   const asked = useRef(''), askedAt = useRef(-1);
-  useEffect(() => { pinned.current = true; asked.current = ''; askedAt.current = -1; touched.current = false; }, [id]);
+  useEffect(() => { pinned.current = true; top.current = 0; asked.current = ''; askedAt.current = -1; touched.current = false; }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
   // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096); a new
@@ -642,6 +649,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     stick();
     const raf = requestAnimationFrame(stick);
     const ro = new ResizeObserver(stick);
+    ro.observe(el);   // the box itself shrinks under a growing composer
     const seen = new WeakSet<Element>();
     const watch = () => { for (const c of Array.from(el.children)) if (!seen.has(c)) { seen.add(c); ro.observe(c); } };
     watch();
