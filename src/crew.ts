@@ -1795,8 +1795,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open. A routine offered by
     // Chief takes the time the person changed on the card ("Change time"), then the same yes.
     if (body.schedule && ask.kind === 'propose' && detail.routine) detail.routine.schedule = String(body.schedule);
-    // The person's pick for the helper's files, from the card in Chief's chat: unlocked copies go when the job ends, or stay.
-    if (ask.kind === 'unlock' && body.answer === 'allow') this.setFileRule(detail.bot, String(body.rule ?? '') === 'keep' ? 'keep' : 'job');
     // A draft the person changed before Approve: their words are the ones kept, in the draft's own file. Still nothing is sent.
     if (body.text !== undefined) {
       const text = String(body.text).trim();
@@ -1813,6 +1811,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const picked = ask.kind === 'style' && body.answer === 'allow' ? (detail.pick?.styles ?? []).find((s: { id: string }) => s.id === String(body.style ?? '')) : undefined;
     if (ask.kind === 'style' && body.answer === 'allow' && !picked) throw fail('pick one of the styles on the card');
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, String(body.rule ?? '')) : '';
+    if (ask.kind === 'unlock' && body.answer === 'allow') this.setFileRule(detail.bot, String(body.rule ?? '') === 'keep' ? 'keep' : 'job');
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (change ? 'change it' : body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
@@ -2201,7 +2200,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** The name the person sent a file in chat under, for the card that names it back to them. */
   private sentName(botId: string, rel: string) { return this.db.get("SELECT json_extract(data, '$.name') AS n FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.path') = ?", botId, rel)?.n ?? null; }
   /** A kept copy's own name holds the path it came from: the person knows that file by the name they sent it under. */
-  private knownName(botId: string, rel: string) { return this.sentName(botId, rel.startsWith('files/unlocked/') ? decodeURIComponent(rel.slice('files/unlocked/'.length)) : rel) ?? fileName(rel); }
+  private knownName(botId: string, rel: string) { let orig = rel; if (rel.startsWith('files/unlocked/')) { try { orig = decodeURIComponent(rel.slice('files/unlocked/'.length)); } catch { orig = rel; } } return this.sentName(botId, orig) ?? fileName(rel); }
   /** Paths out of a helper's folder now (newest 200, in settings): the app keeps no card for a file that is not there. */
   private forgotten() { return JSON.parse(this.db.get("SELECT value FROM settings WHERE key = 'files.forgotten'")?.value ?? '[]') as { bot: string; path: string }[]; }
   private forgetLog(botId: string, rel: string) { this.db.run("INSERT INTO settings (key, value) VALUES ('files.forgotten', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify([{ bot: botId, path: rel }, ...this.forgotten().filter((f) => f.path !== rel || f.bot !== botId)].slice(0, 200))); }

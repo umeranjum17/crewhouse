@@ -220,12 +220,13 @@ export const keptWhere = 'Everything the crew remembers about you shows in Setti
 /** A file's name as a person would say it: "files/mum-birthday_v2.mp4" → "Mum birthday v2". An unlocked copy's own
  *  name holds the path it came from, so it reads by the file's own name instead. */
 export function pretty(path: string) {
-  const leaf = (/%[0-9a-f]{2}/i.test(path) ? decodeURIComponent(path) : path).split('/').pop() ?? path;
+  let decoded = path; if (/%[0-9a-f]{2}/i.test(path)) { try { decoded = decodeURIComponent(path); } catch { decoded = path; } }
+  const leaf = decoded.split('/').pop() ?? path;
   const b = leaf.replace(/\.[a-z0-9]+$/i, '').replace(/[-_.]+/g, ' ').trim();
   return b ? b[0].toUpperCase() + b.slice(1) : 'A file';
 }
 /** The bot and path a file view came from, for the phone's photo fetch: `/files/<bot>/<path under files/>`. */
-export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); return m ? { bot: m[1], path: `files/${decodeURIComponent(m[2])}` } : null; };
+export const fileSource = (url: string) => { const m = /^\/files\/([a-z0-9-]+)\/(.+)$/.exec(url); if (!m) return null; let path = m[2]; try { path = decodeURIComponent(m[2]); } catch { path = m[2]; } return { bot: m[1], path: `files/${path}` }; };
 
 /** Crewd's own check on a suggested change, as a person reads it: did it pass, when, and the job to start again.
  *  What the check found and which run counts are crewd's own thread line; the card never says them a second time. */
