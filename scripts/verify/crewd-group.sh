@@ -3,6 +3,8 @@
 # $LAB: TERM to the whole group, KILL after a bounded grace, then wait until no member is left. Only an empty group
 # lets the lab go; a group that outlives KILL keeps it and fails the run. HUP, INT and TERM exit through cleanup.
 CREWD=""
+# The driver's own stderr: a trap can run inside a redirected command (`… >/dev/null 2>&1`), so say things here.
+exec {crewd_err}>&2
 crewd_traps() { trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; }
 crewd_traps
 # crewd_start <dir> <log> <command…>: the command, run in <dir>, leads a fresh group and dies with this shell
@@ -17,7 +19,7 @@ crewd_start() {
 }
 crewd_group() {
   for _ in $(seq 100); do kill -0 -- "-$1" 2>/dev/null && { CREWD=$1; return 0; }; sleep 0.05; done
-  echo "${0##*/}: crewd's own process group never appeared" >&2; return 1
+  echo "${0##*/}: crewd's own process group never appeared" >&"$crewd_err"; return 1
 }
 crewd_gone() { ! kill -0 -- "-$CREWD" 2>/dev/null; }
 crewd_drain() { kill "-$1" -- "-$CREWD" 2>/dev/null || true; for _ in $(seq 100); do crewd_gone && return 0; sleep 0.05; done; crewd_gone; }
@@ -26,8 +28,8 @@ crewd_stop() {
   [ -n "$CREWD" ] || return 0
   trap '' HUP INT TERM
   if ! crewd_drain TERM; then
-    echo "${0##*/}: crewd's process group $CREWD outlived SIGTERM; sending SIGKILL" >&2
-    crewd_drain KILL || { echo "${0##*/}: crewd's process group $CREWD outlived SIGKILL; keeping $LAB" >&2; return 1; }
+    echo "${0##*/}: crewd's process group $CREWD outlived SIGTERM; sending SIGKILL" >&"$crewd_err"
+    crewd_drain KILL || { echo "${0##*/}: crewd's process group $CREWD outlived SIGKILL; keeping $LAB" >&"$crewd_err"; return 1; }
   fi
   CREWD=""; crewd_traps
 }

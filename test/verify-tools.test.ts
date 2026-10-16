@@ -110,7 +110,7 @@ test('recorder bounds silent peers and settles disconnected requests', { timeout
 // wait for it, remove the lab): it must fail the same check.
 test('verify drivers empty crewd\'s process group before removing its lab', { timeout: 150_000 }, async () => {
   const own = Number(readFileSync('/proc/self/stat', 'utf8').split(') ')[1].split(' ')[2]);
-  const [git, setsid] = execFileSync('sh', ['-c', 'command -v git setsid'], { encoding: 'utf8' }).trim().split('\n');
+  const [git, setsid] = ['git', 'setsid'].map((bin) => execFileSync('sh', ['-c', `command -v ${bin}`], { encoding: 'utf8' }).trim()); // dash's command -v reads one name
   const alive = (pgid: number) => { try { process.kill(-pgid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code !== 'ESRCH'; } };
   const exit = (child: ChildProcess) => new Promise<number | string>((resolve) => {
     const timer = setTimeout(() => resolve('no exit within 90s'), 90_000);
@@ -154,7 +154,7 @@ kill -TERM "$PID"; wait "$PID"; rm -rf "$LAB"`];
       ( [ $resist = no ] || { trap '' TERM; : > "${dir}/resisting"; }
         for _ in $(seq 1200); do [ -d "$lab" ] || { echo "$lab" >> "${dir}/survived"; exit; }; sleep 0.05; done ) < /dev/null > /dev/null 2>&1 &
     done
-    for _ in $(seq 500); do [ -e "${dir}/resisting" ] && break; sleep 0.01; done
+    for _ in $(seq 1200); do [ -e "${dir}/resisting" ] && break; sleep 0.05; done
     printf '%s\\n%s\\n' "$(ps -o pgid= -p $$)" "$lab" > "${dir}/group.tmp" && mv "${dir}/group.tmp" "${dir}/group"`;
     writeFileSync(join(dir, 'git'), `#!/usr/bin/env bash
 case "\${CREWHOUSE_STATE_DIR:-}" in "${dir}/tmp/"*/state)
