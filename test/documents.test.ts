@@ -137,6 +137,20 @@ test('the deck crewd writes is a real .pptx: the parts PowerPoint needs, its sli
   assert.match(slide, /<a:t>Warm coat<\/a:t>/, 'and its lines are its lines');
   await assert.rejects(() => buildDeck(join(temp('empty-deck'), 'empty.pptx'), { name: 'Empty', slides: [] }), /at least one slide/, 'an empty deck is a plain refusal, no file');
 
+  // Looks: light is the plain deck it always was; dark and bold paint theirs; anything else is refused by name.
+  assert.doesNotMatch(await zip.file('ppt/slides/slide1.xml')!.async('string'), /p:bg/, 'light paints nothing');
+  const darkFile = join(temp('dark-deck'), 'dark.pptx');
+  await buildDeck(darkFile, { ...deckSpec, style: 'dark' });
+  const darkSlide = await (await JSZip.loadAsync(readFileSync(darkFile))).file('ppt/slides/slide1.xml')!.async('string');
+  assert.match(darkSlide, /val="111827"/, 'dark paints its background near-black');
+  assert.match(darkSlide, /val="FFFFFF"/, 'and its words light');
+  const boldFile = join(temp('bold-deck'), 'bold.pptx');
+  await buildDeck(boldFile, { ...deckSpec, style: 'bold' });
+  const boldSlide = await (await JSZip.loadAsync(readFileSync(boldFile))).file('ppt/slides/slide1.xml')!.async('string');
+  assert.match(boldSlide, /val="DBEAFE"/, 'bold paints its pale background');
+  assert.match(boldSlide, /val="1D4ED8"/, 'and its title the accent');
+  await assert.rejects(() => buildDeck(join(temp('no-deck'), 'no.pptx'), { ...deckSpec, style: 'gaudy' }), /pick a style/, 'an unknown look is a plain refusal, no file');
+
   // The preview JSON: one entry per slide, words only, plus the same words flattened as document parts.
   const json = await readDeck(file) as any;
   assert.deepEqual(json.slides.map((s: any) => s.title), ['Weekend away', 'What to pack', 'Costs']);
@@ -152,7 +166,7 @@ test('a helper makes a deck in its own chat: the .pptx lands in files/, is deliv
   const { cfg, db, crew } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
-  const id = (await crew.post('quill', `make the weekend a slide deck ${call('crew_slides', deckSpec)}`))!.task;
+  const id = (await crew.post('quill', `make the weekend a slide deck ${call('crew_slides', { ...deckSpec, style: 'light' })}`))!.task;
   await settled(db, id);
   assert.equal(task(db, id).state, 'done');
 
@@ -172,6 +186,50 @@ test('a helper makes a deck in its own chat: the .pptx lands in files/, is deliv
   assert.equal(A.fileTarget(f)?.href, `#/f/quill/${encodeURIComponent(rel)}`, 'a deck opens the read-only panel, never the raw file');
   assert.deepEqual(A.deck(view, f.name).slides.map((s) => s.title), ['Weekend away', 'What to pack', 'Costs']);
   assert.equal(A.slideWords(3), '3 slides');
+});
+
+test('a deck without a style opens a pick card first: the tap names the look, and the second call builds it', async () => {
+  const { cfg, db, crew } = setup();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  const id = (await crew.post('quill', `make the weekend a slide deck ${call('crew_slides', deckSpec)}`))!.task;
+  await settled(db, id);
+  assert.equal(db.all("SELECT data FROM events WHERE kind = 'file.delivered'").length, 0, 'nothing is built before the pick');
+  assert.equal(task(db, id).state, 'needs_you', 'the job waits on the person');
+  const row = db.get("SELECT * FROM asks WHERE state = 'open'")!;
+  assert.equal(row.kind, 'style');
+  assert.equal(row.bot, 'chief', 'the pick card lives in Chief\u2019s chat');
+  const detail = JSON.parse(row.detail);
+  assert.equal(detail.pick.deck, 'Weekend away');
+  assert.equal(detail.pick.title, 'Weekend away');
+  assert.deepEqual(detail.pick.lines, ['Two nights by the sea', 'Train leaves at 09:12 on Saturday']);
+  assert.deepEqual(detail.pick.styles.map((s: any) => s.id), ['light', 'dark', 'bold']);
+
+  // The app's own card: one choice per look, the first slide's words riding along.
+  const card = A.card({ ...row, detail }, crew.snapshot());
+  assert.equal(card.kind, 'style');
+  assert.deepEqual(card.choices.map((c) => c.label), ['Light', 'Dark', 'Bold', 'Not now']);
+  assert.equal(card.pick!.title, 'Weekend away');
+  assert.deepEqual(card.pick!.styles.map((s: any) => s.id), ['light', 'dark', 'bold']);
+
+  // A tap outside the three looks is a plain refusal, and the card stays open.
+  await assert.rejects(() => crew.answer(row.id, { answer: 'allow', style: 'gaudy' }), /pick one of the styles/);
+  assert.equal(db.get('SELECT state FROM asks WHERE id = ?', row.id)!.state, 'open');
+  await crew.answer(row.id, { answer: 'allow', style: 'dark' });
+  assert.equal(db.get('SELECT answer FROM asks WHERE id = ?', row.id)!.answer, 'Dark');
+  await settled(db, id);
+  assert.equal(task(db, id).state, 'done', 'the resumed turn ends the waiting job');
+
+  // The second call builds the dark deck the person picked.
+  const JSZip = (await import('jszip')).default;
+  const second = (await crew.post('quill', `they picked dark ${call('crew_slides', { ...deckSpec, style: 'dark' })}`))!.task;
+  await settled(db, second);
+  assert.equal(task(db, second).state, 'done');
+  const rel = JSON.parse(db.all("SELECT data FROM events WHERE kind = 'file.delivered'").at(-1)!.data).path;
+  const slide = await (await JSZip.loadAsync(readFileSync(join(disk.botDir(cfg, 'quill'), rel)))).file('ppt/slides/slide1.xml')!.async('string');
+  assert.match(slide, /val="111827"/, 'the finished file wears the picked look');
+  const view = await crew.documentView('quill', rel) as any;
+  assert.deepEqual(view.slides.map((s: any) => s.title), ['Weekend away', 'What to pack', 'Costs'], 'it still reads back as slides');
 });
 
 test('repeated requests for the same title get separate delivered files that both open', async () => {

@@ -940,9 +940,43 @@ function UnlockCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: strin
   );
 }
 
+/** A deck's style pick: the deck's first slide in each offered look, drawn with the slide-frame preview, one button
+ *  per look. The tap names the look; "Not now" waits behind ⋯ like any other card, with tomorrow's reminder. */
+function StyleCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  const p = c.pick!;
+  const [oops, setOops] = useState(false);
+  const last = useRef<Json | null>(null);
+  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
+  const looks = c.choices.filter((x) => x.body.answer === 'allow');
+  const deny = c.choices.find((x) => x.body.answer === 'deny');
+  // A deferred "Not now" comes back on its own, like any other card's.
+  const remind = deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  return (
+    <div className="card ask style-card" id={id}>
+      <AskHead c={c} who={who} />
+      <p className="ask-words">{c.words}</p>
+      <div className="pick-samples" role="group" aria-label="Sample looks">
+        {p.styles.map((s) => <figure key={s.id} className={`slide-frame style-${s.id}`}>
+          {p.title && <h3>{p.title}</h3>}
+          {p.lines.length > 0 && <ul>{p.lines.map((l, j) => <li key={j}>{l}</li>)}</ul>}
+          <figcaption>{s.label}</figcaption>
+        </figure>)}
+      </div>
+      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
+      <div className="btns">
+        {looks.map((x, i) => <button key={x.label} className={`btn${i === 0 ? ' go' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}
+        <More title={c.head} sub={c.status} acts={[
+          deny && { label: deny.label, run: () => act(deny.body) },
+          remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
+      </div>
+    </div>
+  );
+}
+
 export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
+  if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);

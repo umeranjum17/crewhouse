@@ -2,9 +2,10 @@
 # A finished slide deck the person can open and present (docs/verification/slides-deck.md).
 #   bash scripts/verify/slides-deck.sh <repo> <out-dir>
 # Real crewd on the stub engine, isolated per docs/verification/runbook.md's Launch (web/dist built first). Quill is asked for a deck and
-# crewd writes the .pptx itself, then delivers it. Proves: the file's own OOXML parts; LibreOffice opens it and every
-# slide renders; /api/document reads it back as slides and parts, and 403s a path nobody delivered; the chat card and
-# the panel at 1440/390, day and night; the look check at 360 with the largest text; the same panel in the installed app.
+# crewd files the style pick card first, then writes the .pptx itself in the picked look and delivers it. Proves: the pick card with its
+# samples, the pick, and the file's own OOXML parts; LibreOffice opens it and every slide renders; /api/document reads
+# it back as slides and parts, and 403s a path nobody delivered; the chat card and the panel at 1440/390, day and
+# night; the look check at 360 with the largest text; the same panel in the installed app.
 # Needs unzip, LibreOffice, ImageMagick, chrome-devtools-axi, xvfb-run. Scratch under ~/.cache/fm-scratch, never /tmp.
 set -euo pipefail
 REPO=$(cd "$1" && pwd); OUT=$(mkdir -p "$2" && cd "$2" && pwd)
@@ -36,16 +37,50 @@ tool() { "$NODE" -e 'process.stdout.write(`[tool ${process.argv[1]} ${JSON.strin
 msg() { "$NODE" -e 'process.stdout.write(JSON.stringify({text: process.argv[1]}))' "$1"; }
 is_done() { api "$B/api/bots/$1" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const t=JSON.parse(s).tasks.find((t)=>t.id===Number(process.argv[1]));process.exit(t&&t.state==="done"?0:1)})' "$2"; }
 
-# The deck the reference bar asks for: a kick-off somebody stands up with.
-SPEC='{"name":"New shop kick-off","slides":[{"title":"Opening the new shop","bullets":["Doors open Saturday 4 October","Amina manages the floor"]},{"title":"Why now","bullets":["The old unit\u2019s lease ends in November","Weekend footfall is three times the weekday"]},{"title":"The first week","bullets":["Wednesday: stock arrives","Thursday: staff run-through","Saturday: opening day"]},{"title":"What it costs","bullets":["Fit-out \u00a38,400","First stock \u00a35,200","Staff \u00a31,900 a week"]},{"title":"What we need from you","bullets":["Approve the fit-out quote","Name the weekend team"]}]}'
+is_done() { api "$B/api/bots/$1" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const t=JSON.parse(s).tasks.find((t)=>t.id===Number(process.argv[1]));process.exit(t&&t.state==="done"?0:1)})' "$2"; }
+is_waiting() { api "$B/api/bots/$1" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const t=JSON.parse(s).tasks.find((t)=>t.id===Number(process.argv[1]));process.exit(t&&t.state==="needs_you"?0:1)})' "$2"; }
+open_ask() { api "$B/api/state" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const a=JSON.parse(s).asks.filter((a)=>a.kind===process.argv[1]&&a.state!=="answered").pop();if(!a){process.exit(1)}console.log(a.id)})' "$1"; }
+
+# The deck the reference bar asks for: a kick-off somebody stands up with. No style on the first call, so crewd files
+# the pick card instead of building: the first slide carries the longest title a deck allows (120 characters).
+SPEC='{"name":"New shop kick-off","slides":[{"title":"Opening the new shop on Saturday, 4 October with Amina managing the floor and the whole weekend team with the doors open","bullets":["Doors open Saturday 4 October","Amina manages the floor"]},{"title":"Why now","bullets":["The old unit\u2019s lease ends in November","Weekend footfall is three times the weekday"]},{"title":"The first week","bullets":["Wednesday: stock arrives","Thursday: staff run-through","Saturday: opening day"]},{"title":"What it costs","bullets":["Fit-out \u00a38,400","First stock \u00a35,200","Staff \u00a31,900 a week"]},{"title":"What we need from you","bullets":["Approve the fit-out quote","Name the weekend team"]}]}'
 task=$(api -X POST -d "$(msg "make the kick-off a slide deck $(tool crew_slides "$SPEC")")" "$B/api/bots/quill/messages" | "$NODE" -pe 'JSON.parse(require("fs").readFileSync(0)).task')
-wait_for is_done quill "$task"
+wait_for is_waiting quill "$task"
 
 DECK=new-shop-kick-off.pptx; REL="files/$DECK"; FULL="$LAB/crew/bots/quill/$REL"
+[ -f "$FULL" ] && { log "a deck was built before the pick"; exit 1; }
+ask=$(open_ask style) || { log "no style pick card"; exit 1; }
+api "$B/api/state" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const a=JSON.parse(s).asks.find((x)=>x.id===Number(process.argv[1]));
+  console.log("ask:", a.title, "| bot:", a.bot);
+  console.log("looks:", a.detail.pick.styles.map((x)=>x.id).join(","));
+  console.log("sample:", JSON.stringify(a.detail.pick.title), "|", JSON.stringify(a.detail.pick.lines));
+  process.exit(a.bot==="chief"&&a.detail.pick.styles.length===3 ? 0 : 1)})' "$ask" | tee "$OUT/pick-card.txt"
+
+# The person's app: the pick card in Chief's chat, day at phone width and night at desk width.
+PICK='(async () => { for (let i = 0; i < 100 && !document.querySelector(".style-card"); i++) await new Promise((r) => setTimeout(r, 100)); const c = document.querySelector(".style-card"); if (c) c.scrollIntoView({ block: "center" }); return !!c; })()'
+ax() { chrome-devtools-axi "$@"; }
+ax stop >/dev/null 2>&1 || true; ax pages >/dev/null 2>&1 || true; ax selectpage 1 >/dev/null
+ax open "$B/#person=$(<"$LAB/state/person.key")" >/dev/null
+ax resize 390 844 >/dev/null; ax open "$B/?day#/chief" >/dev/null; ax eval "$PICK" >/dev/null
+ax eval '(() => document.querySelector(".style-card")?.textContent ?? "no pick card")()' | tee -a "$OUT/pick-card.txt"
+ax screenshot "$OUT/screens/pick-card-day-390.png" >/dev/null
+ax resize 1440 900 >/dev/null; ax open "$B/?night#/chief" >/dev/null; ax eval "$PICK" >/dev/null
+ax screenshot "$OUT/screens/pick-card-night-1440.png" >/dev/null
+ax resize 390 844 >/dev/null; ax open "$B/?day#/chief" >/dev/null
+ax eval '(async () => { for (let i = 0; i < 100 && !document.querySelector(".style-card .btns"); i++) await new Promise((r) => setTimeout(r, 100)); const b = document.querySelector(".style-card .btns"); if (b) b.scrollIntoView({ block: "end" }); return !!b; })()' >/dev/null
+ax screenshot "$OUT/screens/pick-card-day-390-end.png" >/dev/null
+
+# The pick: Dark. The resumed job ends, and the second call builds the deck in that look.
+api -X POST -d '{"answer":"allow","style":"dark"}' "$B/api/asks/$ask/answer" >/dev/null
+wait_for is_done quill "$task"
+SPEC2=$(echo "$SPEC" | "$NODE" -pe 'JSON.stringify({...JSON.parse(require("fs").readFileSync(0,"utf8")),style:"dark"})')
+task2=$(api -X POST -d "$(msg "they picked dark $(tool crew_slides "$SPEC2")")" "$B/api/bots/quill/messages" | "$NODE" -pe 'JSON.parse(require("fs").readFileSync(0)).task')
+wait_for is_done quill "$task2"
 [ -f "$FULL" ] || { log "no deck at $REL"; ls -la "$LAB/crew/bots/quill/files"; exit 1; }
 { echo "crew_slides delivered $REL as $(stat -c%s "$FULL") bytes, $(file -b "$FULL")"
   echo "parts:"; unzip -Z1 "$FULL" | sort
   echo "slide 5 says:"; unzip -p "$FULL" ppt/slides/slide5.xml | grep -o '<a:t>[^<]*</a:t>'
+  echo "slide 1 wears dark:"; unzip -p "$FULL" ppt/slides/slide1.xml | grep -o 'val="111827"\|val="FFFFFF"' | sort | uniq -c
 } | tee "$OUT/deck-file.txt"
 unzip -Z1 "$FULL" | grep -qx 'ppt/theme/theme1.xml' || { log 'the deck has no theme: PowerPoint would refuse it'; exit 1; }
 [ "$(unzip -Z1 "$FULL" | grep -c '^ppt/slides/slide[0-9]*\.xml$')" = 5 ] || { log 'not five slide parts'; exit 1; }
@@ -66,9 +101,20 @@ code=$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' "${H[@]}" "$B/api/d
 echo "undelivered path: $code" | tee -a "$OUT/api-document.txt"
 [ "$code" = 403 ] || { log 'an undelivered path answered'; exit 1; }
 
+# No detail at all: one bare slide still files a proper pick card, and Not now ends the job with nothing built.
+BARE='{"name":"Ideas","slides":[{"title":"Ideas"}]}'
+bare=$(api -X POST -d "$(msg "make the ideas a slide deck $(tool crew_slides "$BARE")")" "$B/api/bots/quill/messages" | "$NODE" -pe 'JSON.parse(require("fs").readFileSync(0)).task')
+wait_for is_waiting quill "$bare"
+bareask=$(open_ask style) || { log "no pick card for the bare deck"; exit 1; }
+api "$B/api/state" | "$NODE" -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const a=JSON.parse(s).asks.find((x)=>x.id===Number(process.argv[1]));
+  console.log("bare pick:", JSON.stringify(a.detail.pick.title), JSON.stringify(a.detail.pick.lines), a.detail.pick.styles.length, "looks");
+  process.exit(a.detail.pick.title==="Ideas"&&a.detail.pick.lines.length===0&&a.detail.pick.styles.length===3 ? 0 : 1)})' "$bareask" | tee -a "$OUT/pick-card.txt"
+api -X POST -d '{"answer":"deny"}' "$B/api/asks/$bareask/answer" >/dev/null
+wait_for is_done quill "$bare"
+[ "$(ls "$LAB/crew/bots/quill/files/"*.pptx | wc -l)" = 1 ] || { log "Not now built a deck"; exit 1; }
+
 # The person's app: the card in the chat, the panel over it, and the file's own Download bytes.
 PANEL='(async () => { for (let i = 0; i < 100 && !document.querySelector(".slide-frame"); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector(".slide-frame"); })()'
-ax() { chrome-devtools-axi "$@"; }
 ax stop >/dev/null 2>&1 || true; ax pages >/dev/null 2>&1 || true; ax selectpage 1 >/dev/null
 ax open "$B/#person=$(<"$LAB/state/person.key")" >/dev/null
 ax eval 'location.href.includes("person=") ? "KEY IN URL" : "address clean"' > "$OUT/address-check.txt"

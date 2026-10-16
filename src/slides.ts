@@ -3,7 +3,9 @@
 // bot's folder. The model never hand-writes the binary, and the app never parses it: readDeck reads it back as
 // slides for the preview. The shape a helper fills in: one slide per point, each with a title and its lines.
 export type SlideSpec = { title: string; bullets?: string[] };
-export type DeckSpec = { name: string; slides: SlideSpec[] };
+export type DeckSpec = { name: string; slides: SlideSpec[]; style?: string };
+/** The looks a deck comes in (light is today's plain deck, dark light words on near-black, bold an accent title on pale blue). */
+export const STYLES: { id: string; label: string; bg?: string; ink?: string; accent?: string }[] = [{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark', bg: '111827', ink: 'FFFFFF' }, { id: 'bold', label: 'Bold', bg: 'DBEAFE', ink: '1F2937', accent: '1D4ED8' }];
 
 const MAX = { slides: 40, lines: 8, title: 120, line: 200, body: 420 };
 
@@ -40,19 +42,19 @@ const box = (id: number, name: string, y: number, cy: number, body: string) =>
   `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>`
   + `<a:xfrm><a:off x="685800" y="${y}"/><a:ext cx="10972800" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
   + `<p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>${body}</p:txBody></p:sp>`;
-/** One paragraph: the title's, or a bullet. Sizes are in hundredths of a point. */
-const para = (text: string, size: number, bullet: boolean) =>
+/** One paragraph: the title's, or a bullet. Sizes are in hundredths of a point; ink colours the run, empty keeps the theme's. */
+const para = (text: string, size: number, bullet: boolean, ink = '') =>
   `<a:p>${bullet ? '<a:pPr marL="342900" indent="-342900"><a:buFont typeface="Arial"/><a:buChar char="•"/></a:pPr>' : ''}`
-  + `<a:r><a:rPr lang="en-US" sz="${size}"${bullet ? '' : ' b="1"'}/><a:t>${esc(text)}</a:t></a:r></a:p>`;
+  + `<a:r><a:rPr lang="en-US" sz="${size}"${bullet ? '' : ' b="1"'}${ink ? `><a:solidFill><a:srgbClr val="${ink}"/></a:solidFill></a:rPr>` : '/>'}<a:t>${esc(text)}</a:t></a:r></a:p>`;
 
 /** One slide: a title along the top, its lines under it — plain text boxes, so nothing depends on a layout. */
-function slideXml(s: SlideSpec) {
+function slideXml(s: SlideSpec, st: { bg?: string; ink?: string; accent?: string } = {}) {
   const title = String(s?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX.title) || 'Untitled slide', lines = (Array.isArray(s?.bullets) ? s.bullets : []).map((b) => String(b ?? '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX.line)).filter(Boolean).slice(0, MAX.lines);
   // Fewer words mean bigger words: a body that would run off the slide comes down a size.
   const len = lines.reduce((n, b) => n + b.length, 0), size = len > MAX.body ? 1400 : len > 260 ? 1600 : 1800;
-  return XML + `<p:sld ${A} ${R} ${P}><p:cSld>${TREE}`
-    + box(2, 'Title', 457200, 1371600, para(title, 3200, false))
-    + (lines.length ? box(3, 'Body', 2057400, 4114800, lines.map((l) => para(l, size, true)).join('')) : '')
+  return XML + `<p:sld ${A} ${R} ${P}><p:cSld>${st.bg ? `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="${st.bg}"/></a:solidFill></p:bgPr></p:bg>` : ''}${TREE}`
+    + box(2, 'Title', 457200, 1371600, para(title, 3200, false, st.accent ?? st.ink ?? ''))
+    + (lines.length ? box(3, 'Body', 2057400, 4114800, lines.map((l) => para(l, size, true, st.ink ?? '')).join('')) : '')
     + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
 }
 
@@ -60,6 +62,8 @@ function slideXml(s: SlideSpec) {
 export async function buildDeck(file: string, spec: DeckSpec) {
   const slides = (Array.isArray(spec?.slides) ? spec.slides : []).slice(0, MAX.slides);
   if (!slides.length) throw new Error('say what the deck should cover: at least one slide with a title');
+  const st = STYLES.find((x) => x.id === String(spec?.style ?? 'light').trim().toLowerCase());
+  if (!st) throw new Error('pick a style for the deck: light, dark or bold');
   const JSZip = (await import('jszip')).default, n = slides.length, rel = (id: string, kind: string, target: string) => `<Relationship Id="${id}" Type="${T}/${kind}" Target="${target}"/>`, zip = new JSZip();
   zip.file('[Content_Types].xml', XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
     + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
@@ -96,7 +100,7 @@ export async function buildDeck(file: string, spec: DeckSpec) {
   zip.file('ppt/slideLayouts/slideLayout1.xml', XML + `<p:sldLayout ${A} ${R} ${P} type="blank" preserve="1"><p:cSld name="Blank">${TREE}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`);
   zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', XML + `<Relationships ${RELS}>${rel('rId1', 'slideMaster', '../slideMasters/slideMaster1.xml')}</Relationships>`);
   slides.forEach((s, i) => {
-    zip.file(`ppt/slides/slide${i + 1}.xml`, slideXml(s));
+    zip.file(`ppt/slides/slide${i + 1}.xml`, slideXml(s, st));
     zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, XML + `<Relationships ${RELS}>${rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml')}</Relationships>`);
   });
   await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }).then((b) => import('node:fs').then((fs) => fs.writeFileSync(file, b)));

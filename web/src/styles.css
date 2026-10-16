@@ -845,6 +845,18 @@ details.card[open] > summary { margin-bottom: 10px; }
 .slide-frame ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .slide-frame li { font-size: 16px; line-height: 1.5; color: var(--ink); }
 .slide-frame a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+/* A style pick: the deck's first slide in each look, one frame per look with its name under it. Each look keeps its
+ * own colours day and night, so the samples match the finished file. */
+.pick-samples { display: grid; gap: 10px; }
+.pick-samples .slide-frame { margin: 0; }
+.pick-samples figcaption { font-size: 13px; color: var(--mute); }
+.slide-frame.style-light { background: #fff; }
+.slide-frame.style-light h3, .slide-frame.style-light li { color: #1f2937; }
+.slide-frame.style-dark { background: #111827; border-color: #111827; }
+.slide-frame.style-dark h3, .slide-frame.style-dark li { color: #fff; }
+.slide-frame.style-bold { background: #dbeafe; border-color: #bfdbfe; }
+.slide-frame.style-bold h3 { color: #1d4ed8; }
+.slide-frame.style-bold li { color: #1f2937; }
 @media (min-width: 900px) {
   /* a desk opens the workbook beside the chat it came from; a phone gets the whole screen */
   :root { --book: min(560px, 48vw); }
