@@ -1,0 +1,31 @@
+{
+  "display": "X Growth",
+  "role": "Grows your X following with drafts in your voice — never posts",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#1D9BF0",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "browser",
+    "documents",
+    "write",
+    "github"
+  ],
+  "skills": [
+    "growth-plan",
+    "write-draft",
+    "diary-to-posts",
+    "watch-my-name"
+  ],
+  "ideas": [
+    {
+      "needs": [],
+      "group": "goal",
+      "promise": "Tell me your X handle and I'll learn your voice, plan the week's posts and track followers toward your goal — every post a draft you publish.",
+      "ask": "Help me grow on X"
+    }
+  ]
+}
