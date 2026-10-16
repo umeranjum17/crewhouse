@@ -2174,8 +2174,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
     if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir))) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
     const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i]))), wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
+    d.files.forEach((f: string, i: number) => codes[i] || this.db.event('file.unlocked', d.bot, { task: ask.task_id, path: unlockedAs(f) })); // a copy that opened follows the rule, even on a try where another didn't
     if (wrong.length) { this.db.run('UPDATE asks SET title = ?, detail = ? WHERE id = ?', lockedTitle(wrong.length), JSON.stringify({ ...d, files: wrong }), ask.id); throw fail(codes.some((c) => c && c !== 3) ? `${one ? 'That file' : 'Those files'} didn't open. Check ${one ? 'it' : 'them'}, then try again.` : `${one ? "That password didn't open the file. Check it" : "Those passwords didn't open the files. Check them"} and try again.`); }
-    for (const f of d.files as string[]) this.db.event('file.unlocked', d.bot, { task: ask.task_id, path: unlockedAs(f) });
     // Kept, not removed with the job: every copy this job opened is a card in the helper's chat, with Forget this
     // file on it — including one an earlier try on this same card already opened.
     if (keep === 'keep') for (const f of d.all as string[]) if (unlockedCurrent(space, f) && this.db.get("SELECT 1 FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", d.bot, ask.task_id, unlockedAs(f)))

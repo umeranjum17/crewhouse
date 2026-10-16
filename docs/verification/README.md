@@ -17,7 +17,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
-| helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep them, Forget this file, and the default rule's removal) |
+| helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep it / Keep them, Forget this file, and the default rule's removal) |
 | thread-hygiene | `done-done run ask-in-view` plus the recipe's other cases |
 | site-signin | `done-done run site-signin` |
 | pwa-pair | `done-done run pwa-pair` plus typed-code and push legs |
@@ -69,7 +69,7 @@ Without that approval the journey is NOT RUN; never drop `spends:` or wrap its d
 | openrouter-signin | [openrouter-signin.md](openrouter-signin.md) | Real-engine recipe: the explicitly offered OpenRouter route opens its authorize URL through the published kit instead of a plugin allow-list rejection, and cancelling leaves the account signed out |
 | site-signin | [site-signin.md](site-signin.md) | A helper's `crew_signin` becomes Chief's Sign in to <site> card with the site's icon; one tap opens the helper's screen large and driving, Done hands it back, the helper carries on and the card becomes "Signed in to <site> · <time>" |
 | unlock-card | [unlock-card.md](unlock-card.md) | A helper's `crew_unlock` becomes Chief's locked-files card (mock 3A): a password field per file, a wrong one keeps that file with a plain line, the right one leaves unlocked copies and "Unlocked · <time>", and no row, database file, log, model turn or browser profile holds a password. The same card carries the one plain retention rule for the helper's files with the person's pick — the job's end takes its copies, or they are kept and each is a card in the helper's chat with **Forget this file** on it (`POST /api/bots/:id/forget-file`); the driver proves the kept copy, the forgotten one and the default rule's removal |
-| helper-files | [helper-files.md](helper-files.md) | The one plain rule for a helper's files in Chief's chat: unlocked copies go when the job ends, or stay when the person picks Keep them, and a sent document or a kept copy is removed by **Forget this file** |
+| helper-files | [helper-files.md](helper-files.md) | The one plain rule for a helper's files in Chief's chat: unlocked copies go when the job ends, or stay when the person picks Keep, and a sent document or a kept copy is removed by **Forget this file** |
 | signin-stepper | [signin-stepper.md](signin-stepper.md) | The SignIn/ConnectApp shared stepper's labels wrap only between words at 320/360/390 and 1.3x text, with no sideways scroll, and unchanged at 390/desktop |
 | voice-call | [voice-call.md](voice-call.md) | Talk with Chief: a hands-free call in Chief's chat that listens, sends, reads his reply aloud a sentence at a time in the device's own voice and speed, listens again (never while reading), and Stop ends it; every state beside its mock at 390/1440, day and night, and in the app window |
 | chat-live | [chat-live.md](chat-live.md) | From send to reply the thread never sits still (live line, handoff mirror, "still working" on it after 4 s without an event, end line), toasts never over words, and the phone's bubble never over the app's text |

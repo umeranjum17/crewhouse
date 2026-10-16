@@ -779,6 +779,25 @@ test('locked PDF: two locked files with one basename keep separate copies, and a
   lab.done();
 });
 
+test('locked PDF: a copy opened on a try where the other password was wrong still goes when the job ends', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
+  const lab = setup();
+  lab.crew.onboard('Umer');
+  lab.crew.recruit('scribe', 'Scribe', 'person');
+  const bot = disk.botDir(lab.cfg, 'scribe'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
+  for (const d of ['a', 'b']) { mkdirSync(join(bot, 'files', 'inbox', d), { recursive: true }); writeFileSync(join(bot, 'files', 'inbox', d, 'statement.pdf'), '%PDF-1.7\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n'); }
+  mkdirSync(join(py, '..'), { recursive: true });
+  writeFileSync(py, `#!/bin/bash\nP="$(cat)"\ncase "$4" in *'/a/'*) [ "$P" = 'a-pass' ] || exit 3 ;; *) [ "$P" = '${PASSWORD}' ] || exit 3 ;; esac\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
+  const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
+  await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
+  const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!, copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf');
+  await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: ['a-pass', `${PASSWORD}x`] }), (e: any) => e.status === 400);
+  assert.ok(existsSync(copyA), 'a opened on the try where b did not');
+  await lab.crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
+  await settled(lab.db, t);
+  assert.ok(!existsSync(copyA) && !existsSync(join(bot, 'files', 'unlocked', 'files%2Finbox%2Fb%2Fstatement.pdf')), 'the default rule takes both copies back');
+  lab.done();
+});
+
 test('locked PDF: a 200+-char nested accented name unlocks under a short hash name', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
   const lab = setup();
   lab.crew.onboard('Umer');
@@ -820,7 +839,7 @@ test('helper files: the one plain rule is on the card in Chief\'s chat, and the 
   const { db, crew, t, c, copy, done } = await unlockAsk();
   const keep = c.keep!;
   assert.match(keep.line, /not locked any more, so it can sit in Scribe's folder for good/, 'the rule, in plain words, on the card');
-  assert.deepEqual(keep.options.map((o) => o.label), ['Remove it when the job ends', 'Keep them']);
+  assert.deepEqual(keep.options.map((o) => o.label), ['Remove it when the job ends', 'Keep it']);
   // Kept: the job ends and the copy stays, named as a card in the helper\'s chat with Forget this file on it.
   await crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD], rule: 'keep' });
   await settled(db, t);

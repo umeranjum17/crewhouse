@@ -37,6 +37,9 @@ then write a plan for `scripts/verify/pwa-shell.mjs` (its header lists the step 
   Steps: boot with `#person=`, open `#/settings`, `click: ".install .btn"`, `key: "Tab"` then `key: "Return"`
   (Cancel has focus first), `xshot` the whole screen, `attachApp: "$B"`, then theme/width captures with
   `eval` `matchMedia('(display-mode: standalone)').matches` (true) and `.install` absent.
+  A shot of the installed window at a given width: `win: [w, h]` sizes the real window (a `w` viewport inside
+  the 1400 window leaves a narrow column in a wide blank window) and `wshot` saves just that window. Chromium
+  keeps an installed app's window at least 508 wide, so phone width stays a `w` viewport with an `out` shot.
   Chromium 151 here has no `PWA.install` over CDP, so the app's own button and the real sheet do it.
 
 - Android Chrome install (emulator): a task AVD on `system-images;android-36;google_apis;x86_64` (it ships Chrome

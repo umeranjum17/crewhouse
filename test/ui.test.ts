@@ -181,7 +181,7 @@ test('the one plain rule for a helper\'s files is asked on the card, in plain wo
   const ask = { id: 8, bot: 'chief', task_id: 5, kind: 'unlock', at: now, title: 'A file is locked', detail: { bot: 'reel', files: ['files/inbox/march.pdf'], all: ['files/inbox/march.pdf'] } };
   const c = A.card(ask, state);
   assert.match(c.keep!.line, /not locked any more, so it can sit in Reel's folder for good/, 'the rule, said once, in plain words');
-  assert.deepEqual(c.keep!.options.map((o) => [o.label, o.rule]), [['Remove it when the job ends', 'job'], ['Keep them', 'keep']], 'and the person\'s pick');
+  assert.deepEqual(c.keep!.options.map((o) => [o.label, o.rule]), [['Remove it when the job ends', 'job'], ['Keep it', 'keep']], 'and the person\'s pick');
   assert.deepEqual(c.choices.map((x) => x.label), ['Unlock the file', 'Not now']);
   // A kept copy reads by the name of the file it came from; only the person's own documents and the copies are theirs to forget.
   assert.equal(A.pretty('files/unlocked/files%2Finbox%2Fmarch.pdf'), 'March');

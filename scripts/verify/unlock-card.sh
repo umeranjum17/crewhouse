@@ -56,6 +56,10 @@ fields() { chrome-devtools-axi snapshot --full | awk '/textbox "[^"]*\.pdf"/{sub
 button() { chrome-devtools-axi snapshot --full | awk -v n="$1" '$0 ~ "button \"" n {sub(/uid=(g[0-9]+:)?/,"",$1); print $1; exit}'; }
 # The look check at the hardest size (360 wide, text x1.3, day and night), each shot beside mock 3A (FM_HOME holds it).
 node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$(show .unlock-card)" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+# Two files: the pick reads Keep them, picked in each theme and width; the next fresh open resets the card to the default.
+KEEP='(async () => { for (let i = 0; i < 50 && !document.querySelector(".unlock-keep"); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector(".unlock-keep .keep-opt:last-child input").click(); document.querySelector(".unlock-card").scrollIntoView({ block: "start" }); return true; })()'
+THEN="$KEEP" bash scripts/verify/screens.sh "$EV/screens" keep-them "$B/#/chief" >/dev/null
+chrome-devtools-axi eval "[...document.querySelectorAll('.unlock-keep .keep-opt')].map((e) => e.innerText.trim() + (e.querySelector('input').checked ? ' (picked)' : '')).join(' / ')" | tee -a "$EV/transcript.txt"
 # At 390, a wrong password for April and the right one for March: March opens, the card keeps only April and says so plainly.
 chrome-devtools-axi resize 390 844 >/dev/null; chrome-devtools-axi open "$B/?day#/chief" >/dev/null; chrome-devtools-axi wait "it's forgotten" >/dev/null
 mapfile -t F < <(fields); chrome-devtools-axi fill "@${F[0]}" "$PW1" >/dev/null; chrome-devtools-axi fill "@${F[1]}" 'CitySav 2025' >/dev/null
@@ -75,11 +79,15 @@ const [B, key, LAB, EV, SK, THEN, PW] = process.argv.slice(1), steps = [
 for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 900]])
   steps.push({ name: `card-${look}-${w}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: `${B}/?${look}#/chief`, wait: "!!document.querySelector(\".unlock-card\")", timeout: 20000,
     eval: `[matchMedia("(display-mode: standalone)").matches, ${THEN}][0]`, out: `${EV}/pwa/unlock-card-${look}-${w}.png` });
-steps.push({ name: "film", w: 390, h: 844, dpr: 2, mobile: true, url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, record: `${EV}/pwa/unlock-type.webm`, seconds: 10 },
+// The Keep pick (April alone now, so Keep it) in the installed window itself: full width, then the narrowest window
+// Chromium allows an installed app (508), never a phone viewport inside a wide window.
+steps.push({ name: "wide", win: [1440, 900], url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, eval: THEN },
+  { name: "wide-keep", click: ".unlock-keep .keep-opt:last-child input", settle: 400, wshot: `${EV}/pwa/keep-it-1440.png` });
+steps.push({ name: "film", win: [508, 880], url: `${B}/?day#/chief`, wait: "!!document.querySelector(\".unlock-card input\")", timeout: 20000, record: `${EV}/pwa/unlock-type.webm`, seconds: 10 },
   { name: "type", eval: `(() => { const t = document.querySelector(".unlock-card input"); t.closest("form").scrollIntoView({ block: "center" }); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(t, ${JSON.stringify(PW)}); t.dispatchEvent(new Event("input", { bubbles: true })); return t.value.length; })()` },
-  { name: "keep", click: ".unlock-keep .keep-opt:last-child input", settle: 400, xshot: `${EV}/pwa/keep-them.png`,
+  { name: "keep", click: ".unlock-keep .keep-opt:last-child input", settle: 400, wshot: `${EV}/pwa/keep-it-narrow.png`,
     eval: `[document.querySelector(".unlock-keep .keep-opt:last-child input").checked, document.querySelector(".unlock-keep .keep-opt:first-child input").checked].join("/")` },
-  { name: "unlock", click: ".unlock-card .btn.go", settle: 3000 }, { name: "filmed", recwait: true, wait: "!!document.querySelector(\".answered\")", out: `${EV}/pwa/unlocked-day-390.png` });
+  { name: "unlock", click: ".unlock-card .btn.go", settle: 3000 }, { name: "filmed", recwait: true, wait: "!!document.querySelector(\".answered\")", out: `${EV}/pwa/unlocked-day-narrow.png` });
 console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, recorder: `${SK}/record.mjs`, args: ["--window-size=1400,950", "--force-device-scale-factor=1", "about:blank"], steps }));
 ' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$EV" "$REPO/scripts/verify" "$(show .unlock-card)" "$PW2" > "$LAB/pwa-plan.json"
 mkdir -p "$EV/pwa" "$LAB/pwa/home/run"; xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "$LAB/pwa-plan.json" > "$EV/pwa/run.json"
@@ -109,6 +117,10 @@ log "May's statement is task $T3"
 console.log(JSON.stringify({ text: `Read my May statement [tool crew_unlock ${JSON.stringify({ files: [`files/inbox/${at}-1.pdf`] })}]`, files: [{ type: "application/pdf", name: "City Savings May.pdf", data: a }] }))' \
   "$LAB/pdf/citysavings-may.pdf" "$T3" | api -X POST -d @- "$B/api/bots/penny/messages" >/dev/null
 until_js "state.asks.some((a) => a.kind === 'unlock' && a.bot === 'chief')"
+# One file: the same rule on the card, said for one copy (day and night, 390 and 1440).
+THEN=$(show .unlock-keep) bash scripts/verify/screens.sh "$EV/screens" keep-it "$B/#/chief" >/dev/null
+chrome-devtools-axi open "$B/?day#/chief" >/dev/null; chrome-devtools-axi wait "it's forgotten" >/dev/null
+chrome-devtools-axi eval "JSON.stringify([...document.querySelectorAll('.unlock-keep .keep-opt')].map((e) => e.innerText.trim()))" | tee -a "$EV/transcript.txt"
 MAY=$(api "$B/api/state" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const a=JSON.parse(s).asks.find((x)=>x.kind==='unlock');console.log(a.id)})")
 api -X POST -d "{\"answer\":\"allow\",\"passwords\":[\"$PW3\"]}" "$B/api/asks/$MAY/answer" >/dev/null
 until_js "!state.bots.find((b) => b.id === 'penny').task"

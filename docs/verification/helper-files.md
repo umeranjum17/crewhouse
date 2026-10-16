@@ -5,12 +5,14 @@ Documents the person sent in Chief's chat (`files/inbox/`) and the unlocked copi
 both, and the person sees and picks it in Chief's chat:
 
 > An unlocked copy is not locked any more, so it can sit in the helper's folder for good. How long
-> should it stay? **Remove it when the job ends** (the default) / **Keep them**
+> should it stay? **Remove it when the job ends** (the default) / **Keep it** — said for several files, **Remove them when the
+> job ends** / **Keep them**
 
 The rule is asked on the locked-files card itself (`docs/ui-contract.md`), in the same answer that
 carries the passwords, so it is one card and one tap rather than a setting. crewd records every copy
-it opens (`file.unlocked`, password-less copies included) and takes the task's copies back when that
-job ends, unless the person picked **Keep them**. A kept copy is then a card in the helper's own
+it opens (`file.unlocked`, password-less copies and a copy opened on a try where another password was
+wrong included) and takes the task's copies back when that
+job ends, unless the person picked Keep. A kept copy is then a card in the helper's own
 chat — `Kept files/unlocked/<name>: <the file's own name>`, shown as that name with "unlocked" on its sub line, so a
 copy never reads as the file the person sent.
 
@@ -31,9 +33,10 @@ adapter's `state.forgotten` filter in `test/ui.test.ts`.
 ## Drive (real crewd, stub engine)
 
 The retention rule lives on the locked-files card, so the [unlock-card](unlock-card.md) journey drives
-it: `done-done run unlock-card` types a wrong then the right password, picks **Keep them** on film in
-the installed app, then forgets one kept copy from Penny's own chat and lets a third statement follow
-the default rule. To drive only this slice against your own crewd:
+it: `done-done run unlock-card` types a wrong then the right password, shows **Keep them** picked on the two-file card
+(`screens/keep-them-*`), picks **Keep it** for April in the installed app (window shots `pwa/keep-it-1440.png`
+and `pwa/keep-it-narrow.png`, and on film), then forgets one kept copy from Penny's own chat and lets a third statement follow
+the default rule (its one-file card in `screens/keep-it-*`). To drive only this slice against your own crewd:
 
 ```bash
 FM_HOME=<firstmate home> EV=${DONE_DONE_EVIDENCE_ROOT:?run through done-done} \
@@ -49,7 +52,7 @@ then `POST /api/bots/:id/forget-file {path}` and read the thread back.
 ## Pass
 
 The card in Chief's chat names the rule and offers both picks; the job's end takes the copies under the
-default; **Keep them** leaves each copy as a card in the helper's chat, named after the file it came
+default; Keep leaves each copy as a card in the helper's chat, named after the file it came
 from with "unlocked" on its sub line; **Forget this file** removes that file from the folder, says so in
 plain words, and leaves no card for it; the file is gone from disk
 (`$LAB/crew/bots/<bot>/files/…`) and no other file in that folder changes.

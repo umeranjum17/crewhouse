@@ -8,7 +8,7 @@ the Documents tool's pinned pypdfium2 on stdin in the helper's sandbox, which wr
 A wrong one is a plain 400 and the card keeps only the files still locked; the right ones leave "Unlocked · <time>" and
 resume the helper with the copies' paths. The same card carries the one plain rule for the helper's files — an unlocked
 copy is not locked any more, so it can sit in the helper's folder for good — with the person's pick, **Remove it when
-the job ends** (the default) or **Keep them**; the job's own end takes its copies back either way unless Keep them was
+the job ends** (the default) or **Keep it** (**Keep them** for several files); the job's own end takes its copies back either way unless Keep was
 picked, and a kept copy is a card in the helper's own chat named after the file it came from, its sub line saying "unlocked",
 with **Forget this file** on it (`POST /api/bots/:id/forget-file`, which takes the file out of the helper's folder and says so in plain words; the
 chat keeps no card for a file that is not there). The phone app points to the computer or the web app.

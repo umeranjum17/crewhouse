@@ -812,7 +812,7 @@ export function card(a: Json, state: Json): Card {
       head: plain(a.title), status: `${crewName(state, d.bot)} needs ${n > 1 ? 'each password to read them' : 'its password to read it'}`,
       words: "What you type here opens the file on this computer, then it's forgotten. It never goes into the chat or to the AI.",
       keep: { line: `The unlocked ${n > 1 ? 'copies are' : 'copy is'} not locked any more, so ${n > 1 ? 'they can' : 'it can'} sit in ${crewName(state, d.bot)}'s folder for good. How long should ${n > 1 ? 'they' : 'it'} stay?`,
-        options: [{ label: n > 1 ? 'Remove them when the job ends' : 'Remove it when the job ends', rule: 'job' }, { label: 'Keep them', rule: 'keep' }] },
+        options: [{ label: n > 1 ? 'Remove them when the job ends' : 'Remove it when the job ends', rule: 'job' }, { label: n > 1 ? 'Keep them' : 'Keep it', rule: 'keep' }] },
       choices: [{ label: n > 1 ? `Unlock ${n} files` : 'Unlock the file', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'style' && d.pick) {
