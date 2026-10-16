@@ -430,7 +430,7 @@ export class Crew {
   private pub(b: Row) {
     const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id), desk = this.desktops.info(b.id);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
-      controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'),
+      controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'), can: disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id), signedIn: disk.botConfig(this.cfg, b.id).signedIn ?? [],
       // The active task carries its delivered files for the office desk: own output first, handed-over inputs marked.
       live: !this.live.get(b.id) ? 'off' : this.busy.has(b.id) ? 'working' : 'idle', task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,

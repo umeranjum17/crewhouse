@@ -158,6 +158,8 @@ export const computer = (c: Computer | null) => {
 // ---------- words ----------
 /** "8:02 pm": the time alone (a phone's day line carries it, "Today 8:02 pm"). */
 export const timeOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+/** "9:10 am" today, else the day ("Mon"): a rail row's time. */
+export const when = (t: number) => (new Date(t).toDateString() === new Date().toDateString() ? timeOf(t) : new Date(t).toLocaleDateString([], { weekday: 'short' }));
 export const clock = (t: number) => {
   const d = new Date(t);
   const time = timeOf(t);
@@ -1537,6 +1539,42 @@ export function trayNotes(state: Json, lines: Line[]): Line[] {
     out.splice(i < 0 ? out.length : i, 0, n);
   }
   return out;
+}
+
+/** What a helper can do and the one thing it never does unasked, from crewd's own grants: the apps the person
+ *  connected, the sites they signed it in to and its ready tools; never the model's words. Paying or sending always asks
+ *  (policy.ts: a spend has no standing answer, a press on a signed-in site asks every time, no helper sends mail). */
+const CAN_APPS: Record<string, string> = { drive: 'Drive', calendar: 'Calendar', gmail: 'Gmail', gmailwrite: 'Gmail', notion: 'Notion', canva: 'Canva' };
+const CAN_TOOLS: [string, string][] = [['web', 'read the web'], ['browser', 'use its own browser'], ['files', 'work in its own folder']];
+export function limitOf(state: Json, id: string): string {
+  const b = (state.bots ?? []).find((x: Json) => x.id === id);
+  if (!b) return '';
+  const apps = [...new Set(((state.connections ?? []) as string[]).map((a) => CAN_APPS[a]).filter(Boolean))];
+  const can = [apps.length ? `use your ${apps.join(' and ')}` : '', ...((b.signedIn ?? []) as string[]).slice(0, 1).map((h) => `use ${h} as you`),
+    ...CAN_TOOLS.filter(([t]) => (b.can ?? []).includes(t)).map(([, w]) => w)].filter(Boolean).slice(0, 2);
+  return `${b.display} ${can.length ? `can ${can.join(' and ')}, but ` : ''}can't pay or send anything without asking you.`;
+}
+
+/** A job Chief handed a helper (its task, origin chief), as one chip in his thread: "Messaged Penny · at work ›", then
+ *  "done · 3 s". The word is the office's own and never "Needs you": a crew member only ever waits, Chief asks. */
+export type HandChip = { task: number; helper: string; at: number; done: boolean; working: boolean; word: string; limit: string };
+/** Where each chip sits: after the turn that handed the job on and before its result came back, i.e. before the
+ *  person's next line or the first line at or after the job's end, whichever is first; an open job's chip may trail.
+ *  A request routed straight to a helper ("Penny, …") is saved just after its job, so a line of theirs within 2 s
+ *  of the job is the one that asked for it, not the next, and a job just before the first line still has its chip. */
+export function handChips(state: Json, lines: Line[]): { before: Map<number, HandChip[]>; tail: HandChip[] } {
+  const before = new Map<number, HandChip[]>(), tail: HandChip[] = [], first = lines.find((l) => l.at)?.at;
+  if (!first) return { before, tail };
+  const helpers = new Set(crew(state).map((h) => h.id));
+  for (const t of ((state.tasks ?? []) as Json[]).filter((t) => t.origin === 'chief' && helpers.has(t.bot) && at(t.created_at) >= first - 2000).sort((a, b) => a.id - b.id)) {
+    const from = at(t.created_at), end = at(t.updated_at), open = OPEN.includes(t.state);
+    const word = t.state === 'working' ? WORDS.work : t.state === 'queued' ? WORDS.next : open ? WORDS.wait
+      : t.state === 'done' ? `${WORDS.done} · ${took(end - from)}` : t.state === 'unsure' ? WORDS.unsure : WORDS.failed;
+    const c: HandChip = { task: t.id, helper: t.bot, at: from, done: t.state === 'done', working: t.state === 'working', word: word.toLowerCase(), limit: limitOf(state, t.bot) };
+    const i = lines.findIndex((l) => l.at !== undefined && l.at > from && ((l.from === 'me' && l.at > from + 2000) || (!open && l.at >= end)));
+    if (i < 0) tail.push(c); else before.set(i, [...(before.get(i) ?? []), c]);
+  }
+  return { before, tail };
 }
 
 /** Where each ask's card falls in the thread (Main2036): a card belongs to the turn that raised it, so it shows after
