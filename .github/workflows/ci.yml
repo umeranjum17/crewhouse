@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  # What a change can affect: a pull request touching only docs, evidence or the landing page skips the jobs below,
-  # which then report as skipped, never pending (mobile/ and .agents/ stay in: kept tests read them).
+  # What a change can affect: a pull request touching only docs (docs/, top-level *.md), evidence or the landing page
+  # skips the heavy work below, and every required check still reports (mobile/ and .agents/ stay in: kept tests read them).
   # The relay image builds only when the relay changed. A push to main always runs everything.
   changes:
     runs-on: ubuntu-latest
@@ -33,12 +33,13 @@ jobs:
           if [ -z "$BASE" ]; then echo code=true >> "$GITHUB_OUTPUT"; echo relay=true >> "$GITHUB_OUTPUT"; exit 0; fi
           files=$(git diff --name-only "$BASE"...HEAD)
           echo "$files"
-          echo code=$(echo "$files" | grep -qvE '^(docs/|data/|landing/|README\.md$|TRY-IT\.md$|LICENSE$|NOTICE$)' && echo true || echo false) >> "$GITHUB_OUTPUT"
+          echo code=$(echo "$files" | grep -qvE '^(docs/|data/|landing/|[^/]+\.md$|LICENSE$|NOTICE$)' && echo true || echo false) >> "$GITHUB_OUTPUT"
           echo relay=$(echo "$files" | grep -qE '^(relay/|\.github/)' && echo true || echo false) >> "$GITHUB_OUTPUT"
 
   check:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # A skipped matrix job reports one unexpanded name, so its required `check (node, group)` names would wait
+    # forever: the steps skip instead, and each part reports success under its own name.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -49,29 +50,40 @@ jobs:
         group: [migrate, engine, app]
     name: check (${{ matrix.node }}, ${{ matrix.group }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - if: needs.changes.outputs.code == 'true'
+        uses: actions/checkout@v4
+      - if: needs.changes.outputs.code == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci --no-audit --no-fund
+      - if: needs.changes.outputs.code == 'true'
+        run: npm ci --no-audit --no-fund
       # Private desktops, capture libraries and the sandboxed shell; cookie isolation must run, not skip.
       # Only Ubuntu supplies our packages; unrelated runner repositories must not delay the test budget.
-      - run: sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-      - run: sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - if: needs.changes.outputs.code == 'true'
+        run: sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+      - if: needs.changes.outputs.code == 'true'
+        run: sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # The pinned engine install, keyed on the lockfile that pins the kit; prepare reuses a matching one.
-      - uses: actions/cache@v4
+      - if: needs.changes.outputs.code == 'true'
+        uses: actions/cache@v4
         with:
           path: |
             runtime/openclaw
             runtime/openclaw.sets
           key: engine-${{ runner.os }}-node${{ matrix.node }}-${{ hashFiles('package-lock.json') }}
-      - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
+      - if: needs.changes.outputs.code == 'true'
+        run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
       # Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
-      - run: npm audit signatures --prefix "$(cat "$RUNNER_TEMP/engine-prepare/openclaw/engine-set")"
-      - run: npm run check
-      - run: npm run build:web
-      - run: npm test -- --group=${{ matrix.group }} # stub runner only: no Herdr, no CLI, no model calls
+      - if: needs.changes.outputs.code == 'true'
+        run: npm audit signatures --prefix "$(cat "$RUNNER_TEMP/engine-prepare/openclaw/engine-set")"
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run check
+      - if: needs.changes.outputs.code == 'true'
+        run: npm run build:web
+      - if: needs.changes.outputs.code == 'true'
+        run: npm test -- --group=${{ matrix.group }} # stub runner only: no Herdr, no CLI, no model calls
 
   done-done:
     needs: changes

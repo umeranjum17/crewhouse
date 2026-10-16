@@ -33,7 +33,9 @@ const isBrowser = (file) => /browserBin|taskBrowser|ownedBrowser|Xvfb/.test(read
 const group = process.argv.find((a) => a.startsWith('--group='))?.slice('--group='.length);
 const GROUPS = { migrate: (f) => isGateway(f) && /migrate/.test(f), engine: (f) => isGateway(f) && !/migrate/.test(f), app: (f) => !isGateway(f) };
 if (group && !GROUPS[group]) throw new Error(`unknown test group ${group}: use ${Object.keys(GROUPS).join(', ')}`);
-const files = group ? all.filter(GROUPS[group]) : all;
+// Named files run alone, under the same throwaway HOME (the pipeline's test step: only the changed parts' files).
+const named = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const files = named.length ? named : group ? all.filter(GROUPS[group]) : all;
 const runOne = (file) => new Promise((resolve) => {
   const t0 = Date.now();
   const child = spawn(bounded ? 'timeout' : process.execPath,
