@@ -6,7 +6,7 @@ app: "crewhouse"
 # Commits touching only these keep evidence fresh (mirrors CI's docs-only skip):
 # a proof of HEAD still counts until a commit outside this list lands.
 evidence:
-  ignore_paths: ["docs/**", "data/**", "landing/**", "README.md", "TRY-IT.md", "LICENSE", "NOTICE"]
+  ignore_paths: ["docs/**", "data/**", "landing/**", "AGENTS.md", "CLAUDE.md", "CONSTRAINTS.md", "README.md", "TRY-IT.md", "VISION.md", "LICENSE", "NOTICE"]
 journeys:
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"

@@ -8,7 +8,12 @@
 test:
   instructions: |
     Required, in order, from the run worktree with dependencies installed (npm ci):
-    1. npm run check (tsc, strict) and npm test (the isolated stub suite; CI parity).
+    1. npm run check (tsc, strict), then only the tests for the changed parts:
+       `npm test -- <files>` (the same isolated runner) with every test/*.test.ts the
+       diff changed or that imports or reads a changed file (git grep its module name
+       under test/), plus the one user journey `done-done run stub-drive` (step 3's;
+       run it on every change, even one step 3 would skip). Not the full suite: CI runs
+       all of it (`npm test`, three groups on two Nodes) on every PR before merge.
     2. node scripts/floor-guard.mjs — the CONSTRAINTS.md floor on this diff. Exit 0
        required; exit 1 lists violations; exit 2 means the guard could not run and
        must be reported as such, never treated as clean.
