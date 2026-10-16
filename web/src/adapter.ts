@@ -15,9 +15,11 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock'; head: string; words: string;
+  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style'; head: string; words: string;
   /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
+  /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
+  pick?: { deck: string; title: string; lines: string[]; styles: { id: string; label: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
   site?: { host: string; icon: string; bot: string };
   preview?: { head?: string; body: string }; choices: Choice[]; reply: boolean; app?: App; at: number;
@@ -45,7 +47,7 @@ export type Card = {
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
 };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
-export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
+export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password', style: 'Pick a style' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
 export type FileView = { url: string; kind: 'video' | 'image' | 'doc' | 'sheet' | 'page'; name: string; review?: Review; size?: number };
@@ -805,6 +807,18 @@ export function card(a: Json, state: Json): Card {
       words: "What you type here opens the file on this computer, then it's forgotten. It never goes into the chat or to the AI.",
       choices: [{ label: n > 1 ? `Unlock ${n} files` : 'Unlock the file', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'style' && d.pick) {
+    // A deck's style pick: the deck's first slide in each offered look, drawn with the slide-frame preview, one
+    // choice per look. The tap names the look (`style` in the answer); the deck is built on the helper's next call.
+    const styles = (Array.isArray(d.pick.styles) ? d.pick.styles : []).slice(0, 3)
+      .map((s: Json) => ({ id: plain(String(s?.id ?? '')), label: plain(String(s?.label ?? '')) })).filter((s: { id: string; label: string }) => s.id && s.label);
+    if (!styles.length) return { ...base, kind: 'question', reply: true, status: 'Has a question', head: `${name} has a question`, words: plain(d.words ?? a.title), choices: [] };
+    return { ...base, kind: 'style', status: 'Pick a style', head: plain(a.title),
+      words: 'Same slides, three looks. The whole deck is built in the one you pick.',
+      pick: { deck: plain(String(d.pick.deck ?? '')).slice(0, 80), title: plain(String(d.pick.title ?? '')).slice(0, 140),
+        lines: (Array.isArray(d.pick.lines) ? d.pick.lines : []).map((l: Json) => plain(String(l ?? '')).slice(0, 220)).filter(Boolean).slice(0, 4), styles },
+      choices: [...styles.map((s: { id: string; label: string }, i: number) => ({ label: s.label, body: { answer: 'allow', style: s.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -909,7 +923,7 @@ export function card(a: Json, state: Json): Card {
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
-const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked' };
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
  *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {

@@ -13,8 +13,9 @@ done-done run slides-deck   # or: bash scripts/verify/slides-deck.sh . "$EV/slid
 
 It has Quill make a 5-slide kick-off deck with `crew_slides`, then writes:
 
-- `deck-file.txt`: `crew_slides` delivered `files/new-shop-kick-off.pptx` as N bytes, `Microsoft PowerPoint 2007+`,
-  every part a presentation needs (`ppt/theme/theme1.xml`, master, layout, `slide1..5.xml`), and slide 5's own words.
+- `pick-card.txt`: `crew_slides` without `style` builds nothing and files a `style` ask in Chief's chat instead — the deck's first slide in all three looks, one choice per look (`Light`, `Dark`, `Bold`, `Not now`); answering `Dark` records `Dark` and resumes the waiting job. `screens/pick-card-{day-390,night-1440}.png` show it with no clipping or overlap (`pick-card-day-390-end.png` the button row at phone width).
+- `deck-file.txt`: the second `crew_slides` call, with `style: 'dark'`, delivered `files/new-shop-kick-off.pptx` as N bytes, `Microsoft PowerPoint 2007+`,
+  every part a presentation needs (`ppt/theme/theme1.xml`, master, layout, `slide1..5.xml`), slide 5's own words, and the dark background with light words in slide 1.
 - `libreoffice.txt`: LibreOffice converts it to PDF, `Pages: 5`; `screens/slides-render-*.png` draw every slide.
 - `api-document.txt`: `/api/document` reads it back as 5 slides with lines plus the same words flattened as parts,
   and a path nobody delivered answers **403**.
@@ -27,4 +28,4 @@ It has Quill make a 5-slide kick-off deck with `crew_slides`, then writes:
   `run.json` must show standalone mode true for all four panel captures, with no error rows.
 
 Open every screen: each slide frame shows its title over its lines, no clipped text or overlap, no raw markup,
-crew counts agreeing with the thread. The pinned tests are the two `deck` tests in `test/documents.test.ts`.
+crew counts agreeing with the thread. The pinned tests are the three `deck` tests in `test/documents.test.ts`.

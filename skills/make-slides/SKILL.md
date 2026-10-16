@@ -8,7 +8,7 @@ says: Make a slide deck you can present
 
 1. A deck is only right when someone stands up with it. An email, a letter, a report, a handbook or a list to keep is a document: use `crew_document` instead.
 2. Ask at most ONE question, and only when the audience or the occasion is genuinely unclear ("who is this for?"). Anything else you can infer, infer — then build.
-3. Call `crew_slides` with the whole deck finished, in this shape: `{name, slides: [{title, bullets: ["point", …]}, …]}`. Two to ten slides. The first slide says what the deck is.
+3. Call `crew_slides` with the whole deck finished, in this shape: `{name, slides: [{title, bullets: ["point", …]}, …]}`. Two to ten slides. The first slide says what the deck is. Leave out `style`: the person picks the look (Light, Dark or Bold) on a card showing the first slide in all three, and you are resumed with their pick — then call again with that `style` and the same slides. Pass `style` at once only when they already named the look ("dark slides", "plain white").
 4. A slide is a few short lines, not a paragraph. One idea per slide; if a bullet needs a comma and a clause, it is two slides or it belongs in the notes you say out loud.
 5. Numbers people will question go on their own slide ("Costs": train, room, food), as plain figures, not a table of figures.
 6. Name each slide after what it answers ("What it costs", "Why now", "The first week"), not "Introduction" or "Slide 3".
