@@ -29,7 +29,10 @@ Chief turn it also waits for "Chief · at work · N s · still
 working" (at least 4 s after the task's last event, in sight inside the thread's scrolling box, one clock in the live
 line), emits crewd's own `run.tool` event (`db.event`) and expects "still working" gone. Mutation times are captured before reading `innerText`, whose
 forced-layout cost must not be charged to the preceding still stretch. It still requires changed visible words:
-slowing the live-line timer to two seconds must fail. For loaded-run qualification, repeat the gate ten times under
+slowing the live-line timer to two seconds must fail. The live line stays in sight because the thread holds its newest
+line until the person scrolls up (`Chat` `onScroll` in `web/src/main.tsx`): a scroll event read a frame late, after the
+composer grew, once let go of it and left the line under the fold (ch-chat-live-timeout: the 390 Chief leg timed out on
+"still working" about half the runs on a loaded host). For loaded-run qualification, repeat the gate ten times under
 the same bounded CPU contention before and after; retain logs and the load command. Prove a regression with it by
 checking the old `src`/`web` out over the new and running it again.
 
@@ -37,7 +40,9 @@ checking the old `src`/`web` out over the new and running it again.
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
 Then per message: `node scripts/verify/chat-probe.mjs "$BASE" "$EV/<run>" "<words>" 390 844 "/?night#person=$PERSON"` (and 1440 900, `?day`). The probe opens its own Chromium with a fresh
 profile, so the `#person=<person.key>` fragment is the only way it gets write authority — without it the app echoes
-the message locally but crewd never makes the task (the probe then records an empty run).
+the message locally but crewd never makes the task (the probe then records an empty run). On a fresh install the Add
+your phone card sits under the live line and fills a 390 screen: set `CHAT_PROBE_FIRST` to a page expression for the
+person's first move (Not now on `.chat .card.pair`); the probe runs it before typing.
 It writes `changes.json` (every change to the thread, timed in the page: `longestStillMs` until the end line is the
 number), `screen.jsonl` (rows carry the 160-character `lines` preview plus `linesFull` with
 each of the last four thread lines whole — likewise `asideFull`/`heroFull` beside the capped
