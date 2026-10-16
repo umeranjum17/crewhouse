@@ -2188,7 +2188,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** The rule applied when the job ends: its unlocked copies go, unless the person chose to keep them. */
   private dropUnlocked(task: Row) {
-    if (this.fileRule(task.bot) === 'keep') return;
+    if (this.fileRule(task.bot) === 'keep') {
+      for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
+        const rel = String(JSON.parse(e.data).path ?? '');
+        if (!rel.startsWith('files/unlocked/')) continue;
+        if (this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", task.bot, task.id, rel)) continue;
+        this.unforgotten(task.bot, rel);
+        this.db.event('file.delivered', task.bot, { task: task.id, path: rel });
+        this.say(task.bot, 'system', `Kept ${rel}: ${this.knownName(task.bot, rel)}`, task.id);
+      }
+      return;
+    }
     const space = disk.botDir(this.cfg, task.bot);
     for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
       const rel = String(JSON.parse(e.data).path ?? '');
