@@ -957,7 +957,7 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
     <h2 className="plate">Who Chief is</h2><div className="card"><ChatText text={page?.soul ?? ''} /></div>
     <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
   return <div className="page helper">{head('Chat')}<section className="detail rest-screen chief-profile">
-    <div className="cp-head"><Face who="chief" size={64} /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
+    <div className="cp-head"><ChiefArt mood={live.chief.mood} mascot /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
     <div className="label">Routines</div>
     <div className="card list">
       {all.slice(0, 2).map((r: Json) => <div key={r.id} className="row-item">

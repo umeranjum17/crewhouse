@@ -1719,6 +1719,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* Chief's profile, one page (mock profile-b): a tight header, so Take control shows whole on the first phone screen. */
 a.ch-art, .ch-name a { color: inherit; text-decoration: none; }
 .cp-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 0; }
+.cp-head .helmet { width: 64px; height: auto; flex: none; } /* the phone header's smooth mascot (art.helmetSoft), crisp at 64px */
 .cp-head h1 { margin: 0; }
 .cp-head .lead { margin: 2px 0 0; }
 .chief-profile .label { margin: 18px 4px 8px; }
