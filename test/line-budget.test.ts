@@ -35,8 +35,7 @@ import { join } from 'node:path';
 // allocated against its measured base, where the mission's own net is +98 (src 7043 -> 7141 on this rebase).
 // Paired ch-src-trim-mail retires the allocation after landing.
 // ch-src-trim-slides-final joins the remaining crew.ts declarations (net -63): src 7171 -> 7108 on that rebase.
-// The pre-slides ceiling 7010 is not restored here: the email allocation above landed in between, so it stands until
-// ch-src-trim-mail retires its +98 (7108 - 98 = 7010).
+// The pre-slides ceiling 7010 was left standing here, pending ch-src-trim-mail; that lane ended differently (below).
 // Raised 7108 -> 7112 for helper-file retention (ch-helper-file-retention, Firstmate-authorized remainder): a job's end
 // gives a kept copy opened on a failed try its card; the rest was paid in the change, never by packing statements.
 // ch-src-trim-mail joins the adjacent same-scope declarations left outside mail, mail-send, policy and the gate. Measured
