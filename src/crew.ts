@@ -2190,7 +2190,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private dropUnlocked(task: Row) {
     if (this.fileRule(task.bot) === 'keep') return;
     const space = disk.botDir(this.cfg, task.bot);
-    for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) { const rel = String(JSON.parse(e.data).path ?? '');
+    for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
+      const rel = String(JSON.parse(e.data).path ?? '');
       if (!rel.startsWith('files/unlocked/')) continue;
       try { rmSync(join(space, rel), { force: true }); this.forgetLog(task.bot, rel); this.db.event('file.forgotten', task.bot, { task: task.id, path: rel, why: 'job' }); } catch { /* a copy that is already gone stays gone */ }
     }
