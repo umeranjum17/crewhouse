@@ -27,8 +27,9 @@ MASK=(env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools")
 "${MASK[@]}" "$NODE" src/tools.ts install documents 2>&1 | tail -2 | tee -a "$EV/transcript.txt"
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
-"${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts > "$EV/crewd.log" 2>&1 &
-CREWD=$!; trap '{ kill -TERM $CREWD; wait $CREWD; chrome-devtools-axi stop; chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+. scripts/verify/crewd-group.sh
+trap 'chrome-devtools-axi stop >/dev/null 2>&1 || true; crewd_stop || exit 1; { chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+crewd_start . "$EV/crewd.log" "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts
 B="http://127.0.0.1:$PORT"
 for _ in $(seq 600); do [ -s "$LAB/state/person.key" ] && curl --max-time 10 -fsS -o /dev/null -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")" "$B/api/state" 2>/dev/null && break; sleep 0.2; done
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")")
@@ -91,7 +92,7 @@ for f in 2-1 2-2; do
   log "$f: copy $( [ -f "$c" ] && echo present || echo MISSING ); encrypted: $(qpdf --is-encrypted "$c" && echo yes || echo no); reads: $("$LAB/tools/documents/venv/bin/markitdown" "$c" | head -1)"
 done
 api "$B/api/bots/penny" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const b=JSON.parse(s);console.log('penny task', JSON.stringify(b.tasks[0] && { state: b.tasks[0].state, body: b.tasks[0].body }))})" | tee -a "$EV/transcript.txt"
-kill -TERM $CREWD; wait $CREWD 2>/dev/null || true; chrome-devtools-axi stop >/dev/null 2>&1 || true
+crewd_stop; chrome-devtools-axi stop >/dev/null 2>&1 || true
 
 # Everything kept: the database and its WAL, crewd's log, the crew and state folders, the browsers' own profiles.
 for s in "March's:$PW1" "April's:$PW2" "the wrong one:CitySav 2025"; do

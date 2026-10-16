@@ -27,8 +27,9 @@ MASK=(env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" CREWHOUSE_ENGINE=stub
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools")
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
-"${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts > "$EV/crewd.log" 2>&1 &
-CREWD=$!; trap '{ if [ -n "${REC:-}" ]; then kill -TERM "$REC"; wait "$REC"; fi; kill -TERM $CREWD; wait $CREWD; timeout -k 5 15 chrome-devtools-axi stop; chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+. scripts/verify/crewd-group.sh
+trap '{ if [ -n "${REC:-}" ]; then kill -TERM "$REC"; wait "$REC"; fi; timeout -k 5 15 chrome-devtools-axi stop; } >/dev/null 2>&1 || true; crewd_stop || exit 1; { chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+crewd_start . "$EV/crewd.log" "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts
 B="http://127.0.0.1:$PORT"
 for _ in $(seq 600); do [ -s "$LAB/state/person.key" ] && curl --max-time 10 -fsS -o /dev/null -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")" "$B/api/state" 2>/dev/null && break; sleep 0.2; done
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")")

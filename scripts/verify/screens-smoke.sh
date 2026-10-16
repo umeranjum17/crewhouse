@@ -7,46 +7,24 @@
 #
 # Needs chrome-devtools-axi on PATH with that session owning a Chrome. Exit 0 with
 # eight PNGs, non-zero otherwise. Never the owner's install, never port 7711.
-#
-# crewd and everything it starts share one process group of their own (setsid), and
-# every exit goes through cleanup: TERM to the whole group, KILL after a bounded
-# grace, then wait until no member is left. Only an empty group lets the lab go; a
-# group that outlives KILL keeps it and fails the run. If this script is SIGKILLed,
-# setpriv's parent-death signal takes crewd too.
+# crewd's process group is emptied before the lab goes (crewd-group.sh).
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: screens-smoke.sh <evidence-dir>" >&2; exit 2; }
 OUT=$1; mkdir -p "$OUT/screens"
 REPO=$(git rev-parse --show-toplevel)
-PID=""
-gone() { ! kill -0 -- "-$PID" 2>/dev/null; }
-drain() { kill "-$1" -- "-$PID" 2>/dev/null || true; for _ in $(seq 100); do gone && return 0; sleep 0.05; done; gone; }
-cleanup() {
-  local rc=$?
-  trap '' HUP INT TERM
-  if [ -n "$PID" ] && ! drain TERM; then
-    echo "screens-smoke: crewd's process group $PID outlived SIGTERM; sending SIGKILL" >&2
-    drain KILL || { echo "screens-smoke: crewd's process group $PID outlived SIGKILL; keeping $LAB" >&2; exit 1; }
-  fi
-  rm -rf "$LAB"; exit "$rc"
-}
+. "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-screens.XXXXXX)
-trap cleanup EXIT
-trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+trap 'crewd_stop || exit 1; rm -rf "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
-set +m # no job control: the background child stays in this group, so setsid never forks and $! is crewd
-setsid setpriv --pdeathsig KILL -- env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+crewd_start "$REPO" "$OUT/crewd-screens.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
   CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" \
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
-  node "$REPO/src/main.ts" > "$OUT/crewd-screens.log" 2>&1 &
-# setsid gives the background child a fresh group led by its own pid: signal it only once proven.
-LEADER=$!
-for _ in $(seq 100); do kill -0 -- "-$LEADER" 2>/dev/null && { PID=$LEADER; break; }; sleep 0.05; done
-[ -n "$PID" ] || { echo "screens-smoke: crewd's own process group never appeared" >&2; exit 1; }
+  node "$REPO/src/main.ts"
 PERSON=""
 DEADLINE=$((SECONDS + 60))
 for _ in $(seq 240); do

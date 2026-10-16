@@ -8,8 +8,10 @@
 set -euo pipefail
 LAB=${LAB:?set LAB to a scratch folder}
 free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})'; }
+. "$(dirname "$0")/crewd-group.sh"
 # exec: a backgrounded `( … mask node … & echo $! )` records the server itself, so `down` stops it, not a wrapper.
-mask() { exec env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB/tmp" XDG_STATE_HOME="$LAB/home/.local/state" \
+# crewd leads a group of its own (setsid), drained by `down` before the lab may go.
+mask() { exec ${SETSID:-} env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB/tmp" XDG_STATE_HOME="$LAB/home/.local/state" \
   XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" "$@"; }
 wait_for() { for _ in $(seq 300); do if eval "$1" >/dev/null 2>&1; then return 0; fi; sleep 0.2; done; echo "timed out: $1" >&2; return 1; }
@@ -21,9 +23,9 @@ case "${1:-}" in
     PORT=$(free); LINK_PORT=$(free); RPORT=$(free)
     (cd "$REPO" && mask PORT="$RPORT" HOST=127.0.0.1 RELAY_DATA="$LAB/relay" RELAY_SIGNUP=open node relay/main.ts >"$LAB/relay.log" 2>&1 & echo $! >"$LAB/relay.pid")
     wait_for "curl --max-time 10 -fsS http://127.0.0.1:$RPORT/health"
-    (cd "$REPO" && mask CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK_PORT" CREWHOUSE_LINK_HOST=127.0.0.1 \
+    (cd "$REPO" && SETSID=setsid mask CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK_PORT" CREWHOUSE_LINK_HOST=127.0.0.1 \
       CREWHOUSE_RELAY="http://127.0.0.1:$RPORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
-      node src/main.ts >"$LAB/crewd.log" 2>&1 & echo $! >"$LAB/crewd.pid")
+      node src/main.ts >"$LAB/crewd.log" 2>&1 & echo $! >"$LAB/crewd.pid"; crewd_group $!)
     wait_for "curl --max-time 10 -fsS -H x-crewhouse:1 -H \"Authorization: Bearer \$(cat '$LAB/state/person.key')\" http://127.0.0.1:$PORT/api/state | grep -q person"
     (cd "$REPO" && exec node scripts/verify/serve-web.mjs web/dist >"$LAB/web.log" 2>&1 & echo $! >"$LAB/web.pid")
     wait_for "grep -q serving $LAB/web.log"
@@ -38,7 +40,8 @@ case "${1:-}" in
       CREWHOUSE_CREW_DIR="$LAB/crew" ./crewhouse "$@"
     ;;
   down)
-    for p in web crewd relay; do
+    if [ -f "$LAB/crewd.pid" ]; then CREWD=$(<"$LAB/crewd.pid"); crewd_stop || exit 1; fi
+    for p in web relay; do
       [ -f "$LAB/$p.pid" ] || continue
       pid=$(<"$LAB/$p.pid")
       kill -TERM "$pid" 2>/dev/null || continue
