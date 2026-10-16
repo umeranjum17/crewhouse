@@ -58,8 +58,10 @@ export async function pairTypedCode(text: string, onWords: (w: string) => void):
   const t = readTyped(text);
   if (t.kind === 'unknown') throw new Error(t.words);
   const o = { name: (Device.deviceName || Device.modelName || 'Phone').slice(0, 40), onWords };
+  // Only the relay's own "wrong", "run out" or "expired" is about the code; any other failed lookup is the relay's,
+  // and Expo's fetch fails with its own FetchError there, not the browser's TypeError.
   const g = t.kind === 'code' ? await pairOnWifi(t.code, o) : await pairWithCode(await findHost(t.base, t.short).catch((e) => {
-    throw e instanceof TypeError ? new Error(NO_RELAY) : e;
+    throw /wrong|run out|expired/i.test(e?.message ?? '') ? e : new Error(NO_RELAY, { cause: e });
   }), t.code, o);
   await store.save(g);
   return g;

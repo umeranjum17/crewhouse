@@ -56,6 +56,10 @@ and `?day`, and prove Settings still mints its own code on the same build.
 (`node -e "…qrMatrix('hello')…" > not-a-code.png`, or any QR), and at a code that has run out
 (`CREWHOUSE_PAIR_MS=1` on the crewd side, or wait two minutes), and keep the screenshot of what the
 phone says. Each failure must be one plain sentence that says what to do next, never an error code.
+A relay code whose relay the phone cannot reach is one too: on an owned emulator, drop the relay's address as root
+(`adb -s <serial> shell iptables -I OUTPUT -d <relay-ip> -j DROP`, then `-D` to undo) and type a fresh code. The
+phone says "Could not reach your computer's relay. Check it is on and try again." and never blames the code; until
+BYOKit bounds `findHost`, that takes about two and a half minutes.
 
 **The typed code.** Under the code, every card (Settings › Phones, "Add your phone", Chief's phone offer)
 shows the kit's 12-letter code (`Host.code`, `XXXX-XXXX-XXXX`; case, spaces and dashes optional).
