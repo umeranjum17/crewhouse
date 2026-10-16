@@ -1811,8 +1811,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const picked = ask.kind === 'style' && body.answer === 'allow' ? (detail.pick?.styles ?? []).find((s: { id: string }) => s.id === String(body.style ?? '')) : undefined;
     if (ask.kind === 'style' && body.answer === 'allow' && !picked) throw fail('pick one of the styles on the card');
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
-    if (rule) this.setFileRule(detail.bot, rule);
-    const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
+    if (rule) this.setFileRule(detail.bot, rule); const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (change ? 'change it' : body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
@@ -2160,10 +2159,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
   private async askUnlock(botId: string, files: unknown) {
-    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))];
-    const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [], opened: string[] = [];
-    for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r); else opened.push(r);
-    for (const r of opened) this.db.event('file.unlocked', botId, { task: this.activeTask(botId)?.id, path: unlockedAs(r) });
+    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))]; const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [], opened: string[] = [];
+    for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r); else opened.push(r); for (const r of opened) this.db.event('file.unlocked', botId, { task: this.activeTask(botId)?.id, path: unlockedAs(r) });
     if (this.fileRule(botId) === 'keep') for (const r of opened) { const kept = this.activeTask(botId)?.id; if (this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", botId, kept, unlockedAs(r))) continue; this.unforgotten(botId, unlockedAs(r)); this.db.event('file.delivered', botId, { task: kept, path: unlockedAs(r) }); this.say(botId, 'system', `Kept ${unlockedAs(r)}: ${this.knownName(botId, r)}`, kept ?? null); }
     if (locked.length && !this.db.get("SELECT 1 FROM asks WHERE kind = 'unlock' AND state = 'open' AND json_extract(detail, '$.bot') = ?", botId)) this.openAsk(CHIEF, this.activeTask(botId), lockedTitle(locked.length), { bot: botId, files: locked, all: rels.filter((r) => locked.includes(r) || unlockedCurrent(space, r)) }, 'unlock');
     return locked.length ? { asked: true, note: "The person sees a card in Chief's chat now. End your turn with one short line; you will be told when the files are open." } : { note: `Not locked, or unlocked already: read ${rels.map((r) => unlockedCurrent(space, r) ? unlockedAs(r) : r).join(', ')}` };
@@ -2171,8 +2168,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** Each password opens its file in the helper's sandbox, through stdin only, and is gone: no row, log, event or model ever holds it. A wrong one keeps that file on the card. */
   private async unlock(ask: Row, d: Row, passwords: unknown, keep: string) {
-    const space = disk.botDir(this.cfg, d.bot);
-    if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
+    const space = disk.botDir(this.cfg, d.bot); if (!Array.isArray(passwords) || passwords.length !== d.files.length || !passwords.every((x) => typeof x === 'string' && x)) throw fail('type the password for each file');
     if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir))) throw fail("This computer can't open locked files yet: it needs the Documents tool and a sandbox.", 409);
     const codes = await Promise.all(d.files.map((f: string, i: number) => this.unlocking(space, f, passwords[i]))), wrong = d.files.filter((_: string, i: number) => codes[i]), one = wrong.length === 1;
     d.files.forEach((f: string, i: number) => codes[i] || this.db.event('file.unlocked', d.bot, { task: ask.task_id, path: unlockedAs(f) })); // a copy that opened follows the rule, even on a try where another didn't
@@ -2188,14 +2184,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** The rule applied when the job ends: its unlocked copies go, unless the person chose to keep them. */
   private dropUnlocked(task: Row) {
-    if (this.fileRule(task.bot) === 'keep') {
-      for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
+    if (this.fileRule(task.bot) === 'keep') { for (const e of this.db.all("SELECT data FROM events WHERE kind = 'file.unlocked' AND bot = ? AND json_extract(data, '$.task') = ?", task.bot, task.id)) {
         const rel = String(JSON.parse(e.data).path ?? '');
         if (!rel.startsWith('files/unlocked/')) continue;
         if (this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", task.bot, task.id, rel)) continue;
-        this.unforgotten(task.bot, rel);
-        this.db.event('file.delivered', task.bot, { task: task.id, path: rel });
-        this.say(task.bot, 'system', `Kept ${rel}: ${this.knownName(task.bot, rel)}`, task.id);
+        this.unforgotten(task.bot, rel); this.db.event('file.delivered', task.bot, { task: task.id, path: rel }); this.say(task.bot, 'system', `Kept ${rel}: ${this.knownName(task.bot, rel)}`, task.id);
       }
       return;
     }
@@ -2218,13 +2211,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** "Forget this file": the person takes one file out of the helper's folder themselves. Only a file inside that folder. */
   forgetFile(botId: string, path: string) {
-    if (!this.bot(botId)) throw Object.assign(new Error('no such bot'), { status: 404 });
-    const full = disk.insideBot(this.cfg, botId, path), rel = relative(disk.botDir(this.cfg, botId), full);
+    if (!this.bot(botId)) throw Object.assign(new Error('no such bot'), { status: 404 }); const full = disk.insideBot(this.cfg, botId, path), rel = relative(disk.botDir(this.cfg, botId), full);
     if (!/^files\/.+/.test(rel) || !statSync(full, { throwIfNoEntry: false })?.isFile()) throw fail('there is no file there to forget');
-    rmSync(full);
-    this.forgetLog(botId, rel);
-    this.db.event('file.forgotten', botId, { path: rel, by: 'person' });
-    this.say(botId, 'system', `Removed ${this.knownName(botId, rel)} from ${this.bot(botId)!.display}'s folder.`);
+    rmSync(full); this.forgetLog(botId, rel);
+    this.db.event('file.forgotten', botId, { path: rel, by: 'person' }); this.say(botId, 'system', `Removed ${this.knownName(botId, rel)} from ${this.bot(botId)!.display}'s folder.`);
   }
 
   private unlocking(space: string, f: string, password: string) { mkdirSync(join(space, 'files', 'unlocked'), { recursive: true }); return runSandboxed(space, [this.cfg.toolsDir], {}, `${q(unlockPy(this.cfg.toolsDir))} -I -c ${q(UNLOCK)} ${q(f)} ${q(unlockedAs(f))}`, undefined, 60_000, password).then((r) => { if (r.code) rmSync(join(space, unlockedAs(f)), { force: true }); return r.code; }); }
