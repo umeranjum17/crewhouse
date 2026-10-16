@@ -31,11 +31,13 @@ import { join } from 'node:path';
 // Raised 7010 -> 7166 for finished slide decks (ch-cap-slides): the .pptx writer, crew_slides and preview readback.
 // This is this change's own net; paired trim lane ch-src-trim-slides restores BUDGET to 7010 in two slices.
 // Slice 1 joins adjacent declarations in artifact/supporting modules: src 7165 -> 7073 (net -92).
-// ch-src-trim-slides-final carries the remaining crew.ts trim back to 7010.
 // Raised 7073 -> 7172 for Chief reply-as-draft and labels (ch-cap-email-reply-v2, mission-only exception): the +99
 // allocated against its measured base, where the mission's own net is +98 (src 7043 -> 7141 on this rebase).
 // Paired ch-src-trim-mail retires the allocation after landing.
-const BUDGET = 7172;
+// ch-src-trim-slides-final joins the remaining crew.ts declarations (net -63): src 7171 -> 7108 on that rebase.
+// The pre-slides ceiling 7010 is not restored here: the email allocation above landed in between, so it stands until
+// ch-src-trim-mail retires its +98 (7108 - 98 = 7010).
+const BUDGET = 7108;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
