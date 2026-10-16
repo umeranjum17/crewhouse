@@ -79,7 +79,7 @@ done; done
 
 # The mandatory look check at the hardest size (360 wide, text x1.3, day and night), beside mock 3A (FM_HOME holds it).
 THEN='(async () => { for (let i = 0; i < 50 && !document.querySelector(".unlock-card"); i++) await new Promise((r) => setTimeout(r, 100)); return true; })()'
-node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$THEN" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt" || log "look-check: exit $?"
+node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$THEN" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt"
 
 # The installed app (headed, under Xvfb): installed from Settings for real, then Chief's thread opens on the ask.
 mkdir -p "$EV/pwa" "$LAB/pwa/home/run"

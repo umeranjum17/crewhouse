@@ -99,6 +99,7 @@ look=0
 node "$L" web --out "$OUT/look" --person "$LAB/state/person.key" --then "(async () => { $WAIT })()" chart-panel="$B/#/f/quill/files%2F$XLSX" || look=$?
 node "$L" web --out "$OUT/look" --person "$LAB/state/person.key" --then "(async () => { $WAIT document.querySelectorAll('.wb-tab')[1].click(); $WAIT })()" chart-panel-pie="$B/#/f/quill/files%2F$XLSX" || look=$?
 echo "look check exit: $look" | tee "$OUT/look/exit.txt"
+[ "$look" -eq 0 ]
 # PWA=1: the same panel in the installed home-screen app (docs/verification/pwa-shell.md's real install, headed under Xvfb):
 # the app's own Install, the real sheet, then each look and width inside the standalone window (pwa/).
 if [ "${PWA:-}" = 1 ]; then
