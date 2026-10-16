@@ -39,7 +39,11 @@ import { join } from 'node:path';
 // ch-src-trim-mail retires its +98 (7108 - 98 = 7010).
 // Raised 7108 -> 7112 for helper-file retention (ch-helper-file-retention, Firstmate-authorized remainder): a job's end
 // gives a kept copy opened on a failed try its card; the rest was paid in the change, never by packing statements.
-const BUDGET = 7112;
+// ch-src-trim-mail joins the adjacent same-scope declarations left outside mail, mail-send, policy and the gate. Measured
+// on acf5711 (net -25, src 7110 -> 7085): #531 had already joined 11 of the 37 and #532 rewrote one more away. The
+// remaining 72 lines of the email allocation are closed as an owner exception (Main3343): they are real email-feature
+// code, and only line-packing or code moves could remove them.
+const BUDGET = 7085;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
