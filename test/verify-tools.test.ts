@@ -100,15 +100,17 @@ test('recorder bounds silent peers and settles disconnected requests', { timeout
   }
 });
 
-// Each driver's teardown is judged on a real crewd. crewd's first git call (a git on PATH
-// that then execs the real one) leaves two watchers in crewd's process group, one that
-// ignores SIGTERM; a watcher that sees the lab vanish while it still runs writes `survived`.
-// A case fails on that, on any member of the group outliving the driver, or on a lab left
-// behind. The negative control is the former boundary (TERM to crewd's pid alone, wait for
-// it, remove the lab): it must fail the same check.
+// Each driver's teardown is judged on a real crewd. crewd's launch (a setsid on PATH that runs
+// the real one, for the shell drivers) or else its first git call leaves two watchers in crewd's
+// process group, one that ignores SIGTERM; a watcher that sees the lab vanish while it still runs
+// writes `survived`. A case fails on that, on any member of the group outliving the driver, or
+// on a lab left behind. The sibling drivers are stopped while crewd's launch is held (`boot`),
+// past their fixtures (shimmed). unlock-card is not run: it installs a tool from the network
+// before crewd starts. The negative control is the former boundary (TERM to crewd's pid alone,
+// wait for it, remove the lab): it must fail the same check.
 test('verify drivers empty crewd\'s process group before removing its lab', { timeout: 150_000 }, async () => {
   const own = Number(readFileSync('/proc/self/stat', 'utf8').split(') ')[1].split(' ')[2]);
-  const git = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const [git, setsid] = ['git', 'setsid'].map((bin) => execFileSync('sh', ['-c', `command -v ${bin}`], { encoding: 'utf8' }).trim()); // dash's command -v reads one name
   const alive = (pgid: number) => { try { process.kill(-pgid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code !== 'ESRCH'; } };
   const exit = (child: ChildProcess) => new Promise<number | string>((resolve) => {
     const timer = setTimeout(() => resolve('no exit within 90s'), 90_000);
@@ -126,8 +128,9 @@ PID=$!
 for _ in $(seq 600); do [ ! -e "$FIX/group" ] || break; sleep 0.05; done
 kill -TERM "$PID"; wait "$PID"; rm -rf "$LAB"`];
   const session = { CHROME_DEVTOOLS_AXI_SESSION: 'verify-group' };
+  const driver = (script: string, ...args: string[]) => (out: string) => ['bash', `scripts/verify/${script}`, ...args, out];
   const cases: { name: string, argv: (out: string) => string[], code: number | null, says?: RegExp, env?: Record<string, string>,
-    inject?: 'hang' | 'throw', term?: 'group' | 'held', before?: (out: string) => void }[] = [
+    inject?: 'hang' | 'throw', term?: 'group' | 'held' | 'boot', before?: (out: string) => void }[] = [
     { name: 'stub-drive pass', argv: stub, code: 0, says: /stub-drive: pass/ },
     { name: 'stub-drive error', argv: stub, code: 1, says: /EISDIR/, before: (out) => mkdirSync(join(out, 'summary.json')) },
     { name: 'stub-drive uncaught exception', argv: stub, code: 1, says: /injected uncaught exception/, inject: 'throw' },
@@ -135,24 +138,46 @@ kill -TERM "$PID"; wait "$PID"; rm -rf "$LAB"`];
     { name: 'screens-smoke pass', argv: smoke, code: 0, says: /8 captures/, env: session },
     { name: 'screens-smoke error', argv: smoke, code: 1, says: /set to your task-named session/, env: { CHROME_DEVTOOLS_AXI_SESSION: '' } },
     { name: 'screens-smoke SIGTERM', argv: smoke, code: 143, env: session, term: 'held' },
+    { name: 'files-gate SIGTERM', argv: driver('files-gate.sh', '.'), code: 143, term: 'boot' },
+    { name: 'workbook-chart SIGTERM', argv: driver('workbook-chart.sh', '.'), code: 143, term: 'boot' },
+    { name: 'slides-deck SIGTERM', argv: driver('slides-deck.sh', '.'), code: 143, term: 'boot' },
+    { name: 'ask-in-view SIGTERM', argv: driver('ask-in-view.sh'), code: 143, term: 'boot' },
+    { name: 'pwa-pair SIGTERM', argv: driver('pwa-pair.sh'), code: 143, term: 'boot' },
     { name: 'former boundary (negative control)', argv: former, code: null },
   ];
   const drive = async (c: typeof cases[number]) => {
     const dir = mkdtempSync(join(tmpdir(), 'verify-group-'));
     const out = join(dir, 'out'), record = join(dir, 'group');
-    mkdirSync(join(dir, 'tmp')); mkdirSync(out);
+    mkdirSync(join(dir, 'tmp')); mkdirSync(join(dir, 'home')); mkdirSync(out);
+    // The record goes out only once the resistant watcher ignores SIGTERM.
+    const watch = `for resist in no yes; do
+      ( [ $resist = no ] || { trap '' TERM; : > "${dir}/resisting"; }
+        for _ in $(seq 1200); do [ -d "$lab" ] || { echo "$lab" >> "${dir}/survived"; exit; }; sleep 0.05; done ) < /dev/null > /dev/null 2>&1 &
+    done
+    for _ in $(seq 1200); do [ -e "${dir}/resisting" ] && break; sleep 0.05; done
+    printf '%s\\n%s\\n' "$(ps -o pgid= -p $$)" "$lab" > "${dir}/group.tmp" && mv "${dir}/group.tmp" "${dir}/group"`;
     writeFileSync(join(dir, 'git'), `#!/usr/bin/env bash
 case "\${CREWHOUSE_STATE_DIR:-}" in "${dir}/tmp/"*/state)
   if mkdir "${dir}/started" 2>/dev/null; then
     lab=\${CREWHOUSE_STATE_DIR%/state}
-    for resist in no yes; do
-      ( [ $resist = no ] || trap '' TERM
-        for _ in $(seq 1200); do [ -d "$lab" ] || { echo "$lab" >> "${dir}/survived"; exit; }; sleep 0.05; done ) < /dev/null > /dev/null 2>&1 &
-    done
-    printf '%s\\n%s\\n' "$(ps -o pgid= -p $$)" "$lab" > "${dir}/group.tmp" && mv "${dir}/group.tmp" "${dir}/group"
+    ${watch}
   fi;;
 esac
 exec ${git} "$@"
+`, { mode: 0o755 });
+    writeFileSync(join(dir, 'setsid'), `#!/usr/bin/env bash
+exec ${setsid} "${dir}/boot.sh" "$@"
+`, { mode: 0o755 });
+    writeFileSync(join(dir, 'boot.sh'), `#!/usr/bin/env bash
+for a; do case $a in HOME=*) lab=$(dirname "\${a#HOME=}");; esac; done
+if mkdir "${dir}/started" 2>/dev/null; then
+    ${watch}
+  for _ in $(seq 1200); do [ -e "${dir}/boot" ] || break; sleep 0.05; done
+fi
+exec "$@"
+`, { mode: 0o755 });
+    for (const made of ['magick', 'ffmpeg', 'gs', 'qpdf']) writeFileSync(join(dir, made), `#!/usr/bin/env bash
+for a; do case $a in -sOutputFile=*) touch "\${a#*=}";; esac; done; touch "\${a##*:}"
 `, { mode: 0o755 });
     writeFileSync(join(dir, 'chrome-devtools-axi'), `#!/usr/bin/env bash
 case "$1" in
@@ -161,7 +186,7 @@ case "$1" in
   screenshot) touch "$2";;
 esac
 `, { mode: 0o755 });
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}`, TMPDIR: join(dir, 'tmp'), FIX: dir, ...c.env };
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}`, HOME: join(dir, 'home'), TMPDIR: join(dir, 'tmp'), FIX: dir, ...c.env };
     if (c.inject) {
       // Preloaded into stub-drive: its API calls never answer, and `throw` raises an exception nothing catches.
       writeFileSync(join(dir, 'inject.mjs'), `import { existsSync } from 'node:fs';
@@ -173,7 +198,8 @@ globalThis.fetch = () => {
       env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(join(dir, 'inject.mjs')).href}`;
     }
     c.before?.(out);
-    if (c.term === 'held') writeFileSync(join(dir, 'hold'), '');
+    const hold = c.term === 'held' ? 'hold' : c.term === 'boot' ? 'boot' : '';
+    if (hold) writeFileSync(join(dir, hold), '');
     let child: ChildProcess | undefined, group = 0;
     try {
       const [command, ...args] = c.argv(out);
@@ -183,12 +209,13 @@ globalThis.fetch = () => {
       child.stderr!.on('data', (d) => { said += d; });
       const exited = exit(child);
       if (c.term) {
-        await until(`${c.name} running`, () => existsSync(join(dir, c.term!)), 60_000);
+        await until(`${c.name} running`, () => existsSync(join(dir, c.term === 'held' ? 'held' : 'group')), 60_000);
         child.kill('SIGTERM');
-        rmSync(join(dir, 'hold'), { force: true });
+        if (hold) rmSync(join(dir, hold), { force: true });
       }
       const code = await exited;
-      assert.ok(existsSync(record), `${c.name}: crewd never ran git: ${said}`);
+      if (existsSync(join(out, 'lab.log'))) said += readFileSync(join(out, 'lab.log'), 'utf8'); // pair-lab's own stop, when a failed `up` ran it
+      assert.ok(existsSync(record), `${c.name}: crewd never started: ${said}`);
       const [pgid, lab] = readFileSync(record, 'utf8').trim().split('\n');
       group = Number(pgid);
       const found = [
@@ -200,7 +227,7 @@ globalThis.fetch = () => {
       else {
         assert.equal(code, c.code, `${c.name}: ${said}`);
         if (c.says) assert.match(said, c.says, c.name);
-        assert.match(said, /outlived SIGTERM; sending SIGKILL/, `${c.name} never escalated past the watcher that ignores SIGTERM`);
+        assert.match(said, /outlived SIGTERM; sending SIGKILL/, `${c.name} never escalated past the watcher that ignores SIGTERM: ${said}`);
         assert.deepEqual(found, [], `${c.name}: ${said}`);
       }
     } finally {

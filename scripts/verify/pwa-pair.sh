@@ -2,7 +2,8 @@
 set -euo pipefail
 OUT=$(mkdir -p "${1:?evidence directory}" && cd "$1" && pwd)
 export LAB=$(mktemp -d "${TMPDIR:-/tmp}/crewhouse-pwa-pair.XXXXXX")
-cleanup() { bash scripts/verify/pair-lab.sh down; rm -rf "$LAB"; }
+. scripts/verify/crewd-group.sh   # HUP, INT and TERM exit through cleanup
+cleanup() { bash scripts/verify/pair-lab.sh down 2>&"$crewd_err" || exit 1; rm -rf "$LAB"; }
 trap cleanup EXIT
 bash scripts/verify/pair-lab.sh up "$PWD" > "$OUT/lab.log" 2>&1
 mkdir -p "$OUT/shots" "$OUT/motion"

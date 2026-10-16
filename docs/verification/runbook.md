@@ -44,8 +44,8 @@ trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TER
   "http://127.0.0.1:$PORT/api/state"` returning JSON with a `person` key.
   Every `/api` read needs the person's authority, like every write; loopback alone proves nothing.
   Poll for the condition; never a fixed sleep (CI disks are slow).
-- Teardown is `cleanup` above (`scripts/verify/screens-smoke.sh` and `stub-drive.mjs` do the
-  same; `test/verify-tools.test.ts` holds them to it): TERM to crewd's whole process group
+- Teardown is `cleanup` above (every shell driver sources it as `scripts/verify/crewd-group.sh`,
+  `stub-drive.mjs` does the same; `test/verify-tools.test.ts` holds them to it): TERM to crewd's whole process group
   (`kill -TERM -- -$CREWD`), KILL after a 5 s grace, then wait until `kill -0 -- -$CREWD` finds
   no member. Only an empty group lets `$LAB` go; a group that outlives KILL keeps it. crewd also
   writes its own pid to `$LAB/state/crewd.pid` — only ever signal the group you spawned, never

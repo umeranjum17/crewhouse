@@ -19,10 +19,10 @@ MASK=(env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_STATE_
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools")
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
-( cd "$REPO" && "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts > "$OUT/crewd.log" 2>&1 ) &
-CREWD=$!
-cleanup() { kill -TERM "$CREWD" 2>/dev/null || true; wait "$CREWD" 2>/dev/null || true; chrome-devtools-axi stop >/dev/null 2>&1 || true; chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB"; }
+. "$REPO/scripts/verify/crewd-group.sh"
+cleanup() { chrome-devtools-axi stop >/dev/null 2>&1 || true; crewd_stop || exit 1; chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB"; }
 trap cleanup EXIT
+crewd_start "$REPO" "$OUT/crewd.log" "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts
 wait_for() { for _ in $(seq 1 400); do "$@" >/dev/null 2>&1 && return 0; kill -0 "$CREWD" 2>/dev/null || { echo "crewd exited"; tail "$OUT/crewd.log"; exit 1; }; sleep 0.2; done; echo "timed out: $*"; exit 1; }
 ready() { curl --max-time 10 -fsS "$B/api/state" -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" | grep -q '"person"'; }
 wait_for ready

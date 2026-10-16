@@ -21,16 +21,16 @@ Sunday: lunch with Umer's family" -compress zip "$HERE/trip-plan.pdf"
 ffmpeg -loglevel error -y -f lavfi -i 'testsrc=size=320x180:rate=10' -t 1 -pix_fmt yuv420p -c:v libx264 -movflags +faststart "$HERE/beach-clip.mp4"
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
-( cd "$REPO" && env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+. "$REPO/scripts/verify/crewd-group.sh"
+cleanup() { crewd_stop || exit 1; rm -rf "$LAB"; }
+trap cleanup EXIT
+crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
   CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" \
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
-  node src/main.ts > "$OUT/crewd.log" 2>&1 ) &
-CREWD=$!
-cleanup() { kill -TERM "$CREWD" 2>/dev/null || true; wait "$CREWD" 2>/dev/null || true; rm -rf "$LAB"; }
-trap cleanup EXIT
+  node src/main.ts
 wait_for() { for _ in $(seq 1 300); do "$@" >/dev/null 2>&1 && return 0; kill -0 "$CREWD" 2>/dev/null || { echo "crewd exited"; tail "$OUT/crewd.log"; exit 1; }; sleep 0.2; done; echo "timed out: $*"; exit 1; }
 ready() { curl --max-time 10 -fsS "$B/api/state" -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" | grep -q '"person"'; }
 wait_for ready
