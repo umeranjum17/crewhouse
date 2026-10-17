@@ -2140,7 +2140,7 @@ function Crew(ctx: Ctx) {
       {tile('chief', <Face who="chief" size={72} mood={view.chief.mood} />, 'chief', 'Chief', offline ? OUT : A.chiefStatus(view).word, 'Hands out the jobs', { view: 'chief' })}
       {A.roster(view.crew).map((c) => tile(c.id, <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={72} />, c.kind, c.name, offline ? OUT : A.statusOf(c, view).word, roles.get(c.id) ?? '', { view: 'helper', id: c.id }))}
       {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} accessibilityRole="button" style={({ pressed }) => [s.stTile, { width: w, borderWidth: 2, borderStyle: 'dashed', borderColor: t.line2, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
-        <T style={{ fontSize: 36, lineHeight: 40 }}>+</T><T style={[s.semi, { marginTop: 10 }]}>Add a helper</T><T tone="mute" style={[s.read, s.centerText]}>Tell Chief who you need</T>
+        <T style={{ fontSize: 36, lineHeight: 40 }}>+</T><T style={[s.semi, s.centerText, { marginTop: 10, alignSelf: 'stretch' }]}>Add a helper</T><T tone="mute" style={[s.read, s.centerText]}>Tell Chief who you need</T>
       </Pressable>}
     </View>
   </Page>;
