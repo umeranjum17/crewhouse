@@ -12,7 +12,7 @@ own shape — when the message has nothing attached, the attachment is too big, 
 
 ## Drive and prove
 
-Stub engine, from the Firstmate home (no live Gmail needed; the repo's stub Gmail stands in for the account):
+Stub engine, from your own checkout (no live Gmail needed; the repo's stub Gmail stands in for the account):
 
 ```bash
 REPO=<repo checkout> bash <home>/data/evidence/ch-gmail-attachments/run.sh

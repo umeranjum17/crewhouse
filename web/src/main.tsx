@@ -799,7 +799,7 @@ function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
-  // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
+  // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
   // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat.

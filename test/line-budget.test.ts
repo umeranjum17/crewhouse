@@ -23,7 +23,7 @@ import { join } from 'node:path';
 // Raised 6954 -> 6999 for saving an email attachment (ch-gmail-attachments): listing a conversation's attachments and
 // saving one into the helper's own files/ folder, with its size bound, sanitised name and plain refusals. The paired
 // trim lane ch-src-trim-s4 compacts single-use declarations back out of src/, restoring BUDGET to 6954.
-// Raised 6999 -> 7098 for charts in crew_workbook (ch-cap-charts, Firstmate decision A3): exceljs cannot write a chart,
+// Raised 6999 -> 7098 for charts in crew_workbook (ch-cap-charts): exceljs cannot write a chart,
 // so crewd adds the DrawingML chart parts itself and reads them back for the preview. The paired trim lane ch-src-trim-charts
 // compacted single-use declarations back out of src/, restoring BUDGET to 6999.
 // Raised 6999 -> 7010 for the OpenCode Go key sign-in through the kit (ch-opencode-go-route, owner exception):
@@ -36,7 +36,7 @@ import { join } from 'node:path';
 // Paired ch-src-trim-mail retires the allocation after landing.
 // ch-src-trim-slides-final joins the remaining crew.ts declarations (net -63): src 7171 -> 7108 on that rebase.
 // The pre-slides ceiling 7010 was left standing here, pending ch-src-trim-mail; that lane ended differently (below).
-// Raised 7108 -> 7112 for helper-file retention (ch-helper-file-retention, Firstmate-authorized remainder): a job's end
+// Raised 7108 -> 7112 for helper-file retention (ch-helper-file-retention): a job's end
 // gives a kept copy opened on a failed try its card; the rest was paid in the change, never by packing statements.
 // ch-src-trim-mail joins the adjacent same-scope declarations left outside mail, mail-send, policy and the gate. Measured
 // on acf5711 (net -25, src 7110 -> 7085): #531 had already joined 11 of the 37 and #532 rewrote one more away. The
