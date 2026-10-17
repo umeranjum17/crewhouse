@@ -2,6 +2,7 @@
 // the sign-in step of the build; these pin the product words and states around it, which never change).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { SignInStep } from '../src/runtime.ts';
 
 const { setup, settled, task, until } = await import('./lab.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
@@ -11,6 +12,16 @@ const A = await import('../web/src/adapter.ts');
 
 /** A user message the stub model turns into one tool call. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
+/** The OpenCode console's `/api/orgs`, stubbed: `orgs` names the workspaces each key acts for, and a key it does not list is refused, as a bound service key is. Other hosts stay real. */
+function opencodeConsole(orgs: Record<string, object[]>) {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    if (!String(url).startsWith('https://opencode.ai/')) return real(url, init);
+    const key = String((init?.headers as Record<string, string> | undefined)?.authorization ?? '').replace('Bearer ', '');
+    return orgs[key] ? Response.json(orgs[key]) : new Response('{}', { status: 403 });
+  }) as typeof fetch;
+  return () => { globalThis.fetch = real; };
+}
 /** Only the named accounts count as signed in for the person; the rest wait for sign-in. */
 function only(crew: any, keys: string[]) {
   for (const k of Object.keys(PROVIDERS)) {
@@ -106,6 +117,7 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
   const { join } = await import('node:path');
   const { startServer } = await import('../src/server.ts');
   const { faked } = await import('./kit-fake.ts');
+  const restore = opencodeConsole({});
   const s = setup(), f = faked({}, { 'openclaw.setup.activate': (p) => ({ ok: false, status: p.apiKey === 'synthetic-invalid' ? 'auth' : p.apiKey === 'synthetic-network' ? 'network' : 'unavailable' }) });
   s.cfg.port = 0; s.cfg.linkPort = 0;
   s.crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
@@ -154,8 +166,33 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
     assert.equal(other.notIncluded, false);
     assert.match(other.signIn.error, /Synthetic provider connection failed/);
   } finally {
+    restore();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     s.done(); await f.done();
+  }
+});
+
+test('a Go key added with no workspace clears the workspace an earlier pick left on the engine', async () => {
+  const { faked } = await import('./kit-fake.ts');
+  const restore = opencodeConsole({ 'synthetic-login': [{ id: 'org-a', name: 'Team A' }], 'synthetic-team': [{ id: 'org-a', name: 'Team A' }, { id: 'org-b', name: 'Team B' }] });
+  const f = faked();
+  try {
+    await f.started;
+    const header = async () => (((await f.runtime.kit.call('config.get', {})) as any).config.models?.providers?.['opencode-go']?.headers ?? {})['x-opencode-org-id'];
+    assert.equal((await f.runtime.kit.addKey('m1', { authChoice: 'opencode-go', apiKey: 'synthetic-login', orgId: 'org-a' })).status, 'ok');
+    assert.equal(await header(), 'org-a', 'the pick is on the engine');
+    // A bound service key lists no workspace, so its add names none: the earlier pick must not ride its calls.
+    assert.equal((await f.runtime.kit.addKey('m1', { authChoice: 'opencode-go', apiKey: 'synthetic-service-key' })).status, 'ok');
+    assert.equal(await header(), undefined, 'the service key runs with no workspace header');
+    // A login acting for several workspaces is not saved: the person is told why, plainly, and the paste stays open.
+    const steps: SignInStep[] = [];
+    f.runtime.signIn('opencode-go', 'key', (s) => steps.push(s)).paste('synthetic-team');
+    await until('the several-workspace key result', () => steps.some((s) => s.error));
+    assert.equal(steps.at(-1)!.waiting, true);
+    assert.match(steps.at(-1)!.error!, /several OpenCode workspaces/);
+  } finally {
+    restore();
+    await f.done();
   }
 });
 
