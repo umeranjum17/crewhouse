@@ -4,7 +4,7 @@
 // what it is on and "Waiting for Chief", and the asks reach the person once, through Chief's one action. Tapping a
 // name opens that chat. Every word and count comes from the one A.office view Home also reads (useOffice). The helmet's
 // own moods carry the motion: a scan line while working, still otherwise, none under Reduce Motion (parts.tsx).
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
@@ -32,6 +32,7 @@ export const glowOf = (c: A.OfficeMember, v: A.OfficeView): Glow => {
  *  and hands it to the panels, so they can never disagree. While the home computer is out of reach nobody claims
  *  to be busy. */
 export function useOffice(state: Json, offline = false, signedOut = false): A.OfficeView | null {
+  const sent = useSyncExternalStore(A.onChiefSend, A.chiefSend);
   const view = useMemo(() => (state ? A.office(state, { signedOut }) : null), [state, signedOut]);
   const [live, setLive] = useState(view);
   useEffect(() => setLive(view), [view]);
@@ -40,7 +41,8 @@ export function useOffice(state: Json, offline = false, signedOut = false): A.Of
     ears.add(f);
     return () => { ears.delete(f); };
   }, []);
-  return live && offline ? A.officeAway(live, 'The home computer is asleep') : live;
+  const shown = live && sent ? A.sending(live, sent) : live;
+  return shown && offline ? A.officeAway(shown, 'The home computer is asleep') : shown;
 }
 
 /** Phone width renders the grouped list, as the board's phone frame does: headings with dashed rules, rows with the

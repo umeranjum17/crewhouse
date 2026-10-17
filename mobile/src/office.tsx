@@ -4,7 +4,7 @@
 // a row opens that helper's desk. Every word and count comes from the one
 // A.office view Home also reads (useOffice). The faces are still: a working face looks up and aside and nothing
 // moves, so the old animation battery budget holds with no code for it.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
@@ -128,10 +128,12 @@ export function Office({ view, night, offline, width, jobs, onChief, onDesk, onT
  *  phone kept says how things were and nobody claims to be busy (App.tsx OUT). */
 export function useOffice(state: Json, offline: boolean, away: string) {
   const base = useMemo(() => A.office(state), [state]);
+  const sent = useSyncExternalStore(A.onChiefSend, A.chiefSend);
   const [live, setLive] = useState<A.OfficeView | null>(null);
   const from = useRef(base);
   from.current = base;
   useEffect(() => { setLive(null); }, [base]);
   useEffect(() => onLive((e) => setLive((v) => A.officeEvent(v ?? from.current, e))), []);
-  return offline ? A.officeAway(live ?? base, away) : live ?? base;
+  const cur = live ?? base, shown = sent ? A.sending(cur, sent) : cur;
+  return offline ? A.officeAway(shown, away) : shown;
 }

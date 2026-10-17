@@ -73,3 +73,18 @@ test('a routed helper request finishing while Chief works keeps Chief\'s working
   assert.equal(after?.state, 'working', 'Chief still reads at work');
   assert.equal(after?.since, before?.since, 'Chief\'s clock did not restart');
 });
+
+test('the header says Chief at work from the send, before his job exists (chat quality map, row #8)', { timeout: 60_000 }, async () => {
+  const { crew } = lab();
+  crew.onboard('Umer');
+  // The snapshot the header holds the instant the person sends: Chief's job is not in it yet, only the send.
+  const idle = crew.snapshot();
+  assert.equal(A.chiefStatus(A.office(idle)).word, 'Free', 'nothing sent: Chief is free');
+  const sent = Date.now();
+  assert.equal(A.liveLine({ id: 'chief', name: 'Chief', crew: A.crew(idle), writing: new Map(), heard: [], tasks: [], events: [], sent })?.state, 'reading', 'the thread reads the send');
+  assert.equal(A.chiefStatus(A.sending(A.office(idle), sent)).word, 'At work', 'the header agrees with the thread from the first second');
+  // Once Chief's job is on the snapshot, the job says it: the header stays at work with no send left pending.
+  await crew.post('chief', 'ask permission to plan my week');
+  await holding(crew, 'chief');
+  assert.equal(A.chiefStatus(A.office(crew.snapshot())).word, 'At work', 'the running job is at work');
+});

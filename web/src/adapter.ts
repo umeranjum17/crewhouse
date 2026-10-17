@@ -2038,6 +2038,26 @@ export function office(state: Json, local: ChiefLocal = {}): OfficeView {
   return { chief: chief(state, local), lead: local.signedOut ? 'waiting' : lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? [], gone).seat : 'free',
     crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
+/** The office with Chief's own unanswered send in it: he is at work from the send's first second, as the thread's live
+ *  line reads it (liveLine), while his job is still on its way to the snapshot. Applied at render, never a frame late. */
+export function sending(view: OfficeView, sent?: number): OfficeView {
+  return sent && (view.lead === 'free' || view.lead === 'failed') ? { ...view, lead: 'working' } : view;
+}
+
+/** Chief's send the thread holds until he answers (`at` is when it was sent; undefined once answered). The thread sets
+ *  it and the office hooks read it, so every surface's header agrees with the live line from the first second. */
+let chiefSent: number | undefined;
+const chiefSentEars = new Set<() => void>();
+export const chiefSend = () => chiefSent;
+export function setChiefSend(at: number | undefined) {
+  if (at === chiefSent) return;
+  chiefSent = at;
+  chiefSentEars.forEach((f) => f());
+}
+export function onChiefSend(f: () => void) {
+  chiefSentEars.add(f);
+  return () => { chiefSentEars.delete(f); };
+}
 
 /** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
 export const WAIT_CHIEF = 'Waiting for Chief';

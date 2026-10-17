@@ -2059,9 +2059,12 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && (A.plain(x.text) === A.plain(pending.text) || (!!pending.files && /\[file [a-z0-9-]+\] files\//.test(x.text))));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   const crewNames = A.crew(state);
+  // Chief's send is at work in every office header too, from the send until he answers (A.office's `sent`).
+  const sentTo = waiting && pending ? pending.at : undefined;
+  useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
-    sent: waiting && pending ? pending.at : undefined, side: 'phone' }) : null;
+    sent: sentTo, side: 'phone' }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
   // A live line waiting on the person carries no clock and stays still.
