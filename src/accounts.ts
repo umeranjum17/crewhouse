@@ -95,7 +95,8 @@ export class Accounts {
     }, handle = this.runtime.signIn(account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
-      if (step.error) view.error = step.error; if (step.workspaces) view.workspaces = step.workspaces;
+      if (step.error) { view.error = step.error; delete view.workspaces; }
+      if (step.workspaces) { view.workspaces = step.workspaces; delete view.error; }
       if (step.notIncluded) { this.excluded.add(account); done(false); } else if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);
     });

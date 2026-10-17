@@ -122,8 +122,8 @@ export class OpenClawRuntime implements AgentRuntime {
     const add = () => { const orgId = listed.length === 1 ? listed[0].id : chosen; void this.kit.addKey(ME, { authChoice, apiKey: key, ...(orgId ? { orgId } : {}) }).then((r) => step(r.status)).catch(() => step('retry')); };
     return {
       paste: (text: string) => {
-        key = text; chosen = ''; listed = []; const n = ++seq;
-        void (PROVIDER_OF[account] === 'opencode-go' ? openCodeWorkspaces(text).catch(() => []) : Promise.resolve([])).then((ws) => {
+        key = text.trim(); chosen = ''; listed = []; const n = ++seq;
+        void (PROVIDER_OF[account] === 'opencode-go' ? openCodeWorkspaces(key).catch(() => []) : Promise.resolve([])).then((ws) => {
           if (n !== seq || cancelled) return;
           (listed = ws).length > 1 ? on({ waiting: true, workspaces: ws }) : add();
         });

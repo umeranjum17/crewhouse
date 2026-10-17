@@ -110,6 +110,10 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
   s.cfg.port = 0; s.cfg.linkPort = 0;
   s.crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
   for (const key of Object.keys(PROVIDERS)) s.crew.accounts.ready.set(key, false);
+  // The paste path asks the kit's console listing; refuse it here so the run never leaves this computer.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init: any) => String(url) === 'https://opencode.ai/console/api/orgs'
+    ? { status: 401, json: async () => ({ _tag: 'Unauthorized' }) } as any : realFetch(url, init)) as any;
   const server = await startServer(s.cfg, s.db, s.crew);
   const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
   const headers = { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` };
@@ -154,6 +158,7 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
     assert.equal(other.notIncluded, false);
     assert.match(other.signIn.error, /Synthetic provider connection failed/);
   } finally {
+    globalThis.fetch = realFetch;
     await new Promise<void>((resolve) => server.close(() => resolve()));
     s.done(); await f.done();
   }
