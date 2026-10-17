@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { openCodeWorkspaces } from '@byokit/accounts';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
@@ -113,12 +114,21 @@ export class OpenClawRuntime implements AgentRuntime {
     });
   }
 
-  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
+  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice;
+   *  a login acting for several workspaces names one first (one is used unasked, several wait for the person's pick). */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
-    let cancelled = false;
+    let cancelled = false, key = '', chosen = '', seq = 0, listed: { id: string; name: string }[] = [];
     const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
+    const add = () => { const orgId = listed.length === 1 ? listed[0].id : chosen; void this.kit.addKey(ME, { authChoice, apiKey: key, ...(orgId ? { orgId } : {}) }).then((r) => step(r.status)).catch(() => step('retry')); };
     return {
-      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
+      paste: (text: string) => {
+        key = text; chosen = ''; listed = []; const n = ++seq;
+        void (PROVIDER_OF[account] === 'opencode-go' ? openCodeWorkspaces(text).catch(() => []) : Promise.resolve([])).then((ws) => {
+          if (n !== seq || cancelled) return;
+          (listed = ws).length > 1 ? on({ waiting: true, workspaces: ws }) : add();
+        });
+      },
+      pick: (id: string) => { if (typeof id === 'string' && listed.some((w) => w.id === id)) { chosen = id; add(); } },
       cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
     };
   }

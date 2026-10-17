@@ -1556,6 +1556,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .settings > .link.trust { display: block; padding: 0 0 6px; }
 .hello .how, #memory { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
 .ai-picks .btn { justify-content: flex-start; gap: 10px; text-align: left; }
+/* A workspace pick with a long name wraps instead of clipping past the sheet (390px phones). */
+.ws-pick .btn { white-space: normal; }
 .ai-picks .btn > svg:last-child { color: var(--mute); }
 .ai-picks .btn.go > svg:last-child { color: inherit; }
 .more-ways .ai-picks { margin-top: 4px; }

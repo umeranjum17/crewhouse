@@ -20,13 +20,13 @@ export type RunEvent =
   | { type: 'usage'; tokens: number };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
-export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string };
+export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; workspaces?: { id: string; name: string }[] };
 export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
   signInRecovery?(): string;
   signedIn(account: string): Promise<boolean>;
-  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> };
+  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; pick?(id: string): void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;
   /** The live catalog of one signed-in account: the models the person can pick from, ids without the provider. */
   models(account: string): Promise<{ id: string; name: string }[]>;

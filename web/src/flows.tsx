@@ -121,12 +121,18 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
       <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'key' && <>
-        <h2>Paste your {name} key</h2>
-        <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
-        <form className="stack" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key'); }}>
-          <input className="input" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
-          <button className="btn go big" disabled={!pasted.trim()}>Sign in with {name}</button>
-        </form>
+        {g.pick ? <>
+          <h2>Which workspace should Crewhouse use?</h2>
+          <p className="mute">Your {name} key works in more than one workspace. Pick the one Crewhouse should think with.</p>
+          <div className="stack ws-pick">{g.pick.map((w: { id: string; name: string }) => <button key={w.id} className="btn go big" onClick={() => void attempt(async () => { await api.signInWorkspace(ai.key, w.id); }, 'Connecting')}>{w.name}</button>)}</div>
+        </> : <>
+          <h2>Paste your {name} key</h2>
+          <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key'); }}>
+            <input className="input" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
+            <button className="btn go big" disabled={!pasted.trim()}>Sign in with {name}</button>
+          </form>
+        </>}
         {g.key?.error && <p className="warn-line">{g.key.error}</p>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
