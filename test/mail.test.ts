@@ -12,7 +12,8 @@ import { setup, settled, task, until } from './lab.ts';
 import { temp } from './tmp.ts';
 const A = await import('../web/src/adapter.ts');
 
-const { GMAIL, ageOf, bodyOf, runMail } = await import('../src/mail.ts');
+const { GMAIL } = await import('../src/calendar.ts');
+const { ageOf, bodyOf, runMail } = await import('../src/mail.ts');
 const { MailSend } = await import('../src/mail-send.ts');
 const { Crew } = await import('../src/crew.ts');
 

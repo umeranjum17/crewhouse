@@ -6,7 +6,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, settled, until } from './lab.ts';
 
-const { GMAIL } = await import('../src/mail.ts');
+const { GMAIL } = await import('../src/calendar.ts');
 
 const now = Date.now();
 const msg = (from: string, subject: string, at: number) => ({

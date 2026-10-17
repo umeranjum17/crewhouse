@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 const { setup, until, settled, holding, release, task } = await import('./lab.ts');
 const { CALENDAR } = await import('../src/calendar.ts');
-const { GMAIL } = await import('../src/mail.ts');
+const { GMAIL } = await import('../src/calendar.ts');
 const { effectOf } = await import('../src/policy.ts');
 
 const b64 = (s: string) => Buffer.from(s).toString('base64url');

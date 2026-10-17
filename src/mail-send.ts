@@ -1,7 +1,7 @@
 // Person-only Gmail delivery. No agent tool, batch, standing approval or retry of an uncertain send.
 import type { Store, Row } from './db.ts';
 import type { Connections } from './connections.ts';
-import { GMAIL } from './mail.ts';
+import { GMAIL, GOOGLE } from './calendar.ts';
 import { Marked } from 'marked';
 import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
@@ -46,7 +46,7 @@ export class MailSend {
   private async sender() {
     const token = await this.connections.token('gmailsend');
     if (!token) throw fail('Connect Gmail sending in Settings first. Reading Gmail alone cannot send.');
-    const res = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(20_000) });
+    const res = await fetch(GOOGLE ? `${GOOGLE}/oauth2/v2/userinfo` : 'https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(20_000) });
     if (!res.ok) throw fail(`Gmail could not confirm your sending address (${res.status}). Nothing was sent.`);
     const who = await res.json() as Row;
     if (who.email_verified !== true) throw fail('Gmail has not confirmed your sending address. Nothing was sent.');

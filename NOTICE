@@ -9,6 +9,12 @@ Crewhouse runs its AI engine, the OpenClaw gateway (MIT), as a supervised child 
 person signs in to themselves. Those accounts remain subject to their
 vendors' terms.
 
+The test suite, and never the installed product, runs emulate (Apache License
+2.0, Copyright 2025 Chris Tate; https://github.com/vercel-labs/emulate) as a
+development dependency, for an offline stand-in for Google. Its HTTP layer
+builds on Hono (MIT License, Copyright (c) 2021 - present, Yusuke Wada and Hono
+contributors); emulate's THIRD_PARTY_NOTICES.md carries that notice in full.
+
 The web app bundles the Nunito and JetBrains Mono fonts under the SIL Open
 Font License 1.1 (see web/fonts/OFL.txt).
 
