@@ -55,11 +55,12 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   done();
 });
 
-test('a send the engine never answers never leaves the message bare: a plain failure line with Try again', async () => {
+test('a send the engine never answers never leaves the message bare: Chief speaks for himself with Try again, a helper names itself', async () => {
   const { crew, db, done } = setup();
   process.env.CREWHOUSE_STUB_GOLDEN = '1';
   try {
     crew.onboard('Umer');
+    crew.recruit('scout', 'Scout', 'person');
     const hi = await crew.post('chief', 'hi') as { task?: number } | undefined;
     if (hi?.task) await settled(db, hi.task);
     // No scripted answer: the golden stub gives no reply at all, like an engine that never answers.
@@ -69,12 +70,20 @@ test('a send the engine never answers never leaves the message bare: a plain fai
     const t = db.get('SELECT * FROM tasks WHERE id = ?', r.task)!;
     assert.equal(t.bot, 'chief');
     assert.equal(t.state, 'failed');
-    assert.match(t.result, /couldn't finish this one\. Try again\./);
+    assert.equal(t.result, "I couldn't finish this one.");
     const page = crew.botPage('chief'), state = crew.snapshot(), lines = A.lines(page, 'chief', state);
-    assert.match(lines.map((l) => l.text).join('\n'), /couldn't finish this one\. Try again\./);
+    assert.match(lines.map((l) => l.text).join('\n'), /I couldn't finish this one\./);
+    // The Try again button carries the retry on Chief's line, so the words are not repeated in the text.
+    assert.ok(lines.some((l) => l.text === "I couldn't finish this one." && l.retry === 'quux wobble fnord, nothing scripted answers this'));
     // Every send is answered: no two person lines in a row, and the header names the failure, never Free.
     assert.ok(!lines.some((l, i) => l.from === 'me' && lines[i + 1]?.from === 'me'), 'a bare message with no answer');
     assert.match(A.chief(state).line, /couldn't finish/);
+    // A helper's failure still names the helper, and keeps its own Try again words (no button in a helper's chat).
+    const h = await crew.post('scout', 'quux wobble fnord, nothing scripted answers this either') as { task?: number } | undefined;
+    assert.ok(h?.task);
+    await settled(db, h.task);
+    assert.equal(db.get('SELECT * FROM tasks WHERE id = ?', h.task)!.result, "Scout couldn't finish this one. Try again.");
+    assert.match(A.lines(crew.botPage('scout'), 'scout', crew.snapshot()).map((l) => l.text).join('\n'), /Scout couldn't finish this one\. Try again\./);
   } finally {
     delete process.env.CREWHOUSE_STUB_GOLDEN;
     done();
