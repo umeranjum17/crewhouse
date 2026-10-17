@@ -1949,7 +1949,9 @@ function useLook() {
   // Auto follows the device's own dark setting, as the native app does, and switches live when it changes. The query
   // lives in state so the browser keeps it, and its change listener, for as long as the app runs.
   const [media] = useState(() => matchMedia('(prefers-color-scheme: dark)'));
-  const [dark, setDark] = useState(media.matches);
+  // `matches` is read only at the start, on subscribing and in the listener, never on a render: Chromium's getter takes
+  // in a pending change, so a re-render between the device's switch and its change event swallows the event.
+  const [dark, setDark] = useState(() => media.matches);
   // Layout effect: subscribed in the same commit that paints, and re-read at once, so no change is missed in between.
   useLayoutEffect(() => { const on = () => setDark(media.matches); on(); media.addEventListener('change', on); return () => media.removeEventListener('change', on); }, [media]);
   const night = look === 'night' || (look === 'auto' && dark);
