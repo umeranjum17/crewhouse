@@ -694,6 +694,11 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer.
   const answered = newestAnswer !== undefined || !!partial;
   const send = async (t: string, files?: { name: string; type: string; data: string }[]) => {
+    // A send is the person's own hand reaching the newest line: re-pin at once so the echo
+    // bubble and the live line are visible in the first frame, even from scrolled-up reading.
+    pinned.current = true; touched.current = false;
+    const el = box.current;
+    if (el) el.scrollTop = el.scrollHeight;
     setPending({ text: t || (files ?? []).map((f) => f.name).join(', '), files: !!files?.length, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
     const ok = await attempt(() => api.post(id, t, undefined, undefined, files?.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
