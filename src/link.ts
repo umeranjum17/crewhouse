@@ -402,7 +402,7 @@ export class Link {
   /** Encrypted HTTP-shaped requests; mutations record the device's idempotency key with their effect. */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
-    if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261012.18) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
+    if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261017.19) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
       person: { id: 1, name: '', address: '', onboarded: 1 }, bots: [{ id: 'chief', display: 'Chief', last: { author: 'bot', text: UPDATE_APP } }],
       asks: [], tasks: [], events: [], ideas: [], templates: [], routines: [], resting: {}, connections: [], room: { last: null, busy: [] },
     } } : { status: 426, body: { error: UPDATE_APP } };
