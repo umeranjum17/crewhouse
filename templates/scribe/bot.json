@@ -1,6 +1,6 @@
 {
   "display": "Scribe",
-  "role": "Drafts posts, emails and copy (drafts only); makes documents and spreadsheets you can use",
+  "role": "Writes posts, emails and documents for you to check, and makes spreadsheets. You send them.",
   "models": [
     "chatgpt"
   ],

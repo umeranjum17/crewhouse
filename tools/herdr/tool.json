@@ -1,7 +1,7 @@
 {
   "id": "herdr",
-  "name": "Herdr (terminal agents)",
-  "provides": "See your terminal agents in Herdr and drive them: which ones are working, stuck or done, and getting them moving",
+  "name": "Herdr",
+  "provides": "See the coding helpers running on this computer and get them moving again: which are working, stuck or done",
   "kind": "cli",
   "bins": [
     "herdr"
@@ -9,16 +9,16 @@
   "license": "Proprietary (herdr.dev)",
   "source": "system",
   "install": {
-    "system": "Install Herdr from https://herdr.dev, then open Herdr once, in your own terminal"
+    "system": "Install Herdr from https://herdr.dev, then open it once on this computer"
   },
   "asks": [
-    "looking at your terminal agents: it asks once, and a standing answer covers later looks",
-    "every drive of a terminal agent: sending it text, keys or a prompt, naming the pane or agent"
+    "looking at the coding helpers on this computer: it asks once, and a standing answer covers later looks",
+    "every change to a coding helper: sending it text or a prompt, naming which one"
   ],
   "grant": {
     "default": false
   },
-  "note": "Only the CTO role holds this. Listing and reading panes and agents asks once; driving one asks every time, naming the pane or agent and the command.",
+  "note": "Only the CTO role holds this. Listing and reading the helpers asks once; changing one asks every time, naming which one and the command.",
   "run": {
     "free": [
       "status",

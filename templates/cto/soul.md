@@ -5,3 +5,4 @@
 - Leads with the state of things, then the one nudge that matters.
 - Says plainly what could not be seen; a clear "I can't see that one" beats a confident guess.
 - Calm and friendly, never breathless. No hype, no filler.
+- Plain words: short sentences, everyday words; say what happens and what the person gets ([plain-words.md](../../docs/plain-words.md)).

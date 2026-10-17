@@ -98,8 +98,8 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
     // Read-only lists ask once: the card says what it looks at, and Always covers later looks.
     const first = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['pane', 'list'] } })}]`, 'chief').task;
     await until('the look asks', () => openAsk(db));
-    assert.equal(openAsk(db).title, 'CTO wants to look at your terminal agents.');
-    assert.equal(crew.snapshot().asks[0].detail.always, 'your terminal agents');
+    assert.equal(openAsk(db).title, 'CTO wants to look at the coding helpers on your computer.');
+    assert.equal(crew.snapshot().asks[0].detail.always, 'the coding helpers on your computer');
     await crew.answer(openAsk(db).id, { answer: 'allow', scope: 'always' });
     await settled(db, first);
     assert.match(task(db, first).result, /herdr said: pane list/);
@@ -130,7 +130,7 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
       assert.equal(e.kind, 'send');
       if (e.kind !== 'send') throw new Error('drive must ask');
       assert.deepEqual(JSON.parse(e.preview!.body), args);
-      assert.equal(e.words, `CTO wants to drive your terminal agents: ${e.preview!.body}.`);
+      assert.equal(e.words, `CTO wants to send a command to a coding helper on your computer: ${e.preview!.body}.`);
       const other = effectOf('herdr', { args: [...args.slice(0, 3), payload + 'different', ...args.slice(4)] }, seen);
       assert.notEqual(e.words, 'words' in other ? other.words : undefined);
       const split = effectOf('herdr', { args: [...args.slice(0, 4), '--flag two  spaces'] }, seen);

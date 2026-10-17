@@ -1,6 +1,6 @@
 {
   "display": "Scout",
-  "role": "Researches a question into a sourced report",
+  "role": "Looks into a question and writes a report with its sources",
   "models": [
     "chatgpt"
   ],

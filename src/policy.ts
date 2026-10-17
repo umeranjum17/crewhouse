@@ -144,13 +144,13 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
   const cli = s.run?.[tool];
   if (cli) {
     const args = (Array.isArray(input.args) ? input.args : []).map(String).join(' '), starts = (p: string) => args === p || args.startsWith(p + ' ');
-    // Herdr is the person's own terminal agents: looking asks once (a standing answer covers later
-    // looks); driving names its pane or agent and the command, and asks every time.
+    // Herdr is the person's own coding helpers on this computer: looking asks once (a standing answer covers later
+    // looks); driving names which helper and the command, and asks every time.
     if (tool === 'herdr') {
       const argv = (Array.isArray(input.args) ? input.args : []).map(String), matches = (p: string) => p.split(' ').every((part, i) => argv[i] === part), shown = JSON.stringify(argv).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
-      if (cli.spend.some(matches)) return { kind: 'send', words: `${s.bot} wants to drive your terminal agents: ${shown}.`, preview: { head: 'Exact terminal arguments', body: shown, verbatim: true } };
-      if (cli.free.some(matches)) return { kind: 'files', words: `${s.bot} wants to look at your terminal agents.`, key: 'herdr:look' };
-      return { kind: 'refuse', why: 'Herdr here lists and reads panes and agents, and drives them with their own commands.' };
+      if (cli.spend.some(matches)) return { kind: 'send', words: `${s.bot} wants to send a command to a coding helper on your computer: ${shown}.`, preview: { head: 'The exact command', body: shown, verbatim: true } };
+      if (cli.free.some(matches)) return { kind: 'files', words: `${s.bot} wants to look at the coding helpers on your computer.`, key: 'herdr:look' };
+      return { kind: 'refuse', why: 'Here I can only list and read what is running; I cannot type into it. Ask the person to do this themselves.' };
     }
     if (cli.spend.some(starts)) {
       const cap = /max-cost:\s*\$?([\d.]+)/i.exec(args)?.[1];
@@ -195,7 +195,7 @@ export function claimOf(snapshot: string): { shown: string } | null {
 export function coversOf(key: string) {
   const [kind, ...rest] = key.split(':'), what = rest.join(':');
   if (kind === 'app') { const [app, ...title] = rest; return `“${title.join(':')}” in your ${app}`; }
-  return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'your terminal agents' : 'this';
+  return kind === 'files' ? folderWords(what + '/x') : kind === 'herdr' ? 'the coding helpers on your computer' : 'this';
 }
 
 /** The element a browser press targets, read out of the page's own snapshot: its name as the page writes it, and the

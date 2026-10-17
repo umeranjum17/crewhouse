@@ -9,7 +9,7 @@
   "license": "Apache-2.0 with an added no-hosted-resale term (superdesigndev/treg)",
   "source": "system",
   "install": {
-    "system": "curl -fsSL https://treg.to/install.sh | sh (needs Python 3.12 or 3.13), then in your own terminal: treg login. New accounts get $1 of credit. Your own provider keys (treg secret add, or the treg dashboard) are used first and never billed by treg."
+    "system": "curl -fsSL https://treg.to/install.sh | sh (needs Python 3.12 or 3.13), then sign in with treg login on this computer. New accounts get $1 of credit. Your own provider keys (treg secret add, or the treg dashboard) are used first and never billed by treg."
   },
   "asks": [
     "every paid lookup, showing its price cap"

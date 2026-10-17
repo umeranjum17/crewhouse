@@ -145,8 +145,8 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual([herd.source, herd.bins, herd.grant], ['system', ['herdr'], { default: false }], 'a user-installed binary, never bundled, held only by its role');
   const hs = { ...s, run: { herdr: { name: herd.name, ...herd.run } } };
   const look = effectOf('herdr', { args: ['pane', 'list'] }, hs) as any;
-  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Maya wants to look at your terminal agents.', 'herdr:look'], 'reads ask once, under a standing answer');
-  assert.equal(coversOf(look.key), 'your terminal agents');
+  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Maya wants to look at the coding helpers on your computer.', 'herdr:look'], 'reads ask once, under a standing answer');
+  assert.equal(coversOf(look.key), 'the coding helpers on your computer');
   const drive = effectOf('herdr', { args: ['agent', 'prompt', 'reviewer', 'ship it'] }, hs) as any;
   assert.deepEqual([drive.kind, drive.key], ['send', undefined], 'drives ask every time: no standing key');
   assert.match(drive.words, /prompt.*reviewer/, 'the card names the agent and the command');
@@ -1464,11 +1464,11 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.ok(card(), 'a card, not a helper');
   assert.equal(crew.bot('pip'), undefined);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
-  assert.equal(view.detail.yes, 'Yes, take Pip on');
+  assert.equal(view.detail.yes, 'Yes, bring Pip on');
   // The hire in a glance, never the five-part job: the role, what it can and can't do, its first job.
   const shown = A.card(view, crew.snapshot());
-  assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Shall I take on Pip?',
-    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, take Pip on', 'Not now']]);
+  assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Bring Pip onto the crew?',
+    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, bring Pip on', 'Not now']]);
   assert.ok(!crew.snapshot().templates.some((x: any) => x.id === 'helper'), 'the base is never offered on its own');
 
   // Not now: nothing is made.
@@ -1511,7 +1511,7 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.equal(db.get('SELECT bot FROM tasks WHERE id = ?', t4)!.bot, 'chief');
   await settled(db, t4);
   const adapt = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
-  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Shall Pip take this on?', 'Pip now finds you a flat or a room in Phuket.', ['Yes, Pip can take it on', 'Not now']]);
+  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Give Pip this job?', 'Pip now finds you a flat or a room in Phuket.', ['Yes, give Pip the job', 'Not now']]);
   await crew.answer(card()!.id, { answer: 'allow' });
   assert.deepEqual([crew.snapshot().bots.length, crew.bot('pip')!.role, disk.readJob(crew['cfg'], 'pip').does], [crewSize, more.role, more.job.does], 'no new helper: Pip\'s role and job widen');
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n', 'who Pip is stays');
@@ -1595,7 +1595,7 @@ test('Chief interviews a vague ask before hiring: questions first, the card buil
   await holding(crew, 'chief');
   await release(crew, 'chief', 'I have put the shed on a card; take a look.');
   await settled(db, t3);
-  assert.match(card()!.title, /Shall Fern take this on/);
+  assert.match(card()!.title, /Give Fern this job/);
   await crew.answer(card()!.id, { answer: 'deny' });
   assert.equal(crew.bot('fern')!.role, 'Looks after your garden');
   done();

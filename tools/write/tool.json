@@ -1,7 +1,7 @@
 {
   "id": "write",
   "name": "write (Own Voice)",
-  "provides": "The places a post can go with their limits, the lines a draft must follow, and a check on a finished draft: does it fit, does it sound like the person, is any of it stock. No model, no network, no sign-in",
+  "provides": "Checks a finished draft: does it fit the place it goes, does it sound like you, is any of it stock. Knows where a post can go and the lines a draft must follow. No model, no network, no sign-in",
   "kind": "cli",
   "bins": [
     "write"

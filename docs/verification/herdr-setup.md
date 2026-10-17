@@ -12,7 +12,7 @@ Add to your crew (`#/apps`) carries Herdr's own row in its Code section with thr
 - `cto-grant` — only the `cto` template grants `herdr`; the recruit card offers it
   with its asks, and per-bot Tools settings can take it back.
 - `cto-look` — a CTO `pane list` / `agent read` opens one ask
-  (`CTO wants to look at your terminal agents.`); Always covers later looks.
+  (`CTO wants to look at the coding helpers on your computer.`); Always covers later looks.
 - `cto-drive` — a CTO `agent prompt` / `pane run` opens one ask naming the pane
   or agent and the command; it asks again next time and is never money
   (`detail.spends` false). An unconfirmed drive ends `unsure`, never `done`.

@@ -1,6 +1,6 @@
 {
   "display": "CTO",
-  "role": "Watches your terminal agents in Herdr and gets them moving",
+  "role": "Keeps the coding helpers on your computer working",
   "models": [
     "chatgpt"
   ],

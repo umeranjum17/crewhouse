@@ -1,6 +1,6 @@
 {
   "display": "Desk",
-  "role": "Support desk for a product: reads its public issues, drafts replies, proves fixes in a copy (drafts only)",
+  "role": "Reads a product's bug reports, drafts replies, and checks fixes in a copy. You send them.",
   "models": [
     "chatgpt"
   ],
