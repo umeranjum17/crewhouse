@@ -1158,7 +1158,7 @@ export class Crew {
    *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
   private failedLine(task: Row, result: string, unsure = false) {
     const b = this.bot(task.bot)?.display ?? task.bot, r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine), job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
-    if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, null), result === HUNG && this.alert();
+    if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, task.bot === CHIEF ? task.id : null), result === HUNG && this.alert();
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null);
       const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';

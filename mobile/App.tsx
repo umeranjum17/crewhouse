@@ -362,7 +362,7 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
 /** The message box: words (the phone keyboard's own mic dictates them; Chief's box has its own) and up to four
  *  photos or, with `docs`, documents. A send that didn't go through keeps them all with a Retry; each chat holds its own
  *  words (web/src/draft.ts). */
-function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: canDoc = false, away, mic = chat === 'chief', listen }: { placeholder: string; onSend: (t: string, photos: Photo[], files: Doc[]) => unknown; chat?: string; photos?: boolean; docs?: boolean; mic?: boolean; listen?: boolean; away?: boolean }) {
+function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: canDoc = false, away, mic = chat === 'chief', listen, stop }: { placeholder: string; onSend: (t: string, photos: Photo[], files: Doc[]) => unknown; chat?: string; photos?: boolean; docs?: boolean; mic?: boolean; listen?: boolean; away?: boolean; stop?: () => void }) {
   const t = useLook();
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const [pics, setPics] = useState<Photo[]>([]);
@@ -413,11 +413,16 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
   const plus = canPhoto && <Pressable onPress={attach} disabled={room <= 0} accessibilityLabel={canDoc ? 'Add a photo or a document' : 'Add a photo'} style={[s.send, { backgroundColor: 'transparent' }]}>
     <Text style={{ color: t.ink, fontSize: 20 }}>＋</Text>
   </Pressable>;
+  // While Chief works, an empty box's send becomes a stop square (the same reset a helper's Stop uses).
   const rest = <>
     <Mic on={mic} text={text} put={change} listen={listen} />
-    <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
-      <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
-    </Pressable>
+    {stop && !ready
+      ? <Pressable onPress={stop} accessibilityRole="button" accessibilityLabel="Stop" style={[s.send, { backgroundColor: t.ink, borderRadius: 10 }]}>
+        <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: t.solid }} />
+      </Pressable>
+      : <Pressable onPress={() => void send()} disabled={away || !ready || busy} accessibilityLabel="Send" accessibilityState={{ disabled: away || !ready || busy }} style={[s.send, dark ? { backgroundColor: on ? t.go : t.ink, borderRadius: 10 } : { backgroundColor: t.go, opacity: on ? 1 : 0.4 }]}>
+        <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
+      </Pressable>}
   </>;
   const field = (full: boolean) => <TextInput style={[s.composerInput, { color: t.ink }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
   return (
@@ -2065,6 +2070,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     const t = setTimeout(() => setNow(Date.now()), 1005 - ((Date.now() - ln!.since) % 1000));
     return () => clearTimeout(t);
   }, [ticking, ln?.since, now]);
+  const stopChief = () => void attempt(async () => { await api.reset('chief'); refresh(); });
   const [seed, setSeed] = useState(0); // a starter chip fills the box from outside; remount reads the draft back
   const h = A.crew(state).find((x) => x.id === id);
   const b = state.bots.find((x: Json) => x.id === id);
@@ -2153,6 +2159,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
                 {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
                 {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <ChatText text={l.text} latest={l.id === newestAnswer} />)}
+                {!!l.retry && <Btn label="Try again" onPress={() => void send(l.retry!)} />}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
                 {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
               </View>
@@ -2168,7 +2175,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       </ScrollView>
       {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
-      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} /></View>
+      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );

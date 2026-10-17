@@ -697,7 +697,7 @@ const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).
  */
 /** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (a PDF, a document or a photo,
  *  shown as chips until sent), a starter or two that fill the box without sending, then the mic and send. */
-export function Composer({ placeholder, onSend, chat, chips, talk }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk }) {
+export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk; stop?: () => void }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat === 'chief', text, (t) => change(t));
   const [busy, setBusy] = useState(false);
@@ -752,7 +752,9 @@ export function Composer({ placeholder, onSend, chat, chips, talk }: { placehold
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
       {voice}
-      {call.can && !text.trim() && !picked.length && !busy
+      {stop && !text.trim() && !picked.length
+        ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
+        : call.can && !text.trim() && !picked.length && !busy
         ? <button type="button" className="send talk" aria-label="Talk with Chief" title="Talk with Chief" onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
         : <button className="send" aria-label="Send" disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
     </form>
