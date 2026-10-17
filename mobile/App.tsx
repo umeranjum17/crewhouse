@@ -517,13 +517,15 @@ function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
   </View>;
 }
 
-/** A wide table on a narrow screen: the columns are reachable, so say how — a quiet line under the table. */
+/** A wide table on a narrow screen: the columns are reachable, so say how — a quiet line under the table. The two widths
+ *  come from the layout as it lands (refs, not the state of an earlier render), so a table that fits says nothing. */
 function Wide({ children }: { children: ReactNode }) {
-  const [box, setBox] = useState(0);
   const [wide, setWide] = useState(false);
+  const box = useRef(0), content = useRef(0);
+  const check = () => setWide(content.current > box.current + 8);
   return <View>
-    <View onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} onContentSizeChange={(w) => setWide(w > box + 8)}>{children}</ScrollView>
+    <View onLayout={(e) => { box.current = e.nativeEvent.layout.width; check(); }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} onContentSizeChange={(w) => { content.current = w; check(); }}>{children}</ScrollView>
     </View>
     {wide && <T tone="mute" style={[s.small, { textAlign: 'right' }]}>Swipe sideways to see it all ›</T>}
   </View>;
@@ -2160,9 +2162,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-                {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
                 {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <ChatText text={l.text} latest={l.id === newestAnswer} />)}
                 {!!l.retry && <Btn label="Try again" onPress={() => void send(l.retry!)} />}
+                {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
                 {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
               </View>
