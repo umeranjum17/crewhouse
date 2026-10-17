@@ -94,7 +94,7 @@ export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: 
   return s + '</svg>';
 }
 
-/** The same helmet as a soft 3D figure (the phone header's mascot, Main1808): helmet()'s squircle shell, visor and eyes
+/** The same helmet as a soft 3D figure (the phone header's mascot): helmet()'s squircle shell, visor and eyes
  *  as layered vector shapes — a ceramic shell lit from the top left (its key light, a bounce from below, a soft form
  *  shadow and a specular), a recessed glass visor with a reflection, and eyes that glow. One material in both themes, as
  *  a real object; day adds a faint outline so the light shell keeps its edge on the paper. Sharp at any pixel ratio. */

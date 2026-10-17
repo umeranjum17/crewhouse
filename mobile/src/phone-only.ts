@@ -1,5 +1,5 @@
 // Proof-stage phone-only glue: the whole Chief loop over @byokit/accounts with no computer anywhere.
-// It moves into BYOKit's kit when the cross-kit phone-first plan (Main2211) defines that surface: no engine,
+// It moves into BYOKit's kit when the cross-kit phone-first plan defines that surface: no engine,
 // no sessions, no providers, no memory, nothing downloaded at runtime (bundled tools only, App Review 4.7).
 // The system prompt is Chief's real template files, bundled as words by metro (scripts/markdown.cjs).
 // For this proof the account is an API-key route (DeepSeek on OpenRouter, billed per use), which needs no

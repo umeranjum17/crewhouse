@@ -130,14 +130,13 @@ test('the screens read view models only, and the mono face draws art only', () =
 
 
 test('no jargon anywhere: the machinery\'s words never reach a person', () => {
-  // The captain's sweep (CREWHOUSE-APK-04): relay, link, Noise, ticket, grant, host, daemon, crewd, engine, token,
+  // The sweep (CREWHOUSE-APK-04): relay, link, Noise, ticket, grant, host, daemon, crewd, engine, token,
   // port and stub never show in the screens' own words or the adapter's views. Tailscale is the one allowed name,
   // and only in the two places a person is asked to set it up or switch it on (adapter.anywhere/away).
   const JARGON = /\b(relay|noise|tickets?|grants?|daemon|crewd|engine|tokens?|ports?|stub|hosted?|links?|host)\b/i;
   // A literal of all lower-case tokens (class names, import paths, hrefs) is never read as words on a screen.
   const TOKENY = /^[a-z0-9-./:]+( [a-z0-9-./:]+)*$/;
-  // The one exception: Chief's Things lists the web links said in his chat, a plain word on the approved Things mock
-  // (data/ch-chief-profile-gaps/board/mocks/chief-profile/things.html, Main lead's answer); these exact strings only.
+  // The one exception: Chief's Things lists the web links said in his chat, a plain word on the approved Things mock; these exact strings only.
   const SAVED_LINKS = new Set(['Links', 'LINK', 'Links you or the crew share in the chat land here.']);
   const prose = (src: string) => {
     const bare = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, ' '); // comments are for us

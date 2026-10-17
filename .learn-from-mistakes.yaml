@@ -1,6 +1,6 @@
 # written by learn-from-mistakes-axi init
 name: "crewhouse"
-# The agent keys come from $LFM_HOME/config.yaml (default ~/.learn-from-mistakes/config.yaml); set one here to
+# The agent keys come from the tool's config.yaml (default ~/.learn-from-mistakes/config.yaml); set one here to
 # override it for this project. The tool never picks an agent: set agent and judge_agent, each with its model.
 # Live agents run on the OpenCode Go plan only, never Claude (fleet rule).
 agent: pi

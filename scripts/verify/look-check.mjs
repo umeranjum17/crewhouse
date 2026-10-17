@@ -11,7 +11,7 @@
 // web: its own headless Chromium (throwaway profile), ?day and ?night per screen (the app's own theme switch), every
 // text box's font-size and line-height × --text (Android Chrome's text scaling). android: the emulator at 360 dp
 // (`wm density`), the system's largest font_scale and `cmd uimode night`, read back from uiautomator and screencap;
-// both are reset afterwards. Mocks: mocks.tsv beside this script (slug → path under $FM_HOME, {theme} = day|night, {look} = light|dark).
+// both are reset afterwards. Mocks: mocks.tsv beside this script (slug → path under $EVIDENCE_HOME, {theme} = day|night, {look} = light|dark).
 // native: replay a saved android capture (its png and uiautomator xml) through the same tree and pixel checks, so a
 // capture can be re-judged without an emulator (the fixture test/test/look-check-native.test.ts).
 // Writes <out>/<slug>-<theme>.png, <slug>-<theme>-vs-mock.png, hits/<slug>-<theme>-<n>-<kind>.png, look-check.json.
@@ -28,7 +28,9 @@ const ROOT = opt('root', join(import.meta.dirname, '..', '..'));
 const DPR = 3, RATIO = 0.03; // a picture more than 3% off its own shape is stretched or squashed
 if (!OUT || !['web', 'android', 'shot', 'native', 'fonts'].includes(mode) || !argv.length && mode !== 'fonts') { console.error('usage: look-check.mjs web|android|shot|native|fonts --out <dir> …'); process.exit(2); }
 mkdirSync(join(OUT, 'hits'), { recursive: true });
-const FM = process.env.FM_HOME ?? `${process.env.HOME}/.treehouse/firstmate`;
+const FM = process.env.EVIDENCE_HOME;
+// No approved-mocks folder set - shots still checked, mock diffs skipped (replay/native tests run without one)
+if (!FM) console.error('note: EVIDENCE_HOME unset, so approved mocks are not compared');
 const mocks = Object.fromEntries(readFileSync(join(import.meta.dirname, 'mocks.tsv'), 'utf8').split('\n')
   .filter((l) => l && !l.startsWith('#')).map((l) => l.split('\t')));
 // The app's own backgrounds (web/src/tokens.ts, shared with the phone): an edge band of one of these is the app's page.
@@ -310,7 +312,7 @@ async function finish(slug, theme, shotFile, domHits, scale) {
       box: b.edge === 'left' ? { x: 0, y: 0, w: b.px, h } : b.edge === 'right' ? { x: w - b.px, y: 0, w: b.px, h } : b.edge === 'top' ? { x: 0, y: 0, w, h: b.px } : { x: 0, y: h - b.px, w, h: b.px } }))];
   hits.forEach((x, n) => { x.crop = join('hits', `${slug}-${theme}-${n + 1}-${x.kind}.png`); });
   for (const x of hits) save(join(OUT, x.crop), await run(img, crop, src, x.box, 16 * scale));
-  const m = mocks[slug]?.replace('{theme}', theme).replace('{look}', theme === 'night' ? 'dark' : 'light'), mock = m && existsSync(join(FM, m)) ? join(FM, m) : null;
+  const m = mocks[slug]?.replace('{theme}', theme).replace('{look}', theme === 'night' ? 'dark' : 'light'), mock = m && FM && existsSync(join(FM, m)) ? join(FM, m) : null;
   save(join(OUT, `${slug}-${theme}-vs-mock.png`), await run(img, pair, src, mock && dataUrl(mock), `${slug} ${theme}${mock ? '' : ' (no approved mock)'}`));
   return { slug, theme, shot: shotFile, mock, hits };
 }

@@ -1,7 +1,7 @@
 # Account rests: the person picks, never a switch by surprise
 
 An AI account that hits its limit rests (`Accounts.rests`). The crew never moves the job to another
-AI by itself (captain rule, 12 Oct): the task parks `paused` with `wake_at` (`Crew.pause`), and Chief
+AI by itself: the task parks `paused` with `wake_at` (`Crew.pause`), and Chief
 says once, in his thread, "Your ChatGPT reached its limit and rests until T. Work starts again then by
 itself, or pick another model in Settings › AI accounts." The snapshot's `resting` lists the account.
 Two ways out:

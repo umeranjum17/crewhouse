@@ -5,7 +5,7 @@
 // from pair-lab.sh, paired by the typed code (`adb reverse` carries the code's loopback link address).
 //
 //   LAB=<lab> node scripts/verify/phone-continue.mjs --serial <emulator> --ev "$EV" \
-//     --apk <app-release.apk> --key-file /home/umer/.config/openrouter/api_key [--seed-turns 52]
+//     --apk <app-release.apk> --key-file "$HOME/.config/openrouter/api_key" [--seed-turns 52]
 //
 // 1. a real phone-only chat (the OpenRouter key is pushed and typed on the device, never in argv or logs), then one
 //    message sent in airplane mode, so it waits queued when the phone leaves phone-only;
@@ -24,7 +24,7 @@ import { join } from 'node:path';
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
 const SERIAL = opt('serial', 'emulator-5562'), EV = opt('ev', null), APK = opt('apk', null), LAB = process.env.LAB;
-const KEY_FILE = opt('key-file', '/home/umer/.config/openrouter/api_key'), SEED = Number(opt('seed-turns', 52));
+const KEY_FILE = opt('key-file', `${process.env.HOME}/.config/openrouter/api_key`), SEED = Number(opt('seed-turns', 52));
 if (!EV || !LAB) { console.error('usage: LAB=<lab> phone-continue.mjs --ev <dir> [--serial s] [--apk a] [--key-file f] [--seed-turns n]'); process.exit(2); }
 mkdirSync(join(EV, 'screens'), { recursive: true });
 const env = Object.fromEntries(readFileSync(join(LAB, 'env'), 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));

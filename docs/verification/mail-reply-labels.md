@@ -14,7 +14,7 @@ Gmail/OAuth transport only. Never use a personal mailbox or invoke sending. The 
 private driver is runnable from the candidate checkout:
 
 ```bash
-EV=<firstmate-home>/data/evidence/ch-cap-email-reply-v2
+EV=<your evidence folder>
 bash "$EV/run-proof.sh" "$EV/api-new-run" > "$EV/api-new-run.log" 2>&1
 ```
 

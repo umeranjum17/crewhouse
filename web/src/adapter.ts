@@ -87,7 +87,7 @@ export const phoneOffer = (page: Json): { qr: string; typed: string; expires: nu
 export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
 export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
 
-// ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key: Main2691) ----------
+// ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
 /** Chief asks where he should work. `cloud` shows the cloud row and its line: each surface keeps it off in a release
  *  build until BYOKit's cloud kit is published. */
@@ -120,7 +120,7 @@ export const CLOUD = {
   kept: "The key stays on this phone, locked by your phone's own lock. It never goes to Crewhouse.",
 };
 
-// ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer: Main2678) ----------
+// ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer) ----------
 /** What only BYOKit's cloud kit can say: whether crewd is the latest, the daily snapshots and the last one, the disk. */
 export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
 export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
@@ -1522,7 +1522,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();
-    // Every line carries its time: notes and cards are placed among the messages by when they happened (Main2036).
+    // Every line carries its time: notes and cards are placed among the messages by when they happened.
     const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
       const f = /^(?:Delivered|Kept) (files\/.+?)(?::\s|$)/.exec(text);
@@ -1549,7 +1549,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
 
 /** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in Your things — only from a
  *  done task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread
- *  began. The note goes before the first line that came later, so a newer message is never above it (Main2036). */
+ *  began. The note goes before the first line that came later, so a newer message is never above it. */
 export function trayNotes(state: Json, lines: Line[]): Line[] {
   const first = lines.find((l) => l.at)?.at;
   if (!first) return lines;
@@ -1617,7 +1617,7 @@ export function chatThings(state: Json, page: Json) {
   return { files: all.filter((x) => !pic(x)), links: links.filter((x, i) => links.findIndex((y) => y.href === x.href) === i), pictures: all.filter(pic) };
 }
 
-/** Where each ask's card falls in the thread (Main2036): a card belongs to the turn that raised it, so it shows after
+/** Where each ask's card falls in the thread: a card belongs to the turn that raised it, so it shows after
  *  the reply and before the next message the person sent; a card with no later message follows the whole thread. Placing
  *  by the ask's own time alone floated the proposal card above the sentence that announced it. */
 /** Where each timed item sits in the thread: before the person's next line after it, else in the tail. Shared by

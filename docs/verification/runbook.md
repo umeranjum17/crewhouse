@@ -120,11 +120,11 @@ drive. Anything a person sees also owes the Review evidence set below.
 
 **Real model words** (a proof of what Chief or a helper actually says) need the real engine
 and a signed-in account: run the same isolated launch without `CREWHOUSE_ENGINE=stub`.
-For Claude proofs hold `/home/umer/firstmate/config/fm-cred-lock.sh` for the entire engine
-lifetime, through `/home/umer/firstmate/config/fm-mem-gate.sh`. Use
-`PATH=/home/umer/.local/bin:/usr/bin:/bin`, `MISE_OFFLINE=1`. After the log says
-`crewd engine ready`, symlink only the dedicated test credential
-`/home/umer/lab-tmp/claude-test-cred/home/.claude/.credentials.json` into
+For Claude proofs hold a single-writer lock on the test credential for the entire engine
+lifetime (two runs at once sign it out). Run with a masked env and
+`PATH="$HOME/.local/bin:/usr/bin:/bin"`, `MISE_OFFLINE=1`. After the log says
+`crewd engine ready`, symlink only your dedicated test credential's
+`.claude/.credentials.json` into
 `$LAB/state/openclaw/home/.claude/.credentials.json`; never read/copy the person's credentials.
 Check `claude auth status` with that engine HOME and CLAUDE_CONFIG_DIR and the engine's own
 Claude CLI preflight before sending; pick a Claude model with `PUT /api/accounts/1/claude/model` (an id from its `GET`).
@@ -135,7 +135,7 @@ fresh `claude auth login`; a stale credential reads `Login: Expired` once the CL
 retain pre/post results and stop; never infer admission from missing crewd tool events.
 This route is hosted, not a scripted provider.
 Stop crewd's process group as in Launch (TERM, KILL after the grace, wait until it is empty) before releasing the lock.
-Sign-in tests alone reuse `/home/umer/lab-tmp/crewhouse-retained`; never copy its history.
+Sign-in tests alone reuse one retained test HOME; never copy its history.
 Quota errors mean the account rests: report the bound, never mint another sign-in.
 
 ## Evidence
@@ -202,11 +202,11 @@ the screen differently (`mobile/`). Any hit fails the change: fix it, or name it
 known defect with its crop.
 
 ```bash
-L=scripts/verify/look-check.mjs; export FM_HOME=<firstmate home>   # mocks resolve there
+L=scripts/verify/look-check.mjs; export EVIDENCE_HOME=<your approved-mocks folder>   # mocks resolve there
 node $L web --out "$EV/look" --person "$LAB/state/person.key" chief-chat="$B/#/chief" crew="$B/#/crew"
 node $L web --out "$EV/look" --then "document.querySelector('[data-mode=office]')?.click()" office="$WEB/?demo=office"
 SERIAL=<your emulator> node $L android --out "$EV/look" --then 'Settings>>Your crew' crew   # taps reach the screen
-node $L shot --out "$EV/look" captain-photo=/path/to/phone-shot.png   # someone else's shot: strips and mock only
+node $L shot --out "$EV/look" phone-shot=/path/to/phone-shot.png   # someone else's shot: strips and mock only
 ```
 
 Checks, each with the element and a red-outlined crop (`hits/`), and exit 0 clean / 1 a hit / 2 could not run:
@@ -223,9 +223,9 @@ Checks, each with the element and a red-outlined crop (`hits/`), and exit 0 clea
   page colours (`web/src/tokens.ts` bg/surface/sunken).
 
 Each shot is saved beside its approved mock (`<slug>-<theme>-vs-mock.png`). **Where mocks live:** approved mocks
-stay in the Firstmate home, never in the repo; `scripts/verify/mocks.tsv` maps a screen slug to its mock path under
-`$FM_HOME` (`{theme}` = day|night). A mock counts as approved only when a Main message approves that mock round
-(`data/done-archive.md`, `data/backlog.md`); the newest approved round wins, and adding a row is part of the change
+stay in your evidence folder, never in the repo; `scripts/verify/mocks.tsv` maps a screen slug to its mock path under
+`$EVIDENCE_HOME` (`{theme}` = day|night). A mock counts as approved only when that mock round has a recorded
+approval; the newest approved round wins, and adding a row is part of the change
 that brings a new approved mock. A screen with no row says "(no approved mock)" in every report. Recipe, tuning
 evidence and limits: [look-check.md](look-check.md).
 
@@ -260,8 +260,8 @@ list makes the self-test fail instead of quietly passing every screen.
 ```bash
 export CHROME_DEVTOOLS_AXI_SESSION=<task-name>          # never the shared default session
 export CDP_PORT=9924                                    # Chrome's own port, distinct from the bridge's
-FM_HOME=${FM_HOME:-$HOME/.treehouse/firstmate}          # the supervising firstmate home
-EV=$FM_HOME/evidence/<task-name>/<change-slug>          # stable: named in the PR, survives cleanup
+EVIDENCE_HOME=${EVIDENCE_HOME:?set EVIDENCE_HOME to your evidence folder}
+EV=$EVIDENCE_HOME/evidence/<task-name>/<change-slug>          # stable: named in the PR, survives cleanup
 mkdir -p "$EV/screens" "$EV/motion"
 ```
 

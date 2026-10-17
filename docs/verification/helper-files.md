@@ -39,7 +39,7 @@ and `pwa/keep-it-narrow.png`, and on film), then forgets one kept copy from Penn
 third statement, whose card starts on the standing Keep (its one-file card in `screens/keep-it-*`). To drive only this slice against your own crewd:
 
 ```bash
-FM_HOME=<firstmate home> EV=${DONE_DONE_EVIDENCE_ROOT:?run through done-done} \
+EV=<your evidence folder> \
   bash scripts/verify/unlock-card.sh "$EV"      # the whole journey, this slice at its end
 # and the look check on the kept-copy screen the journey leaves open:
 node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" \

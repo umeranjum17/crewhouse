@@ -1437,7 +1437,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.db.run('UPDATE tasks SET wake_at = ? WHERE id = ?', wake, task.id);
       this.setTask(task, 'paused', state);
       // One waiting line per words, judged by the speaker's own last line in that voice: Chief says his once per wait (every
-      // account resting is his to say, whoever's job waits), notes the next ask in other words, then holds quietly (Main1325).
+      // account resting is his to say, whoever's job waits), notes the next ask in other words, then holds quietly.
       const where = wake ? CHIEF : task.bot, said = voice === 'bot' ? cleanReply(words) : words, last = this.db.get('SELECT text FROM messages WHERE bot = ? AND author = ? ORDER BY id DESC LIMIT 1', where, voice)?.text, noted = cleanReply(`Noted. I'll start on this once ${blocked ? 'your plan includes helpers' : 'you sign in'}.`), again = !wake && voice === 'bot' && last === said;
       if (wake || voice === 'system' ? last !== said : last !== noted) this.say(where, voice, again ? noted : words, where === task.bot ? task.id : null);
     });

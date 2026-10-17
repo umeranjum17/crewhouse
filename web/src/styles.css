@@ -1156,7 +1156,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 @media (min-width: 1200px) {
   .home-office > .home-top { margin-right: 0; }
 }
-/* ── B1 Studio (Main597): one display serif, one accent, the desk rail, Home's greeting and the Tonight column. ── */
+/* ── B1 Studio: one display serif, one accent, the desk rail, Home's greeting and the Tonight column. ── */
 h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .logo { gap: 10px; }
 .logo span { font: 600 24px/1 var(--serif); letter-spacing: 0; }
@@ -1400,7 +1400,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 }
 
 
-/* Main599 (B1 phone chat): Chief's hero keeps his line and the faces at the card's foot, no caption under them; the pinned
+/* B1 phone chat: Chief's hero keeps his line and the faces at the card's foot, no caption under them; the pinned
    ask has a bare face and one detail line; a tray notice is a quiet line with its helper's face; the composer is one row
    (+, words, mic, a dark send) on a solid dock, so no thread line shows under it. */
 .line.note:has(.note-by) { display: flex; gap: 8px; align-items: center; color: var(--ink2); font: 400 13.5px/18px var(--ui); }
@@ -1417,7 +1417,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .c-chip { display: none; }
   .home-chat .send { border-radius: 12px; }
   .home-chat .send:disabled { background: var(--ink); color: var(--solid); transform: none; }
-  /* Main600: the pinned ask's title holds one line at 390 (the mock's face, gap and padding); 320 and large type wrap. */
+  /* the pinned ask's title holds one line at 390 (the mock's face, gap and padding); 320 and large type wrap. */
   .needs-pin.flat { padding: 14px 14px 16px; }
   .needs-pin.flat .nb-top { gap: 10px; }
   .needs-pin.flat .nb-av { width: 34px; height: 34px; }
@@ -1573,7 +1573,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat-head .sub { display: none; } /* the name alone, as Muse and Grok head a thread; the hero under it says the role */
 }
 
-/* ch-pwa-chat (Main1774/1777): a phone thread reads as a conversation, not a transcript. No name on any turn (kept for
+/* ch-pwa-chat: a phone thread reads as a conversation, not a transcript. No name on any turn (kept for
    screen readers); your words in a bubble on the right, Chief's plain across the width. A card is one block: its title,
    one quiet line, the evidence without a box, then one compact primary and "⋯" (a bottom sheet holds the rest). Two
    type sizes per card: 15 and 13. The header's Chief | Office switch sits small in its one row. A desk keeps its rows. */
@@ -1632,7 +1632,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .hello .hello-ask { position: sticky; bottom: 0; margin-top: auto; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); background: var(--bg); }
 }
 
-/* ch-pwa-chat r3 (Main1799/1803/1804): a phone thread in the class of Grok Bot and Dots, headed as Muse heads its own.
+/* ch-pwa-chat r3: a phone thread in the class of Grok Bot and Dots, headed as Muse heads its own.
    Two edges: every box and marker starts on 16 (the page's own gutter), every word in the thread on 32. One accent,
    the ink; green only for the live dot. Two sizes, 17 to read and 13 for what is quiet. Chief speaks in grey bubbles
    and you in ink ones; 6px inside a speaker's run, 22px when the speaker changes. A desk keeps its transcript. */
@@ -1640,7 +1640,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 [data-theme='night'] { --tint: color-mix(in srgb, var(--ink) 9%, var(--bg)); --tint2: color-mix(in srgb, var(--ink) 16%, var(--bg)); --knob: color-mix(in srgb, var(--ink) 20%, var(--bg)); }
 .day-time { display: none; }
 @media (max-width: 899px) {
-  /* Muse's header, compact (Main1808): the mascot drawn smooth at the top centre, overlapping a one-line pill with the
+  /* Muse's header, compact: the mascot drawn smooth at the top centre, overlapping a one-line pill with the
      name and the one status; the gear a round button on the mascot's line; then the Chief | Office switch as a
      borderless pill track at the column's width. */
   .page.chat-page.home-chat { padding-top: 8px; }
@@ -1711,7 +1711,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .live-next { padding-left: 16px; font: 400 13px/18px var(--ui); }
   .chat .live-todos li .tick, .chat .live-line.working .live-todos li.doing .tick { display: block; box-sizing: border-box; width: 9px; height: 9px; margin: 0; border-radius: 50%; font-size: 0; color: inherit; }
   .chat .live-todos li.done .tick { border-radius: 0; background: var(--ink2); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; }
-  /* A real spinner: a faint full track with an ink half turning on it (Main1808); still, it reads as a half-filled ring. */
+  /* A real spinner: a faint full track with an ink half turning on it; still, it reads as a half-filled ring. */
   .chat .live-todos li.doing .tick, .chat .live-line.working .live-todos li.doing .tick { border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); border-top-color: var(--ink); border-right-color: var(--ink); }
   .chat .live-todos li.todo .tick { border: 1.5px solid var(--mute); }
 
