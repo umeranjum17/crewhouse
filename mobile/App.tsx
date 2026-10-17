@@ -2021,7 +2021,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
-  useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
+  useEffect(() => { setHeard([]); setWriting(new Map()); pinned.current = true; lastY.current = 0; seen.current = 0; setNewBelow(false); }, [id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
   const [around, setAround] = useState(m ?? 0);
   // Use the first live page, not the phone's cached unread count, and keep its boundary after read.
@@ -2029,6 +2029,20 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => { mark.current ??= A.newDivider(p, id); setPage(p); kept.chat(id, p); }).catch(() => {}), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const scroll = useRef<ScrollView>(null);
+  // Whether the thread sits at its newest line: only then does growth follow the bottom (the web's rule). Reading up
+  // lets go; lines landing below raise a New pill over the dock that jumps back down and pins again.
+  const pinned = useRef(true), lastY = useRef(0), seen = useRef(0);
+  const [newBelow, setNewBelow] = useState(false);
+  const onScroll = (e: { nativeEvent: { contentOffset: { y: number }; contentSize: { height: number }; layoutMeasurement: { height: number } } }) => {
+    const n = e.nativeEvent;
+    pinned.current = n.contentSize.height - n.contentOffset.y - n.layoutMeasurement.height < 40 || (pinned.current && n.contentOffset.y >= lastY.current);
+    lastY.current = n.contentOffset.y;
+    if (pinned.current) { seen.current = n.contentSize.height; setNewBelow(false); }
+  };
+  const jump = () => {
+    pinned.current = true; seen.current = 0; setNewBelow(false);
+    scroll.current?.scrollToEnd({ animated: true });
+  };
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
@@ -2068,6 +2082,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const newest = last?.id;
   useEffect(() => { if (canAct && mark.current !== null && newest && b?.unread) void api.read(id).then(refresh).catch(() => {}); }, [canAct, newest, b?.unread, id, refresh]);
   const send = async (x: string, p: Photo[] = [], d: Doc[] = []) => {
+    // A send is the person's own hand reaching the newest line: re-pin so the echo and the live line show at once.
+    pinned.current = true;
     setPending({ text: x || d.map((f) => f.name).join(', '), files: d.length > 0, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
     const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
@@ -2099,9 +2115,15 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     <View style={{ flex: 1 }}>
       {/* Home's hero and pinned ask stay in place over the thread (096); on a short screen they shrink and scroll alone. */}
       {hero && <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4 }}>{hero}</ScrollView>}
-      <ScrollView ref={scroll} style={{ flex: 1, minHeight: hero ? 168 : undefined }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero ? 'flex-end' : undefined }}
-        onContentSizeChange={() => {
+      {/* The New pill floats inside the thread's own box, over its foot: a touch outside a parent's bounds never lands on Android. */}
+      <View style={{ flex: 1, minHeight: hero ? 168 : undefined }}>
+      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero ? 'flex-end' : undefined }}
+        scrollEventThrottle={16} onScroll={onScroll}
+        onContentSizeChange={(w, h) => {
           if (around) return;
+          // Reading up: a line landing below raises the New pill instead of moving anything.
+          if (!pinned.current) { if (h !== seen.current) setNewBelow(true); return; }
+          seen.current = h; setNewBelow(false);
           // Android ignores a scroll in the same frame as the growth (the live page's new lines stayed below the fold).
           requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
         }}>
@@ -2141,6 +2163,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
         {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
       </ScrollView>
+      {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.ink }]}><T style={[s.newPillText, { color: t.bg }]}>↓ New</T></Pressable>}
+      </View>
       {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
@@ -2856,6 +2880,8 @@ const s = StyleSheet.create({
   dayText: { fontSize: 12, lineHeight: 16, ...fw('500') },
   // A thread's NEW divider over the first line the person hasn't seen yet.
   newDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6 },
+  newPill: { position: 'absolute', bottom: 10, alignSelf: 'center', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  newPillText: { fontSize: 13, lineHeight: 18, ...fw('600') },
   newDividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   newDividerText: { fontSize: 11, lineHeight: 16, letterSpacing: 1, textTransform: 'uppercase', ...fw('700') },
   typing: { flexDirection: 'row', gap: 5, paddingVertical: 8, flex: 1 },
