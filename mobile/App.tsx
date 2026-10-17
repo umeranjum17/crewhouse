@@ -779,7 +779,7 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
       )}
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
       {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
-      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); }} />}
+      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); setCode(''); }} />}
       {onBack && <Btn ghost label="Back" onPress={onBack} />}
       <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>{A.awake('your computer')}</T>
       <T tone="mute" style={[s.small, s.centerText]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
