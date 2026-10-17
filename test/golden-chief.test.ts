@@ -80,8 +80,10 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // Chief's plain "What can you do?" answer (what the crew really does, the yes before buying or sending, routines,
   // Google, one next step: +245 net after dropping the lines it replaces), and 10,386 → 10,685 for marketplace
   // import. The guard is still a plain length check; P7's note stands, the prompt no longer varies with HOME.
+  // Re-frozen 11,150 -> 11,220 for picked helper names on the plain-words rebase (ch-helper-names,
+  // Firstmate decision B-plain): the longer job-word-plus-first-name crew names across Chief's crew lines.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
-  assert.ok(prompt.length <= 11_150, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
+  assert.ok(prompt.length <= 11_220, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
   assert.doesNotMatch(prompt, /on every line/, 'the soul never permits an occasional Sir');
   assert.match(prompt, /no "Sir", no "Madam"/, 'Chief never titles the person');
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.

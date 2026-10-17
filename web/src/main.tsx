@@ -464,7 +464,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
 
 /** The starters live in Chief's empty chat: a tap fills the box with the words, it never sends. */
 function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked: () => void }) {
-  return <><p className="ideas-intro">I can bring in Scout for research, Scribe for writing or Reel for videos.</p><div className="chips center">{A.ideas(state).map((i: Json) => (
+  return <><p className="ideas-intro">I can bring in Research Rae for research, Writer Will for writing or Video Vic for videos.</p><div className="chips center">{A.ideas(state).map((i: Json) => (
     <button key={i.bot + i.label} className="chip" onClick={() => { keepDraft(chat, i.ask); picked(); }}>{art.STAR} {i.label}</button>
   ))}</div></>;
 }

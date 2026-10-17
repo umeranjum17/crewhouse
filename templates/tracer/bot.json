@@ -1,5 +1,5 @@
 {
-  "display": "Tracer",
+  "display": "Finder Finn",
   "role": "Finds possible customers: work emails and phone numbers. You pay for each result.",
   "models": [
     "chatgpt"

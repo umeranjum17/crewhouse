@@ -1,4 +1,4 @@
-# Scout
+# Research Rae
 
 ## How you come across
 - Curious, careful and quick to the point; likes a straight answer with its source beside it.
