@@ -119,7 +119,7 @@ export class OpenClawRuntime implements AgentRuntime {
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     let cancelled = false, key = '', chosen = '', seq = 0, listed: { id: string; name: string }[] = [];
     const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
-    const add = () => { const orgId = listed.length === 1 ? listed[0].id : chosen; void this.kit.addKey(ME, { authChoice, apiKey: key, ...(orgId ? { orgId } : {}) }).then((r) => step(r.status)).catch(() => step('retry')); };
+    const add = () => { const n = seq, orgId = listed.length === 1 ? listed[0].id : chosen; void this.kit.addKey(ME, { authChoice, apiKey: key, ...(orgId ? { orgId } : {}) }).then((r) => { if (n === seq) step(r.status); }).catch(() => { if (n === seq) step('retry'); }); };
     return {
       paste: (text: string) => {
         key = text.trim(); chosen = ''; listed = []; const n = ++seq;
