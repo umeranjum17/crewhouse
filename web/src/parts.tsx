@@ -756,7 +756,8 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
         ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
         : call.can && !text.trim() && !picked.length && !busy
         ? <button type="button" className="send talk" aria-label="Talk with Chief" title="Talk with Chief" onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
-        : <button className="send" aria-label="Send" disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
+        // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.
+        : <button className="send" aria-label="Send" onPointerDown={(e) => e.preventDefault()} disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
     </form>
   );
 }

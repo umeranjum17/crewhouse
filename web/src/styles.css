@@ -1463,6 +1463,10 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .ch-row > .icon-btn { margin-left: auto; flex: none; }
   .home-chat .chief-hero > .home-mode { display: flex; align-self: stretch; }
   .home-chat .chief-hero > .home-mode button { flex: 1; }
+  /* With the box focused (the keyboard up) the helmet, the switch and "What happened" step aside, so the thread keeps the room; the name and status stay on one line. */
+  .home-chat:has(.dock textarea:focus) .ch-art,
+  .home-chat:has(.dock textarea:focus) .home-mode,
+  .home-chat:has(.dock textarea:focus) .home-did { display: none; }
   /* The conversation carries no pinned card (the ask already sits inline in the thread; the full list stays in Office). */
   .home-chat .needs-pin { display: none; }
   .home-chat .needs-pin.flat .section-head { margin-bottom: 4px; }
