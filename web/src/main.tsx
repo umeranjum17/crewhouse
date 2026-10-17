@@ -590,6 +590,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: waiting && pending ? pending.at : undefined, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
+  // While Chief works the box's send becomes a stop square: the same reset a helper's Stop uses, its line then says so.
+  const stopChief = () => void attempt(async () => { await api.reset('chief'); refresh(); });
   // The engine can say nothing for tens of seconds while the model writes a big file: never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
   const quiet = ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
@@ -765,6 +767,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             {l.by && <span className="note-by" aria-hidden />}
             {l.files.map((f) => <Media key={f.url} f={f} big forget />)}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestAnswer} /></div>)}
+            {l.retry && <button type="button" className="btn sm try-again" onClick={() => void send(l.retry!)}>Try again</button>}
             {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
@@ -790,7 +793,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {A.things(state).filter((x) => x.helper === id).length > 0 && <section className="home-section"><div className="label">Made in this chat</div><div className="list-group">{A.things(state).filter((x) => x.helper === id).map((x) => { const t = A.fileTarget(x.files[0]); return <a className="list-row" key={x.id} href={t?.href.startsWith('#') ? t.href : `#/things/t${x.id}`}><span className="file-chip">{t?.chip ?? '—'}</span><span className="grow"><b className="clamp1">{x.title}</b><span className="small clamp1">{x.summary}</span></span></a>; })}</div></section>}
       </aside>
-      {id === 'chief' ? <div className="dock"><Composer key={seed} placeholder={hero && !matchMedia('(min-width: 900px)').matches ? 'Ask Chief anything' : 'Ask Chief anything…'} onSend={send} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} talk={{ lines, reading: setReading }} {...typeInto(id)} /></div>
+      {id === 'chief' ? <div className="dock"><Composer key={seed} placeholder={hero && !matchMedia('(min-width: 900px)').matches ? 'Ask Chief anything' : 'Ask Chief anything…'} onSend={send} stop={ln?.state === 'working' || ln?.state === 'reading' ? stopChief : undefined} chips={hero ? A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask })) : undefined} talk={{ lines, reading: setReading }} {...typeInto(id)} /></div>
         : <ReadAlong name={name} job={(state.tasks ?? []).find((t: Json) => t.bot === id)?.title} />}
     </div>
   );

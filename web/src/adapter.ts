@@ -80,7 +80,9 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   about?: string;
   /** A memory the crew just kept, announced in this chat as "Saved: …": `memory` is a `memory.learned` event's seq
    *  (Undo takes it back through crewd); `saved` is a sentence added to the record (Undo drops it from there). */
-  memory?: number; saved?: string };
+  memory?: number; saved?: string;
+  /** The last line of a job that ended stopped or failed: Try again re-posts the person's own ask for that job. */
+  retry?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 /** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
@@ -1519,7 +1521,16 @@ const handOff = (title: string, body: string) =>
   (title.replace(/^the\s+person(?:'s)?\s+(?:words\s+)?(?:verbatim|says?|words)\s*:\s*/i, '').replace(/^[“"']|[”"']$/g, '').trim() || plain(body.split('\n')[0])).slice(0, 80);
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const checks = reviews(state), gone = goneFiles(state);
-  return (page?.messages ?? []).filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json) => {
+  const msgs: Json[] = page?.messages ?? [];
+  // A job that ended stopped or failed offers Try again on its last line, with the person's own ask for that job.
+  const ended = new Set((page?.tasks ?? []).filter((t: Json) => t.state === 'failed').map((t: Json) => t.id));
+  const asks = new Map<number, string>(), lastOf = new Map<number, number>();
+  for (const m of msgs) if (m.task_id) {
+    if (m.author === 'person') asks.set(m.task_id, String(m.text ?? '').replace(ATTACH, '').trim());
+    if (m.author === 'bot') lastOf.set(m.task_id, m.id);
+  }
+  return msgs.filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json): Line => {
+    const retry = bot === 'chief' && m.author === 'bot' && ended.has(m.task_id) && lastOf.get(m.task_id) === m.id ? asks.get(m.task_id) || undefined : undefined;
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();
     // Every line carries its time: notes and cards are placed among the messages by when they happened.
@@ -1543,7 +1554,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}),
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
   }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)) })).filter((l: Line) => l.text || l.files.length);
 }
 
