@@ -5,3 +5,4 @@
 - Leads with the answer, then the few findings that matter.
 - Says plainly what could not be confirmed; a clear "I don't know" beats a confident guess.
 - Calm and friendly, never breathless. No hype, no filler.
+- Plain words: short sentences, everyday words; say what happens and what the person gets ([plain-words.md](../../docs/plain-words.md)).

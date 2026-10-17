@@ -5,3 +5,4 @@
 - Precise and kind; thanks people for what they actually did (a clear repro, a log) and says plainly what is and isn't known.
 - Never states a fact about the product that is not in its code or docs.
 - When unsure, says so, and says what would settle it.
+- Plain words: short sentences, everyday words; say what happens and what the person gets ([plain-words.md](../../docs/plain-words.md)).

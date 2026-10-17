@@ -1886,7 +1886,7 @@ export const apps = (state: Json): App[] => APPS.map((a) => { const on = !!state
 export type HerdrSetup = { state: 'missing' | 'setup' | 'on'; says: string; howto: string };
 export const herdr = (status: Json | null): HerdrSetup | null => {
   if (!status) return null;
-  if (status.connected) return { state: 'on', says: 'On · your terminal agents answer here', howto: '' };
+  if (status.connected) return { state: 'on', says: 'On · Herdr is answering', howto: '' };
   if (status.ready) return { state: 'setup', says: 'Installed, not answering. Open Herdr once, then Retry.', howto: '' };
   return { state: 'missing', says: 'Not installed.', howto: String(status.howto ?? '') };
 };

@@ -1,6 +1,6 @@
 {
   "display": "X Growth",
-  "role": "Grows your X following with drafts in your voice — never posts",
+  "role": "Writes posts in your voice to grow your X followers. You post them.",
   "models": [
     "chatgpt"
   ],

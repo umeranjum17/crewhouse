@@ -76,7 +76,8 @@ test('find-clients is wired into Tracer, and Home offers the job once the lookup
   assert.ok(existsSync(join(cfg.crewDir, 'bots', 'tracer', 'skills', 'find-clients', 'SKILL.md')), 'recruiting Tracer copies the skill in');
   const mine = disk.listSkills(cfg, 'tracer').find((k) => k.name === 'find-clients');
   assert.ok(mine?.description && mine?.says, 'the model gets a description and the person a line in their own words');
-  assert.ok(disk.systemPrompt(cfg, 'tracer', false).length < 5_000, 'Tracer keeps his own words stay inside the frozen prompt budget');
+  // <5,250: re-frozen from 5,000 for the plain-words rule (docs/plain-words.md) Tracer's soul and AGENTS now point at.
+  assert.ok(disk.systemPrompt(cfg, 'tracer', false).length < 5_250, 'Tracer keeps his own words stay inside the frozen prompt budget');
   const row = crew.snapshot().ideas.find((i: any) => /Find me clients/.test(i.ask));
   assert.ok(row, 'Home lists the job');
   assert.match(row.promise, /one workbook/, 'and says what they get');

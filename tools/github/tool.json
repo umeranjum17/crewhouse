@@ -9,7 +9,7 @@
   "license": "MIT",
   "source": "system",
   "install": {
-    "system": "https://cli.github.com (then gh auth login, in your own terminal)"
+    "system": "https://cli.github.com (then sign in with gh auth login on this computer)"
   },
   "asks": [
     "anything that changes GitHub: it can only read, so you make those changes yourself"
