@@ -9,6 +9,12 @@ const STATUS: Record<string, string> = {
   idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
 };
 
+/** One plain line for a screen that would not open. desklink's own failure text is diagnostic, never shown; a path
+ *  that never formed ('never-connected') will not reopen itself, so say what to check instead of "try again". */
+const failWords = (name: string, code?: string) => code === 'never-connected'
+  ? `This device can't reach ${name}'s computer directly. Bring it onto the home Wi-Fi, then try again.`
+  : `Couldn't open ${name}'s screen. Try again in a moment.`;
+
 /** One live session on a bot's screen, with input on while the person holds the wheel. */
 function useBotScreen(bot: Json, control: boolean, setErr: (e: string) => void) {
   const controlRef = useRef(control);
@@ -20,7 +26,7 @@ function useBotScreen(bot: Json, control: boolean, setErr: (e: string) => void) 
       signaling.current = desktopSignaling(bot.id);
       return { signaling: signaling.current, session: { permissions: controlRef.current ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
     },
-    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
+    onError: (fail) => setErr(failWords(bot.display, fail.code)),
   });
   // Input is per session (closing one turns it off), so it is switched on after each connect.
   const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current));

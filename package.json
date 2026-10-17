@@ -24,7 +24,7 @@
     "@byokit/relay": "0.7.1",
     "@byokit/secrets": "0.5.1",
     "@byokit/ui-core": "0.6.0",
-    "@desklink/host": "0.3.0",
+    "@desklink/host": "0.5.8",
     "docx": "9.7.2",
     "exceljs": "4.4.0",
     "jszip": "3.10.2",
@@ -33,7 +33,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@desklink/react-native": "0.3.0",
+    "@desklink/react-native": "0.5.8",
     "@types/node": "^22.10.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

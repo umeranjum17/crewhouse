@@ -166,15 +166,15 @@ export class Desktops {
     return { ...rest, DISPLAY: d.display, XAUTHORITY: d.xauth, XDG_SESSION_TYPE: 'x11' };
   }
 
-  /** crewd picks the display/permissions, not the watcher; control requires the person holding the wheel. */
+  /** crewd picks the display and whether a watcher may drive, from its own authority — the link grant plus the
+   *  wheel — never the client's scopes: 0.4+ phones always send the full view/control/clipboard set and engines ignore it. */
   async signal(bot: string, watcher: Watcher, method: string, params: Record<string, any>, mayControl: boolean) {
     const d = this.desks.get(bot);
     if (!d) throw refused(`${bot}'s desktop is not running`, 'no-screen');
     d.used = Date.now();
     if (method === 'session.open') {
       if (params.source !== undefined) throw refused('the client cannot choose the desktop source', 'source');
-      const perms: string[] = Array.isArray(params.permissions) ? params.permissions : ['view'], control = perms.includes('control');
-      if (control && !mayControl) throw refused('Take over first: the bot has the controls');
+      const control = mayControl;
       await this.closeSession(d, 'another screen opened this desktop');
       d.engine ??= await this.engine(d);
       const opened: any = await d.engine.request('session.open', {

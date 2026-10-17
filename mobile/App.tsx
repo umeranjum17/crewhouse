@@ -2330,6 +2330,12 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   );
 }
 
+/** One plain line for a screen that would not open. desklink's own failure text is diagnostic, never shown; a path
+ *  that never formed ('never-connected') will not reopen itself, so say what to check instead of "try again". */
+const screenFailWords = (name: string, code?: string) => code === 'never-connected'
+  ? `This phone can't reach ${name}'s computer directly. Bring it onto the home Wi-Fi, then try again.`
+  : `Couldn't open ${name}'s screen. Try again in a moment.`;
+
 /** A bot's own screen on the phone, through desklink over the encrypted link: Watch, Take control, Hand it back.
  *  Taking the wheel is the whole page: one status line, the screen, Hand it back pinned at the bottom. */
 function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct: boolean; refresh: () => void; showing?: { words: string } | null; watchNow?: boolean }) {
@@ -2358,7 +2364,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
       sig.current = desktopSignaling(bot.id);
       return { signaling: sig.current as any, session: { permissions: controlRef.current && canAct ? CONTROL_PERMISSIONS : ['view'], maxFps: 15 } };
     },
-    onError: () => setErr(`Couldn't open ${bot.display}'s screen. Try again in a moment.`),
+    onError: (fail) => setErr(screenFailWords(bot.display, fail.code)),
   });
   const open = () => session.connect().then(() => session.setInputEnabled(controlRef.current && canAct));
   useEffect(() => { if (watching.current) void session.close().then(open); }, [control]);
@@ -2382,7 +2388,7 @@ function Screen({ bot, canAct, refresh, showing, watchNow }: { bot: Json; canAct
         <View style={{ flex: 1, margin: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: t.line }}>
           <DesktopView sessionId={session.nativeId} style={{ flex: 1 }} accessibilityLabel={`${bot.display}'s screen`} keyboardClearance={120} />
           {/* one calm grey line, with the way forward — never a doubled failure */}
-          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? "Couldn't open it. Try again in a moment." : `Opening ${bot.display}'s screen…`}</T></View>}
+          {idle && <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', padding: 16 }]}><T tone="mute" style={s.centerText}>{live === 'failed' ? (err || "Couldn't open it. Try again in a moment.") : `Opening ${bot.display}'s screen…`}</T></View>}
         </View>
         <View style={{ padding: 12, gap: 8 }}>
           {tabs.length > 0 && <View style={s.chips}>
