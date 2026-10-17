@@ -75,5 +75,5 @@ const endAt = (await run("JSON.stringify(document.querySelector('.live-end') ? 1
 let gap = 0, from = 0, prev = 0; for (const t of chg) { if (endAt != null && t > endAt) break; if (t - prev > gap) { gap = t - prev; from = prev; } prev = t; }
 writeFileSync(join(out, 'changes.json'), JSON.stringify({ endAt, longestStillMs: gap, from, changes: chg }));
 console.log('end at', endAt, 'ms; longest still', gap, 'ms from', from);
-push.close(); ws.close(); chrome.kill('SIGTERM'); chrome.on('exit', () => rmSync(profile, { recursive: true, force: true }));
+push.close(); ws.close(); chrome.kill('SIGTERM'); chrome.on('exit', () => rmSync(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }));
 console.log('done', Date.now() - t0, 'ms', frame, 'frames');
