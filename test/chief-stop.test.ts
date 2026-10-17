@@ -20,6 +20,8 @@ test("stopping Chief's job leaves a line that offers Try again with the person's
   const again = await crew.post('chief', ask) as { task: number };
   assert.notEqual(again.task, first.task);
   await holding(crew, 'chief');
+  // While the retry is live, the old stop line offers nothing: a second tap would start a duplicate.
+  assert.equal(A.lines(crew.botPage('chief'), 'chief').find((l) => l.id === stopped?.id)?.retry, undefined, 'no Try again while Chief works');
   await release(crew, 'chief', 'Here it is.');
   await until('the retried job to finish', () => task(db, again.task)?.state === 'done');
   done();

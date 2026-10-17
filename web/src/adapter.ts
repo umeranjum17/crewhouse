@@ -1522,15 +1522,18 @@ const handOff = (title: string, body: string) =>
 export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const checks = reviews(state), gone = goneFiles(state);
   const msgs: Json[] = page?.messages ?? [];
-  // A job that ended stopped or failed offers Try again on its last line, with the person's own ask for that job.
-  const ended = new Set((page?.tasks ?? []).filter((t: Json) => t.state === 'failed').map((t: Json) => t.id));
+  // Only the newest job that ended stopped or failed offers Try again, on its last line, and only while none of Chief's
+  // jobs is live (a second tap would start a duplicate of a retry already running).
+  const tasks: Json[] = page?.tasks ?? [];
+  const newest = Math.max(0, ...tasks.filter((t: Json) => t.state === 'failed').map((t: Json) => t.id));
+  const live = tasks.some((t: Json) => ['queued', 'working', 'needs_you', 'paused'].includes(t.state));
   const asks = new Map<number, string>(), lastOf = new Map<number, number>();
   for (const m of msgs) if (m.task_id) {
     if (m.author === 'person') asks.set(m.task_id, String(m.text ?? '').replace(ATTACH, '').trim());
     if (m.author === 'bot') lastOf.set(m.task_id, m.id);
   }
   return msgs.filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json): Line => {
-    const retry = bot === 'chief' && m.author === 'bot' && ended.has(m.task_id) && lastOf.get(m.task_id) === m.id ? asks.get(m.task_id) || undefined : undefined;
+    const retry = bot === 'chief' && !live && m.author === 'bot' && m.task_id === newest && lastOf.get(m.task_id) === m.id ? asks.get(m.task_id) || undefined : undefined;
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();
     // Every line carries its time: notes and cards are placed among the messages by when they happened.
