@@ -633,6 +633,9 @@ export function resting(state: Json) {
  */
 /** `bare`: no job's words, only names (the bubble's panel and the status bar, which sit over other apps). */
 export type ChiefLocal = { offline?: boolean; listen?: boolean; signedOut?: boolean; bare?: boolean };
+/** The sign-in wait's one word: the thread card, the header and Chief's chats row all say it, so every surface
+ *  names the same state (flows.tsx re-exports it for its card). */
+export const NEEDS_SIGNIN = 'Needs a sign-in';
 export type ChiefView = { mood: Mood; line: string; tone: 'ok' | 'wait' | 'off'; rank: number };
 export function chief(state: Json, local: ChiefLocal = {}): ChiefView {
   const v = chiefRow(state, local);
@@ -723,13 +726,17 @@ export function chiefSaid(state: Json): string {
   const said = realSentence(String(last.text));
   return said ? preview({ ...last, text: said }) : '';
 }
-export function chats(state: Json): Chat[] {
+/** The chats list, with the same `local` the office takes: while the crew can't think, Chief's row reads the header's
+ *  own word and never "Chief is working" (ch-signin-wait-truth). */
+export function chats(state: Json, local: ChiefLocal = {}): Chat[] {
   const bot = (id: string) => state.bots.find((b: Json) => b.id === id) ?? {};
-  const v = office(state), member = (id: string) => v.crew.find((m) => m.id === id)!;
+  const v = office(state, local), member = (id: string) => v.crew.find((m) => m.id === id)!;
   const glow = (s: Status): Chat['cls'] => s.seat === 'needs' ? 'needs' : s.seat === 'working' ? 'work'
     : s.seat === 'done' ? 'done' : s.seat === 'failed' ? 'failed' : 'rest';
-  const cs = chiefStatus(v);
-  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state).line), at: at(bot('chief').last?.at ?? 0) || 0, asks: v.counts.needs, ring: v.counts.needs ? 'needs' : '', status: cs.word, cls: glow(cs), ...(cs.seat === 'working' ? { working: 'Chief is working' } : {}) };
+  const out = !!local.signedOut, cs = chiefStatus(v);
+  const lead: Chat = { id: 'chief', name: 'Chief', who: 'chief', line: preview(bot('chief').last, chief(state, local).line), at: at(bot('chief').last?.at ?? 0) || 0,
+    asks: v.counts.needs, ring: v.counts.needs ? 'needs' : '', status: out ? NEEDS_SIGNIN : cs.word, cls: out ? 'needs' : glow(cs),
+    ...(cs.seat === 'working' && !out ? { working: 'Chief is working' } : {}) };
   const rank = (c: Chat) => GROUP_ORDER.indexOf(groupOf(member(c.id), v));
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id), s = statusOf(member(h.id), v), m = member(h.id);
@@ -1396,7 +1403,11 @@ const planOf = (body: unknown): string[] => {
  *  pushed while the thread is open (they carry `seen`, the client time); `last` maps a task to when anything about it
  *  last arrived, streamed words included. */
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
-  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number>; side?: 'phone' }): LiveLine | null {
+  heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number>; side?: 'phone'; signedOut?: boolean }): LiveLine | null {
+  // While no account is ready to think with (the sign-in card's own test), the card is the one state: no working,
+  // reading or waiting line above it, so the thread and the header say one thing (ch-signin-wait-truth). The phone,
+  // which cannot see the accounts, passes nothing and keeps its waiting line naming where to sign in.
+  if (o.signedOut) return null;
   const evs = new Map<number, Json>();
   for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
   const all = [...evs.values()].sort((a, b) => a.seq - b.seq);
@@ -1976,7 +1987,9 @@ const tally = (crew: OfficeMember[], needs: Card[], done: Thing[]) =>
   ({ needs: needs.length + crew.filter((c) => c.stuck && c.seat === 'working').length, working: crew.filter((c) => seatOf(c) === 'working').length, done: done.filter((t) => t.at >= midnight()).length });
 /** The member's Needs-you row: the first in Needs you's own order. */
 const askFor = (needs: Card[], id: string) => needs.find((c) => c.helper === id);
-export function office(state: Json): OfficeView {
+/** The office's one view. `local` carries what only the app knows (the sign-in: the accounts are the app's own poll,
+ *  never in crewd's state), so Chief's row, line and count say what the header says (ch-signin-wait-truth). */
+export function office(state: Json, local: ChiefLocal = {}): OfficeView {
   const helpers = crew(state), gone = goneFiles(state);
   const raw = new Map((state.bots as Json[] ?? []).map((b: Json) => [b.id, b]));
   const lines = new Map(work(state).map((w) => [w.helper, w]));
@@ -2002,7 +2015,10 @@ export function office(state: Json): OfficeView {
   });
   const done = things(state);
   const lead = raw.get('chief');
-  return { chief: chief(state), lead: lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? [], gone).seat : 'free', crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
+  // A sign-in wait is Chief's own state in the office too: his line follows it, and until a job can really run he
+  // counts as waiting, never at work, so the counts under the header agree with it (ch-signin-wait-truth).
+  return { chief: chief(state, local), lead: local.signedOut ? 'waiting' : lead ? helper(lead, [], [], state.tasks ?? [], state.asks ?? [], gone).seat : 'free',
+    crew: crewRows, done, needs, counts: tally(crewRows, needs, done) };
 }
 
 /** The Office's one way to the asks: crew never ask the person, so a waiting member says this and Chief carries them all. */
