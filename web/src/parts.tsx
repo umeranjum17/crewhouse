@@ -690,6 +690,9 @@ const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).
   r.readAsDataURL(f);
 }))).then((ps) => ps.filter((p): p is Pick => !!p?.data));
 
+/** A send handler's answer for words kept for the person, not sent and not failed (Hello asks for a name first): the box
+ *  gets them back, with no Not sent line. */
+export const KEPT = 'kept';
 /**
  * The message box. `chat` ties it to one conversation's held draft. A send that doesn't go through keeps the words
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts). A send the computer hasn't
@@ -724,11 +727,12 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
     // A send still unanswered after HOLD_MS is held, not dead: say so while the same request stays in flight, so Retry
     // is only ever offered once it has settled and can never send the words twice.
     const stall = setTimeout(() => setHeld(true), HOLD_MS);
-    let ok = false;
-    try { ok = !!(await onSend(t, at.length ? at : undefined)); } catch { ok = false; }
+    let ok: unknown = false;
+    try { ok = await onSend(t, at.length ? at : undefined); } catch { ok = false; }
     clearTimeout(stall);
     setBusy(false); setHeld(false);
-    if (ok) { hear(focused, ''); } else { setText(t); setPicked(at); setFailed(true); if (chat) sent(chat, false, t); }
+    if (ok === KEPT) { change(t); setPicked(at); }
+    else if (ok) { hear(focused, ''); } else { setText(t); setPicked(at); setFailed(true); if (chat) sent(chat, false, t); }
   };
   const call = useCall(talk, async (said) => {
     let ok = false;
