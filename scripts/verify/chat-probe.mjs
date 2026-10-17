@@ -26,6 +26,9 @@ const send = (method, params = {}) => new Promise((r, j) => { const n = ++id; wa
 const run = async (e) => (await send('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true })).result.value;
 await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 1, mobile: +W < 600 });
 await send('Page.navigate', { url: base + path });
+// The person's link lands on Home (the crew view); Chief's thread is a tap away, opened once Home has kept the key.
+await until(() => run("!!document.querySelector('.stack-home, .dock textarea')"));
+await run("document.querySelector('.dock textarea') ? 1 : (location.hash = '#/chief')");
 await until(() => run("!!document.querySelector('.dock textarea')"));
 // CHAT_PROBE_FIRST: what the person does before typing, as a page expression (e.g. Not now on the Add your phone card).
 if (process.env.CHAT_PROBE_FIRST) await until(() => run(process.env.CHAT_PROBE_FIRST));

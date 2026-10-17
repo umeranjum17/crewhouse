@@ -1894,7 +1894,6 @@ function useLook() {
   // Layout effect: subscribed in the same commit that paints, and re-read at once, so no change is missed in between.
   useLayoutEffect(() => { const on = () => setDark(media.matches); on(); media.addEventListener('change', on); return () => media.removeEventListener('change', on); }, [media]);
   const night = look === 'night' || (look === 'auto' && dark);
-  setNight(night);
   useEffect(() => {
     document.documentElement.dataset.theme = night ? 'night' : 'day';
     document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#0C0C0B' : '#F3EEE3'); // the browser's bar and the phone's status bar
