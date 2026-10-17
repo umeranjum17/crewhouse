@@ -1,8 +1,8 @@
 # A stalled send says so, a failed one offers Retry, and Retry sends once
 
 When the person sends a message the computer doesn't answer, the box must not sit there as a dead button. After a few
-seconds with no answer the composer shows a plain muted line above the held words — "Reconnecting… your words stay
-here until the home computer answers." — and the words stay in the box. If the request fails (the connection drops),
+seconds with no answer the composer shows a plain muted line above the box — "Reconnecting… your message will send when
+the home computer answers." — and the words stay in the thread while they wait. If the request fails (the connection drops),
 the line becomes "Not sent — it's kept here." with a **Retry** button. Retry sends the same words; it is offered only
 after the first request has settled, so a held request that later succeeds is never sent twice. When the computer
 answers again the line goes and the message shows as normal. The words are the person's own and are never thrown away
@@ -25,6 +25,6 @@ crewd on the same port and state dir, and clicks Retry (the words go once and th
 scroll, the words kept), `motion/send-stall-cycle-1440-day.webm` (one cycle), and `crewd.log`. It ends by reading the
 SQLite `messages` rows and asserting exactly one person message per case.
 
-**Layout.** The line is its own row above the words at every width; the phone chat's one-row composer and the feed
-boxes get `flex-wrap: wrap` back while the line is shown (`web/src/styles.css`, the appended `:has(.send-away)` /
-`:has(.send-failed)` rule), or the words and the line squeeze side by side at 390.
+**Layout.** While the held line shows, the box takes a 44px top margin (`web/src/styles.css`, `.composer:has(.send-away)`)
+and the line sits absolutely in it, above the box; the + , the words and Send stay in one row at 390 and 1440. A failed
+send's line is still its own wrapped row (`:has(.send-failed)`), since its words are kept in the box.

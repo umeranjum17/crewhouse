@@ -740,7 +740,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk }: { placehold
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {away || held ? <div className="send-away" role="status">Reconnecting… your words stay here until the home computer answers.</div>
+      {away || held ? <div className="send-away" role="status">Reconnecting… your message will send when the home computer answers.</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file"><b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
