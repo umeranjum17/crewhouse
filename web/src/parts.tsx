@@ -744,7 +744,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      {away || held ? <div className="send-away" role="status">Reconnecting… your message will send when the home computer answers.</div>
+      {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file"><b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
       <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
@@ -1035,7 +1035,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
         : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
-      {c.kind === 'routine' ? (
+      {away ? <p className="mute small">You can answer once the home computer is back.</p> : c.kind === 'routine' ? (
         <>
           {when !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (!stuck) void start(); }}>
             <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" />

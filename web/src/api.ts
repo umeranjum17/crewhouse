@@ -27,7 +27,7 @@ let call: Transport = http;
 export function setTransport(t: Transport) { call = t; }
 
 /** The encrypted link, once this browser is paired (web/src/link.ts): every call, the live events and a bot's screen. */
-export type Link = { name: string; call: Transport; subscribe: typeof subscribe; desktop: typeof desktopSignaling; unpair: () => Promise<void> };
+export type Link = { name: string; host: string; call: Transport; subscribe: typeof subscribe; desktop: typeof desktopSignaling; unpair: () => Promise<void> };
 export let paired: Link | null = null;
 export function setLink(l: Link) { paired = l; demo = false; setTransport(l.call); }
 
