@@ -27,10 +27,11 @@ const mdBlocks = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === '
   : t.type === 'code' ? <p key={i}>{t.text}</p>
   : t.type === 'html' ? <p key={i}>{t.raw}</p> : null);
 
-/** Chat markdown without raw HTML or arbitrary URL schemes. Long answers stay available behind More. */
-export function ChatText({ text }: { text: string }) {
+/** Chat markdown without raw HTML or arbitrary URL schemes. The newest reply stays open in full behind no
+ *  fold; older long answers stay available behind More. */
+export function ChatText({ text, latest }: { text: string; latest?: boolean }) {
   const [more, setMore] = useState(false);
-  const long = text.length > 700 || text.split('\n').length > 10;
+  const long = !latest && (text.length > 700 || text.split('\n').length > 10);
   // A cut inside a list item drops that item, so the fold never ends on an empty or half-cut bullet.
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '').replace(/\n[ \t]*(?:[-*+]|\d+[.)])(?:[ \t][^\n]*)?$/, '') : text;
   return <div className="chat-md">{mdBlocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;

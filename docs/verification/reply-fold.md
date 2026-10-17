@@ -1,6 +1,8 @@
 # Reply fold (More / Less)
 
-A long chat reply (over 700 characters or 10 lines) folds behind **More** (`ChatText`, `web/src/parts.tsx`).
+A long chat reply (over 700 characters or 10 lines) folds behind **More** (`ChatText`, `web/src/parts.tsx`,
+native in `mobile/App.tsx`) — unless it is the newest answer, which always reads in full with no fold
+(`latest`; the thread's newest `them`/`chief` line, the streaming reply, and the room's newest line).
 The fold cuts near 650 characters; a cut that lands inside a list item drops that item, so the folded
 reply ends on whole items, never an empty or half-cut bullet.
 
@@ -13,6 +15,8 @@ with that reply's `author` and a 12+ item bullet list whose plain 650-character 
 
 ## Prove
 
+- Seed two long replies: the older one folds (`.chat-more` present, last `li` whole), the newest one
+  shows in full with no `.chat-more`.
 - `eval` the last `li` in each folded `.chat-md`: its text is non-empty and is a whole item.
 - Captures, folded and after More, dark and light, at 390 and 1440, with `.chat-more` scrolled into view
   (on the phone the thread scrolls in its own column, under the composer).
