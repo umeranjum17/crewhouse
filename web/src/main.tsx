@@ -15,6 +15,13 @@ import { hear, Office, useOffice } from './office.tsx';
 import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
+import * as K from './kept.ts';
+
+/** The kept week (web/src/kept.ts): what this browser last heard from the computer, shown read-only while it can't be
+ *  reached. Demo keeps nothing. */
+let week: K.Kept | null = null;
+const keptWeek = (): K.Kept => (week ??= demo ? K.empty('') : K.readKept(paired?.host ?? location.origin));
+const keepWeek = (f: (k: K.Kept) => K.Kept) => { if (!demo) week = K.writeKept(f(keptWeek())); };
 
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
@@ -241,7 +248,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   // While the computer is out of reach its own words win; the sign-in wait rides along otherwise.
   const phone = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 899px)').matches;
   if (mode === 'chat') return phone
-    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} side={gear} below={<>{seg}{did}</>} /></header>
+    ? <header className="home-bar is-chat"><ChiefHero live={ctx.live} state={ctx.state} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} offline={ctx.offline} side={gear} below={<>{seg}{did}</>} /></header>
     : <header className="home-bar is-chat"><div className="home-meta">{needs}{busy}{still}</div>{tools}</header>;
   // Office is a slim bar over the grid: the title (phone width only), the count line, the switch and settings.
   return (
@@ -326,7 +333,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
  *  branch; the desk rail (lane 3) carries its own header. Chief's own state comes from the same table the thread reads
  *  (A.chief, with the sign-in HomeBar passes down): with no account signed in he waits for a sign-in, whatever the
  *  crew's seats say. One status, never a second echoing strip beside it. */
-function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView; state: Json; signedOut?: boolean; side?: ReactNode; below?: ReactNode }) {
+function ChiefHero({ live, state, signedOut, offline, side, below }: { live: A.OfficeView; state: Json; signedOut?: boolean; offline?: boolean; side?: ReactNode; below?: ReactNode }) {
   const chief = signedOut ? A.chief(state, { signedOut: true }) : live.chief;
   // The phone header's own status: a sign-in wait first — the thread card's own flag, said once here and never the
   // green "At work" — then Chief's one status, the rail's own (A.chiefStatus).
@@ -336,7 +343,7 @@ function ChiefHero({ live, state, signedOut, side, below }: { live: A.OfficeView
       <div className="ch-row">
         <a className="ch-art" href={CHIEF_PROFILE} aria-label="Chief's profile"><ChiefArt mood={chief.mood} hero mascot /></a>
         <h2 className="ch-name"><a href={CHIEF_PROFILE}>Chief</a></h2>
-        <p className={`ch-status${out || needs ? '' : s.group === 'work' ? ' work' : ' rest'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : s.word}</span></p>
+        <p className={`ch-status${out || needs ? '' : s.group === 'work' ? ' work' : ' rest'}`}><i aria-hidden /><span>{out ? NEEDS_SIGNIN : offline ? 'Out of reach for now' : s.word}</span></p>
         {side}
       </div>
       {below}
@@ -566,8 +573,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // Keep the opening unread boundary after the thread's read acknowledgment.
   const mark = useRef<number | null>(null);
   const load = useCallback((ar = around) => api.bot(id, ar || undefined).then((p) => {
-    mark.current ??= A.newDivider(p, id); setPage(p);
-  }).catch(() => {}), [id, around]);
+    mark.current ??= A.newDivider(p, id); setPage(p); keepWeek((k) => K.keepChat(k, id, p));
+  }).catch(() => setPage((cur: Json) => cur ?? keptWeek().chats[id] ?? null)), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
   const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
@@ -589,7 +596,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // Chief's send is at work in every office header too, from the send until he answers (A.office's `sent`).
   const sentTo = waiting && pending ? pending.at : undefined;
   useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
-  const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
+  // Out of reach, the chat reads as it was kept: no live line, since nothing it shows is still running (A.officeAway).
+  const ln = page && !offline ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
@@ -1959,8 +1967,8 @@ function useLook() {
 
 /** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
  *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
-function SideCrew({ state, live, id, signedOut }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean }) {
-  const word = signedOut ? NEEDS_SIGNIN : A.chiefStatus(live).word;
+function SideCrew({ state, live, id, signedOut, offline }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean; offline?: boolean }) {
+  const word = offline ? 'Out of reach for now' : signedOut ? NEEDS_SIGNIN : A.chiefStatus(live).word;
   // The crew summary is the office's own count line (A.summaryOf): every member once, Chief too, by the status the
   // rail rows and the Office read, so a row that shows "Free" is counted as free.
   const sub = A.summaryOf(live);
@@ -2015,10 +2023,24 @@ function App() {
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
+  const answered = useRef(false); // the computer has answered this visit, with state or with no authority
   const { look, setLook, night } = useLook();
+  // The kept week stands in, read-only, and says when it was last heard. Nothing kept, nothing shown.
+  const showKept = () => {
+    const k = keptWeek();
+    if (!k.state) return;
+    heard.current ||= k.at;
+    setState((cur: Json) => cur ?? k.state);
+    setOffline(true);
+  };
   const refresh = useCallback(() => {
-    api.state().then((s) => { setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); })
-      .catch((e) => { if (trouble(e) === 'noauth') { setNoauth(true); setOffline(false); } else setOffline(true); });
+    api.state().then((s) => { answered.current = true; setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); })
+      .catch((e) => {
+        // No authority is the plain screen, never a kept copy served as if it were live.
+        if (trouble(e) === 'noauth') { answered.current = true; setState(null); setNoauth(true); setOffline(false); return; }
+        showKept();
+        setOffline(true);
+      });
     setTick((t) => t + 1);
   }, []);
   useEffect(() => {
@@ -2026,12 +2048,15 @@ function App() {
     addEventListener('hashchange', onHash);
     remember(); // the opening place (a link or shortcut) is remembered too
     refresh();
+    // Boot shows the kept copy at once when the computer has not answered within a second; a live answer that comes sooner
+    // replaces nothing, so the kept copy never flashes.
+    const grace = setTimeout(() => { if (!answered.current) showKept(); }, 1000);
     let pending: any;
     // Streamed words are not a change of state: refreshing on each would hold the refresh off until the reply ends.
     const stop = subscribe((e) => { hear(e); if (e.kind === 'reply.partial') return; clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
-    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
+    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); clearTimeout(grace); };
   }, [refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) { toast('Back in touch with the home computer ✓'); void mintFiles(); } wasOffline.current = offline; }, [offline]);
@@ -2082,7 +2107,7 @@ function App() {
         <aside className="side">
           <a href="#/" className="brand"><Logo night={night} />{demo && <span className="demo-tag">Demo</span>}</a>
           <nav className="side-navs">{rail.map(([h, l, i, n]) => <a key={h} href={h} className={`side-nav ${railOn(h) ? 'on' : ''}`}><Icon name={i} />{l}{n > 0 && <span className={`side-count${h === '#/' ? ' hot' : ''}`}>{n}</span>}</a>)}</nav>
-          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} />
+          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} offline={ctx.offline} />
           <div className="grow" />
           {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
           <a href="#/settings" className={`side-me ${v.view === 'settings' || v.view === 'computer' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>
@@ -2090,7 +2115,7 @@ function App() {
           </a>
         </aside>
         <main className="main">
-          {offline && <div className="offline" role="status">The home computer isn't answering. If it's asleep, the crew has paused and carries on when it wakes. Last heard from it at {A.clock(heard.current)}. Reconnecting… <button className="link inline" onClick={refresh}>Try now</button></div>}
+          {offline && <div className="offline" role="status">Can't reach the home computer{heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}. Meanwhile you can read your recent chats. You can reply once it's back. <button className="link inline" onClick={refresh}>Try now</button></div>}
           {(v.view === 'home' || v.view === 'chief') && <Home {...ctx} chat={v.view === 'chief'} m={v.m} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}

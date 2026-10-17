@@ -6,6 +6,7 @@ import { findHost } from '@byokit/relay/device';
 import { NO_COMPUTER, NO_RELAY, readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
 import { setBadge, turnOffNotifications } from './pwa.ts';
+import { clearKept } from './kept.ts';
 
 const store = browserDeviceStore('crewhouse.grant');
 const BUILD = 'p9b'; // what crewd takes as a current app (src/link.ts `currentPhone`)
@@ -43,6 +44,7 @@ export async function unpair(link: DeviceLink) {
   await bounded(link.unpair());
   link.stop();
   await store.clear();
+  clearKept();
   await leave();
 }
 
@@ -64,6 +66,7 @@ function start(grant: DeviceGrant) {
   });
   setLink({
     name: grant.hostName,
+    host: grant.host,
     // A read, the notifications key ask or turning off gives up after 15 s, so a computer that's off shows as out of reach; any other change waits through reconnects.
     call: async (method, path, body) => {
       let r: { status: number; body: Json };

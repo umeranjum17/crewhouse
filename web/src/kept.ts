@@ -1,6 +1,7 @@
 // What the phone app keeps so its person can still read recent chats while the home computer is asleep: the last
 // home screen and the newest lines of each chat, for a week. Read-only; it never answers anything. Framework-free,
 // so the tests run it (test/unit.test.ts); mobile/src/link.ts reads and writes the file and wipes it with the grant.
+// The installed web app keeps the same shape in this browser's localStorage (readKept, writeKept, clearKept).
 import type { Json } from './api.ts';
 
 export const WEEK = 7 * 86_400_000;
@@ -21,3 +22,17 @@ export const keepState = (k: Kept, state: Json, now = Date.now()): Kept => ({ ..
 /** A chat page from the computer: only its newest lines, never its notes, files or trail. */
 export const keepChat = (k: Kept, id: string, page: Json, now = Date.now()): Kept =>
   ({ ...k, chats: { ...k.chats, [id]: { at: now, messages: (page?.messages ?? []).slice(-LINES) } } });
+
+const KEY = 'crewhouse.kept';
+/** This browser's copy, for this computer only: another computer's copy reads as nothing kept. */
+export function readKept(host: string): Kept {
+  try { return fresh(JSON.parse(localStorage.getItem(KEY) ?? 'null'), host); } catch { return empty(host); }
+}
+/** Keeps the week and hands it back. When storage is full or blocked nothing is kept, and the live app still works. */
+export function writeKept(k: Kept): Kept {
+  try { localStorage.setItem(KEY, JSON.stringify(k)); } catch { /* nothing kept this time */ }
+  return k;
+}
+export function clearKept() {
+  try { localStorage.removeItem(KEY); } catch { /* nothing to clear */ }
+}

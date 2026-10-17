@@ -2070,7 +2070,7 @@ export const chiefHas = (view: OfficeView) => `Chief has ${view.counts.needs} th
 /** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
   const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, seat: 'waiting' as const, ask: undefined, status: line, step: '', steps: [] }));
-  return { ...view, chief: { ...view.chief, mood: 'rest', line }, lead: 'waiting', crew, needs: [], counts: { ...tally(crew, [], view.done) } };
+  return { ...view, chief: { ...view.chief, mood: 'rest', line }, lead: 'free', crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only

@@ -42,7 +42,7 @@ export function useOffice(state: Json, offline = false, signedOut = false): A.Of
     return () => { ears.delete(f); };
   }, []);
   const shown = live && sent ? A.sending(live, sent) : live;
-  return shown && offline ? A.officeAway(shown, 'The home computer is asleep') : shown;
+  return shown && offline ? A.officeAway(shown) : shown;
 }
 
 /** Phone width renders the grouped list, as the board's phone frame does: headings with dashed rules, rows with the
