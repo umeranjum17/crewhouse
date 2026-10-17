@@ -1,6 +1,6 @@
 // Crewhouse, direction C "Pocket Pals" with A's night mode and ASCII moments. Every screen reads the adapter's
 // plain-words view models (adapter.ts), never crewd's raw rows.
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
 import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json } from './api.ts';
@@ -1627,7 +1627,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
       {!paired && <Phones tick={tick} />}
 
       <div className="label">Look</div>
-      <div className="seg">{[['auto', 'Evenings dark'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
+      <div className="seg">{[['auto', 'Match my device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       <Money state={state} refresh={refresh} />
       <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
@@ -1938,13 +1938,18 @@ function Apps({ state, refresh }: Ctx) {
 function useLook() {
   const q = new URLSearchParams(location.search);
   const [look, setLookState] = useState(() => (q.has('night') ? 'night' : q.has('day') ? 'day' : localStorage.getItem('crewhouse.look') ?? 'auto'));
-  const [hour, setHour] = useState(new Date().getHours());
-  useEffect(() => { const t = setInterval(() => setHour(new Date().getHours()), 60_000); return () => clearInterval(t); }, []);
-  const night = look === 'night' || (look === 'auto' && (hour >= 19 || hour < 7));
+  // Auto follows the device's own dark setting, as the native app does, and switches live when it changes. The query
+  // lives in state so the browser keeps it, and its change listener, for as long as the app runs.
+  const [media] = useState(() => matchMedia('(prefers-color-scheme: dark)'));
+  const [dark, setDark] = useState(media.matches);
+  // Layout effect: subscribed in the same commit that paints, and re-read at once, so no change is missed in between.
+  useLayoutEffect(() => { const on = () => setDark(media.matches); on(); media.addEventListener('change', on); return () => media.removeEventListener('change', on); }, [media]);
+  const night = look === 'night' || (look === 'auto' && dark);
   setNight(night);
   useEffect(() => {
     document.documentElement.dataset.theme = night ? 'night' : 'day';
     document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#0C0C0B' : '#F3EEE3'); // the browser's bar and the phone's status bar
+    document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.setAttribute('content', night ? 'black-translucent' : 'default'); // iOS reads it at launch; kept in step with the look
   }, [night]);
   const setLook = (l: string) => { localStorage.setItem('crewhouse.look', l); setLookState(l); };
   return { look, setLook, night };
