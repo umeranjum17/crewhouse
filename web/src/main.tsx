@@ -1009,8 +1009,8 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   const head = (title: string) => <div className="sticky-top"><header className="chat-head">
     <a href="#/chief" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b></div></header></div>;
   if (tab === 'instructions') return <div className="page helper">{head('How Chief works for you')}<section className="detail rest-screen">
-    <p className="lead">Plain words Chief reads before every job. Only you change them.</p>
-    <h2 className="plate">Who Chief is</h2><div className="card"><ChatText text={page?.soul ?? ''} /></div>
+    <p className="lead">Plain words Chief reads before every reply. Only you change them.</p>
+    <h2 className="plate">Chief's personality</h2><ChiefSoul tick={ctx.tick} />
     <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
   if (list) return <div className="page helper">{head('Things')}<section className="detail rest-screen chief-profile">
     <div className="seg cp-seg" role="tablist" aria-label="Things">{THINGS.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} className={k === tab ? 'on' : ''}
@@ -1138,6 +1138,23 @@ function JobSection({ id, name, page, reload }: { id: string; name: string; page
     {writing && <div className="card form"><b>Tell me roughly what {name} should do</b><textarea className="input" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} />
       <button className="btn go" disabled={!idea.trim()} onClick={() => attempt(async () => { await api.draftJob(id, idea); setWriting(false); setIdea(''); reload(); }, 'Asked Chief to write it')}>Ask Chief</button></div>}
   </>;
+}
+
+/** Chief's personality: the engine reads it as its own SOUL.md on his next reply. The person writes it; Chief never does. */
+function ChiefSoul({ tick }: { tick: number }) {
+  const [page, setPage] = useState<Json>(null), [draft, setDraft] = useState<string | null>(null);
+  const load = useCallback(() => api.bot('chief').then(setPage).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const body = String(page?.soul ?? '').replace(/^# .*\n+/, ''), text = `# Chief\n\n${(draft ?? '').trim()}`, left = (page?.soulCap ?? 2000) - text.length;
+  if (draft === null) return <div className="card chief-soul"><ChatText text={body} />
+    <div className="btns"><button className="btn" onClick={() => setDraft(body)}>Change</button>
+      <button className="btn ghost" onClick={() => confirm('Put Chief back the way he started?') && attempt(async () => { await api.soulReset('chief'); await load(); }, 'Chief is back to how he started')}>Put back how Chief started</button></div></div>;
+  return <div className="card form chief-soul"><b>How should Chief talk to you?</b>
+    <p className="mute small">Plain words. Change what he calls you, his tone, anything. Your next message gets the new Chief.</p>
+    <textarea className="input" rows={14} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Chief's personality" />
+    <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
+    <div className="btns"><button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul('chief', text); setDraft(null); await load(); }, 'Saved')}>Save</button>
+      <button className="btn ghost" onClick={() => setDraft(null)}>Cancel</button></div></div>;
 }
 
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
@@ -1603,6 +1620,9 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
 
       <div className="label">You</div>
       <You state={state} act={act} plan={A.planName(accounts)} />
+      <div className="label" id="chief-soul">Chief's personality</div>
+      <p className="mute small">How Chief talks to you. Change it any time; his next reply follows it.</p>
+      <ChiefSoul tick={tick} />
       <Memory tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
@@ -1830,11 +1850,11 @@ function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknow
       <div className="row">
         <span className="initial">{(display || 'You')[0]}</span>
         <div className="grow"><b>{display || 'You'}</b>
-          <div className="mute small">{m.address ? `Chief calls you “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
+          <div className="mute small">{m.address ? `Chief greets you as “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
       </div>
       <label className="field">Your name
         <input className="input" value={name} placeholder="Your name" autoComplete="given-name" onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== named && act(() => api.person(m.id, { name }), 'Saved')} /></label>
-      <label className="field">Chief calls you
+      <label className="field">Chief greets you as
         <input className="input" value={address} placeholder="a name, or leave it to Chief" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }), 'Saved')} /></label>
       <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings you then; the crew keeps going on what's already OK.</div></span>
         <input type="checkbox" role="switch" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} /></label>

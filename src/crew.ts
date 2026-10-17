@@ -1359,7 +1359,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
-      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
+      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [], soul: disk.readSoul(this.cfg, CHIEF) };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
       (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
@@ -1984,7 +1984,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
         (p) => {
           const b = this.bot(String(p.bot ?? '').toLowerCase());
-          if (!b) throw fail(`no bot called ${p.bot}; see crew_roster`, 404);
+          if (!b || b.id === CHIEF) throw fail(b ? 'only the person changes your own personality, in Settings' : `no bot called ${p.bot}; see crew_roster`, 404);
           const body = String(p.text ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, ''), text = `# ${b.display}\n\n${body}`;
           if (!body || text.length > disk.SOUL_CAP) throw fail(`say it in a few lines, under ${disk.SOUL_CAP} characters`);
           return this.propose(CHIEF, `Chief suggests a change to how ${b.display} comes across`,
