@@ -2158,6 +2158,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             {l.from === 'note' ? <>
               {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
               {!!l.text && !l.by && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
+              {/* A delivered or kept file is a note too: its words, then its card. */}
+              {!l.text && !!l.about && <ChatText text={l.about} />}
+              {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
             </> : <View style={turn()}>
               <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
