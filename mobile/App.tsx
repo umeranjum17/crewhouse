@@ -1114,21 +1114,21 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
           </View>
         )}
         {lines.map((l, i) => l.who === 'you'
-          ? <View key={i} style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('You')}
+          ? <View key={i} style={s.line}><View style={turn()}>{speaker('You')}
             <View style={{ flex: 1, gap: 2 }}><T>{l.text}</T>{l.queued && <T tone="mute" style={s.small}>Queued, not sent yet</T>}</View></View></View>
           : l.stopped
-            ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
+            ? <View key={i} style={s.line} accessibilityLiveRegion="polite"><View style={turn()}>{speaker('Chief')}
               <View style={{ flex: 1, minWidth: 0, gap: 8 }}><T tone="ink2">{l.text}{retrySuffix(l) ? ' Retry?' : ''}</T>
                 {l.retry != null && <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry!, l.retryRid)} />}</View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>
-              {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} latest={i === newestLocal} /></View></View></View>}
+              {!!l.text && <View style={s.line}><View style={turn()}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} latest={i === newestLocal} /></View></View></View>}
               {l.doc && <PhoneDocCard doc={l.doc} disabled={offline} onOpen={() => setOpen(l.doc!)} />}
             </View>)}
-        {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
+        {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={turn()}>{speaker('Chief')}
           <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingTop: 6 }}>{[0, 1, 2].map((i) => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.ink2, opacity: reduce ? 0.5 : (beat + i) % 3 === 0 ? 0.8 : 0.35 }} />)}</View>
         </View></View>}
-        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={turn()}>{speaker('Chief')}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
       </ScrollView>
       {/* Pinned above the composer, so it shows however long the chat is. */}
       {offline && <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: t.sunken }} accessibilityLiveRegion="polite">
@@ -1949,8 +1949,11 @@ function DeskSheet({ desk, state, offline, canAct, go, refresh, onClose }: Ctx &
   </Modal>;
 }
 
-// A transcript's name column, wide enough for a name at the person's text size (60 at normal size).
-const nameCol = () => Math.round(60 * Math.min(PixelRatio.getFontScale(), 2));
+// A transcript turn: the name in a column beside the words (60 at normal size); at large text the name
+// goes above the words instead, so a reply keeps the screen's width.
+const stacked = () => PixelRatio.getFontScale() >= 1.3;
+const nameCol = () => stacked() ? undefined : Math.round(60 * PixelRatio.getFontScale());
+const turn = () => stacked() ? { gap: 2 } : { flexDirection: 'row' as const, gap: 10 };
 
 function ChatList({ state, go, mood }: { state: Json; go: Ctx['go']; mood?: art.Mood }) {
   const t = useLook();
@@ -2144,7 +2147,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             {l.from === 'note' ? <>
               {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
               {!!l.text && !l.by && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
-            </> : <View style={{ flexDirection: 'row', gap: 10 }}>
+            </> : <View style={turn()}>
               <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
@@ -2156,8 +2159,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             </View>}
           </View></motion.Rise></View>
         )}
-        {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}><T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
-        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
+        {echoed && <motion.Rise reduce={reduce}><View style={s.line}><View style={turn()}><T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View></motion.Rise>}
+        {!!partial && <View style={s.line} accessibilityLiveRegion="polite"><View style={turn()}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
         {ln && <LiveLine ln={ln} go={go} />}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
@@ -2186,7 +2189,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
   const open = ln.helper ? <Pressable onPress={() => go({ view: 'helper', id: ln.helper })} accessibilityRole="link" hitSlop={8}><T style={[s.small, s.b]}>Open {ln.who}'s chat ›</T></Pressable> : null;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? 'Waiting' : LIVE_WORD[ln.state];
-  if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
+  if (ln.took !== undefined) return <View style={s.line} accessibilityLiveRegion="polite"><View style={turn()}>
     <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
       <T tone="mute" style={s.small}>{ln.helper ? `${ln.who} · ` : ''}{word} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
@@ -2194,7 +2197,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
     </View>
   </View></View>;
   const doing = ln.todos.find((x) => x.state === 'doing');
-  return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${word}`} accessibilityLiveRegion="polite"><View style={{ flexDirection: 'row', gap: 10 }}>
+  return <View style={s.line} accessible accessibilityLabel={`${ln.who} is ${word}`} accessibilityLiveRegion="polite"><View style={turn()}>
     <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{ln.who}</T>
     <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
       <View style={[s.row, { gap: 6 }]}>
