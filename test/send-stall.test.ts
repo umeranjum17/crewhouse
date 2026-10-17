@@ -84,6 +84,11 @@ test('a stalled send says it is held, a failed one offers Retry, and Retry sends
   assert.equal(await words(), '', 'the words have left the box for the thread while it waits');
   assert.equal(await run("!!document.querySelector('.line.me.sending')"), true, 'the held words echo in the thread, marked sending');
 
+  // On a phone the held line sits above the box and never takes the box's row: the + , the words and Send stay in one row.
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  const layout = await run("(() => { const c = document.querySelector('.dock .composer'), l = c.querySelector('.send-away').getBoundingClientRect(), mid = (s) => { const b = c.querySelector(s).getBoundingClientRect(); return b.top + b.height / 2; }; return { above: l.bottom <= c.getBoundingClientRect().top, row: Math.abs(mid('textarea') - mid('.send')) < 4 && Math.abs(mid('textarea') - mid('.c-clip, .send')) < 4 }; })()");
+  assert.deepEqual(layout, { above: true, row: true }, 'the held line sits above the box, and the + , words and Send share one row on a phone');
+
   // The request fails: not sent, with a Retry, and the words are still there.
   await send('Fetch.failRequest', { requestId: held.requestId, errorReason: 'ConnectionFailed' });
   await until('the Not sent line', async () => /Not sent/.test(await line()), 10_000);
