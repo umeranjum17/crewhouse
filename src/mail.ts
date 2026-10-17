@@ -6,10 +6,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tool } from './engine.ts';
 import { writeBytes } from './files.ts';
-import { options, table } from './calendar.ts';
+import { GMAIL, options, table } from './calendar.ts';
 import type { MailSend } from './mail-send.ts';
-
-export const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 const HELP = [
   'mail                               unread count and the newest in the inbox', 'mail search "<gmail query>" [--limit 10]   e.g. from:school newer_than:7d',

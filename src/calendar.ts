@@ -4,8 +4,10 @@
 import { createHash } from 'node:crypto';
 import { tool } from './engine.ts';
 
-/** Google Calendar's REST API; its events scope is the one a Calendar connection already has. */
-export const CALENDAR = 'https://www.googleapis.com/calendar/v3';
+/** Google's own hosts. Only a test points them at its emulated Google, through the environment and on loopback alone. */
+export const GOOGLE = /^http:\/\/127\.0\.0\.1:\d+$/.exec(process.env.CREWHOUSE_GOOGLE_EMULATOR ?? '')?.[0];
+export const CALENDAR = `${GOOGLE ?? 'https://www.googleapis.com'}/calendar/v3`; // its events scope is the one a Calendar connection already has
+export const GMAIL = `${GOOGLE ?? 'https://gmail.googleapis.com'}/gmail/v1/users/me`;
 
 const HELP = [
   'calendar                      today, and what is next', 'calendar week [--from <day>]  seven days of events',

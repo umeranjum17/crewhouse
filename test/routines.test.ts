@@ -537,7 +537,7 @@ test('tell me when something\'s wrong: a routine that fails says so in Chief\'s 
 test('the digest reads today\'s calendar itself once Calendar is connected, and the share has a weekly line in thirds', async () => {
   const { db, crew, cfg, done } = setup();
   const { signInApp } = await import('./connect-fixture.ts');
-  const { CALENDAR } = await import('../src/connections.ts');
+  const { CALENDAR } = await import('../src/calendar.ts');
   await signInApp(crew.connections, 'calendar');
   const nine = new Date(); nine.setHours(9, 0, 0, 0);
   const real = globalThis.fetch;

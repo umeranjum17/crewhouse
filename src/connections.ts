@@ -7,10 +7,9 @@ import { googleClientFile } from '@byokit/connect/node';
 import { osKeyringSeal, writeFileAtomic, type Keystore } from '@byokit/secrets/node';
 import type { Config } from './config.ts';
 import { tool, type CrewTool } from './engine.ts';
-import { CALENDAR, calendarTool, events } from './calendar.ts';
+import { calendarTool, events } from './calendar.ts';
 import { mailTool } from './mail.ts';
 
-export { CALENDAR };
 export type App = Provider & { google?: boolean; warns?: boolean; tool?: (token: () => Promise<string | null>) => CrewTool };
 /** The kit's presets request one Google service at a time; Gmail stays read-only, filing lives beside it. */
 export const APPS: Record<string, App> = {
