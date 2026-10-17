@@ -261,7 +261,7 @@ export function fileTarget(f?: FileView): { href: string; chip: string } | null 
   if (!f) return null;
   const src = fileSource(f.url);
   const panel = (f.kind === 'sheet' || f.kind === 'page') && src;
-  return { href: panel ? `#/f/${src.bot}/${encodeURIComponent(src.path)}` : f.url,
+  return { href: panel ? `#/f/${src.bot}/${encodeURIComponent(src.path)}/${encodeURIComponent(f.name)}` : f.url,
     chip: (f.url.split('?')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? 'file').toUpperCase() };
 }
 
@@ -1529,7 +1529,10 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
       // phone's plainer card has no count, so it keeps them as `about`. A kept copy reads by the file's own name; the
       // card says "unlocked" on its sub line, so the name never grows a suffix that clips.
-      const card = /\.(xlsx|docx|pptx)$/i.test(f[1]), kept = text.startsWith('Kept '), name = kept ? words : undefined;
+      // A document's delivery line names it: "The <title> is ready: …" (crewd's own headline, documents.test.ts). The
+      // file's slug is only the fallback, so the card and its panel read the title the helper gave.
+      const card = /\.(xlsx|docx|pptx)$/i.test(f[1]), kept = text.startsWith('Kept '),
+        name = kept ? words : /\.docx$/i.test(f[1]) ? /^The (.+?) is ready[.:]/.exec(words)?.[1] : undefined;
       return { id: m.id, from: 'note', text: card || kept ? '' : words, about: card || kept ? words : undefined, files: [fileView(bot, f[1], checks.get(`${bot}|${f[1]}`), undefined, name)], choices: [], at: at0 };
     }
     // Another helper handing this one a job: a note in its words, "Reel asked: …".

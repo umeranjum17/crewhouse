@@ -19,14 +19,14 @@ import { remember, resume } from './resume.ts';
 type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
-type Route = { view: View; id?: string; tab?: string; m?: string; file?: string };
+type Route = { view: View; id?: string; tab?: string; m?: string; file?: string; title?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
   if (location.pathname === '/share') return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
-  const [a, b, c] = location.hash.replace(/^#\/?/, '').split('/');
+  const [a, b, c, d] = location.hash.replace(/^#\/?/, '').split('/');
   if (a === 'h' && b) return { view: 'helper', id: b, tab: ANCHOR.test(c) ? 'chat' : c || 'chat', m: ANCHOR.test(c) ? c : undefined };
-  // #/f/<helper>/<file>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
-  if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c) };
+  // #/f/<helper>/<file>/<title>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
+  if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c), title: d ? decodeURIComponent(d) : undefined };
   if (a === 'ask' && b) return { view: 'ask', id: b };
   if (a === 'pair' && demo) return { view: 'pair' };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
@@ -761,8 +761,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           <div id={`m${l.id}`} className={`line ${l.from}${l.event ? ' chat-event' : ''}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${l.id === reading ? ' reading' : ''}`}>
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
-            {l.files.map((f) => <Media key={f.url} f={f} big forget />)}
             {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestAnswer} /></div>)}
+            {l.files.map((f) => <Media key={f.url} f={f} big forget />)}
             {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
@@ -2047,7 +2047,7 @@ function App() {
   const crew = A.crew(ctx.state);
   const asks = ctx.live.counts.needs;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
-  const book = route.file && route.id ? { bot: route.id, path: route.file } : undefined;
+  const book = route.file && route.id ? { bot: route.id, path: route.file, title: route.title } : undefined;
   // The desk rail (B1): Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
   const rail: [string, string, IconName, number][] = [['#/', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Add to your crew', 'apps', 0]];
   const railOn = (h: string) => (h === '#/' ? ['home', 'chief'].includes(v.view) : h === `#/${v.view}`);
@@ -2084,7 +2084,7 @@ function App() {
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
-      {book && <PreviewPanel bot={book.bot} path={book.path} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
