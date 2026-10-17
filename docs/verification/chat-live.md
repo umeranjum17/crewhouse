@@ -11,6 +11,15 @@ words count as events); the next event clears it. No second clock. In the thread
 the helper's chat. The rules and their numbers are the bar (ch-chat-live-1 `bar.md`); `adapter.liveLine` builds it from
 `/ws` events only (docs/ui-contract.md).
 
+**The running turn keeps the line (chat quality map, row #1).** The line follows the job that is actually running
+(or waiting on the person), never the newest row: a second send while Chief works shows as a short "Next: …" row under
+his running job and does not restart its clock, and a routed helper's job finishing while Chief still works does not
+take his line. The clock counts the run, not the wait: it starts at `run.admitted` (falling back to `task.created` for
+a thread from before the kit's started event), so a queued job's wait never shows in "Done · N s". Prove it on the stub:
+`node --test test/chat-follows-run.test.ts` (a held Chief turn, a second send, and a "Penny, …" route), and in the real
+app with two sends while a turn is held — the running job keeps "Started on …" and its clock while the queued one reads
+"Next: …", at 390 and 1440, day and night, web and phone.
+
 **The doing mark (a turning ring).** The live line's doing row carries a small ring that turns while work is in
 progress (`web/src/styles.css` `@keyframes spin` on `li.doing .tick`, `mobile/src/motion.ts` `Ring`), not the old
 half-filled circle that read as clipped; done (✓) and todo (○) are unchanged. Reduce Motion holds the ring still — a

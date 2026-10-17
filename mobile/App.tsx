@@ -2179,6 +2179,7 @@ function LiveLine({ ln, go }: { ln: A.LiveLine; go: Ctx['go'] }) {
           : <T style={[s.small, { color: st.state === 'todo' ? t.ink2 : t.ok }]}>{TICK[st.state]}</T>}
         <T style={[s.small, { flex: 1, ...fw(st === doing ? '600' : '400'), color: st.state === 'todo' ? t.ink2 : t.ink }]}>{st.text}{st === doing && ln.state !== 'waiting' && Date.now() - st.at > 20_000 ? ' · still on it' : ''}</T>
       </View>)}
+      {!!ln.next && <T tone="mute" style={s.small}>Next: {ln.next}</T>}
       {!!ln.detail.length && <Pressable onPress={() => setOpenDetail((v) => !v)} accessibilityRole="button" hitSlop={8}>
         <T tone="mute" style={s.small}>{openDetail ? 'Hide the small steps' : `Show the small steps (${ln.detail.length})`}</T></Pressable>}
       {openDetail && ln.detail.map((st) => <View key={`${st.at}-${st.text}`} style={[s.row, { gap: 6, alignItems: 'flex-start' }]}>

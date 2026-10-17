@@ -1000,6 +1000,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .live-todos li.doing .tick { width: 12px; height: 12px; margin: 4px 0 0; display: inline-block; box-sizing: border-box; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; animation: spin 900ms linear infinite; }
 .live-line.working .live-todos li.doing .tick { color: var(--ok-ink); }
 .live-todos li.todo { color: var(--mute); }
+.live-next { margin: 0; padding-left: 24px; font: 400 13px/18px var(--ui); color: var(--mute); overflow-wrap: anywhere; }
 .live-detail summary { font: 500 13px/18px var(--ui); color: var(--mute); cursor: pointer; }
 .live-detail ol { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
 .live-detail li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; font: 400 13px/18px var(--ui); color: var(--mute); overflow-wrap: anywhere; }
@@ -1701,6 +1702,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .live-todos li { grid-template-columns: 16px minmax(0, 1fr); gap: 0; align-items: baseline; font: 400 13px/18px var(--ui); color: var(--ink2); text-wrap: pretty; }
   .chat .live-todos li.doing { color: var(--ink); }
   .chat .live-todos li.todo { color: var(--mute); }
+  .chat .live-next { padding-left: 16px; font: 400 13px/18px var(--ui); }
   .chat .live-todos li .tick, .chat .live-line.working .live-todos li.doing .tick { display: block; box-sizing: border-box; width: 9px; height: 9px; margin: 0; border-radius: 50%; font-size: 0; color: inherit; }
   .chat .live-todos li.done .tick { border-radius: 0; background: var(--ink2); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 9'%3E%3Cpath d='M1 4.8 3.4 7.2 8 1.8' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 9px 9px no-repeat; }
   /* A real spinner: a faint full track with an ink half turning on it (Main1808); still, it reads as a half-filled ring. */
