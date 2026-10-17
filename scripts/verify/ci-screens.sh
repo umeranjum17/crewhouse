@@ -46,7 +46,9 @@ frames=("$OUT"/*.png)
 if [ ${#frames[@]} -eq 0 ]; then
   echo "ci-screens: no frame was captured" >&2; exit 1
 fi
-if [ -z "$BASE" ] || ! ls "$BASE"/*.png > /dev/null 2>&1; then
+baseline=()
+[ -z "$BASE" ] || baseline=("$BASE"/*.png) # nullglob: no PNG leaves the array empty, not the literal pattern
+if [ ${#baseline[@]} -eq 0 ]; then
   echo "no baseline: main has no screens artifact yet, so ${#frames[@]} frames were captured and none compared" > "$FRAMES"
 else
   : > "$FRAMES"
