@@ -2021,15 +2021,22 @@ function App() {
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
+  const answered = useRef(false); // the computer has answered this visit, with state or with no authority
   const { look, setLook, night } = useLook();
+  // The kept week stands in, read-only, and says when it was last heard. Nothing kept, nothing shown.
+  const showKept = () => {
+    const k = keptWeek();
+    if (!k.state) return;
+    heard.current ||= k.at;
+    setState((cur: Json) => cur ?? k.state);
+    setOffline(true);
+  };
   const refresh = useCallback(() => {
-    api.state().then((s) => { setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); })
+    api.state().then((s) => { answered.current = true; setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); })
       .catch((e) => {
         // No authority is the plain screen, never a kept copy served as if it were live.
-        if (trouble(e) === 'noauth') { setState(null); setNoauth(true); setOffline(false); return; }
-        // Out of reach with nothing on screen yet: the kept week stands in, read-only, and says when it was last heard.
-        const k = keptWeek();
-        if (k.state) { heard.current ||= k.at; setState((cur: Json) => cur ?? k.state); }
+        if (trouble(e) === 'noauth') { answered.current = true; setState(null); setNoauth(true); setOffline(false); return; }
+        showKept();
         setOffline(true);
       });
     setTick((t) => t + 1);
@@ -2039,12 +2046,15 @@ function App() {
     addEventListener('hashchange', onHash);
     remember(); // the opening place (a link or shortcut) is remembered too
     refresh();
+    // Boot shows the kept copy at once when the computer has not answered within a second; a live answer that comes sooner
+    // replaces nothing, so the kept copy never flashes.
+    const grace = setTimeout(() => { if (!answered.current) showKept(); }, 1000);
     let pending: any;
     // Streamed words are not a change of state: refreshing on each would hold the refresh off until the reply ends.
     const stop = subscribe((e) => { hear(e); if (e.kind === 'reply.partial') return; clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
-    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); };
+    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); clearTimeout(grace); };
   }, [refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) { toast('Back in touch with the home computer ✓'); void mintFiles(); } wasOffline.current = offline; }, [offline]);
