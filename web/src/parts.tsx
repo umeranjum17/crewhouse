@@ -382,19 +382,18 @@ function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null, deck
   return count ? `${kind} · ${deck ? slideWords(count) : pageWords(count)}` : kind;
 }
 
-/** A page's peek: its first heading that is not the title said twice, over a grey line for each of the next few parts,
- *  each as long as the words it stands for. A written page (.md) reads the same way from its own lines. */
+/** A page's peek: its first heading that is not the title said twice, then the first few lines under it, as written. A
+ *  written page (.md) reads the same way from its own lines. */
 function pagePeek(name: string, doc: DocView | null, text: string | null) {
   const parts: DocPart[] = doc?.parts ?? (text ?? '').split('\n').filter((l) => l.trim())
     .map((l) => ({ kind: /^#/.test(l) ? 'heading' : 'p', text: l.replace(/^[#>*\-\s]+/, '') }));
   const at = parts.findIndex((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(name));
-  const bars = parts.slice(at + 1).filter((p) => p.kind !== 'heading').slice(0, 4)
-    .map((p) => (p.kind === 'table' ? 100 : Math.min(100, 30 + (p.text ?? '').length / 2)));
-  return { head: at < 0 ? '' : parts[at].text ?? '', bars };
+  const lines = parts.slice(at + 1).filter((p) => p.kind === 'p' || p.kind === 'li').slice(0, 3).map((p) => p.text ?? '');
+  return { head: at < 0 ? '' : parts[at].text ?? '', lines };
 }
 
 /** The card's peek inside: a sheet's top-left corner as a small grid, tinted the way the panel is, or a page's heading
- *  over its lines. Nothing to peek at yet (still opening, or empty) shows nothing. */
+ *  over its first lines as written. Nothing to peek at yet (still opening, or empty) shows nothing. */
 export function Thumb({ name, book, doc, deck, text }: { name: string; book: Workbook | null; doc: DocView | null; deck: DeckView | null; text: string | null }) {
   const s = book?.sheets[0];
   if (s && [s.head, ...s.rows].some((r) => r.some(Boolean))) {
@@ -404,12 +403,11 @@ export function Thumb({ name, book, doc, deck, text }: { name: string; book: Wor
       <i key={`${j}-${c}`} className={s.roles[j]?.[c] || (j ? undefined : 'head')}>{r[c] ?? ''}</i>))}</span>;
   }
   const first = deck?.slides[0];
-  const page = first ? { head: first.title, bars: first.lines.slice(0, 4).map((l) => Math.min(100, 30 + l.length / 2)) }
-    : doc || text ? pagePeek(name, doc, text) : null;
-  if (!page || (!page.head && !page.bars.length)) return null;
+  const page = first ? { head: first.title, lines: first.lines.slice(0, 3) } : doc || text ? pagePeek(name, doc, text) : null;
+  if (!page || (!page.head && !page.lines.length)) return null;
   return <span className="wb-thumb leaf" aria-hidden>
     {page.head && <b>{page.head}</b>}
-    {page.bars.map((w, i) => <i key={i} style={{ width: `${w}%` }} />)}
+    {page.lines.map((l, i) => <span key={i} className="ln">{l}</span>)}
   </span>;
 }
 
@@ -420,7 +418,7 @@ export function PreviewCard({ f, big, forget }: { f: FileView; big?: boolean; fo
   const src = fileSource(f.url);
   const about = aboutFile(f, book, doc, deck);
   const card = (
-    <a className={`wb-card${big ? ' big' : ''}`} href={`#/f/${src?.bot ?? ''}/${encodeURIComponent(src?.path ?? '')}`} aria-label={`Open ${f.name}`}>
+    <a className={`wb-card${big ? ' big' : ''}`} href={fileTarget(f)?.href} aria-label={`Open ${f.name}`}>
       <Thumb name={f.name} book={book} doc={doc} deck={deck} text={text} />
       <span className={`wb-ic wb-${f.kind}`} aria-hidden>{src?.path.split('.').pop()?.toUpperCase().slice(0, 4)}</span>
       <span className="grow wb-what">
@@ -525,11 +523,11 @@ function SlideBody({ deck }: { deck: DeckView }) {
  * tables; a deck is one frame per slide. On a desk it is a panel beside the chat it came from; on a phone it is the
  * whole screen. Reading edits nothing, and Download hands over the file itself.
  */
-export function PreviewPanel({ bot, path, onClose }: { bot: string; path: string; onClose: () => void }) {
+export function PreviewPanel({ bot, path, title, onClose }: { bot: string; path: string; title?: string; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(box, onClose);
-  const f = fileView(bot, path);
+  const f = fileView(bot, path, undefined, undefined, title);
   const { book, doc, deck, text } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];

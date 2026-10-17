@@ -81,6 +81,9 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.deepEqual(delivered.map((d) => d.path), [rel]);
   assert.match(delivered[0].note, /^The Front-desk handbook is ready: /, 'the card line names the result, not a section count');
   assert.doesNotMatch(delivered[0].note, /A document in|\b\d+ sections?\b/);
+  // The chat card names the document as the helper titled it, not by its file slug (front-desk-handbook.docx).
+  const card = A.lines(crew.botPage('quill'), 'quill', crew.snapshot()).flatMap((l) => l.files).find((f) => /\.docx$/.test(f.url));
+  assert.equal(card?.name, 'Front-desk handbook', 'the card and its panel read the delivered title');
 
   const view = await crew.documentView('quill', rel);
   assert.equal((view as any).parts.length, 9);
@@ -183,7 +186,7 @@ test('a helper makes a deck in its own chat: the .pptx lands in files/, is deliv
   // The app's own reading of it: a written page the app opens in its panel, and a deck the panel draws as slides.
   const f = A.fileView('quill', rel);
   assert.ok(A.deckFile(f), 'a .pptx is a deck, not a document');
-  assert.equal(A.fileTarget(f)?.href, `#/f/quill/${encodeURIComponent(rel)}`, 'a deck opens the read-only panel, never the raw file');
+  assert.equal(A.fileTarget(f)?.href, `#/f/quill/${encodeURIComponent(rel)}/${encodeURIComponent(f.name)}`, 'a deck opens the read-only panel, never the raw file');
   assert.deepEqual(A.deck(view, f.name).slides.map((s) => s.title), ['Weekend away', 'What to pack', 'Costs']);
   assert.equal(A.slideWords(3), '3 slides');
 });
