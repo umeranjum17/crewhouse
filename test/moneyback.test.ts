@@ -13,6 +13,19 @@ const { toolBin } = await import('../src/tools.ts');
 const task = (db: any, id: number) => db.get('SELECT * FROM tasks WHERE id = ?', id);
 const state = (db: any, id: number) => task(db, id).state;
 
+// Gmail, stood in for: an inbox that answers, because a connect is only connected once the app has been read.
+const { GMAIL } = await import('../src/mail.ts');
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (url: any, init: any = {}) => {
+  if (!String(url).startsWith(GMAIL)) return realFetch(url, init);
+  const path = new URL(String(url)).pathname.replace('/gmail/v1/users/me', '');
+  const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status });
+  if (init.headers?.authorization !== 'Bearer tok') return json({}, 401);
+  if (path === '/labels/INBOX') return json({ id: 'INBOX', name: 'INBOX', threadsUnread: 3 });
+  if (path === '/threads') return json({ threads: [], resultSizeEstimate: 0 });
+  return json({}, 404);
+}) as typeof fetch;
+
 const fakeBin = (dir: string, ...names: string[]) => {
   mkdirSync(dir, { recursive: true });
   for (const b of names) { writeFileSync(join(dir, b), '#!/bin/sh\necho "fake $0 $*"\n'); chmodSync(join(dir, b), 0o755); }

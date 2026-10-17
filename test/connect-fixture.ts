@@ -22,6 +22,6 @@ export async function signInApp(connections: Connections, id: string, access = '
     callback.searchParams.set('state', new URL(flow.url!).searchParams.get('state')!);
     callback.searchParams.set('code', 'test-code');
     const words = await connections.finish(callback);
-    if (!words.includes('is connected.')) throw new Error(words);
+    if (!words.includes('is connected,')) throw new Error(words);
   } finally { await new Promise<void>((resolve, reject) => server.close((e) => e ? reject(e) : resolve())); }
 }
