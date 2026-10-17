@@ -1,5 +1,6 @@
 // The phone-width chat keeps the box usable with the keyboard up (web/src/styles.css, web/src/parts.tsx Composer): with the
 // box focused, the header's helmet, switch and "What happened" step aside, and a real press on Send keeps focus in the box.
+// A photo picked in the box shrinks before it is sent (web/src/parts.tsx `shrinkPhoto`): an oversized PNG becomes a JPG chip.
 // Measured in a real Chromium on the ?demo chat at 390px touch. Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ const built = spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' };
 
-test('the phone chat keeps the box and the header steps aside while typing', { skip: !bin && 'no Chromium here' }, async () => {
+test('the phone chat keeps the box usable, and a photo picked there goes as a shrunk JPEG', { skip: !bin && 'no Chromium here' }, async () => {
   assert.equal(built.status, 0, built.stderr);
   const server = createServer((q, s) => {
     const p = decodeURIComponent(new URL(q.url ?? '/', 'http://x').pathname).replace(/\.\.+/g, '');
@@ -86,4 +87,12 @@ test('the phone chat keeps the box and the header steps aside while typing', { s
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at.x, y: at.y, button: 'left', clickCount: 1 });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
   assert.equal(await run(`document.activeElement === ${box}`), true, 'focus stays in the box after a press on Send');
+
+  // A photo over the 10 MB a file may be is no longer refused: it shrinks to a JPEG chip under a megabyte.
+  const pngBytes = await run(`(async () => { const c = document.createElement('canvas'); c.width = 3000; c.height = 2000; const g = c.getContext('2d'), d = g.createImageData(3000, 2000);
+    for (let i = 0; i < d.data.length; i += 1) d.data[i] = Math.random() * 255; g.putImageData(d, 0, 0);
+    const png = await new Promise((r) => c.toBlob(r, 'image/png')); const dt = new DataTransfer(); dt.items.add(new File([png], 'photo.png', { type: 'image/png' }));
+    const input = ${box}.closest('form').querySelector('input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); return png.size; })()`);
+  assert.ok(pngBytes > 10 << 20, 'the photo is over the 10 MB a file may be, so the raw path would refuse it');
+  await until('the photo chip', () => run("[...document.querySelectorAll('.home-chat .c-file')].some((c) => /^photo\\.jpg/.test(c.textContent) && /JPG · \\d+ KB/.test(c.textContent))"), 30_000);
 });
