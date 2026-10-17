@@ -1,7 +1,7 @@
 # status-one-source: one status per member, the same word and count on every screen
 
 Every crew member has one status, and Chief has his own; every screen reads it from `web/src/adapter.ts`
-(`statusOf` per helper, `chiefStatus` for Chief, `summaryOf` for the count line, `GROUP_TITLES` for the Office
+(`statusOf` per helper, `chiefStatus` for Chief, `summaryOf` for the count line, `GROUP_TITLES` for the
 groups). No screen keeps a word table of its own. The words (`A.WORDS`):
 
 | Status | Word | Counted as |
@@ -20,12 +20,12 @@ person's yes in Chief's thread (draft, routine, hire, a stuck helper's Stop card
 ## Surfaces that must agree
 
 Chief's header (`.ch-status`, the phone/iPad hero), the desk rail (`.side-status`, `.side-seat`, `.side-sub`), the live
-line (`.live-word`), Office (`.p-state`, `.office-counts`, the phone groups), Chats (`.chat-row` lines and badges),
-`#/crew`, and the native app (`mobile/src/crew-status.ts`, `mobile/src/office.tsx`, `mobile/App.tsx`).
+line (`.live-word`), Home (`.st-pill` on each crew card, `.st-label` counts, Chief's `.sh-chief` title), the `#/crew`
+tiles, and the native app (`mobile/src/office.tsx`, `mobile/App.tsx`).
 
 The phone's Chief header keeps Chief's status word whole at every text size. At the largest text the name and the
 status can no longer share the gear's line, so `ChiefHero` (`mobile/App.tsx`) wraps the status under the name
-(`width / fontScale < 360`, `ChatList`'s own rule) instead of letting `numberOfLines` cut "Needs you" to "Needs ."
+(`width / fontScale < 360`) instead of letting `numberOfLines` cut "Needs you" to "Needs ."
 (the single-dot cut `nativeCut` now fails). Drive: on an owned emulator at the system's largest `font_scale`,
 `look-check.mjs android` Chief's thread, light and dark — both must pass, and by eye "Needs you" reads whole beside
 the gear (`test/fixtures/chief-header-truncated.*` is that capture).
@@ -33,7 +33,7 @@ the gear (`test/fixtures/chief-header-truncated.*` is that capture).
 ## Drive (real crewd, stub engine)
 
 Launch per runbook.md with `CREWHOUSE_STUCK_MS=15000`; `POST /api/onboard {"address":"Umer"}`,
-`POST /api/recruit {"template":"scout","name":"Scout"}`. Capture `#/chief` and Office (`[data-mode=office]`) at each
+`POST /api/recruit {"template":"scout","name":"Scout"}`. Capture `#/chief` and Home (`#/`) at each
 moment with `scripts/verify/screens.sh`, and read the words above from the DOM at 1440 and 390:
 
 1. Idle: Chief `Free` in the header and on the rail; Scout `Free`; the count line `0 waiting · 0 at work · 0 done · 2 free`.
@@ -42,7 +42,7 @@ moment with `scripts/verify/screens.sh`, and read the words above from the DOM a
 4. `[tool crew_routine {"bot":"scout","when":"every day 9:00","task":"…"}]` to Chief: the routine card makes Chief
    `Needs you` (header, rail, badge, Chats ring) and the count line counts him as 1 waiting; deny it.
 5. "ask permission to find hotels for next week" to Scout, wait 15 s (Scout still `At work` with its working line on Chats,
-   the rail and Office; Chief `Needs you` for the Stop card), then `POST /api/bots/scout/reset`: Scout `Free` on the rail and in the count line, never `1 resting`.
+   the rail and Home's crew card; Chief `Needs you` for the Stop card), then `POST /api/bots/scout/reset`: Scout `Free` on the rail and in the count line, never `1 resting`.
 6. "Compare the two phone plans, hit every limit" to Chief: the job pauses; Chief `Waiting`, the strip "Your ChatGPT
    is resting until …" (a limit pauses the job, never switches account), and the count line counts Chief as waiting.
 

@@ -59,12 +59,12 @@ a second leaves no "Done · 0 s" row. The composer is a round +, a grey pill wit
 The Home header is Muse's, compact: the helmet as a soft 3D figure (`.ch-art img.helmet`, `art.helmetSoft`: a lit
 ceramic shell, a glass visor, glowing eyes and a soft contact shadow on the pill; the same white shell in day and night, no
 disc, its left rounded to a whole pixel) at the top centre, overlapping a one-line pill with Chief and his status, the round gear on
-its line, then the Chief | Office switch as a borderless pill track across the column, and the day line right under
+its line, then the day line right under
 it (no band). A thread page's head is the name alone. Sign-in choices are one list of plain rows
 (`.ai-picks .btn`). A fresh helper shows at most three starters. A desk keeps the named transcript and the card's
 buttons in a row (`.more-dots` hidden).
 
-- **Check.** At 360, 390 and 430 over Hello, Home, Office, fresh, first, a helper, Settings, an ask, Apps and Things
+- **Check.** At 360, 390 and 430 over Hello, Home, Your crew, fresh, first, a helper, Settings, an ask, Apps and Things
   (`?demo` variants): no text box wider than its clip parent, nothing painted past the screen edge, no document
   scroll, and every `pre.art.helmet` has `role="img"`. In `?demo` Chief's thread at 390, `.chat .card.ask .more-act`
   is not displayed and each card shows one `.btn.go` and one `.more-dots` (`test/office.test.ts` "a phone card is one
@@ -79,7 +79,7 @@ every face, header and hero, never a flat bar. On web each `.face img.ink` has `
 `naturalWidth / naturalHeight` (`test/office.test.ts` "your crew reads whole" probes every row at 390 and 1440, day
 and night). The native app lays `art.helmetDots` on the art's own cell (`art.CELL`, 10:16, the same as `helmetSvg`):
 round dots, whole device pixels, rows `CELL` times as far apart as columns. `scripts/verify/look-check.mjs android` measures
-it on every helmet on screen ("stretched" fails past 3%): run it on Chief chat, Office, `^Settings$>>^Your crew$` and
+it on every helmet on screen ("stretched" fails past 3%): run it on Chief chat, Home, `^Settings$>>^Your crew$` and
 `^Settings$>>^Routines$` paired (`phone-pairing.md`), and on the phone-only hero, at its largest font, day and
 night. A black band outside the phone's own status bar (the clock
 shifted with it) is the viewer or a system shrink mode, not the app: the app cannot move the status bar.

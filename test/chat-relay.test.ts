@@ -56,6 +56,8 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
   if (evidence) mkdirSync(evidence, { recursive: true });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await send('Page.navigate', { url: `${base}/?day#person=${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}` });
+  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await run('location.hash = "#/chief"');
   await until('Chief\'s box and opening overlay gone', () => run("!!document.querySelector('.chat .dock textarea') && !document.querySelector('.splash')"), 30_000);
   const relays: string[] = [];
   for (const [slug, reply] of [
@@ -85,7 +87,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
       writeFileSync(join(evidence, `${slug}.json`), JSON.stringify({ reply, relay, chief: await api('GET', '/api/bots/chief'), scout: await api('GET', '/api/bots/scout') }, null, 2));
       for (const width of [390, 1440]) for (const theme of ['day', 'night']) {
         await send('Emulation.setDeviceMetricsOverride', { width, height: width < 600 ? 844 : 900, deviceScaleFactor: 1, mobile: width < 600 });
-        await send('Page.navigate', { url: `${base}/?${theme}#/` });
+        await send('Page.navigate', { url: `${base}/?${theme}#/chief` });
         await until('relay after theme change and opening overlay gone', async () => (await screen()).includes(relay) && await run("!document.querySelector('.splash')"), 15_000);
         await run('document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))');
         const geometry = await run(`(() => { const e = [...document.querySelectorAll('.chat .lines p')].find(e => e.innerText === ${JSON.stringify(relay)}); const box = e?.closest('.lines'); if (box) box.scrollTop = box.scrollHeight; window.scrollTo(0,0); const r = e?.getBoundingClientRect(); return { text:e?.innerText, rect:r?.toJSON(), width:innerWidth, height:innerHeight }; })()`);

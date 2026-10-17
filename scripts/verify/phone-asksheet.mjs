@@ -67,12 +67,11 @@ const newAsk = async () => { for (let t = 0; t < 40; t++) { const x = (await sta
 await denyAll(); // one ask at a time
 if (!(await state()).bots?.some?.((x) => x.id === 'reel')) await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' }).catch(() => {});
 
-// 1. The sheet: a helper's own ask (a file write outside its space) reaches it through Office -> the helper's desk -> Review
+// 1. The sheet: a helper's own ask (a file write outside its space) reaches it through the helper's card on Home -> its desk -> Review
 // (the phone has no Needs you pin). Two answer buttons, the standing answer only as a link, and nothing answers on a timer.
 await api('POST', '/api/bots/reel/messages', { text: `save it [tool crew_write ${JSON.stringify({ path: join(LAB, 'home', 'Documents', 'lease-note.txt'), content: 'lease note' })}]` });
 const ask = await newAsk(); say(`ask open on the computer: ${ask.title}`);
-await waitFor(/^Office$/, 30000); tap(/^Office$/);
-await waitFor(/^Reel/, 30000); shot('20-office-ask.png'); tap(/^Reel/);
+await waitFor(/^Reel/, 30000); shot('20-home-ask.png'); tap(/^Reel/);
 await waitFor(/^Review$/, 15000); tap(/^Review$/);
 await waitFor(/^Yes, go ahead$/, 15000); await sleep(800); shot('21-asksheet.png');
 const sheet = nodes().filter((n) => n.b[1] > 1500); // the sheet sits over the lower half of the desk

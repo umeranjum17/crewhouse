@@ -204,7 +204,7 @@ known defect with its crop.
 ```bash
 L=scripts/verify/look-check.mjs; export EVIDENCE_HOME=<your approved-mocks folder>   # mocks resolve there
 node $L web --out "$EV/look" --person "$LAB/state/person.key" chief-chat="$B/#/chief" crew="$B/#/crew"
-node $L web --out "$EV/look" --then "document.querySelector('[data-mode=office]')?.click()" office="$WEB/?demo=office"
+node $L web --out "$EV/look" home="$WEB/?demo=office"
 SERIAL=<your emulator> node $L android --out "$EV/look" --then 'Settings>>Your crew' crew   # taps reach the screen
 node $L shot --out "$EV/look" phone-shot=/path/to/phone-shot.png   # someone else's shot: strips and mock only
 ```
@@ -283,7 +283,7 @@ pixels:
 # Launch scoped, before the first open of the run: the browser keeps this Chrome
 # answering CDP so the recorder can screencast it. Use Chrome's own CDP port.
 export CHROME_DEVTOOLS_AXI_CHROME_ARGS="--remote-debugging-port=$CDP_PORT"
-node scripts/verify/record.mjs "http://127.0.0.1:$CDP_PORT" "$B/" "$EV/motion/office-switch.webm" > "$EV/motion/record.log" 2>&1 &
+node scripts/verify/record.mjs "http://127.0.0.1:$CDP_PORT" "$B/" "$EV/motion/home-to-chief.webm" > "$EV/motion/record.log" 2>&1 &
 REC=$!
 # Poll record.log for RECORDING: with a deadline and check that REC is alive.
 # Drive the interaction with the current browser ref, then wait for its outcome.
@@ -294,7 +294,7 @@ wait "$REC"
 It prints the frame count and the span (first paint to last, so a settled screen is a
 short clip); fewer than two frames means nothing moved or the wrong page was recording —
 fix that, never file the empty clip. Record the interaction
-a person performs (a tap, a send, the Chat↔Office switch), not a synthetic animation.
+a person performs (a tap, a send, Home's Chief card opening his thread), not a synthetic animation.
 Reduce Motion (`chrome-devtools-axi emulate`, or `?demo=calm`) is its own case: with motion
 off the screen must still say what changed.
 
@@ -318,7 +318,7 @@ off the screen must still say what changed.
   behaviour, not a fifth capture.
 
 **PR body.** Name the evidence folder and the files (`screens/hello-night-1440.png`,
-`motion/office-switch.webm`, …). Media is never committed; a public repo links the private
+`motion/home-to-chief.webm`, …). Media is never committed; a public repo links the private
 evidence page.
 
 ## Cleanup

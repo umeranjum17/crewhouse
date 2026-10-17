@@ -136,7 +136,7 @@ test('the app is built', () => {
 test('a draft with a link: both ask surfaces read Copy and open, copy the words the person sees, and open the link', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   // The card in the thread, with the person's edit.
-  await b.open('demo=chase&day');
+  await b.open('demo=chase&day#/chief');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   // Scout wrote the draft; Chief carries its decision in the opening chat.
   assert.deepEqual(await pressYes(b, EDIT), { copied: [EDIT], opened: [LINK] });
@@ -151,7 +151,7 @@ test('a draft with a link: both ask surfaces read Copy and open, copy the words 
 
 test('an answered card leaves a receipt line in the thread, and the card is gone', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
-  await b.open('demo=chase&day');
+  await b.open('demo=chase&day#/chief');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   await pressYes(b, '');
   await until('the receipt in the thread', () => b.run("!!document.querySelector('.home-chat .lines .card.answered')"), 10_000);

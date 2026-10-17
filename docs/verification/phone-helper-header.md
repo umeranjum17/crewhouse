@@ -10,12 +10,11 @@ name and role keep the full width. At normal text the boxes and the header's hei
 ## Drive
 
 1. Your own emulator (never the test phone: this changes density, font scale and theme), a lab crewd on the stub
-   engine, the release APK installed and paired ([phone-pairing.md](phone-pairing.md)); a helper recruited so
-   Chats has a second row.
+   engine, the release APK installed and paired ([phone-pairing.md](phone-pairing.md)); a helper (Reel) recruited.
 2. `SERIAL=<serial> node scripts/verify/look-check.mjs android --out <dir> --then
-   'Office>>reveal:^CHATS$>>^Reel$' helper-chat` — exit 0 clean, day and night, no hits. The density and font scale
+   '^Reel$>>^Open Reel.s chat$' helper-chat` — exit 0 clean, day and night, no hits. The density and font scale
    it sets recreate the activity, so the taps drive that fresh start to the helper's chat. How to reach the screen
-   by hand, and why the Office *panel* is not the row to tap, are in [phone-composer.md](phone-composer.md).
+   by hand is in [phone-composer.md](phone-composer.md).
 
 ## Prove it
 

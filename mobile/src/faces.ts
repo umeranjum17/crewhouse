@@ -1,4 +1,4 @@
-// Written by scripts/icons.mjs: Chief and every critter (web/src/art.ts) in each face mode, keyed `${who}-${mode}`.
+// Written by scripts/icons.mjs: Chief and every Geo face (web/src/art.ts) in each face mode, keyed `${who}-${mode}`.
 // Metro needs literal requires.
 export const FACES: Record<string, number> = {
   'chief-here': require('../assets/pals/chief-here.png'),
@@ -13,6 +13,10 @@ export const FACES: Record<string, number> = {
   'scribe-needs': require('../assets/pals/scribe-needs.png'),
   'scribe-think': require('../assets/pals/scribe-think.png'),
   'scribe-rest': require('../assets/pals/scribe-rest.png'),
+  'tracer-here': require('../assets/pals/tracer-here.png'),
+  'tracer-needs': require('../assets/pals/tracer-needs.png'),
+  'tracer-think': require('../assets/pals/tracer-think.png'),
+  'tracer-rest': require('../assets/pals/tracer-rest.png'),
   'reel-here': require('../assets/pals/reel-here.png'),
   'reel-needs': require('../assets/pals/reel-needs.png'),
   'reel-think': require('../assets/pals/reel-think.png'),
@@ -21,10 +25,6 @@ export const FACES: Record<string, number> = {
   'support-needs': require('../assets/pals/support-needs.png'),
   'support-think': require('../assets/pals/support-think.png'),
   'support-rest': require('../assets/pals/support-rest.png'),
-  'tracer-here': require('../assets/pals/tracer-here.png'),
-  'tracer-needs': require('../assets/pals/tracer-needs.png'),
-  'tracer-think': require('../assets/pals/tracer-think.png'),
-  'tracer-rest': require('../assets/pals/tracer-rest.png'),
   'xgrowth-here': require('../assets/pals/xgrowth-here.png'),
   'xgrowth-needs': require('../assets/pals/xgrowth-needs.png'),
   'xgrowth-think': require('../assets/pals/xgrowth-think.png'),

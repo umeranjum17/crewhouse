@@ -368,7 +368,7 @@ try {
         // The theme rides in the query before the route's hash (screens.sh's rule).
         const [base, hash = ''] = url.split('#'), u = `${base}${base.includes('?') ? '&' : '?'}${theme}${hash ? `#${hash}` : ''}`;
         await go(u);
-        if (THEN) { await run(app, `async () => (${THEN})`); await settle(); } // a screen behind an in-memory switch (Office)
+        if (THEN) { await run(app, `async () => (${THEN})`); await settle(); } // a screen behind taps (a helper's chat, a sheet)
         // Read every size before writing any: computed styles are live, so em sizes would compound.
         await run(app, (k) => { const all = [...document.querySelectorAll('body, body *')].map((e) => { const cs = getComputedStyle(e); return [e, cs.fontSize, cs.lineHeight]; });
           for (const [e, f, l] of all) { e.style.setProperty('font-size', `${parseFloat(f) * k}px`, 'important'); if (l !== 'normal') e.style.setProperty('line-height', `${parseFloat(l) * k}px`, 'important'); } }, text);
