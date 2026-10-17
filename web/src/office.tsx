@@ -31,8 +31,8 @@ export const glowOf = (c: A.OfficeMember, v: A.OfficeView): Glow => {
 /** The office view: the snapshot, moved by live events until the next refresh starts it again. Home reads it once
  *  and hands it to the panels, so they can never disagree. While the home computer is out of reach nobody claims
  *  to be busy. */
-export function useOffice(state: Json, offline = false): A.OfficeView | null {
-  const view = useMemo(() => (state ? A.office(state) : null), [state]);
+export function useOffice(state: Json, offline = false, signedOut = false): A.OfficeView | null {
+  const view = useMemo(() => (state ? A.office(state, { signedOut }) : null), [state, signedOut]);
   const [live, setLive] = useState(view);
   useEffect(() => setLive(view), [view]);
   useEffect(() => {

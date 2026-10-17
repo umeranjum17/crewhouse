@@ -173,8 +173,9 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
  *  the account this computer was signed in to, else ChatGPT), every other provider the kit offers one tap away under
  *  "Use another account". The links a provider owns (its own site, its plans) sit under its own branch; no
  *  provider's name is written into another's card. */
-/** The thread sign-in card's flag, shared with the phone header so the two cannot drift. */
-export const NEEDS_SIGNIN = 'Needs a sign-in';
+/** The thread sign-in card's flag lives in the adapter (A.NEEDS_SIGNIN), shared with the header and the chats row so
+ *  the two cannot drift; re-exported here for the card and the app shell. */
+export { NEEDS_SIGNIN } from './adapter.ts';
 export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | null; inChat?: boolean; onReady: () => void }) {
   const [signing, setSigning] = useState<Window | null | false>(sheet === 'signin' ? null : false);
   const [signKey, setSignKey] = useState<string | null>(null);
@@ -197,7 +198,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   );
   return (
     <div className="card ask">
-      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{NEEDS_SIGNIN}</div></div></div>
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{A.NEEDS_SIGNIN}</div></div></div>
       <p className="ask-words">{g.recovery || ('keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
       <div className="ai-picks">{pick(ai, 'btn go')}</div>
       <details className="more-ways">

@@ -56,7 +56,7 @@ type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void;
 
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in.
  *  The sign-in wait is the thread card's own test (AccountCard: no account ready to think with), once accounts are known. */
-function chiefLocal(ctx: Ctx, listen = false): A.ChiefLocal {
+function chiefLocal(ctx: Pick<Ctx, 'accounts' | 'offline'>, listen = false): A.ChiefLocal {
   const g = A.aiList(ctx.accounts).mine[0].g;
   return { offline: ctx.offline, listen, signedOut: !!ctx.accounts && (g.state !== 'ready' || g.notIncluded) };
 }
@@ -172,8 +172,8 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
 }
 
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
-function Chats({ state, desk }: { state: Json; desk?: boolean }) {
-  const crew = A.crew(state), list = A.chats(state);
+function Chats({ state, desk, local }: { state: Json; desk?: boolean; local?: A.ChiefLocal }) {
+  const crew = A.crew(state), list = A.chats(state, local);
   // The desk feed shows the two most recent (B1). A helper gone quiet is Chief's ask, in his row and thread, never a
   // card under the helper's own row: a crew row only ever carries its one status.
   const [all, setAll] = useState(false);
@@ -379,6 +379,9 @@ let homeMode: HomeMode = 'chat';
 
 function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
   const { state, live, refresh, tick, accounts } = ctx;
+  // The header's own sign-in fact (chiefLocal): the chats list reads the same one, so no row says "at work"
+  // beside a header that says "Needs a sign-in" (ch-signin-wait-truth).
+  const signedOut: A.ChiefLocal = { signedOut: chiefLocal(ctx).signedOut && !ctx.offline };
   const [mode, setMode] = useState(homeMode);
   // `#/chief` is Home with Chief's chat open: the same screen as `#/`, never a second one (Main2036).
   useEffect(() => { if (ctx.chat) { homeMode = 'chat'; setMode('chat'); } }, [ctx.chat]);
@@ -411,14 +414,14 @@ function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
         <Office state={state} live={live} night={ctx.night} />
         <div className="phone-only">
           <OnItNow live={live} />
-          <Chats state={state} /><JobList state={state} phone refresh={refresh} />
+          <Chats state={state} local={signedOut} /><JobList state={state} phone refresh={refresh} />
         </div>
       </div>
       <aside className="feed desk-only" aria-label="What's going on">
         <div className="feed-list">
           {tonight()}
           <OnItNow live={live} />
-          <Chats state={state} desk />
+          <Chats state={state} desk local={signedOut} />
           <JobList state={state} few refresh={refresh} />
         </div>
         <div className="feed-ask"><Composer placeholder="Ask Chief anything…" onSend={toChief} {...typeInto('chief')} chips={A.ideas(state).map((i: Json) => ({ label: i.ask.trim(), ask: i.ask }))} /></div>
@@ -547,7 +550,7 @@ function cardFor(c: A.Card, h: Helper | undefined, state: Json, refresh: () => v
   const id = `ask${c.id}`; // the thread lands on the newest open ask by this id when a footer would push it off the top
   return c.kind === 'connect' ? <ConnectCard key={c.id} id={id} c={c} helper={h?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} id={id} c={c} who={h} onDone={refresh} />;
 }
-function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
+function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
   const [page, setPage] = useState<Json>(null);
   const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
   const [partial, setPartial] = useState('');
@@ -580,9 +583,12 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
   }), [id]);
   const crewNames = A.crew(state);
+  // The card's own sign-in test silences the live line too (ch-signin-wait-truth): while no account is ready, Chief's
+  // thread shows the card, never an "at work" row above it, so thread and header say one thing.
+  const signedOut = id === 'chief' && chiefLocal({ accounts, offline }).signedOut;
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
-    sent: waiting && pending ? pending.at : undefined }) : null;
+    sent: waiting && pending ? pending.at : undefined, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
@@ -1994,7 +2000,8 @@ function App() {
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
   // The office's one state source (A.office, moved by live events): Home's room, header, tray, feed and the rail read it.
-  const live = useOffice(state, offline);
+  // `signedOut` is the app's own accounts fact (the sign-in card's test), so the office counts Chief by it too.
+  const live = useOffice(state, offline, chiefLocal({ accounts, offline }).signedOut && !offline);
   const ctx: Ctx | null = useMemo(() => (state && live ? { state, live, tick, refresh, night, offline, accounts } : null), [state, live, tick, refresh, night, offline, accounts]);
 
   // The home-screen icon carries Chief's count of what waits on the person's yes (web/src/pwa.ts), as his rail badge does.
