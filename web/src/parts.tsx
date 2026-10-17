@@ -40,18 +40,20 @@ export function ChatText({ text, latest }: { text: string; latest?: boolean }) {
 }
 
 // ---------- toasts ----------
-const listeners = new Set<(m: string) => void>();
-/** A short line at the foot of the screen: "Sent", "Connecting apps comes with the next update". */
-export const toast = (m: string) => listeners.forEach((l) => l(m));
+type Said = { m: string; act?: { label: string; run: () => void } };
+const listeners = new Set<(s: Said) => void>();
+/** A short line at the foot of the screen: "Sent", "Connecting apps comes with the next update". `act` adds one tap
+ *  ("Reload"), and the line then stays a little longer so there is time to tap it. */
+export const toast = (m: string, act?: Said['act']) => listeners.forEach((l) => l({ m, act }));
 export function Toasts() {
-  const [m, setM] = useState('');
+  const [s, setS] = useState<Said | null>(null);
   useEffect(() => {
     let t: any;
-    const l = (x: string) => { setM(x); clearTimeout(t); t = setTimeout(() => setM(''), 3200); };
+    const l = (x: Said) => { setS(x); clearTimeout(t); t = setTimeout(() => setS(null), x.act ? 12_000 : 3200); };
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return m ? <Toast>{m}</Toast> : null;
+  return s ? <Toast>{s.m}{s.act && <> · <a href="#" onClick={(e) => { e.preventDefault(); s.act!.run(); }}>{s.act.label}</a></>}</Toast> : null;
 }
 /** Every toast sits in one place, never over the words: just above the box you type in where the screen has one,
  *  else in a bar along the foot of the screen, with room left below the page so its end clears the bar. */
