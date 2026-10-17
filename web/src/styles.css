@@ -1771,6 +1771,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    composer and the feed boxes would otherwise squeeze the words and the line side by side. */
 .home-chat .composer.has-bar:has(.send-failed), .home-office .composer.has-bar:has(.send-failed),
 .chat .dock .composer:has(.send-failed) { flex-wrap: wrap; }
+/* Picked files take the same row above the words: on the phone's one-row composer they pushed the box and Send off the screen. */
+.home-chat .composer.has-bar:has(.c-files), .chat .dock .composer:has(.c-files) { flex-wrap: wrap; }
+.home-chat .composer > .c-files, .chat .dock .composer > .c-files { order: -2; }
 
 /* Chief's profile, one page (mock profile-b): a tight header, so Take control shows whole on the first phone screen. */
 a.ch-art, .ch-name a { color: inherit; text-decoration: none; }

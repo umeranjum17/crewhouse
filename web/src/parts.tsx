@@ -679,14 +679,37 @@ const HOLD_MS = 4000;
 /** A file waiting to send: the picker's own name and size for its chip, its bytes for crewd (which names it itself). */
 type Pick = { name: string; type: string; size: number; data: string };
 const PICK_ACCEPT = '.pdf,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.webp';
-/** Read the picked files as base64 for crewd; one too big is left out with a toast, never sent half-read. */
-const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map((f) => new Promise<Pick | null>((resolve) => {
-  if (f.size > 10 << 20) { toast(`“${f.name}” is too big; try one under 10 MB.`); resolve(null); return; }
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const readBase64 = (b: Blob) => new Promise<string>((resolve, reject) => {
   const r = new FileReader();
-  r.onload = () => resolve({ name: f.name, type: f.type, size: f.size, data: String(r.result ?? '').split(',')[1] ?? '' });
-  r.onerror = () => resolve(null);
-  r.readAsDataURL(f);
-}))).then((ps) => ps.filter((p): p is Pick => !!p?.data));
+  r.onload = () => resolve(String(r.result ?? '').split(',')[1] ?? '');
+  r.onerror = () => reject(r.error);
+  r.readAsDataURL(b);
+});
+/** A photo made small enough for the link, as the phone makes it (mobile/App.tsx `shrink`): about 1280 px wide, JPEG at
+ *  quality 0.6, never upscaled. Redrawing it drops the EXIF block, so where the photo was taken goes too. Null when the
+ *  browser can't decode the photo, and the caller keeps the raw file. */
+async function shrinkPhoto(f: File): Promise<Pick | null> {
+  const bmp = await createImageBitmap(f).catch(() => null);
+  if (!bmp) return null;
+  const k = Math.min(1, 1280 / bmp.width), c = document.createElement('canvas'), g = c.getContext('2d');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  if (!g) { bmp.close(); return null; }
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); // a PNG's clear pixels would come out black as a JPEG
+  g.drawImage(bmp, 0, 0, c.width, c.height); bmp.close();
+  const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/jpeg', 0.6));
+  if (!blob) return null;
+  return { name: f.name.replace(/\.[^.]*$/, '') + '.jpg', type: 'image/jpeg', size: blob.size, data: await readBase64(blob) };
+}
+/** One picked file for crewd: a photo shrinks, anything else (or a photo that won't decode) goes as it is, and one too
+ *  big is left out with a toast, never sent half-read. */
+const pickOne = async (f: File): Promise<Pick | null> => {
+  const shrunk = PHOTO_TYPES.includes(f.type) ? await shrinkPhoto(f).catch(() => null) : null;
+  if (shrunk) return shrunk;
+  if (f.size > 10 << 20) { toast(`“${f.name}” is too big; try one under 10 MB.`); return null; }
+  return readBase64(f).then((data) => ({ name: f.name, type: f.type, size: f.size, data })).catch(() => null);
+};
+const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map(pickOne)).then((ps) => ps.filter((p): p is Pick => !!p?.data));
 
 /** A send handler's answer for words kept for the person, not sent and not failed (Hello asks for a name first): the box
  *  gets them back, with no Not sent line. */
