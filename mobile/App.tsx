@@ -29,6 +29,7 @@ import { useShareIntent } from 'expo-share-intent';
 import { qrMatrix } from '@byokit/ui-core';
 import * as motion from './src/motion';
 import { MARKS, WHERE } from './src/marks';
+import { FACES } from './src/faces';
 import { fw } from './src/font';
 import { askOf, sharedOf } from './src/ask';
 import { BUBBLE_DP, bubbleOff, bubbleOn, bubbleResume, bubbleState, bubbleWords, openBubblePermission, showCrew, useBubbleEdge, wanted, type OverlayState } from './src/bubble';
@@ -123,8 +124,8 @@ export default function App() {
   );
 }
 
-// ---------- the mascots, as dots ----------
-/** `cell`: how much taller than wide each cell is (art.CELL for a helmet); the dot stays round in its middle. `d` snaps
+// ---------- dot pictures and faces ----------
+/** `cell`: how much taller than wide each cell is; the dot stays round in its middle. `d` snaps
  *  to whole device pixels so every dot is the same size and the rows keep one pitch, even at a few pixels a dot. */
 function Dots({ rows, pal, d: raw, crisp = false, cell = 1 }: { rows: art.Bitmap; pal: art.Palette; d: number; crisp?: boolean; cell?: number }) {
   const d = PixelRatio.roundToNearestPixel(raw) || 1 / PixelRatio.get();
@@ -138,14 +139,10 @@ function Dots({ rows, pal, d: raw, crisp = false, cell = 1 }: { rows: art.Bitmap
     </View>
   );
 }
-/** Chief or a helper in dots (art.helmetDots): the phone sets no text in mono, so the shading rides on dot
- *  opacity. Every helper wears the same small helmet; `whole` draws all of it. `size` is its width: the dots sit on the
- *  art's own cell (art.CELL), so the head keeps its 5:4 box and nothing squashes it. */
-function Ink({ who, mood = 'idle', size, whole, wave }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
-  const t = useLook();
-  const cols = whole ? 30 : 20;
-  const { rows, pal } = art.helmetDots(cols, art.helmetOf(mood), t.night, 0);
-  return <Dots rows={rows} pal={pal} d={size / cols} cell={art.CELL} />;
+/** Chief or a helper as its critter (web/src/art.ts, drawn to PNGs by scripts/icons.mjs). `size` is its width, in the
+ *  5:4 box the old helmet filled, so no layout moves. */
+function Ink({ who, mood = 'idle', size }: { who: art.Kind | 'chief'; mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
+  return <Image source={FACES[`${who}-${art.faceOf(mood)}`]} style={{ width: size, height: size * 0.8 }} resizeMode="contain" accessibilityIgnoresInvertColors />;
 }
 function ChiefArt({ mood = 'idle', size, whole, wave }: { mood?: art.Mood; size: number; whole?: boolean; wave?: boolean }) {
   return <Ink who="chief" mood={mood} size={size} whole={whole} wave={wave} />;
@@ -158,13 +155,13 @@ function Face({ who, size = 44, mood, row }: { who: A.Helper | 'chief' | { kind:
   return (
     <View style={{ width: size, height: size, borderRadius: size, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       backgroundColor: chief && t.night ? '#2A2622' : row ? rowDisc(t, chief ? undefined : who.kind) : t.surface, borderWidth: ring ? 2 : 0, borderColor: ring === 'needs' ? t.pink : t.green }}>
-      <Ink who={chief ? 'chief' : who.kind} mood={chief ? mood : who.mood} size={size * 0.52} />
+      <Image source={FACES[`${chief ? 'chief' : who.kind}-${art.faceOf(chief ? mood : who.mood)}`]} style={{ width: size, height: size }} accessibilityIgnoresInvertColors />
     </View>
   );
 }
 /** A face's disc on a list row, itself the raised surface (web/src/parts.tsx discOf): one step down by day, the
  *  surface tinted with the pal's own colour by night. */
-const rowDisc = (t: Look, kind?: art.Kind) => t.night ? (kind ? mix(art.PALS[kind].soft, t.surface, 0.16) : '#2A2622') : t.soft;
+const rowDisc = (t: Look, kind?: art.Kind) => t.night ? (kind ? mix(art.PALS[kind].bg, t.surface, 0.16) : '#2A2622') : t.soft;
 /** The dot colour for a tone: the app's own ok green, wait pink, off grey, plus the crew rail's
  *  colours (danger red, amber, ink, and work — the rail's hollow ink ring). */
 function pillDot(t: Look, tone: 'ok' | 'wait' | 'off' | 'danger' | 'amber' | 'ink' | 'work') {
@@ -1689,7 +1686,7 @@ function NeedsRows({ state, cards, open, few = 3 }: { state: Json; cards: A.Card
       {shown.map((c, i) => (
         <Pressable key={c.id} style={[s.listRow, { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line }]}
           onPress={() => open(c)} accessibilityLabel={c.head}>
-          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'bunny', name: c.helper }} size={36} />
           <View style={{ flex: 1 }}><T style={s.rowTitle} lines={1}>{c.head}</T><T tone="ink2" style={s.small} lines={1}>{c.words}</T></View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}><T tone="mute" style={s.time}>{A.briefTime(c.at)}</T><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.pink }} /></View>
         </Pressable>
@@ -1996,7 +1993,7 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
   return <View><Label>Hand me a job</Label><View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>
     {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
-      <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'pip', name: j.bot }} size={28} />
+      <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'bunny', name: j.bot }} size={28} />
       <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.says && <T tone="mute" style={s.small} lines={1}>{j.says}</T>}{!!j.needs.length && <T tone="mute" style={s.small}>{A.jobNeeds(j.needs)}</T>}</View><T tone="mute">›</T>
     </Pressable>)}
   </View></View>;

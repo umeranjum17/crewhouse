@@ -167,50 +167,47 @@ export function Ink({ svg, w, label, className = '' }: { svg: string; w: number;
   return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
 
-/** Chief, head and shoulders (`whole` for all of him, the mock rail's 38-column grid). `d` keeps the old 14-dot footprint,
- *  so callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink,
- *  and the think-scan while he works. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean; rail?: boolean }) {
-  const flash = useChangeBlink(!!hero, mood);
-  const mode = art.helmetOf(flash ? 'blink' : mood);
-  const beat = useTicker(140, !!hero && mode === 'think');
-  const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
-  // The phone header's mascot (as Muse heads a thread): the helmet drawn smooth, a character, not a pixel icon.
-  const pal = night ? color.night : color.day;
-  if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.helmetSoft(mode, { night, beat, eye: mode === 'needs' ? pal.pink : mode === 'rest' ? pal.mute : undefined, scan: pal.pink })} />;
-  // The desk rail's helmet: the whole 38-column head as rects at a fixed width, so the person's text size never
-  // rescales it — text art would grow with it and clip under its mask. Sized by width alone, like every Ink face.
-  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.helmetSvg(38, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined })} />;
-  return <pre className="art helmet" data-mode={mode} style={whole ? undefined : { fontSize: d }} role="img" aria-label="Chief">{
-    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
-  </pre>;
-}
-export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean; live?: boolean }) {
-  const mode = art.helmetOf(mood);
-  // A working helper's scan line moves (the Office panels pass live); every other helmet is still, and Reduce Motion
-  // runs none (useTicker). The eyes still light blue when needed, shut at rest: that is the mood, not motion.
-  const beat = useTicker(140, !!live && mode === 'think');
-  const cells = useMemo(() => art.helmet(14, mode, night, beat), [mode, beat]);
-  return <pre className="art helmet" data-mode={mode} style={{ fontSize: d }} role="img" aria-label={name ?? kind}>{
-    cells.map((row, y) => <div key={y}>{row.map((c, x) => c.eye ? <i key={x} className="eye">{c.ch}</i> : c.scan ? <i key={x} className="scan">{c.ch}</i> : c.ch)}</div>)}
-  </pre>;
+/** A critter (art.critter) in the box the text helmet filled: `cols` art-font columns (0.6em each) by half as many
+ *  lines, so the slot's font size, and every rule that sets it, still sizes the face and no layout moves. */
+function Critter({ who, mode, cols, beat, label, d }: { who: art.Kind | 'chief'; mode: art.FaceMode; cols: number; beat: number; label: string; d?: number }) {
+  const svg = useMemo(() => art.critter(who, mode, { night, beat, aspect: 1.2 }), [who, mode, beat]);
+  return <img className="art helmet" data-mode={mode} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} alt={label} draggable={false}
+    style={{ display: 'block', width: `${cols * 0.6}em`, height: `${Math.round(cols / 2)}em`, fontSize: d }} />;
 }
 
-/** A round face: Chief or a helper, with a ring when it's working or needs you. The helmet is drawn
- *  as rects (art.helmetSvg: the same cells, eyes and scan as the chat's text helmet), because text
- *  glyphs shrink to noise below ~9px and these faces sit at 20-64px. */
-/** A face's disc. It stays neutral in both themes: the board leaves pastel colour out. Night tints the
- *  raised surface faintly and seats Chief on warm dark; day seats every face on the raised surface, or one step
- *  down on a `row` that is itself raised (the Chats list, mock 2). */
-export const discOf = (who: 'chief' | { kind: art.Kind }, row = false) => night ? (who === 'chief' ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].soft} 16%, var(--solid))`) : row ? color.day.sunken : color.day.surface;
+/** Chief, head and shoulders (`whole` for the mock rail's 38-column box). `d` keeps the old 14-dot footprint, so
+ *  callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink, and
+ *  reads along while he works. */
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean; rail?: boolean }) {
+  const flash = useChangeBlink(!!hero, mood);
+  const mode = art.faceOf(flash ? 'blink' : mood);
+  const beat = useTicker(140, !!hero && mode === 'think');
+  // The phone header's mascot and the desk rail keep their boxes (52 px at 100:92, 200 px at 5:4), sized by width
+  // alone like every Ink face, so the person's text size never rescales them.
+  if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.critter('chief', mode, { night, beat, aspect: 100 / 92 })} />;
+  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.critter('chief', mode, { night, beat, aspect: 1.25 })} />;
+  return <Critter who="chief" mode={mode} cols={whole ? 38 : 24} beat={beat} label="Chief" d={whole ? undefined : d} />;
+}
+export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean; live?: boolean }) {
+  const mode = art.faceOf(mood);
+  // A working helper's eyes read along a line (the Office panels pass live); every other face is still, and Reduce Motion
+  // runs none (useTicker). The mood still shows in the eyes and mouth: that is the mood, not motion.
+  const beat = useTicker(140, !!live && mode === 'think');
+  return <Critter who={kind} mode={mode} cols={14} beat={beat} label={name ?? kind} d={d} />;
+}
+
+/** A round face: Chief or a helper, with a ring when it's working or needs you. The critter is its own disc. */
+/** A face's disc, under the critter's own: neutral in both themes. Night tints the raised surface faintly and seats
+ *  Chief on warm dark; day seats every face on the raised surface, or one step down on a `row` that is itself raised
+ *  (the Chats list, mock 2). */
+export const discOf = (who: 'chief' | { kind: art.Kind }, row = false) => night ? (who === 'chief' ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].bg} 16%, var(--solid))`) : row ? color.day.sunken : color.day.surface;
 export function Face({ who, size = 44, ring = '', row }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
-  const chief = who === 'chief';
-  const soft = discOf(who, row);
-  const mode = art.helmetOf(chief ? chiefMood : who.mood);
-  const svg = useMemo(() => art.helmetSvg(24, mode, { night, ink: mode === 'rest' ? (night ? color.night.mute : color.day.mute) : undefined }), [mode]);
+  const chief = who === 'chief', look = chief ? 'chief' : who.kind;
+  const mode = art.faceOf(chief ? chiefMood : who.mood);
+  const svg = useMemo(() => art.critter(look, mode, { night }), [look, mode]);
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size, background: soft }}>
-      <Ink svg={svg} w={Math.round(size * 0.52)} label={chief ? 'Chief' : who.name} />
+    <span className={`face ${ring}`} style={{ width: size, height: size, background: discOf(who, row) }}>
+      <Ink svg={svg} w={size} label={chief ? 'Chief' : who.name} />
     </span>
   );
 }

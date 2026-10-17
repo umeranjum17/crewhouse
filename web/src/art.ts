@@ -1,4 +1,4 @@
-// The mascot family as data: dot bitmaps for Chief, the pals and the logo, and the ASCII brand moments
+// The mascot family as data: the critters (Chief's and every helper's face), dot bitmaps for the logo, and the ASCII brand moments
 // (the block-letter boot splash, Chief's laptop, confetti). Framework-free, so the Expo app draws the same art:
 // a bitmap is an array of equal-width strings, '.' is an unlit dot, any other letter indexes a palette.
 
@@ -17,25 +17,24 @@ function draw(w: number, h: number, ...layers: [number, number, string[]][]): Bi
   return out.map((r) => r.join(''));
 }
 
-// ── The helmet: Chief and every helper wear one, drawn in density characters with a dark visor (the Term-look
-// mascot). mode: here | needs | think | rest (rest = eyes shut). Ported from the look board's static generator:
-// the same squircle (x⁴+y⁴), visor, eyes and think-scan math; only the markup became cells, so the web (<pre>),
-// the phone (dots) and the icon script (rects) all draw the same head. ──
-export const RAMP = ' .:-=+*#%@';
-export type HelmetMode = 'here' | 'needs' | 'think' | 'rest';
-export const HELMET_MODES: HelmetMode[] = ['here', 'needs', 'think', 'rest'];
-/** Every app mood wears one of the helmet's four moods (via the five poses: work thinks, pleased sits here). */
-export const helmetOf = (m: Mood | Pose | HelmetMode = 'idle'): HelmetMode => {
+// ── Every face wears one of four modes: here | needs | think | rest (rest = eyes shut). ──
+export type FaceMode = 'here' | 'needs' | 'think' | 'rest';
+export const FACE_MODES: FaceMode[] = ['here', 'needs', 'think', 'rest'];
+/** Every app mood wears one of the four face modes (via the five poses: work thinks, pleased sits here). */
+export const faceOf = (m: Mood | Pose | FaceMode = 'idle'): FaceMode => {
   if (m === 'here' || m === 'needs' || m === 'think' || m === 'rest') return m;
   const p = poseOf(m);
   return p === 'needs' ? 'needs' : p === 'work' ? 'think' : p === 'rest' ? 'rest' : 'here';
 };
+// ── The helmet: the old mascot in density characters with a dark visor, still drawn by the app icon, favicon,
+// notification glyph and phone bubble (scripts/icons.mjs) until those get Chief's critter. ──
+export const RAMP = ' .:-=+*#%@';
 export type HelmetCell = { ch: string; eye?: true; scan?: true };
 /** One cell's height over its width: a mono glyph at line-height 1, helmetSvg's 10×16. The head fills a 5:4 box only
- *  when every drawing keeps it, so the phone's dots sit on this pitch too. */
+ *  when every drawing keeps it. */
 export const CELL = 1.6;
 /** The helmet as cells: ' ' is bare canvas, eye/scan cells wear the mood colour. */
-export function helmet(cols: number, mode: HelmetMode = 'here', night = true, beat = 0): HelmetCell[][] {
+export function helmet(cols: number, mode: FaceMode = 'here', night = true, beat = 0): HelmetCell[][] {
   const rows = Math.round((cols * 0.8) / CELL);
   const scan = ((beat % 24) / 23) * 1.8 - 0.9;
   const grid: HelmetCell[][] = [];
@@ -66,21 +65,8 @@ export function helmet(cols: number, mode: HelmetMode = 'here', night = true, be
   }
   return grid;
 }
-/** The helmet as plain text rows, for the web's <pre className="art">. */
-export const helmetText = (cols: number, mode: HelmetMode = 'here', night = true, beat = 0): string[] =>
-  helmet(cols, mode, night, beat).map((r) => r.map((c) => c.ch).join(''));
-/** The helmet as a dot bitmap for the phone's Dots path (no mono text on the phone): one dot per character, laid
- *  CELL times as far apart down as across, the letter its density step, 'e' an eye and 's' the think-scan. Opacity carries the shading. */
-export function helmetDots(cols: number, mode: HelmetMode = 'here', night = true, beat = 0, eye = night ? '#ececec' : '#1d1b18'): { rows: Bitmap; pal: Palette } {
-  const ink: [number, number, number] = night ? [236, 236, 236] : [29, 27, 24];
-  const pal: Palette = { e: mode === 'needs' ? '#0a84ff' : eye, s: '#0a84ff' };
-  for (let k = 1; k < RAMP.length; k++) pal[String(k)] = `rgba(${ink[0]},${ink[1]},${ink[2]},${(0.2 + 0.8 * (k / (RAMP.length - 1))).toFixed(2)})`;
-  const rows = helmet(cols, mode, night, beat).map((r) => r.map((c) =>
-    c.ch === ' ' ? '.' : c.eye ? 'e' : c.scan ? 's' : String(Math.max(1, RAMP.indexOf(c.ch)))).join(''));
-  return { rows, pal };
-}
 /** The helmet as rects, for scripts/icons.mjs: no font needed, the same head at any size. */
-export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: boolean; beat?: number; ink?: string; eye?: string; scan?: string; bg?: string; cw?: number; ch?: number } = {}): string {
+export function helmetSvg(cols: number, mode: FaceMode = 'here', o: { night?: boolean; beat?: number; ink?: string; eye?: string; scan?: string; bg?: string; cw?: number; ch?: number } = {}): string {
   const night = o.night ?? true, ink = o.ink ?? (night ? '#ececec' : '#1d1b18');
   const eye = o.eye ?? (mode === 'needs' ? '#0a84ff' : ink), scan = o.scan ?? '#0a84ff';
   const cw = o.cw ?? 10, chh = o.ch ?? 16, cells = helmet(cols, mode, night, o.beat ?? 0);
@@ -94,143 +80,94 @@ export function helmetSvg(cols: number, mode: HelmetMode = 'here', o: { night?: 
   return s + '</svg>';
 }
 
-/** The same helmet as a soft 3D figure (the phone header's mascot): helmet()'s squircle shell, visor and eyes
- *  as layered vector shapes — a ceramic shell lit from the top left (its key light, a bounce from below, a soft form
- *  shadow and a specular), a recessed glass visor with a reflection, and eyes that glow. One material in both themes, as
- *  a real object; day adds a faint outline so the light shell keeps its edge on the paper. Sharp at any pixel ratio. */
-export function helmetSoft(mode: HelmetMode = 'here', o: { night?: boolean; beat?: number; eye?: string; scan?: string } = {}): string {
-  const X = (x: number) => (50 + 48 * x).toFixed(2), Y = (y: number) => (46 + 48 * y).toFixed(2);
-  const shell = Array.from({ length: 96 }, (_, i) => {
-    const t = (i / 96) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
-    return `${X(Math.sign(c) * Math.abs(c) ** 0.5)},${Y((Math.sign(s) * Math.abs(s) ** 0.5) / 1.08)}`;
-  }).join(' ');
-  const eye = o.eye ?? '#EAF4FF', shut = mode === 'rest', eh = shut ? 4.8 : 16.3, scan = ((((o.beat ?? 0) % 24) / 23) * 1.8 - 0.9);
-  const vx = X(-0.76), vy = Y(-0.22), vw = (48 * 1.52).toFixed(2), vh = (48 * 0.6).toFixed(2);
-  const lit = (body: string, glow: boolean) => (glow ? `<g filter="url(#gl)" opacity="0.85">${body}</g>` : '') + body;
-  const eyes = mode === 'think' ? lit(`<rect x="${X(scan - 0.035)}" y="${vy}" width="3.4" height="${vh}" fill="${o.scan ?? '#0a84ff'}"/>`, true)
-    : lit([-0.34, 0.34].map((x) => `<rect x="${X(x - 0.11)}" y="${(46 + 48 * 0.08 - eh / 2).toFixed(2)}" width="10.56" height="${eh}" rx="${shut ? 2.4 : 5.28}" fill="${eye}"/>`).join(''), !shut);
-  const g = (id: string, a: string, stops: [number, string, number?][]) => `<${a.startsWith('x') ? 'linear' : 'radial'}Gradient id="${id}" ${a}>`
-    + stops.map(([k, c, op = 1]) => `<stop offset="${k}" stop-color="${c}" stop-opacity="${op}"/>`).join('') + `</${a.startsWith('x') ? 'linear' : 'radial'}Gradient>`;
-  return `<svg viewBox="0 0 100 92" xmlns="http://www.w3.org/2000/svg"><defs>`
-    + g('k', 'cx="0.3" cy="0.2" r="0.95"', [[0, '#FFFFFF'], [0.4, '#ECEBE7'], [0.78, '#B9B7B1'], [1, '#8F8D87']])
-    + g('e', 'cx="0.5" cy="0.5" r="0.56"', [[0.72, '#000', 0], [1, '#000', 0.24]])
-    + g('b', 'cx="0.62" cy="1.08" r="0.5"', [[0, '#FFFFFF', 0.7], [1, '#FFFFFF', 0]])
-    + g('f', 'x1="0" y1="0" x2="0" y2="1"', [[0.5, '#000', 0], [1, '#000', 0.2]])
-    + g('s', 'cx="0.5" cy="0.5" r="0.5"', [[0, '#FFFFFF'], [0.45, '#FFFFFF', 0.8], [1, '#FFFFFF', 0]])
-    + g('v', 'x1="0" y1="0" x2="0" y2="1"', [[0, '#55534E'], [1, '#FFFFFF']])
-    + g('q', 'x1="0" y1="0" x2="0" y2="1"', [[0, '#34363C'], [0.55, '#15161A'], [1, '#0A0A0C']])
-    + `<filter id="gl" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="2.2"/></filter>`
-    + `<clipPath id="c"><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="13"/></clipPath></defs>`
-    + `<polygon points="${shell}" fill="url(#k)"${o.night ? '' : ' stroke="#1D1B18" stroke-opacity="0.16" stroke-width="0.8"'}/>`
-    + `<polygon points="${shell}" fill="url(#f)"/><polygon points="${shell}" fill="url(#e)"/><polygon points="${shell}" fill="url(#b)"/>`
-    + `<ellipse cx="29" cy="15" rx="13" ry="5.5" transform="rotate(-24 29 15)" fill="url(#s)"/>`
-    + `<rect x="${(+vx - 1.6).toFixed(2)}" y="${(+vy - 1.6).toFixed(2)}" width="${(+vw + 3.2).toFixed(2)}" height="${(+vh + 3.2).toFixed(2)}" rx="14.6" fill="url(#v)"/>`
-    + `<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="13" fill="url(#q)"/>${eyes}`
-    + `<ellipse cx="44" cy="${(+vy + 1).toFixed(2)}" rx="34" ry="7" fill="#FFFFFF" opacity="0.13" clip-path="url(#c)"/></svg>`;
-}
-
-// ── Studio Chief (B1): one ink line, dot eyes, paper and vermilion. Chief is the white bean in the black bowler with
-// the red band; his personality lives in the brows, a small handlebar, the hat and two line arms. The crew are pastel
-// beans, each with one prop. Hand-drawn SVG; the phone renders the same drawings to PNGs (scripts/icons.mjs). ──
-export const INK = '#141A2A', RED = '#F0482A';
-/** The drawings have five poses; every app mood wears one. */
+/** The app's moods map onto the faces' five poses (and from there onto the four face modes, faceOf). */
 export type Pose = 'listen' | 'work' | 'needs' | 'pleased' | 'rest';
 export const POSES: Pose[] = ['listen', 'work', 'needs', 'pleased', 'rest'];
 export const poseOf = (m: Mood | Pose = 'idle'): Pose =>
   m === 'needs' || m === 'pleased' ? m : m === 'work' ? 'work' : m === 'happy' ? 'pleased' : m === 'rest' ? 'rest' : m === 'ask' || m === 'worried' || m === 'error' ? 'needs' : 'listen';
-type Opts = { vb?: string; floor?: boolean; wave?: boolean; night?: boolean };
-/** Chief's outer line after dark: the office's night ink (tokens.ts room.night.edge), so his outline, arms and hands
- *  stay drawn on a dark page. What sits on his white body keeps the day ink. */
-export const NIGHT_INK = '#C9C4DA';
-const Z = 'font-family="Instrument Serif, Georgia, serif" font-style="italic"';
-let uid = 0;
 
-/** Chief whole (viewBox 0 0 200 250, feet on y 232). */
-/** Chief's side shading: the ellipse cx 156 cy 178 rx 30 ry 120, its arc from the art's floor (y 240) up to where it
- *  leaves his body over the dome (the old whole arc's first third, so it is drawn as the same curve), closed outside
- *  the body. The body clip paints exactly what it did, and nothing measures past his outline or below his feet. */
-const SHADE = 'M130.3144 240A30 120 0 0 1 136.5685 86.5742H150V240Z';
-export function chiefSvg(mood: Mood | Pose = 'idle', o: Opts = {}) {
-  const m = poseOf(mood), g = `ch${++uid}`, lw = 3.4, L = o.night ? NIGHT_INK : INK;
-  const body = 'M52 232V120a48 48 0 0 1 96 0V232Z';
-  const ey = m === 'work' ? 121 : 118;
-  const eyes = m === 'rest' ? '' : m === 'pleased' ? `<path d="M80 ${ey + 1}q6 -7 12 0M108 ${ey + 1}q6 -7 12 0" stroke="${INK}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`
-    : `<circle cx="${m === 'listen' ? 88 : 86}" cy="${ey}" r="5.6" fill="${INK}"/><circle cx="${m === 'listen' ? 116 : 114}" cy="${ey}" r="5.6" fill="${INK}"/>`;
-  const brow = { listen: 'M78 104q8 -4 15 -1M107 100q8 -3 15 2', work: 'M78 106l14 3M108 109l14 -3', needs: 'M77 99q8 -7 16 -2M107 97q8 -5 16 2', pleased: 'M78 104q8 -4 15 0M107 104q8 -4 15 0', rest: '' }[m];
-  const tip = m === 'pleased' ? -5 : 0;
-  const tash = `<path d="M100 131C94 127 86 128 80 132C76 135 72 ${134 + tip} 71 ${129 + tip}C69 ${136 + tip} 74 141 81 140C88 139 95 137 100 135C105 137 112 139 119 140C126 141 131 ${136 + tip} 129 ${129 + tip}C128 ${134 + tip} 124 135 120 132C114 128 106 127 100 131Z" fill="${INK}"/>`;
-  const mouth = m === 'pleased' ? `<path d="M93 145q7 5 14 0" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round"/>` : m === 'needs' ? `<ellipse cx="100" cy="146" rx="3" ry="2.6" fill="${INK}"/>` : '';
-  const hand = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="7" fill="#fff" stroke="${L}" stroke-width="${lw - .6}"/>`;
-  const arm = (d: string) => `<path d="${d}" stroke="${L}" stroke-width="${lw}" fill="none" stroke-linecap="round"/>`;
-  // The bowler never leaves his head: a pose only tilts it about the crown's seat (or pulls it over his eyes to nap).
-  // A thin paper edge keeps the black hat whole against a night background.
-  // `wave` (Chief's hero only, B1): calling for you, he lifts the bowler off his head by its brim instead of tipping it.
-  const wave = !!o.wave && m === 'needs';
-  const hatAt = wave ? 'translate(14 -34) rotate(-14 100 78)' : { listen: 'rotate(4 100 76)', work: '', needs: 'rotate(-7 100 78)', pleased: 'rotate(-5 100 78)', rest: 'translate(0 16) rotate(2 100 76)' }[m];
-  const hat = `<g class="hat"><g transform="${hatAt}"><path d="M50 78Q100 94 150 78" stroke="#fff" stroke-width="9.6" fill="none" stroke-linecap="round"/><path d="M68 77C68 51 82 37 100 37C118 37 132 51 132 77Z" fill="${INK}" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/><path d="M69 71H131" stroke="${RED}" stroke-width="5"/><path d="M50 78Q100 94 150 78" stroke="${INK}" stroke-width="5.2" fill="none" stroke-linecap="round"/><path d="M80 60C80 52 86 46 93 44" stroke="rgba(255,255,255,.28)" stroke-width="3" fill="none" stroke-linecap="round"/></g></g>`;
-  const arms = {
-    listen: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + arm('M146 164C160 160 156 148 132 146') + hand(128, 146),
-    work: arm('M54 166C60 184 74 192 88 192') + hand(90, 192) + `<g class="watch"><circle cx="102" cy="196" r="12" fill="#fff" stroke="${L}" stroke-width="2.8"/><path d="M102 189v7l5 3" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/></g><path d="M114 192C124 186 132 178 134 168" stroke="${L}" stroke-width="1.6" fill="none" stroke-dasharray="2 3"/>` + arm('M146 166C156 184 156 198 152 210') + hand(152, 213),
-    needs: arm('M54 166C44 184 44 198 48 210') + hand(48, 213) + (wave ? arm('M146 162C172 140 178 82 164 42') + hand(163, 38) : arm('M146 162C166 146 172 112 160 80') + hand(158, 76)),
-    pleased: arm('M54 166C38 172 30 160 32 148') + hand(32, 144) + arm('M146 166C162 172 170 160 168 148') + hand(168, 144),
-    rest: arm('M54 170C70 190 112 190 132 176') + arm('M146 170C130 190 88 190 68 176') + hand(66, 175) + hand(134, 175),
-  }[m];
-  const marks = m === 'needs' ? `<path class="cue" d="${wave ? 'M180 62l9 -9M186 78l12 -3M176 50l6 -10' : 'M178 56l9 -9M186 70l12 -3M170 48l2 -12'}" stroke="${RED}" stroke-width="3.4" stroke-linecap="round"/>`
-    : m === 'rest' ? `<g class="zz"><text x="150" y="62" ${Z} font-size="30" fill="${L}" opacity=".55">z</text><text x="168" y="40" ${Z} font-size="21" fill="${L}" opacity=".4">z</text></g>`
-    : m === 'work' ? `<path d="M30 96l8 4M26 112h9" stroke="${RED}" stroke-width="3" stroke-linecap="round"/>` : '';
-  return `<svg viewBox="${o.vb ?? '0 0 200 250'}" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="${g}c"><path d="${body}"/></clipPath></defs>`
-    + (o.floor === false ? '' : `<ellipse cx="100" cy="235" rx="58" ry="4.5" fill="${L}" opacity=".1"/>`)
-    + `<g class="body"><path d="${body}" fill="#fff"/><g clip-path="url(#${g}c)"><path d="${SHADE}" fill="#EEF1F6"/></g>`
-    + `<path d="${body}" fill="none" stroke="${L}" stroke-width="${lw}" stroke-linejoin="round"/>`
-    + `<circle cx="76" cy="134" r="6.5" fill="${RED}" opacity=".2"/><circle cx="124" cy="134" r="6.5" fill="${RED}" opacity=".2"/>`
-    + `<g class="eyes">${eyes}</g>${brow ? `<path d="${brow}" stroke="${INK}" stroke-width="3.6" fill="none" stroke-linecap="round"/>` : ''}${tash}${mouth}`
-    + `<path d="M100 170L86 162V178ZM100 170L114 162V178Z" fill="${RED}" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/><circle cx="100" cy="170" r="3.6" fill="${RED}" stroke="${INK}" stroke-width="2.2"/>`
-    + `${arms}${hat}</g>${marks}</svg>`;
+// ── The critters: Chief is a bear in a captain's cap, each template helper its own animal, and a helper Chief makes up
+// gets an animal from the made-up pool (adapter.kindOf). Flat colour on a calm disc, one thin outline: warm, never a
+// sticker. Hand-written SVG in a 100×100 box on its own disc, so one drawing serves every face slot and the phone's
+// PNGs (scripts/icons.mjs). ──
+const INK = '#2A2320';
+type Critter = { fur: string; inner?: string; muzzle?: string; ears: 'round' | 'pointy' | 'long' | 'tufts' | 'mouse' | 'floppy' | 'none' | 'mane'; bg: string; eye?: string;
+  mask?: string; patches?: string; beak?: boolean; owl?: boolean; whiskers?: boolean; cap?: boolean; snout?: string; tuft?: boolean; earInk?: string };
+/** Eyes, brows and mouth in each mode, centred between the eyes at (50, 54). `glance` (-1 left to 1 right) is where a
+ *  working face's eyes are along the line it reads. */
+function face(m: FaceMode, glance: number, o: { ink: string; blush: boolean; mouthY: number }) {
+  const x = 50, y = 54, g = 12, s = 0.95, ink = o.ink, my = o.mouthY;
+  const line = (d: string, w: number) => `<path d="${d}" stroke="${ink}" stroke-width="${w * s}" fill="none" stroke-linecap="round"/>`;
+  const r = (m === 'needs' ? 4 : 3.4) * s, dx = m === 'think' ? 1.6 * s * glance : 0, dy = m === 'think' ? -1.8 * s : 0;
+  const eyes = m === 'rest' ? [-g, g].map((d) => line(`M${x + d - 4 * s} ${y}q${4 * s} ${3.6 * s} ${8 * s} 0`, 2.4)).join('')
+    : [-g, g].map((d) => `<circle cx="${x + d + dx}" cy="${y + dy}" r="${r}" fill="${ink}"/><circle cx="${x + d + dx + r * 0.35}" cy="${y + dy - r * 0.35}" r="${r * 0.32}" fill="#fff"/>`).join('');
+  const brows = m === 'needs' ? [-g, g].map((d) => line(`M${x + d - 4 * s} ${y - 9 * s}q${4 * s} ${-3 * s} ${8 * s} 0`, 2)).join('') : '';
+  const mouth = m === 'needs' ? `<ellipse cx="${x}" cy="${my + s}" rx="${3 * s}" ry="${3.6 * s}" fill="${ink}"/>`
+    : m === 'think' ? line(`M${x - 3 * s} ${my + s}q${3 * s} ${-1.6 * s} ${6 * s} ${-0.4 * s}`, 2.2)
+    : m === 'rest' ? line(`M${x - 2.6 * s} ${my}q${2.6 * s} ${1.8 * s} ${5.2 * s} 0`, 2)
+    : line(`M${x - 6 * s} ${my - s}q${6 * s} ${6.4 * s} ${12 * s} 0`, 2.4);
+  const blush = o.blush && m !== 'think' ? [-g - 4 * s, g + 4 * s].map((d) => `<ellipse cx="${x + d}" cy="${y + 7 * s}" rx="${4 * s}" ry="${2.4 * s}" fill="#FF8FA3" opacity=".55"/>`).join('') : '';
+  return blush + eyes + brows + mouth;
+}
+function drawCritter(p: Critter, m: FaceMode, night: boolean, glance: number, aspect: number) {
+  const L = INK, w = 2.4, inner = p.inner ?? p.fur;
+  const ears = {
+    round: [27, 73].map((x) => `<circle cx="${x}" cy="34" r="12" fill="${p.earInk ?? p.fur}" stroke="${L}" stroke-width="${w}"/><circle cx="${x}" cy="34" r="6" fill="${inner}"/>`).join(''),
+    pointy: `<path d="M22 46L25 15L47 33Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M78 46L75 15L53 33Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M28 36L29 23L39 32Z" fill="${inner}"/><path d="M72 36L71 23L61 32Z" fill="${inner}"/>`,
+    long: [[38, -8], [62, 8]].map(([x, a]) => `<g transform="rotate(${a} ${x} 30)"><ellipse cx="${x}" cy="18" rx="7.5" ry="20" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/><ellipse cx="${x}" cy="19" rx="3.4" ry="14" fill="${inner}"/></g>`).join(''),
+    tufts: `<path d="M26 40L24 18L42 31Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M74 40L76 18L58 31Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/>`,
+    mouse: [24, 76].map((x) => `<circle cx="${x}" cy="34" r="15" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/><circle cx="${x}" cy="34" r="9" fill="${inner}"/>`).join(''),
+    floppy: '',
+    none: '',
+    mane: `<circle cx="50" cy="55" r="40" fill="${inner}" stroke="${L}" stroke-width="${w}"/>` + Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return `<circle cx="${(50 + 37 * Math.cos(a)).toFixed(1)}" cy="${(55 + 37 * Math.sin(a)).toFixed(1)}" r="8" fill="${inner}"/>`; }).join(''),
+  }[p.ears];
+  const floppy = p.ears === 'floppy' ? `<path d="M22 42C10 46 10 70 18 76C26 72 28 56 30 46Z" fill="${inner}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M78 42C90 46 90 70 82 76C74 72 72 56 70 46Z" fill="${inner}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/>` : '';
+  const head = `<ellipse cx="50" cy="57" rx="31" ry="28" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/>`;
+  const tuft = p.tuft ? `<path d="M46 31q2 -10 6 -4q2 -8 6 0" stroke="${L}" stroke-width="2" fill="${p.fur}" stroke-linecap="round"/>` : '';
+  const patches = p.patches ? `<ellipse cx="38" cy="54" rx="8" ry="9.5" fill="${p.patches}" transform="rotate(20 38 54)"/><ellipse cx="62" cy="54" rx="8" ry="9.5" fill="${p.patches}" transform="rotate(-20 62 54)"/>` : '';
+  const mask = p.mask ? `<path d="M22 52C30 44 42 48 50 50C58 48 70 44 78 52C74 62 62 62 50 58C38 62 26 62 22 52Z" fill="${p.mask}"/>` : '';
+  const muzzle = p.muzzle ? `<ellipse cx="50" cy="69" rx="15" ry="11" fill="${p.muzzle}"/>` : '';
+  const owl = p.owl ? `<circle cx="38" cy="54" r="11" fill="#FFF6E6" stroke="${L}" stroke-width="2"/><circle cx="62" cy="54" r="11" fill="#FFF6E6" stroke="${L}" stroke-width="2"/>` : '';
+  const snout = p.snout ? `<ellipse cx="50" cy="67" rx="10" ry="7.5" fill="${p.snout}" stroke="${L}" stroke-width="2"/><circle cx="46.5" cy="67" r="1.8" fill="${L}"/><circle cx="53.5" cy="67" r="1.8" fill="${L}"/>` : '';
+  const nose = p.beak ? `<path d="M45 62L55 62L50 69Z" fill="#F7A23B" stroke="${L}" stroke-width="1.6" stroke-linejoin="round"/>` : p.snout ? '' : `<ellipse cx="50" cy="63" rx="4" ry="3" fill="${L}"/>`;
+  const whisk = p.whiskers ? `<path d="M30 66l-12 -2M30 70l-11 3M70 66l12 -2M70 70l11 3" stroke="${L}" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>` : '';
+  const f = face(m, glance, { ink: p.eye ?? INK, blush: !(p.owl || p.mask || p.patches), mouthY: p.beak ? 73 : p.snout ? 77 : 71 });
+  const cap = p.cap ? `<path d="M26 34C26 16 74 16 74 34Z" fill="#1F3A68" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M26 33H74" stroke="#fff" stroke-width="4"/><path d="M22 36Q50 44 78 36" stroke="${L}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="50" cy="25" r="3.6" fill="#F5C542" stroke="${L}" stroke-width="1.4"/>` : '';
+  const zz = m === 'rest' ? `<text x="76" y="26" font-family="Georgia, serif" font-style="italic" font-size="18" fill="${INK}" opacity=".55">z</text>` : '';
+  // A box wider than tall (the old text helmet's 1.2:1 slot) centres the disc in it rather than stretching it.
+  const pad = 50 * (aspect - 1);
+  return `<svg viewBox="${-pad} 0 ${100 + 2 * pad} 100" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="d"><circle cx="50" cy="50" r="50"/></clipPath></defs>`
+    + `<circle cx="50" cy="50" r="50" fill="${p.bg}"/><g clip-path="url(#d)">${ears + floppy + head + tuft + patches + mask + muzzle + owl + snout + nose + whisk + f + cap + zz}</g>`
+    + `${night ? '' : '<circle cx="50" cy="50" r="49.4" fill="none" stroke="#000" stroke-opacity=".06" stroke-width="1.2"/>'}</svg>`;
 }
 
-/** A crew member whole (viewBox 0 0 120 150, feet on y 140), with their one prop. */
-export function beanSvg(kind: Kind, mood: Mood | Pose = 'idle', o: Opts = {}) {
-  const m = poseOf(mood), lw = 2.6, f = PALS[kind].body, shut = kind === 'pip' || m === 'rest';
-  const body = 'M30 140V74a30 30 0 0 1 60 0V140Z';
-  const eyes = shut ? `<path d="M44 84q5 4 10 0M66 84q5 4 10 0" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`
-    : m === 'pleased' ? `<circle cx="50" cy="80" r="3.4" fill="${INK}"/><circle cx="70" cy="80" r="3.4" fill="${INK}"/><path d="M54 92l5 5l8 -9" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
-    : `<circle cx="50" cy="82" r="3.6" fill="${INK}"/><circle cx="70" cy="82" r="3.6" fill="${INK}"/>`;
-  const prop = {
-    scout: (m === 'needs' ? `<g class="cue"><path d="M88 104C100 92 104 76 102 62" stroke="${INK}" stroke-width="${lw}" fill="none" stroke-linecap="round"/><circle cx="102" cy="58" r="5.4" fill="${RED}" stroke="${INK}" stroke-width="2"/></g>` : '')
-      + `<g class="prop"><path d="M64 98l26 -12l3 7l-26 12z" fill="#fff" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><path d="M84 89l3 7" stroke="${RED}" stroke-width="3"/></g>`,
-    reel: `<g class="prop"><path d="M28 80C28 50 92 50 92 80" stroke="${INK}" stroke-width="3.4" fill="none"/><rect x="22" y="74" width="11" height="18" rx="5.5" fill="${INK}"/><rect x="87" y="74" width="11" height="18" rx="5.5" fill="${INK}"/></g>`,
-    scribe: `<path d="M42 90h16M62 90h16" stroke="${INK}" stroke-width="2"/><path d="M42 90a8 6 0 0 0 16 0M62 90a8 6 0 0 0 16 0" fill="rgba(255,255,255,.5)" stroke="${INK}" stroke-width="2"/><rect x="58" y="108" width="30" height="22" rx="2" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M63 115h18M63 121h12" stroke="${INK}" stroke-width="1.6"/><g class="prop"><path d="M92 102l-10 18" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/><path d="M92 102l3 -5" stroke="${RED}" stroke-width="2.6" stroke-linecap="round"/></g>`,
-    tracer: `<g class="prop"><rect x="58" y="100" width="30" height="36" rx="3" fill="#fff" stroke="${INK}" stroke-width="2"/><rect x="66" y="96" width="14" height="7" rx="2" fill="${INK}"/><path d="M63 112l3 3l5 -5M63 124l3 3l5 -5" stroke="${RED}" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M74 113h9M74 125h9" stroke="${INK}" stroke-width="1.6"/></g>`,
-    // The looks for helpers Chief makes up: each its own pastel and one thing to wear, so a new hire is never a clone.
-    bow: `<path d="M60 106l-13 -8v16zM60 106l13 -8v16z" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><circle cx="60" cy="106" r="3.2" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
-    cap: `<path d="M32 68C32 42 88 42 88 68Z" fill="#fff" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/><path d="M31 68h58" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><circle cx="60" cy="41" r="5" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
-    specs: `<circle cx="50" cy="82" r="8.5" fill="rgba(255,255,255,.35)" stroke="${INK}" stroke-width="2.2"/><circle cx="70" cy="82" r="8.5" fill="rgba(255,255,255,.35)" stroke="${INK}" stroke-width="2.2"/><path d="M58.5 82h3" stroke="${INK}" stroke-width="2.2"/>`,
-    scarf: `<path d="M31 100Q60 111 89 100v9Q60 120 31 109Z" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/><path d="M68 112l3 22l9 -2l-3 -21" fill="${RED}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`,
-    pip: `<path d="M30 76C28 50 50 40 68 44C84 48 98 62 104 84C98 88 92 82 88 74Z" fill="#fff" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/><path d="M34 62C46 58 70 58 84 64" stroke="${f}" stroke-width="5"/><circle cx="104" cy="88" r="6" fill="${RED}" stroke="${INK}" stroke-width="2"/>`,
-  }[kind];
-  const zz = shut ? `<text class="zz" x="90" y="34" ${Z} font-size="20" fill="${INK}" opacity=".5">z</text>` : '';
-  const cushion = kind === 'pip' ? `<ellipse cx="60" cy="140" rx="40" ry="9" fill="${f}" stroke="${INK}" stroke-width="2.2"/>` : '';
-  return `<svg viewBox="${o.vb ?? '0 0 120 150'}" xmlns="http://www.w3.org/2000/svg">${o.floor === false ? '' : `<ellipse cx="60" cy="143" rx="34" ry="3.5" fill="${INK}" opacity=".1"/>`}${cushion}`
-    + `<g class="body"><path d="${body}" fill="${f}" stroke="${INK}" stroke-width="${lw}" stroke-linejoin="round"/><g class="eyes">${eyes}</g>${prop}</g>${zz}</svg>`;
-}
-
-/** Head and shoulders, for faces and avatars: square crops of the same drawings. */
-export const headSvg = (who: Kind | 'chief', mood: Mood | Pose = 'idle', night = false) =>
-  who === 'chief' ? chiefSvg(mood, { vb: '30 28 140 140', floor: false, night }) : beanSvg(who, mood, { vb: '8 26 104 104', floor: false });
-
-// ── The crew's colours: the bean's pastel and the tile behind a face ──
-export type Kind = 'reel' | 'scout' | 'scribe' | 'tracer' | 'pip' | 'bow' | 'cap' | 'specs' | 'scarf';
-export const PALS: Record<Kind, { body: string; soft: string }> = {
-  reel: { body: '#DCEBFF', soft: '#EDF4FF' },
-  scout: { body: '#FFE3DB', soft: '#FFF1EC' },
-  scribe: { body: '#FFF3C8', soft: '#FFF9E3' },
-  tracer: { body: '#DDF4E6', soft: '#EEF9F2' },
-  pip: { body: '#ECE6FF', soft: '#F5F2FF' },
-  bow: { body: '#D4F3EF', soft: '#EAF9F7' },
-  cap: { body: '#FFDDEA', soft: '#FFEEF4' },
-  specs: { body: '#F1E4D3', soft: '#F8F1E8' },
-  scarf: { body: '#E8F4CC', soft: '#F3F9E5' },
-};
+/** Chief: the bear in the navy captain's cap. Nobody else is a bear, so no helper is ever mistaken for him. */
+const CHIEF: Critter = { fur: '#B98252', inner: '#E8C49A', muzzle: '#F1D9B8', ears: 'round', bg: '#F7E3C8', cap: true };
+/** Each look: a template helper's animal (keyed by template id), then the made-up pool (MADE), each with its own disc colour. */
+export const PALS = {
+  scout: { fur: '#EE8A3C', inner: '#FFE3C8', muzzle: '#FFF6EC', ears: 'pointy', bg: '#FFE3D0' }, // fox
+  scribe: { fur: '#A27A55', ears: 'tufts', bg: '#F6E9C9', owl: true, beak: true }, // owl
+  reel: { fur: '#9C9CAA', inner: '#55556A', muzzle: '#F2F2F6', ears: 'round', earInk: '#9C9CAA', bg: '#DCE6FF', mask: '#3B3B4A', eye: '#fff' }, // raccoon
+  support: { fur: '#E2AA6E', inner: '#9C6A3C', muzzle: '#F8E6CC', ears: 'floppy', bg: '#E2F2D8' }, // dog
+  tracer: { fur: '#BDB6CC', inner: '#FFC4D2', muzzle: '#EFEAF6', ears: 'mouse', bg: '#EEE6FF', whiskers: true }, // mouse
+  xgrowth: { fur: '#FFD640', ears: 'none', bg: '#FFF2BF', beak: true, tuft: true }, // chick
+  cto: { fur: '#4D4D5A', inner: '#FFB3C4', muzzle: '#6A6A78', ears: 'pointy', bg: '#D3F0EA', eye: '#D7F27A', whiskers: true }, // cat
+  bunny: { fur: '#FFFFFF', inner: '#FFC4D2', muzzle: '#FFF', ears: 'long', bg: '#FFE0EA' },
+  panda: { fur: '#FFFFFF', patches: '#2E2E38', ears: 'round', earInk: '#2E2E38', inner: '#2E2E38', bg: '#E4F1E6', eye: '#fff' },
+  pig: { fur: '#FFB6C6', inner: '#FF8FA8', ears: 'pointy', bg: '#E3ECF6', snout: '#FF9AB2' },
+  koala: { fur: '#A9AEB8', inner: '#E9D9E0', muzzle: '#D8DCE2', ears: 'mouse', bg: '#D3F0EA' },
+  lion: { fur: '#F2B544', inner: '#C9782A', muzzle: '#FFE7B8', ears: 'mane', bg: '#FFEFD2' },
+  sheep: { fur: '#EED9C4', inner: '#FFFFFF', ears: 'mane', bg: '#E3ECF6' },
+  frog: { fur: '#8BCB6B', inner: '#6BAF4E', ears: 'none', bg: '#E2F5D6', snout: '#A6DC8A' },
+  deer: { fur: '#C7A27C', inner: '#8A6440', muzzle: '#EAD7BF', ears: 'pointy', bg: '#F1E4D3' },
+} satisfies Record<string, Critter>;
+export type Kind = keyof typeof PALS;
+/** The animals for helpers no template draws (Chief's made-up hires): never a template's, never Chief's bear. */
+export const MADE: Kind[] = ['bunny', 'panda', 'pig', 'koala', 'lion', 'sheep', 'frog', 'deer'];
+/** Chief or a helper as a critter SVG. `beat` (a working face's ticker) moves its eyes along a line, left to right,
+ *  as it reads; `aspect` is the slot's width over its height. */
+export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { night?: boolean; beat?: number; aspect?: number } = {}) =>
+  drawCritter(who === 'chief' ? CHIEF : PALS[who], mode, !!o.night, (((o.beat ?? 0) % 24) / 23) * 2 - 1, o.aspect ?? 1);
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──
 export const HOUSE: Bitmap = [

@@ -7,7 +7,7 @@ import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
 import { relayTyped } from './typed.ts';
-import { PALS, type Kind, type Mood } from './art.ts';
+import { MADE, PALS, type Kind, type Mood } from './art.ts';
 
 export type Helper = {
   id: string; name: string; kind: Kind; mood: Mood; ring: 'working' | 'needs' | ''; status: string; role: string;
@@ -393,9 +393,7 @@ export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
-/** The looks for helpers no template draws (Chief's made-up hires): never a template pal's clone. */
-const MADE: Kind[] = ['pip', 'bow', 'cap', 'specs', 'scarf'];
-/** Which pal a bot looks like: its template's, else a steady pick from its name that skips a look someone who joined
+/** Which critter a bot is: its template's, else a steady pick from the made-up pool (art.MADE) by its id that skips a look someone who joined
  *  before it already wears (`crew`, in joining order), so a new hire stands apart until every look is taken. */
 export function kindOf(b: Json, crew: Json[] = []): Kind {
   const drawn = (x: Json) => (KINDS as string[]).includes(String(x?.template ?? x?.id)) && !(MADE as string[]).includes(String(x?.template ?? x?.id));

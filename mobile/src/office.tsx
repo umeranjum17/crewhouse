@@ -1,14 +1,15 @@
 // The office as a grouped list (Term look): Waiting / At work / Done today / Free, every helper in exactly
-// one group. Each row shows the helmet in its mood, the current line and one meta line. Crew never ask the person: a
+// one group. Each row shows the critter in its mood, the current line and one meta line. Crew never ask the person: a
 // waiting row says what it is on and "Waiting for Chief", and one row on top opens Chief, who carries every ask. Tapping
 // a row opens that helper's desk. Every word and count comes from the one
-// A.office view Home also reads (useOffice). The helmets are still: the think-scan shows while working and nothing
+// A.office view Home also reads (useOffice). The faces are still: a working face looks up and aside and nothing
 // moves, so the old animation battery budget holds with no code for it.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { PixelRatio, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import * as A from '../../web/src/adapter.ts';
 import type { Json } from '../../web/src/api.ts';
-import { CELL, helmetDots, helmetOf, type Mood } from '../../web/src/art.ts';
+import { faceOf, type Kind, type Mood } from '../../web/src/art.ts';
+import { FACES } from './faces';
 import { color } from '../../web/src/tokens.ts';
 import { onLive } from './link';
 import { fw } from './font';
@@ -18,21 +19,9 @@ const { landed, groupOf } = A;
 
 type Group = keyof typeof A.GROUP_TITLES;
 
-/** The helmet as dots (art.helmetDots) on the art's own cell (CELL): the phone sets no text in mono, so the shading rides on dot opacity. The
- *  think-scan shows centred while working (a fixed beat); nothing animates. */
-function Helmet({ mood, night, size }: { mood: Mood; night: boolean; size: number }) {
-  const mode = helmetOf(mood), cols = 20;
-  const { rows, pal } = helmetDots(cols, mode, night, mode === 'think' ? 12 : 0);
-  const d = PixelRatio.roundToNearestPixel(size / cols) || 1 / PixelRatio.get();
-  return (
-    <View accessible={false} style={{ width: d * cols }}>
-      {rows.map((r, y) => (
-        <View key={y} style={{ flexDirection: 'row' }}>
-          {[...r].map((k, x) => <View key={x} style={{ width: d, height: d * CELL, justifyContent: 'center' }}>{pal[k] ? <View style={{ height: d, borderRadius: d, backgroundColor: pal[k] }} /> : null}</View>)}
-        </View>
-      ))}
-    </View>
-  );
+/** Chief or a helper as its critter (scripts/icons.mjs's PNGs), in the 5:4 box the helmet filled. Faces are still. */
+function Helmet({ who, mood, size }: { who: Kind | 'chief'; mood: Mood; size: number }) {
+  return <Image source={FACES[`${who}-${faceOf(mood)}`]} style={{ width: size, height: size * 0.8 }} resizeMode="contain" accessibilityIgnoresInvertColors />;
 }
 
 /** The row's state word, in the board's own sentence case. */
@@ -51,7 +40,7 @@ function State({ c, v, t }: { c: A.OfficeMember; v: A.OfficeView; t: Look }) {
 }
 
 /** One helper's row: the helmet, the name and state, the current line, one meta line. */
-function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.OfficeView; t: Look; night: boolean; jobTitle?: string;
+function Row({ c, v, t, jobTitle, onDesk }: { c: A.OfficeMember; v: A.OfficeView; t: Look; jobTitle?: string;
   onDesk: (c: A.OfficeMember) => void }) {
   const done = landed(c, v);
   const g = groupOf(c, v);
@@ -64,7 +53,7 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
   return (
     <Pressable onPress={() => onDesk(c)} accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
-      <Helmet mood={c.mood} night={night} size={52} />
+      <Helmet who={c.kind} mood={c.mood} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, ...fw('600'), color: t.ink, flex: 1 }}>{c.name}</Text>
@@ -78,12 +67,12 @@ function Row({ c, v, t, night, jobTitle, onDesk }: { c: A.OfficeMember; v: A.Off
 }
 
 /** Chief's grouped row: his one status and his line; a tap opens his thread. */
-function ChiefRow({ view, t, night, onChief }: { view: A.OfficeView; t: Look; night: boolean; onChief: () => void }) {
+function ChiefRow({ view, t, onChief }: { view: A.OfficeView; t: Look; onChief: () => void }) {
   const st = A.chiefStatus(view), col = st.seat === 'needs' ? t.pink : st.group === 'work' ? t.green : t.mute;
   return (
     <Pressable onPress={onChief} accessibilityRole="button" accessibilityLabel={`Chief: ${A.officeLine(view)}`}
       style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderColor: t.line }}>
-      <Helmet mood={view.chief.mood} night={night} size={52} />
+      <Helmet who='chief' mood={view.chief.mood} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <Text numberOfLines={1} style={{ fontFamily: 'Inter', fontSize: 15, lineHeight: 20, ...fw('600'), color: t.ink, flex: 1 }}>Chief</Text>
@@ -127,8 +116,8 @@ export function Office({ view, night, offline, width, jobs, onChief, onDesk, onT
         <Text style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 18, ...fw('600'), color: '#fff' }}>{A.chiefHas(view)}</Text>
       </Pressable>}
       {groups.map(([g, rows]) => <Group key={g} title={A.GROUP_TITLES[g]} t={t}>
-        {g === cs.group && <ChiefRow view={view} t={t} night={night} onChief={onChief} />}
-        {rows.map((c) => <Row key={c.id} c={c} v={view} t={t} night={night} jobTitle={titles.get(c.id)} onDesk={onDesk} />)}
+        {g === cs.group && <ChiefRow view={view} t={t} onChief={onChief} />}
+        {rows.map((c) => <Row key={c.id} c={c} v={view} t={t} jobTitle={titles.get(c.id)} onDesk={onDesk} />)}
       </Group>)}
     </View>
   );

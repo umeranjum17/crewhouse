@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
+import * as art from '../web/src/art.ts';
 
 const { Crew, quietNow, short, cleanReply, relayResult } = await import('../src/crew.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
@@ -1482,7 +1483,7 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   const b = crew.bot('pip')!;
   assert.equal(b.role, 'Finds you a flat in Phuket');
   const bots = crew.snapshot().bots;
-  assert.ok(!bots.some((x: any) => x.id !== 'pip' && A.kindOf(x, bots) === A.kindOf(b, bots)) && !['reel', 'scout', 'scribe', 'tracer'].includes(A.kindOf(b, bots)), 'a look of its own');
+  assert.ok(!bots.some((x: any) => x.id !== 'pip' && A.kindOf(x, bots) === A.kindOf(b, bots)) && (art.MADE as string[]).includes(A.kindOf(b, bots)), 'a look of its own');
   assert.equal(b.template, 'helper');
   const dir = join(crew['cfg'].crewDir, 'bots', 'pip');
   const instructions = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
@@ -1540,7 +1541,7 @@ test("Chief's hire card shows will/won't/first-step/first-job, and a won't-post 
   assert.equal(view.detail.first_job, echo.first_job);
   const shown = A.card(view, crew.snapshot());
   assert.deepEqual(shown.hire, { name: 'Echo', kind: shown.hire!.kind, role: echo.role, will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
-  assert.ok(['pip', 'bow', 'cap', 'specs', 'scarf'].includes(shown.hire!.kind), 'a made-up look of its own');
+  assert.ok((art.MADE as string[]).includes(shown.hire!.kind), 'a made-up look of its own');
   await crew.answer(card()!.id, { answer: 'allow' });
   assert.ok(crew.bot('echo'), 'yes hires Echo');
   assert.equal(A.kindOf(crew.bot('echo'), crew.snapshot().bots), shown.hire!.kind, 'its card and hired face agree');

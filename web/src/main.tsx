@@ -214,7 +214,7 @@ function NeedsRows({ state, cards, quiet, all = false }: { state: Json; cards: A
     <>
       {shown.map((c) => (
         <a key={c.id} className="needs-row list-row" href={askHref(c)}>
-          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'pip', name: c.helper }} size={36} />
+          <Face who={crew.find((h) => h.id === c.helper) ?? { kind: 'bunny', name: c.helper }} size={36} />
           <span className="grow"><b className="clamp1">{c.head}</b><span className="small clamp1">{c.words}</span></span>
           <span className="chat-end"><time>{A.briefTime(c.at)}</time><i className="need-dot" /></span>
         </a>
@@ -302,7 +302,7 @@ function NeedsCard({ state, c, flat, onLater }: { state: Json; c: A.Card; flat?:
     <article className="needs-row needs-big" aria-label={`${name} needs you: ${c.head}`}>
       <div className="nb-top">
         {flat ? <span className="nb-av">{who ? <PalArt kind={who.kind} mood={who.mood} d={44 / 12} name={name} /> : <ChiefArt d={3} />}</span>
-          : <Face who={who ?? { kind: 'pip', name }} size={40} />}
+          : <Face who={who ?? { kind: 'bunny', name }} size={40} />}
         {flat
           ? <div className="grow"><b className="nb-title">{question}</b>{lines.length > 0 && <span className="nb-ask">{lines.join(' · ')}</span>}</div>
           : <div className="grow"><b className="nb-title">{name} needs you</b><span className="nb-ask">{question}</span></div>}
@@ -451,7 +451,7 @@ function JobList({ state, phone, few, refresh }: { state: Json; phone?: boolean;
       <div className="section-head"><span className="label">Hand me a job</span>{few && rows.length > 1 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show less' : `See all ${rows.length}`}</button>}</div><div className="list-group">
       {shown.length ? shown.map((j) => {
         const h = crew.find((x) => x.id === j.bot);
-        const body = <>{j.money ? <span className="job-ic" aria-hidden><Icon name="money" /></span> : <Face who={h ?? { kind: 'pip', name: j.bot }} size={phone ? 28 : 36} />}
+        const body = <>{j.money ? <span className="job-ic" aria-hidden><Icon name="money" /></span> : <Face who={h ?? { kind: 'bunny', name: j.bot }} size={phone ? 28 : 36} />}
           <span className="grow"><b className="clamp">{j.label}</b>{j.says && <span className="small mute clamp">{j.says}</span>}{j.needs.length > 0 && <span className="small clamp1">{A.jobNeeds(j.needs)}</span>}</span><span className="mute" aria-hidden><Icon name="next" /></span></>;
         return j.needs.length ? <a key={j.bot + j.label} className="list-row" href="#/apps">{body}</a>
           : j.hire ? <button key={j.bot + j.label} className="list-row" onClick={() => hire(j.hire!, j.ask)}>{body}</button>
