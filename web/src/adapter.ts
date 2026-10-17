@@ -1802,7 +1802,8 @@ export function paysFor(ai: { name: string; billing: string }) {
 export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS.filter((a) => a.billing === 'api').map((a) => a.name).join(' and ')}, where ${paysFor(AIS.find((a) => a.billing === 'api')!)}.`;
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, the fallback
- *  code, or a pasted plan key); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers. */
+ *  code, a pasted plan key, or the workspace a multi-workspace key should use); how a sign-in ended (declined, the port
+ *  busy, expired, failed); a plan without helpers. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
   const none = { recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
