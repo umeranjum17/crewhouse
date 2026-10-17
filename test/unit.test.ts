@@ -436,7 +436,7 @@ test('bots on disk: persona rename, capped notes, folder confinement, slugs', ()
   disk.writeSoul(cfg, 'frames', '# Frames\n\nYou are Frames. Cheerful and quick.');
   assert.match(disk.systemPrompt(cfg, 'frames', false), /Cheerful and quick/);
   assert.throws(() => disk.writeSoul(cfg, 'frames', 'x'.repeat(disk.SOUL_CAP + 1)), /shorter/);
-  assert.equal(disk.templateSoul(cfg, disk.loadTemplate(cfg, 'reel'), 'Frames'), readFileSync(join(cfg.repoDir, 'templates', 'reel', 'soul.md'), 'utf8').replaceAll('Reel', 'Frames'));
+  assert.equal(disk.templateSoul(cfg, disk.loadTemplate(cfg, 'reel'), 'Frames'), readFileSync(join(cfg.repoDir, 'templates', 'reel', 'soul.md'), 'utf8').replaceAll('Video Vic', 'Frames'));
   assert.deepEqual(execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n'), ['Personality changed by the person', 'Joined the crew']);
   assert.throws(() => disk.insideBot(cfg, 'frames', '../chief/notes.md'), /outside/);
   assert.equal(disk.slug('Ma Reel 2!'), 'ma-reel-2');
@@ -1223,19 +1223,19 @@ test('sign-in: a cancelled sign-in keeps nothing, signed in nothing', async () =
   done();
 });
 
-test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if needed', async () => {
+test('routing: a spreadsheet request goes straight to Writer Will, hiring Writer Will if needed', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const said = (bot: string) => db.all("SELECT text FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id", bot).map((m: any) => m.text);
 
-  // Chief-only crew: Scribe is hired silently on the person's own account; no Chief task, no Chief turn.
+  // Chief-only crew: Writer Will is hired silently on the person's own account; no Chief task, no Chief turn.
   const s = (await crew.post('chief', 'make me an Excel for reception'))!.task;
-  assert.equal(task(db, s).bot, 'scribe');
+  assert.equal(task(db, s).bot, 'writer-will');
   assert.equal(task(db, s).origin, 'chief');
   assert.equal(task(db, s).parent, null);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'chief'")!.n, 0, 'no Chief task');
-  assert.equal(crew.bot('scribe')?.template, 'scribe', 'Scribe is hired');
-  assert.ok(said('chief').includes('Scribe is on it.'));
+  assert.equal(crew.bot('writer-will')?.template, 'scribe', 'Writer Will is hired');
+  assert.ok(said('chief').includes('Writer Will is on it.'));
   await settled(db, s);
 
   // A routine stays with Chief even when it names a tracker.
@@ -1249,7 +1249,7 @@ test('routing: a spreadsheet request goes straight to Scribe, hiring Scribe if n
   assert.equal(task(db, n).bot, 'reel');
   await settled(db, n);
 
-  // A plan without helpers stays with Chief instead of stalling on Scribe.
+  // A plan without helpers stays with Chief instead of stalling on Writer Will.
   for (const p of Object.keys(PROVIDERS)) crew.accounts.notIncluded(p, true);
   const e = (await crew.post('chief', 'make me a workbook for reception'))!.task;
   assert.equal(task(db, e).bot, 'chief');
@@ -1261,17 +1261,17 @@ test("a helper's question round-trips in Chief's thread: one answer, then the fi
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const chiefBot = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id").map((m: any) => m.text);
-  const scribes = () => db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'scribe'")!.n as number;
+  const scribes = () => db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = 'writer-will'")!.n as number;
   // A small but real workbook spec: the follow-up run builds it for the card.
   const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
   const marker = call('crew_workbook', { name: 'Reception log', sheets });
 
-  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
+  // The request names a workbook, so it goes straight to the silently hired Writer Will; "ask permission" holds the turn.
   const first = (await crew.post('chief', 'make an excel for reception, ask permission before you build anything'))!.task;
-  assert.equal(task(db, first).bot, 'scribe');
+  assert.equal(task(db, first).bot, 'writer-will');
   assert.equal(task(db, first).origin, 'chief');
   assert.equal(task(db, first).parent, null);
-  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
+  await release(crew, 'writer-will', `${marker} Visitor log, bookings, or something else?`);
   await settled(db, first);
 
   // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
@@ -1281,23 +1281,23 @@ test("a helper's question round-trips in Chief's thread: one answer, then the fi
   assert.equal(db.get("SELECT task_id AS id FROM messages WHERE bot = 'chief' AND author = 'bot' AND text = ?", question)?.id, first);
   let page = await crew.botPage('chief');
   assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'a line with a task and no files adds no card');
-  assert.equal(page.messages.find((m: any) => m.task_id === first)?.helper, 'scribe', 'the app shows Scribe said it');
+  assert.equal(page.messages.find((m: any) => m.task_id === first)?.helper, 'writer-will', 'the app shows Writer Will said it');
 
-  // Posting the answer starts a fresh Scribe task carrying the context, skipping routing and Chief.
+  // Posting the answer starts a fresh Writer Will task carrying the context, skipping routing and Chief.
   const second = (await crew.post('chief', 'bookings'))!.task;
-  assert.equal(task(db, second).bot, 'scribe');
+  assert.equal(task(db, second).bot, 'writer-will');
   assert.equal(task(db, second).origin, 'chief');
   assert.equal(task(db, second).parent, null);
   assert.match(task(db, second).body, /excel for reception/);
   assert.match(task(db, second).body, /bookings/);
   // The carried "ask permission" holds the fresh turn too; releasing it finishes the workbook and its card.
-  await release(crew, 'scribe', 'The reception workbook is ready.');
+  await release(crew, 'writer-will', 'The reception workbook is ready.');
   await settled(db, second);
   page = await crew.botPage('chief');
   assert.ok(page.messages.find((m: any) => m.task_id === second)?.files.some((f: any) => f.path.endsWith('.xlsx')), "the workbook card lands in Chief's thread");
   assert.deepEqual(page.messages.find((m: any) => m.task_id === first)?.files, [], 'the question line stays card-free');
 
-  // An unrelated long message after the question routes normally, not into Scribe's thread.
+  // An unrelated long message after the question routes normally, not into Writer Will's thread.
   const third = (await crew.post('chief', 'plan our anniversary dinner next month with a full week of menus and a shopping list for every single day, please'))!.task;
   assert.equal(task(db, third).bot, 'chief');
   assert.equal(scribes(), 2);

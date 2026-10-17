@@ -53,6 +53,9 @@ const MAX_WORDS = 30;
 const EXCEPTIONS: RegExp[] = [
   // The verbatim terminal approval (docs/ui-contract.md): the card's identity is the exact command crewd runs.
   /^The exact command$/,
+  // Terminal Tess, the picked name for the one helper that runs terminal programs (ch-helper-names,
+  // Firstmate decision B-plain): the fixed name itself carries the banned word.
+  /\bTerminal Tess\b/,
 ];
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean);

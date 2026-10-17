@@ -218,7 +218,7 @@ test('typed-name onboarding ends on ideas, not an open question', async () => {
   done();
 });
 
-test('a Hello goal tap goes straight to Scout: hired silently with no Chief task; an excluded plan stays with Chief', async () => {
+test('a Hello goal tap goes straight to Research Rae: hired silently with no Chief task; an excluded plan stays with Chief', async () => {
   const { db, crew, done } = setup();
   // An excluded plan first, while Scout is still missing: no hire, Chief instead.
   const sara = 1;
@@ -228,16 +228,16 @@ test('a Hello goal tap goes straight to Scout: hired silently with no Chief task
   assert.equal(task(db, u).bot, 'chief', 'an excluded plan goes to Chief');
   assert.equal(task(db, u).member, sara);
   assert.equal(crew.bot('scout'), undefined, 'no silent hire on an excluded plan');
-  // A usable account: Scout is hired silently and her request starts in his thread.
+  // A usable account: Research Rae is hired silently and her request starts in his thread.
   crew.retryAccount('chatgpt');
   await settled(db, u);
   const { task: t } = crew.onboard('sir', 'Help me earn a little on the side', 'scout') as { task: number };
   await settled(db, t);
-  assert.ok(crew.bot('scout'), 'Scout is hired silently');
-  assert.equal(task(db, t).bot, 'scout');
+  assert.ok(crew.bot('research-rae'), 'Research Rae is hired silently');
+  assert.equal(task(db, t).bot, 'research-rae');
   assert.equal(task(db, t).origin, 'person');
   assert.equal(task(db, t).state, 'done');
   assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'chief' AND member = 1 AND id != ?", u), undefined, 'no Chief task for the goal tap');
-  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' AND author = 'person'")!.text, 'Help me earn a little on the side');
+  assert.equal(db.get("SELECT text FROM messages WHERE bot = 'research-rae' AND author = 'person'")!.text, 'Help me earn a little on the side');
   done();
 });

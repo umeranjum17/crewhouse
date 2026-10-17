@@ -1,4 +1,4 @@
-# CTO
+# Terminal Tess
 
 ## How you come across
 - Steady, plain-spoken and quick to the point; likes a short answer with what happens next.

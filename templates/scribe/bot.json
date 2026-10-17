@@ -1,5 +1,5 @@
 {
-  "display": "Scribe",
+  "display": "Writer Will",
   "role": "Writes posts, emails and documents for you to check, and makes spreadsheets. You send them.",
   "models": [
     "chatgpt"

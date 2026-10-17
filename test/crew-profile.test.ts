@@ -91,7 +91,7 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     }
     assert.equal(existsSync(join(disk.botDir(cfg, 'chief'), 'files/forbidden.md')), false);
     assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'soul.md'), 'utf8'), /# Chief/);
-    const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template })).join(' ') });
+    const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template, name: template[0].toUpperCase() + template.slice(1) })).join(' ') });
     await settled(db, recruits.task);
     const parts = { scout: 'Research two local bakery campaign ideas with sources.', scribe: 'Write two bakery post drafts only.', reel: 'Make one bakery poster draft only.' };
     const assigns = await api('/api/bots/chief/messages', { text: Object.entries(parts).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });

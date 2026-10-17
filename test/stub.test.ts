@@ -845,30 +845,30 @@ test('one chat end to end on the stub: excel request, one question, bookings, th
   const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
   const marker = call('crew_workbook', { name: 'Reception log', sheets });
 
-  // The request names a workbook, so it goes straight to the silently hired Scribe; "ask permission" holds the turn.
+  // The request names a workbook, so it goes straight to the silently hired Writer Will; "ask permission" holds the turn.
   const first = (await crew.post('chief', 'make me an Excel for reception, ask permission before you build anything'))!.task;
-  assert.equal(task(db, first).bot, 'scribe');
+  assert.equal(task(db, first).bot, 'writer-will');
   assert.equal(task(db, first).origin, 'chief');
-  await release(crew, 'scribe', `${marker} Visitor log, bookings, or something else?`);
+  await release(crew, 'writer-will', `${marker} Visitor log, bookings, or something else?`);
   await settled(db, first);
 
   // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
   const question = chiefSays().at(-1)!;
   assert.ok(question.endsWith(' Visitor log, bookings, or something else?') && !question.includes('asks:'), 'in the helper\'s own words, no "asks:" prefix');
   assert.ok(question.endsWith('?'));
-  assert.equal((await crew.botPage('chief')).messages.find((m: any) => m.text === question)?.helper, 'scribe', 'the app shows Scribe said it');
+  assert.equal((await crew.botPage('chief')).messages.find((m: any) => m.text === question)?.helper, 'writer-will', 'the app shows Writer Will said it');
 
   // Posting the answer builds the workbook, and its card lands in Chief's thread.
   const second = (await crew.post('chief', 'bookings'))!.task;
-  assert.equal(task(db, second).bot, 'scribe');
-  await release(crew, 'scribe', 'The reception workbook is ready.');
+  assert.equal(task(db, second).bot, 'writer-will');
+  await release(crew, 'writer-will', 'The reception workbook is ready.');
   await settled(db, second);
   const page = await crew.botPage('chief');
   const card = page.messages.find((m: any) => m.task_id === second)?.files.find((f: any) => f.path.endsWith('.xlsx'));
   assert.ok(card, "the finished spreadsheet's card is in Chief's thread");
 
   // The preview behind the card carries row numbers and cell roles, in plain words.
-  const view = await crew.workbookView('scribe', card.path) as any;
+  const view = await crew.workbookView('writer-will', card.path) as any;
   assert.deepEqual(view.sheets.map((s: any) => s.name), ['Bookings']);
   assert.ok(view.sheets[0].roles.flat().includes('head'), 'header cells read as headers');
   assert.ok(view.sheets[0].roles.flat().includes('in'), 'dropdown cells read as inputs');

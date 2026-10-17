@@ -1,5 +1,5 @@
 {
-  "display": "Desk",
+  "display": "Support Sam",
   "role": "Reads a product's bug reports, drafts replies, and checks fixes in a copy. You send them.",
   "models": [
     "chatgpt"

@@ -6,7 +6,7 @@ The [README](../README.md) shows Crewhouse at a glance. This page is the longer 
 
 Your to-do list is full of small jobs that take an afternoon each: chasing a refund, comparing flights, planning the week's dinners, writing the thank-you note. AI can do most of them now, but only if it can act, and nobody wants a chatbot sending emails or placing orders on its own.
 
-Crewhouse is your personal assistant: a crew that does the work and a calm place to say yes. You talk to Chief. Chief hands the job to the right helper: Scout looks things up, Scribe drafts, Reel makes videos, Tracer finds leads. Each helper is a folder on your disk that thinks with your own AI account. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
+Crewhouse is your personal assistant: a crew that does the work and a calm place to say yes. You talk to Chief. Chief hands the job to the right helper: Research Rae looks things up, Writer Will drafts, Video Vic makes videos, Finder Finn finds leads. Each helper is a folder on your disk that thinks with your own AI account. When a helper wants to send, spend or delete something, it asks you first, in one plain sentence, on your computer or your phone.
 
 The helpers run on your own computer, with your own AI account sign-in. There is no Crewhouse server and no telemetry. What leaves your computer is what a job needs: your AI account, the pages and searches a helper opens, the apps you connected, and a content-free "Crewhouse has news" ping to your phone.
 
@@ -20,7 +20,7 @@ Helpers work in their own folders without bothering you. Anything that costs mon
 
 ## Drafts, never sent behind your back
 
-When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The one exception is Tracer's find-clients emails, which can go from your own Gmail one at a time, each after a yes on your paired phone (see [Connected apps](#also-included)). For everything else the helper hands you the words to send yourself.
+When a helper writes in your name (a reply to the clinic, a refund chase, a cancellation email), it arrives as a draft. You approve it or you don't, and nothing is sent either way. The one exception is Finder Finn's find-clients emails, which can go from your own Gmail one at a time, each after a yes on your paired phone (see [Connected apps](#also-included)). For everything else the helper hands you the words to send yourself.
 
 ## Real files, ready to use
 

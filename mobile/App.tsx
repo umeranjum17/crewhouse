@@ -2624,7 +2624,7 @@ function OnYourScreen() {
       <T tone="mute">Your screen can keep a small button that you drag to any edge. Make it open Chief:</T>
       {steps.map((l, i) =>
         <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
-      <T tone="mute" style={s.small}>Ask Chief, Write with Scribe and Record a demo with Reel also go in Control Center, on the Lock Screen, and on the Action button if yours has one. Each opens the chat with your words in the box; nothing is sent until you tap send.</T>
+      <T tone="mute" style={s.small}>Ask Chief, Write with Writer Will and Record a demo with Video Vic also go in Control Center, on the Lock Screen, and on the Action button if yours has one. Each opens the chat with your words in the box; nothing is sent until you tap send.</T>
     </Card>
   );
 }
