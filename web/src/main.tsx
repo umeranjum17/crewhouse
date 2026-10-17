@@ -586,9 +586,12 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // The card's own sign-in test silences the live line too (ch-signin-wait-truth): while no account is ready, Chief's
   // thread shows the card, never an "at work" row above it, so thread and header say one thing.
   const signedOut = id === 'chief' && chiefLocal({ accounts, offline }).signedOut;
+  // Chief's send is at work in every office header too, from the send until he answers (A.office's `sent`).
+  const sentTo = waiting && pending ? pending.at : undefined;
+  useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
   const ln = page ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
-    sent: waiting && pending ? pending.at : undefined, signedOut }) : null;
+    sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
   // While Chief works the box's send becomes a stop square: the same reset a helper's Stop uses, its line then says so.
   const stopChief = () => void attempt(async () => { await api.reset('chief'); refresh(); });
