@@ -42,6 +42,8 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
   await api('POST', '/api/onboard', { address: 'Umer' });
   assert.equal((await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' })).id, 'scout');
+  // Enough earlier lines that the thread scrolls at 1440 too, so reading up mid-turn has somewhere to go.
+  for (let i = 1; i <= 24; i++) crew.say('chief', 'bot', `Earlier note ${i} for Umer.`);
 
   const profile = mkdtempSync(join(tmpdir(), 'chat-live-browser-'));
   browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
@@ -120,7 +122,24 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       db.event('run.tool', 'chief', { task: job, words: 'Wrote the week plan' });
       await until('the next event to clear it', async () => /^Chief · at work · \d+ s$/.test(await head()), 3_000);
     }
+    // Reading up mid-turn keeps the place: the reply lands below without moving the thread, a New pill says so,
+    // and its tap goes back to the newest line (chat quality map gap 3).
+    const BOX = `[...document.querySelectorAll('.chat .lines')].find((e) => e.offsetParent)`;
+    const place = () => run(`(() => { const b = ${BOX}, p = b.querySelector('.new-pill'), r = p?.getBoundingClientRect(), o = b.getBoundingClientRect();
+      return { st: Math.round(b.scrollTop), max: b.scrollHeight - b.clientHeight, pill: !!r && r.top >= o.top && r.bottom <= o.bottom + 1 }; })()`);
+    const up = bot === 'scout';
+    if (up) {
+      await run(`${BOX}.scrollTop = 0`);
+      await until('the thread read up', async () => (await place()).st === 0, 3_000);
+      assert.ok((await place()).max > 0, `${width}: the thread is long enough to read up`);
+    }
     await release(crew, bot, `All set for Umer from ${bot}.`);
+    if (up) {
+      await until('the New pill over the newest line', async () => (await place()).pill, 15_000);
+      assert.equal((await place()).st, 0, `${width}: the reply landed without moving the place being read`);
+      await run(`${BOX}.querySelector('.new-pill').click()`);
+      await until('the tap at the newest line', async () => { const p = await place(); return p.st >= p.max - 1 && !p.pill; }, 3_000);
+    }
     await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /done/i.test(await run("document.querySelector('.live-end')?.innerText ?? ''")), 15_000);
   };
   for (const width of [1440, 390]) {

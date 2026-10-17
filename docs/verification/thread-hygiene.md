@@ -9,6 +9,10 @@ The thread reads in the order things happened, and opens where the person last i
   the thread (the "Add your phone" card sits below it, as in `unlock-card.md`), the thread lands on that
   card's own top instead of the very bottom — on a thread open, or when the ask arrives while the chat is at the
   bottom. A thread with no open ask is unchanged, and nothing moves while the person reads older lines.
+- Reading up mid-turn keeps the place, on the web and the phone alike: lines landing below never move the thread,
+  and a "↓ New" pill shows over the foot of the thread, above the dock. Its tap goes to the newest line and pins the
+  thread again (a send does too). The web reads the box's own position before every stick, because its scroll event
+  comes a frame late and the live clock's tick in that frame once undid a scroll up.
 - Messages and cards share one time order: a finished notice ("… finished … · it's in Your things") sits before any
   later message, and a proposal card shows after the reply that raised it and before the person's next message.
 - The app says "Your things" everywhere, never "tray".
@@ -26,6 +30,10 @@ The thread reads in the order things happened, and opens where the person last i
   own bottom; without the landing the ask's top is negative (measured -287).
 - `node --test test/thread-clear.test.ts`: at 390 on `?demo=longthread`, `#/chief` redirects to `#/` and renders
   `.home-chat`, and the thread is already at its newest line when it appears (`.lines` scrollTop at its max).
+
+- `node --test test/chat-live.test.ts`: during the held Scout job, at 1440 and 390, the thread is read up to its top;
+  the reply lands with `scrollTop` still 0 and `.new-pill` inside the box, and its click lands at the newest line
+  with the pill gone. Before the fix it timed out waiting for the pill.
 
 ## Drive (real crewd)
 
@@ -48,6 +56,14 @@ The thread reads in the order things happened, and opens where the person last i
    thread's own bottom (`below == 0`), the arriving ask lands with `cardTop == 0` (recorded in
    `motion/ask-arrives.webm`), and each of the four open-with-the-ask captures (`{day,night}-{390,1440}.png`) reports
    `cardTop >= 0` with the footer still below it.
+
+9. The read-up leg: `bash scripts/verify/new-pill.sh "$EV"`. One Chief turn is held over 30 earlier notes; at 390 and
+   1440, day and night, the thread is wheeled up to its top, a second send lands below, and `measure.txt` records
+   `st == 0` with the pill in the box and above the dock, then `st == max` with no pill after its tap
+   (`<look>-<w>-{read-up,pill,latest}.png`, `motion/read-up-new-pill.webm` at night 390). The same legs run in the
+   installed app (`pwa/<look>-<w>-{pill,latest}.png`, `pwa/run.json` with `display-mode: standalone` true).
+   The phone's leg is on an emulator with a release APK: read up during a held turn, a line lands, the place holds
+   and "↓ New" shows over the dock; its tap lands on the newest line.
 
 ## Pass
 

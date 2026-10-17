@@ -607,12 +607,14 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // Whether the thread is at its newest line, so a line arriving while the person reads up never yanks them down.
   // Only a scroll up lets go of it: a scroll event is read a frame after the box moved, and a composer that grew in
   // that frame (typing, the phone's keyboard) once read as reading up and left the live line under the fold for good.
-  const pinned = useRef(true), top = useRef(0);
+  const pinned = useRef(true), top = useRef(0), seenH = useRef(0);
+  const [newBelow, setNewBelow] = useState(false);
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40 || (pinned.current && el.scrollTop >= top.current);
     top.current = el.scrollTop;
+    if (pinned.current) { seenH.current = el.scrollHeight; setNewBelow(false); }
   };
   // The person's own hand in this thread: from the first touch on, the thread never moves itself again.
   const touched = useRef(false);
@@ -627,7 +629,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   }, []);
   // A new chat opens at its own newest line, whatever the last thread was left at; its open ask may be landed on again.
   const asked = useRef(''), askedAt = useRef(-1);
-  useEffect(() => { pinned.current = true; top.current = 0; asked.current = ''; askedAt.current = -1; touched.current = false; }, [id]);
+  useEffect(() => { pinned.current = true; top.current = 0; seenH.current = 0; asked.current = ''; askedAt.current = -1; touched.current = false; setNewBelow(false); }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
   // to the line instead. Every chat opens at its newest line under a hero that stays in place (096); a new
@@ -647,7 +649,12 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     // stream or the person's own hand since then means the thread has moved on and must keep its bottom.
     const land = !!askId && askedAt.current === lines.length && !partial && !echoed;
     const stick = () => {
-      if (!pinned.current) return;
+      // Read the box first: its scroll event comes a frame late, and a stick in that frame (the live clock's tick) undid a scroll up.
+      onScroll();
+      // Reading up: a line landing below raises the New pill instead of moving anything.
+      if (!pinned.current) { if (el.scrollHeight !== seenH.current) setNewBelow(true); return; }
+      seenH.current = el.scrollHeight;
+      setNewBelow(false);
       el.scrollTop = el.scrollHeight;
       const over = card?.isConnected ? card.getBoundingClientRect().top - el.getBoundingClientRect().top : 0;
       if (land && !touched.current && over < 0) { el.scrollTop += over; pinned.current = false; }   // on the ask now, not the bottom
@@ -693,6 +700,13 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
   // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer.
   const answered = newestAnswer !== undefined || !!partial;
+  // The New pill's tap: back to the newest line and pinned again — the same hand a send is.
+  const jump = () => {
+    pinned.current = true; touched.current = false;
+    const el = box.current;
+    if (el) { el.scrollTop = el.scrollHeight; seenH.current = el.scrollHeight; }
+    setNewBelow(false);
+  };
   const send = async (t: string, files?: { name: string; type: string; data: string }[]) => {
     // A send is the person's own hand reaching the newest line: re-pin at once so the echo
     // bubble and the live line are visible in the first frame, even from scrolled-up reading.
@@ -767,6 +781,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {id === 'chief' && answered && <AddPhonePrompt accounts={accounts} tick={tick} />}
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
+        {newBelow && <button className="new-pill" onClick={jump} aria-label="Jump to the newest line">↓ New</button>}
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
         {rail}

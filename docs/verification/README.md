@@ -18,7 +18,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
 | helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep it / Keep them, Forget this file, and Remove it when the job ends taking a copy) |
-| thread-hygiene | `done-done run ask-in-view` plus the recipe's other cases |
+| thread-hygiene | `done-done run ask-in-view` and `done-done run -- bash scripts/verify/new-pill.sh "$DONE_DONE_EVIDENCE_ROOT"` plus the recipe's other cases |
 | site-signin | `done-done run site-signin` |
 | pwa-pair | `done-done run pwa-pair` plus typed-code and push legs |
 | pwa-shell / pwa-offline / pwa-resume / chief-computer | `done-done run pwa-plan` with the recipe's task-owned `PLAN` |
@@ -79,7 +79,7 @@ Without that approval the journey is NOT RUN; never drop `spends:` or wrap its d
 | send-stall | [send-stall.md](send-stall.md) | A send the computer hasn't answered says "Reconnecting…" with the words kept; a failed one says "Not sent" with a Retry that sends the same words once, day and night at 1440 and 390 |
 | term-screens | [term-screens.md](term-screens.md) | Things, routines, helper details, the file panel, first run and the Share sheet wear Term: shared tiles, one blue primary, names in full; on a phone, Hello leads with the ideas, a thread is bubbles and plain text, and a card is one primary plus a ⋯ sheet |
 | thread-clear | [thread-clear.md](thread-clear.md) | Phone threads scroll in their own column: the sign-in card's buttons clear the composer, no line under the top bar; Chief says the sign-in wait once, and his header says it too |
-| thread-hygiene | [thread-hygiene.md](thread-hygiene.md) | The thread opens at its latest line and keeps the bottom, except that an open ask the footer card would hide lands on its own top; notes and cards sit in time order; "Your things", plain job names; `#/chief` and `#/` are one screen |
+| thread-hygiene | [thread-hygiene.md](thread-hygiene.md) | The thread opens at its latest line and keeps the bottom, except that an open ask the footer card would hide lands on its own top; reading up mid-turn keeps the place and a "↓ New" pill jumps to the latest (web, installed app and phone); notes and cards sit in time order; "Your things", plain job names; `#/chief` and `#/` are one screen |
 | stalled-run | [stalled-run.md](stalled-run.md) | A turn the engine went silent in ends itself after `CREWHOUSE_HUNG_MS` (10 min): the task fails plainly, its files stay, Chief says so once in his thread, and the next message runs |
 | desktop-start-refusal | [desktop-start-refusal.md](desktop-start-refusal.md) | Opening a helper's screen on a machine whose engine cannot load a system library refuses at start with the library named and the install hint (never a generic error, never "grant it on the Tools tab" for a granted computer); the same screen opens on a healthy machine |
 | reply-fold | [reply-fold.md](reply-fold.md) | A long chat reply folds behind More on whole items (no empty or half-cut bullet); More and Less toggle |
