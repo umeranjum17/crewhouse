@@ -110,7 +110,7 @@ thread. Layout is pure CSS, so `resize` then reload works: **1440×900** (deskto
 **390×844** (phone), and **320** wide as the narrowest probe — at 320, report what actually
 happens (scroll, wrap, overflow) rather than assuming support. For a phone capture use
 `chrome-devtools-axi emulate --viewport "390x844x3,mobile,touch"` (`"1440x900x1"` back to desktop).
-Themes: `?day` or `?night` on the URL pins light or dark (otherwise the app follows the clock),
+Themes: `?day` or `?night` on the URL pins light or dark (otherwise the app follows the device's dark setting),
 so a theme pair is two loads, e.g. `/?night#/h/scout`. For the longest-title probe,
 use the longest visible strings (the standing jobs' idea asks, a helper's display name) and
 prove placement with `eval` + `getBoundingClientRect`, not by looking at a screenshot.
