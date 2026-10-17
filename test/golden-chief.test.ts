@@ -9,6 +9,7 @@ import { taskTitle, relayResult } from '../src/crew.ts';
 import { route } from '../src/route.ts';
 import { TOOLS } from '../src/openclaw/runtime.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
+import * as A from '../web/src/adapter.ts';
 import * as disk from '../src/bots.ts';
 
 const turns = ['hi', 'how do i pair my computer with you?', 'i want to market my app', 'https://trymuxr.com/'];
@@ -52,6 +53,32 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.match(relay?.files[0].path ?? '', /\.docx$/);
   delete process.env.CREWHOUSE_STUB_GOLDEN;
   done();
+});
+
+test('a send the engine never answers never leaves the message bare: a plain failure line with Try again', async () => {
+  const { crew, db, done } = setup();
+  process.env.CREWHOUSE_STUB_GOLDEN = '1';
+  try {
+    crew.onboard('Umer');
+    const hi = await crew.post('chief', 'hi') as { task?: number } | undefined;
+    if (hi?.task) await settled(db, hi.task);
+    // No scripted answer: the golden stub gives no reply at all, like an engine that never answers.
+    const r = await crew.post('chief', 'quux wobble fnord, nothing scripted answers this') as { task?: number } | undefined;
+    assert.ok(r?.task);
+    await settled(db, r.task);
+    const t = db.get('SELECT * FROM tasks WHERE id = ?', r.task)!;
+    assert.equal(t.bot, 'chief');
+    assert.equal(t.state, 'failed');
+    assert.match(t.result, /couldn't finish this one\. Try again\./);
+    const page = crew.botPage('chief'), state = crew.snapshot(), lines = A.lines(page, 'chief', state);
+    assert.match(lines.map((l) => l.text).join('\n'), /couldn't finish this one\. Try again\./);
+    // Every send is answered: no two person lines in a row, and the header names the failure, never Free.
+    assert.ok(!lines.some((l, i) => l.from === 'me' && lines[i + 1]?.from === 'me'), 'a bare message with no answer');
+    assert.match(A.chief(state).line, /couldn't finish/);
+  } finally {
+    delete process.env.CREWHOUSE_STUB_GOLDEN;
+    done();
+  }
 });
 
 test('title, relay and markdown trust boundary', () => {
