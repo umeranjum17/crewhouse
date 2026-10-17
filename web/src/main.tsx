@@ -477,10 +477,10 @@ function HelperIdeas({ state, chat, name }: { state: Json; chat: string; name: s
 }
 
 /** Chief's hand-off in a helper's chat: the collapsed ask, with the full assignment words behind Show details. */
-function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
+function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
   const [open, setOpen] = useState(false);
-  return <div className="bubble-text"><ChatText text={l.text} /> <button className="link inline" onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Show details'}</button>
-    {open && <ChatText text={l.detail} />}</div>;
+  return <div className="bubble-text"><ChatText text={l.text} latest={latest} /> <button className="link inline" onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Show details'}</button>
+    {open && <ChatText text={l.detail} latest={latest} />}</div>;
 }
 
 // ---------- a chat ----------
@@ -683,6 +683,10 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   // An answered card leaves a muted outcome in time order, above the result it let through (A.receiptSlots).
   const receiptSlots = A.receiptSlots(lines, receipts);
   const last = lines.at(-1);
+  // The newest answer reads in full, never folded; older long answers keep the 700-char fold behind More.
+  const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
+  // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer.
+  const answered = newestAnswer !== undefined || !!partial;
   const send = async (t: string, files?: { name: string; type: string; data: string }[]) => {
     setPending({ text: t || (files ?? []).map((f) => f.name).join(', '), files: !!files?.length, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
@@ -733,15 +737,15 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
             {l.from !== 'note' && <div className="line-by"><span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
             {l.files.map((f) => <Media key={f.url} f={f} big forget />)}
-            {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <div className="bubble-text"><ChatText text={l.text} /></div>)}
-            {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
+            {l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestAnswer} /></div>)}
+            {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
           return <Fragment key={l.id}>{before}{l.id === mark.current && <div className="new-divider" role="separator"><span>New</span></div>}{shown ? null : wrap}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
-        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} /></div></div>}
+        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
         {ln && <LiveRow ln={ln} quiet={quiet} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
@@ -750,7 +754,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
         {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
-        {id === 'chief' && <AddPhonePrompt accounts={accounts} tick={tick} />}
+        {id === 'chief' && answered && <AddPhonePrompt accounts={accounts} tick={tick} />}
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
       </div>
       <aside className={`working-on${rail ? ' tonight-rail' : ''}`}>
@@ -817,6 +821,7 @@ function Room(ctx: Ctx) {
   const load = useCallback(() => api.room().then(setPage).catch(() => {}), []);
   useEffect(() => { void load(); }, [load, tick]);
   const lines = A.room(page, state);
+  const newestRoom = [...lines].reverse().find((l) => l.text)?.id;
   const helpers = A.crew(state);
   const latest = [...lines].reverse().find((l) => l.who && l.who.id !== 'chief' && l.author !== 'person');
   const target = to || latest?.who?.id || helpers[0]?.id || 'chief';
@@ -825,7 +830,7 @@ function Room(ctx: Ctx) {
   return <div className="page chat-page room-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
     <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}`} key={l.id}>
       {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} ring={l.who.ring} />}<b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
-      {l.text && <div className="bubble-text"><ChatText text={l.text} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
+      {l.text && <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestRoom} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>

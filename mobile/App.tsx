@@ -218,10 +218,10 @@ function Link({ label, onPress, disabled }: { label: string; onPress: () => void
     <T style={[s.small, { color: t.pinkInk, textDecorationLine: 'underline' }]}>{label}</T>
   </Pressable>;
 }
-function ChatText({ text }: { text: string }) {
+function ChatText({ text, latest }: { text: string; latest?: boolean }) {
   const t = useLook();
   const [more, setMore] = useState(false);
-  const long = text.length > 700 || text.split('\n').length > 10;
+  const long = !latest && (text.length > 700 || text.split('\n').length > 10);
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '') : text;
   const inline = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'strong' ? <Text key={i} style={s.b}>{inline(x.tokens)}</Text>
     : x.type === 'em' ? <Text key={i} style={{ fontStyle: 'italic' }}>{inline(x.tokens)}</Text>
@@ -236,14 +236,14 @@ function ChatText({ text }: { text: string }) {
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
 }
 
-function ChiefAsk({ l }: { l: { text: string; detail: string } }) {
+function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
   const [open, setOpen] = useState(false);
   return <View style={{ paddingLeft: 36, gap: 4 }}>
     <T>{l.text}</T>
     <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={open ? 'Hide details' : 'Show details'} hitSlop={6}>
       <T style={s.b}>{open ? 'Hide details' : 'Show details'}</T>
     </Pressable>
-    {open && <ChatText text={l.detail} />}
+    {open && <ChatText text={l.detail} latest={latest} />}
   </View>;
 }
 
@@ -1099,6 +1099,9 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
     return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   const speaker = (w: string) => <T style={[s.small, s.b, { width: nameCol(), color: t.ink2 }]}>{w}</T>;
+  // The newest answer reads in full, never folded; older long answers keep the fold.
+  let newestLocal = -1;
+  lines.forEach((l, i) => { if (l.who !== 'you' && !l.stopped && l.text) newestLocal = i; });
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <PhoneHead subtitle={plan || 'On this phone, no computer'} onExit={onExit} onSignOut={confirmSignOut} />
@@ -1121,7 +1124,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
                 {l.retry != null && <Btn label={l.interrupted ? 'Retry' : 'Try again'} disabled={busy || offline} onPress={() => void send(l.retry!, l.retryRid)} />}</View>
             </View></View>
             : <View key={i} style={{ gap: 10 }}>
-              {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} /></View></View></View>}
+              {!!l.text && <View style={s.line}><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}<View style={{ flex: 1, minWidth: 0 }}><ChatText text={l.text} latest={i === newestLocal} /></View></View></View>}
               {l.doc && <PhoneDocCard doc={l.doc} disabled={offline} onOpen={() => setOpen(l.doc!)} />}
             </View>)}
         {busy && !partial && <View style={s.line} accessibilityLiveRegion="polite" accessibilityLabel="Chief is working"><View style={{ flexDirection: 'row', gap: 10 }}>{speaker('Chief')}
@@ -2055,6 +2058,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const receipts = A.answeredReceipts(state).filter((r) => r.helper === id);
   const slots = A.cardSlots(lines, cards), receiptSlots = A.receiptSlots(lines, receipts);
   const last = lines.at(-1);
+  // The newest answer reads in full, never folded; the Add-a-phone card waits below Chief's first answer.
+  const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
+  const answered = newestAnswer !== undefined || !!partial;
   const name = h?.name ?? 'Chief';
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
   const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
@@ -2123,9 +2129,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
                 {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
-                {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} /> : <ChatText text={l.text} />)}
+                {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <ChatText text={l.text} latest={l.id === newestAnswer} />)}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
-                {phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
+                {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
               </View>
             </View>}
           </View></motion.Rise></View>
@@ -2220,11 +2226,12 @@ function Room(ctx: Ctx) {
   useEffect(() => { void load(); }, [load, tick]);
   const crew = A.crew(state);
   const lines = A.room(page, state);
+  const newestRoom = [...lines].reverse().find((l) => l.text)?.id;
   const send = async (text: string) => { const ok = await attempt(() => api.post('chief', text, { room: true }), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ width: '100%', maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
       {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.time}>{A.clock(l.at)}</T></View>}
-      <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
+      <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} latest={l.id === newestRoom} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
     {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
   </View>;
