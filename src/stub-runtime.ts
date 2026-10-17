@@ -87,7 +87,7 @@ export class StubRuntime implements AgentRuntime {
     let text = result ? `stub ${spec.bot}: ${seen.at(-1)?.name} said ${result.slice(0, 300)}` : `stub ${spec.bot}: done with "${last.slice(0, 60)}"`;
     if (/\[two-fare-backtest\]/.test(said))
       text = 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';
-    text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? text;
+    text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? (process.env.CREWHOUSE_STUB_GOLDEN && !result ? '' : text); // golden: unscripted gets no reply
     if (/ask permission/i.test(said)) {
       text = await new Promise<string>((resolve) => { on({ type: 'thinking' }); this.holds.set(spec.key, (reply) => resolve(reply || text)); });
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished
