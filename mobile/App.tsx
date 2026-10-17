@@ -373,9 +373,12 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
   // Chief's box (B1): the send stays dark while there is nothing to send, never a faded accent.
   const dark = chat === 'chief', on = ready && !busy && !away;
   const change = (x: string) => { setText(x); setFailed(false); if (chat) keepDraft(chat, x); };
+  const input = useRef<TextInput>(null);
   const send = async () => {
     if (away || busy || !ready) return;
     const x = text.trim(), p = pics, d = docs;
+    // Send keeps the keyboard up: the box takes focus back, so a press on Send never leaves it blurred.
+    input.current?.focus();
     setBusy(true);
     setText(''); setPics([]); setDocs([]); if (chat) keepDraft(chat, '');
     let ok = false;
@@ -419,7 +422,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
       <Text style={{ color: dark && !on ? t.solid : t.goInk, fontSize: 18, ...fw('900') }}>↑</Text>
     </Pressable>
   </>;
-  const field = (full: boolean) => <TextInput style={[s.composerInput, { color: t.ink }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
+  const field = (full: boolean) => <TextInput ref={input} style={[s.composerInput, { color: t.ink }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
   return (
     <View style={{ gap: 6 }}>
       {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
