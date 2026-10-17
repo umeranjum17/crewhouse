@@ -2163,7 +2163,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
         {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
       </ScrollView>
-      {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.ink }]}><T style={[s.newPillText, { color: t.bg }]}>↓ New</T></Pressable>}
+      {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
       {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
@@ -2880,7 +2880,7 @@ const s = StyleSheet.create({
   dayText: { fontSize: 12, lineHeight: 16, ...fw('500') },
   // A thread's NEW divider over the first line the person hasn't seen yet.
   newDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6 },
-  newPill: { position: 'absolute', bottom: 10, alignSelf: 'center', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  newPill: { position: 'absolute', bottom: 10, alignSelf: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, shadowColor: '#14121a', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   newPillText: { fontSize: 13, lineHeight: 18, ...fw('600') },
   newDividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   newDividerText: { fontSize: 11, lineHeight: 16, letterSpacing: 1, textTransform: 'uppercase', ...fw('700') },
