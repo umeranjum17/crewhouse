@@ -109,8 +109,7 @@ export class Accounts {
   async logout(account: string) {
     this.views.delete(account);
     await this.runtime.signOut(account).catch(() => {});
-    this.ready.delete(account); this.fresh.delete(account);
-    this.expired.add(account);
+    this.ready.delete(account); this.fresh.delete(account); this.expired.add(account);
   }
   /** The sign-in is over (either way): the card's last word is in. */
   async finished(account: string) { await this.running.get(account)?.finished.catch(() => {}); }
