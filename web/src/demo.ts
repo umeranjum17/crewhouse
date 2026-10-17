@@ -5,7 +5,8 @@
 // ?demo=return (Scout asks to press a shop's Start return), ?demo=chase (Scout's chase email as a draft to send), ?demo=renewal (Scout's renewal warning and the cancellation email as a draft to send), ?demo=day (Scout's plan of the day, three things in order),
 // ?demo=b1 (the B1 mocks' crew), ?demo=paper (Scout's reply to the clinic as a draft to approve — the paper, sorted), ?demo=meals (this week's dinners shopped into a cart, waiting on its checkout card),
 // ?demo=watch (the name watch heard: one source-linked line), ?demo=neighbour (the weekly brief as a document), ?demo=brief (the month in brief as a document),
-// ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=finished (the quiet just after a job lands),
+// ?demo=office (Home's office with first looks on the desks), ?demo=calm (nothing on the go), ?demo=goworkspaces (a pasted
+// Go key for several workspaces asks which one, web and phone widths), ?demo=finished (the quiet just after a job lands),
 // ?demo=saved (a keeping just landed: one "Saved:" line with Undo in Chief's chat),
 // ?demo=fresh (the Chief-only Home a new person gets: no helpers hired yet, nothing to hand over),
 // ?demo=ownerdefault (just after Hello: the stored name is still 'Owner', only the address is set).
@@ -500,12 +501,18 @@ for (const [id, p] of Object.entries(pages)) p.trail = events.filter((e) => e.bo
 
 // Every subscription route the app really offers, so the demo's Settings shows the honest matrix: the front-door
 // account carries the sign-in states, the rest stand there untested until you sign in to one.
+const GO_KEY = AIS.find((a) => 'keyEntry' in a)?.key ?? 'opencode-go';
+// A Go login for several workspaces (?demo=goworkspaces): pasting the key asks which one to use (the long name
+// exercises small screens); picking one signs it in.
+const GO_WORKSPACES = [{ id: 'wrk_personal', name: 'Personal' }, { id: 'wrk_team', name: 'An Exceptionally Long Workspace Name for Small Screens' }];
+const goworkspaces = variant === 'goworkspaces';
 const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
   signedIn: ai.key === 'chatgpt' && (!signin || variant === 'work'),
   restingUntil: ai.key === 'chatgpt' && variant === 'resting' ? now + 95 * min : 0,
   notIncluded: ai.key === 'chatgpt' && variant === 'plan',
   work: ai.key === 'chatgpt' && variant === 'work' ? 'maya@mail.example' : false,
-  signIn: ai.key === 'chatgpt' && variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
+  signIn: ai.key === 'chatgpt' && variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' }
+    : ai.key === GO_KEY && goworkspaces ? { state: 'waiting', via: 'key' } : null }));
 
 // ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
 // crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.
@@ -565,6 +572,16 @@ export async function demoCall(method: string, path: string, body?: Json) {
   }
   // &slowaccounts: the accounts answer takes 3 s, as the real engine's can: the screens while it is still checking.
   if (method === 'GET' && path.startsWith('/api/accounts')) return new URLSearchParams(location.search).has('slowaccounts') ? new Promise((r) => setTimeout(() => r(accounts), 3000)) : accounts;
+  // ?demo=goworkspaces: pasting the key asks which workspace, picking one signs in.
+  const goRow = () => { const r = (accounts as Json[]).find((a) => a.account === GO_KEY); if (!r) throw new Error('no Go row'); return r; };
+  if (goworkspaces && method === 'POST' && path === `/api/accounts/1/${GO_KEY}/paste`) {
+    goRow().signIn = { state: 'waiting', via: 'key', workspaces: GO_WORKSPACES };
+    return { ok: true, signIn: goRow().signIn };
+  }
+  if (goworkspaces && method === 'POST' && path === `/api/accounts/1/${GO_KEY}/workspace`) {
+    Object.assign(goRow(), { signedIn: true, signIn: { state: 'done', via: 'key' } });
+    return { ok: true, signIn: goRow().signIn };
+  }
   // The workbook crewd reads for the card and the panel (src/workbooks.ts): the tabs, headings and first rows.
   if (method === 'GET' && path.startsWith('/api/workbook')) return path.includes('flights') ? flights : book;
   // The document crewd reads for its card and panel (src/documents.ts): the headings, paragraphs, lists and tables —

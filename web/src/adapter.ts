@@ -1800,10 +1800,11 @@ export function paysFor(ai: { name: string; billing: string }) {
 export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS.filter((a) => a.billing === 'api').map((a) => a.name).join(' and ')}, where ${paysFor(AIS.find((a) => a.billing === 'api')!)}.`;
 
 /** One of the person's own AI accounts: signed in; a sign-in in progress (ChatGPT's page to say yes on, the fallback
- *  code, or a pasted plan key); how a sign-in ended (declined, the port busy, expired, failed); a plan without helpers. */
+ *  code, a pasted plan key, or the workspace a multi-workspace key should use); how a sign-in ended (declined, the port
+ *  busy, expired, failed); a plan without helpers. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { recovery: '', signing: null, key: null as null | { error: string }, page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
+  const none = { recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -1811,13 +1812,16 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   const signing = phase === 'code' && s.code ? { url: s.url ?? '', code: s.code } : null;
   // A plan-key wait (OpenCode Go) has no page and no code: the card asks for the pasted key instead.
   const pasting = s?.via === 'key' && s?.state === 'waiting' ? { error: s?.error ? plain(s.error) : '' } : null;
+  // A pasted key acting for several workspaces: the card asks which one to use (row ids, never secrets).
+  const pick = pasting && Array.isArray(s?.workspaces) && s.workspaces.length > 1
+    ? s.workspaces.filter((w: Json) => typeof w?.id === 'string' && w.id && typeof w?.name === 'string').map((w: Json) => ({ id: w.id as string, name: w.name as string })) : null;
   // Expiry stays an independent screen flag, based on the error words even when the reason also says busy or declined.
   const expired = s?.state === 'failed' && phaseOf({ signIn: { ...s, why: undefined } }) === 'expired';
   const declined = phase === 'cancelled';
   const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
-    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }

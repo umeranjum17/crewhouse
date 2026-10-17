@@ -137,6 +137,8 @@ export const api = {
   signIn: (account: string, body: { via?: 'code' | 'key'; fresh?: boolean } = {}) => call('POST', `/api/accounts/1/${account}/login`, body),
   /** Paste the plan key the key wait asks for. */
   signInPaste: (account: string, text: string) => call('POST', `/api/accounts/1/${account}/paste`, { text }),
+  /** A pasted plan key acting for several workspaces: use it for the one picked (row ids, never secrets). */
+  signInWorkspace: (account: string, id: string) => call('POST', `/api/accounts/1/${account}/workspace`, { id }),
   retryAccount: (account: string) => call('POST', `/api/accounts/1/${account}/retry`),
   /** The person switches Google on for their crew: their own Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),
