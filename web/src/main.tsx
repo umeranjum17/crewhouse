@@ -804,6 +804,7 @@ function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
       <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {word.toLowerCase()}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
         <span className={`tick ${s.state}`} aria-hidden>{TICK[s.state]}</span><span>{s.text}</span></li>)}</ol>
+      {!!ln.next && <p className="live-next">Next: {ln.next}</p>}
       {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>
         <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol></details>}
     </div>

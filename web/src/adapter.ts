@@ -1375,6 +1375,8 @@ export type LiveStep = { text: string; at: number };
 export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
 export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
   state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
+  /** The next queued job behind the running one, as a short title ("Next: …"). Never on the waiting/done line. */
+  next?: string;
   /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
   heard?: number };
 const OPEN = ['queued', 'working', 'needs_you', 'paused'];
@@ -1404,15 +1406,25 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   for (const t of o.tasks) if (mine(t.bot, t.origin)) tasks.set(t.id, t);
   for (const e of all) if (e.kind === 'task.created' && mine(e.bot, e.data?.origin) && !tasks.has(e.data.task))
     tasks.set(e.data.task, { id: e.data.task, bot: e.bot, origin: e.data.origin, state: 'queued', created_at: e.at });
-  const t = [...tasks.values()].sort((a, b) => b.id - a.id)[0];
+  // The line follows the job that is actually running (or waits on the person); only when none is does the newest
+  // one own it. A queued job behind a running one is the person's "Next: …", never a second, restarted clock.
+  const list = [...tasks.values()], titleOf = (x: Json) => plain(String(all.find((e) => e.kind === 'task.created' && e.data?.task === x.id)?.data?.title ?? x.title ?? ''));
+  const running = list.filter((x) => x.state === 'working' || x.state === 'needs_you' || x.state === 'paused').sort((a, b) => b.id - a.id);
+  const waiting = list.filter((x) => x.state === 'queued').sort((a, b) => b.id - a.id);
+  const t = running[0] ?? waiting[0] ?? [...list].sort((a, b) => b.id - a.id)[0];
   const created = t && all.find((e) => e.kind === 'task.created' && e.data?.task === t.id);
-  if (o.sent && (!t || !created?.seen || created.seen < o.sent))
+  // The optimistic line is only for a send with nothing to follow yet: a running job keeps its line even while a newer send is read.
+  if (!running.length && o.sent && (!t || !created?.seen || created.seen < o.sent))
     return { who: o.name, todos: [{ text: 'Reading your message', state: 'doing', at: o.sent }], detail: [], since: o.sent, state: 'reading' };
   if (!t) return null;
+  const next = running.length && waiting.length ? titleOf(waiting[0]) : '';
   const helper = t.bot !== o.id ? o.crew.find((c) => c.id === t.bot) : undefined;
   const who = helper?.name ?? o.name;
   const own = all.filter((e) => e.data?.task === t.id);
-  const start = created ? when(created) : at(t.created_at);
+  // The clock counts the run, not the wait: it starts when the engine admits the job (`run.admitted`), so a queued
+  // job that waited its turn does not make the turn look longer than it was (chat quality map, row #1).
+  const admitted = own.find((e) => e.kind === 'run.admitted');
+  const start = created ? when(created) : at(t.created_at), began = admitted ? when(admitted) : start;
   const title = plain(String(created?.data?.title ?? t.title ?? '')) || 'the job';
   // A sign-in wait names its one action, in this viewer's words; a waiting live line never carries a clock.
   const action = o.side === 'phone' ? WAIT_SIGNIN_PHONE : WAIT_SIGNIN;
@@ -1444,7 +1456,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
-    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: start, state, took: at(ended.at) - (created ? at(created.at) : at(t.created_at)),
+    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: began, state, took: at(ended.at) - (admitted ? at(admitted.at) : created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
   const writing = o.writing.get(t.id);
@@ -1452,7 +1464,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
   for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
   // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
-  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: start, state,
+  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: began, state, ...(next ? { next } : {}),
     heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
 }
 
