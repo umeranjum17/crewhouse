@@ -252,9 +252,11 @@ async function nativeCut(src, xml) {
     if (reach < 0 || !nearish) continue;
     // (b) a drawn cut marker: the last line's tail ends in small ink groups low on the line with no ink above them.
     // Two or more are the native "…"; a single small round dot standing apart from the line's last glyph (a box too
-    // tight for the full ellipsis) is the same cut drawn with one dot, and counts only where the node's own words end
-    // in no dot of their own — a real period or comma is the node's last glyph, not a marker. A glyph's own low tail
-    // (the leg of a "k") stays joined to its stem, so a marker must have clear space before it.
+    // tight for the full ellipsis) is the same cut drawn with one dot. Either way it counts only where the node's own
+    // words end in no dot of their own — a real period or comma is the node's last glyph, not a marker, so a node like
+    // an ordered-list marker "2." (its digit's own low terminal beside the period) is never read as an ellipsis cut.
+    // A glyph's own low tail (the leg of a "k") stays joined to its stem, so a marker must have clear space before it.
+    const ownDot = /[.,;:…·•‧‥-]\s*$/.test(n.text.trim());
     const span = Math.min(w, Math.max(16, Math.round(lh * 0.8))), x0 = w - span, mid = top + lh * 0.45;
     const groups = [];
     for (let px = x0; px < w; px++) {
@@ -272,8 +274,8 @@ async function nativeCut(src, xml) {
     let before = -1;
     if (m) for (let px = m.start - 1; px >= 0 && before < 0; px--) for (let py = top; py <= bot; py++) if (ink(px, py)) { before = px; break; }
     const cut = tail.length === 1 && m.wide >= 3 && m.wide <= Math.max(8, lh * 0.35) && m.maxy - m.miny >= 3 && m.maxy - m.miny <= Math.max(6, lh * 0.35)
-      && m.maxy >= bot - Math.max(2, lh * 0.08) && m.start - before >= Math.max(3, Math.round(lh * 0.1)) && !/[.,;:…·•‧‥-]\s*$/.test(n.text.trim());
-    if ((dots >= 2 && near) || cut) out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60),
+      && m.maxy >= bot - Math.max(2, lh * 0.08) && m.start - before >= Math.max(3, Math.round(lh * 0.1)) && !ownDot;
+    if ((dots >= 2 && near && !ownDot) || cut) out.push({ kind: 'clipped', el: label, text: n.text.trim().replace(/\s+/g, ' ').slice(0, 60),
       box: { x: x + x0, y: y + top, w: span, h: lh },
       detail: `${dots >= 2 && near ? 'drawn cut (ends "…" on screen)' : 'drawn cut (one dot on screen)'} but reports its full text "${n.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` });
   }

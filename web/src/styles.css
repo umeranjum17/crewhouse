@@ -479,11 +479,14 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .line .bubble-text { overflow-wrap: anywhere; font: 400 15px/24px var(--ui); max-width: 62ch; }
 .chat-md > :first-child { margin-top: 0; }
 .chat-md > :last-child { margin-bottom: 0; }
-.chat-md p, .chat-md ul, .chat-md pre { margin: 0 0 12px; }
+.chat-md p, .chat-md ul, .chat-md ol, .chat-md pre, .chat-md blockquote { margin: 0 0 12px; }
 .chat-md h3 { font: 600 18px/1.35 var(--ui); margin: 16px 0 8px; }
-.chat-md ul { padding-left: 22px; }
+.chat-md ul, .chat-md ol { padding-left: 22px; }
 .chat-md li { margin: 4px 0; }
 .chat-md li p { display: inline; }
+/* A quoted note reads as one: a soft panel behind the words, marked by a rule down its side. */
+.chat-md blockquote { padding: 8px 12px 8px 14px; border-left: 3px solid var(--line2); border-radius: 0 8px 8px 0; background: var(--soft); color: var(--ink2); }
+.chat-md blockquote > :last-child { margin-bottom: 0; }
 .chat-md .chat-link { display: inline-block; color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; text-decoration: underline; text-underline-offset: 2px; }
 /* Inline code in a chat answer reads as code: the mono stack on a quiet chip, in both themes.
    No border (it would push the lines apart); a long code word wraps inside the bubble. */
@@ -491,7 +494,7 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
 .chat-table { overflow-x: auto; margin-bottom: 12px; }
 .chat-table table { border-collapse: collapse; }
 .chat-table th, .chat-table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
-.chat-md pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); padding: 10px; border-radius: 8px; }
+.chat-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--art); font-size: .88em; background: var(--soft); padding: 10px; border-radius: 8px; }
 .chat-more { border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; font: 600 14px/1.5 var(--ui); padding: 4px 0; }
 .line.note { max-width: 92%; }
 .line.unsure .bubble-text { border-left: 2px solid var(--amber); padding-left: 12px; }

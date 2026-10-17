@@ -117,14 +117,14 @@ test('the screens read view models only, and the mono face draws art only', () =
     const src = readFileSync(f, 'utf8');
     assert.doesNotMatch(src, /detail\.(summary|pane|rule|tool)|\.thinks\b|\.limits\b|\.runtime\b|\bclaude\b|terminal/i, f);
     if (f.includes('mobile')) assert.doesNotMatch(src, /monospace/, 'the phone app draws its art as dots, and sets no text in mono');
-    else assert.doesNotMatch(src, /<pre(?![^>]*className="art)/, f);
+    else assert.doesNotMatch(src, /<pre(?![^>]*className="(?:art|chat-pre))/, f);
   }
   const css = readFileSync(join(dir, 'styles.css'), 'utf8');
   for (const rule of css.split('}')) {
     if (!/var\(--art\)|monospace/.test(rule)) continue;
     // Mono draws the art, standalone times/counts in a column (.time), and inline code chips
     // in chat answers (.chat-code) - never other reading text.
-    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|\.chat-code\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
+    assert.match(rule, /(\.art\b|\.ascii\b|\.time\b|\.chat-code\b|\.chat-pre\b|--art:|@font-face)/, `mono type outside the art: ${rule.trim().slice(0, 80)}`);
   }
 });
 
