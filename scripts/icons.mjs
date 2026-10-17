@@ -1,11 +1,11 @@
-// Draws Crewhouse's icons from the helmet in web/src/art.ts, so the icon can never drift from Chief:
-// native/store and desktop exports, the maskable icon, the favicon (his head) and notification glyph (his head in
-// white). It also renders the phone's mascot set into mobile/assets/pals/: Chief and every helper in each helmet
-// mood, required from mobile/src/marks.ts. Run after changing the helmet (`node scripts/icons.mjs`; the PNGs need
-// ImageMagick's `magick`). The outputs are committed.
+// Draws Crewhouse's icons from the helmet in web/src/art.ts: native/store and desktop exports, the maskable icon, the
+// favicon (his head) and notification glyph (his head in white). It also renders the phone's faces into
+// mobile/assets/pals/ from the critters: Chief and every look in each face mode, required from mobile/src/faces.ts
+// (written here too). Run after changing either (`node scripts/icons.mjs`; the PNGs need ImageMagick's `magick`).
+// The outputs are committed.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { helmetSoft, helmetSvg, helmetOf, POSES, PALS } from '../web/src/art.ts';
+import { critter, helmetSvg, faceOf, FACE_MODES, PALS } from '../web/src/art.ts';
 import { ICONS } from '../web/src/icons.ts';
 import { MARKS } from '../web/src/logos.ts';
 
@@ -73,27 +73,25 @@ for (const [key, d] of Object.entries(MARKS)) {
   rmSync(`${ai}${key}.svg`);
 }
 console.log('icons written into web/, mobile/assets/, mobile/store/ and packaging/icons/');
-// The phone's mascots: the helmet whole and as a head in every mood (the office reads the same files until lane 4
-// replaces the room), at 3x for the densest screens. The phone draws these with <Image>.
+// The phone's faces: Chief and every critter in each face mode, at 3x for the densest screens (56 dp). The phone
+// draws these with <Image>, and Metro needs literal requires, so this writes mobile/src/faces.ts beside them.
 const pals = new URL('../mobile/assets/pals/', import.meta.url).pathname;
 rmSync(pals, { recursive: true, force: true });
 mkdirSync(pals, { recursive: true });
-const sprite = (name, art, w, h) => {
-  writeFileSync(`${pals}${name}.svg`, art);
-  execFileSync('magick', ['-background', 'none', '-density', '300', `${pals}${name}.svg`, '-resize', `${w}x${h}`, '-depth', '8', '-strip', `PNG32:${pals}${name}.png`]);
-  rmSync(`${pals}${name}.svg`);
-};
-const inkDay = { night: false, ink: '#1d1b18', eye: undefined, scan: '#3d6fd6', cw: 6, ch: 15 };
-const headDay = { night: false, ink: '#1d1b18', eye: undefined, scan: '#3d6fd6', cw: 7, ch: 14 };
-for (const p of POSES) {
-  const mode = helmetOf(p);
-  const dim = p === 'rest' ? { ink: '#6b665d' } : {};
-  sprite(`chief-${p}`, helmetSvg(30, mode, { ...inkDay, ...dim }), 180, 225);
-  sprite(`head-chief-${p}`, helmetSvg(24, mode, { ...headDay, ...dim }), 168, 168);
-  for (const kind of Object.keys(PALS)) { sprite(`${kind}-${p}`, helmetSvg(30, mode, { ...inkDay, ...dim }), 144, 180); sprite(`head-${kind}-${p}`, helmetSvg(24, mode, { ...headDay, ...dim }), 168, 168); }
+const faces = [];
+for (const who of ['chief', ...Object.keys(PALS)]) for (const mode of FACE_MODES) {
+  writeFileSync(`${pals}${who}-${mode}.svg`, critter(who, mode));
+  execFileSync('magick', ['-background', 'none', '-density', '300', `${pals}${who}-${mode}.svg`, '-resize', '168x168', '-depth', '8', '-strip', `PNG32:${pals}${who}-${mode}.png`]);
+  rmSync(`${pals}${who}-${mode}.svg`);
+  faces.push(`  '${who}-${mode}': require('../assets/pals/${who}-${mode}.png'),`);
 }
-sprite('chief-wave', helmetSvg(30, 'needs', inkDay), 180, 225);   // the hero's ask (ChiefHero)
-console.log('sprites written into mobile/assets/pals/');
+writeFileSync(new URL('../mobile/src/faces.ts', import.meta.url), `// Written by scripts/icons.mjs: Chief and every critter (web/src/art.ts) in each face mode, keyed \`\${who}-\${mode}\`.
+// Metro needs literal requires.
+export const FACES: Record<string, number> = {
+${faces.join('\n')}
+};
+`);
+console.log('faces written into mobile/assets/pals/ and mobile/src/faces.ts');
 // The phone's on-screen bubble (@byokit/overlay, mobile/src/bubble.ts): the helmet on a dark disc, one still per
 // mood he can wear on Home; `ask` wears the blue dot. 168 px is the bubble's 56 dp at the densest screens. The glyph is
 // its notification's small icon.
@@ -101,14 +99,14 @@ const bubbles = new URL('../mobile/assets/bubble/', import.meta.url).pathname;
 mkdirSync(bubbles, { recursive: true });
 for (const m of ['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error']) {
   const dot = m === 'ask' ? '<circle cx="846" cy="178" r="138" fill="#0A84FF" stroke="#FFFFFF" stroke-width="36"/>' : '';
-  writeFileSync(`${bubbles}chief-${m}.svg`, svg(`<circle cx="512" cy="512" r="488" fill="#0C0C0B" stroke="#ECECEC" stroke-width="24"/>${at(helmetSvg(24, helmetOf(m), { night: true, cw: 8, ch: 16 }), 152, 160, 720)}${dot}`));
+  writeFileSync(`${bubbles}chief-${m}.svg`, svg(`<circle cx="512" cy="512" r="488" fill="#0C0C0B" stroke="#ECECEC" stroke-width="24"/>${at(helmetSvg(24, faceOf(m), { night: true, cw: 8, ch: 16 }), 152, 160, 720)}${dot}`));
   execFileSync('magick', ['-background', 'none', '-density', '96', `${bubbles}chief-${m}.svg`, '-resize', '168x168', '-depth', '8', '-strip', `PNG32:${bubbles}chief-${m}.png`]);
   rmSync(`${bubbles}chief-${m}.svg`);
 }
 execFileSync('magick', [web + 'notify-96.png', `PNG32:${bubbles}glyph.png`]);
 console.log('bubble written into mobile/assets/bubble/');
-// The phone's first screen (mock C): the line marks white on transparent (the screen tints each one), and Chief's soft
-// helmet in each look, at 3x.
+// The phone's first screen (mock C): the line marks white on transparent (the screen tints each one), and Chief's
+// critter in each look, at 3x.
 const where = new URL('../mobile/assets/where/', import.meta.url).pathname;
 mkdirSync(where, { recursive: true });
 const draw = (name, art, w, h) => {
@@ -117,5 +115,5 @@ const draw = (name, art, w, h) => {
   rmSync(`${where}${name}.svg`);
 };
 for (const k of ['cloud', 'computer', 'phone', 'shield']) draw(k, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`, 60, 60);
-for (const look of ['day', 'night']) draw(`chief-${look}`, helmetSoft('here', { night: look === 'night' }).replace('<svg ', '<svg width="100" height="92" '), 132, 121);
+for (const look of ['day', 'night']) draw(`chief-${look}`, critter('chief', 'here', { night: look === 'night', aspect: 132 / 121 }).replace('<svg ', '<svg width="132" height="121" '), 132, 121);
 console.log('first-screen marks written into mobile/assets/where/');

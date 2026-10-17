@@ -1,5 +1,5 @@
 // The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
-// panels are flat with no 3D library anywhere, their only motion is the working helmet's scan line (still otherwise,
+// panels are flat with no 3D library anywhere, their only motion is a working face reading along (still otherwise,
 // none under Reduce Motion), and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer
 // every panel sits clear of the others, nothing clips, counts agree with A.office, and the grid scrolls past six.
 // Needs a Chromium on PATH (skipped without one).
@@ -94,16 +94,16 @@ const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
   await until('the office rows', () => b.run("!!document.querySelector('.office .panel, .office .grow-row')"), 30_000);
 };
 
-// What moves: the working helmets' scan lines only (a 140 ms re-render, never a frame callback or a CSS loop).
+// What moves: a working face reading along only (a 140 ms re-render, never a frame callback or a CSS loop).
 const helmets = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
   const on = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations === Infinity);
   const panels = [...document.querySelectorAll('.office .panel')];
   return { loops: on.length, panels: panels.length,
     think: panels.filter((p) => p.querySelector('.helmet')?.dataset.mode === 'think').length,
-    art: panels.map((p) => p.querySelector('.helmet')?.textContent ?? '') };
+    art: panels.map((p) => p.querySelector('.helmet')?.getAttribute('src') ?? '') };
 })()`);
 
-test('the office keeps the battery budget: a scan line while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
+test('the office keeps the battery budget: a face reads along while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
@@ -116,8 +116,8 @@ test('the office keeps the battery budget: a scan line while working, still othe
     await new Promise((r) => setTimeout(r, WINDOW_MS));
     const q1 = await helmets(b);
     const moved = q0.art.filter((a: string, i: number) => a !== q1.art[i]).length;
-    assert.equal(moved, q1.think, `${demo}: exactly the thinking helmets move (${moved} of ${q1.panels})`);
-    if (demo === 'calm') assert.equal(q1.think, 0, 'calm: nobody works, every helmet still');
+    assert.equal(moved, q1.think, `${demo}: exactly the thinking faces move (${moved} of ${q1.panels})`);
+    if (demo === 'calm') assert.equal(q1.think, 0, 'calm: nobody works, every face still');
     else assert.ok(q1.think > 0, 'office: someone working is seen working');
   }
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
@@ -125,7 +125,7 @@ test('the office keeps the battery budget: a scan line while working, still othe
   await toOffice(b);
   const r0 = await helmets(b);
   await new Promise((r) => setTimeout(r, WINDOW_MS));
-  assert.deepEqual((await helmets(b)).art, r0.art, 'Reduce Motion: every helmet still, even at work');
+  assert.deepEqual((await helmets(b)).art, r0.art, 'Reduce Motion: every face still, even at work');
   await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
@@ -267,7 +267,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
             assert.equal(m.cols, 3, `${at}: three columns on a desk`);
           }
           if (n === 30) assert.ok(m.scroll, `${at}: thirty rows scroll past six, on the page or in the column`);
-          assert.ok(m.modes.every((x: string) => ['here', 'needs', 'think', 'rest'].includes(x)), `${at}: helmets wear only their four moods (${m.modes})`);
+          assert.ok(m.modes.every((x: string) => ['here', 'needs', 'think', 'rest'].includes(x)), `${at}: faces wear only their four moods (${m.modes})`);
           assert.ok(m.words.every((w: string) => !/session|terminal|console|pane|live|split|shell|tmux|command|prompt|cursor/i.test(w)), `${at}: no terminal words in the state words (${m.words.join(' | ')})`);
         } catch (e) {
           const dir = process.env.OFFICE_SHOTS;
@@ -281,26 +281,26 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
         }
       }
     }
-    // Day draws day art and night draws night art: the same helmets differ between the two.
+    // Day draws day art and night draws night art: the same faces differ between the two.
     const art: string[] = [];
     for (const theme of ['day', 'night']) {
       await b.open(`demo=crew5&${theme}`);
       await toOffice(b);
-      art.push(await b.run("[...document.querySelectorAll('.office .helmet')].map((h) => h.textContent).join('\\n')"));
+      art.push(await b.run("[...document.querySelectorAll('.office .helmet')].map((h) => h.getAttribute('src')).join('\\n')"));
     }
-    assert.notEqual(art[0], art[1], `day and night draw different helmets at ${width}`);
+    assert.notEqual(art[0], art[1], `day and night draw different faces at ${width}`);
   }
 });
 
 
-test('your crew reads whole: every face is the drawn helmet in its own shape, and no row overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
+test('your crew reads whole: every face is its critter in its own shape, and no row overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   const rows = `(() => [...document.querySelectorAll('.crew-row')].map((row) => {
     const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
     const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
     const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
-    // The helmet's box follows the drawing (its viewBox): a box forced to another shape squashes or shrinks the head.
+    // The face's box follows the drawing (its viewBox): a box forced to another shape squashes or shrinks the head.
     const squashed = [...row.querySelectorAll('.face img.ink')].filter((i) => !i.naturalHeight
       || Math.abs(i.width / i.height - i.naturalWidth / i.naturalHeight) > 0.05).length;
     return { faces: row.querySelectorAll('.face img.ink').length + (row.querySelector('.face.add') ? 1 : 0), kids: kids.length, overlap, clip, squashed };
@@ -312,8 +312,8 @@ test('your crew reads whole: every face is the drawn helmet in its own shape, an
     const found = await b.run(rows), at = `${theme} ${w}`;
     assert.ok(found.length > 3, `${at}: the crew lists every helper (${found.length} rows)`);
     for (const [i, f] of found.entries()) {
-      assert.equal(f.faces, 1, `${at} row ${i}: one drawn helmet face`);
-      assert.equal(f.squashed, 0, `${at} row ${i}: the helmet keeps its own shape`);
+      assert.equal(f.faces, 1, `${at} row ${i}: one critter face`);
+      assert.equal(f.squashed, 0, `${at} row ${i}: the critter keeps its own shape`);
       assert.ok(!f.overlap, `${at} row ${i}: name, role and status never overlap`);
       assert.ok(!f.clip, `${at} row ${i}: nothing spills past the row`);
     }
@@ -485,7 +485,7 @@ test('things, routines and helper details read Term: shared tiles, one blue prim
   }
 });
 
-test('first run and the Share sheet read Term: helmet faces, shared tiles, no bubble, one blue primary, words in full', { skip: !bin && 'no Chromium here' }, async () => {
+test('first run and the Share sheet read Term: critter faces, shared tiles, no bubble, one blue primary, words in full', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   const look = `(() => { const W = innerWidth, sp = document.querySelector('.speech'), st = sp && getComputedStyle(sp);
@@ -513,7 +513,7 @@ test('first run and the Share sheet read Term: helmet faces, shared tiles, no bu
     m = await b.run(look);
     assert.equal(m.chips, 0, `${at} share: no old chips`);
     assert.equal(m.primary, 1, `${at} share: one filled-blue primary`);
-    assert.equal(m.faces, 1, `${at} share: Chief speaks with his drawn helmet`);
+    assert.equal(m.faces, 1, `${at} share: Chief speaks with his critter`);
     assert.ok(!m.cut, `${at}: what was shared and every idea read in full`);
     for (const [i, r] of m.rows.entries()) assert.ok(!r.overlap && !r.clip, `${at} row ${i}: nothing overlaps or spills`);
   }

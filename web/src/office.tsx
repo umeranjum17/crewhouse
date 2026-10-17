@@ -166,7 +166,7 @@ function HelperPanel({ c, live, job, role }: { c: A.OfficeMember; live: A.Office
   const meta = meta0 === line ? '' : meta0;
   const file = !c.ask && c.things[0] ? c.things[0] : undefined;
   // The scan follows the helmet's own mood (at work even while holding a question), never the seat.
-  const think = art.helmetOf(c.mood) === 'think';
+  const think = art.faceOf(c.mood) === 'think';
   return (
     <Panel name={c.name} href={`#/h/${c.id}`} mood={c.mood} kind={c.kind} line={line} meta={meta}
       steps={c.steps.slice(-3)} glow={glow} think={think}

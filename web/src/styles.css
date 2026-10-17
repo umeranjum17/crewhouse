@@ -107,11 +107,7 @@ b { font-weight: 600; }
 /* art */
 .art { font-family: var(--art); line-height: 1; white-space: pre; margin: 0; letter-spacing: 0; font-kerning: none; font-variant-ligatures: none; font-feature-settings: normal; }
 .art i { font-style: normal; }
-/* The helmet's mood colours: eyes light when here, blue when needed, a blue scan while thinking, dim at rest. */
-.helmet[data-mode="needs"] .eye { color: var(--pink); }
-.helmet[data-mode="think"] .scan { color: var(--pink); }
-.helmet[data-mode="rest"] { color: var(--mute); }
-/* Whole helmets size like the old figure: the hero slot first, then anywhere centred. */
+/* A face slot (.helmet, parts.tsx Critter) is sized in em, as the text helmet it replaced: whole faces size like the old figure: the hero slot first, then anywhere centred. */
 .helmet { font-size: 9px; }
 .ch-art .helmet { font-size: 9.5px; } /* the whole 38-column rail grid fits the art column */
 /* The old figure bled past the slot's edge; text art must not clip, so the helmet resets the bleed. */
@@ -1768,7 +1764,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* Chief's profile, one page (mock profile-b): a tight header, so Take control shows whole on the first phone screen. */
 a.ch-art, .ch-name a { color: inherit; text-decoration: none; }
 .cp-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 0; }
-.cp-head .helmet { width: 64px; height: auto; flex: none; } /* the phone header's smooth mascot (art.helmetSoft), crisp at 64px */
+.cp-head .helmet { width: 64px; height: auto; flex: none; } /* the phone header's mascot (Chief's critter), crisp at 64px */
 .cp-head h1 { margin: 0; }
 .cp-head .lead { margin: 2px 0 0; }
 .chief-profile .label { margin: 18px 4px 8px; }
