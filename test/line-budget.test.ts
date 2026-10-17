@@ -42,7 +42,10 @@ import { join } from 'node:path';
 // on acf5711 (net -25, src 7110 -> 7085): #531 had already joined 11 of the 37 and #532 rewrote one more away. The
 // remaining 72 lines of the email allocation are closed as an owner exception: they are real email-feature
 // code, and only line-packing or code moves could remove them.
-const BUDGET = 7085;
+// Raised 7085 -> 7086 for the Go workspace pick (ch-go-workspace-pick, owner exception): the pick step in
+// OpenClawRuntime.keyIn (one listing, one add in flight, the pick guard), the one workspace route and the
+// Accounts pick handling. No trim paired: the pick path is the feature.
+const BUDGET = 7086;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
