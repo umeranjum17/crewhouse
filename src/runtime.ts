@@ -8,10 +8,9 @@ export interface ToolHost {
   call(run: RunRef, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<string>;
 }
 export interface RunSpec extends RunRef {
-  cwd: string; system: string; message: string; account: string;
-  model?: string;
+  cwd: string; system: string; message: string; account: string; model?: string;
   images?: { data: string; mimeType: string }[];
-  thinking?: 'low'; builtins: string[];
+  thinking?: 'low'; builtins: string[]; soul?: string; // Chief's soul: the engine's own SOUL.md, one house voice for every bot on the agent
 }
 export type RunEvent =
   | { type: 'started' | 'thinking' }

@@ -49,7 +49,7 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost;
-  private runs = new Map<string, RunRef & { account?: string }>();
+  private runs = new Map<string, RunRef & { account?: string }>(); private souls = new Map<string, string>(); // the SOUL.md each lane holds, as this process last set it
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
@@ -157,6 +157,8 @@ export class OpenClawRuntime implements AgentRuntime {
     const provider = PROVIDER_OF[spec.account], model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
     this.runs.set(spec.key, spec);
     try {
+      const lane = provider === 'opencode-go' ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId; // the engine reads SOUL.md and IDENTITY.md from the lane's workspace each turn, and retires its stock BOOTSTRAP.md once they are set
+      if (spec.soul && this.souls.get(lane) !== spec.soul) { for (const [name, content] of [['SOUL.md', spec.soul], ['IDENTITY.md', '- Name: Chief\n']]) await this.kit.call('agents.files.set', { agentId: lane, name, content }); this.souls.set(lane, spec.soul); }
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
         ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}) },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });

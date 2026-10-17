@@ -377,15 +377,15 @@ export function insideBot(cfg: Config, id: string, p: string) {
   return full;
 }
 
-/** How every model turn is told to address the person. Only a name: an honorific is never the answer. */
+/** How every model turn is told the person's name: Chief's soul holds his form of address; sir or ma’am is never it. */
 export function addressLine(address: string | null) {
   if (!address) return 'You do not know what to call the person yet; use no name or title.';
-  return `The person likes to be called "${address}". Use it at most once, when greeting them; never in an ordinary reply. Never use sir or ma’am instead of their name.`;
+  return `The person's name is "${address}". Use the name at most once, when greeting them; never in an ordinary reply. Never use sir or ma’am.`;
 }
 
-/** What the engine is told about the bot for a whole session: who it is (its soul), its job, then how Crewhouse works. */
+/** What the engine is told about the bot for a whole session: a helper's own soul (Chief's is the engine's SOUL.md), its job, then how Crewhouse works. */
 export function systemPrompt(cfg: Config, id: string, chief: boolean) {
-  const dir = botDir(cfg, id), persona = ['soul.md', 'AGENTS.md'].map((f) => existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8').trim() : '').filter(Boolean).join('\n\n');
+  const dir = botDir(cfg, id), own = (f: string) => readText(join(dir, f)).trim(), persona = (chief ? [own('AGENTS.md')] : ['SOUL.md is Chief\'s voice for the house; in your own work, who you are below comes first.', own('soul.md'), own('AGENTS.md')]).filter(Boolean).join('\n\n');
   // Chief's installed job is the person's file and may predate shipped product knowledge.
   const about = chief ? readFileSync(join(templatesDir(cfg), 'chief', 'AGENTS.md'), 'utf8').match(/## About Crewhouse\n[\s\S]*?(?=\n## |$)/)?.[0] ?? '' : '';
   return `${persona}${about && !persona.includes('## About Crewhouse') ? `\n\n${about}` : ''}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +
@@ -398,7 +398,6 @@ export function systemPrompt(cfg: Config, id: string, chief: boolean) {
     '- Be decisive: recommend one option and say why in a clause. When you must assume something, say it in a few words ("assuming this weekend") and carry on.\n' +
     '- A caveat only where being wrong costs the person: money, health, legal, safety, a price or date they will act on, or something about to be sent, paid or deleted. Then one specific line: what to check, and where. Never "I could not verify", "I did not test", "unverified" or "as an AI". Where you looked and what you skipped goes at the end of the document, not in chat.\n' +
     '- Call what you made by what it is ("the launch plan"), never a file path, command or code.\n' +
-    '- You already have a name and role. Never introduce yourself as a new assistant or ask the person to name you after a task; finish with the result only.\n' +
     (chief ? 'Crew tools for the crew. Calendar and mail: read the person\'s own and answer yourself; crew_connect if it isn\'t connected; changes go on a card or to a helper.' :
       `The person's own folders are in ${homedir()} (Documents, Pictures, Downloads…). Your shell can't see them; reach them with read and write, ` +
       'or crew_copy to put a copy of something you made there. Crewhouse asks the person first, so just go ahead and call the tool.\n' +
