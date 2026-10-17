@@ -110,16 +110,19 @@ test('display lifecycle: start once, own cookie, idle stop', { skip: noXvfb }, a
   assert.ok(!existsSync(`/tmp/.X11-unix/X${d.n}`), 'the display is gone');
 });
 
-test('watching: crewd picks the display and the permissions', { skip: noXvfb }, async (t) => {
+test('watching: crewd picks the display and whether a watcher may drive', { skip: noXvfb }, async (t) => {
   const d = await desks.ensure('reel', botDir);
   if (!(await probe(d.display, d.xauth))) return t.skip('desklink engine unavailable here');
   const a = watcher(), b = watcher();
-  await assert.rejects(desks.signal('reel', a, 'session.open', { permissions: ['view'], source: { kind: 'portal' } }, false), { code: 'source' });
-  await assert.rejects(desks.signal('reel', a, 'session.open', { permissions: ['view', 'control'] }, false), { code: 'permission' });
+  await assert.rejects(desks.signal('reel', a, 'session.open', { source: { kind: 'portal' } }, false), { code: 'source' });
 
-  const view = await desks.signal('reel', a, 'session.open', { permissions: ['view'] }, false);
+  // A 0.4+ phone always sends the full view/control/clipboard set whatever the app asked for, and 0.4+ engines
+  // ignore it: crewd's own authority — the wheel and the link grant — decides, never the request. So a watch-only
+  // watcher opening with that full set still opens view-only and can never drive.
+  const view = await desks.signal('reel', a, 'session.open', { permissions: ['view', 'control', 'clipboard'] }, false);
   assert.equal(view.source.kind, 'x11-root');
   assert.deepEqual([view.source.width, view.source.height], [1280, 800]);
+  assert.equal(desks.info('reel')?.control, false, 'a request for control from a watch-only watcher grants none');
   for (let i = 0; i < 100 && !a.seen.some((e) => e.kind === 'description'); i++) await sleep(100);
   assert.ok(a.seen.some((e) => e.kind === 'description'), 'the offer reaches the watcher');
   assert.ok(a.seen.every((e) => e.sessionId === view.sessionId), 'engine events retain their session for viewer recovery');
@@ -135,9 +138,9 @@ test('watching: crewd picks the display and the permissions', { skip: noXvfb }, 
   desks.release(a);
   assert.equal(desks.info('reel')?.watching, false, 'a closed socket ends its session');
 
-  const drive = await desks.signal('reel', b, 'session.open', { permissions: ['view', 'control'] }, true);
+  const drive = await desks.signal('reel', b, 'session.open', { permissions: ['view', 'control', 'clipboard'] }, true);
   assert.ok(drive.sessionId);
-  assert.equal(desks.info('reel')?.control, true);
+  assert.equal(desks.info('reel')?.control, true, 'the person holding the wheel drives, whatever the wire said');
   await desks.revokeControl('reel');
   assert.equal(desks.info('reel')?.watching, false, 'Give back ends the controlling session');
   assert.ok(b.seen.some((e) => e.kind === 'revoked'));

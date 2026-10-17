@@ -13,7 +13,7 @@
     "@byokit/relay": "0.6.0",
     "@byokit/statusbar": "0.1.1",
     "@byokit/ui-core": "0.6.0",
-    "@desklink/react-native": "0.3.0",
+    "@desklink/react-native": "0.5.8",
     "patch-package": "8.0.1",
     "@expo/ui": "~57.0.21",
     "expo": "~57.0.25",
