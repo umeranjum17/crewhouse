@@ -134,8 +134,7 @@ function geoFace(p: Geo, m: FaceMode, glance: number) {
         : style === 'bar' ? `<rect x="${x - 5.5}" y="${ey - 3}" width="11" height="6" rx="3" fill="${INK}"/>`
         : `<circle cx="${x}" cy="${ey}" r="${m === 'needs' ? 6.5 : 5.5}" fill="${INK}"/>`;
     }).join('');
-  const mouth = m === 'needs' ? `<ellipse cx="50" cy="${my + 1}" rx="4" ry="5" fill="${INK}"/>`
-    : m === 'think' || m === 'rest' || p.mouth === 'flat' ? line(`M${m === 'think' ? 46 : 44} ${my}H${m === 'think' ? 56 : 56}`)
+  const mouth = m === 'think' || m === 'rest' || p.mouth === 'flat' ? line(`M${m === 'think' ? 46 : 44} ${my}H${m === 'think' ? 56 : 56}`)
     : line(`M41 ${my}Q50 ${my + 7} 59 ${my}`);
   return eyes + mouth;
 }
@@ -162,9 +161,10 @@ export const PALS = {
 export type Kind = keyof typeof PALS;
 /** The looks for helpers no template draws (Chief's made-up hires): never a template's, never Chief's. */
 export const MADE: Kind[] = ['bunny', 'panda', 'pig', 'koala', 'lion', 'sheep', 'frog', 'deer'];
-/** The crew colour: a face's own, and the card the person sees for it. Chief's card is a lighter blue than his face, so
- *  black words on it read (his #3157F2 is 3.8:1 with black; this is 5.7:1). */
-export const colourOf = (who: Kind | 'chief') => who === 'chief' ? '#5C7CFA' : PALS[who].c;
+/** The crew colour: a face's own, and the card the person sees for it. Chief's blue is 3.8:1 with black words, so his
+ *  card's words are light (5.6:1): `inkOn`. */
+export const colourOf = (who: Kind | 'chief') => (who === 'chief' ? CHIEF : PALS[who]).c;
+export const inkOn = (who: Kind | 'chief') => who === 'chief' ? LIGHT : INK;
 /** Chief or a helper as a Geo face SVG on its black disc. `beat` (a working face's ticker) moves its eyes along a line,
  *  left to right, as it reads; `aspect` is the slot's width over its height. */
 export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { beat?: number; aspect?: number } = {}) => {

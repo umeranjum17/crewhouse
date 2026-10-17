@@ -1713,6 +1713,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-tile > .face { align-self: center; margin: 10px 0 12px; }
 .st-tile > b { font-size: 18px; line-height: 1.15; overflow-wrap: anywhere; }
 .st-tile > span:last-child { font-size: 16px; font-weight: 600; opacity: .75; overflow-wrap: anywhere; }
+.st-tile.st-chief { color: #F7F7FB; }
+.st-tile.st-chief > span:last-child { opacity: 1; }
 .st-tile.st-new { align-items: center; justify-content: center; text-align: center; color: var(--ink); }
 .st-tile.st-new > b { margin-top: 10px; }
 .st-tile.st-new > span:last-child { color: var(--mute); opacity: 1; font-weight: 400; }

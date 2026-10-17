@@ -340,7 +340,8 @@ function Home(ctx: Ctx) {
   const toChief = async (t: string, files?: { name: string; type: string; data: string }[]) => { const ok = await attempt(() => api.post('chief', t, undefined, undefined, files), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
   const jobs = useMemo(() => new Map(A.work(state).map((w) => [w.helper, w])), [state]);
   const n = live.counts.needs, name = A.displayName(state.person);
-  const said = A.chats(state, { signedOut: out })[0];
+  // Under "Chief has N things for you", the first ask's own words (as the demo); else Chief's latest line.
+  const said = A.chats(state, { signedOut: out })[0], line = n ? live.needs[0]?.head : said.at > 0 ? said.line : '';
   return (
     <div className="page stack stack-home">
       <header className="st-head"><h1 className="wide">{A.greeting().replace(/^Good (.)/, (_, c: string) => c.toUpperCase())}{name ? `, ${name}.` : '.'}</h1><a className="icon-btn st-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={20} /></a></header>
@@ -352,7 +353,7 @@ function Home(ctx: Ctx) {
       {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
       <section className="sh-chief" aria-label="Chief">
         <a className="sh-top" href="#/chief"><Face who="chief" size={64} />
-          <span className="grow"><b className="semi">{n ? A.chiefHas(live) : 'Chief'}</b>{(out || !n) && <span className="st-word">{chiefWord(live, out, ctx.offline)}</span>}{said.at > 0 && <span className="st-line">{said.line}</span>}</span></a>
+          <span className="grow"><b className="semi">{n ? A.chiefHas(live) : 'Chief'}</b>{(out || !n) && <span className="st-word">{chiefWord(live, out, ctx.offline)}</span>}{line && <span className="st-line">{line}</span>}</span></a>
         <Composer placeholder="Ask Chief anything" onSend={toChief} {...typeInto('chief')} chips={[]} />
       </section>
       <div className="st-label"><span>Your crew</span><span>{A.summaryOf(live)}</span></div>
@@ -369,10 +370,7 @@ function Home(ctx: Ctx) {
 /** One crew member on Home, a card in their own colour (Stack): their face, the one status every screen reads
  *  (office.tsx glowOf), what they are on and one meta line, as the office panel said it. */
 function CrewCard({ c, live, job }: { c: A.OfficeMember; live: A.OfficeView; job?: A.Work }) {
-  const done = A.landed(c, live), glow = glowOf(c, live);
-  const line = A.waitsOnYou(c) ? job?.title || c.step || A.NO_JOB : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
-  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && A.seatOf(c) === 'working' ? job.title : glow.cls === 'done' ? done!.title : '';
-  const meta = meta0 === line ? '' : meta0;
+  const glow = glowOf(c, live), { line, meta } = A.cardLines(c, live, job);
   return <a className="st-card" href={hrefOf(c.id)} style={{ background: art.colourOf(c.kind) }} aria-label={`${c.name}: ${glow.word}`}>
     <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={48} />
     <span className="grow"><span className="st-top"><b className="semi">{c.name}</b><span className={`st-pill ${glow.cls}`}>{glow.word}</span></span>
@@ -837,17 +835,18 @@ function Room(ctx: Ctx) {
 
 // ---------- the crew ----------
 // A tile per member in their own colour (Stack), Chief first: each pill is the member's one status, the rail's own
-// (A.chiefStatus, A.statusOf), so the page can never disagree with Home or the rail. The tile keeps the member's role.
+// (A.chiefStatus, A.statusOf), so the page can never disagree with Home or the rail. The tile keeps one short role line
+// (A.tagOf); the full role is on the member's sheet.
 function Crew(ctx: Ctx) {
   const { state, live } = ctx;
   const out = chiefLocal(ctx).signedOut && !ctx.offline;
-  const roles = new Map(A.crew(state).map((h) => [h.id, h.role]));
-  const tile = (href: string, who: Parameters<typeof Face>[0]['who'], colour: string, name: string, word: string, role: string) =>
-    <a key={href} className="st-tile" href={href} style={{ background: colour }} aria-label={`${name}: ${word}`}><span className="st-pill">{word}</span><Face who={who} size={72} /><b className="semi">{name}</b><span>{role}</span></a>;
+  const roles = new Map(A.crew(state).map((h) => [h.id, A.tagOf(h)]));
+  const tile = (href: string, who: Parameters<typeof Face>[0]['who'], kind: art.Kind | 'chief', name: string, word: string, role: string) =>
+    <a key={href} className={`st-tile ${kind === 'chief' ? 'st-chief' : ''}`} href={href} style={{ background: art.colourOf(kind) }} aria-label={`${name}: ${word}`}><span className="st-pill">{word}</span><Face who={who} size={72} /><b className="semi">{name}</b><span>{role}</span></a>;
   return <div className="page stack rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1 className="wide">Your crew</h1><p className="st-line">Chief deals each job to one of them. Tap one to see what they are doing.</p>
     <div className="st-tiles">
-      {tile('#/chief', 'chief', art.colourOf('chief'), 'Chief', chiefWord(live, out, ctx.offline), 'Hands out the jobs')}
-      {A.roster(live.crew).map((c) => tile(hrefOf(c.id), { kind: c.kind, name: c.name, mood: c.mood }, art.colourOf(c.kind), c.name, A.statusOf(c, live).word, roles.get(c.id) ?? ''))}
+      {tile('#/chief', 'chief', 'chief', 'Chief', chiefWord(live, out, ctx.offline), 'Hands out the jobs')}
+      {A.roster(live.crew).map((c) => tile(hrefOf(c.id), { kind: c.kind, name: c.name, mood: c.mood }, c.kind, c.name, A.statusOf(c, live).word, roles.get(c.id) ?? ''))}
       <a className="st-tile st-new" href="#/crew/add"><Icon name="plus" size={36} /><b className="semi">Add a helper</b><span>Tell Chief who you need</span></a>
     </div></div>;
 }

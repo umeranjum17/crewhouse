@@ -1734,7 +1734,7 @@ function Home(ctx: Ctx) {
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <T style={[s.semi, { fontSize: 22, lineHeight: 26 }]}>{n ? A.chiefHas(view) : 'Chief'}</T>
               {!n && <T style={[s.read, s.b]}>{offline ? OUT : A.chiefStatus(view).word}</T>}
-              {chats[0].at > 0 && <T tone="mute" style={s.read}>{chats[0].line}</T>}
+              {(n ? !!view.needs[0] : chats[0].at > 0) && <T tone="mute" style={s.read}>{n ? view.needs[0].head : chats[0].line}</T>}
             </View>
           </Pressable>
           {(canAct || ctx.writer) && <Composer placeholder="Ask Chief anything" onSend={toChief} chat="chief" docs away={offline} />}
@@ -1764,10 +1764,7 @@ function Home(ctx: Ctx) {
 /** One crew member on Home, a card in their own colour (web/src/main.tsx CrewCard): their face, the one status every
  *  screen reads (glowOf), what they are on and one meta line. */
 function CrewCard({ c, view, job, offline, onPress }: { c: A.OfficeMember; view: A.OfficeView; job?: A.Work; offline: boolean; onPress: () => void }) {
-  const done = A.landed(c, view), glow = glowOf(c, view), word = offline ? OUT : glow.word;
-  const line = A.waitsOnYou(c) ? job?.title || c.step || A.NO_JOB : glow.cls === 'done' && done!.summary ? done!.summary : c.status;
-  const meta0 = A.waitsOnYou(c) ? A.WAIT_CHIEF : job && A.seatOf(c) === 'working' ? job.title : glow.cls === 'done' ? done!.title : '';
-  const meta = meta0 === line || offline ? '' : meta0;
+  const word = offline ? OUT : glowOf(c, view).word, { line, meta: meta0 } = A.cardLines(c, view, job), meta = offline ? '' : meta0;
   return <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${c.name}: ${word}`} style={({ pressed }) => [s.stCard, { backgroundColor: art.colourOf(c.kind) }, pressed && { opacity: 0.8 }]}>
     <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={48} />
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -2126,19 +2123,22 @@ function Crew(ctx: Ctx) {
   const t = useLook();
   const { width } = useWindowDimensions();
   const cols = Math.max(2, Math.floor((width - 22) / 170)), w = Math.floor((width - 32 - 10 * (cols - 1)) / cols);
-  const roles = new Map(A.crew(state).map((h) => [h.id, h.role]));
-  const tile = (key: string, face: ReactNode, colour: string, name: string, word: string, role: string, route: Route) =>
-    <Pressable key={key} onPress={() => go(route)} accessibilityRole="button" accessibilityLabel={`${name}: ${word}`} style={({ pressed }) => [s.stTile, { width: w, backgroundColor: colour }, pressed && { opacity: 0.8 }]}>
-      <Text style={[s.stPill, { alignSelf: 'flex-end', maxWidth: '100%' }]}>{word}</Text>
+  const roles = new Map(A.crew(state).map((h) => [h.id, A.tagOf(h)]));
+  // Chief's blue takes light words (art.inkOn); one short role line each (A.tagOf), the full role on the sheet.
+  const tile = (key: string, face: ReactNode, kind: art.Kind | 'chief', name: string, word: string, role: string, route: Route) => {
+    const ink = { color: art.inkOn(kind), opacity: 1 };
+    return <Pressable key={key} onPress={() => go(route)} accessibilityRole="button" accessibilityLabel={`${name}: ${word}`} style={({ pressed }) => [s.stTile, { width: w, backgroundColor: art.colourOf(kind) }, pressed && { opacity: 0.8 }]}>
+      <Text style={[s.stPill, { alignSelf: 'flex-end', maxWidth: '100%', color: ink.color }]}>{word}</Text>
       <View style={{ alignSelf: 'center', marginTop: 10, marginBottom: 12 }}>{face}</View>
-      <Text style={[s.semi, { color: INK }]}>{name}</Text><Text style={s.stSub}>{role}</Text>
+      <Text style={[s.semi, { color: ink.color }]}>{name}</Text><Text style={[s.stSub, kind === 'chief' && ink]}>{role}</Text>
     </Pressable>;
+  };
   return <Page back={['Home', () => go({ view: 'home' }, true)]}>
     <T style={[s.wide, { fontSize: 40, lineHeight: 42 }]}>Your crew</T>
     <T tone="mute" style={s.read}>Chief deals each job to one of them. Tap one to see what they are doing.</T>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
-      {tile('chief', <Face who="chief" size={72} mood={view.chief.mood} />, art.colourOf('chief'), 'Chief', offline ? OUT : A.chiefStatus(view).word, 'Hands out the jobs', { view: 'chief' })}
-      {A.roster(view.crew).map((c) => tile(c.id, <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={72} />, art.colourOf(c.kind), c.name, offline ? OUT : A.statusOf(c, view).word, roles.get(c.id) ?? '', { view: 'helper', id: c.id }))}
+      {tile('chief', <Face who="chief" size={72} mood={view.chief.mood} />, 'chief', 'Chief', offline ? OUT : A.chiefStatus(view).word, 'Hands out the jobs', { view: 'chief' })}
+      {A.roster(view.crew).map((c) => tile(c.id, <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={72} />, c.kind, c.name, offline ? OUT : A.statusOf(c, view).word, roles.get(c.id) ?? '', { view: 'helper', id: c.id }))}
       {ctx.canAct && <Pressable onPress={() => go({ view: 'add' })} accessibilityRole="button" style={({ pressed }) => [s.stTile, { width: w, borderWidth: 2, borderStyle: 'dashed', borderColor: t.line2, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
         <T style={{ fontSize: 36, lineHeight: 40 }}>+</T><T style={[s.semi, { marginTop: 10 }]}>Add a helper</T><T tone="mute" style={[s.read, s.centerText]}>Tell Chief who you need</T>
       </Pressable>}
