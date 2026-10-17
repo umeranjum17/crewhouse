@@ -25,7 +25,7 @@ spends: start it with `done-done verify phone-continue --outcome "<claim>"` and 
 
 ```bash
 LAB=<lab> node scripts/verify/phone-continue.mjs --serial <emulator> --ev "$EV" \
-  --apk mobile/android/app/build/outputs/apk/release/app-release.apk --key-file /home/umer/.config/openrouter/api_key
+  --apk mobile/android/app/build/outputs/apk/release/app-release.apk --key-file "$HOME/.config/openrouter/api_key"
 ```
 
 It writes `$EV/screens/01-phone-only-chat.png` (a real chat; with no OpenRouter credit the plain error lines are the

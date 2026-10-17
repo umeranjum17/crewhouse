@@ -45,6 +45,6 @@ hostname). Then drive the real app from crewd's own loopback (`http://127.0.0.1:
 ## Evidence
 
 The Review evidence set from [`runbook.md`](runbook.md): the boot screen in dark and light
-at 390 and 1440 from the real running shell. For the installed PWA (the captain's PWA-first
+at 390 and 1440 from the real running shell. For the installed PWA (the PWA-first
 bar), install the deployed `*.pages.dev` shell and capture its first launch, which lands on
 this same first question.

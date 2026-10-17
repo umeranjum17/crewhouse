@@ -42,7 +42,7 @@ The thread reads in the order things happened, and opens where the person last i
 6. Home's Office view: read `.jobs .list-row` text for a job whose helper is not hired — the plain name, no raw id.
 7. Load `#/chief` and confirm `location.hash` becomes `#/` with `.home-chat` present; load `#/chief/m<id>` and
    confirm the hash stays and `#m<id>` is near the viewport centre.
-8. The ask-in-view leg: `FM_HOME=<firstmate home> bash scripts/verify/ask-in-view.sh "$EV"`.
+8. The ask-in-view leg: `EVIDENCE_HOME=<your evidence folder> bash scripts/verify/ask-in-view.sh "$EV"`.
    It sends two locked statements to Penny from `unlock-card.md` (the Documents tool stays uninstalled, so the
    card opens), then measures `.unlock-card` against `.chat .lines`: `plain-day-390.png` with no ask yet is at the
    thread's own bottom (`below == 0`), the arriving ask lands with `cardTop == 0` (recorded in

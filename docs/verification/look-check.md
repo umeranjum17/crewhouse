@@ -2,7 +2,7 @@
 
 The mandatory UI-change step in [runbook.md](runbook.md#mandatory-look-check-360-wide-largest-text-light-and-dark).
 `scripts/verify/look-check.mjs` captures each changed screen at 360 wide with the largest text, light and dark, runs
-machine checks on it and puts it next to its approved mock. It found the two defects the captain caught by eye:
+machine checks on it and puts it next to its approved mock. It found the two defects a by-eye review caught:
 the phone's squashed Chief helmet and the black strip down the left of a phone shot.
 
 ## Running it
@@ -47,7 +47,7 @@ Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme
   `stretched: a 302-dot picture — stretched wide 60%: cells 5.6×5.6px, the art's own cell is 0.625:1`. The phone's
   `Dots` draw art.helmetDots on square cells, while the art's cell is 10:16. The same hit shows on Office,
   Your crew and Routines; Settings and Your things pass.
-- The captain's phone shot: `strip: left edge — a 132px band of rgb(22,24,21)`. On the emulator,
+- A phone shot: `strip: left edge — a 132px band of rgb(22,24,21)`. On the emulator,
   letterboxing (`wm set-ignore-orientation-request true` with the device turned) draws black bands beside the
   portrait-locked app. The day look fails on them (`left 169px`, `right 85px` of rgb(0,0,0); a band is measured up to the first thing drawn on it, here the status-bar clock). The night look cannot
   see them, since black sits within 10 of night's bg #0C0C0B.
@@ -68,7 +68,7 @@ Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme
   over a page that still scrolls is content passing under it.
 - Phone dot pictures: a helmet is at least 12 dots wide. The 9×9 icons (art.TABS, Settings' rows) are square on
   purpose.
-- Strips compare against the look's own page colours, never the shot's middle. The captain's (21,23,21) sits
+- Strips compare against the look's own page colours, never the shot's middle. The phone shot's (21,23,21) sits
   inside night's surface #131312, so only the look the screen is in counts.
 - Text scaling reads every size before writing any, because computed styles are live and em sizes would
   compound.

@@ -30,7 +30,7 @@ REPO=<repo checkout> bash <home>/data/evidence/ch-gmail-attachments/run.sh
 
 ## Limits
 
-- **Not proven against live Gmail.** That proof is parked with the captain's Google re-auth (gap `ch-google-reauth`);
+- **Not proven against live Gmail.** That proof needs a live Google sign-in;
   the stub serves the Gmail REST shapes the real API does (threads, `messages/<id>/attachments/<att>`).
 - No screen changed: this is a tool/backend change, so no Review evidence set applies. A saved attachment does show
   in a thread only as the helper's own report line, which is the existing chat surface.

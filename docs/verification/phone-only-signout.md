@@ -19,7 +19,7 @@ Drive by what is on screen (`SERIAL=<serial> node scripts/verify/phone-ui.mjs
 texts | tap '<regex>' | shot <file>`):
 
 1. chooser → **Use this phone only** → sign-in screen;
-2. paste the test key (clipboard/`input text` from `/home/umer/.config/openrouter/api_key`, never
+2. paste the test key (clipboard/`input text` from `$HOME/.config/openrouter/api_key`, never
    printed, logged or captured) and **Connect** → the chat header reads Chief / DeepSeek;
 3. **Sign out** → the native confirm ("Sign out of Chief?" / "Your key will be removed from this
    phone." / Cancel / Sign out) → **Sign out** → the first chooser is back;

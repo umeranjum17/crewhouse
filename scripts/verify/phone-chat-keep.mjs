@@ -5,7 +5,7 @@
 // with no connection waits as "Queued, not sent yet" and goes when the phone hears the model again.
 //
 //   node scripts/verify/phone-chat-keep.mjs \
-//     --serial emulator-5562 --repo "$PWD" --ev "$EV" --key-file /home/umer/.config/openrouter/api_key \
+//     --serial emulator-5562 --repo "$PWD" --ev "$EV" --key-file "$HOME/.config/openrouter/api_key" \
 //     [--apk path.apk] [--seed-turns 52] [--offline] [--interrupted]
 //
 // It drives the real release app on an emulator: sign in with the person's own OpenRouter key (file only,
@@ -28,7 +28,7 @@ const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : arg
 const has = (n) => args.includes(`--${n}`);
 const SERIAL = opt('serial', 'emulator-5562');
 const EV = opt('ev', null);
-const KEY_FILE = opt('key-file', '/home/umer/.config/openrouter/api_key');
+const KEY_FILE = opt('key-file', `${process.env.HOME}/.config/openrouter/api_key`);
 const APK = opt('apk', null);
 const SEED = Number(opt('seed-turns', 0));
 const OFFLINE = has('offline');

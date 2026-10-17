@@ -234,7 +234,7 @@ function HomeBar({ ctx, mode, pick }: { ctx: Ctx; mode: HomeMode; pick: (m: Home
   const still = quiet && <span className="m-quiet"><Icon name="moon" size={14} />{quiet}</span>;
   const gear = <a className="icon-btn home-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={18} /></a>;
   const seg = <div className="seg home-mode" role="tablist" aria-label="Home view">{HOME_MODES.map(([m, l]) => <button key={m} role="tab" aria-selected={mode === m} data-mode={m} className={mode === m ? 'on' : ''} onClick={() => pick(m)}><Icon name={m === 'chat' ? 'chief' : 'office'} />{l}{m === 'office' && mode === 'chat' && n.needs > 0 && <span className="count">{n.needs}</span>}</button>)}</div>;
-  // Chief's own trail (his learned notes with Undo) stays reachable now his page is Home (Main2036).
+  // Chief's own trail (his learned notes with Undo) stays reachable now his page is Home.
   const did = <a className="link home-did" href={CHIEF_TRAIL}>What happened</a>;
   const tools = <div className="home-tools"><a className="link home-did" href={CHIEF_PROFILE}>Chief's profile</a>{did}{gear}{seg}</div>;
   // A phone header is one block (Term): the hero carries the gear top-right and the switch below its lines.
@@ -380,7 +380,7 @@ let homeMode: HomeMode = 'chat';
 function Home(ctx: Ctx & { chat?: boolean; m?: string }) {
   const { state, live, refresh, tick, accounts } = ctx;
   const [mode, setMode] = useState(homeMode);
-  // `#/chief` is Home with Chief's chat open: the same screen as `#/`, never a second one (Main2036).
+  // `#/chief` is Home with Chief's chat open: the same screen as `#/`, never a second one.
   useEffect(() => { if (ctx.chat) { homeMode = 'chat'; setMode('chat'); } }, [ctx.chat]);
   // On a phone Chief's thread holds the page scrolled to its newest line; the other view starts at its top, or Office
   // opens scrolled past its room.
@@ -500,7 +500,7 @@ function AppDownloadQR() {
     </div>
   </div>;
 }
-/** The public web app's first screen with no computer paired (mock C, Main2691): Chief asks where he should work.
+/** The public web app's first screen with no computer paired (mock C): Chief asks where he should work.
  *  On my computer opens the Pair sheet (#/pair); a cloud, or Chief on the phone alone, is set up in the phone app, so
  *  both rows say so. The cloud row waits for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows it. */
 function Where({ pairing }: { pairing: boolean }) {
@@ -584,7 +584,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: waiting && pending ? pending.at : undefined }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
-  // The engine can say nothing for tens of seconds while the model writes a big file (Main1785): never a silent gap,
+  // The engine can say nothing for tens of seconds while the model writes a big file: never a silent gap,
   // so a run with no event for 4 s says "still working" on the live line, beside its one clock; the next event clears it.
   const quiet = ln?.state === 'working' && ln.heard !== undefined && Date.now() - ln.heard >= QUIET_MS;
   // The clock beside the step moves on each whole second of the job, so the thread never sits still.
@@ -608,7 +608,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40 || (pinned.current && el.scrollTop >= top.current);
     top.current = el.scrollTop;
   };
-  // The person's own hand in this thread: from the first touch on, the thread never moves itself again (Main2036).
+  // The person's own hand in this thread: from the first touch on, the thread never moves itself again.
   const touched = useRef(false);
   useEffect(() => {
     const el = box.current;
@@ -624,8 +624,8 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
   useEffect(() => { pinned.current = true; top.current = 0; asked.current = ''; askedAt.current = -1; touched.current = false; }, [id]);
   // Every thread scrolls in its own lines column (phone and desk alike), so the box holds itself at its newest line.
   // A scrollIntoView here once dragged the whole page up with it, hiding Chief's hero. An anchored landing scrolls
-  // to the line instead. Every chat opens at its newest line (Main600) under a hero that stays in place (096); a new
-  // line follows only while the person is still at the bottom (Main2036). A card that grows after it lands (a form
+  // to the line instead. Every chat opens at its newest line under a hero that stays in place (096); a new
+  // line follows only while the person is still at the bottom. A card that grows after it lands (a form
   // opening, an image loading) moves the bottom too, so the box is watched for its own size changes, not just renders.
   useEffect(() => {
     if (around) return;
@@ -638,7 +638,7 @@ function Chat({ id, m, state, tick, refresh, accounts, hero, rail }: Ctx & { id:
     const newestAsk = cards.at(-1), askId = newestAsk ? `ask${newestAsk.id}` : '', card = askId ? el.querySelector<HTMLElement>(`#${askId}`) : null;
     if (askId && asked.current !== askId) { asked.current = askId; askedAt.current = lines.length; touched.current = false; }
     // The ask's own arrival: the thread as it stands while it is still the newest thing that happened. A line, a
-    // stream or the person's own hand since then means the thread has moved on and must keep its bottom (Main2036).
+    // stream or the person's own hand since then means the thread has moved on and must keep its bottom.
     const land = !!askId && askedAt.current === lines.length && !partial && !echoed;
     const stick = () => {
       if (!pinned.current) return;
@@ -802,7 +802,7 @@ function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
   // Chief's own reply done in under a second says nothing worth a line (Main1780b): "Done · 0 s" goes.
   if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
-  // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat (Main1777).
+  // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat.
   return <div className={`line them live-line ${ln.state}`}>
     <div className="live-body">
       <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who} · {word.toLowerCase()}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span></span>{link}</div>
@@ -2007,7 +2007,7 @@ function App() {
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
   useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
   useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
-  // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL (Main2036). An anchored
+  // `#/chief` and `#/` are one screen: the bare chief link lands on Home's own URL. An anchored
   // `#/chief/m<id>` keeps its hash, so a search result can still open the thread on that message.
   useEffect(() => { if (route.view === 'chief' && !route.m) { history.replaceState(null, '', `${location.pathname}${location.search}#/`); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route]);
   const splash = <Splash done={!!ctx || offline || noauth} />;

@@ -66,7 +66,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     return r.result.value;
   };
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  // `#/chief` and `#/` are one Chief screen now (Main2036): the bare chief link lands on Home's own URL, the same
+  // `#/chief` and `#/` are one Chief screen now: the bare chief link lands on Home's own URL, the same
   // thread the route below drives. An anchored `#/chief/m<id>` keeps its hash (its own test below).
   await send('Page.navigate', { url: `${base}/?demo=longthread&night#/chief` });
   await until('the redirect', () => run("location.hash === '#/' && document.readyState === 'complete'"), 30_000);
@@ -81,7 +81,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     await run("(document.querySelector('.chat .card.ask .more-ways > summary').click(), true)");
     await until('every account shown', () => run("document.querySelector('.chat .card.ask .more-ways').open"), 30_000);
     await until('a long thread', () => run("document.querySelectorAll('.chat .lines .line').length > 10"), 30_000);
-    // It opens at its latest line (Main2036), or — when the newest open ask would sit off the top under a footer card
+    // It opens at its latest line, or — when the newest open ask would sit off the top under a footer card
     // — on that ask's own top (ch-ask-card-in-view); signed out, the newest ask here is a proposal card above the
     // sign-in card, and the sign-in card's form has just opened. Either way it must settle, and stay there.
     await until('the thread settled on its line or its ask', () => run(`(() => { const el = document.querySelector('.chat .lines');

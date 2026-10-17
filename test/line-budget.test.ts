@@ -1,8 +1,8 @@
 // crewd's src/ line budget, measured after the one-person migration and entry-point deletions.
 // Every change from here keeps src/ net <= 0; raising BUDGET needs an owner decision, with deletions elsewhere first.
-// Raised 6838 -> 6856 for the marketplace import feature (Main1094): the thin crew_import hook, the shared
-// seat path and the soul-reset guard; fetch/parse/map/write live unbudgeted in scripts/. The dead-code hunt
-// recorded in the firstmate home (data/ch-crew-templates/budget-note.md) found nothing honest to delete.
+// Raised 6838 -> 6856 for the marketplace import feature: the thin crew_import hook, the shared
+// seat path and the soul-reset guard; fetch/parse/map/write live unbudgeted in scripts/. A dead-code hunt
+// found nothing honest to delete.
 // Raised 6856 -> 6876 for the crew-brain slice-1 shared profile (ch-crew-brain-1, awaiting owner
 // decision): people/1/profile.md storage, the one shared prompt path and GET/PUT /api/profile.
 // Raised 6876 -> 6888 for the Herdr first slice (ch-herdr-slice-1): the herdr gate entry in policy.ts, the
@@ -40,7 +40,7 @@ import { join } from 'node:path';
 // gives a kept copy opened on a failed try its card; the rest was paid in the change, never by packing statements.
 // ch-src-trim-mail joins the adjacent same-scope declarations left outside mail, mail-send, policy and the gate. Measured
 // on acf5711 (net -25, src 7110 -> 7085): #531 had already joined 11 of the 37 and #532 rewrote one more away. The
-// remaining 72 lines of the email allocation are closed as an owner exception (Main3343): they are real email-feature
+// remaining 72 lines of the email allocation are closed as an owner exception: they are real email-feature
 // code, and only line-packing or code moves could remove them.
 const BUDGET = 7085;
 

@@ -175,7 +175,7 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { 
   const mode = art.helmetOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
   const cells = useMemo(() => art.helmet(whole ? 38 : 24, mode, night, beat), [mode, beat]);
-  // The phone header's mascot (Main1804/1808, as Muse heads a thread): the helmet drawn smooth, a character, not a pixel icon.
+  // The phone header's mascot (as Muse heads a thread): the helmet drawn smooth, a character, not a pixel icon.
   const pal = night ? color.night : color.day;
   if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.helmetSoft(mode, { night, beat, eye: mode === 'needs' ? pal.pink : mode === 'rest' ? pal.mute : undefined, scan: pal.pink })} />;
   // The desk rail's helmet: the whole 38-column head as rects at a fixed width, so the person's text size never
@@ -887,7 +887,7 @@ function useDraftEdit(c: Card) {
 
 type MoreAct = { label: string; run: () => unknown; pressed?: boolean; cls?: string };
 /** A card's other choices: in its row on a desk; on a phone they wait behind "⋯", which opens a bottom sheet with
- *  the card's title on top and one full-width row per choice, so a card shows one primary (Main1774). */
+ *  the card's title on top and one full-width row per choice, so a card shows one primary. */
 export function More({ title, sub, acts }: { title: string; sub?: string; acts: (MoreAct | false | null | undefined)[] }) {
   const [open, setOpen] = useState(false);
   const shown = acts.filter((a): a is MoreAct => !!a);

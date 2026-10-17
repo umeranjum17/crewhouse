@@ -2,7 +2,7 @@
 # Chief's chat opens on the ask that needs the person (docs/verification/thread-hygiene.md): an open unlock ask in Chief's
 # thread with the "Add your phone" card below it, driven so the card's own top is measured against the thread box at
 # 390 and 1440, day and night, and recorded as the ask arrives while the chat is open.
-#   FM_HOME=<firstmate home> bash scripts/verify/ask-in-view.sh <evidence-dir>
+#   EVIDENCE_HOME=<your evidence folder> bash scripts/verify/ask-in-view.sh <evidence-dir>
 # Needs qpdf, ghostscript, chrome-devtools-axi, ffmpeg (for the recording) and a Chromium.
 set -euo pipefail
 EV=$(mkdir -p "$1" && cd "$1" && pwd); REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel); cd "$REPO"
@@ -77,7 +77,7 @@ for look in day night; do for w in 390 1440; do
   shot "$look-$w.png"
 done; done
 
-# The mandatory look check at the hardest size (360 wide, text x1.3, day and night), beside mock 3A (FM_HOME holds it).
+# The mandatory look check at the hardest size (360 wide, text x1.3, day and night), beside mock 3A (EVIDENCE_HOME holds it).
 THEN='(async () => { for (let i = 0; i < 50 && !document.querySelector(".unlock-card"); i++) await new Promise((r) => setTimeout(r, 100)); return true; })()'
 node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$THEN" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt"
 

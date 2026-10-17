@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The locked-PDF journey on a real crewd (stub engine), docs/verification/unlock-card.md: two locked statements sent to Penny, the
 # card in Chief's chat typed into in a real browser (wrong, then right), the copies read back, and every store searched.
-#   FM_HOME=<firstmate home> bash scripts/verify/unlock-card.sh <evidence-dir>
+#   EVIDENCE_HOME=<your evidence folder> bash scripts/verify/unlock-card.sh <evidence-dir>
 # Needs qpdf, ghostscript, bubblewrap, xvfb-run, chrome-devtools-axi, and the network once (the Documents tool's pip).
 set -euo pipefail
 EV=$(mkdir -p "$1" && cd "$1" && pwd); REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel); cd "$REPO"
@@ -54,7 +54,7 @@ THEN=$(show .unlock-card) bash scripts/verify/screens.sh "$EV/screens" unlock-ca
 # Refs without their snapshot generation: every action bumps it, so a gN: prefix is stale after the first fill.
 fields() { chrome-devtools-axi snapshot --full | awk '/textbox "[^"]*\.pdf"/{sub(/uid=(g[0-9]+:)?/,"",$1); print $1}'; }
 button() { chrome-devtools-axi snapshot --full | awk -v n="$1" '$0 ~ "button \"" n {sub(/uid=(g[0-9]+:)?/,"",$1); print $1; exit}'; }
-# The look check at the hardest size (360 wide, text x1.3, day and night), each shot beside mock 3A (FM_HOME holds it).
+# The look check at the hardest size (360 wide, text x1.3, day and night), each shot beside mock 3A (EVIDENCE_HOME holds it).
 node scripts/verify/look-check.mjs web --out "$EV/look" --person "$LAB/state/person.key" --then "$(show .unlock-card)" unlock-card="$B/#/chief" | tee -a "$EV/transcript.txt"
 # Two files: the pick reads Keep them, picked in each theme and width; the next fresh open resets the card to the default.
 KEEP='(async () => { for (let i = 0; i < 50 && !document.querySelector(".unlock-keep"); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector(".unlock-keep .keep-opt:last-child input").click(); document.querySelector(".unlock-card").scrollIntoView({ block: "start" }); return true; })()'

@@ -4,7 +4,7 @@ The first screen on the phone app (`GetStarted` in `mobile/App.tsx`) and on the 
 `web/src/main.tsx`): Chief asks "Hi, I'm Chief. Where should I work?" with In my cloud / On my computer / Just on
 this phone, the sign-in-yourself note and "You can change this later in Settings." The words are `A.where` and
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
-`scripts/verify/mocks.tsv` (data/ch-cloud-onboarding-mock, Main2691).
+`scripts/verify/mocks.tsv`.
 
 The cloud row is behind a build flag until BYOKit's cloud kit (`@byokit/cloud`: `boat()`, `setupKey`) is on npm:
 `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for `scripts/build-web.mjs`. Without it the

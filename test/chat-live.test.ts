@@ -103,7 +103,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       assert.match(await screen(), /Show the small steps \(1\)/, `${width}: the small steps hide behind the expand`);
     }
     if (bot === 'chief') {
-      // The engine can stay silent for tens of seconds while the model writes a big file (Main1785): after 4 s with no
+      // The engine can stay silent for tens of seconds while the model writes a big file: after 4 s with no
       // event the live line says so beside its one clock ("Chief · at work · 27 s · still working"), and the next
       // event clears it. Read only while in sight: inside the thread's scrolling box, not under the composer.
       const head = () => run(`(() => { const q = [...document.querySelectorAll('.chat .lines .live-head')].find((e) => e.offsetParent);

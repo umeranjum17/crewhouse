@@ -5,7 +5,7 @@
 //
 //   node scripts/verify/phone-pair.mjs --out "$EV/phone" --state "$LAB/state"
 //                                [--serial emulator-5562] [--base http://127.0.0.1:$PORT]
-//                                [--apk path.apk] [--camera-file <png>] [--runs 3] [--record] [--qr-file <txt>]
+//                                [--apk path.apk] --camera-file <png> [--runs 3] [--record] [--qr-file <txt>]
 //
 // Task-owned prerequisites, none of the owner's:
 //   - crewd on the stub engine, started as the SKILL says, with CREWHOUSE_LINK_PORT on a free port so two
@@ -39,7 +39,8 @@ const BASE = opt('base', 'http://127.0.0.1:7801');
 const APK = opt('apk', null);
 const PREPARED = flag('prepared'); // an installed dev APK already on Pair; preserve its Metro host settings
 const RUNS = Number(opt('runs', 1));
-const CAMERA_FILE = opt('camera-file', '/home/umer/lab-tmp/ch-pm-19/ev/live-qr.png');
+const CAMERA_FILE = opt('camera-file', null);
+if (!CAMERA_FILE) throw new Error('Pass --camera-file <png> to feed the emulator camera');
 const TAP_SCAN = opt('tap-scan', '540 1598').split(' ');  // "Scan the code" at 1080x2400
 const TAP_OPEN = opt('tap-open', '540 1626').split(' ');  // "Open Crewhouse" at 1080x2400
 const PKG = 'dev.crewhouse.app';

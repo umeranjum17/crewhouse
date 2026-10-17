@@ -1,4 +1,4 @@
-// The cloud set-up's phone side (mocks provider and signin-key, Main2691): the pasted boat.dev key is checked once by
+// The cloud set-up's phone side (mocks provider and signin-key): the pasted boat.dev key is checked once by
 // BYOKit's cloud kit, then kept in this phone's own secure store the way BYOKit's cloud-setup example keeps it
 // (examples/expo/cloud-setup.ts, #535): readable only while the phone is unlocked, never moved to another device.
 import { nativeStore } from '@byokit/secrets/native';

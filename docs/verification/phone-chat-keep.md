@@ -15,7 +15,7 @@ with `done-done verify phone-chat-keep --outcome "<claim>"` and the person's spe
 
 ```bash
 node scripts/verify/phone-chat-keep.mjs --serial <emulator> --ev "$EV" \
-  --key-file /home/umer/.config/openrouter/api_key --apk mobile/android/app/build/outputs/apk/release/app-release.apk \
+  --key-file "$HOME/.config/openrouter/api_key" --apk mobile/android/app/build/outputs/apk/release/app-release.apk \
   --interrupted --offline --seed-turns 52
 ```
 

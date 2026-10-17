@@ -791,7 +791,7 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
 }
 
 // ---------- phone only: Chief on this phone, no computer ----------
-/** The first screen with no computer paired (mock C, Main2691): Chief asks where he should work. On my computer is
+/** The first screen with no computer paired (mock C): Chief asks where he should work. On my computer is
  *  the pairing as before, Just on this phone the phone-only floor as before, In my cloud the cloud set-up steps (only
  *  in a build with the cloud on, src/cloud.ts). */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {

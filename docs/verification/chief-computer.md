@@ -4,7 +4,7 @@ Chief's settings page for the one cloud computer the crew shares (`ChiefComputer
 `mobile/App.tsx`): Update computer, Reset computer (red) with its sheet "Reset Chief's computer?", the sandbox
 caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer).
 The words are `A.computer` in `web/src/adapter.ts`, one source for both. Approved mock: `computer` in
-`scripts/verify/mocks.tsv` (data/ch-cloud-onboarding-mock, Main2678).
+`scripts/verify/mocks.tsv`.
 
 Behind the same build flag as the cloud row ([where-cloud.md](where-cloud.md)): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for
 the phone, `CREWHOUSE_CLOUD=1` for `scripts/build-web.mjs`. Without it Settings has no row and `#/computer` opens
