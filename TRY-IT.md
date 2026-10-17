@@ -28,7 +28,7 @@ From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 ## 3. The phone app
 
-Install [Crewhouse phone preview .19](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261017.19**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
+Install [Crewhouse phone preview .20](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261017.20**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
 This file is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the versioned release; see [docs/install.md](docs/install.md).
 
@@ -45,3 +45,5 @@ A phone on an older preview can open Chief's chat and use **Get the latest Crewh
 ## Known limits
 
 AI sign-ins and connecting apps stay on the computer. Android notifications need the builder's push credential; without it, news appears when you open Crewhouse. The iPhone build is not available yet.
+
+Go sign-in with a key that covers several workspaces fails with an error (HTTP 403) in this preview. The fix is planned for the next preview.

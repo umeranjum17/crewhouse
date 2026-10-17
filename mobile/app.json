@@ -2,7 +2,7 @@
   "expo": {
     "name": "Crewhouse",
     "slug": "crewhouse",
-    "version": "1.0.0-preview.20261017.19",
+    "version": "1.0.0-preview.20261017.20",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
       }
     },
     "android": {
-      "versionCode": 19,
+      "versionCode": 20,
       "adaptiveIcon": {
         "backgroundColor": "#ffd6c7",
         "foregroundImage": "./assets/android-icon-foreground.png",
