@@ -229,9 +229,10 @@ function ChatText({ text, latest }: { text: string; latest?: boolean }) {
     : x.type === 'html' ? x.raw : x.tokens ? <Text key={i}>{inline(x.tokens)}</Text> : x.text ?? x.raw);
   const blocks = (tokens: any[]): ReactNode => tokens.map((x, i) => x.type === 'heading' ? <T key={i} style={{ fontSize: 18, lineHeight: 25, ...fw('600'), marginTop: 8 }}>{inline(x.tokens)}</T>
     : x.type === 'paragraph' || x.type === 'text' ? <T key={i}>{inline(x.tokens ?? [{ text: x.text }])}</T>
-    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
+    : x.type === 'list' ? <View key={i} style={{ gap: 5 }}>{x.items.map((item: any, j: number) => <View key={j} style={{ flexDirection: 'row', gap: 6 }}><T>{item.task ? item.checked ? '☑' : '☐' : x.ordered ? `${x.start + j}.` : '•'}</T><View style={{ flex: 1 }}>{blocks(item.tokens.filter((y: any) => y.type !== 'checkbox'))}</View></View>)}</View>
+    : x.type === 'blockquote' ? <View key={i} style={{ backgroundColor: t.soft, borderLeftWidth: 3, borderLeftColor: t.line2, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, gap: 6 }}>{blocks(x.tokens)}</View>
     : x.type === 'table' ? <Wide key={i}><View>{[x.header, ...x.rows].map((row: any[], j: number) => <View key={j} style={{ flexDirection: 'row' }}>{row.map((c, k) => <View key={k} style={{ minWidth: 90, maxWidth: 200, padding: 6, borderWidth: 1, borderColor: t.line }}><T style={j ? undefined : s.b}>{inline(c.tokens)}</T></View>)}</View>)}</View></Wide>
-    : x.type === 'code' ? <T key={i} style={{ backgroundColor: t.soft }}>{x.text}</T>
+    : x.type === 'code' ? <View key={i} style={{ backgroundColor: t.soft, borderRadius: 8, padding: 10 }}><T style={{ fontSize: 14, lineHeight: 20 }}>{x.text}</T></View>
     : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
 }
