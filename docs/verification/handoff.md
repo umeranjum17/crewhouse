@@ -6,7 +6,7 @@ own chat is read only. Approved mocks: `handoff` / `handoff-helper` (390) and `h
 ## Sub-features
 
 - `chip` — `A.handChips` → `HandOff` (`web/src/main.tsx`): one chip per `origin: 'chief'` task, after the turn that handed it on (a routed "Penny, …" request is saved a few ms after its task, so that line is not the boundary) and before its result. The word is the app's one status (`at work`, `waiting`, `done · <time>`); a green dot only while working; it links to `#/h/<helper>`.
-- `limit` — `A.limitOf`: "<helper> can <two things>, but can't pay or send anything without asking you.", from `bots[].can`, `bots[].signedIn` and `connections` only.
+- `limit` — `A.limitOf`: "<helper> can <two things>, but can't pay or send anything without asking you.", from `bots[].can`, `bots[].signedIn` and `connections` only; shown on a helper's first hand-off only (later chips leave it empty).
 - `read-only` — a helper's chat has no composer: the lock line and **Ask Chief about this** (fills Chief's composer with "About <helper>'s job “…”: ", never sends). Idea chips fill Chief's composer too.
 - `rail` — the desk/iPad rail (`SideCrew`, ≥900px): each crew row is name + status word, its last line (the step while working) and its time (`now` while working); no unread badge on any crew row; "Read only. Results come back in Chief's chat."
 

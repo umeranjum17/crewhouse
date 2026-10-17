@@ -140,7 +140,11 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       await run(`${BOX}.querySelector('.new-pill').click()`);
       await until('the tap at the newest line', async () => { const p = await place(); return p.st >= p.max - 1 && !p.pill; }, 3_000);
     }
-    await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /done/i.test(await run("document.querySelector('.live-end')?.innerText ?? ''")), 15_000);
+    // A job passed to a helper ends as its hand-off chip in Chief's thread; the live-end row is not said twice (chip gap 13).
+    const end = bot === 'scout'
+      ? "[...document.querySelectorAll('.hand')].at(-1)?.textContent ?? ''"
+      : "document.querySelector('.live-end')?.innerText ?? ''";
+    await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /done/i.test(await run(end)) && (bot !== 'scout' || !(await run("!!document.querySelector('.live-end')"))), 15_000);
   };
   for (const width of [1440, 390]) {
     await journey(width, 'chief', 'Please ask permission before you plan my week', /Chief · at work[\s\S]*Started on/);
