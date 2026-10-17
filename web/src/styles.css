@@ -1688,6 +1688,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .line.them + .line.them, .chat .line > .card.ask { margin-top: 6px; }
   .chat .line-wrap > .card.ask { margin-top: 22px; }
   .chat .line:is(.them, .chief) > .bubble-text { width: fit-content; max-width: 84%; padding: 9px 16px; border-radius: 20px; background: var(--tint); font: 400 17px/24px var(--ui); text-wrap: pretty; }
+  /* Chief's own replies (his thread, and his lines in a helper's) use nearly the full width; the person's stays 84%. */
+  .home-chat .line.them > .bubble-text, .chat .line.chief > .bubble-text { max-width: 92%; }
   .chat .line.me { max-width: 84%; }
   .chat .line.me .bubble-text, [data-theme='night'] .chat .line.me .bubble-text { padding: 9px 16px; border-radius: 20px; background: var(--ink); color: var(--bg); font: 400 17px/24px var(--ui); text-wrap: pretty; }
 
