@@ -6,9 +6,12 @@ import { api, demo } from './api.ts';
 type Badging = Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
 const canServe = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !(typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo'));
 
-/** Register the shell worker for an offline cold start; harmless where the browser has none. */
-export function startWorker() {
-  if (canServe()) void navigator.serviceWorker.register('/sw.js').catch(() => {});
+/** Register the shell worker for an offline cold start; harmless where the browser has none. `updated` runs when a newer
+ *  worker takes over a page that already had one, never on the very first install (the page had no worker then). */
+export function startWorker(updated: () => void) {
+  if (!canServe()) return;
+  if (navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', updated);
+  void navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
 /** Mirror the app's unread count onto the home-screen icon (0 clears it). */

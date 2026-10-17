@@ -2140,6 +2140,8 @@ function App() {
   );
 }
 
-startWorker(); // the offline shell and web-push handler are ready from the first load on
+// the offline shell and web-push handler are ready from the first load on; an update says so once, and Reload is safe
+// because the composer's draft is kept (draft.ts)
+startWorker(() => toast('Crewhouse updated', { label: 'Reload', run: () => location.reload() }));
 // The public shell decides once, before its first screen: a device grant kept here makes it the paired app; none, the demo.
 void Promise.all([pairable ? import('./link.ts').then((l) => l.resume()) : Promise.resolve(), mintFiles()]).finally(() => { resume(); createRoot(document.getElementById('root')!).render(<App />); });
