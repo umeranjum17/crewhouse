@@ -650,6 +650,15 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   assert.match(chip.limit, /^Scout .*can't pay or send anything without asking you\.$/);
   assert.deepEqual([chip.href, chip.after], ['#/h/scout', true], 'the chip opens Scout\'s thread and sits after the request that handed it on');
   await release(lab.crew, 'scout', 'Two trains on Monday.'); await settled(lab.db, next);
+  // The result is already the chip, so the finished job raises no toast in the thread it appears in (chat quality gap 12).
+  await until('the first chip reads done', () => b.run(`/done/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
+  assert.deepEqual(await b.run(`[...document.querySelectorAll('.toast')].map((t) => t.textContent).filter((t) => /Monday trains/.test(t))`), [], 'no toast repeats the finished job in the open thread');
+  // A second hand-off to the same helper says the job alone: the limit sentence rides only its first hand-off (gap 13).
+  const again = (await api('/api/bots/chief/messages', { text: 'Scout, check the Friday flights; ask permission' })).task;
+  await holding(lab.crew, 'scout');
+  await until('the second hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 2 && /at work/.test(document.querySelectorAll('.hand')[1]?.textContent ?? '')`), 30_000);
+  assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[1].querySelector('.hand-limit')`), false, 'the second hand-off carries no limit sentence');
+  await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
 });
 
 // The demo banner (main.tsx PairRow) at the hardest size a phone gets: 360 wide with the largest text. Its Pair

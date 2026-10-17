@@ -692,6 +692,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const slots = A.cardSlots(lines, cards);
   // Chief's thread: each job he handed a helper, as one chip after the turn that handed it on (A.handChips).
   const hands = id === 'chief' ? A.handChips(state, lines) : null;
+  // A helper's ended job is already a chip on this thread, so its end line is not said twice.
+  const chipped = !!ln?.task && (!!hands?.tail.some((c) => c.task === ln.task) || [...(hands?.before.values() ?? [])].some((cs) => cs.some((c) => c.task === ln.task)));
   const receipts = page ? A.answeredReceipts(state).filter((r) => r.helper === id) : [];
   // An answered card leaves a muted outcome in time order, above the result it let through (A.receiptSlots).
   const receiptSlots = A.receiptSlots(lines, receipts);
@@ -772,7 +774,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
-        {ln && <LiveRow ln={ln} quiet={quiet} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
@@ -802,13 +804,21 @@ function ReadAlong({ name, job }: { name: string; job?: string }) {
   </div>;
 }
 
+/** Is a finished job's result already on the screen? A helper's own chat shows it; so does Chief's thread (Home's chat
+ *  view, or `#/chief`) for a job he handed over, where its chip turns to done. */
+function resultOpen(state: Json, t: A.Thing) {
+  const here = parseRoute();
+  if (here.view === 'helper') return here.id === t.helper;
+  return (here.view === 'chief' || (here.view === 'home' && homeMode === 'chat')) && state.tasks.some((x: Json) => x.id === t.id && x.origin === 'chief');
+}
+
 /** Chief's hand-off as the person sees it: what the helper may do and the one limit, in crewd's words from its grants
  *  (A.limitOf), then "Messaged Penny" with the job's state, into the helper's chat, which is read only. */
 function HandOff({ c, state }: { c: A.HandChip; state: Json }) {
   const h = A.crew(state).find((x) => x.id === c.helper);
   if (!h) return null;
   return <div className="line them hand-off"><div className="line-by" aria-hidden />
-    <p className="bubble-text hand-limit">{c.limit}</p>
+    {c.limit && <p className="bubble-text hand-limit">{c.limit}</p>}
     <a className={`hand${c.done ? ' done' : ''}`} href={hrefOf(h.id)}><Face who={h} size={22} /><span>Messaged <b>{h.name}</b></span>
       {c.done ? <span className="hand-ok" aria-hidden>✓</span> : c.working && <i className="hand-dot" aria-hidden />}<span className="hand-word">{c.word}</span><span className="chev" aria-hidden>›</span></a>
   </div>;
@@ -821,12 +831,12 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
  *  A job passed to a helper links to that helper's chat. */
 const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 const QUIET_MS = 4000;
-function LiveRow({ ln, quiet }: { ln: A.LiveLine; quiet: boolean }) {
+function LiveRow({ ln, quiet, chipped }: { ln: A.LiveLine; quiet: boolean; chipped: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes.
-  if (ln.took !== undefined) return ln.state === 'done' && ln.took < 1000 && !ln.helper ? null : <div className={`live-end ${ln.state}`} role="status">
+  if (ln.took !== undefined) return chipped || (ln.state === 'done' && ln.took < 1000 && !ln.helper) ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
   // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat.
   return <div className={`line them live-line ${ln.state}`}>
@@ -2012,11 +2022,11 @@ function App() {
   }, [refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) { toast('Back in touch with the home computer ✓'); void mintFiles(); } wasOffline.current = offline; }, [offline]);
-  // A job that finishes while you watch gets a little party.
+  // A job that finishes while you watch gets a little party, unless its result already sits on the screen you have open.
   useEffect(() => {
     if (!state) return;
     const done = A.things(state);
-    if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh) setParty({ title: fresh.title, helper: fresh.helper }); }
+    if (seenDone.current) { const fresh = done.find((t) => !seenDone.current!.has(t.id)); if (fresh && !resultOpen(state, fresh)) setParty({ title: fresh.title, helper: fresh.helper }); }
     seenDone.current = new Set(done.map((t) => t.id));
   }, [state]);
   // The office's one state source (A.office, moved by live events): Home's room, header, tray, feed and the rail read it.

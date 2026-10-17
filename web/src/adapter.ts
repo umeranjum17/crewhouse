@@ -1383,7 +1383,9 @@ export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: L
   /** The next queued job behind the running one, as a short title ("Next: …"). Never on the waiting/done line. */
   next?: string;
   /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
-  heard?: number };
+  heard?: number;
+  /** The task an ended line closes, so the thread can tell its hand-off chip is already on screen (A.handChips). */
+  task?: number };
 const OPEN = ['queued', 'working', 'needs_you', 'paused'];
 const END: Record<string, LiveLine['state']> = { 'task.done': 'done', 'task.failed': 'failed', 'task.unsure': 'unsure' };
 /** "8 s", "1 m 05 s": the clock beside the step, counting up from real crewd times. */
@@ -1465,7 +1467,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   if (state === 'done' || state === 'failed' || state === 'unsure') {
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
-    return { who, helper: helper?.id, chief: t.bot === 'chief', todos: [], detail: [], since: began, state, took: at(ended.at) - (admitted ? at(admitted.at) : created ? at(created.at) : at(t.created_at)),
+    return { who, helper: helper?.id, task: t.id, chief: t.bot === 'chief', todos: [], detail: [], since: began, state, took: at(ended.at) - (admitted ? at(admitted.at) : created ? at(created.at) : at(t.created_at)),
       count: own.filter((e) => e.kind === 'run.tool').length };
   }
   const writing = o.writing.get(t.id);
@@ -1577,7 +1579,8 @@ export function limitOf(state: Json, id: string): string {
 }
 
 /** A job Chief handed a helper (its task, origin chief), as one chip in his thread: "Messaged Penny · at work ›", then
- *  "done · 3 s". The word is the office's own and never "Needs you": a crew member only ever waits, Chief asks. */
+ *  "done · 3 s". The word is the office's own and never "Needs you": a crew member only ever waits, Chief asks. `limit` is
+ *  the one sentence on what the helper can do, on that helper's first hand-off only; later chips leave it empty. */
 export type HandChip = { task: number; helper: string; at: number; done: boolean; working: boolean; word: string; limit: string };
 /** Where each chip sits: after the turn that handed the job on and before its result came back, i.e. before the
  *  person's next line or the first line at or after the job's end, whichever is first; an open job's chip may trail.
@@ -1587,11 +1590,14 @@ export function handChips(state: Json, lines: Line[]): { before: Map<number, Han
   const before = new Map<number, HandChip[]>(), tail: HandChip[] = [], first = lines.find((l) => l.at)?.at;
   if (!first) return { before, tail };
   const helpers = new Set(crew(state).map((h) => h.id));
-  for (const t of ((state.tasks ?? []) as Json[]).filter((t) => t.origin === 'chief' && helpers.has(t.bot) && at(t.created_at) >= first - 2000).sort((a, b) => a.id - b.id)) {
+  const handed = ((state.tasks ?? []) as Json[]).filter((t) => t.origin === 'chief' && helpers.has(t.bot)).sort((a, b) => a.id - b.id);
+  const firstOf = new Map<string, number>();
+  for (const t of handed) if (!firstOf.has(t.bot)) firstOf.set(t.bot, t.id);
+  for (const t of handed.filter((t) => at(t.created_at) >= first - 2000)) {
     const from = at(t.created_at), end = at(t.updated_at), open = OPEN.includes(t.state);
     const word = t.state === 'working' ? WORDS.work : t.state === 'queued' ? WORDS.next : open ? WORDS.wait
       : t.state === 'done' ? `${WORDS.done} · ${took(end - from)}` : t.state === 'unsure' ? WORDS.unsure : WORDS.failed;
-    const c: HandChip = { task: t.id, helper: t.bot, at: from, done: t.state === 'done', working: t.state === 'working', word: word.toLowerCase(), limit: limitOf(state, t.bot) };
+    const c: HandChip = { task: t.id, helper: t.bot, at: from, done: t.state === 'done', working: t.state === 'working', word: word.toLowerCase(), limit: firstOf.get(t.bot) === t.id ? limitOf(state, t.bot) : '' };
     const i = lines.findIndex((l) => l.at !== undefined && l.at > from && ((l.from === 'me' && l.at > from + 2000) || (!open && l.at >= end)));
     if (i < 0) tail.push(c); else before.set(i, [...(before.get(i) ?? []), c]);
   }
