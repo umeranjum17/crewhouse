@@ -8,16 +8,12 @@ import { startServer } from './server.ts';
 
 stamp('service start');
 const cfg = loadConfig();
-if ((cfg.stateDir + '/').startsWith(cfg.repoDir + '/') || (cfg.crewDir + '/').startsWith(cfg.repoDir + '/')) {
-  console.error('crewd: data must live outside the repo; set CREWHOUSE_STATE_DIR / CREWHOUSE_CREW_DIR elsewhere');
-  process.exit(1);
-}
 mkdirSync(join(cfg.crewDir, 'bots'), { recursive: true });
 const db = new Store(cfg.stateDir);
 db.single();
-const url = `http://${cfg.host}:${cfg.port}`, crew = new Crew(cfg, db);
+const crew = new Crew(cfg, db);
 await crew.connections.ready;
-const server = await startServer(cfg, db, crew);
+const server = await startServer(cfg, db, crew), url = `http://${cfg.host}:${(server.address() as import('node:net').AddressInfo).port}`;
 crew.init();
 writeFileSync(join(cfg.stateDir, 'endpoint'), url + '\n');
 writeFileSync(join(cfg.stateDir, 'crewd.pid'), `${process.pid}\n`); // ./crewhouse update restarts it; uninstall stops it

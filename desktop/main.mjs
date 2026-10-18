@@ -9,11 +9,13 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { loadConfig } from '../src/config.ts';
+import { isolatedRun, loadConfig } from '../src/config.ts';
 import { status } from '../web/src/adapter.ts';
 import { trouble } from '../packaging/trouble.mjs';
 
-const cfg = loadConfig(), origin = `http://127.0.0.1:${cfg.port}`, keyFile = join(cfg.stateDir, 'person.key');
+process.env.CREWHOUSE_RUN_MODE ??= 'product';
+const cfg = loadConfig(), keyFile = join(cfg.stateDir, 'person.key');
+let origin = `http://127.0.0.1:${cfg.port}`;
 const nodeBin = join(process.resourcesPath, 'node', 'bin'), icon = join(import.meta.dirname, 'icon.png');
 const key = () => (existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '');
 // The helpers' tools install with the bundled npm, so it goes first on the PATH crewd and its tools see.
@@ -22,8 +24,11 @@ const { APPDIR: _d, APPIMAGE: _i, ARGV0: _a, OWD: _o, ...inherited } = process.e
 const env = { ...inherited, PATH: `${nodeBin}:${process.env.PATH ?? ''}`, CREWHOUSE_PACKAGED: process.env.CREWHOUSE_PACKAGED ?? '1' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Liveness only: crewd answers this unauthenticated probe with its gate's 403 and its own code; anything else is not crewd.
-const up = () => fetch(`${origin}/api/state`, { signal: AbortSignal.timeout(1500) })
-  .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({})))?.code === 'no-authority'), () => false);
+const up = () => {
+  if (!cfg.port) { if (!existsSync(join(cfg.stateDir, 'endpoint'))) return false; origin = readFileSync(join(cfg.stateDir, 'endpoint'), 'utf8').trim(); }
+  return fetch(`${origin}/api/state`, { signal: AbortSignal.timeout(1500) })
+    .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({})))?.code === 'no-authority'), () => false);
+};
 
 let win = null, tray = null, crewd = null, quitting = false, why = '';
 
@@ -106,7 +111,7 @@ async function counts() {
 
 /** Start at login: written once, and again when the app it points at has moved (a new AppImage elsewhere). */
 function loginStart() {
-  if (process.env.CREWHOUSE_NO_SERVICE) return; // tests: never touch the login items of whoever runs this
+  if (process.env.CREWHOUSE_NO_SERVICE || isolatedRun(cfg.engine)) return; // tests: never touch the login items of whoever runs this
   const file = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'autostart', 'crewhouse.desktop');
   const exe = process.env.APPIMAGE || process.execPath, was = existsSync(file) && /^Exec="([^"]+)"/m.exec(readFileSync(file, 'utf8'))?.[1];
   if (was && existsSync(was)) return;

@@ -1,31 +1,20 @@
-import { existsSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir, tmpdir, userInfo } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 
-/** Everything the daemon needs to know about where it lives. All overridable by env, because the tests need their own data dir. Never inside the repo. */
+/** Product launchers keep the installed crew; tests and unmarked scripts get a private home. */
 export interface Config {
-  /** SQLite, the endpoint file, the engine's own folder and the person's sign-ins live here. */
   stateDir: string;
-  /** Human-visible crew folder: bots/<name>/, crew/. */
   crewDir: string;
-  /** Pinned tool installs (npm, pip, single binaries): Crewhouse's own folder, never global. */
   toolsDir: string;
-  /** The AI engine's install: a checkout or the .deb keeps its own runtime/openclaw; any other install uses the person's data folder. */
   engineDir: string;
   host: string;
   port: number;
-  /** The phone link (src/link.ts). Empty host: loopback and Tailscale, plus the LAN when the owner turns
-   *  it on in Settings, Phones. A comma list pins the addresses instead. Port 0 turns the link off. */
   linkHost: string;
   linkPort: number;
-  /** A relay the person runs themselves (relay/), for phones away from home. None by default: there is no hosted one.
-   *  Settings, Phones overrides it. */
   relay: string;
   relayPublic: string;
-  /** 'openclaw' for the real engine, 'stub' for tests: the scripted model, no quota. */
   engine: 'openclaw' | 'stub';
-  /** Max concurrent bot runs. */
   maxConcurrent: number;
-  /** A custom OpenAI-compatible model provider for the engine (the tests' scripted model; a self-hosted gateway later). */
   engineProvider?: { baseUrl: string; apiKey: string };
   googleClient: string;
   repoDir: string;
@@ -38,26 +27,41 @@ export function relayOrigin(value: string | null): string | null {
   return value && new URL(value).origin;
 }
 
+// Unmarked lab/proof scripts are isolated even when they select the stub only after loadConfig.
+export const isolatedRun = (engine = process.env.CREWHOUSE_ENGINE) => !!process.env.NODE_TEST_CONTEXT || process.env.CREWHOUSE_ENGINE === 'stub' || engine === 'stub' || (process.env.CREWHOUSE_RUN_MODE !== 'product' && !(process.env.CREWHOUSE_RUN_MODE === undefined && process.platform === 'linux' && /\/crewhouse(?:-headless)?\.service(?:\/|$)/m.test(readFileSync('/proc/self/cgroup', 'utf8'))));
+const physical = (p: string): string => lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ? physical(resolve(dirname(p), readlinkSync(p))) : existsSync(p) ? realpathSync(p) : join(physical(dirname(p)), basename(p));
+export function assertSafeConfig(cfg: Config) {
+  if ([cfg.stateDir, cfg.crewDir].some(p => (physical(resolve(p)) + '/').startsWith(physical(cfg.repoDir) + '/'))) throw new Error('crewd: data must live outside the repo; set CREWHOUSE_STATE_DIR / CREWHOUSE_CREW_DIR elsewhere');
+  if (!isolatedRun(cfg.engine)) return;
+  const owner = userInfo().homedir, roots = ['Crewhouse', '.local/state/crewhouse', '.local/share/crewhouse', '.config/byokit'].map(p => physical(join(owner, p)));
+  for (const p of [cfg.stateDir, cfg.crewDir, cfg.toolsDir, cfg.engineDir, cfg.googleClient]) {
+    const target = physical(resolve(p));
+    if (roots.some(r => target === r || target.startsWith(r + '/') || r.startsWith(target + '/'))) throw new Error(`crewd: refusing isolated start: ${p} overlaps the owner's Crewhouse; set isolated CREWHOUSE_* directories`);
+  }
+}
 export function loadConfig(): Config {
-  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw');
-  return {
+  const product = !isolatedRun(), home = product ? homedir() : process.env.CREWHOUSE_RUN_HOME ||= mkdtempSync(join(tmpdir(), 'crewhouse-run-'));
+  const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw');
+  const cfg: Config = {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(xdgData, 'crewhouse', 'tools')),
-    engineDir: envPath('CREWHOUSE_ENGINE_DIR', existsSync(join(repoDir, '.git')) || existsSync(own) ? own : join(xdgData, 'crewhouse', 'engine')),
+    engineDir: envPath('CREWHOUSE_ENGINE_DIR', product && (existsSync(join(repoDir, '.git')) || existsSync(own)) ? own : join(xdgData, 'crewhouse', 'engine')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
-    port: Number(process.env.CREWHOUSE_PORT || 7711),
+    port: Number(process.env.CREWHOUSE_PORT || (product ? 7711 : 0)),
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
-    linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? 7712),
+    linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? (product ? 7712 : 0)),
     relay: process.env.CREWHOUSE_RELAY?.trim() ?? '',
     relayPublic: relayOrigin(process.env.CREWHOUSE_RELAY_PUBLIC?.trim() || null) ?? '',
     engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'openclaw',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY
       ? { baseUrl: process.env.CREWHOUSE_ENGINE_BASE_URL, apiKey: process.env.CREWHOUSE_ENGINE_API_KEY } : undefined,
-    googleClient: envPath('CREWHOUSE_GOOGLE_CLIENT', join(process.env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'byokit', 'google-oauth-client.json')),
+    googleClient: envPath('CREWHOUSE_GOOGLE_CLIENT', join((product && process.env.XDG_CONFIG_HOME?.trim()) || join(home, '.config'), 'byokit', 'google-oauth-client.json')),
     repoDir,
   };
+  assertSafeConfig(cfg);
+  return cfg;
 }
 
 export const CHIEF = 'chief';
