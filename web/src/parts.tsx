@@ -865,13 +865,13 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
 /** The ask inline in the thread: the name, the status flag with the dot, then the words. No face, no clock —
  *  except a hire, which is the new helper's own header (mock 1): its face left of the title and its role under it. */
 function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
-  const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
+  const by = c.by ?? c.helper, name = by === 'chief' ? 'Chief' : who?.name ?? c.head;
   if (c.hire) return <div className="ask-head hire-head">
     <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={64} />
     <div className="grow"><b>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
   </div>;
   return <div className="ask-head">
-    <Face who={c.helper === 'chief' ? 'chief' : who ?? 'chief'} size={44} />
+    <Face who={by === 'chief' ? 'chief' : who ?? 'chief'} size={44} />
     <div className="grow"><b>{c.kind === 'plan' ? c.head : name}</b><div className="ask-status"><i />{c.status}</div></div>
   </div>;
 }
@@ -1035,7 +1035,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   const edit = useDraftEdit(c);
   const routine = c.kind === 'routine' ? c.lines : undefined;
   const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
-  const kind = c.hire?.kind ?? (c.helper === 'chief' ? 'chief' : who?.kind ?? 'chief');
+  const kind = c.hire?.kind ?? ((c.by ?? c.helper) === 'chief' ? 'chief' : who?.kind ?? 'chief');
   return (
     <div className={`card ask stack-ask${c.campaign ? ' campaign' : ''}${c.kind === 'plan' ? ' plan-ask' : ''}${c.evidence === 'draft' ? ' draft-ask' : ''}${kind === 'chief' ? ' chief-ask' : ''}`} id={id} aria-label={c.head}
       style={{ '--ask-colour': art.colourOf(kind) } as CSSProperties}>
@@ -1122,13 +1122,13 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   return (
     <div className="scrim" onClick={onClose}>
       <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}
-        style={{ '--ask-colour': art.colourOf(c.hire?.kind ?? (c.helper === 'chief' ? 'chief' : who?.kind ?? 'chief')) } as CSSProperties}>
+        style={{ '--ask-colour': art.colourOf(c.hire?.kind ?? ((c.by ?? c.helper) === 'chief' ? 'chief' : who?.kind ?? 'chief')) } as CSSProperties}>
         <div className="approve-art">
-          <Face who={c.hire ? { kind: c.hire.kind, name: c.hire.name } : c.helper === 'chief' ? 'chief' : who ?? 'chief'} size={96} />
+          <Face who={c.hire ? { kind: c.hire.kind, name: c.hire.name } : (c.by ?? c.helper) === 'chief' ? 'chief' : who ?? 'chief'} size={96} />
           <button className="btn approve-close" aria-label="Close" onClick={onClose}><span aria-hidden>×</span></button>
         </div>
         <div className="approve-body">
-        <div className="approve-status"><span className="st-pill">Needs you</span><span>{c.helper === 'chief' ? 'Chief asks' : `Chief asks · ${who?.name ?? 'The crew'}`}</span></div>
+        <div className="approve-status"><span className="st-pill">Needs you</span><span>{(c.by ?? c.helper) === 'chief' ? 'Chief asks' : `Chief asks · ${who?.name ?? 'The crew'}`}</span></div>
         {c.hire && <AskHead c={c} who={who} />}
         {!c.hire && <h2 className="ask-words">{question}</h2>}
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}

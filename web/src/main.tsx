@@ -510,7 +510,7 @@ function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {
 /** A crew message's card: the connect prompt for an app, or the ask's own card. */
 function cardFor(c: A.Card, h: Helper | undefined, state: Json, refresh: () => void) {
   const id = `ask${c.id}`; // the thread lands on the newest open ask by this id when a footer would push it off the top
-  const who = A.crew(state).find((x) => x.id === c.helper) ?? h;
+  const who = A.crew(state).find((x) => x.id === (c.by ?? c.helper)) ?? h;
   return c.kind === 'connect' ? <ConnectCard key={c.id} id={id} c={c} helper={who?.name} state={state} onDone={refresh} /> : <AskCard key={c.id} id={id} c={c} who={who} onDone={refresh} />;
 }
 function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ctx & { id: string; m?: string; hero?: boolean; rail?: ReactNode }) {
@@ -2131,7 +2131,7 @@ function App() {
           <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'jobs' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
-      {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
+      {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === (sheet.by ?? sheet.helper))} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}

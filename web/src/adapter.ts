@@ -15,7 +15,7 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style'; head: string; words: string;
+  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style'; head: string; words: string;
   /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
@@ -836,7 +836,7 @@ export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.r
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, by: a.bot, at: a.at, reply: false };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
@@ -876,7 +876,7 @@ export function card(a: Json, state: Json): Card {
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
     const note = zoneNote(state);
     const one = !!d.routine.once; // a one-off reminder: the same card, in the words a reminder uses
-    return { ...base, kind: 'routine', status: one ? 'A reminder' : 'A new routine', head: one ? 'A reminder' : 'A new routine', words: plain(d.words ?? a.title),
+    return { ...base, by: d.routine.bot ?? a.bot, kind: 'routine', status: one ? 'A reminder' : 'A new routine', head: one ? 'A reminder' : 'A new routine', words: plain(d.words ?? a.title),
       lines: String(d.preview?.body ?? '').split('\n').map((l: string) => plain(l)).filter(Boolean).concat(note ? [note] : []),
       schedule: String(d.routine.schedule ?? ''), zoneNote: note, remind: one,
       choices: [{ label: one ? 'Remind me' : 'Start it', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };

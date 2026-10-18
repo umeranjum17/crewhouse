@@ -109,6 +109,7 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
   }
   await cold(`${base}/?demo=chase&night#/chief`);
   await until('the draft subject', () => run("!!document.querySelector('.draft-ask .ev-subject')"));
+  assert.equal(await run("document.querySelector('.draft-ask img').alt"), 'Scout', 'Chief’s thread keeps the draft author’s face');
   const contrast = await run(`(() => { const e=document.querySelector('.draft-ask .ev-subject');
     const luminance=s=>{const c=s.match(/[\\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
     const a=luminance(getComputedStyle(e).color),b=luminance(getComputedStyle(e.closest('.ev')).backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
