@@ -309,6 +309,40 @@ export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helpe
 /** What to run on the computer: Crewhouse itself, then the one-use code (`./crewhouse phones code`). */
 const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
 
+// Chrome on Android has BarcodeDetector; iOS Safari has none, so there only the typed code shows.
+const canScan = () => 'BarcodeDetector' in window;
+
+/** The back camera on the computer's QR: BarcodeDetector reads each frame, and the camera stops on a read, on Back and
+ *  on unmount. A refused camera goes back to the typed box (`onRefused`). */
+function Scanner({ onCode, onBack, onRefused }: { onCode: (qr: string) => void; onBack: () => void; onRefused: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    let open = true, frame = 0, stream: MediaStream | undefined;
+    const stop = () => { open = false; cancelAnimationFrame(frame); stream?.getTracks().forEach((t) => t.stop()); };
+    void navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(async (s) => {
+      stream = s;
+      if (!open) return stop();
+      video.current!.srcObject = s;
+      await video.current!.play();
+      const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+      const look = async () => {
+        const [hit] = await detector.detect(video.current!).catch(() => []);
+        if (!open) return;
+        if (hit?.rawValue) { stop(); onCode(hit.rawValue); return; }
+        frame = requestAnimationFrame(() => void look());
+      };
+      void look();
+    }).catch(() => { if (open) { stop(); onRefused(); } });
+    return stop;
+  }, []);
+  return <>
+    <h2>Point at the code</h2>
+    <p className="mute">The code on your computer's screen, under Add a phone.</p>
+    <video ref={video} className="pair-scan" playsInline muted aria-label="Camera" />
+    <button className="link" onClick={onBack}>Back</button>
+  </>;
+}
+
 /** The demo's way to the person's own crew: the few commands for their computer, one box for the code it prints (a relay
  *  code or the 12-letter one, web/src/link.ts), then the two words to check there. Paired, the same installed app
  *  opens again on their real crew. ?demo&phase=waiting|done pins a step, for review. */
@@ -318,12 +352,16 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [done, setDone] = useState(false);
-  const pair = () => { setBusy(true); setProblem(''); void (async () => {
+  const [scan, setScan] = useState(false);
+  const [camOff, setCamOff] = useState(false);
+  const join = (how: (link: typeof import('./link.ts')) => Promise<void>) => { setBusy(true); setProblem(''); void (async () => {
     const link = await import('./link.ts');
-    await link.pair(text, setWords);
+    await how(link);
     setDone(true);
     setTimeout(() => void link.leave(), 1200);
   })().catch((e: Error) => { setProblem(e.message); setWords(null); setBusy(false); }); };
+  const pair = () => join((link) => link.pair(text, setWords));
+  const scanned = (qr: string) => { setScan(false); join((link) => link.scanned(qr, setWords)); };
   const phase = pinned === 'waiting' || pinned === 'done' ? pinned : done ? 'done' : words ? 'waiting' : 'code';
   const said = words ?? 'maple lantern';
   const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
@@ -331,14 +369,17 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
     <Sheet label="Pair with your computer" onClose={onClose}>
       <Progress at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} steps={['Your computer', 'Two words', 'Done']} />
       <Mood phase={phase} />
-      {phase === 'code' && <>
+      {phase === 'code' && scan && <Scanner onCode={scanned} onRefused={() => { setScan(false); setCamOff(true); }} onBack={() => setScan(false)} />}
+      {phase === 'code' && !scan && <>
         <h2>Pair with your computer</h2>
         <p className="mute">Your crew lives on your own computer. Run these there once:</p>
         <div className="cmds">{PAIR_CMDS.split('\n').map((c) => <code className="chat-code" key={c}>{c}</code>)}</div>
         <button className="link" onClick={() => copy(PAIR_CMDS)}>Copy these</button>
         <p className="mute small">Already have Crewhouse? Run just the last one.</p>
+        {canScan() && <button className="btn" disabled={busy} onClick={() => { setCamOff(false); setScan(true); }}>Scan the code on your computer</button>}
         <label className="pair-label">Paste the code it prints
           <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the code here" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
+        {camOff && <p className="mute small">Camera is off for this page. Type the code instead.</p>}
         {problem && <p className="pair-problem" role="alert">{problem}</p>}
         <button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
         <button className="link" onClick={onClose}>Not now</button>
