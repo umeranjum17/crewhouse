@@ -2,8 +2,8 @@
 // public-style origin (`crewhouse.localhost`, loopback to the browser but not a loopback name to the app) opens on
 // Chief's first question, Where should I work?; On my computer opens the Pair sheet, a relay code pastes in, the page shows the same two words the computer asks about, and on yes
 // the same page opens on crewd's real data over the link (web/src/link.ts). A reload stays paired, Unpair goes back to
-// the first question and the computer forgets the device, and the computer's 12-letter code pairs too. Needs a Chromium on PATH (skipped
-// without one).
+// the first question and the computer forgets the device, and the computer's 12-letter code pairs too. Paired, Home offers closed-app news
+// once (Not now keeps it away). Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -110,6 +110,14 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   // A cold start keeps the grant: the installed app opens paired, never on the demo.
   await send('Page.navigate', { url: shell });
   await until('paired again after a reload', async () => (await mode()) === 'real', 30_000);
+  // Closed-app news is offered once on Home, as a tap (a browser prompts only from one); Not now puts it away on
+  // this device for good, and Settings keeps its own row.
+  const offer = `[...document.querySelectorAll('.card')].find((c) => /Get news when the app is closed/.test(c.textContent))`;
+  await run(`location.hash = '#/'`); // onboarding left the page on Chief's thread; the offer is on Home
+  await until('the news offer', () => run(`!!${offer}`), 20_000);
+  await run(`[...${offer}.querySelectorAll('button')].find((b) => b.textContent === 'Not now').click()`);
+  assert.equal(await run(`!!${offer}`), false, 'Not now puts the offer away');
+  assert.equal(await run(`localStorage.getItem('crewhouse.newsOffer')`), '1', 'and this device remembers the answer');
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!!document.getElementById('setup-phones')`), false, 'phones stay the computer’s to manage');

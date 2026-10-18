@@ -1,7 +1,8 @@
 // The home-screen app proof (docs/verification/pwa-shell.md): one isolated Chromium driven over CDP from a plan.
 //   node pwa-shell.mjs <plan.json>     (headed installs: under `xvfb-run -a`, with "headless": false)
 // plan: { profile, home, headless?, args?, xkey?, recorder?, steps: [{ name, w, h, dpr, mobile, ua, platform, touch,
-//   insets, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant }] }
+//   insets, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant, deny }] }
+// `grant` allows the listed permissions for the page's origin; `deny: true` blocks its notifications, as a person's "Block" does.
 // `win: [w, h]` sizes the real window (and drops any viewport override); `wshot` saves just that window off the X screen.
 // `run` is a shell command (the computer's side, e.g. `./crewhouse phones approve …`); its trimmed stdout replaces
 // `{{out}}` (as a JSON string) in later url/eval/wait steps. `wait` polls an expression until truthy, up to `timeout` ms.
@@ -39,6 +40,7 @@ for (const st of plan.steps) {
     if (st.w) await send('Emulation.setDeviceMetricsOverride', { width: st.w, height: st.h, deviceScaleFactor: st.dpr ?? 1, mobile: !!st.mobile }, s);
     if (st.inject) await send('Page.addScriptToEvaluateOnNewDocument', { source: st.inject }, s);
     if (st.grant) { const o = new URL(await evalJs('location.origin')); await send('Browser.grantPermissions', { origin: o.origin, permissions: st.grant }); out.push({ granted: st.grant, origin: o.origin }); }
+    if (st.deny) { const o = new URL(await evalJs('location.origin')); await send('Browser.setPermission', { origin: o.origin, permission: { name: 'notifications' }, setting: 'denied' }); out.push({ denied: o.origin }); }
     if (st.ua) await send('Emulation.setUserAgentOverride', { userAgent: st.ua, platform: st.platform ?? '' }, s);
     if (st.touch !== undefined) await send('Emulation.setTouchEmulationEnabled', { enabled: st.touch, maxTouchPoints: st.touch ? 5 : 1 }, s);
     if (st.insets) await send('Emulation.setSafeAreaInsetsOverride', { insets: st.insets }, s);
