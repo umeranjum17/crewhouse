@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, KEPT } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -671,6 +671,18 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // the thread's foot: the thread holds its newest line, so a footer card filled a phone screen after every send and
   // hid the echo, the live line and the reply above it.
   const firstAnswer = id === 'chief' ? lines.find((l) => l.from === 'them' && l.text)?.id : undefined;
+  // The newest finished sheet or page in Chief's thread is a Done card until the person speaks again, opens it or says
+  // Later (Stack J16a); a person's line after it ends the moment.
+  const [kept, setKept] = useState(keptDone);
+  const made = (f: A.FileView) => (f.kind === 'sheet' || f.kind === 'page') && !f.review && !A.sentFile(f);
+  const doneLine = id === 'chief' ? lines.findLast((l) => l.from === 'me' || l.files.some(made)) : undefined;
+  const doneFile = doneLine?.from === 'me' ? undefined : doneLine?.files.find((f) => made(f) && !kept.includes(f.url));
+  const doneBy = doneFile && makerOf(state, A.fileSource(doneFile.url)?.bot ?? '');
+  const keep = (f: A.FileView, later: boolean) => {
+    const put = (urls: string[]) => { try { localStorage.setItem(KEPT_DONE, JSON.stringify(urls.slice(-200))); } catch { /* this visit only */ } setKept(urls); };
+    put([...kept, f.url]);
+    if (later) toast(`Kept: ${f.name}`, { label: 'Undo', run: () => put(kept) });
+  };
   // A quick end goes unsaid only when its reply is in the thread to say it; a reply the thread drops leaves the end line.
   const replied = !!ln?.task && (page?.messages ?? []).some((x: Json) => x.task_id === ln.task && x.author === 'bot' && lines.some((l) => l.id === x.id));
   // The New pill's tap: back to the newest line and pinned again — the same hand a send is.
@@ -729,8 +741,9 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
-          const content = <>{l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
-            {l.files.map((f) => <Media key={f.url} f={f} big forget />)}</>;
+          const content = <>{l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+            {l.files.map((f) => f === doneFile && doneBy ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} settle={(later) => keep(f, later)} />
+              : <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved
             ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
             : <div className="line-wrap">{dayOf(l.at)}
@@ -1229,6 +1242,13 @@ function Memory({ tick }: { tick: number }) {
 }
 
 // ---------- things ----------
+const KEPT_DONE = 'crewhouse.done.kept';
+// ponytail: settled Done cards live in this browser only, so the phone or another browser shows the card again;
+// move the list to crewd when that matters.
+const keptDone = (): string[] => { try { return JSON.parse(localStorage.getItem(KEPT_DONE) ?? '[]'); } catch { return []; } };
+/** Who made a finished thing: Chief, a helper on the crew, or nobody left on it. */
+const makerOf = (state: Json, id: string) => id === 'chief' ? 'chief' as const : A.crew(state).find((x) => x.id === id);
+
 function Things({ state, id }: Ctx & { id?: string }) {
   const list = A.things(state);
   // A search hit for a finished thing lands on the result itself.
@@ -1993,7 +2013,8 @@ function Jobs({ state, live }: Ctx) {
 function App() {
   const [route, setRoute] = useState<Route>(parseRoute());
   const under = useRef<Route>({ view: route.view === 'ask' ? 'chief' : 'home' });
-  if (route.view !== 'ask' && route.view !== 'pair') under.current = route;
+  // A file opened from Chief's thread reads over his thread, not over the chat of the helper who made it.
+  if (route.view !== 'ask' && route.view !== 'pair' && !(route.file && under.current.view === 'chief')) under.current = route;
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -2076,12 +2097,13 @@ function App() {
   const asks = ctx.live.counts.needs;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file, title: route.title } : undefined;
+  const made = book && A.things(ctx.state).find((t) => t.files.some((f) => A.fileSource(f.url)?.path === book.path && t.helper === book.bot));
   const place = placeOf(v);
   const me = A.displayName(ctx.state.person), quiet = A.quietLine(ctx.state.person);
   return (
     <>
       {splash}
-      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book ? ' with-book' : ''}`}>
+      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book && v.view !== 'chief' ? ' with-book' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Face who="chief" size={36} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
           <nav className="side-navs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav nav-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
@@ -2115,7 +2137,8 @@ function App() {
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === (sheet.by ?? sheet.helper))} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
-      {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
+      {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} wide={v.view === 'chief'} who={makerOf(ctx.state, book.bot)}
+        made={made && A.clock(made.at)} summary={made?.summary} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />

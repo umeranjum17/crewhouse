@@ -313,6 +313,9 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 
 /* A finished job is a toast now (parts.tsx Celebrate), not an overlay. */
 .toast a { text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; }
+/* A toast you can take back (Kept: … Undo, Stack J16a): its words, then a light button at the end of the bar. */
+.toast:has(.toast-act) { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 420px; padding: 6px 6px 6px 20px; border-radius: 22px; font: 600 16px/1.3 Archivo, var(--ui); text-align: left; }
+.toast-act { flex: none; min-height: 44px; padding: 0 18px; border: 0; border-radius: 16px; background: var(--bg); color: var(--ink); font: 700 16px/1.2 Archivo, var(--ui); }
 
 /* hello */
 .hello { max-width: 440px; margin: 0 auto; padding: 36px 20px 40px; display: grid; justify-items: center; text-align: center; gap: 4px; }
@@ -778,45 +781,65 @@ details.card[open] > summary { margin-bottom: 10px; }
 
 /* Spreadsheets: the card a delivered workbook leaves in the chat, and the read-only panel crewd reads it into (parts.tsx). */
 /* A peek inside across the top, then the file's kind as a badge, its name (two lines at most) and its kind, Open. */
-.wb-card { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 12px; align-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; max-width: 480px; transition: background 120ms var(--ease); }
+.wb-card { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "thumb thumb thumb" "ic what open"; column-gap: 12px; row-gap: 12px; align-items: center; background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; max-width: 480px; transition: background 120ms var(--ease); }
+.wb-card > .wb-ic, .wb-card > .face { grid-area: ic; }
+.wb-card > .wb-what { grid-area: what; }
+.wb-card > .wb-thumb, .wb-card > .wb-picture { grid-area: thumb; }
+.wb-card > .wb-open { grid-area: open; }
 .wb-card:hover { background: color-mix(in srgb, var(--soft) 60%, var(--line)); }
 .wb-card:hover .wb-open { text-decoration: underline; text-underline-offset: 3px; }
-.wb-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--ink2); font: 400 22px/1 var(--ui); flex: 0 0 auto; }
-.wb-ic.wb-sheet { color: var(--ok); }
+.wb-ic { width: 44px; height: 44px; border-radius: 12px; background: var(--solid); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--ink2); font: 800 13px/1 var(--ui); flex: 0 0 auto; }
+.wb-ic[style] { box-shadow: none; color: #0B0B0B; }
 .wb-card .wb-ic { font: 700 10px/1 var(--ui); letter-spacing: .06em; color: var(--ink2); }
 .wb-card .wb-ic.wb-sheet { color: var(--ok-ink); background: color-mix(in srgb, var(--ok) 12%, var(--solid)); }
 .wb-card .wb-ic.wb-page { background: var(--cell-calc); }
 .wb-what { display: grid; gap: 2px; min-width: 0; }
 .wb-what b { font: 600 15px/20px var(--ui); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .wb-what .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The peek: a sheet's top-left four by four, tinted like the panel; a page's heading over its lines. */
-.wb-thumb { grid-column: 1 / -1; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font: 400 11px/16px var(--ui); color: var(--ink2); }
-.wb-thumb i { font-style: normal; padding: 3px 6px; min-height: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--solid); }
-.wb-thumb.leaf { background: var(--solid); display: flex; flex-direction: column; gap: 7px; padding: 12px 14px 14px; }
-.wb-thumb.leaf b { font: 600 13px/18px var(--ui); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
-.wb-thumb.leaf .ln { display: block; font: 400 12px/16px var(--ui); color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The peek: a sheet's header and first two rows as a small cream table; a page's heading over its lines. */
+.wb-thumb { display: grid; align-content: start; padding: 6px 10px; border-radius: 16px; background: #FFFDF6; color: #222; font: 400 16px/1.3 var(--ui); overflow: hidden; }
+.wb-thumb i { font-style: normal; padding: 8px 10px; border-bottom: 1px solid #EEEAE0; }
+.wb-thumb i.head { font-weight: 700; border-bottom: 2px solid #E4DFD2; }
+.wb-thumb i.n { text-align: right; }
+.wb-thumb.leaf { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px 14px; }
+.wb-thumb.leaf b { font: 600 16px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-thumb.leaf .ln { display: block; color: #3D3C38; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-picture { width: 100%; max-height: 220px; object-fit: cover; border-radius: 16px; }
 .wb-open { color: var(--ink); font: 600 14px/20px var(--ui); padding: 8px 14px; border-radius: 10px; background: var(--solid); border: 1px solid var(--line2); flex: 0 0 auto; }
 .icon-btn { width: 40px; height: 40px; flex: none; display: inline-grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--ink2); font: 500 18px/1 var(--ui); }
 .icon-btn:hover { background: var(--soft); }
-.wb-scrim { align-items: stretch; justify-items: stretch; }
-.wb-panel { background: var(--solid); width: 100%; height: 100%; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
-.wb-head { display: flex; gap: 10px; align-items: center; }
-.wb-head .btn { min-height: 38px; padding: 6px 14px; font-size: 14px; }
-/* The sheet's tabs sit under it, as in the file's own program. */
-.wb-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin-top: -12px; border-top: 1px solid var(--line); }
-.wb-tab { font: 500 13px/18px var(--ui); background: transparent; border: 0; border-top: 2px solid transparent; border-radius: 0 0 8px 8px; padding: 7px 12px; color: var(--mute); white-space: nowrap; }
-.wb-tab.on { color: var(--ink); border-color: var(--ok); background: var(--soft); }
-.wb-rows { flex: 1; min-height: 0; overflow: auto; background: var(--soft); border-radius: 14px; padding: 10px; display: grid; gap: 8px; align-content: start; }
+/* The file read-only (Stack J07b): on a phone the whole screen above the tabs, a round Back, its name and maker, a
+   black Download, the table in a rounded box, the sheets as pills under it and the maker's line about it. */
+.wb-scrim { bottom: var(--tabs); align-items: stretch; justify-items: stretch; background: var(--bg); }
+.wb-panel { background: var(--bg); width: 100%; height: 100%; padding: 20px 16px 16px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+.wb-head { display: flex; gap: 12px; align-items: center; }
+.wb-head .wb-what b, .wb-file .wb-what b { font: 700 18px/1.2 var(--ui); font-stretch: 112%; -webkit-line-clamp: 3; }
+.wb-head .wb-what span, .wb-file .wb-what span { font-size: 16px; color: var(--mute); overflow-wrap: anywhere; }
+.wb-head > .wb-ic, .wb-ro { display: none; }
+.wb-close { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--soft); color: var(--ink); }
+.btn.wb-down { flex: none; gap: 8px; min-height: 44px; padding: 0 14px; border: 0; border-radius: 16px; font: 700 16px/1.2 var(--ui); background: var(--soft); color: var(--ink); }
+.btn.wb-down.go { background: var(--ink); color: var(--bg); }
+.wb-content { flex: 1; min-height: 0; display: flex; }
+.wb-reading { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.wb-reading > .mute { font-size: 16px; }
+.wb-tabs { order: 1; flex: none; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.wb-tab { flex: none; min-height: 44px; padding: 0 20px; border: 0; border-radius: 16px; background: var(--soft); color: var(--ink); font: 700 16px/1.2 var(--ui); white-space: nowrap; }
+.wb-tab.on { background: var(--ink); color: var(--bg); }
+.wb-note { order: 2; display: flex; gap: 10px; align-items: flex-start; margin: 0; color: var(--mute); font-size: 16px; line-height: 1.4; }
+.wb-note .lucide { flex: none; margin-top: 1px; }
+.wb-about { display: none; }
+.wb-rows { flex: none; overflow-x: auto; background: var(--solid); border: 1px solid var(--line); border-radius: 20px; padding: 6px 8px; display: grid; gap: 8px; align-content: start; }
 .wb-grid { border-collapse: collapse; width: auto; min-width: 100%; font-size: 14px; }
 .wb-grid th, .wb-grid td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); max-width: 260px; overflow-wrap: normal; word-break: normal; }
 .wb-grid th { font: 500 12px/16px var(--ui); color: var(--mute); background: var(--solid); }
 .wb-grid td { color: var(--ink2); background: var(--solid); }
-/* A sheet as a grid: letters over the columns, row numbers down the side, the heading row set apart,
-   soft yellow where the person fills in and soft blue where it works itself out. */
-.wb-sheet td { border: 1px solid var(--line); padding: 6px 10px; }
-.wb-sheet th { font: 500 11px/16px var(--ui); color: var(--mute); background: var(--soft); text-align: center; padding: 3px 8px; border: 1px solid var(--line); }
-.wb-sheet thead th { position: sticky; top: -10px; z-index: 1; }
-.wb-sheet .wb-n { position: sticky; left: -10px; min-width: 34px; }
+/* A sheet as a table: its header row in bold over a rule, numbers to the right, soft yellow where the person fills
+   in and soft blue where it works itself out. */
+.wb-sheet { font-size: 16px; }
+.wb-sheet th { font: 700 16px/1.3 var(--ui); color: var(--ink); background: none; padding: 10px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+.wb-sheet td { color: var(--ink); background: none; padding: 12px; white-space: nowrap; }
+.wb-sheet tr:last-child td { border-bottom: 0; }
+.wb-grid td.n { text-align: right; }
 /* A chart in the sheet sits over its table at the panel's width, and stays put while a wide table scrolls sideways. */
 .wb-rows:has(> .wb-chart) { grid-template-columns: minmax(0, 1fr); }
 .wb-chart { margin: 0; background: var(--solid); border-radius: 10px; padding: 12px; display: grid; gap: 8px; position: sticky; left: 0; }
@@ -827,13 +850,10 @@ details.card[open] > summary { margin-bottom: 10px; }
 .wb-axis line { stroke: var(--line); }
 .wb-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 13px/18px var(--ui); color: var(--ink2); }
 .wb-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
-.wb-sheet thead .wb-n { z-index: 2; }
-.wb-sheet th.head { font: 600 14px/20px var(--ui); color: var(--ink); background: var(--solid); text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--line2); }
-.wb-grid td.in, .wb-thumb .in { background: var(--cell-in); color: var(--ink); }
-.wb-grid td.calc, .wb-thumb .calc { background: var(--cell-calc); color: var(--ink); }
-.wb-thumb .head { font-weight: 600; color: var(--ink); background: var(--soft); }
+.wb-grid td.in { background: var(--cell-in); color: var(--ink); }
+.wb-grid td.calc { background: var(--cell-calc); color: var(--ink); }
 /* A document's preview body: the helper's own headings, words, lists and tables, read-only — set as a page to read. */
-.wb-rows.doc-rows { background: transparent; padding: 4px 2px 24px; gap: 12px; }
+.wb-rows.doc-rows { background: transparent; border: 0; padding: 4px 2px 24px; gap: 12px; }
 .doc-rows > * { max-width: 64ch; }
 .doc-rows h3 { margin: 16px 0 0; font: 600 18px/1.35 var(--ui); letter-spacing: -.01em; color: var(--ink); }
 .doc-rows h3:first-child { margin-top: 0; }
@@ -843,7 +863,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .doc-rows a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .doc-rows .wb-grid { margin: 4px 0; max-width: none; }
 /* A deck: one frame per slide, title over its lines, in the same panel a document opens in. */
-.wb-rows.slide-rows { background: transparent; padding: 4px 2px 24px; gap: 14px; }
+.wb-rows.slide-rows { background: transparent; border: 0; padding: 4px 2px 24px; gap: 14px; }
 .slide-frame { background: var(--solid); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px; display: grid; gap: 10px; max-width: 72ch; }
 .slide-frame h3 { margin: 0; font: 600 18px/1.35 var(--ui); letter-spacing: -.01em; color: var(--ink); }
 .slide-frame ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
@@ -866,6 +886,24 @@ details.card[open] > summary { margin-bottom: 10px; }
   :root { --book: min(560px, 48vw); }
   .wb-scrim { align-items: stretch; justify-items: end; padding: 0; background: transparent; pointer-events: none; }
   .wb-panel { pointer-events: auto; width: var(--book); height: 100%; border-radius: 0; border-left: 1px solid var(--line); box-shadow: var(--e2); padding: 24px; }
+  .wb-tabs { order: 0; }
+  /* Opened from Your things, the file takes the page beside the side menu: a header bar with its chip, name, maker
+     and Download, the sheets as pills over the table, and what it is with Ask about it in the column beside. */
+  .wb-scrim.wb-wide { left: 264px; background: var(--bg); pointer-events: auto; }
+  .wb-wide .wb-panel { width: 100%; padding: 0; gap: 0; border: 0; box-shadow: none; background: var(--bg); }
+  .wb-wide .wb-head { min-height: 76px; padding: 12px 28px; border-bottom: 1px solid var(--line); gap: 14px; }
+  .wb-wide .wb-close { display: none; }
+  .wb-wide .wb-head > .wb-ic, .wb-wide .wb-ro { display: inline; }
+  .wb-wide .wb-head > .wb-ic { display: grid; border-radius: 12px; }
+  .wb-wide .wb-head .wb-what b { font: 800 26px/1.1 var(--ui); font-stretch: 125%; letter-spacing: -.01em; }
+  .wb-wide .btn.wb-down { min-height: 50px; padding: 0 20px; }
+  .wb-wide .wb-reading { padding: 24px 28px; }
+  .wb-wide .wb-about { display: flex; flex-direction: column; gap: 12px; width: 368px; flex: none; overflow-y: auto; padding: 20px; border-left: 1px solid var(--line); }
+  .wb-about .label { margin: 0; font: 800 14px/1.2 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .wb-about .label + .composer { margin-top: 0; }
+  .wb-about p { display: flex; gap: 12px; margin: 0; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 16px; overflow-wrap: anywhere; }
+  .wb-about p b { flex: none; min-width: 56px; font-weight: 700; color: var(--mute); }
+  .wb-about p + .label { margin-top: 12px; }
 }
 @media (min-width: 1200px) {
   /* with room for both, the chat moves over for the panel instead of sitting under it */
@@ -1845,3 +1883,30 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .more-sheet { font: 400 16px/1.4 Archivo, var(--ui); border-radius: 30px 30px 0 0; }
 .more-sheet .more-head b { font-size: 18px; }
 .more-sheet .more-head span, .more-sheet .more-row { font: inherit; }
+/* A file a crew member made, as its maker's colour card: face, name, kind and maker, a peek, a black Open. */
+.wb-card.wb-made { height: 100%; max-width: none; margin: 0; padding: 16px; border: 0; border-radius: 30px; color: #0B0B0B; grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "ic what" "thumb thumb" "open open"; align-content: start; }
+.wb-made .wb-what b { display: block; overflow: visible; font: 750 20px/1.15 var(--ui); font-stretch: 108%; }
+.wb-made .wb-what .small { font-size: 16px; font-weight: 600; color: inherit; opacity: .78; white-space: normal; overflow-wrap: anywhere; }
+.wb-made .wb-thumb.leaf { padding: 0 2px; background: none; color: inherit; }
+.wb-made .wb-thumb.leaf b { display: none; }
+.wb-made .wb-thumb.leaf .ln { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; color: inherit; opacity: .78; font-weight: 600; }
+.wb-made .wb-open { min-height: 50px; display: grid; place-items: center; border: 0; border-radius: 16px; background: #000; color: #FFF; font: 700 16px/1.2 var(--ui); }
+.wb-made.wb-chief { color: #F7F7FB; }
+/* A job just finished, in Chief's thread (Stack J16a): the maker's colour, a big face, Done., the thread's own words, a
+   peek, then a black Open it beside a quiet Later. Centred on a phone; on a computer the face sits beside the words. */
+.line .wb-made { height: auto; max-width: 480px; margin-top: 10px; }
+.done-card { display: grid; justify-items: center; gap: 14px; max-width: 640px; margin-top: 10px; padding: 24px 20px 20px; border-radius: 30px; color: #0B0B0B; text-align: center; }
+.done-card.wb-chief { color: #F7F7FB; }
+.done-say h2 { margin: 0; font: 800 56px/1 Archivo, var(--ui); font-stretch: 125%; letter-spacing: -.02em; }
+.done-say p { margin: 8px 0 0; font: 600 18px/1.4 var(--ui); opacity: .82; overflow-wrap: anywhere; }
+.done-card .wb-thumb { justify-self: stretch; text-align: left; }
+.done-go { justify-self: stretch; display: flex; gap: 8px; }
+.done-open, .done-later { min-height: 50px; display: grid; place-items: center; padding: 0 20px; border: 0; border-radius: 16px; font: 700 16px/1.2 Archivo, var(--ui); text-decoration: none; }
+.done-open { flex: 1; background: #000; color: #FFF; }
+.done-later { background: rgb(0 0 0 / .1); color: inherit; }
+@media (min-width: 900px) {
+  .done-card { grid-template-columns: 96px minmax(0, 1fr); align-items: center; column-gap: 24px; padding: 28px; text-align: left; }
+  .done-card > .wb-thumb, .done-go { grid-column: 1 / -1; }
+  .done-say h2 { font-size: 64px; }
+  .done-later { padding: 0 28px; }
+}
