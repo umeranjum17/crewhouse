@@ -63,9 +63,6 @@ b { font-weight: 600; }
 .app-row-item .app-ic { width: 36px; height: 36px; border-radius: 9px; }
 .settings > .label, .settings > .seg, .settings > .card, .settings > .form { max-width: 640px; }
 .settings { max-width: 640px; }
-.helper-intro { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
-.helper-intro h1 { margin: 0 0 4px; }
-.helper-intro .lead { margin: 0; }
 .detail { max-width: 720px; }
 .crew-row { min-height: 68px; flex-wrap: wrap; row-gap: 4px; }
 .crew-row > b, .crew-row > span.grow { min-width: 0; }
@@ -1500,6 +1497,96 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-tile.st-new { align-items: center; justify-content: center; text-align: center; color: var(--ink); }
 .st-tile.st-new > b { margin-top: 10px; }
 .st-tile.st-new > span:last-child { color: var(--mute); opacity: 1; font-weight: 400; }
+
+/* Helpers (Stack J05): the shared transcript and file cards, read only; the person's one way in is Chief. */
+.st-helper-chat.page, .st-profile.page { padding: 0; max-width: none; width: 100%; }
+.st-helper-chat .chat-head, .st-profile-head { padding: 16px 20px; min-height: 80px; border-bottom: 1px solid var(--line); }
+.st-helper-chat .chat-head b { font: 800 22px/1.1 var(--ui); font-stretch: 112%; overflow-wrap: anywhere; }
+.st-helper-chat .st-reading { display: block; color: var(--mute); font-size: 16px; }
+.st-helper-chat .st-gear, .st-profile .st-gear { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.st-helper-chat .back { margin: 0; border-radius: 50%; background: var(--soft); width: 44px; height: 44px; }
+.st-helper-chat .sticky-top { margin: 0; padding: 0; }
+.st-helper-chat .chat { min-height: 0; }
+.st-helper-chat .lines { padding: 0 14px 28px; }
+.st-helper-chat .chat .line { position: relative; display: block; max-width: none; margin-top: 22px; }
+.st-helper-chat .chat .line-by { position: static; width: auto; height: auto; clip-path: none; overflow: visible; white-space: normal; display: flex; align-items: center; gap: 10px; padding: 0 2px 8px; }
+.st-helper-chat .chat .line-by .who { font: 700 16px/1.4 var(--ui); color: var(--ink); }
+.st-helper-chat .helper-bubble { border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px; background: var(--solid); overflow-wrap: anywhere; }
+.st-helper-chat .chat .line .bubble-text { max-width: none; padding: 0; background: none; color: inherit; font: 400 16px/1.45 var(--ui); }
+.st-helper-chat .helper-bubble > .wb-card { margin: 12px 0 0; }
+.st-helper-chat .line.note { color: var(--mute); font-size: 16px; }
+.st-helper-chat .line.note .wb-card { color: var(--ink); }
+.st-helper-chat .chat .dock { margin: 0; padding: 14px; border-top: 1px solid var(--line); border-radius: 0; background: var(--bg); mask-image: none; }
+.st-helper-chat .read-along .ro { background: none; padding: 0 2px; font-size: 16px; line-height: 1.4; }
+.st-helper-chat .read-along .btn, .st-profile .st-change { background: var(--ink); color: var(--bg); border: 0; border-radius: 16px; min-height: 50px; font-size: 16px; font-weight: 700; }
+.st-helper-chat .working-on { padding: 24px 20px; }
+.st-helper-chat .st-profile-hero { border-radius: 30px; padding: 24px; }
+.st-helper-chat .st-profile-hero h1 { font: 800 26px/1.1 var(--ui); font-stretch: 125%; overflow-wrap: anywhere; }
+.st-helper-chat .working-on .label { font-size: 14px; }
+.st-helper-chat .small, .st-profile .small { font-size: 16px; }
+.st-helper-chat .wb-thumb, .st-profile .wb-thumb { display: none; }
+.st-helper-chat .wb-card, .st-profile .wb-card { border-radius: 20px; padding: 14px; background: var(--solid); }
+.st-helper-chat .wb-card .wb-ic[class], .st-profile .wb-card .wb-ic[class] { background: var(--helper-colour); color: #0B0B0B; width: 44px; height: 44px; border-radius: 14px; font-size: 14px; }
+.st-helper-chat .wb-card .wb-what > b, .st-profile .wb-card .wb-what > b { font-size: 16px; }
+.st-helper-chat .time, .st-profile .time, .st-profile .step, .st-profile .step time, .st-helper-chat .chat-more, .st-helper-chat .chat-intro > span, .st-helper-chat .chip { font-size: 16px; }
+.st-helper-chat .wb-what .small, .st-profile .wb-what .small { white-space: normal; overflow: visible; }
+.st-profile .wb-open, .st-helper-chat .working-on .wb-open { display: none; }
+.st-profile .wb-card::after, .st-helper-chat .working-on .wb-card::after { content: '›'; font-size: 28px; }
+.st-profile-head > .st-pill { background: var(--soft); }
+.st-helper-chat .wb-open, .st-profile .wb-open { border-radius: 16px; background: var(--soft); padding: 12px 16px; font-size: 16px; }
+.st-profile h1 { font: 800 32px/1.1 var(--ui); font-stretch: 125%; overflow-wrap: anywhere; }
+.st-profile-hero { background: var(--helper-colour); color: #0B0B0B; border-radius: 0 0 30px 30px; padding: 16px 20px 24px; text-align: center; }
+.st-profile-hero > .face { margin: 4px auto 14px; }
+.st-profile-hero > p { margin-bottom: 0; font-weight: 600; }
+.st-profile-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.st-profile-controls .st-gear { background: #0002; font-size: 32px; }
+.st-profile .st-profile-main { min-width: 0; }
+.st-profile .st-label { display: block; font: 800 14px/1.3 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); margin: 26px 20px 10px; }
+.st-profile-overview > :not(.st-profile-hero, .st-label), .st-profile-job { margin-left: 20px; margin-right: 20px; }
+.st-profile-job > .st-label { margin-left: 0; margin-right: 0; }
+.st-profile .st-now { font-size: 18px; font-weight: 600; }
+.st-profile .card { background: var(--solid); border: 1px solid var(--line); border-radius: 22px; box-shadow: none; }
+.st-job > .card:first-child { border: 0; border-radius: 0; padding: 0; background: none; }
+.st-job > .card:first-child > p { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.st-job > .card:first-child > p > b { color: var(--mute); }
+.st-profile .btn { font-size: 16px; white-space: normal; min-height: 44px; border-radius: 16px; }
+.st-profile .st-change { width: 100%; margin-top: 18px; }
+.st-profile-more { margin: 24px 0; }
+.st-profile-more > summary { cursor: pointer; font-weight: 600; }
+.st-profile .st-made { display: grid; gap: 10px; }
+@media (max-width: 899px) {
+  .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) .dock { margin: 0; padding: 14px; }
+}
+@media (min-width: 900px) {
+  .st-profile-head.desk-only { display: flex; }
+  .st-profile-head h1 { font-size: 26px; margin: 0 0 4px; }
+  .st-profile-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, .65fr); }
+  .st-profile-main { padding: 24px 28px; }
+  .st-profile .st-profile-hero { border-radius: 30px; padding: 24px; }
+  .st-profile-controls { display: none; }
+  .st-profile-overview > :not(.st-profile-hero, .st-label), .st-profile-job { margin-left: 0; margin-right: 0; }
+  .st-profile .st-label { margin-left: 0; margin-right: 0; }
+  .st-profile-trail { border-left: 1px solid var(--line); padding: 0 20px 24px; min-width: 0; }
+  .st-profile-trail .steps { background: none; padding: 0; box-shadow: none; border: 0; border-radius: 0; }
+  .st-profile-trail .step { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: start; gap: 12px; border-bottom: 1px solid var(--line); padding: 14px 0; }
+  .st-profile-trail .step > i { display: none; }
+  .st-profile-trail .step > .grow { grid-column: 2; grid-row: 1; }
+  .st-profile-trail .step > time { grid-column: 1; grid-row: 1; }
+  .st-helper-chat .chat-head { max-width: none; }
+  .st-helper-chat .lines { max-width: none; padding: 4px 28px 28px; }
+  .st-helper-chat .lines > :first-child { margin-top: auto; }
+}
+@media (min-width: 1200px) {
+  .st-profile-layout { grid-template-columns: minmax(0, 1fr) 368px; }
+  .st-profile-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .st-profile-job > .st-label:first-child { margin-top: 0; }
+  .st-profile .st-profile-hero h1 { font-size: 26px; }
+  .st-profile .st-profile-hero > .face { width: 96px !important; height: 96px !important; }
+  .page.st-helper-chat > .chat { display: grid; grid-template-columns: minmax(0, 1fr) 368px; grid-template-rows: minmax(0, 1fr) auto; gap: 0; }
+  .st-helper-chat .chat > .lines { grid-column: 1; grid-row: 1; }
+  .st-helper-chat .chat > .dock { grid-column: 1; grid-row: 2; max-width: none; }
+  .st-helper-chat .chat > .working-on { grid-column: 2; grid-row: 1 / 3; overflow-y: auto; border-left: 1px solid var(--line); width: auto; }
+}
 
 /* The Stack frame (design C, v59): the four places Home, Chief, Jobs, Crew in that order, as the phone's tab bar and
    the computer's 264px side menu, on the Stack ground. Chief is the primary place: his tab is the filled one, and in

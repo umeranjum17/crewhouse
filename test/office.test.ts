@@ -379,16 +379,16 @@ test('a stepper\'s step labels split only between words, never mid-word, at the 
   }
 });
 
-test('things, routines and helper details read Term: shared tiles, one blue primary, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
+test('things, routines and helper profiles: shared file cards, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   // Old-style markers: the pastel file chip and the coral result link. Their Term replacements carry the rows.
   const markers = `(() => ({ chips: document.querySelectorAll('.file-chip').length,
     coral: document.querySelectorAll('.link.pink').length,
-    tiles: [...document.querySelectorAll('.thing-list .o-ic, .detail .o-ic')].map((e) => e.textContent),
+    tiles: [...document.querySelectorAll('.thing-list .o-ic, .st-made .wb-ic, .st-made .doc-ic')].map((e) => e.textContent),
     primary: [...document.querySelectorAll('.routine .btn.go, .wb-panel .btn.go')].map((e) => e.textContent),
-    rows: [...document.querySelectorAll('.thing-list .row-item, .routine, .detail .list-row')].map((row) => {
-      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
+    rows: [...document.querySelectorAll('.thing-list .row-item, .routine, .st-made .wb-card, .st-made .doc')].map((row) => {
+      const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
       const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
       const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
       const cut = [...row.querySelectorAll('b')].some((e) => e.scrollWidth > e.clientWidth + 1);
@@ -408,15 +408,25 @@ test('things, routines and helper details read Term: shared tiles, one blue prim
     assert.equal(m.coral, 0, `${at} routines: no coral result link`);
     assert.ok(((m.primary as string[]).some((t) => /Do it now|Download/.test(t ?? ''))), `${at} routines: one filled-blue primary per row`);
     await b.open(`demo&${theme}#/h/scribe/details`);
-    await until("scribe's files", () => b.run("document.querySelectorAll('.detail .list-row').length > 0"), 30_000);
+    await until("scribe's files", () => b.run("document.querySelectorAll('.st-made .wb-card, .st-made .doc').length > 0"), 30_000);
     m = await b.run(markers);
     assert.equal(m.chips, 0, `${at} helper details: no old file chips`);
-    assert.ok(m.tiles.length > 0, `${at} helper details: finished work wears the shared tile`);
+    assert.ok(m.tiles.length > 0, `${at} helper profile: finished work wears the shared tile`);
+    assert.deepEqual(await b.run(`(() => ({ hero: !!document.querySelector('.st-profile-hero .face'),
+      job: !!document.querySelector('.st-job'), remembers: document.body.textContent.includes('What Scribe remembers'),
+      chief: !!document.querySelector('.st-change'), scroll: document.documentElement.scrollWidth > innerWidth + 1 }))()`),
+      { hero: true, job: true, remembers: true, chief: true, scroll: false }, `${at}: profile keeps the real job, memories and Chief handoff`);
     for (const [i, r] of m.rows.entries()) {
       assert.ok(!r.overlap, `${at} row ${i}: never overlaps`);
       assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);
       assert.ok(!r.cut, `${at} row ${i}: names read in full`);
     }
+    await b.open(`demo&${theme}#/h/scribe/chat`);
+    await until('helper read-along', () => b.run("!!document.querySelector('.st-helper-chat .read-along')"), 30_000);
+    assert.equal(await b.run("document.querySelectorAll('.st-helper-chat textarea').length"), 0, `${at}: helper stays read only`);
+    if (!mobile) assert.equal(await b.run(`(() => { const p = document.querySelector('.st-helper-chat'),
+      a = p.querySelector('.lines').getBoundingClientRect(), c = p.querySelector('.working-on').getBoundingClientRect();
+      return c.left >= a.right - 1 && Math.abs(c.top - a.top) < 2 && p.getBoundingClientRect().width === document.querySelector('.main').getBoundingClientRect().width; })()`), true, `${at}: helper context sits beside the full-width transcript, never below it`);
   }
 });
 
