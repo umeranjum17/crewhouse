@@ -386,7 +386,7 @@ export function Thumb({ name, book, doc, deck, text }: { name: string; book: Wor
     const rows = [s.head, ...s.rows].slice(0, 3);
     const cols = [...Array(Math.min(3, Math.max(...rows.map((r) => r.length)))).keys()];
     return <span className="wb-thumb" aria-hidden style={{ gridTemplateColumns: `repeat(${cols.length}, auto)` }}>{rows.flatMap((r, j) => cols.map((c) =>
-      <i key={`${j}-${c}`} className={j ? cell(r[c]) : 'head'}>{r[c] ?? ''}</i>))}</span>;
+      <i key={`${j}-${c}`} className={j ? cell(r[c]) : 'head'}>{j ? money(s.head[c], r[c]) : r[c] ?? ''}</i>))}</span>;
   }
   const first = deck?.slides[0];
   const page = first ? { head: first.title, lines: first.lines.slice(0, 3) } : doc || text ? pagePeek(name, doc, text) : null;
@@ -467,6 +467,9 @@ export function SheetChart({ c }: { c: Chart }) {
 }
 
 /** A cell's look: what the helper filled in, a sum it worked out, or a number, which reads from the right. */
+/** A sum in a column its header calls money reads to the penny (42.50), as a bill does; the file keeps its own number.
+ *  ponytail: the header's words decide, so a "Total visits" column reads 3.00; read the file's number format when one matters. */
+const money = (head = '', v = '') => /amount|cost|price|total|fee|balance|spent|budget|owed|[£$€]/i.test(head) && /^-?\d+(\.\d+)?$/.test(v) ? Number(v).toFixed(2) : v;
 const cell = (v = '', role = '') => [role, /^[-+(]?[£$€]?\d[\d,.]*%?\)?$/.test(v.trim()) ? 'n' : ''].filter(Boolean).join(' ') || undefined;
 
 /** One sheet as a table, read-only: its own header row on top, each cell tinted by its role, and what is not shown
@@ -478,7 +481,7 @@ export function SheetTable({ s }: { s: Sheet }) {
     {s.charts.map((c, i) => <SheetChart key={i} c={c} />)}
     <table className="wb-grid wb-sheet">
       <thead><tr>{cols.map((c) => <th key={c} scope="col">{s.head[c] ?? ''}</th>)}</tr></thead>
-      <tbody>{s.rows.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c} className={cell(r[c], s.roles[i + 1]?.[c])}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
+      <tbody>{s.rows.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c} className={cell(r[c], s.roles[i + 1]?.[c])}>{money(s.head[c], r[c])}</td>)}</tr>)}</tbody>
     </table>
     {more > 0 && <div className="mute">…and {more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.</div>}
   </div>;
