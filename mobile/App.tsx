@@ -1998,7 +1998,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const stuck = A.stuckIn(crewNames, id).filter((x) => leftAlone.get(x.id) !== x.quietSince);
   const stuckProps = { go, refresh, canAct, leave: (x: A.Helper) => { leftAlone.set(x.id, x.quietSince); leave((n) => n + 1); } };
   const faceOf = (helper?: string) => { const x = crewNames.find((c) => c.id === helper); return x ? { kind: x.kind, name: x.name, mood: x.mood } : 'chief' as const; };
-  const mine = (text: string) => <Theme.Provider value={{ ...t, ink: t.bg }}><View style={[s.mine, { backgroundColor: t.ink }]}><ChatText text={text} /></View></Theme.Provider>;
+  const mine = (text: string) => <Theme.Provider value={{ ...t, ink: t.bg, soft: t.ink2 }}><View style={[s.mine, { backgroundColor: t.ink }]}><ChatText text={text} /></View></Theme.Provider>;
   const last = lines.at(-1);
   // The newest answer reads in full, never folded; the Add-a-phone card waits below Chief's first answer.
   const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
@@ -2050,7 +2050,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10, flexGrow: hero ? 1 : undefined, justifyContent: hero && !fresh ? 'flex-end' : undefined }}
         scrollEventThrottle={16} onScroll={onScroll}
         onContentSizeChange={(w, h) => {
-          if (around) return;
+          if (around || fresh) return; // An empty thread opens at its greeting, not its last idea.
           // Reading up: a line landing below raises the New pill instead of moving anything.
           if (!pinned.current) { if (h !== seen.current) setNewBelow(true); return; }
           seen.current = h; setNewBelow(false);
@@ -2141,7 +2141,7 @@ function JobCard({ who, title, word, chief, children }: { who?: A.Helper; title:
       <View style={[s.row, { gap: 12 }]}>
         <Face who={who ? { kind: who.kind, name: who.name, mood: who.mood } : 'chief'} size={40} />
         <Text style={[s.semi, { flex: 1, fontSize: 20, lineHeight: 24, color: ink }]}>{title}</Text>
-        <Text style={[s.stPill, !who && { color: t.ink, backgroundColor: t.soft }]}>{word}</Text>
+        <Text numberOfLines={1} style={[s.stPill, { flexShrink: 0 }, !who && { color: t.ink, backgroundColor: t.soft }]}>{word}</Text>
       </View>
       {children}
     </View>
