@@ -1,6 +1,7 @@
 // The phone's cloud connect (web/src/cloud.ts) on BYOKit's fake boat.dev: a refused key is said in Chief's words and
 // never kept; an accepted one lists the person's computer, and Use this computer walks the kit's setup steps to ready
-// with this phone's key delivered, no new rental; an install failure stops the list at that row and the retry resumes.
+// with this phone's key delivered, no new rental; an install failure stops the list at that row and the retry resumes;
+// a throw stops on the row setup was on, or on none before the kit's first step.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { keyPair } from '@byokit/pair';
@@ -34,6 +35,9 @@ test('paste a boat.dev key, pick the computer, and the progress list follows the
     const steps = await all(connect(p, store, seeded.id, phone));
     assert.deepEqual(steps.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
     assert.deepEqual(progress(steps), { done: 5, failed: -1, why: '', retry: false });
+    // A throw mid-setup marks the row setup was on; one before the kit's first step marks none. Both offer Try again.
+    assert.deepEqual(progress(steps.slice(0, 4), 'lost'), { done: 3, failed: 3, why: 'lost', retry: true });
+    assert.deepEqual(progress([], 'lost'), { done: 0, failed: -1, why: 'lost', retry: true });
     assert.deepEqual([...server.machine.files.get('/home/user/crewhouse/.byokit/inbox/phone.bin')!.bytes], [...phone]);
     assert.equal(server.requests.filter((r) => r.method === 'POST' && r.path === '/sandboxes').length, 1, 'only the seeded computer was ever rented');
   } finally { await server.close(); }
