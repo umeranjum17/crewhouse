@@ -14,4 +14,10 @@ add-to-crew	demo	#/crew/add
 chief-things	demo	#/things
 handoff	demo=after	#/
 handoff-helper	demo=after	#/h/reel
+ask-hire	demo=ask-hire	#/chief
+ask-plan	demo=job-plan	#/chief
+ask-routine	demo	#/ask/14
+ask-draft	demo	#/ask/7
+ask-spend	demo	#/ask/11
+ask-spend-unknown	demo=unknown	#/ask/11
 screen-control	demo	#/h/scout/screen

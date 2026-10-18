@@ -179,7 +179,11 @@ const state = {
     { bot: 'chief', promise: "What's on this week?", ask: "What's on this week?" },
     { bot: 'reel', promise: 'Make a poster from photos', ask: 'Make a poster from these photos: ' },
   ],
-  asks: variant.startsWith('phone') || variant === 'finished' ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for your newsletter.' } } }]
+  asks: variant === 'ask-hire' ? [{ id: 1, bot: 'chief', task_id: null, kind: 'propose', at: now, title: 'Bring Invoice Ivy onto the crew?', detail: {
+    words: 'Bring Invoice Ivy onto the crew?', hire: 'Invoice Ivy', hireId: 'invoice-ivy', role: 'Keeps your invoices in order', yes: 'Yes, bring Invoice Ivy on',
+    first_job: 'Sort out my invoices', will_do: ['Read the invoices you share', 'Put them in one sheet by due date', 'Ask you before sending or spending'], wont_do: [],
+    preview: { body: 'Keeps your invoices in order' } } }]
+    : variant.startsWith('phone') || variant === 'finished' ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for your newsletter.' } } }]
     : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Maya’s calendar in order.', aim: 'Help Maya know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, the dentist with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Maya’s calendar in order.\n\nWhat it’s aiming for: Help Maya know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, the dentist with a reminder the evening before.' } } }]
     : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.', detail: {
         words: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.',
@@ -289,6 +293,12 @@ if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person'
   { id: 72, author: 'chief', text: 'Happy to, Maya. Scout will take it; here is how, before anything starts.' });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Maya. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
+if (variant === 'ask-hire') {
+  Object.assign(state.person, { name: 'Umer', address: 'Umer' });
+  for (const b of bots) Object.assign(b, { task: null, step: undefined });
+  pages.chief = { messages: [{ id: 1, author: 'person', text: 'I need someone to sort out my invoices' },
+    { id: 2, author: 'chief', text: 'Invoices are a good fit for a helper of their own. Bring Invoice Ivy on?' }] };
+}
 // ?demo=live: Chief has passed Saturday's dinner to Scout, part way down the plan: the live line under Chief's thread
 // with steps done, doing and still to do. Each turn is timed, so the day line carries its time.
 if (variant === 'live') {

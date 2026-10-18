@@ -1,6 +1,6 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
 import { createPortal } from 'react-dom';
-import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { canHear, hear, speak, voices } from './voice.ts';
@@ -843,12 +843,12 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
     </div>;
   }
   if (c.hire) return <div className="ev hire-ev">
+    {!!c.hire.first_job && <><div className="hire-sect">First job</div><div className="hire-job">{c.hire.first_job}</div></>}
     {!!c.hire.will_do.length && <><div className="hire-sect">Will do</div>{c.hire.will_do.map((l, i) => <div key={`w${i}`} className="hire-li">{l}</div>)}</>}
     {!!c.hire.wont_do.length && <><div className="hire-sect">Won't do</div>{c.hire.wont_do.map((l, i) => <div key={`n${i}`} className="hire-li no">{l}</div>)}</>}
     {!!c.hire.first_step && <><div className="hire-sect">First step for you</div><div className="hire-first"><b className="hire-n">1</b><span>{c.hire.first_step}</span></div></>}
-    {!!c.hire.first_job && <><div className="hire-sect">First job</div><div className="hire-li">{c.hire.first_job}</div></>}
     {c.lines?.filter((line) => line.startsWith('Can use: ')).map((line, i) => <div key={`app${i}`} className="hire-li">{line}</div>)}
-    <div className="hire-foot">Nothing changes until you say yes.</div>
+    <div className="hire-foot"><Icon name="lock" size={20} /><span>Nothing changes until you say yes.</span></div>
   </div>;
   if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;
   if (c.preview) return <div className="ev">
@@ -864,11 +864,12 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
 function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const name = c.helper === 'chief' ? 'Chief' : who?.name ?? c.head;
   if (c.hire) return <div className="ask-head hire-head">
-    <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={48} />
-    <div className="grow"><b>{c.words}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
+    <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={64} />
+    <div className="grow"><b>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
   </div>;
   return <div className="ask-head">
-    <div className="grow"><b>{name}</b><div className="ask-status"><i />{c.status}</div></div>
+    <Face who={c.helper === 'chief' ? 'chief' : who ?? 'chief'} size={44} />
+    <div className="grow"><b>{c.kind === 'plan' ? c.head : name}</b><div className="ask-status"><i />{c.status}</div></div>
   </div>;
 }
 
@@ -1031,8 +1032,10 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   const edit = useDraftEdit(c);
   const routine = c.kind === 'routine' ? c.lines : undefined;
   const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
+  const kind = c.hire?.kind ?? (c.helper === 'chief' ? 'chief' : who?.kind ?? 'chief');
   return (
-    <div className={`card ask${c.campaign ? ' campaign' : ''}`} id={id}>
+    <div className={`card ask stack-ask${c.campaign ? ' campaign' : ''}${c.kind === 'plan' ? ' plan-ask' : ''}${c.evidence === 'draft' ? ' draft-ask' : ''}${kind === 'chief' ? ' chief-ask' : ''}`} id={id} aria-label={c.head}
+      style={{ '--ask-colour': art.colourOf(kind) } as CSSProperties}>
       <AskHead c={c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
@@ -1115,22 +1118,30 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
   const edit = useDraftEdit(c);
   return (
     <div className="scrim" onClick={onClose}>
-      <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
-        <AskHead c={c} who={who} />
+      <div ref={box} className="sheet approve" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}
+        style={{ '--ask-colour': art.colourOf(c.hire?.kind ?? (c.helper === 'chief' ? 'chief' : who?.kind ?? 'chief')) } as CSSProperties}>
+        <div className="approve-art">
+          <Face who={c.hire ? { kind: c.hire.kind, name: c.hire.name } : c.helper === 'chief' ? 'chief' : who ?? 'chief'} size={96} />
+          <button className="btn approve-close" aria-label="Close" onClick={onClose}><span aria-hidden>×</span></button>
+        </div>
+        <div className="approve-body">
+        <div className="approve-status"><span className="st-pill">Needs you</span><span>{c.helper === 'chief' ? 'Chief asks' : `Chief asks · ${who?.name ?? 'The crew'}`}</span></div>
+        {c.hire && <AskHead c={c} who={who} />}
         {!c.hire && <h2 className="ask-words">{question}</h2>}
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
         {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}
         {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
         <div className="approve-btns">
-          {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {remind && <button className="btn big ghost" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body)}>{x.label}</button>)}
           {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
+          {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body)}>{x.label}</button>)}
         </div>
+        {remind && <button className="link approve-remind" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
         {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
-        {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
+        {c.kind === 'spend' && <p className="ask-note"><Icon name="lock" size={20} /><span>Anything that costs money asks you every time.</span></p>}
+        </div>
       </div>
     </div>
   );
