@@ -874,7 +874,9 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
     <Pressable onPress={() => void Clipboard.getString().then(check)} disabled={busy} accessibilityRole="button" accessibilityLabel={c.key.paste}
       style={[s.input, { minHeight: 48, justifyContent: 'center', borderColor: t.line2, backgroundColor: t.bg }]} /* paste-only: nothing typed, the key never on screen */>
       <T tone="mute">{busy ? c.key.checking : c.key.paste}</T></Pressable>
-    {err ? <T tone="pinkInk">{err}</T> : <T tone="mute" style={s.small}>{c.key.after}</T>}
+    {err ? <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]} /* the failed step's "!" and colour, not link blue */>
+      <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{err}</T></View>
+      : <T tone="mute" style={s.small}>{c.key.after}</T>}
     <Pressable onPress={() => setWay(way === 9 ? -1 : 9)} accessibilityRole="button" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.key.make}</T></Pressable>
     {way === 9 && <><T tone="ink2" style={s.small}>{c.key.how}</T><Btn label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} /></>}
     <View style={{ backgroundColor: t.soft, borderRadius: radius.card, padding: 12 }}><T tone="ink2" style={s.small}>{c.kept.map((x, i) => i % 2 ? <Text key={i} style={s.b}>{x}</Text> : x)}</T></View></>;
