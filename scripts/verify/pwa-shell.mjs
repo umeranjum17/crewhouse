@@ -9,9 +9,10 @@
 // Chromium gets a HOME and every XDG dir under plan.home and nothing from this shell: an install writes its desktop
 // entry and icons to XDG_DATA_HOME, so an inherited one lands them in the owner's own menu.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 mkdirSync(plan.profile, { recursive: true });
+rmSync(plan.profile + '/DevToolsActivePort', { force: true }); // a reused profile keeps the last run's port
 const args = [`--user-data-dir=${plan.profile}`, '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--disable-features=Translate', ...(plan.headless === false ? ['--ozone-platform=x11'] : ['--headless=new']), ...(plan.args ?? ['about:blank'])];
 const chrome = spawn(plan.bin ?? 'chromium', args, { stdio: 'ignore', env: { PATH: process.env.PATH, DISPLAY: process.env.DISPLAY ?? '', HOME: plan.home, XDG_DATA_HOME: plan.home + '/.local/share', XDG_CONFIG_HOME: plan.home + '/.config', XDG_CACHE_HOME: plan.home + '/.cache', XDG_STATE_HOME: plan.home + '/.local/state', XDG_RUNTIME_DIR: plan.home + '/run', DBUS_SESSION_BUS_ADDRESS: 'unix:path=' + plan.home + '/no-bus' } });
 process.once('exit', () => chrome.kill('SIGTERM'));

@@ -2,7 +2,10 @@
 
 Chief's settings page for the one cloud computer the crew shares (`ChiefComputer` in `web/src/main.tsx` and in
 `mobile/App.tsx`): Update computer, Reset computer (red) with its sheet "Reset Chief's computer?", the sandbox
-caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer).
+caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer). On
+the phone that kept a boat.dev key, a "boat.dev key" row with Forget key follows Runs on boat.dev. Forget removes the
+key from the phone's secure store, and the row goes away. The web shows "Your boat.dev key stays on the phone that set
+this computer up. Forget it there." instead.
 The words are `A.computer` in `web/src/adapter.ts`, one source for both. Approved mock: `computer` in
 `scripts/verify/mocks.tsv`.
 
