@@ -506,7 +506,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
     assert.equal(r.status, 200); return r.json();
   };
   await api('/api/recruit', { template: 'scout', name: 'Scout' });
-  const job = (await api('/api/bots/scout/messages', { text: 'Check my Friday flights; ask permission' })).task;
+  const job = (await api('/api/bots/chief/messages', { text: 'Scout, Check my Friday flights; ask permission' })).task;
   await holding(lab.crew, 'scout');
   const b = await browse(base);
   await b.send('Page.enable'); await b.send('Runtime.enable');
@@ -533,18 +533,19 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
   await until('Scout done on its card', async () => /^Done /.test((await row())?.word ?? ''), 30_000);
-  // Scout's reply is still unread: only Chief carries a badge, so the desk rail's Scout row has none.
+  // Chief relayed Scout's reply, so it is unread in Chief's thread and not in Scout's: only Chief carries a badge, so the desk rail's Scout row has none.
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await until('the rail row with its last reply', async () => /Three Friday flights are ready\./.test(await b.run("document.querySelector('.side-row')?.innerText ?? ''")), 30_000);
-  assert.equal((await api('/api/bots/scout')).bot.unread > 0, true);
+  assert.equal((await api('/api/bots/chief')).bot.unread > 0, true);
+  assert.equal((await api('/api/bots/scout')).bot.unread, 0, 'a reply Chief relayed is not unread in the helper’s own thread');
   assert.equal(await b.run("document.querySelectorAll('.side-row .badge').length"), 0, 'no crew rail row carries a badge');
   assert.match(await b.run("document.querySelector('.side-row').innerText"), /Done[^]*Three Friday flights are ready\./, 'the rail row carries its status word and last line');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await b.run('location.hash = "#/h/scout"');
+  await b.run('location.hash = "#/chief"');
   await until('opening NEW divider', () => b.run("!!document.querySelector('.new-divider')"), 30_000);
-  await until('read acknowledged', async () => (await api('/api/bots/scout')).bot.unread === 0);
+  await until('read acknowledged', async () => (await api('/api/bots/chief')).bot.unread === 0);
   const boundary = await b.run("(() => { const n = document.querySelector('.new-divider'); return {word:n?.textContent, after:n?.nextElementSibling?.textContent}; })()");
-  assert.equal(boundary.word, 'New'); assert.match(boundary.after, /Three Friday flights are ready/);
+  assert.equal(boundary.word, 'New'); assert.match(boundary.after, /Scout|Friday/, 'the divider opens on Chief’s first unread line about Scout’s job');
   await b.run('location.hash = "#/"');
   await until('left the helper thread', () => b.run("!!document.querySelector('.stack-home')"));
   await b.run('location.hash = "#/h/scout"');
@@ -556,10 +557,11 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await holding(lab.crew, 'scout');
   await b.run('location.hash = "#/chief"');
   await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
-  const chip = await b.run(`(() => { const h = [...document.querySelectorAll('.hand-off')].at(-1), lines = [...document.querySelectorAll('.chat .lines > .line')];
-    return { limit: h.querySelector('.hand-limit').textContent, href: h.querySelector('a.hand').getAttribute('href'), after: lines.indexOf(h) > lines.findIndex((l) => /Monday trains/.test(l.textContent)) }; })()`);
+  // The Friday request was Chief's first hand-off to Scout, so it carries the limit; this Monday one is the second and does not.
+  const chip = await b.run(`(() => { const hs = [...document.querySelectorAll('.hand-off')], h = hs.at(-1), lines = [...document.querySelectorAll('.chat .lines > .line')];
+    return { limit: hs[0].querySelector('.hand-limit').textContent, second: h.querySelector('.hand-limit'), href: h.querySelector('a.hand').getAttribute('href'), after: lines.indexOf(h) > lines.findIndex((l) => /Monday trains/.test(l.textContent)) }; })()`);
   assert.match(chip.limit, /^Scout .*can't pay or send anything without asking you\.$/);
-  assert.deepEqual([chip.href, chip.after], ['#/h/scout', true], 'the chip opens Scout\'s thread and sits after the request that handed it on');
+  assert.deepEqual([chip.href, chip.after, chip.second], ['#/h/scout', true, null], 'the chip opens Scout\'s thread and sits after the request that handed it on');
   await release(lab.crew, 'scout', 'Two trains on Monday.'); await settled(lab.db, next);
   // The result is already the chip, so the finished job raises no toast in the thread it appears in (chat quality gap 12).
   await until('the first chip reads done', () => b.run(`/done/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
@@ -567,8 +569,8 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   // A second hand-off to the same helper says the job alone: the limit sentence rides only its first hand-off (gap 13).
   const again = (await api('/api/bots/chief/messages', { text: 'Scout, check the Friday flights; ask permission' })).task;
   await holding(lab.crew, 'scout');
-  await until('the second hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 2 && /at work/.test(document.querySelectorAll('.hand')[1]?.textContent ?? '')`), 30_000);
-  assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[1].querySelector('.hand-limit')`), false, 'the second hand-off carries no limit sentence');
+  await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
+  assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
   await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
 });
 

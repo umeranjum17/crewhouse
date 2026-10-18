@@ -1372,11 +1372,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .chief-hero, .home-chat .needs-pin { display: none; }
 }
 
-/* The crew room's helper picker: one styled row of faces over the box, in the dock's flow. */
-.room-to { display: flex; gap: 8px; align-items: center; overflow-x: auto; scrollbar-width: none; margin: 0 0 8px; padding: 2px; }
-.room-to > .mute { flex: none; }
-.room-to .chip { flex: none; }
-
 /* The crew room on a phone, one screen like Chief's chat (096): the bar and picker stay put, only the thread
    scrolls, opened at its top, above a picker and composer docked at the foot. Nothing sits under them. */
 @media (max-width: 899px) {

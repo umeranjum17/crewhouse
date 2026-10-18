@@ -813,16 +813,12 @@ function LiveRow({ ln, quiet, chipped }: { ln: A.LiveLine; quiet: boolean; chipp
 function Room(ctx: Ctx) {
   const { state, tick, refresh } = ctx;
   const [page, setPage] = useState<Json>(null);
-  const [to, setTo] = useState('');
   const load = useCallback(() => api.room().then(setPage).catch(() => {}), []);
   useEffect(() => { void load(); }, [load, tick]);
   const lines = A.room(page, state);
   const newestRoom = [...lines].reverse().find((l) => l.text)?.id;
   const helpers = A.crew(state);
-  const latest = [...lines].reverse().find((l) => l.who && l.who.id !== 'chief' && l.author !== 'person');
-  const target = to || latest?.who?.id || helpers[0]?.id || 'chief';
   const cards = A.cards(state).filter((c) => (page?.asks ?? []).some((a: Json) => a.id === c.id));
-  const send = async (text: string) => { const ok = await attempt(() => api.post(target, text, { room: true }), undefined, true); if (ok) { await load(); refresh(); } return ok; };
   return <div className="page chat-page room-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
     <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}`} key={l.id}>
       {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} ring={l.who.ring} />}<b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
@@ -830,7 +826,7 @@ function Room(ctx: Ctx) {
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
-      <div className="dock"><div className="room-to" role="group" aria-label="Message"><span className="small mute">To</span><button className={`chip${target === 'chief' ? ' on' : ''}`} aria-pressed={target === 'chief'} onClick={() => setTo('chief')}><Face who="chief" size={20} />Chief</button>{helpers.map((h) => <button key={h.id} className={`chip${target === h.id ? ' on' : ''}`} aria-pressed={target === h.id} onClick={() => setTo(h.id)}><Face who={h} size={20} />{h.name}</button>)}</div><Composer placeholder={`Message ${target === 'chief' ? 'Chief' : helpers.find((h) => h.id === target)?.name ?? 'the crew'}…`} onSend={send} {...typeInto('room')} /></div>
+      <ReadAlong name="the crew" />
     </div></div>;
 }
 

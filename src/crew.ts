@@ -1070,7 +1070,7 @@ export class Crew {
       || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
         && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person')));
     if (!helper) return this.addTask(CHIEF, body, 'person', undefined, own, pics, { room, key });
-    const r = this.addTask(helper.id, body, CHIEF, undefined, body, pics, { room, key });
+    const r = this.addTask(helper.id, body, CHIEF, undefined, own, pics, { room, key, title: own, root: room ?this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', helper.id)?.root : undefined });
     this.say(CHIEF, 'person', own + r.shown, null);
     this.say(CHIEF, 'bot', `${helper.display} is on it.`, null);
     return { task: r.task };

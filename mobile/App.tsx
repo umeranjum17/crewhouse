@@ -2021,7 +2021,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       </ScrollView>
       {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
-      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Ask Chief anything' : `Message ${name}…`} onSend={send} chat={id} docs away={offline} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} /></View>
+      {id !== 'chief' ? <View style={s.dock}><T tone="mute" style={s.small}>You can read along here. To change this job or ask {name} anything, ask Chief.</T><Btn ghost label="Ask Chief about this" onPress={() => { keepDraft('chief', `${name}, `); go({ view: 'chief' }); }} /></View>
+        : canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder="Ask Chief anything" onSend={send} chat={id} docs away={offline} stop={ln?.state === 'working' || ln?.state === 'reading' ? stopChief : undefined} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
@@ -2097,20 +2098,19 @@ function ChiefPage(ctx: Ctx & { m?: number }) {
 }
 
 function Room(ctx: Ctx) {
-  const { state, tick, refresh, canAct, offline } = ctx;
+  const { state, tick, refresh } = ctx;
   const [page, setPage] = useState<Json>(null);
   const load = useCallback(() => api.room().then(setPage).catch(() => {}), []);
   useEffect(() => { void load(); }, [load, tick]);
   const crew = A.crew(state);
   const lines = A.room(page, state);
   const newestRoom = [...lines].reverse().find((l) => l.text)?.id;
-  const send = async (text: string) => { const ok = await attempt(() => api.post('chief', text, { room: true }), undefined, true); if (ok) { void load(); refresh(); } return ok; };
   return <View style={{ flex: 1 }}><Head onBack={ctx.back}><View style={{ width: 40, flexDirection: 'row' }}>{crew.slice(0, 2).map((h, i) => <View key={h.id} style={{ marginLeft: i ? -12 : 0 }}><Face who={h} size={26} /></View>)}</View><View style={{ flex: 1 }}><T style={s.rowTitle}>The crew</T><T tone="ink2" style={s.small}>Work handed between helpers</T></View></Head>
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>{lines.map((l: { id: number; who?: A.Helper; from?: string; to?: string; text: string; at: number; author: string; files: A.FileView[] }) => <View key={l.id} style={{ width: '100%', maxWidth: '92%', alignSelf: l.author === 'person' ? 'flex-end' : 'flex-start' }}>
       {l.who && <View style={s.row}><Face who={l.who} size={28} /><T style={s.rowTitle}>{l.from && l.to ? `${l.from} → ${l.to}` : l.who.name}</T><T tone="mute" style={s.time}>{A.clock(l.at)}</T></View>}
       <View style={{ paddingLeft: l.author === 'person' ? 0 : 36 }}><ChatText text={l.text} latest={l.id === newestRoom} /></View>{l.files.map((f) => <Card key={f.url}><FileRow f={f} /></Card>)}
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
-    {canAct ? <View style={s.dock}><Composer placeholder="Message the crew" onSend={send} chat="room" /></View> : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
+    <View style={s.dock}><T tone="mute" style={s.small}>You can read along here. To change a job or ask the crew anything, ask Chief.</T><Btn ghost label="Ask Chief about this" onPress={() => { keepDraft('chief', 'the crew, '); ctx.go({ view: 'chief' }); }} /></View>
   </View>;
 }
 
