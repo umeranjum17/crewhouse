@@ -15,11 +15,11 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/accounts": "0.24.1",
+    "@byokit/accounts": "0.27.0",
     "@byokit/connect": "0.5.0",
     "@byokit/decide": "0.6.4",
     "@byokit/discover": "0.8.2",
-    "@byokit/openclaw": "0.14.5",
+    "@byokit/openclaw": "0.16.1",
     "@byokit/pair": "0.10.1",
     "@byokit/relay": "0.7.1",
     "@byokit/secrets": "0.5.1",

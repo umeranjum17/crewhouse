@@ -48,7 +48,7 @@ const CONFIG = {
 export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
-  private host?: ToolHost;
+  private host?: ToolHost; private keyChecks = new Set<string>();
   private runs = new Map<string, RunRef & { account?: string }>();
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
@@ -84,12 +84,9 @@ export class OpenClawRuntime implements AgentRuntime {
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
 
-  async signedIn(account: string) {
-    const provider = PROVIDER_OF[account];
-    return provider ? await this.kit.signedIn(ME, provider) : false;
-  }
+  async signedIn(account: string) { return PROVIDER_OF[account] ? await this.kit.signedIn(ME, PROVIDER_OF[account]) : false; }
 
-  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> } {
+  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> } {
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
@@ -113,21 +110,21 @@ export class OpenClawRuntime implements AgentRuntime {
     });
   }
 
-  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice. */
+  /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice;
+   *  a login acting for several workspaces names one first (one is used unasked, several wait for the person's pick). */
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
-    let cancelled = false;
-    const step = (status: string): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: status === 'needs_workspace' ? `This key works in several OpenCode workspaces, and Crewhouse can't choose one yet. Use a key for a single workspace.` : `That key didn't work. Check it and paste it again.` })));
+    const busy = 'Still checking the last key. Wait for it to finish, then paste again.';
+    let cancelled = false, key = '', chosen = '', listed: { id: string; name: string }[] = [], pending: { cancel(): void } | undefined;
+    const step = ({ status, message }: { status: string; message?: string }): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: message ?? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
+    const add = () => { const h = this.kit.addKey(ME, { authChoice, apiKey: key, ...(chosen ? { orgId: chosen } : {}) }); pending = h; this.keyChecks.add(account); const release = () => { if (pending === h) { pending = undefined; this.keyChecks.delete(account); } }; return h.then((r) => { release(); if (cancelled) return; if (r.status === 'needs_workspace') { listed = r.workspaces; on({ waiting: true, workspaces: r.workspaces }); } else step(r); }).catch(() => { release(); step({ status: 'retry' }); }); };
     return {
-      paste: (text: string) => void this.kit.addKey(ME, { authChoice, apiKey: text }).then((r) => step(r.status)).catch(() => step('retry')),
-      cancel: () => { cancelled = true; on({ waiting: false, error: 'The sign-in was cancelled.' }); },
+      paste: (text: string) => { if (this.keyChecks.has(account)) throw new Error(busy); key = text.trim(); chosen = ''; listed = []; if (!cancelled) return add(); },
+      pick: (id: string) => { if (this.keyChecks.has(account)) throw new Error(busy); if (!cancelled && listed.some((w) => w.id === id)) { chosen = id; return add(); } },
+      cancel: () => { cancelled = true; pending?.cancel(); pending = undefined; this.keyChecks.delete(account); on({ waiting: false, error: 'The sign-in was cancelled.' }); },
     };
   }
 
-  async signOut(account: string) {
-    const provider = PROVIDER_OF[account];
-    if (!provider) throw new Error('no such AI account');
-    await this.kit.signOut(ME, provider);
-  }
+  async signOut(account: string) { if (!PROVIDER_OF[account]) throw new Error('no such AI account'); await this.kit.signOut(ME, PROVIDER_OF[account]); }
 
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
