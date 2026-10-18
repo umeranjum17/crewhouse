@@ -47,13 +47,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const profile = mkdtempSync(join(tmpdir(), 'look-check-'));
 const chrome = spawn(process.env.CHROME ?? 'chromium', ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', 'about:blank'], { stdio: 'ignore', env: { PATH: process.env.PATH, HOME: profile } });
-// Chromium's helpers can still be writing the profile after the browser exits (ENOTEMPTY): wait them out, as test/browser.ts does.
-const done = (code) => { chrome.kill('SIGTERM'); chrome.once('exit', () => { rmSync(profile, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 }); process.exit(code); }); };
+// Browser.close lets Chromium finish its own shutdown first: its helpers keep writing into the profile after a bare kill
+// (ENOTEMPTY on the delete, exit 1 with no hit listed). The kill is only the fallback, bounded, when no socket is open.
+let ws;
+const done = (code) => {
+  const gone = () => { rmSync(profile, { recursive: true, force: true }); process.exit(code); };
+  if (chrome.exitCode !== null || chrome.signalCode !== null) return gone();
+  const bound = setTimeout(() => chrome.kill('SIGKILL'), 10_000);
+  chrome.once('exit', () => { clearTimeout(bound); gone(); });
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: 0, method: 'Browser.close' }));
+  else chrome.kill('SIGTERM');
+};
 for (const s of ['SIGINT', 'SIGTERM']) process.once(s, () => done(2)); // a stopped run still closes its browser and profile
 let port;
 for (let i = 0; i < 300 && !port; i++) { await sleep(100); try { port = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch { /* not yet */ } }
 if (!port) { console.error('look-check: Chromium never opened its DevTools port'); done(2); await new Promise(() => {}); }
-const ws = new WebSocket((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
+ws = new WebSocket((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener('open', r));
 let id = 0; const pending = new Map();
 ws.addEventListener('message', (m) => { const d = JSON.parse(m.data); const p = pending.get(d.id); if (p) { pending.delete(d.id); d.error ? p[1](new Error(d.error.message)) : p[0](d.result); } });
