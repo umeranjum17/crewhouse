@@ -8,7 +8,7 @@
 //   BOAT_KEY_FILE=… [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <adb server port> <serial> <out dir>
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 const [adbPort, serial, out] = process.argv.slice(2);
@@ -70,4 +70,4 @@ const server = http.createServer(async (q, r) => {
   catch (e) { const v = { error: String(e?.code ?? ''), why: String(e?.message ?? e) }; log({ [q.url.slice(1)]: v }); r.end(JSON.stringify(v) + '\n'); }
 });
 const mask = process.umask(0o177);
-server.listen(socket, () => { process.umask(mask); log({ ready: socket }); });
+server.listen(socket, () => { chmodSync(socket, 0o600); process.umask(mask); log({ ready: socket }); });
