@@ -408,14 +408,16 @@ test('things, routines and helper profiles: shared file cards, names in full, no
     assert.equal(m.coral, 0, `${at} routines: no coral result link`);
     assert.ok(((m.primary as string[]).some((t) => /Do it now|Download/.test(t ?? ''))), `${at} routines: one filled-blue primary per row`);
     await b.open(`demo&${theme}#/h/scribe/details`);
-    await until("scribe's files", () => b.run("document.querySelectorAll('.st-made .wb-card, .st-made .doc').length > 0"), 30_000);
+    await until("scribe's files and job", () => b.run("document.querySelectorAll('.st-made .wb-card, .st-made .doc').length > 0 && !!document.querySelector('.st-job dt')"), 30_000);
     m = await b.run(markers);
     assert.equal(m.chips, 0, `${at} helper details: no old file chips`);
     assert.ok(m.tiles.length > 0, `${at} helper profile: finished work wears the shared tile`);
     assert.deepEqual(await b.run(`(() => ({ hero: !!document.querySelector('.st-profile-hero .face'),
-      job: !!document.querySelector('.st-job'), remembers: document.body.textContent.includes('What Scribe remembers'),
-      chief: !!document.querySelector('.st-change'), scroll: document.documentElement.scrollWidth > innerWidth + 1 }))()`),
-      { hero: true, job: true, remembers: true, chief: true, scroll: false }, `${at}: profile keeps the real job, memories and Chief handoff`);
+      job: [...document.querySelectorAll('.st-profile-job .st-job dt')].map((d) => d.textContent).join(), remembers: document.body.textContent.includes('What Scribe remembers'),
+      chief: [...document.querySelectorAll('.st-profile-job > .btn')].map((x) => x.textContent).join(), scroll: document.documentElement.scrollWidth > innerWidth + 1,
+      typed: document.querySelectorAll('.st-profile-job input:not([type=checkbox]), .st-profile-job textarea').length,
+      seen: ${mobile} || document.querySelector('.st-change').getBoundingClientRect().bottom <= innerHeight }))()`),
+      { hero: true, job: 'Does,Aims,Asks', remembers: true, chief: "Ask Chief to change Scribe's job", scroll: false, typed: 0, seen: true }, `${at}: profile reads the job in three rows, nothing is typed to the helper, and Chief is the one way to change it, in view on a computer`);
     for (const [i, r] of m.rows.entries()) {
       assert.ok(!r.overlap, `${at} row ${i}: never overlaps`);
       assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);

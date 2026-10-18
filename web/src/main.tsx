@@ -441,13 +441,6 @@ function HelperIdeas({ state, chat, name }: { state: Json; chat: string; name: s
   ))}</div>;
 }
 
-/** Chief's hand-off in a helper's chat: the collapsed ask, with the full assignment words behind Show details. */
-function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return <div className="bubble-text"><ChatText text={l.text} latest={latest} /> <button className="link inline" onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Show details'}</button>
-    {open && <ChatText text={l.detail} latest={latest} />}</div>;
-}
-
 // ---------- a chat ----------
 function PairQR({ text, label }: { text: string; label?: string }) {
   const rows = useMemo(() => qrMatrix(text, { border: 1 }), [text]);
@@ -533,7 +526,11 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   }).catch(() => setPage((cur: Json) => cur ?? keptWeek().chats[id] ?? null)), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
-  const lines = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
+  const said = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
+  // In a helper's chat, a file delivered on its own line reads inside the helper's next words, the way it hands it over.
+  const bare = (l?: A.Line) => l?.from === 'note' && !l.text && l.files.length > 0;
+  const lines = id === 'chief' ? said : said.flatMap((l, i) => bare(l) && said[i + 1]?.from === 'them' ? []
+    : bare(said[i - 1]) && l.from === 'them' ? [{ ...l, files: [...l.files, ...said[i - 1].files] }] : [l]);
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && (A.plain(x.text) === A.plain(pending.text) || (!!pending.files && /\[file [a-z0-9-]+ files\/\S+/.test(x.text))));
   const waiting = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   useEffect(() => { setHeard([]); setWriting(new Map()); }, [id]);
@@ -731,7 +728,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />),
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
-          const content = <>{l.text && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} /> : <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestAnswer} /></div>)}
+          // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
+          const content = <>{l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
             {l.files.map((f) => <Media key={f.url} f={f} big forget />)}</>;
           const wrap = l.memory !== undefined || l.saved
             ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
@@ -765,8 +763,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {rail}
         {id !== 'chief' && h && <>
           <HelperPortrait h={h} />
-          <h2 className="label">What {name} made</h2><div className="st-made">{A.made(state, id).map((f) => <Media key={f.url} f={f} />)}</div>
-          <h2 className="label">{name}'s job</h2><div className="st-job">{page && <JobSection id={id} name={name} page={page} reload={load} readOnly />}</div>
+          {A.made(state, id).length > 0 && <><h2 className="label">What {name} made</h2><div className="st-made">{A.made(state, id).map((f) => <Media key={f.url} f={f} />)}</div></>}
+          <h2 className="label">{name}'s job</h2>{page && <JobSection page={page} />}
         </>}
         {!rail && live && h && <section className="working-on-frame"><div className="label">Working on</div><div className="list-group"><div className="work-title"><b>{A.plain(live.title)}</b><span className="small">{h.status}</span></div>{trail.length > 0 && <Steps steps={trail} max={3} />}<a className="link" href={`#/h/${id}/did`}>What happened ›</a></div></section>}
         {id === 'chief' && <MadeHere made={hero ? A.madeInChat(state, page)
@@ -911,6 +909,26 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const apps = A.appsOf(state, id);
   const member = ctx.live.crew.find((c) => c.id === id), lastJob = A.things(state).find((t) => t.helper === id);
   const word = member ? A.statusOf(member, ctx.live).word : h?.status;
+  // The button calls a "<Role> <Name>" helper by its name, as the render does ("Ivy's job"), so it stays one line.
+  // ponytail: a two-word rule; a short name of its own in bot.json if helpers stop being named "<Role> <Name>".
+  const short = name.split(' ').length === 2 ? name.split(' ')[1] : name;
+  // The trail's Undo and Forget, the same on the profile's What happened and on every step.
+  const undo = (s: A.Step) => attempt(async () => {
+    const ev = (page.trail ?? []).find((e: Json) => e.seq === s.seq);
+    if (ev?.kind === 'soul.changed') {
+      if (!ev?.data?.prev) throw new Error('Nothing to undo');
+      await api.soul(id, String(ev.data.prev));
+    } else await api.undoMemory(id, s.seq);
+    void load();
+  }, 'Put back');
+  const forget = (s: A.Step) => attempt(async () => {
+    // The receipt's own reason, taken back from what this helper remembers: the next job reads notes afresh.
+    // Matched the way crew_draft matched it (case-insensitive): the model quotes the line in its own casing.
+    const i = A.memories(page.notes ?? '').findIndex((m) => m.toLowerCase() === (s.forget ?? '').toLowerCase());
+    if (i < 0) throw new Error('That line is not one of its own notes; ask Chief to change it');
+    await api.notes(id, A.withoutMemory(page.notes ?? '', i));
+    void load();
+  }, 'Forgotten');
   return (
     <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : ''}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
       {tab === 'chat' && h && <>
@@ -941,11 +959,15 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             </div>
             <div className="st-profile-job">
               <h2 className="st-label">{name}'s job</h2>
-              <div className="st-job">{page && <JobSection id={id} name={name} page={page} reload={load} />}</div>
+              {page && <JobSection page={page} />}
               <h2 className="st-label">What {name} remembers</h2>
               {page && <Remembers id={id} name={name} page={page} reload={load} />}
-              <button className="btn st-change" onClick={() => { keepDraft('chief', `I'd like to change ${name}'s job: `); go('#/chief'); }}>Ask Chief to change {name}'s job</button>
+              <button className="btn st-change" onClick={() => { keepDraft('chief', `I'd like to change ${name}'s job: `); go('#/chief'); }}>Ask Chief to change {short}'s job</button>
               <details className="st-profile-more"><summary>More about {name}</summary>
+                <h2 className="st-label">How {name} works</h2>
+                {page && <label className="card toggle"><span className="grow"><b>Check with me before {name} hands work on</b></span>
+                  <input type="checkbox" role="switch" checked={page.handoff === 'ask'} onChange={(e) => attempt(async () => { await api.settings(id, { handoff: e.target.checked ? 'ask' : 'go' }); void load(); })} /></label>}
+                <LearnedRows name={name} />
                 <h2 className="st-label">Routines</h2><RoutineList {...ctx} bot={id} />
                 <h2 className="st-label">About {name}</h2>{page && <AboutMe id={id} name={name} page={page} reload={load} />}
                 <h2 className="st-label">{name}'s apps</h2>
@@ -956,7 +978,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
               </details>
             </div>
           </section>
-          <aside className="st-profile-trail desk-only"><h2 className="st-label">What happened</h2>{page && <Steps steps={A.steps(page.trail ?? [])} max={7} />}<a className="link" href={`#/h/${id}/did`}>See every step ›</a></aside>
+          <aside className="st-profile-trail desk-only"><h2 className="st-label">What happened</h2>{page && <Steps steps={A.steps(page.trail ?? [])} max={7} onUndo={undo} onForget={forget} />}<a className="link" href={`#/h/${id}/did`}>See every step ›</a></aside>
         </div>
       </>}
       {tab === 'did' && (page ? <>
@@ -965,21 +987,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           <div className="grow"><b>What happened</b></div>
         </header></div>
         <p className="lead">What {name} does, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
-        {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={(s) => attempt(async () => {
-          const ev = (page.trail ?? []).find((e: Json) => e.seq === s.seq);
-          if (ev?.kind === 'soul.changed') {
-            if (!ev?.data?.prev) throw new Error('Nothing to undo');
-            await api.soul(id, String(ev.data.prev));
-          } else await api.undoMemory(id, s.seq);
-          void load();
-        }, 'Put back')} onForget={(s) => attempt(async () => {
-          // The receipt's own reason, taken back from what this helper remembers: the next job reads notes afresh.
-          // Matched the way crew_draft matched it (case-insensitive): the model quotes the line in its own casing.
-          const i = A.memories(page.notes ?? '').findIndex((m) => m.toLowerCase() === (s.forget ?? '').toLowerCase());
-          if (i < 0) throw new Error('That line is not one of its own notes; add it under What it remembers to change it');
-          await api.notes(id, A.withoutMemory(page.notes ?? '', i));
-          void load();
-        }, 'Forgotten')} />
+        {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={undo} onForget={forget} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
       </> : null)}
       {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
@@ -1057,14 +1065,12 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   </section></div>;
 }
 
-/** A list of remembered lines with Forget, and a line to add one: a helper's notes on you, or what the whole crew knows about you. */
-function MemoryList({ notes, save, empty, placeholder }: { notes: string; save: (text: string) => Promise<unknown>; empty: string; placeholder: string }) {
-  const [adding, setAdding] = useState('');
+/** A helper's remembered lines, each with Forget. A new line comes from the helper's own work or through Chief: the person talks only to Chief. */
+function MemoryList({ notes, save, empty }: { notes: string; save: (text: string) => Promise<unknown>; empty: string }) {
   // Forget leaves a "Forgotten" row where the line was, with an Undo that puts it back exactly, for a short while.
   const [undo, setUndo] = useState<{ prev: string; at: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const list = A.memories(notes);
-  const add = () => adding.trim() && attempt(async () => { await save(A.withMemory(notes, adding)); setAdding(''); }, 'Remembered');
   const forget = (i: number) => void attempt(async () => {
     const prev = notes; await save(A.withoutMemory(notes, i));
     if (timer.current) clearTimeout(timer.current);
@@ -1078,26 +1084,16 @@ function MemoryList({ notes, save, empty, placeholder }: { notes: string; save: 
     <button className="link" onClick={() => forget(i)}>Forget</button></div>);
   if (undo) rows.splice(Math.min(undo.at, rows.length), 0, <div key="undo" className="row-item forgotten"><span className="grow">Forgotten</span>
     <button className="link" onClick={putBack}>Undo</button></div>);
-  return (
-    <>
-      {rows.length ? <div className="card list">{rows}</div> : <div className="card empty">{empty}</div>}
-      <div className="row add-row"><input className="input grow" value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={placeholder} aria-label="Something to remember" />
-        <button className="btn" disabled={!adding.trim()} onClick={add}>Add</button></div>
-    </>
-  );
+  return rows.length ? <div className="card list">{rows}</div> : <div className="card empty">{empty}</div>;
 }
 
 function Remembers({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
   return (
     <>
-      <p className="lead">What {name} has learned about how you like its work. It reads this every time it starts a job for you.</p>
       <label className="card toggle"><span className="grow"><b>Remember things</b><div className="mute small">{page.memory === false ? `${name} starts fresh every time.` : `${name} keeps notes on what you like.`}</div></span>
         <input type="checkbox" role="switch" checked={page.memory !== false} onChange={(e) => attempt(async () => { await api.settings(id, { memory: e.target.checked }); reload(); })} /></label>
-      <label className="card toggle"><span className="grow"><b>Check with me before {name} hands work on</b></span>
-        <input type="checkbox" role="switch" checked={page.handoff === 'ask'} onChange={(e) => attempt(async () => { await api.settings(id, { handoff: e.target.checked ? 'ask' : 'go' }); reload(); })} /></label>
       <MemoryList notes={page.notes ?? ''} save={async (t) => { await api.notes(id, t); reload(); }}
-        empty={`Nothing yet. ${name} adds a line when it learns something you like.`} placeholder={`Tell ${name} something to keep in mind`} />
-      <LearnedRows name={name} />
+        empty={`Nothing yet. ${name} adds a line when it learns something you like.`} />
     </>
   );
 }
@@ -1118,24 +1114,11 @@ function LearnedRows({ name }: { name: string }) {
   </>;
 }
 
-/** The person's five-part job recipe. Chief may draft it, but only the person's yes changes it. */
-function JobSection({ id, name, page, reload, readOnly }: { id: string; name: string; page: Json; reload: () => void; readOnly?: boolean }) {
-  const labels = ['What it does', "What it's aiming for", 'What it gets from others', 'How it goes about it', 'What great looks like, with an example'];
-  const keys = ['does', 'aim', 'gets', 'how', 'great'];
-  const view = A.jobParts(page.job);
-  const [edit, setEdit] = useState(false), [idea, setIdea] = useState(''), [parts, setParts] = useState<Json>(page.job ?? {});
-  const [writing, setWriting] = useState(false);
-  return <>
-    <div className="card">
-      {view.map((part, i) => <p key={part.label}><b>{part.label}</b><br />{part.text || <span className="mute">Not set yet.</span>}</p>)}
-      {!readOnly && <div className="btns"><button className="btn" onClick={() => { setParts({ ...page.job }); setEdit(!edit); }}>Change</button><button className="btn ghost" onClick={() => setWriting(!writing)}>Write it for me</button></div>}
-    </div>
-    {edit && <div className="card form">{labels.map((label, i) => <label key={label}><b>{label}</b><textarea className="input" rows={3} maxLength={600} value={parts[keys[i]] ?? ''} onChange={(e) => setParts({ ...parts, [keys[i]]: e.target.value })} /></label>)}
-      <div className="btns"><button className="btn go" onClick={() => attempt(async () => { await api.job(id, parts); setEdit(false); reload(); }, 'Job saved')}>Save</button><button className="btn ghost" onClick={() => setEdit(false)}>Cancel</button></div>
-    </div>}
-    {writing && <div className="card form"><b>Tell me roughly what {name} should do</b><textarea className="input" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} />
-      <button className="btn go" disabled={!idea.trim()} onClick={() => attempt(async () => { await api.draftJob(id, idea); setWriting(false); setIdea(''); reload(); }, 'Asked Chief to write it')}>Ask Chief</button></div>}
-  </>;
+/** A helper's job as the profile shows it: what it does, what it aims for, and when it asks. It changes only through Chief. */
+function JobSection({ page }: { page: Json }) {
+  const [does, aim] = A.jobParts(page.job);
+  return <dl className="st-job">{([['Does', does.text], ['Aims', aim.text], ['Asks', 'Before it pays or sends anything.']] as const).map(([k, v]) =>
+    <Fragment key={k}><dt>{k}</dt><dd>{v || <span className="mute">Not set yet.</span>}</dd></Fragment>)}</dl>;
 }
 
 /** Chief's personality: the engine reads it as its own SOUL.md on his next reply. The person writes it; Chief never does. */

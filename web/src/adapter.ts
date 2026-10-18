@@ -1763,8 +1763,7 @@ export const signedIn = (page: Json) => [...new Set((((page?.signedIn as string[
 export const signTick = (name: string, host: string) => `I signed ${name} in to ${host}`;
 /** Which ticks start on: the tab on screen (crewd lists it first) — off by default, the person turns the rest on. */
 export const signTicks = (pages: string[]) => (pages.length ? [pages[0]] : []);
-/** The notes with one more line, or without the i-th: what Add and Forget send back. */
-export const withMemory = (notes = '', line: string) => `${notes.replace(/\n*$/, '\n').replace(/^\n$/, '')}- ${line.replace(/\s+/g, ' ').trim()}\n`;
+/** The notes without the i-th line: what Forget sends back. */
 export function withoutMemory(notes = '', i: number) {
   let n = -1;
   return notes.split('\n').filter((l) => { if (!l.replace(/^[-*]\s*/, '').trim() || l.trim().startsWith('#')) return true; n++; return n !== i; }).join('\n');
