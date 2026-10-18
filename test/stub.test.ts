@@ -79,19 +79,19 @@ test('chief onboarding, recruit, assign, grants', async () => {
   await say('chief', 'I need a demo video');
   await until(async () => (await api('GET', '/api/bots/chief')).body.messages.find((m: any) => m.text === 'stub chief: done with "The person says: I need a demo video"'));
 
-  // Chief recruits Reel with his own tool; the folder is the bot.
-  const rec = (await say('chief', `get me a video maker ${call('crew_recruit', { template: 'reel', name: 'Reel' })}`)).body.task;
+  // Chief recruits Video Reel with his own tool; the folder is the bot.
+  const rec = (await say('chief', `get me a video maker ${call('crew_recruit', { template: 'reel', name: 'Video Reel' })}`)).body.task;
   await done('chief', rec);
-  const dir = join(root, 'crew', 'bots', 'reel');
+  const dir = join(root, 'crew', 'bots', 'video-reel');
   for (const f of ['AGENTS.md', 'soul.md', 'skills/make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
-  const tried = (await say('reel', `hire a friend ${call('crew_recruit', { template: 'scout' })}`)).body.task;
-  await done('reel', tried);
+  const tried = (await say('video-reel', `hire a friend ${call('crew_recruit', { template: 'scout' })}`)).body.task;
+  await done('video-reel', tried);
   assert.ok(!(await api('GET', '/api/state')).body.bots.some((b: any) => b.id === 'scout'), 'only Chief recruits');
 
-  // Chief hands Reel a task; it runs and reports back in Chief's thread.
-  const hand = (await say('chief', `please ${call('crew_assign', { bot: 'reel', task: 'Make a 10 second demo' })}`)).body.task;
+  // Chief hands Video Reel a task; it runs and reports back in Chief's thread.
+  const hand = (await say('chief', `please ${call('crew_assign', { bot: 'video-reel', task: 'Make a 10 second demo' })}`)).body.task;
   await done('chief', hand);
-  const t = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
+  const t = await until(async () => (await api('GET', '/api/bots/video-reel')).body.tasks.find((x: any) => x.title === 'Make a 10 second demo' && x.state === 'done'));
   page = (await api('GET', '/api/bots/chief')).body;
   const said = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
   assert.ok(said, 'Chief gives one wrap-up for the assigned work');
@@ -101,8 +101,8 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
   // The helper's delivered file shows as a card on that one wrap line; handoff copies stay out.
   const wrapDb = openDb();
-  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/demo.xlsx', note: 'demo sheet' }));
-  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'reel', JSON.stringify({ task: t.id, path: 'files/from-reel/copy.txt' }));
+  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'video-reel', JSON.stringify({ task: t.id, path: 'files/demo.xlsx', note: 'demo sheet' }));
+  wrapDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', 'video-reel', JSON.stringify({ task: t.id, path: 'files/from-reel/copy.txt' }));
   wrapDb.close();
   page = (await api('GET', '/api/bots/chief')).body;
   const wrapped = page.messages.find((m: any) => m.author === 'bot' && m.text.startsWith('All done.'));
@@ -112,12 +112,12 @@ test('chief onboarding, recruit, assign, grants', async () => {
 
   // Two helpers on one Chief job: each delivered file shows exactly once on the single wrap line.
   await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
-  const pair = (await say('chief', `two jobs please ${call('crew_assign', { bot: 'reel', task: 'First pair job' })} ${call('crew_assign', { bot: 'scout', task: 'Second pair job' })}`)).body.task;
-  const jobA = await until(async () => (await api('GET', '/api/bots/reel')).body.tasks.find((x: any) => x.title === 'First pair job' && x.state === 'done'));
+  const pair = (await say('chief', `two jobs please ${call('crew_assign', { bot: 'video-reel', task: 'First pair job' })} ${call('crew_assign', { bot: 'scout', task: 'Second pair job' })}`)).body.task;
+  const jobA = await until(async () => (await api('GET', '/api/bots/video-reel')).body.tasks.find((x: any) => x.title === 'First pair job' && x.state === 'done'));
   const jobB = await until(async () => (await api('GET', '/api/bots/scout')).body.tasks.find((x: any) => x.title === 'Second pair job' && x.state === 'done'));
   await done('chief', pair);
   const pairDb = openDb();
-  for (const [bot, id, label] of [['reel', jobA.id, 'first'], ['scout', jobB.id, 'second']] as const) {
+  for (const [bot, id, label] of [['video-reel', jobA.id, 'first'], ['scout', jobB.id, 'second']] as const) {
     pairDb.prepare('INSERT INTO events (at, kind, bot, data) VALUES (?, ?, ?, ?)').run(Date.now(), 'file.delivered', bot, JSON.stringify({ task: id, path: `files/${label}.xlsx`, note: `${label} sheet` }));
   }
   pairDb.close();
@@ -127,11 +127,11 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.deepEqual(both[0].files.map((f: any) => f.path).sort(), ['files/first.xlsx', 'files/second.xlsx']);
 
   // Grants: what the person ticks is what the bot gets.
-  const tools = (await api('GET', '/api/bots/reel')).body.tools;
+  const tools = (await api('GET', '/api/bots/video-reel')).body.tools;
   assert.ok(tools.find((x: any) => x.id === 'media').granted);
-  await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'github'] });
-  assert.deepEqual((await api('GET', '/api/bots/reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
-  await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
+  await api('PUT', '/api/bots/video-reel/tools', { tools: ['files', 'github'] });
+  assert.deepEqual((await api('GET', '/api/bots/video-reel')).body.tools.filter((x: any) => x.granted).map((x: any) => x.id).sort(), ['crew', 'files', 'github']);
+  await api('PUT', '/api/bots/video-reel/tools', { tools: ['files', 'media', 'images'] });
 
 });
 
@@ -317,7 +317,7 @@ test('two-source fare backtest: both local sources fetched and the reply names t
 
 test('nothing technical reaches the app; the person\'s own files ask in one plain sentence', async () => {
   await ready();
-  const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body, (await api('GET', '/api/connections')).body]);
+  const seen = JSON.stringify([(await api('GET', '/api/state')).body, (await api('GET', '/api/bots/video-reel')).body, (await api('GET', '/api/bots/chief')).body, (await api('GET', '/api/accounts')).body, (await api('GET', '/api/connections')).body]);
   for (const bad of [root, homedir() + '/', 'openai-codex', 'gpt-', 'grok-4', 'Muse', 'Meta', 'bwrap', 'ffmpeg -', '[Crewhouse', 'Your id in Crewhouse', 'token']) {
     assert.ok(!seen.includes(bad), `the app was sent "${bad}": …${seen.slice(Math.max(0, seen.indexOf(bad) - 120), seen.indexOf(bad) + 80)}…`);
   }
@@ -329,12 +329,12 @@ test('nothing technical reaches the app; the person\'s own files ask in one plai
 
   // Touching the person's own files asks, in one plain sentence; the answer comes from the app.
   const outside = join(root, 'Documents', 'plan.txt');
-  const w = (await say('reel', `save the plan ${call('crew_write', { path: outside, content: 'plan' })}`)).body.task;
+  const w = (await say('video-reel', `save the plan ${call('crew_write', { path: outside, content: 'plan' })}`)).body.task;
   const ask = await until(async () => (await api('GET', '/api/state')).body.asks[0]);
-  assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “plan.txt”.');
+  assert.equal(ask.title, 'Video Reel wants to change a file in a folder outside your home: “plan.txt”.');
   assert.deepEqual(ask.detail, { effect: 'files', words: ask.title, spends: false, covers: 'a folder outside your home', always: 'a folder outside your home' });
   assert.equal((await api('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow' })).status, 200);
-  await done('reel', w);
+  await done('video-reel', w);
   assert.equal(readFileSync(outside, 'utf8'), 'plan');
   // The answered card stays in the thread as a receipt: crewd keeps it (state.answered) and the adapter words it.
   const st = (await api('GET', '/api/state')).body;
@@ -391,24 +391,24 @@ test('sign in from the app: a code to show and a page to open, then signed in', 
 
 test('screen: take over and give back through the API; watching needs the Computer grant', async () => {
   await ready();
-  assert.equal((await api('POST', '/api/bots/reel/takeover')).status, 200);
-  assert.equal((await api('GET', '/api/state')).body.bots.find((b: any) => b.id === 'reel').controls, 'person');
-  assert.equal((await api('POST', '/api/bots/reel/giveback', { note: 'signed in' })).status, 200);
-  assert.equal((await api('POST', '/api/bots/reel/giveback', {})).status, 409);
-  assert.equal((await api('POST', '/api/bots/reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
-  assert.equal((await api('POST', '/api/bots/reel/steer', { text: 'faster' })).status, 409, 'nothing running to steer');
+  assert.equal((await api('POST', '/api/bots/video-reel/takeover')).status, 200);
+  assert.equal((await api('GET', '/api/state')).body.bots.find((b: any) => b.id === 'video-reel').controls, 'person');
+  assert.equal((await api('POST', '/api/bots/video-reel/giveback', { note: 'signed in' })).status, 200);
+  assert.equal((await api('POST', '/api/bots/video-reel/giveback', {})).status, 409);
+  assert.equal((await api('POST', '/api/bots/video-reel/takeover', undefined, {})).status, 403, 'cross-site pages cannot take over');
+  assert.equal((await api('POST', '/api/bots/video-reel/steer', { text: 'faster' })).status, 409, 'nothing running to steer');
 
   // Set this test's own grant precondition, even if an earlier onboarding assertion fails.
-  await api('PUT', '/api/bots/reel/tools', { tools: ['files', 'media', 'images'] });
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, `crewhouse-person.${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`);
+  await api('PUT', '/api/bots/video-reel/tools', { tools: ['files', 'media', 'images'] });
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/video-reel`, `crewhouse-person.${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`);
   await new Promise((r) => ws.once('open', r));
   ws.send(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }));
   const reply = JSON.parse(String(await new Promise((r) => ws.once('message', r))));
   assert.equal(reply.error.code, 'no-screen');
   ws.close();
-  const unauthenticated = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`);
+  const unauthenticated = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/video-reel`);
   assert.equal(await new Promise((r) => { unauthenticated.once('open', () => r('open')); unauthenticated.once('error', () => r('refused')); }), 'refused', 'loopback alone cannot control a desktop');
-  const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/reel`, { origin: 'https://evil.example' });
+  const foreign = new WebSocket(`ws://127.0.0.1:${port}/ws/desktop/video-reel`, { origin: 'https://evil.example' });
   assert.equal(await new Promise((r) => { foreign.once('open', () => r('open')); foreign.once('error', () => r('refused')); }), 'refused');
 });
 
@@ -514,16 +514,16 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal((await api('GET', '/api/schedule?text=' + encodeURIComponent('every month on the 15th'))).body.words, 'On the 15th of every month at 9:00 am');
 
   // Chief's crew_routine is a confirmed request now: a card with cadence, what, quiet and first run — no routine yet.
-  const t = (await say('chief', `every friday ${call('crew_routine', { bot: 'reel', when: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })}`)).body.task;
+  const t = (await say('chief', `every friday ${call('crew_routine', { bot: 'video-reel', when: 'every Friday 17:00', task: 'Make a demo of what shipped this week' })}`)).body.task;
   await done('chief', t);
   const card = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
-  assert.equal(card.detail.words, 'Every Friday at 5:00 pm, Reel will make a demo of what shipped this week.');
+  assert.equal(card.detail.words, 'Every Friday at 5:00 pm, Video Reel will make a demo of what shipped this week.');
   assert.equal(card.detail.preview.head, 'A new routine');
   assert.equal(card.detail.preview.body.split('\n')[0], 'Every Friday at 5:00 pm');
   // The same words everywhere: the card's last line is the schedule preview's own first run.
   const friday = (await api('GET', '/api/schedule?text=' + encodeURIComponent('every Friday 17:00'))).body;
   assert.equal(card.detail.preview.body.split('\n').at(-1), `First time: ${friday.first}`, 'the card and the preview name one first run');
-  assert.match(card.detail.preview.body, /Reel will make a demo of what shipped this week/);
+  assert.match(card.detail.preview.body, /Video Reel will make a demo of what shipped this week/);
   assert.equal((await api('GET', '/api/state')).body.routines.some((x: any) => x.name === 'Make a demo of what shipped this week'), false, 'nothing runs before the yes');
 
   // The person changes the time on the card, then starts it: the routine takes the new time.
@@ -531,13 +531,13 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   const chiefSays = (await api('GET', '/api/bots/chief')).body.messages.map((m: any) => m.text);
   const start = chiefSays.indexOf('New routine “Make a demo of what shipped this week”');
   assert.ok(start >= 0, 'approval writes the routine-start event');
-  assert.match(chiefSays[start + 1], /^I'll have Reel make a demo of what shipped this week\. Every Friday at 9:00 am\. First check: /);
+  assert.match(chiefSays[start + 1], /^I'll have Video Reel make a demo of what shipped this week\. Every Friday at 9:00 am\. First check: /);
   assert.match(chiefSays[start + 1], /I'll bring the result back here each time\.$/, 'Chief explains the actual reporting cadence right after the event');
   let r = (await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Make a demo of what shipped this week');
   assert.equal(r.words, 'Every Friday at 9:00 am');
 
   // Chief offers another, this time without a time of day: the card asks about the hour before anything runs. "Not now" leaves nothing behind.
-  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every Monday', task: 'Tidy the screenshots folder' })}`)).body.task);
+  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'video-reel', when: 'every Monday', task: 'Tidy the screenshots folder' })}`)).body.task);
   const again = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
   assert.ok(again.detail.preview.body.split('\n').includes('Did you mean 9:00 am?'), 'an odd schedule asks instead of quietly passing a guess as the person\'s');
   assert.equal((await api('POST', `/api/asks/${again.id}/answer`, { answer: 'deny' })).status, 200);
@@ -546,13 +546,13 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   // A quiet check-in the model wrote as the string "true": the card must still say it stays quiet, and the routine it
   // makes must be quiet. Chief promises "you only hear when it changes" in the same breath, so a card reading the
   // opposite — or an hourly helper speaking up on a flat day — is the person told two different things.
-  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'reel', when: 'every 2 hours', task: 'Watch the shared folder for new photos', quiet: 'true' })}`)).body.task);
+  await done('chief', (await say('chief', `and ${call('crew_routine', { bot: 'video-reel', when: 'every 2 hours', task: 'Watch the shared folder for new photos', quiet: 'true' })}`)).body.task);
   const hush = await until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.detail.routine));
   assert.ok(hush.detail.preview.body.split('\n').includes('Tells you only when something changed'), `a quiet watch must not be previewed as a noisy one: ${hush.detail.preview.body}`);
   assert.equal((await api('POST', `/api/asks/${hush.id}/answer`, { answer: 'allow' })).status, 200);
   assert.equal((await api('GET', '/api/state')).body.routines.find((x: any) => x.name === 'Watch the shared folder for new photos').quiet, 1, 'the routine the person approved is the quiet one they were shown');
 
-  // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Reel does the work.
+  // Its time comes (moved into the past, as after a sleep): crewd's own clock fires it and Video Reel does the work.
   const routineDb = openDb();
   try { routineDb.prepare('UPDATE routines SET next_at = ? WHERE id = ?').run(Date.now() - 1000, r.id); } finally { routineDb.close(); }
   r = await until(async () => (await api('GET', '/api/state')).body.routines.find((x: any) => x.id === r.id && x.history[0]?.state === 'done'));
@@ -577,37 +577,37 @@ test('routines: Chief offers one as a card, the person starts it (or changes the
   assert.equal(second.status, 409);
   assert.match(second.body.error, /already in Chief's chat/, 'the launcher is told what really happened');
   assert.equal((await thread()).length, before + 1, 'nothing was sent the second time');
-  const own = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder' })).body;
+  const own = (await api('POST', '/api/routines', { bot: 'video-reel', schedule: 'every 2 hours', task: 'Tidy the screenshots folder' })).body;
   assert.equal((await api('DELETE', `/api/routines/${own.id}`)).status, 200);
   // The person's own words for a date each month: the routine keeps that date, and the card's words are the preview's.
-  const bill = (await api('POST', '/api/routines', { bot: 'reel', schedule: 'the 1st of every month 9am', task: 'Check the monthly statement' })).body;
+  const bill = (await api('POST', '/api/routines', { bot: 'video-reel', schedule: 'the 1st of every month 9am', task: 'Check the monthly statement' })).body;
   assert.equal(bill.words, 'On the 1st of every month at 9:00 am');
   assert.equal(new Date(bill.next_at).getDate(), 1);
   assert.equal(new Date(bill.next_at).getHours(), 9);
   assert.ok(bill.next_at > Date.now());
   assert.equal((await api('DELETE', `/api/routines/${bill.id}`)).status, 200);
-  assert.equal((await api('POST', '/api/routines', { bot: 'reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
+  assert.equal((await api('POST', '/api/routines', { bot: 'video-reel', schedule: 'daily 9', task: 'x' }, {})).status, 403, 'cross-site pages cannot add routines');
 });
 
 test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts it', async () => {
   await ready();
-  const hire = (await say('chief', `a writer please ${call('crew_recruit', { template: 'scribe', name: 'Quill' })}`)).body.task;
+  const hire = (await say('chief', `a writer please ${call('crew_recruit', { template: 'scribe', name: 'Writer Quill' })}`)).body.task;
   await done('chief', hire);
-  // What Quill learned about the owner lives in the owner's own folder.
+  // What Writer Quill learned about the owner lives in the owner's own folder.
   const dir = join(root, 'crew', 'people', '1');
-  const notes = () => readFileSync(join(dir, 'notes', 'quill.md'), 'utf8');
+  const notes = () => readFileSync(join(dir, 'notes', 'writer-quill.md'), 'utf8');
   const log = () => execFileSync('git', ['log', '--format=%s'], { cwd: dir }).toString().trim().split('\n');
-  const learned = async () => (await api('GET', '/api/bots/quill')).body.trail.filter((e: any) => e.kind === 'memory.learned');
-  const remember = async (input: object) => { const t = (await say('quill', `note this ${call('crew_remember', input)}`)).body.task; return done('quill', t); };
+  const learned = async () => (await api('GET', '/api/bots/writer-quill')).body.trail.filter((e: any) => e.kind === 'memory.learned');
+  const remember = async (input: object) => { const t = (await say('writer-quill', `note this ${call('crew_remember', input)}`)).body.task; return done('writer-quill', t); };
 
   // The debrief asks for it at the end of every task.
-  const first = (await say('quill', 'Draft a note')).body.task;
-  await done('quill', first);
+  const first = (await say('writer-quill', 'Draft a note')).body.task;
+  await done('writer-quill', first);
   // The debrief travels in the run's prompt; the engine keeps the conversation itself (its key is on the task).
   const sessionDb = openDb();
   const session = sessionDb.prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
   sessionDb.close();
-  assert.match(session.session, /^agent:m1:crewhouse:quill:\d+$/, 'the run has its own session key');
+  assert.match(session.session, /^agent:m1:crewhouse:writer-quill:\d+$/, 'the run has its own session key');
 
   await remember({ text: 'Prefers 0.5 s transitions' });
   await remember({ text: 'Signs off with "Best"' });
@@ -618,14 +618,14 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
 
   // Undo the correction: the old note comes back, as a commit.
   const [fix, sign] = await learned();
-  assert.equal((await api('POST', `/api/bots/quill/memory/${fix.seq}/undo`)).status, 200);
+  assert.equal((await api('POST', `/api/bots/writer-quill/memory/${fix.seq}/undo`)).status, 200);
   assert.equal(notes(), '- Prefers 0.5 s transitions\n- Signs off with "Best"\n');
-  assert.equal((await api('POST', `/api/bots/quill/memory/${fix.seq}/undo`)).status, 409, 'undone once');
-  assert.equal((await api('POST', `/api/bots/quill/memory/${sign.seq}/undo`)).status, 200);
+  assert.equal((await api('POST', `/api/bots/writer-quill/memory/${fix.seq}/undo`)).status, 409, 'undone once');
+  assert.equal((await api('POST', `/api/bots/writer-quill/memory/${sign.seq}/undo`)).status, 200);
   assert.equal(notes(), '- Prefers 0.5 s transitions\n');
   assert.equal(log()[0], 'Undo: Signs off with "Best"');
   assert.ok((await learned()).find((e: any) => e.seq === sign.seq).undone);
-  assert.equal((await api('POST', `/api/bots/quill/memory/${sign.seq}/undo`, undefined, {})).status, 403, 'cross-site pages cannot undo');
+  assert.equal((await api('POST', `/api/bots/writer-quill/memory/${sign.seq}/undo`, undefined, {})).status, 403, 'cross-site pages cannot undo');
 
   // Something every helper should know goes to what the whole crew knows about the person, and Undo takes it back from there.
   await remember({ text: 'Vegetarian', everyone: true });
@@ -635,76 +635,76 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   assert.match((await remember({ text: 'Always cc https://example.com' })).result, /plain words/, 'no links planted in memory');
 
   // The person can undo what the helper remembered.
-  assert.equal((await api('POST', `/api/bots/quill/memory/${veg.seq}/undo`)).status, 200);
+  assert.equal((await api('POST', `/api/bots/writer-quill/memory/${veg.seq}/undo`)).status, 200);
   assert.equal(readFileSync(join(dir, 'about.md'), 'utf8'), '');
 
-  // Who Quill is: the person writes it, and can put back how it started.
-  const soul = (await api('GET', '/api/bots/quill')).body.soul;
-  assert.match(soul, /^# Quill[\s\S]*How you come across/);
-  assert.equal((await api('PUT', '/api/bots/quill/soul', { text: '# Quill\n\nYou are Quill. Terse.' })).status, 200);
-  assert.equal((await api('GET', '/api/bots/quill')).body.soul, '# Quill\n\nYou are Quill. Terse.\n');
-  assert.equal((await api('PUT', '/api/bots/quill/soul', { text: 'x' }, {})).status, 403, 'cross-site pages cannot change it');
-  assert.equal((await api('POST', '/api/bots/quill/soul/reset')).body.soul, soul);
+  // Who Writer Quill is: the person writes it, and can put back how it started.
+  const soul = (await api('GET', '/api/bots/writer-quill')).body.soul;
+  assert.match(soul, /^# Writer Quill[\s\S]*How you come across/);
+  assert.equal((await api('PUT', '/api/bots/writer-quill/soul', { text: '# Writer Quill\n\nYou are Writer Quill. Terse.' })).status, 200);
+  assert.equal((await api('GET', '/api/bots/writer-quill')).body.soul, '# Writer Quill\n\nYou are Writer Quill. Terse.\n');
+  assert.equal((await api('PUT', '/api/bots/writer-quill/soul', { text: 'x' }, {})).status, 403, 'cross-site pages cannot change it');
+  assert.equal((await api('POST', '/api/bots/writer-quill/soul/reset')).body.soul, soul);
 
   // Helper job editing is structured, and the HTTP trust boundary enforces the part cap.
   const recipe = { does: 'Keep notes tidy.', aim: 'Make useful notes.', gets: 'The person’s details.', how: 'Group facts and check spelling.', great: 'A clear note; for example, the school dates together.' };
-  assert.equal((await api('PUT', '/api/bots/quill/job', recipe)).status, 200);
-  assert.deepEqual((await api('GET', '/api/bots/quill')).body.job, recipe);
-  assert.equal((await api('PUT', '/api/bots/quill/job', { ...recipe, great: 'x'.repeat(601) })).status, 400);
-  const instructions = readFileSync(join(root, 'crew', 'bots', 'quill', 'AGENTS.md'), 'utf8');
+  assert.equal((await api('PUT', '/api/bots/writer-quill/job', recipe)).status, 200);
+  assert.deepEqual((await api('GET', '/api/bots/writer-quill')).body.job, recipe);
+  assert.equal((await api('PUT', '/api/bots/writer-quill/job', { ...recipe, great: 'x'.repeat(601) })).status, 400);
+  const instructions = readFileSync(join(root, 'crew', 'bots', 'writer-quill', 'AGENTS.md'), 'utf8');
   assert.match(instructions, /## Your job[\s\S]*### What it does[\s\S]*Keep notes tidy/);
   assert.match(instructions, /## Boundaries\n- Stop and ask first only/);
 });
 
 test('suggestions: a helper keeps a skill, and Chief changes a personality, only on the person\'s yes', async () => {
   await ready();
-  const skills = async () => (await api('GET', '/api/bots/reel')).body.skills;
+  const skills = async () => (await api('GET', '/api/bots/video-reel')).body.skills;
   const suggestion = (bot: string) => until(async () => (await api('GET', '/api/state')).body.asks.find((a: any) => a.kind === 'propose' && a.bot === bot));
   const answer = (id: number, a: string) => api('POST', `/api/asks/${id}/answer`, { answer: a });
   const learn = { name: 'Birthday video', description: 'Use for a birthday video from family photos', says: 'Make a birthday video from family photos',
     steps: '1. Pick the happiest photos.\n2. Keep it under thirty seconds, with soft music.' };
 
   // An explicit standing preference can be kept on its first occurrence; the job carries on until the person says yes.
-  const t = (await say('reel', `From now on, make birthday videos this way: ${call('crew_learn', learn)}`)).body.task;
-  assert.equal((await done('reel', t)).state, 'done', 'a suggestion does not hold up the job');
-  const card = await suggestion('reel');
-  assert.equal(card.detail.words, 'Reel would like to remember how to do this: Make a birthday video from family photos');
+  const t = (await say('video-reel', `From now on, make birthday videos this way: ${call('crew_learn', learn)}`)).body.task;
+  assert.equal((await done('video-reel', t)).state, 'done', 'a suggestion does not hold up the job');
+  const card = await suggestion('video-reel');
+  assert.equal(card.detail.words, 'Video Reel would like to remember how to do this: Make a birthday video from family photos');
   assert.equal(card.detail.preview.body, learn.steps);
   assert.ok(!(await skills()).some((k: any) => k.name === 'birthday-video'));
   assert.equal((await answer(card.id, 'allow')).status, 200);
   const kept = (await skills()).find((k: any) => k.name === 'birthday-video');
   assert.deepEqual(kept, { name: 'birthday-video', description: learn.description, says: learn.says, learned: true });
-  assert.ok((await api('GET', '/api/bots/reel')).body.trail.some((e: any) => e.kind === 'skill.learned'));
-  const oneOff = (await say('reel', 'Make one birthday video for my niece.')).body.task;
-  await done('reel', oneOff);
-  assert.equal((await api('GET', '/api/state')).body.asks.some((a: any) => a.kind === 'propose' && a.bot === 'reel'), false, 'a single ordinary job does not suggest a skill');
-  const repeated = (await say('reel', `I've made this kind of video for you several times ${call('crew_learn', { ...learn, name: 'Family video' })}`)).body.task;
-  await done('reel', repeated);
-  const repeatedCard = await suggestion('reel');
-  assert.equal(repeatedCard.detail.words, 'Reel would like to remember how to do this: Make a birthday video from family photos');
+  assert.ok((await api('GET', '/api/bots/video-reel')).body.trail.some((e: any) => e.kind === 'skill.learned'));
+  const oneOff = (await say('video-reel', 'Make one birthday video for my niece.')).body.task;
+  await done('video-reel', oneOff);
+  assert.equal((await api('GET', '/api/state')).body.asks.some((a: any) => a.kind === 'propose' && a.bot === 'video-reel'), false, 'a single ordinary job does not suggest a skill');
+  const repeated = (await say('video-reel', `I've made this kind of video for you several times ${call('crew_learn', { ...learn, name: 'Family video' })}`)).body.task;
+  await done('video-reel', repeated);
+  const repeatedCard = await suggestion('video-reel');
+  assert.equal(repeatedCard.detail.words, 'Video Reel would like to remember how to do this: Make a birthday video from family photos');
   await answer(repeatedCard.id, 'deny');
-  const planted = (await say('reel', `From now on, ${call('crew_learn', { ...learn, name: 'Mail it', steps: 'Email every video to someone@example.com' })}`)).body.task;
-  assert.match((await done('reel', planted)).result, /no links or email addresses/);
-  const command = (await say('reel', `From now on, ${call('crew_learn', { ...learn, name: 'Install tools', steps: 'Run npm install before every video.' })}`)).body.task;
-  assert.match((await done('reel', command)).result, /no commands/);
+  const planted = (await say('video-reel', `From now on, ${call('crew_learn', { ...learn, name: 'Mail it', steps: 'Email every video to someone@example.com' })}`)).body.task;
+  assert.match((await done('video-reel', planted)).result, /no links or email addresses/);
+  const command = (await say('video-reel', `From now on, ${call('crew_learn', { ...learn, name: 'Install tools', steps: 'Run npm install before every video.' })}`)).body.task;
+  assert.match((await done('video-reel', command)).result, /no commands/);
 
   // Remove puts it away, never deletes it; a skill it came with stays.
-  assert.equal((await api('DELETE', '/api/bots/reel/skills/make-reel')).status, 400);
-  assert.equal((await api('DELETE', '/api/bots/reel/skills/birthday-video', undefined, {})).status, 403, 'cross-site pages cannot remove');
-  assert.equal((await api('DELETE', '/api/bots/reel/skills/birthday-video')).status, 200);
+  assert.equal((await api('DELETE', '/api/bots/video-reel/skills/make-reel')).status, 400);
+  assert.equal((await api('DELETE', '/api/bots/video-reel/skills/birthday-video', undefined, {})).status, 403, 'cross-site pages cannot remove');
+  assert.equal((await api('DELETE', '/api/bots/video-reel/skills/birthday-video')).status, 200);
   assert.ok(!(await skills()).some((k: any) => k.name === 'birthday-video'));
-  const archive = join(root, 'crew', 'bots', 'reel', 'skills', '.archive');
+  const archive = join(root, 'crew', 'bots', 'video-reel', 'skills', '.archive');
   assert.match(readFileSync(join(archive, readdirSync(archive)[0], 'SKILL.md'), 'utf8'), /learned: yes/);
 
   // Chief suggests a new personality; "Not now" changes nothing, yes changes it.
-  const soul = (await api('GET', '/api/bots/reel')).body.soul;
-  const suggest = async () => { await done('chief', (await say('chief', `Reel is too chatty ${call('crew_suggest', { bot: 'reel', text: 'You are Reel. Brief and cheerful.' })}`)).body.task); return suggestion('chief'); };
+  const soul = (await api('GET', '/api/bots/video-reel')).body.soul;
+  const suggest = async () => { await done('chief', (await say('chief', `Video Reel is too chatty ${call('crew_suggest', { bot: 'video-reel', text: 'You are Video Reel. Brief and cheerful.' })}`)).body.task); return suggestion('chief'); };
   const no = await suggest();
-  assert.equal(no.detail.words, 'Chief suggests a change to how Reel comes across');
+  assert.equal(no.detail.words, 'Chief suggests a change to how Video Reel comes across');
   await answer(no.id, 'deny');
-  assert.equal((await api('GET', '/api/bots/reel')).body.soul, soul);
+  assert.equal((await api('GET', '/api/bots/video-reel')).body.soul, soul);
   await answer((await suggest()).id, 'allow');
-  assert.equal((await api('GET', '/api/bots/reel')).body.soul, '# Reel\n\nYou are Reel. Brief and cheerful.\n');
+  assert.equal((await api('GET', '/api/bots/video-reel')).body.soul, '# Video Reel\n\nYou are Video Reel. Brief and cheerful.\n');
 });
 
 test('a built ask reaches the helper while the thread keeps the person’s own words', async () => {
@@ -726,10 +726,10 @@ test('a built ask reaches the helper while the thread keeps the person’s own w
 
 test('room API: a message starts and rejoins the person’s room job', async () => {
   await ready();
-  const first = (await api('POST', '/api/bots/reel/messages', { text: 'A room job', room: true })).body.task;
-  await done('reel', first);
-  const second = (await api('POST', '/api/bots/reel/messages', { text: 'More on that room job', room: true })).body.task;
-  await done('reel', second);
+  const first = (await api('POST', '/api/bots/video-reel/messages', { text: 'A room job', room: true })).body.task;
+  await done('video-reel', first);
+  const second = (await api('POST', '/api/bots/video-reel/messages', { text: 'More on that room job', room: true })).body.task;
+  await done('video-reel', second);
   const room = (await api('GET', '/api/room')).body;
   assert.ok(room.lines.some((l: any) => l.text === 'More on that room job'));
   assert.equal(room.lines.filter((l: any) => l.text === 'A room job').length, 1);

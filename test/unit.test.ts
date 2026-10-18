@@ -1452,48 +1452,48 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   const { db, crew, done } = setup();
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
-  const pip = { name: 'Pip', role: 'Finds you a flat in Phuket', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
+  const pip = { name: 'Property Pip', role: 'Finds you a flat in Phuket', job: { does: 'Watches rental listings in Phuket.', aim: 'Find new flats under $900 a month.', gets: 'Your budget and preferred area.', how: 'Check current listings and compare the details.', great: 'A shortlist with links and prices; for example, two verified flats under $900.' }, personality: 'You are Property Pip. Cheerful and quick.', first: 'find me flats in Phuket under $900' };
   // Malformed model arguments must explain the five-part object, not merely refuse the hire.
   const { task: malformed } = (await crew.post('chief', `please ${create({ ...pip, job: 'Keep my bills in order' })}`))!;
   await settled(db, malformed);
   assert.match(lastSaid(db, 'chief')!, /job.*object.*does.*aim.*gets.*how.*great/);
   assert.equal(crew.snapshot().asks.length, 0);
-  assert.equal(crew.bot('pip'), undefined);
+  assert.equal(crew.bot('property-pip'), undefined);
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
   assert.ok(card(), 'a card, not a helper');
-  assert.equal(crew.bot('pip'), undefined);
+  assert.equal(crew.bot('property-pip'), undefined);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
-  assert.equal(view.detail.yes, 'Yes, bring Pip on');
+  assert.equal(view.detail.yes, 'Yes, bring Property Pip on');
   // The hire in a glance, never the five-part job: the role, what it can and can't do, its first job.
   const shown = A.card(view, crew.snapshot());
-  assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Bring Pip onto the crew?',
-    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, bring Pip on', 'Not now']]);
+  assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Bring Property Pip onto the crew?',
+    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, bring Property Pip on', 'Not now']]);
   assert.ok(!crew.snapshot().templates.some((x: any) => x.id === 'helper'), 'the base is never offered on its own');
 
   // Not now: nothing is made.
   await crew.answer(card()!.id, { answer: 'deny' });
-  assert.equal(crew.bot('pip'), undefined);
+  assert.equal(crew.bot('property-pip'), undefined);
 
-  // Asked again, and yes: Pip joins with the job and personality from the card, and starts on the request.
+  // Asked again, and yes: Property Pip joins with the job and personality from the card, and starts on the request.
   const { task: t2 } = (await crew.post('chief', `again ${create(pip)}`))!;
   await settled(db, t2);
   await crew.answer(card()!.id, { answer: 'allow' });
-  const b = crew.bot('pip')!;
+  const b = crew.bot('property-pip')!;
   assert.equal(b.role, 'Finds you a flat in Phuket');
   const bots = crew.snapshot().bots;
-  assert.ok(!bots.some((x: any) => x.id !== 'pip' && A.kindOf(x, bots) === A.kindOf(b, bots)) && (art.MADE as string[]).includes(A.kindOf(b, bots)), 'a look of its own');
+  assert.ok(!bots.some((x: any) => x.id !== 'property-pip' && A.kindOf(x, bots) === A.kindOf(b, bots)) && (art.MADE as string[]).includes(A.kindOf(b, bots)), 'a look of its own');
   assert.equal(b.template, 'helper');
-  const dir = join(crew['cfg'].crewDir, 'bots', 'pip');
+  const dir = join(crew['cfg'].crewDir, 'bots', 'property-pip');
   const instructions = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
-  assert.match(instructions, /^# Pip[\s\S]*## Your job\n### What it does\nWatches rental listings in Phuket\./);
-  assert.equal(disk.readJob(crew['cfg'], 'pip').great, pip.job.great);
+  assert.match(instructions, /^# Property Pip[\s\S]*## Your job\n### What it does\nWatches rental listings in Phuket\./);
+  assert.equal(disk.readJob(crew['cfg'], 'property-pip').great, pip.job.great);
   assert.match(instructions, /## Boundaries[\s\S]*never sign in/);
-  assert.throws(() => disk.writeJob(crew['cfg'], 'pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
-  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n');
-  assert.equal(lastSaid(db, 'chief'), "Pip has joined the crew. Pip is starting on it now; I'll bring the result back here.");
-  const first = db.get("SELECT * FROM tasks WHERE bot = 'pip'")!;
+  assert.throws(() => disk.writeJob(crew['cfg'], 'property-pip', { ...pip.job, aim: 'x'.repeat(601) }), /600/);
+  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Property Pip\n\nYou are Property Pip. Cheerful and quick.\n');
+  assert.equal(lastSaid(db, 'chief'), "Property Pip has joined the crew. Property Pip is starting on it now; I'll bring the result back here.");
+  const first = db.get("SELECT * FROM tasks WHERE bot = 'property-pip'")!;
   assert.deepEqual([first.origin, first.body], ['chief', 'find me flats in Phuket under $900']);
   await settled(db, first.id);
   assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', first.id)!.result), 'the first result comes back in Chief\'s chat');
@@ -1502,22 +1502,22 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   const { task: t3 } = (await crew.post('chief', `once more ${create(pip)}`))!;
   await settled(db, t3);
   assert.equal(card(), undefined);
-  assert.match(lastSaid(db, 'chief')!, /already a helper called Pip/);
+  assert.match(lastSaid(db, 'chief')!, /already a helper called Property Pip/);
 
-  // A job close to Pip's: Chief adapts Pip instead of making another helper, on the same short card and first-job path.
-  const more = { bot: 'pip', role: 'Finds you a flat or a room in Phuket', job: { ...pip.job, does: 'Watches flat and room listings in Phuket.' }, first: 'find me a room in Phuket under $400' };
+  // A job close to Property Pip's: Chief adapts Property Pip instead of making another helper, on the same short card and first-job path.
+  const more = { bot: 'property-pip', role: 'Finds you a flat or a room in Phuket', job: { ...pip.job, does: 'Watches flat and room listings in Phuket.' }, first: 'find me a room in Phuket under $400' };
   const crewSize = crew.snapshot().bots.length;
-  // Said to Pip by name, a change to its job still goes to Chief, never to Pip as a one-off task.
-  const { task: t4 } = (await crew.post('chief', `Pip, from now on rooms too ${create(more)}`))!;
+  // Said to Property Pip by name, a change to its job still goes to Chief, never to Property Pip as a one-off task.
+  const { task: t4 } = (await crew.post('chief', `Property Pip, from now on rooms too ${create(more)}`))!;
   assert.equal(db.get('SELECT bot FROM tasks WHERE id = ?', t4)!.bot, 'chief');
   await settled(db, t4);
   const adapt = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
-  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Give Pip this job?', 'Pip now finds you a flat or a room in Phuket.', ['Yes, give Pip the job', 'Not now']]);
+  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Give Property Pip this job?', 'Property Pip now finds you a flat or a room in Phuket.', ['Yes, give Property Pip the job', 'Not now']]);
   await crew.answer(card()!.id, { answer: 'allow' });
-  assert.deepEqual([crew.snapshot().bots.length, crew.bot('pip')!.role, disk.readJob(crew['cfg'], 'pip').does], [crewSize, more.role, more.job.does], 'no new helper: Pip\'s role and job widen');
-  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Pip\n\nYou are Pip. Cheerful and quick.\n', 'who Pip is stays');
-  assert.equal(lastSaid(db, 'chief'), "From now on, Pip finds you a flat or a room in Phuket. Pip is starting on it now; I'll bring the result back here.");
-  const next = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', 'pip', more.first)!;
+  assert.deepEqual([crew.snapshot().bots.length, crew.bot('property-pip')!.role, disk.readJob(crew['cfg'], 'property-pip').does], [crewSize, more.role, more.job.does], 'no new helper: Property Pip\'s role and job widen');
+  assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Property Pip\n\nYou are Property Pip. Cheerful and quick.\n', 'who Property Pip is stays');
+  assert.equal(lastSaid(db, 'chief'), "From now on, Property Pip finds you a flat or a room in Phuket. Property Pip is starting on it now; I'll bring the result back here.");
+  const next = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', 'property-pip', more.first)!;
   assert.equal(next.origin, 'chief');
   await settled(db, next.id);
   assert.equal(lastSaid(db, 'chief'), relayResult(db.get('SELECT result FROM tasks WHERE id = ?', next.id)!.result), 'its first result comes back in Chief\'s chat');
@@ -1529,7 +1529,7 @@ test("Chief's hire card shows will/won't/first-step/first-job, and a won't-post 
   crew.onboard('sir');
   const create = (args: object) => `[tool crew_create ${JSON.stringify(args)}]`;
   const job = { does: 'Learns your voice from your posts and your code, then drafts a week of posts.', aim: 'Get to 1,000 followers on drafts you publish yourself.', gets: 'Your X handle and the projects you point to.', how: 'Reads your posts and code, plans the week, drafts each post to stand alone.', great: 'Five drafts in your voice; for example, two from one diary entry.' };
-  const echo = { name: 'Echo', role: 'Grows your X from what you build', job, personality: 'You are Echo. Brief and plain.', will_do: ['Learn your voice from your posts and your code', 'Draft five posts a week that each stand alone'], wont_do: ['Post for you. Every post is a draft you publish yourself'], first_step: 'Tell Echo your X handle.', first_job: 'Read your posts and draft five posts.' };
+  const echo = { name: 'Social Echo', role: 'Grows your X from what you build', job, personality: 'You are Social Echo. Brief and plain.', will_do: ['Learn your voice from your posts and your code', 'Draft five posts a week that each stand alone'], wont_do: ['Post for you. Every post is a draft you publish yourself'], first_step: 'Tell Social Echo your X handle.', first_job: 'Read your posts and draft five posts.' };
   const { task: t } = (await crew.post('chief', `please ${create(echo)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
@@ -1540,20 +1540,20 @@ test("Chief's hire card shows will/won't/first-step/first-job, and a won't-post 
   assert.equal(view.detail.first_step, echo.first_step);
   assert.equal(view.detail.first_job, echo.first_job);
   const shown = A.card(view, crew.snapshot());
-  assert.deepEqual(shown.hire, { name: 'Echo', kind: shown.hire!.kind, role: echo.role, will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
+  assert.deepEqual(shown.hire, { name: 'Social Echo', kind: shown.hire!.kind, role: echo.role, will_do: echo.will_do, wont_do: echo.wont_do, first_step: echo.first_step, first_job: echo.first_job });
   assert.ok((art.MADE as string[]).includes(shown.hire!.kind), 'a made-up look of its own');
   await crew.answer(card()!.id, { answer: 'allow' });
-  assert.ok(crew.bot('echo'), 'yes hires Echo');
-  assert.equal(A.kindOf(crew.bot('echo'), crew.snapshot().bots), shown.hire!.kind, 'its card and hired face agree');
-  assert.ok(!disk.botConfig(crew['cfg'], 'echo').tools.includes('browser'), 'won\'t post switches the posting grant off');
-  assert.ok(disk.botConfig(crew['cfg'], 'echo').tools.includes('computer'), 'an unmatched grant stays');
-  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'echo'")!.id);
-  const next = (await crew.post('chief', create({ ...echo, name: 'Reel' })))!;
+  assert.ok(crew.bot('social-echo'), 'yes hires Social Echo');
+  assert.equal(A.kindOf(crew.bot('social-echo'), crew.snapshot().bots), shown.hire!.kind, 'its card and hired face agree');
+  assert.ok(!disk.botConfig(crew['cfg'], 'social-echo').tools.includes('browser'), 'won\'t post switches the posting grant off');
+  assert.ok(disk.botConfig(crew['cfg'], 'social-echo').tools.includes('computer'), 'an unmatched grant stays');
+  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'social-echo'")!.id);
+  const next = (await crew.post('chief', create({ ...echo, name: 'Video Reel' })))!;
   await settled(db, next.task);
   const offered = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
   await crew.answer(card()!.id, { answer: 'allow' });
-  assert.equal(A.kindOf(crew.bot('reel'), crew.snapshot().bots), offered.hire!.kind, 'a name matching a template still keeps its custom face');
-  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'reel'")!.id);
+  assert.equal(A.kindOf(crew.bot('video-reel'), crew.snapshot().bots), offered.hire!.kind, 'a second made-up hire keeps the face its card showed');
+  await settled(db, db.get("SELECT * FROM tasks WHERE bot = 'video-reel'")!.id);
   done();
 });
 
@@ -1574,31 +1574,31 @@ test('Chief interviews a vague ask before hiring: questions first, the card buil
   await release(crew, 'chief', 'Happy to take someone on for the garden. Three quick questions: what would they look after? What does good look like? And what should they do first?');
   await settled(db, t);
   assert.equal(card(), undefined);
-  assert.equal(crew.bot('fern'), undefined);
+  assert.equal(crew.bot('garden-fern'), undefined);
   assert.match(lastSaid(db, 'chief')!, /what should they do first\?/);
-  // The answers: Chief builds the card from them; yes hires Fern with the answers in her job, and starts the first job.
-  const fern = { name: 'Fern', role: 'Looks after your garden', job: { does: 'Waters the plants and weeds the beds, nothing else in the garden.', aim: 'Nothing dies.', gets: 'Photos of the beds when something looks wrong.', how: 'Waters weekly, weeds monthly, never sprays or prunes without asking.', great: 'Every plant alive at a glance; for example, no wilted pots this week.' }, personality: 'You are Fern. Patient, green-fingered and brief.', first: 'Clear the brambles' };
+  // The answers: Chief builds the card from them; yes hires Garden Fern with the answers in her job, and starts the first job.
+  const fern = { name: 'Garden Fern', role: 'Looks after your garden', job: { does: 'Waters the plants and weeds the beds, nothing else in the garden.', aim: 'Nothing dies.', gets: 'Photos of the beds when something looks wrong.', how: 'Waters weekly, weeds monthly, never sprays or prunes without asking.', great: 'Every plant alive at a glance; for example, no wilted pots this week.' }, personality: 'You are Garden Fern. Patient, green-fingered and brief.', first: 'Clear the brambles' };
   const { task: t2 } = (await crew.post('chief', `They would water the plants and weed the beds; good means nothing dies; first clear the brambles ${create(fern)}`))!;
   // The earlier hold words stay in this chat's history, so later turns hold again: the tool call above already ran; release the turn.
   await holding(crew, 'chief');
-  await release(crew, 'chief', 'I have put Fern on a card; take a look.');
+  await release(crew, 'chief', 'I have put Garden Fern on a card; take a look.');
   await settled(db, t2);
   assert.ok(card(), 'the answers become a card');
   await crew.answer(card()!.id, { answer: 'allow' });
-  assert.equal(disk.readJob(crew['cfg'], 'fern').aim, 'Nothing dies.');
-  assert.match(disk.readJob(crew['cfg'], 'fern').how, /never sprays/);
-  const first = db.get("SELECT * FROM tasks WHERE bot = 'fern'")!;
+  assert.equal(disk.readJob(crew['cfg'], 'garden-fern').aim, 'Nothing dies.');
+  assert.match(disk.readJob(crew['cfg'], 'garden-fern').how, /never sprays/);
+  const first = db.get("SELECT * FROM tasks WHERE bot = 'garden-fern'")!;
   assert.equal(first.body, 'Clear the brambles');
   await settled(db, first.id);
   // The skip path: an already-specific "just do it" files the card in the same turn, with no question turn.
-  const shed = { bot: 'fern', role: 'Looks after your garden and shed', job: { ...fern.job, does: 'Waters the plants, weeds the beds and keeps the shed tidy.' }, first: 'Tidy the shed' };
-  const { task: t3 } = (await crew.post('chief', `Just do it: Fern should also keep the shed tidy ${create(shed)}`))!;
+  const shed = { bot: 'garden-fern', role: 'Looks after your garden and shed', job: { ...fern.job, does: 'Waters the plants, weeds the beds and keeps the shed tidy.' }, first: 'Tidy the shed' };
+  const { task: t3 } = (await crew.post('chief', `Just do it: Garden Fern should also keep the shed tidy ${create(shed)}`))!;
   await holding(crew, 'chief');
   await release(crew, 'chief', 'I have put the shed on a card; take a look.');
   await settled(db, t3);
-  assert.match(card()!.title, /Give Fern this job/);
+  assert.match(card()!.title, /Give Garden Fern this job/);
   await crew.answer(card()!.id, { answer: 'deny' });
-  assert.equal(crew.bot('fern')!.role, 'Looks after your garden');
+  assert.equal(crew.bot('garden-fern')!.role, 'Looks after your garden');
   done();
 });
 

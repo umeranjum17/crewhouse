@@ -91,9 +91,9 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     }
     assert.equal(existsSync(join(disk.botDir(cfg, 'chief'), 'files/forbidden.md')), false);
     assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'soul.md'), 'utf8'), /# Chief/);
-    const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template, name: template[0].toUpperCase() + template.slice(1) })).join(' ') });
+    const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template, name: { scout: 'Research Rae', scribe: 'Writer Will', reel: 'Video Vic' }[template] })).join(' ') });
     await settled(db, recruits.task);
-    const parts = { scout: 'Research two local bakery campaign ideas with sources.', scribe: 'Write two bakery post drafts only.', reel: 'Make one bakery poster draft only.' };
+    const parts = { 'research-rae': 'Research two local bakery campaign ideas with sources.', 'writer-will': 'Write two bakery post drafts only.', 'video-vic': 'Make one bakery poster draft only.' };
     const assigns = await api('/api/bots/chief/messages', { text: Object.entries(parts).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
     await settled(db, assigns.task);
     for (const [bot, body] of Object.entries(parts)) {
@@ -105,17 +105,17 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     }
     // The marketing journey uses one existing draft, handed to Chief by the app, after every part finishes.
     const body = 'Facebook\nWarm bread for a family weekend.\nCome say hello at Morning Loaf.\n\n---\n\nInstagram\n#MorningLoaf\nA small bakery welcome for local families.';
-    writeFileSync(join(disk.botDir(cfg, 'reel'), 'files/poster.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=', 'base64'));
+    writeFileSync(join(disk.botDir(cfg, 'video-vic'), 'files/poster.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=', 'base64'));
     for (const answer of ['deny', 'allow']) {
       const path = `files/campaign-${answer}.txt`;
-      const bodies = { scout: 'Research the bakery campaign. ask permission', scribe: call('crew_write', { path, content: body }) + ' ' + call('crew_deliver', { path, note: 'Both campaign posts' }) + ' ' + call('crew_draft', { path, channel: 'post', to: 'Facebook and Instagram' }), reel: call('crew_deliver', { path: 'files/poster.png', note: 'Morning Loaf poster' }) };
+      const bodies = { 'research-rae': 'Research the bakery campaign. ask permission', 'writer-will': call('crew_write', { path, content: body }) + ' ' + call('crew_deliver', { path, note: 'Both campaign posts' }) + ' ' + call('crew_draft', { path, channel: 'post', to: 'Facebook and Instagram' }), 'video-vic': call('crew_deliver', { path: 'files/poster.png', note: 'Morning Loaf poster' }) };
       const campaign = await api('/api/bots/chief/messages', { text: Object.entries(bodies).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
       await settled(db, campaign.task);
       const parts = db.all('SELECT id, bot FROM tasks WHERE parent = ?', campaign.task);
-      for (const part of parts.filter((p) => p.bot !== 'scout')) await settled(db, part.id);
-      await holding(crew, 'scout');
+      for (const part of parts.filter((p) => p.bot !== 'research-rae')) await settled(db, part.id);
+      await holding(crew, 'research-rae');
       assert.equal(A.cards(await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json()).length, 0, 'the campaign review waits for the last part to finish');
-      await release(crew, 'scout', 'Research finished with sources.');
+      await release(crew, 'research-rae', 'Research finished with sources.');
       for (const part of parts) await settled(db, part.id);
       const state = await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json();
       assert.equal(state.asks.length, 1, 'one existing draft card for both posts');
@@ -123,8 +123,8 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
       assert.equal(card.helper, 'chief', 'the person decides only through Chief');
       assert.deepEqual(card.choices.map((c) => c.label), ['Approve', 'Not now']);
       assert.equal(card.preview?.body, body, 'both exact post bodies and channel headings survive');
-      assert.equal(card.campaign?.poster?.url, '/files/reel/poster.png');
-      assert.equal(A.office(state).crew.find((h) => h.id === 'scribe')?.ask, undefined, 'no helper Needs-you badge for a draft');
+      assert.equal(card.campaign?.poster?.url, '/files/video-vic/poster.png');
+      assert.equal(A.office(state).crew.find((h) => h.id === 'writer-will')?.ask, undefined, 'no helper Needs-you badge for a draft');
       await api(`/api/asks/${card.id}/answer`, { answer });
       const after = await (await fetch(base + '/api/state', { headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1' } })).json();
       assert.equal(A.cards(after).length, 0, 'the approval card closes');
