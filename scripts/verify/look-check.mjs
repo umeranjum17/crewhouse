@@ -185,16 +185,13 @@ async function strips(src, frac, sets, theme) {
   // A phone shot with no theme given: the look whose page colour is nearer the middle of the screen.
   if (!sets[theme]) { const m = px(w >> 1, h >> 1), d = (k) => Math.abs(sets[k][0][0] - m[0]) + Math.abs(sets[k][0][1] - m[1]) + Math.abs(sets[k][0][2] - m[2]); theme = d('day') <= d('night') ? 'day' : 'night'; }
   const bgs = sets[theme], out = [];
-  // A solid black band is never the app's page: night's sunken (#060605) sits within 10 of black, so without
-  // this a letterbox band passes in the night look while failing by day. Only (near-)pure black counts: the app's
-  // own night page colours (bg #0C0C0B, sunken #060605) stay the app's page, even at its padded edges.
-  const black = (c) => c[0] <= 4 && c[1] <= 4 && c[2] <= 4;
+  // Night's ground is black (#000000), so a letterbox band cannot be told from the page at night: the day look catches it.
   // Each edge: the run of lines, from the edge inwards, that are one colour end to end (98% of their pixels).
   for (const [edge, n, len, at] of [['left', w, h, (k, t) => px(k, t)], ['right', w, h, (k, t) => px(w - 1 - k, t)], ['top', h, w, (k, t) => px(t, k)], ['bottom', h, w, (k, t) => px(t, h - 1 - k)]]) {
     const ink = at(0, len >> 1);
     let k = 0;
     for (; k < n >> 1; k++) { let same = 0; for (let t = 0; t < len; t += 2) same += near(at(k, t), ink); if (same < 0.98 * Math.ceil(len / 2)) break; }
-    if (k >= Math.max(6, frac * n) && (!bgs.some((b) => near(ink, b, 10)) || black(ink))) out.push({ edge, px: k, colour: ink });
+    if (k >= Math.max(6, frac * n) && !bgs.some((b) => near(ink, b, 10))) out.push({ edge, px: k, colour: ink });
   }
   return { out, w, h, theme };
 }

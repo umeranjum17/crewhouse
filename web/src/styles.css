@@ -3,31 +3,31 @@
 @font-face { font-family: Archivo; src: url(/fonts/Archivo.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url(/fonts/JetBrainsMono.woff2) format('woff2'); font-display: block; }
 :root {
-  --bg: #F3EEE3; --solid: #EBE5D7; --soft: #E0D7C0; --line: #D3C9B0; --line2: #BDB096;
-  --ink: #1D1B18; --ink2: #575046; --mute: #6B665D; --go: #3D6FD6; --go-ink: #FFFFFF;
+  --bg: #F4F3EF; --solid: #FFFFFF; --soft: #E6E4DE; --line: #D9D7D0; --line2: #C4C2BA; --menu: #ECEAE3;
+  --ink: #0B0B0B; --ink2: #3D3C38; --mute: #5F5E59; --go: #3D6FD6; --go-ink: #FFFFFF;
   --pink: #3D6FD6; --ok: #1C9F63; --amber: #B86E00; --danger: #C4372C; --soft-accent: #DBE6F8;
-  --card: var(--solid); --warm: #E9E1CB; --on-pink: #FFFFFF; --pink-ink: #3D6FD6;
+  --card: var(--solid); --warm: #EDEBE5; --on-pink: #FFFFFF; --pink-ink: #3D6FD6;
   --serif: 'Inter', system-ui, sans-serif; --ok-ink: var(--ok); --wait: var(--pink); --shadow: var(--line2);
   --cell-in: #FFEFB8; --cell-calc: #DAE8FB;
   --e1: 0 1px 2px rgba(20,18,26,.04), 0 4px 16px rgba(20,18,26,.06);
   --e2: 0 16px 48px rgba(20,18,26,.16), 0 2px 6px rgba(20,18,26,.06);
-  --ui: Inter, system-ui, sans-serif; --art: 'JetBrains Mono', ui-monospace, monospace;
+  --ui: Archivo, system-ui, sans-serif; --art: 'JetBrains Mono', ui-monospace, monospace;
   --ease: cubic-bezier(.2,.8,.2,1); color-scheme: light;
-  --top: env(safe-area-inset-top, 0px);
+  --top: env(safe-area-inset-top, 0px); --tabs: 0px;
 }
 [data-theme='night'] {
-  --bg: #0C0C0B; --solid: #131312; --soft: #060605; --line: #262625; --line2: #3A3A38;
-  --ink: #ECECEC; --ink2: #C9C9C5; --mute: #9B9B98; --go: #0A84FF; --go-ink: #FFFFFF;
+  --bg: #000000; --solid: #141414; --soft: #1F1F1F; --line: #262626; --line2: #3A3A38; --menu: #141414;
+  --ink: #F4F3EF; --ink2: #C9C9C5; --mute: #8E8D88; --go: #0A84FF; --go-ink: #FFFFFF;
   --pink: #0A84FF; --ok: #30D158; --amber: #F2B04B; --danger: #FF6B5E; --soft-accent: #16283F; --pink-ink: #0A84FF;
   --e1: 0 0 0 1px var(--line), 0 4px 16px #0003;
   --e2: 0 0 0 1px var(--line2), 0 16px 48px #0008;
-  --warm: #1A1815; --on-pink: #FFFFFF; --cell-in: #3A3118; --cell-calc: #1B2B42;
+  --warm: #1A1A1A; --on-pink: #FFFFFF; --cell-in: #3A3118; --cell-calc: #1B2B42;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
-body { background: var(--bg); color: var(--ink); font: 400 15px/22px var(--ui); font-feature-settings: 'cv11','ss03'; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.4 var(--ui); font-feature-settings: 'cv11','ss03'; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 /* Home-screen app: the page runs under the status bar and beside any notch, so it keeps clear of both, and a band of the page's own colour sits under the clock. */
 body { padding: var(--top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: var(--top); background: var(--bg); z-index: 100; }
@@ -77,7 +77,6 @@ b { font-weight: 600; }
 .status-word { display: inline-flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 13px; white-space: nowrap; }
 .crew-row .status-word { min-width: 0; max-width: 100%; overflow: hidden; }
 .status-word > .clamp1 { min-width: 0; }
-.side-seat > .clamp1 { min-width: 0; }
 .status-word i { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); flex: none; }
 .status-word i.working { background: var(--ok); }
 .status-word i.needs { background: var(--pink); }
@@ -121,7 +120,7 @@ b { font-weight: 600; }
 .dots b { width: var(--d); height: var(--d); border-radius: 50%; background: transparent; }
 .dots.crisp { gap: 0; image-rendering: pixelated; }
 .dots.crisp b { border-radius: 0; }
-.face .dots b:not(.on), .halo .dots b:not(.on), .logo .dots b:not(.on) { background: transparent; }
+.face .dots b:not(.on), .halo .dots b:not(.on) { background: transparent; }
 .ink { display: inline-block; flex: none; line-height: 0; }
 .ink svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .halo { position: relative; display: grid; place-items: center; padding: 18px; border-radius: 50%; background: var(--soft); }
@@ -129,7 +128,6 @@ b { font-weight: 600; }
 .face.working::after, .face.needs::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--ok); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg) inset; pointer-events: none; }
 .face.needs::after { border-color: var(--pink); }
 .face.add { background: transparent; border: 2px dashed var(--shadow); color: var(--mute); font-size: 24px; }
-.logo { display: inline-flex; gap: 8px; align-items: center; font: 600 15px/22px var(--ui); letter-spacing: -.01em; }
 .laptop { font-size: 9px; color: var(--mute); margin-top: -10px; }
 .laptop::first-line { color: var(--mute); }
 .small-art { font-size: 13px; color: var(--mute); margin: 0 auto 8px; text-align: center; }
@@ -374,7 +372,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .needs-more { display: none; }
 .needs-quiet { padding: 16px; color: var(--ink2); }
 /* An empty list: a small mark and a plain line, never a blank box. */
-.frame-empty { display: flex; gap: 12px; align-items: center; padding: 16px; color: var(--ink2); font-size: 14px; }
+.frame-empty { display: flex; gap: 12px; align-items: center; padding: 16px; color: var(--ink2); font-size: 16px; }
 .jobs.phone-only { padding-bottom: 48px; }
 .home > .dock { margin-left: -16px; margin-right: -16px; }
 .home .section-head .label { margin-bottom: 8px; }
@@ -579,8 +577,7 @@ input[role='switch']:focus-visible { outline: 2px solid var(--ink); outline-offs
 body:has(> * .toast.foot) { padding-bottom: 56px; }
 .offline { position: sticky; top: var(--top); z-index: 20; background: color-mix(in srgb, var(--amber) 14%, var(--solid)); color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: center; font: 500 14px/1.45 var(--ui); padding: 10px 16px; }
 
-/* shell: phone first, no tab bar (B1): Home's gear reaches Settings, and Settings every other place */
-.side, .rail { display: none; }
+/* shell: phone first; the frame is the Stack tab bar on a phone and the side menu on a computer (the block at the end) */
 .working-on, .desk-only { display: none; }
 .main { min-width: 0; }
 .is-chat .dock { bottom: 0; }
@@ -588,36 +585,11 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
 
 /* desktop: the crew room's wall down the left, the work in frames */
 @media (min-width: 900px) {
-  .shell { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - var(--top)); }
+  .shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: calc(100vh - var(--top)); }
   .main { padding-bottom: 0; display: flex; flex-direction: column; }
   .main > .home, .main > .page { flex: 1; }
   .is-chat .dock, .home .dock { bottom: 0; }
-  .side { display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; position: sticky; top: var(--top); height: calc(100vh - var(--top)); overflow-y: auto; background: var(--soft); border-right: 1px solid var(--line); }
-  .brand { padding: 0 8px 18px; }
-  .side .label { margin: 24px 8px 8px; }
-  .side-row { display: flex; gap: 10px; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 14px; min-height: 32px; }
-  .side-row b { display: block; font-weight: 500; }
-  .side-row.on, .side-row:hover { background: var(--solid); }
-  .side-room { display: flex; align-items: center; width: 22px; flex: none; }
-  .side-room .face + .face { margin-left: -12px; box-shadow: 0 0 0 2px var(--soft); }
-  .side-blank { padding: 4px 10px 8px; }
   /* The rail's head: Chief's helmet, his name, his one-word status and who else is around. */
-  .side-chief { display: grid; justify-items: center; gap: 2px; padding: 6px 6px 2px; color: inherit; text-decoration: none; }
-  .side-chief b { font: 600 17px/22px var(--ui); }
-  .side-helmet { display: block; max-width: 100%; overflow: hidden; }
-  .side-helmet .helmet { text-align: center; }
-  .side-status { display: flex; gap: 6px; align-items: center; justify-content: center; font: 600 13px/18px var(--ui); color: var(--ink2); }
-  .side-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--line2); flex: none; }
-  .side-status.needs { color: var(--pink-ink); }
-  .side-status.needs i { background: var(--pink); }
-  .side-sub { text-align: center; padding: 0 10px; }
-  .side-sched { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; font-size: 14px; min-height: 36px; }
-  .side-sched:hover { background: var(--solid); }
-  .side-sched .grow { display: grid; gap: 1px; }
-  .side-sched b { font-weight: 500; }
-  .side-nav { display: flex; gap: 12px; align-items: center; padding: 7px 12px; border-radius: 8px; font: 500 14px/20px var(--ui); color: var(--ink2); min-height: 34px; }
-  .side-nav.on { background: var(--solid); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
-  .side-nav .ic { width: 16px; height: 16px; flex: none; }
   .home, .page { padding: 32px; }
   .home { max-width: none; padding-right: 0; }
   .phone-only { display: none; }
@@ -626,7 +598,6 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
   .home > .dock { margin: auto 0 0; padding: 20px 0; background: var(--bg); max-width: 720px; }
   .dock { padding: 18px 32px 16px; margin: 8px -32px 0; }
   .bubbles { justify-content: flex-start; }
-  .page:not(.chat-page) { max-width: 720px; }
   .page.settings { max-width: 640px; }
   .scrim { align-items: center; padding: 24px; }
   .sheet { border-radius: 16px; padding: 24px; }
@@ -657,14 +628,12 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
   .working-on { display: block; width: 320px; }
 }
 @media (min-width: 1200px) {
-  .shell { grid-template-columns: 320px minmax(0, 1fr); }
   .home, .page { padding: 36px 40px 40px; }
   .home { padding-right: 20px; }
   .dock { padding: 18px 40px 16px; margin: 8px -40px 0; }
   .home .dock { padding: 20px 0; }
 }
 @media (min-width: 1440px) {
-  .shell { grid-template-columns: 320px minmax(0, 1fr); }
   .home, .page { padding: 40px 48px 44px; }
   .home { padding-left: 32px; padding-right: 20px; }
   .dock { padding: 18px 48px 16px; margin: 8px -48px 0; }
@@ -675,7 +644,6 @@ body:has(> * .toast.foot) { padding-bottom: 56px; }
   .page.chat-page .chat .working-on { grid-column: 2; grid-row: 1 / 3; min-height: 0; overflow-y: auto; padding-top: 6px; }
 }
 @media (min-width: 1920px) {
-  .shell { grid-template-columns: 320px minmax(0, 1fr); }
   .home, .page { padding: 44px 64px 48px; }
   .home { padding-right: 20px; }
   .dock { padding: 18px 64px 16px; margin: 8px -64px 0; }
@@ -809,8 +777,6 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
    one tap returns to the newest line and pins the thread again. */
 .new-pill { position: sticky; bottom: 12px; align-self: center; margin-top: 12px; z-index: 3; border: 1px solid var(--line2); border-radius: 999px; padding: 8px 14px; background: var(--bg); color: var(--ink); font: 600 13px/18px var(--ui); cursor: pointer; box-shadow: var(--e2); }
 
-.side-row .grow { min-width: 0; }
-.side-meter { display: block; padding: 6px 10px 10px; line-height: 1.3; }
 .how { margin: 8px 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; }
 details.card > summary { cursor: pointer; }
 details.card[open] > summary { margin-bottom: 10px; }
@@ -1058,16 +1024,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 .chat-page .lines::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
 .chat-page .lines::-webkit-scrollbar-button { display: none; }
 
-/* The desk rail's seat words. */
-@media (min-width: 900px) {
-  .side-seat { display: flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); color: var(--ink2); }
-  .side-seat i { width: 6px; height: 6px; border-radius: 50%; background: var(--line2); flex: none; }
-  .side-seat.seat-needs i, .side-seat.seat-chat i { background: var(--pink); }
-  .side-seat.seat-working i, .side-seat.seat-done i { background: var(--ok); }
-  .side-seat { min-width: 0; }
-  .side-seat.seat-failed i { background: var(--danger); }
-  .side-seat.seat-next i { background: var(--amber); }
-}
 /* Chief's thread: one bar (Chief's line, the counts) and the pinned Needs you over his thread.
    On a phone the top stays in view while the thread scrolls, so what needs you never leaves the first screen. */
 .home-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 10px; }
@@ -1084,8 +1040,6 @@ details.card[open] > summary { margin-bottom: 10px; }
 }
 /* ── B1 Studio: one display serif, one accent, the desk rail, Home's greeting and the Tonight column. ── */
 h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
-.logo { gap: 10px; }
-.logo span { font: 600 24px/1 var(--serif); letter-spacing: 0; }
 .demo-tag { margin-left: auto; font: 600 9.5px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--line2); border-radius: 5px; padding: 3px 5px; }
 .label { font-size: 11px; line-height: 14px; letter-spacing: .09em; color: var(--mute); }
 .label .count { background: none; color: var(--pink-ink); padding: 0; min-width: 0; margin-left: 8px; font-size: 11px; }
@@ -1128,36 +1082,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .home-chat .dock, .home .dock { bottom: 0; }
 
 @media (min-width: 900px) {
-  .side { background: var(--bg); border-right: 1.5px solid var(--ink); padding: 22px 24px 16px; gap: 2px; }
-  .brand { display: flex; align-items: center; padding: 0 8px 24px; }
-  .side-navs { display: grid; gap: 2px; }
-  .side-nav { gap: 10px; height: 34px; min-height: 34px; padding: 0 10px; border-radius: 10px; font: 500 14px/1 var(--ui); color: var(--ink2); }
-  .side-nav.on { background: var(--solid); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
-  .side-count { margin-left: auto; font: 600 12px var(--ui); color: var(--mute); }
-  .side-count.hot { color: var(--pink-ink); }
-  .side-crew { margin-top: 24px; display: grid; gap: 0; }
-  /* The rail reads like the mock: the status line stands apart, and a hairline opens each section. */
-  .side-crew .side-sub { margin: 3px 0 0; }
-  .side-crew .side-label { border-top: 1px solid var(--line); border-radius: 0; margin: 14px 0 8px; padding: 12px 10px 0; }
-
-  .side .side-label { display: flex; margin: 0; padding: 0 10px 8px; color: var(--mute); text-decoration: none; }
-  .side-label span { margin-left: auto; letter-spacing: 0; }
-  .side-row { height: 38px; min-height: 38px; padding: 0 10px; gap: 10px; font: 500 14px/1 var(--ui); }
-  .side-row .face { flex: none; }
-  .side-row b { font-weight: 500; }
-  .side-row .side-seat { flex: none; max-width: 52%; font: 400 12px/16px var(--ui); color: var(--mute); }
-  .side-row .side-seat.seat-needs, .side-row .side-seat.seat-chat { color: var(--pink-ink); font-weight: 600; }
-  .side-seat.seat-working i { background: none; box-shadow: inset 0 0 0 1.6px var(--ink); } .side-seat.seat-done i { background: var(--ink); }
-  /* A crew row (the iPad two-pane): name and status, its last line under them, the time at the right. */
-  .side-row { height: auto; min-height: 50px; padding: 6px 10px; }
-  .side-two { display: grid; gap: 2px; min-width: 0; }
-  .side-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .side-two > .small { font: 400 12px/16px var(--ui); }
-  .side-at { flex: none; align-self: flex-start; padding-top: 1px; font: 400 12px/16px var(--ui); color: var(--mute); }
-  .side-ro { padding: 8px 10px 12px; }
-  .side-me { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 12px 10px 0; border-top: 1px solid var(--line); color: var(--mute); text-decoration: none; }
-  .side-me .grow { display: grid; } .side-me b { font: 600 14px/18px var(--ui); color: var(--ink); } .side-me .grow > span { font: 400 12px/16px var(--ui); }
-  .me-av { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--ink); font: 600 17px/1 var(--serif); color: var(--ink); }
   .home-bar { margin-bottom: 18px; }
 }
 
@@ -1311,7 +1235,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    at its newest line, above a composer docked at the foot (clear of the home indicator). On a short screen the top
    shrinks and scrolls by itself so the thread keeps its room. The thread and the ask take the mock's compact sizes. */
 @media (max-width: 899px) {
-  .page.chat-page.home-chat { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page.home-chat { position: relative; height: calc(100dvh - var(--top) - var(--tabs)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .home-chat > .home-top { position: static; flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
   /* The chat reserves its own floor: a 140px thread plus the dock (its composer may wrap to two lines at 320). The base
      .chat minimum (100dvh - 190px) and a scroller's content height must never size it (d868bb4). */
@@ -1375,7 +1299,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* The crew room on a phone, one screen like Chief's chat (096): the bar and picker stay put, only the thread
    scrolls, opened at its top, above a picker and composer docked at the foot. Nothing sits under them. */
 @media (max-width: 899px) {
-  .page.chat-page.room-page { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page.room-page { position: relative; height: calc(100dvh - var(--top) - var(--tabs)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .room-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .room-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px 0; }
   .room-page .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
@@ -1385,7 +1309,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    stands under them. Chief's chat and the room carry their own copies of this above; the one cause is shared, so a
    thread never runs under a bar or the composer on any phone chat. Details pages keep the document scroll. */
 @media (max-width: 899px) {
-  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+  .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) { position: relative; height: calc(100dvh - var(--top) - var(--tabs)); display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .page.chat-page:not(.home-chat):not(.room-page):has(> .chat) .dock { position: static; flex: none; margin: 0 -16px; padding: 6px 16px max(12px, env(safe-area-inset-bottom)); mask-image: none; background: var(--bg); }
@@ -1716,3 +1640,48 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-tile.st-new { align-items: center; justify-content: center; text-align: center; color: var(--ink); }
 .st-tile.st-new > b { margin-top: 10px; }
 .st-tile.st-new > span:last-child { color: var(--mute); opacity: 1; font-weight: 400; }
+
+/* The Stack frame (design C, v59): the four places Home, Chief, Jobs, Crew in that order, as the phone's tab bar and
+   the computer's 264px side menu, on the Stack ground. Chief is the primary place: his tab is the filled one, and in
+   the side menu he wears his face and his one status word. Text is 16px or more outside caps, badges and tab labels. */
+.side, .tabs { display: none; }
+@media (max-width: 899px) {
+  :root { --tabs: calc(71px + env(safe-area-inset-bottom)); }
+  .main { padding-bottom: var(--tabs); }
+  .shell .main .dock { bottom: var(--tabs); }
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; display: flex; padding: 6px max(8px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line); }
+  .tab { position: relative; flex: 1; min-width: 0; min-height: 54px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--mute); font: 700 14px/1.2 var(--ui); }
+  .tab.on, .tab-chief { color: var(--ink); }
+  .tab-ic { width: 56px; height: 32px; border-radius: 999px; display: grid; place-items: center; }
+  .tab.on .tab-ic { background: var(--soft); }
+  .tab-chief .tab-ic, .tab-chief.on .tab-ic { background: var(--ink); color: var(--bg); }
+  .tab-badge { position: absolute; top: 0; left: calc(50% + 10px); min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #FF7AB8; color: #0B0B0B; font: 800 13px/20px var(--ui); text-align: center; }
+}
+@media (min-width: 900px) {
+  .side { position: sticky; top: var(--top); height: calc(100vh - var(--top)); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 18px 12px 14px; background: var(--menu); border-right: 1px solid var(--line); }
+  .brand { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 0 8px 22px; }
+  .main > .stack-home { max-width: none; padding: 32px 40px 48px; }
+  .brand b { font: 800 22px/1 var(--ui); font-stretch: 125%; letter-spacing: -.01em; }
+  .side-navs, .side-more { display: grid; gap: 2px; }
+  .side-nav, .side-row, .side-me { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 12px; border-radius: 14px; font: 600 16px/1.2 var(--ui); color: var(--ink); }
+  .side-nav.on, .side-nav:hover, .side-row.on, .side-row:hover, .side-me:hover { background: var(--soft); }
+  .side-nav > .lucide, .side-row > .face, .nav-chief > .face { flex: none; }
+  .nav-chief { font-weight: 800; }
+  .side-status { max-width: 55%; text-align: right; font-weight: 600; color: var(--mute); }
+  .side-status.needs { color: var(--pink-ink); }
+  .side-count { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #FF7AB8; color: #0B0B0B; font: 800 14px/24px var(--ui); text-align: center; }
+  .side-crew { display: grid; gap: 2px; margin-top: 22px; }
+  .side .side-label { margin: 0; padding: 0 12px 8px; font: 800 14px/1.2 var(--ui); letter-spacing: .08em; color: var(--mute); }
+  .side-row { gap: 12px; }
+  .side-seat { flex: none; max-width: 50%; text-align: right; font-weight: 400; color: var(--mute); }
+  .side-seat > .clamp1 { white-space: normal; }
+  .side-blank { padding: 8px 12px; color: var(--mute); }
+  .side-more { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .side-more .side-nav { color: var(--mute); }
+  .side-more .side-nav.on { color: var(--ink); }
+  .side-me { position: sticky; bottom: 0; gap: 12px; min-height: 56px; margin-top: 6px; background: var(--menu); }
+  .side-me:hover { background: var(--soft); }
+  .side-me .grow { display: grid; } .side-me .grow > span { font-weight: 400; color: var(--mute); }
+  .me-av { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--soft); font: 800 18px/1 var(--ui); }
+}
+.jobs-page .needs-row .small, .jobs-page .needs-row time { font-size: 16px; }

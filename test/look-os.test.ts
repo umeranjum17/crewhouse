@@ -86,8 +86,8 @@ async function browse() {
   return { send, run, open, look };
 }
 
-const DAY = { theme: 'day', bar: '#F3EEE3', status: 'default' };
-const NIGHT = { theme: 'night', bar: '#0C0C0B', status: 'black-translucent' };
+const DAY = { theme: 'day', bar: '#F4F3EF', status: 'default' };
+const NIGHT = { theme: 'night', bar: '#000000', status: 'black-translucent' };
 
 test('auto follows the device dark setting, not the clock, before first paint and live', { skip: !bin && 'no Chromium here' }, async () => {
   assert.equal(built.status, 0, built.stderr);

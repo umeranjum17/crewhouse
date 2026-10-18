@@ -9,8 +9,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#F3EEE3",
-  "theme_color": "#F3EEE3",
+  "background_color": "#F4F3EF",
+  "theme_color": "#F4F3EF",
   "categories": ["productivity", "utilities"],
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
