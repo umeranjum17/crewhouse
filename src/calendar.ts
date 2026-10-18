@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { tool } from './engine.ts';
 
-/** Google's own hosts. The kit configures OAuth, but does not yet expose its API base to these calls. */
+/** The emulator route stays until Composio tools replace these direct Google API calls. */
 export const GOOGLE = /^http:\/\/127\.0\.0\.1:\d+$/.exec(process.env.CREWHOUSE_GOOGLE_EMULATOR ?? '')?.[0];
 export const CALENDAR = `${GOOGLE ?? 'https://www.googleapis.com'}/calendar/v3`; // its events scope is the one a Calendar connection already has
 export const GMAIL = `${GOOGLE ?? 'https://gmail.googleapis.com'}/gmail/v1/users/me`;
