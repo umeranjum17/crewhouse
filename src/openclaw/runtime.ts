@@ -107,7 +107,6 @@ export class OpenClawRuntime implements AgentRuntime {
         .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
       return { paste() {}, cancel() { cancelled = true; } };
     }
-    // Only ChatGPT's code path differs from its own route (its device code); every other account signs in on AUTH_CHOICE.
     const cliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' && account === 'chatgpt';
     const authChoice = cliOnly ? undefined : via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
     if (!authChoice) {
