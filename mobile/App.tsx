@@ -846,6 +846,7 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
   const [listed, setListed] = useState<MachineRef[]>([]);
   const [picked, setPicked] = useState('');
   const [steps, setSteps] = useState<SetupStep[]>([]);
+  const [setupError, setSetupError] = useState('');
   const [way, setWay] = useState(-1);
   const held = useRef(''); // the checked key, never on screen
   const check = async (k: string) => {
@@ -857,10 +858,13 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
   // One action with a key already kept: straight to the computers.
   useEffect(() => { void keptKey().then((k) => { if (k) void check(k); }); }, []);
   const run = async (id: string) => {
-    setPicked(id); setSteps([]); setView('steps');
-    for await (const step of setUpCloud(boatOn(held.current), cloudStore, id, await phoneKey())) setSteps((x) => [...x, step]);
+    setPicked(id); setSteps([]); setSetupError(''); setView('steps');
+    try {
+      for await (const step of setUpCloud(boatOn(held.current), cloudStore, id, await phoneKey())) setSteps((x) => [...x, step]);
+    } catch (e) { setSetupError(said(e)); }
   };
   const p = progress(steps), ready = steps.at(-1)?.step === 'ready';
+  if (setupError && p.failed < 0) p.failed = 2;
   const box = (lead: boolean, body: ReactNode) => <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: lead ? 2 : 1, borderColor: lead ? t.go : t.line }]}>{body}</View>;
   const pill = (w: string) => <T style={[s.label2, { alignSelf: 'flex-start', color: t.go, backgroundColor: t.softAccent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{w}</T>;
   const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
@@ -887,8 +891,8 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
     {c.steps.rows.map(([title, sub], i) => <View key={title} style={[s.row, { alignItems: 'flex-start', opacity: i > p.done && i !== p.failed ? 0.6 : 1 }]}>
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
-    {p.failed < 0 ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
-      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked)} />}</View>}</>;
+    {p.failed < 0 && !setupError ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{setupError || p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
+      {(setupError || p.retry) && <Btn go big label={c.steps.retry} onPress={() => void run(picked)} />}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
