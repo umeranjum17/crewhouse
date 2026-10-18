@@ -5,8 +5,11 @@ The thread reads in the order things happened, and opens where the person last i
 - A thread opens scrolled to its latest line and stays at the bottom when a new line arrives while the person is at
   the bottom (a line arriving while they read up never yanks them down). A card that grows after it lands (a form
   opening, an image loading) keeps the bottom.
-- The one exception is an open ask that the footer would hide: when the newest open ask card would sit off the top of
-  the thread (the "Add your phone" card sits below it, as in `unlock-card.md`), the thread lands on that
+- Nothing waits at the thread's foot below the live line: "Add your phone" sits under Chief's first answer. The thread
+  holds its newest line, so a footer card once filled a phone screen after every send and hid the person's words, the
+  live line and the reply above it (ch-chat-silent-gap).
+- The one exception is an open ask that would sit off the top: when the newest open ask card would sit off the top of
+  the thread (taller cards below it), the thread lands on that
   card's own top instead of the very bottom — on a thread open, or when the ask arrives while the chat is at the
   bottom. A thread with no open ask is unchanged, and nothing moves while the person reads older lines.
 - Reading up mid-turn keeps the place, on the web and the phone alike: lines landing below never move the thread,
@@ -25,9 +28,11 @@ The thread reads in the order things happened, and opens where the person last i
 - `node --test test/office.test.ts` (the "thread keeps time" test): a finished note lands before a later message and
   the notice says "Your things"; a proposal card lands after its reply and before the person's next message; a
   hand-me-a-job row shows the plain template name.
-- `node --test test/office.test.ts` (the "open ask card is in view" test): at 390 on `?demo=nophone`, where the
-  "Add your phone" card sits below the open asks, the thread's box lands on the newest ask's own top and not at its
-  own bottom; without the landing the ask's top is negative (measured -287).
+- `node --test test/office.test.ts` (the "open ask card is in view" test): at 390 on `?demo=nophone` the newest open
+  ask is whole inside the thread's box and "Add your phone" sits above it, never at the foot (with the card at the foot
+  the ask's top was negative, measured -287).
+- `node --test test/chat-live.test.ts`: with Add your phone in the thread, the person's words and the live line are in
+  sight after every send at 1440 and 390, and a quick stub turn ends on a "Done" line in sight.
 - `node --test test/thread-clear.test.ts`: at 390 on `?demo=longthread`, `#/chief` redirects to `#/` and renders
   `.home-chat`, and the thread is already at its newest line when it appears (`.lines` scrollTop at its max).
 

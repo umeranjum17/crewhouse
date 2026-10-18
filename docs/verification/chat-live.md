@@ -31,7 +31,11 @@ collapsed and expanded, day and night, plus the done footer. Real-model words ne
 when no route is usable (expired sign-in, quota), say "not proven" with the cause rather than minting one.
 
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
-Chromium at 1440 and 390, a held Chief turn and a job passed to Scout; it fails if the visible thread sits still for
+Chromium at 1440 and 390, a held Chief turn and a job passed to Scout, with the phone link listening and no phone paired
+so Add your phone is in the thread as on a normal install. After every send the person's words and the live line must
+be in sight inside the thread's box, and a quick stub turn (its reply hidden) must end on a "Done" line in sight;
+`test/chat-follows-run.test.ts` keeps that end line past the thread's newest 50 jobs (an older ended job known only by
+its events once read as queued and took the line, so the end vanished on the next reload). It fails if the visible thread sits still for
 over a second (one frame of timer jitter allowed), and it fails if the live line skips the engine's own first steps —
 it requires the admission row (`/Started on/`, `/Passed to Scout/`) and `/Thinking/` while the turn is held. In the
 Chief turn it also waits for "Chief · at work · N s · still
@@ -49,9 +53,10 @@ checking the old `src`/`web` out over the new and running it again.
 HOME and the run under `fm-cred-lock.sh` and `fm-mem-gate.sh`; set `chief` and the helper to `{"models":["claude"]}`.
 Then per message: `node scripts/verify/chat-probe.mjs "$BASE" "$EV/<run>" "<words>" 390 844 "/?night#person=$PERSON"` (and 1440 900, `?day`). The probe opens its own Chromium with a fresh
 profile, so the `#person=<person.key>` fragment is the only way it gets write authority — without it the app echoes
-the message locally but crewd never makes the task (the probe then records an empty run). On a fresh install the Add
-your phone card sits under the live line and fills a 390 screen: set `CHAT_PROBE_FIRST` to a page expression for the
-person's first move (Not now on `.chat .card.pair`); the probe runs it before typing.
+the message locally but crewd never makes the task (the probe then records an empty run). `CHAT_PROBE_FIRST` is a page
+expression for the person's first move, run before typing (e.g. Not now on `.chat .card.pair`, which waits under
+Chief's first answer, never under the live line). On the stub engine Chief's reply (`stub chief: …`) never shows in the
+thread, so a stub send ends on its end line ("Done · 0 s"), not on a reply: a stub probe proves the live line, not words.
 It writes `changes.json` (every change to the thread, timed in the page: `longestStillMs` until the end line is the
 number), `screen.jsonl` (rows carry the 160-character `lines` preview plus `linesFull` with
 each of the last four thread lines whole — likewise `asideFull`/`heroFull` beside the capped

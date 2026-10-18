@@ -24,4 +24,4 @@ own chat is read only. Approved mocks: `handoff` / `handoff-helper` (390) and `h
 ## Gotchas
 
 - The stub finishes the first job instantly, so its chip says `done · 0 s`.
-- A fresh browser shows the "Add your phone" card over the thread; tap Not now first.
+- A fresh browser shows the "Add your phone" card under Chief's first answer; tap Not now first if it is in the shot.

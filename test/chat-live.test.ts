@@ -1,10 +1,12 @@
 // The chat never goes quiet (bar.md, ch-chat-live-1): from the send to the reply the thread changes at least once a
 // second, through a long model turn and a job passed to a helper, on a desk and at phone width. Real crewd (stub
 // engine, its turn held) and the real built web app in a real Chromium. Needs a Chromium on PATH (skipped without one).
+// As on a normal install, the phone link listens and no phone is paired, so Chief's thread carries Add your phone.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, symlinkSync } from 'node:fs';
+import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -36,7 +38,8 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   // Registered before setup's own after(done), so the server and its phone link's 30 s timer stop before the database closes.
   after(async () => { ws?.close(); try { await browser?.close(); } finally { server?.closeAllConnections(); await new Promise((r) => server ? server.close(r) : r(null)); done(); } });
   const { cfg, db, crew, done } = setup();
-  Object.assign(cfg, { port: 0, host: '127.0.0.1', linkPort: 0, repoDir: parent });
+  const linkPort = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
+  Object.assign(cfg, { port: 0, host: '127.0.0.1', linkHost: '127.0.0.1', linkPort, repoDir: parent });
   server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const api = (method: string, path: string, body?: object) => fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
@@ -70,6 +73,12 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   // What the person sees of the thread: its visible words, live line included.
   const SCREEN = `[...document.querySelectorAll('.chat .lines')].filter((e) => e.offsetParent).map((e) => e.innerText).join('|')`;
   const screen = () => run(SCREEN);
+  const BOX = `[...document.querySelectorAll('.chat .lines')].find((e) => e.offsetParent)`;
+  /** Whether the person's newest words and Chief's live line are in sight inside the thread's own scrolling box. */
+  const inSight = (words: string) => run(`(() => { const b = ${BOX}, o = b.getBoundingClientRect();
+    const seen = (e) => { const r = e?.getBoundingClientRect(); return !!r && r.height > 0 && r.bottom > o.top + 2 && r.top < o.bottom - 2; };
+    return { echo: seen([...b.querySelectorAll('.line.me')].filter((e) => e.innerText.includes(${JSON.stringify(words.slice(0, 30))})).at(-1)),
+      live: seen(b.querySelector('.live-line, .live-end')) }; })()`);
 
   /** Send the words from the box and watch the thread while the model holds its turn; then let it answer. */
   const journey = async (width: number, bot: string, words: string, expect: RegExp) => {
@@ -78,6 +87,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
     await run('location.hash = "#/chief"');
     await until('Chief\'s box', () => run("!!document.querySelector('.chat .dock textarea')"), 30_000);
+    await until('Add your phone in the thread', () => run("!!document.querySelector('.chat .lines [aria-label=\"Add your phone\"] .qr svg')"), 15_000);
     await run("document.querySelector('.chat .dock textarea').focus()");
     await send('Input.insertText', { text: words });
     // Stamp the mutation before innerText forces layout: the read's variable cost is measurement work,
@@ -89,6 +99,9 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
     await holding(crew, bot);
+    // A send is never silent on screen: the thread holds its newest line, so nothing may sit below the live line
+    // (Add your phone at the thread's foot once filled a phone screen after every send; ch-chat-silent-gap).
+    await until('the words and the live line in sight', async () => { const s = await inSight(words); return s.echo && s.live; }, 10_000);
     await until(`${HELD_MS} ms of the held turn watched`, async () => (await run('performance.now() - __sent')) >= HELD_MS, 30_000);
     const { seen, from, to } = await run('({ seen: __seen, from: __sent, to: performance.now() })');
     let gap = 0, prev = from;
@@ -126,7 +139,6 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     }
     // Reading up mid-turn keeps the place: the reply lands below without moving the thread, a New pill says so,
     // and its tap goes back to the newest line (chat quality map gap 3).
-    const BOX = `[...document.querySelectorAll('.chat .lines')].find((e) => e.offsetParent)`;
     const place = () => run(`(() => { const b = ${BOX}, p = b.querySelector('.new-pill'), r = p?.getBoundingClientRect(), o = b.getBoundingClientRect();
       return { st: Math.round(b.scrollTop), max: b.scrollHeight - b.clientHeight, pill: !!r && r.top >= o.top && r.bottom <= o.bottom + 1 }; })()`);
     const up = bot === 'scout';
@@ -153,5 +165,15 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     // On a phone there is no side column: the job passed to Scout is followed in Chief's thread itself. Scout's own
     // progress note is the doing line; its small steps stay behind the expand.
     await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', /Scout · at work[\s\S]*Passed to Scout/);
+    // A turn that ends at once with a reply the thread does not show (the stub's own) keeps its end line, so the
+    // send still says it finished; a quick Chief reply in the thread lets "Done · 0 s" go.
+    const quick = `What did you finish at ${width}?`;
+    await run("document.querySelector('.chat .dock textarea').focus()");
+    await send('Input.insertText', { text: quick });
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    // Chief's session still says "ask permission", so the stub holds this turn too: let it go at once, with the stub's own reply.
+    await release(crew, 'chief');
+    await until(`${width}: the quick turn's end line in sight`, async () => { const s = await inSight(quick); return s.echo && s.live && /Done/.test(await run("document.querySelector('.live-end')?.innerText ?? ''")); }, 15_000);
   }
 });

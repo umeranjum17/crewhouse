@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Chief's chat opens on the ask that needs the person (docs/verification/thread-hygiene.md): an open unlock ask in Chief's
-# thread with the "Add your phone" card below it, driven so the card's own top is measured against the thread box at
+# thread (Add your phone sits above it, under Chief's first answer), driven so the card's own top is measured against the thread box at
 # 390 and 1440, day and night, and recorded as the ask arrives while the chat is open.
 #   EVIDENCE_HOME=<your evidence folder> bash scripts/verify/ask-in-view.sh <evidence-dir>
 # Needs qpdf, ghostscript, chrome-devtools-axi, ffmpeg (for the recording) and a Chromium.
