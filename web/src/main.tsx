@@ -793,18 +793,9 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {id === 'chief' && <MadeHere made={hero ? A.madeInChat(state, page)
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
-      {id === 'chief' ? <div className="dock"><Composer key={seed} placeholder="Tell Chief anything…" onSend={send} stop={ln?.state === 'working' || ln?.state === 'reading' ? stopChief : undefined} chips={hero ? [] : undefined} talk={{ lines, reading: setReading }} {...typeInto(id)} /></div>
-        : <ReadAlong name={name} job={(state.tasks ?? []).find((t: Json) => t.bot === id)?.title} />}
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={id === 'chief' ? { lines, reading: setReading } : undefined} {...typeInto(id)} /></div>
     </div>
   );
-}
-
-/** A helper's chat is read only: Chief is the one place to answer or ask. The button fills Chief's box, it never sends. */
-function ReadAlong({ name, job }: { name: string; job?: string }) {
-  return <div className="dock read-along">
-    <p className="ro"><Icon name="lock" /><span>You can read along here. To change this job, ask Chief.</span></p>
-    <button className="btn" onClick={() => { keepDraft('chief', job ? `About ${name}'s job “${A.plain(job)}”: ` : `${name}, `); go('#/chief'); }}>Ask Chief about this</button>
-  </div>;
 }
 
 /** Is a finished job's result already on the screen? A helper's own chat shows it; so does Chief's thread (Home's chat
@@ -870,7 +861,7 @@ function Room(ctx: Ctx) {
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === (c.by ?? c.helper))} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
-      <ReadAlong name="the crew" />
+      <div className="dock read-along"><p className="ro"><Icon name="lock" /><span>The crew room is read-only. Open a crew member to talk directly.</span></p></div>
     </div></div>;
 }
 

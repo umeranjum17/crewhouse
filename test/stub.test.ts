@@ -741,15 +741,19 @@ test('room API: a message starts and rejoins the person’s room job', async () 
   db.close();
 });
 
-test('the person talks only to Chief: a message posted to a helper is handed on by him, and the helper does the job', async () => {
+test('the person talks directly to a helper: the helper owns the task and Chief gets no synthetic request', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
-  const posted = (await api('POST', '/api/bots/reel/messages', { text: 'save [tool crew_write {"path":"files/via-chief.txt","content":"x"}]' })).body.task;
+  const text = 'save [tool crew_write {"path":"files/via-chief.txt","content":"x"}]';
+  const posted = (await api('POST', '/api/bots/reel/messages', { text, move: 'direct-chat-test' })).body.task;
   await done('reel', posted);
   const job = (await api('GET', '/api/bots/reel')).body.tasks.find((t: any) => t.id === posted);
-  assert.equal(job.origin, 'chief', 'Chief handed it on; the helper’s chat took no words from the person');
+  assert.equal(job.origin, 'person', 'the helper task originates with the person');
   assert.ok(existsSync(join(root, 'crew', 'bots', 'reel', 'files', 'via-chief.txt')), 'and the helper did the job');
-  assert.ok((await api('GET', '/api/bots/chief')).body.messages.some((m: any) => m.author === 'person' && m.text.startsWith('save ')), 'Chief’s thread holds the person’s own words, without the name he was handed');});
+  assert.ok(!(await api('GET', '/api/bots/chief')).body.messages.some((m: any) => m.author === 'person' && m.text.includes(text)), 'Chief gets no synthetic request');
+  const again = (await api('POST', '/api/bots/reel/messages', { text, move: 'direct-chat-test' })).body.task;
+  assert.equal(again, posted, 'reconnect retry returns the original task');
+});
 
 test('the person’s bot page, events and live activity keep their delivered work', async () => {
   await ready();
