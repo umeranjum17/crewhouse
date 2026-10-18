@@ -426,7 +426,7 @@ function Composer({ placeholder, onSend, chat, photos: canPhoto = true, docs: ca
         <Text style={{ color: thread ? t.bg : dark && !on ? t.solid : t.goInk, fontSize: thread ? 22 : 18, ...fw('900') }}>↑</Text>
       </Pressable>}
   </>;
-  const field = (full: boolean) => <TextInput style={[s.composerInput, { color: t.ink }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
+  const field = (full: boolean) => <TextInput style={[s.composerInput, { color: t.ink }, thread && { fontSize: 16 }, full && { flexBasis: '100%' }]} value={text} onChangeText={change} multiline placeholder={placeholder} placeholderTextColor={t.mute} accessibilityLabel={placeholder} />;
   return (
     <View style={{ gap: 6 }}>
       {away && <T tone="ink2" style={[s.small, { paddingHorizontal: 8 }]}>Reconnecting… your words stay here until the home computer answers.</T>}
@@ -1758,11 +1758,10 @@ function Gear({ go }: { go: Ctx['go'] }) {
 
 /** Chief's thread's header (J03, web/src/main.tsx ChiefHead): back to Home, his face and name, what he does — or, while
  *  the computer is out of reach, that wait — and the gear. */
-function ChiefHead({ back, gear, offline }: { back: () => void; gear: ReactNode; offline: boolean }) {
+function ChiefHead({ gear, offline }: { gear: ReactNode; offline: boolean }) {
   const t = useLook();
   return (
     <View accessibilityLabel="Chief" style={[s.row, { gap: 12, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, borderBottomWidth: 1, borderColor: t.line }]}>
-      <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Home" hitSlop={8}><Text style={{ fontSize: 32, lineHeight: 36, color: t.ink }}>‹</Text></Pressable>
       <Face who="chief" size={44} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[s.wide, { fontSize: 28, lineHeight: 32, color: t.ink }]}>Chief</Text>
@@ -2065,7 +2064,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {/* Chief's empty thread (J03b): his face, the greeting, and the starters; a tap fills the box, it never sends. */}
         {fresh && page && bubble && <View style={{ alignItems: 'center', gap: 12, paddingTop: 24 }}>
           <Face who="chief" size={96} />
-          <Text style={[s.wide, s.centerText, { color: t.ink, marginTop: 12 }]}>{hello(state.person)}</Text>
+          <Text style={[s.wide, s.centerText, { color: t.ink, fontSize: 28, lineHeight: 32, marginTop: 12 }]}>{hello(state.person)}</Text>
           <T tone="mute" style={[s.read, s.centerText]}>I can bring in Research Rae for research, Writer Will for writing or Video Vic for videos.</T>
           {canAct && own.map((i: Json) => <Pressable key={i.bot + i.label} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} accessibilityRole="button"
             style={({ pressed }) => [s.row, { alignSelf: 'stretch', gap: 12, minHeight: 56, paddingVertical: 14, paddingHorizontal: 22, borderRadius: 26, borderWidth: 1, borderColor: t.line, backgroundColor: t.solid }, pressed && { opacity: 0.6 }]}>
@@ -2223,7 +2222,7 @@ function Head({ children, onBack, wrap }: { children: ReactNode; onBack: () => v
 function ChiefPage(ctx: Ctx & { m?: number }) {
   return (
     <View style={{ flex: 1 }}>
-      <ChiefHead back={ctx.back} offline={ctx.offline} gear={<Gear go={ctx.go} />} />
+      <ChiefHead offline={ctx.offline} gear={<Gear go={ctx.go} />} />
       <Chat {...ctx} id="chief" m={ctx.m} hero={<ContinueOffer canAct={ctx.canAct} onMoved={ctx.refresh} />} />
     </View>
   );
