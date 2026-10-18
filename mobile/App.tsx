@@ -2773,7 +2773,7 @@ const s = StyleSheet.create({
   page: { padding: 16, gap: 12, paddingBottom: 32 },
   tabs: { flexDirection: 'row', paddingHorizontal: 8, paddingTop: 6, paddingBottom: 10, borderTopWidth: 1 },
   tab: { flex: 1, minWidth: 0, minHeight: 54, alignItems: 'center', gap: 2, paddingVertical: 4 },
-  tabIc: { width: 56, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  tabIc: { width: 56, height: 32, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   tabLabel: { fontSize: 14, lineHeight: 17, ...fw('700') },
   tabBadge: { position: 'absolute', top: 0, left: '50%', marginLeft: 10, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, overflow: 'hidden', fontSize: 13, lineHeight: 20, color: color.day.ink, textAlign: 'center', ...fw('700') },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
