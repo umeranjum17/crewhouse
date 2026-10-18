@@ -880,6 +880,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
   const details = tab !== 'chat' && tab !== 'did' && tab !== 'screen';
   const trail = page ? A.steps(page.trail ?? [], b?.task?.id, true) : [];
+  const apps = A.appsOf(state, id);
   return (
     <div className={`page helper ${tab === 'chat' ? 'chat-page' : ''}`}>
       {tab === 'chat' && h && <>
@@ -923,6 +924,10 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           {page && <AboutMe id={id} name={h.name} page={page} reload={load} />}
           <h2 className="plate">What {h.name} remembers</h2>
           {page && <Remembers id={id} name={h.name} page={page} reload={load} />}
+          <h2 className="plate">{h.name}'s apps</h2>
+          {apps.length ? <div className="card list">{apps.map((a) => <div key={a.id} className="row-item"><span className="grow">{a.name}</span>
+            <span className="mute small">{a.connected ? 'Connected' : 'Not connected yet'}</span></div>)}</div>
+            : <div className="card empty">{h.name} uses none of your apps.</div>}
           {A.signedIn(page).length > 0 && <>
             <h2 className="plate">Signed in to</h2>
             <div className="card list">

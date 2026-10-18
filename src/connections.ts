@@ -20,6 +20,7 @@ export const APPS: Record<string, App> = {
   gmailwrite: { ...providers.gmail, id: 'gmailwrite', name: 'Gmail drafts & labels', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/gmail.compose'], google: true, warns: true },
   notion: { ...providers.notion }, canva: { ...providers.canva },
 };
+export const GRANTABLE = Object.keys(APPS).filter((id) => APPS[id].tool || APPS[id].mcpUrl);
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
 export type Step = { state: 'checked' | 'said' | 'missing'; note: string };
 const CONNECT_MS = Number(process.env.CREWHOUSE_SIGNIN_MS || 15 * 60_000);
@@ -65,7 +66,7 @@ export class Connections {
   private store: Keystore;
   private googleClient?: OAuthClient;
   private houseFile = false;
-  apps: Record<string, App> = { ...APPS };
+  apps: Record<string, App> = Object.assign(Object.create(null), APPS);
   private handles = new Map<string, { key: string; connection: Connection }>();
   private flows = new Map<string, Attempt>();
   private views = new Map<string, Connecting>();

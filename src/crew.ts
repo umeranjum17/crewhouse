@@ -8,7 +8,7 @@ import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
-import { Connections, type AppTool, APPS } from './connections.ts';
+import { Connections, type AppTool, APPS, GRANTABLE } from './connections.ts';
 import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
@@ -430,7 +430,7 @@ export class Crew {
   private pub(b: Row) {
     const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id), desk = this.desktops.info(b.id);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
-      controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'), can: disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id), signedIn: disk.botConfig(this.cfg, b.id).signedIn ?? [],
+      controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'), can: disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id), signedIn: disk.botConfig(this.cfg, b.id).signedIn ?? [], apps: (disk.botConfig(this.cfg, b.id).apps ?? []).filter((a) => GRANTABLE.includes(a)).map((a) => ({ id: a, name: this.connections.apps[a].name })),
       // The active task carries its delivered files for the office desk: own output first, handed-over inputs marked.
       live: !this.live.get(b.id) ? 'off' : this.busy.has(b.id) ? 'working' : 'idle', task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
@@ -1948,8 +1948,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
-    const chiefTools = own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name));
-    return [...chiefTools,
+    return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name)),
       tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
         const was = disk.readProfile(this.cfg), text = String(p.text ?? '').trim();
         if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
@@ -1988,20 +1987,22 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
             { soul: { bot: b.id, text }, preview: { head: `${b.display}, as Chief suggests`, body } });
         }),
       tool('crew_create', 'Take on a helper for a job no one on the crew does yet, when the person asks for someone ("I need someone to…") or a job will come round again, or change a helper\'s job when they ask ("Invoice Ivy should also…"). A vague ask gets plain-words questions first, in chat and never on this card: at most three (what it does, what good looks like, its first job) across two turns, then build the card from the answers; an already-specific ask, or "just do it", skips the questions. Adapt first: when a crew member\'s work is close, `bot` is that helper and `job` is its whole job from now on; only when no one and no template fits, a new one with `name` (a job word plus a first name, e.g. "Invoice Ivy") ' +
-        'and `personality` (a few short plain lines, "You are Invoice Ivy. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; `will_do`: up to six lines of what it will do; `wont_do`: up to six lines of what it never does (posting/sending, spending, deleting switch its browser off; passwords/sign-in switch its computer off); `first_step`: the person\'s first step after yes; `first_job` (or `first`): its first job once they say yes. The person sees a short card and decides; nothing changes until then.',
+        'and `personality` (a few short plain lines, "You are Invoice Ivy. …"). `role`: what it does, as a person would say it ("Keeps your invoices in order"); `job`: all five parts (does, aim, gets, how, great) as one tight job that also says what it never does; `will_do`: up to six lines of what it will do; `wont_do`: up to six lines of what it never does (posting/sending, spending, deleting switch its browser off; passwords/sign-in switch its computer off); `first_step`: the person\'s first step after yes; `first_job` (or `first`): its first job once they say yes. ' +
+        `\`apps\` (a new helper only): the ids of the person's apps this job needs (${GRANTABLE.join(', ')}); none if it needs none, never all of them. The person sees a short card and decides; nothing changes until then.`,
         (p) => {
           const was = p.bot ? this.bot(String(p.bot).toLowerCase()) : undefined;
           if (p.bot && (!was || was.id === CHIEF)) throw fail(`no helper called ${p.bot}; see crew_roster`, 404);
           const name = was?.display ?? clean(p.name, 24), role = clean(p.role, 80).replace(/[.!?]$/, ''), will_do = hireList(p.will_do), wont_do = hireList(p.wont_do), first_step = clean(p.first_step, 200) || undefined, first_job = clean(p.first_job ?? p.first, 2000) || undefined, job = Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, String(p.job?.[k] ?? '').replace(/\r/g, '').trim()])) as disk.Job;
           disk.validateJob(job);
           if (!name || !/[a-z]/i.test(name) || !role) throw fail('give the helper a name and a role');
+          const grant: string[] | undefined = p.apps; if (grant !== undefined && (was || !Array.isArray(grant) || grant.some((a) => !GRANTABLE.includes(a)))) throw fail(was ? 'apps are set when Chief makes a helper; this helper keeps the apps it has' : `apps must be a list of ${GRANTABLE.join(', ')}`);
           if (!was && this.bot(disk.slug(friendlyName(name)))) throw fail(`there is already a helper called ${name}; pick another name`, 409);
           const soul = was ? undefined : `# ${name}\n\n${String(p.personality ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '') || `You are ${name}. Friendly, careful and brief.`}`;
           if (soul && soul.length > disk.SOUL_CAP) throw fail(`say who it is in a few lines, under ${disk.SOUL_CAP} characters`);
           const plain = will_do.length || wont_do.length || first_step ? [`${was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.`}`, ...will_do.map((w) => `Will do: ${w}`), ...wont_do.map((w) => `Won't do: ${w}`), ...(first_step ? [`First step for you: ${first_step}`] : []), ...(first_job ? [`First job: ${short(first_job, 120)}`] : [])].join('\n') : [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first_job ? `First job: ${short(first_job, 120)}` : ''].filter(Boolean).join('\n');
           // The card is the hire in a glance (role, will/won't, first step, first job); the five-part job goes to its file unshown.
-          return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job },
-            preview: { head: name, body: plain } });
+          return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
+            preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
@@ -2098,7 +2099,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   }
 
   /** On the person's yes, a helper Chief made up (base template and tools minus each won't-do grant) or adapted (job and role widened); the request is its first task. */
-  private create(c: { bot?: string; name: string; role?: string; job: disk.Job; soul?: string; first?: string; will_do?: string[]; wont_do?: string[]; first_step?: string; first_job?: string }) {
+  private create(c: { bot?: string; name: string; role?: string; job: disk.Job; soul?: string; first?: string; will_do?: string[]; wont_do?: string[]; first_step?: string; first_job?: string; apps?: string[] }) {
     const id = c.bot ?? disk.slug(c.name);
     if (c.bot ? !this.bot(id) : this.bot(id)) throw fail(c.bot ? 'that helper has left the crew' : `there is already a helper called ${c.name}`, 409);
     if (c.bot) this.db.run('UPDATE bots SET role = ? WHERE id = ?', c.role, id);
@@ -2106,7 +2107,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.addBot({ ...disk.loadTemplate(this.cfg, 'helper'), role: c.role || short(c.job.does.split(/\n|(?<=[.!?])\s/)[0].replace(/[.!?]$/, ''), 80) }, c.name, id, CHIEF);
       this.say(id, 'system', `${c.name} joined the crew.`);
     });
-    disk.writeJob(this.cfg, id, c.job);
+    disk.writeJob(this.cfg, id, c.job); if (c.apps) disk.patchConfig(this.cfg, id, { apps: c.apps }); // the card named them; no grant without the person's yes
     const off = hireOff(c.wont_do ?? []);
     if (off.size) disk.setGrants(this.cfg, id, [...new Set(disk.botConfig(this.cfg, id).tools ?? [])].filter((t) => t !== 'crew' && !off.has(t)));
     if (c.soul) disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
