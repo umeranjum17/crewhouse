@@ -6,8 +6,8 @@ this phone, the sign-in-yourself note and "You can change this later in Settings
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
-The cloud row is behind a build flag until BYOKit's cloud kit (`@byokit/cloud`) is on npm (the branch builds against a
-tarball packed from BYOKit main): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for
+The cloud row is behind a build flag (the branch builds against a vendored tarball packed from BYOKit main):
+`EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for
 `scripts/build-web.mjs`. Without it the screen has two rows, On my computer first. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
 
@@ -18,7 +18,8 @@ tarball packed from BYOKit main): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone,
   refused key says "boat.dev didn't accept your key…" and nothing is kept. An accepted key lists the account's
   computers ("I didn't find a computer…" when there are none). Make a new computer shows the cost line, and its
   Create button stays off. Use this computer walks the kit's setup steps on the five-row progress list: a failure
-  marks its row "!" with Chief's words and Try again, and Try again resumes there. A setup exception marks the row
+  marks its row "!" with Chief's words and Try again; retry reruns the kit setup sequence while retaining the
+completed-step display. A setup exception marks the row
   setup was on (no row before the kit's first step), with the error and Try again. Ready says Chief knows this phone.
   Other ways lists the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
   hardware back, return one step. A kept key skips the paste on the next visit.
