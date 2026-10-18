@@ -388,7 +388,7 @@ function Home(ctx: Ctx) {
           <section className="sh-chief" aria-label="Chief">
             <a className="sh-top" href="#/chief"><Face who="chief" size={64} />
               <span className="grow"><b className="semi">{n ? A.chiefHas(live) : plainWord ? `Chief is ${word.toLowerCase()}` : 'Chief'}</b>{!n && !plainWord && <span className="st-word">{word}</span>}{line && <span className="st-line">{line}</span>}</span></a>
-            {n > 0 && <div className="sh-acts"><a className="btn go" href={live.needs[0] ? askHref(live.needs[0]) : '#/chief'}>Open Jobs</a><a className="btn" href="#/chief">Chat with Chief</a></div>}
+            {n > 0 && <div className="sh-acts"><a className="btn go" href="#/jobs">Open Jobs</a><a className="btn" href="#/chief">Chat with Chief</a></div>}
             <Composer placeholder={crew.length ? 'Tell Chief anything…' : 'Give Chief a job…'} onSend={toChief} {...typeInto('chief')} />
           </section>
           {crew.length ? (n > 0 || today.length > 0) && <>
@@ -416,6 +416,16 @@ function Home(ctx: Ctx) {
       </div>
     </div>
   );
+}
+
+/** A helper on the Jobs page: its name, its one status, and its job's line. */
+function CrewCard({ c, live, job }: { c: A.OfficeMember; live: A.OfficeView; job?: A.Work }) {
+  const glow = glowOf(c, live), { line, meta } = A.cardLines(c, live, job);
+  return <a className="st-card" href={hrefOf(c.id)} style={{ background: art.colourOf(c.kind) }} aria-label={`${c.name}: ${glow.word}`}>
+    <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={48} />
+    <span className="grow"><span className="st-top"><b className="semi">{c.name}</b><span className={`st-pill ${glow.cls}`}>{glow.word}</span></span>
+      {line !== glow.word && <span className="st-sub">{line}</span>}{meta && <span className="st-sub">{meta}</span>}</span>
+  </a>;
 }
 
 /** One of Today's rows (Stack J02): the job a helper is on, or the one it finished today, in the helper's colour — the
