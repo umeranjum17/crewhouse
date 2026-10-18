@@ -17,4 +17,9 @@ export const WHERE = {
   shield: require('../assets/where/shield.png'),
   'chief-day': require('../assets/where/chief-day.png'),
   'chief-night': require('../assets/where/chief-night.png'),
+  // The tab bar's four places (Home, Chief, Jobs, Crew), tinted on the bar.
+  'tab-home': require('../assets/where/tab-home.png'),
+  'tab-talk': require('../assets/where/tab-talk.png'),
+  'tab-jobs': require('../assets/where/tab-jobs.png'),
+  'tab-crew': require('../assets/where/tab-crew.png'),
 };
