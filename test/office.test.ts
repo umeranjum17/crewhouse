@@ -248,14 +248,13 @@ test('your crew reads whole: every tile has its Geo face in its own shape, and n
   for (const theme of ['day', 'night']) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await b.open(`demo&${theme}#/crew`);
-    await until('the crew tiles and the rail', () => b.run("document.querySelectorAll('.st-tile').length > 3 && !!document.querySelector('.side-status')"), 30_000);
+    await until('the crew tiles and the rail', () => b.run("document.querySelectorAll('.st-tile').length > 3 && document.querySelectorAll('.side-row').length > 0"), 30_000);
     const page = await b.run("[...document.querySelectorAll('.st-tile:not([href=\"#/chief\"]) .st-pill')].map((e) => e.textContent)"), at = `${theme} crew page`;
     assert.ok(!page.includes('Needs you'), `${at}: no crew tile says "Needs you" (${page.join(' | ')})`);
     assert.ok(page.includes('Waiting'), `${at}: a waiting crew member says "Waiting" (${page.join(' | ')})`);
     assert.equal(await b.run("document.querySelector('.st-tile[href=\"#/chief\"] .st-pill')?.textContent"), 'Needs you', `${at}: Chief's tile says his real status`);
     const rail = await b.run("[...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent)"), atRail = `${theme} rail`;
     assert.ok(!rail.includes('Needs you'), `${atRail}: no crew rail row says "Needs you" (${rail.join(' | ')})`);
-    assert.equal(await b.run("document.querySelector('.side-status')?.textContent"), 'Needs you', `${atRail}: Chief still says "Needs you"`);
   }
 });
 
@@ -273,6 +272,7 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
       await until('Home', () => b.run("!!document.querySelector('.sh-chief .sh-top b')"), 30_000);
       const has = await b.run("document.querySelector('.sh-chief .sh-top b').textContent");
       counts[`home ${w}`] = /^Chief has/.test(has) ? num(has) : 0;
+      if (w < 900) assert.equal(await b.run("[...document.querySelectorAll('.tabs .tab-ic')].filter((e) => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)').length"), 1, `${demo}: only the current tab is lit`);
       counts[w < 900 ? 'tab bar' : 'menu'] = num(await b.run(`document.querySelector('${w < 900 ? '.tabs .tab-badge' : '.side-navs .side-count'}')?.textContent`));
     }
     await b.run('location.hash = "#/jobs"');
@@ -294,12 +294,10 @@ test('your crew page reads the rail status: every tile matches its rail row', { 
     await until('the crew tiles', () => b.run("document.querySelectorAll('.st-tile').length > 3"), 30_000);
     const r = await b.run(`(() => ({
       page: Object.fromEntries([...document.querySelectorAll('.st-tile:not(.st-new)')].map((t) => [t.querySelector('b')?.textContent.trim(), t.querySelector('.st-pill')?.textContent.trim()])),
-      rail: Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [row.querySelector('b')?.textContent.trim(), row.querySelector('.side-seat')?.textContent.trim()])),
-      chief: document.querySelector('.side-status')?.textContent.trim() }))()`);
+      rail: Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [row.querySelector('b')?.textContent.trim(), row.querySelector('.side-seat')?.textContent.trim()])) }))()`);
     const page = r.page as Record<string, string>, rail = r.rail as Record<string, string>;
     assert.ok(Object.keys(rail).length > 2, `${demo}: the rail lists the crew (${JSON.stringify(rail)})`);
     for (const [name, status] of Object.entries(rail)) assert.equal(page[name], status, `${demo}: the crew page reads ${name} as the rail does`);
-    assert.equal(page.Chief, r.chief, `${demo}: Chief's tile reads his rail status`);
   }
 });
 

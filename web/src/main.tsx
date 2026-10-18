@@ -1968,7 +1968,7 @@ function useLook() {
  *  primary one: his tab is the filled one, and in the side menu he wears his face and his one status word. */
 const PLACES: [string, string, IconName, View][] = [['#/', 'Home', 'home', 'home'], ['#/chief', 'Chief', 'talk', 'chief'], ['#/jobs', 'Jobs', 'jobs', 'jobs'], ['#/crew', 'Crew', 'crew', 'crew']];
 /** The computer side menu's lower places, quieter than the four above. */
-const MORE: [string, string, IconName, View][] = [['#/things', 'Your things', 'things', 'things'], ['#/routines', 'Routines', 'routines', 'routines'], ['#/apps', 'Apps', 'apps', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
+const MORE: [string, string, IconName, View][] = [['#/things', 'Your things', 'copy', 'things'], ['#/routines', 'Routines', 'clock', 'routines'], ['#/apps', 'Apps', 'plus', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
 /** Which place a screen belongs to, so its tab reads as the one you are in. */
 const placeOf = (r: Route): View => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'add' || r.view === 'room' ? 'crew' : r.view === 'ai' || r.view === 'computer' ? 'settings' : r.view;
 
@@ -2094,7 +2094,7 @@ function App() {
   const asks = ctx.live.counts.needs;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file, title: route.title } : undefined;
-  const place = placeOf(v), out = chiefLocal(ctx).signedOut && !ctx.offline, word = chiefWord(ctx.live, out, ctx.offline);
+  const place = placeOf(v);
   const me = A.displayName(ctx.state.person), quiet = A.quietLine(ctx.state.person);
   return (
     <>
@@ -2103,8 +2103,7 @@ function App() {
         <aside className="side">
           <a href="#/" className="brand"><Face who="chief" size={36} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
           <nav className="side-navs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav nav-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
-            {k === 'chief' ? <Face who="chief" size={26} /> : <Icon name={i} size={22} />}<span className="grow">{l}</span>
-            {k === 'chief' && <span className={`side-status${word === A.WORDS.needs || out ? ' needs' : ''}`}>{word}</span>}
+            <Icon name={i} size={22} /><span className="grow">{l}</span>
             {k === 'jobs' && asks > 0 && <span className="side-count">{asks}</span>}</a>)}</nav>
           <SideCrew live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
           <div className="grow" />
