@@ -35,7 +35,7 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.match(chiefTasks.at(-1)!.body, /i want to market my app\nhttps:\/\/trymuxr.com\//);
   const first = (crew as any).prompt(chiefTasks.at(-1));
   assert.match(first, /Earlier in this chat:[\s\S]*market my app/);
-  assert.match(first, /The person likes to be called "Umer"/, 'the first greeting carries her chosen name: the model saw it');
+  assert.match(first, /The person's name is "Umer"/, 'the first greeting carries her chosen name: the model saw it');
   assert.doesNotMatch(first, /, Sir\b|"Sir"|Madam|at your service|glad to be back at work/i, 'no butler words reach the model');
   assert.doesNotMatch(first, /Templates:/, 'roster and templates ride crew_roster on demand, not every prompt');
   assert.match(first, /Crew: Scout \(id scout\)\./, 'the crew line names who is on, nothing stale');
@@ -120,8 +120,10 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // Firstmate decision B-plain): the longer job-word-plus-first-name crew names across Chief's crew lines.
   const prompt = disk.systemPrompt(cfg, 'chief', true);
   assert.ok(prompt.length <= 11_220, `Chief prompt grew past its frozen size (prompt ${prompt.length})`);
-  assert.doesNotMatch(prompt, /on every line/, 'the soul never permits an occasional Sir');
-  assert.match(prompt, /no "Sir", no "Madam"/, 'Chief never titles the person');
+  const soul = readFileSync(join(cfg.repoDir, 'templates', 'chief', 'soul.md'), 'utf8'); // the engine's SOUL.md, not in this prompt
+  assert.ok(soul.length <= disk.SOUL_CAP, `Chief soul past SOUL_CAP (${soul.length})`);
+  assert.doesNotMatch(soul, /on every line/, 'the soul never permits an occasional Sir');
+  assert.match(soul, /no "Sir", no "Madam"/, 'Chief never titles the person');
   // Every agent, Chief included, carries the same model-visible tool descriptions: no new ABOUT text.
   // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3), then from 2745
   // for crew_unlock's (+59).

@@ -126,8 +126,9 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s crew cards are
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
           const lines = [...document.querySelectorAll('.home-chat .lines .line')];
           const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
-          return { pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
+          return { pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen([...document.querySelectorAll('.home-chat .lines .line, .home-chat .lines .ask')].at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
         })()`);
+        // The thread's newest item (a line, or an ask card after it) is in view above the box and the tab bar.
         const lead = `${demo} ${theme} at ${width}, Chief's thread from Home`;
         assert.equal(first.pin, false, `${lead}: no pinned card in the conversation (the ask sits inline)`);
         assert.ok(first.thread && first.box, `${lead}: the conversation and Chief's box on the first screen`);
@@ -247,43 +248,63 @@ test('your crew reads whole: every tile has its Geo face in its own shape, and n
   for (const theme of ['day', 'night']) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await b.open(`demo&${theme}#/crew`);
-    await until('the crew tiles and the rail', () => b.run("document.querySelectorAll('.st-tile').length > 3 && !!document.querySelector('.side-status')"), 30_000);
+    await until('the crew tiles and the rail', () => b.run("document.querySelectorAll('.st-tile').length > 3 && document.querySelectorAll('.side-row').length > 0"), 30_000);
     const page = await b.run("[...document.querySelectorAll('.st-tile:not([href=\"#/chief\"]) .st-pill')].map((e) => e.textContent)"), at = `${theme} crew page`;
     assert.ok(!page.includes('Needs you'), `${at}: no crew tile says "Needs you" (${page.join(' | ')})`);
     assert.ok(page.includes('Waiting'), `${at}: a waiting crew member says "Waiting" (${page.join(' | ')})`);
     assert.equal(await b.run("document.querySelector('.st-tile[href=\"#/chief\"] .st-pill')?.textContent"), 'Needs you', `${at}: Chief's tile says his real status`);
     const rail = await b.run("[...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent)"), atRail = `${theme} rail`;
     assert.ok(!rail.includes('Needs you'), `${atRail}: no crew rail row says "Needs you" (${rail.join(' | ')})`);
-    assert.equal(await b.run("document.querySelector('.side-status')?.textContent"), 'Needs you', `${atRail}: Chief still says "Needs you"`);
   }
 });
 
-test('the desk rail summary under Chief counts the same status its rows show', { skip: !bin && 'no Chromium here' }, async () => {
-  // The rail's count line is the Office's own summary (summaryOf, from A.groupOf); so it must equal the rail rows'
-  // own status. The old ad-hoc line counted every non-working, non-ask member as "resting" (the reported bug: the
-  // summary said "1 resting" while the member's row said "Waiting"). This fails on that line.
+test('what waits on the person is one count: Home, the menu, the tab bar and the Jobs page agree', { skip: !bin && 'no Chromium here' }, async () => {
+  // Chief's card says "Chief has N things for you" (A.chiefHas, counts.needs); the side menu's and the tab bar's Jobs
+  // count say the same N, and the Jobs page adds up to it: its Needs you rows plus the helpers gone quiet.
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
-  await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  // The rail's own words, mapped to the four Office groups the summary counts.
-  const group = (w: string) => w.startsWith('Done') ? 'done'
-    : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 'waiting'
-    : w === 'At work' ? 'at work'
-    : 'free';
+  const num = (s: string | null | undefined) => Number(/\d+/.exec(s ?? '')?.[0] ?? 0);
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
-    await b.open(`demo=${demo}&day#/crew`);
-    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
-    const r = await b.run(`(() => {
-      const words = [...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent.trim());
-      const chief = document.querySelector('.side-status')?.textContent.trim() ?? '';
-      words.push(chief);
-      const sub = document.querySelector('.side-sub')?.textContent ?? '';
-      const nums = Object.fromEntries([...sub.matchAll(/(\\d+) (waiting|at work|done|free)/g)].map((x) => [x[2], Number(x[1])]));
-      return { words, nums };
-    })()`);
-    const counted: Record<string, number> = { waiting: 0, 'at work': 0, done: 0, free: 0 };
-    for (const w of r.words as string[]) counted[group(w)]++;
-    assert.deepEqual(r.nums, counted, `${demo}: the rail summary is the rows' own status (${JSON.stringify(r)})`);
+    const counts: Record<string, number> = {};
+    for (const [w, h] of [[1440, 900], [390, 844]] as const) {
+      await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 900 });
+      await b.open(`demo=${demo}&day#/`);
+      await until('Home', () => b.run("!!document.querySelector('.sh-chief .sh-top b')"), 30_000);
+      const has = await b.run("document.querySelector('.sh-chief .sh-top b').textContent");
+      counts[`home ${w}`] = /^Chief has/.test(has) ? num(has) : 0;
+      if (w < 900) assert.equal(await b.run("[...document.querySelectorAll('.tabs .tab-ic')].filter((e) => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)').length"), 1, `${demo}: only the current tab is lit`);
+      counts[w < 900 ? 'tab bar' : 'menu'] = num(await b.run(`document.querySelector('${w < 900 ? '.tabs .tab-badge' : '.side-navs .side-count'}')?.textContent`));
+    }
+    await b.run('location.hash = "#/jobs"');
+    await until('the Jobs page', () => b.run("!!document.querySelector('.jobs-page')"), 30_000);
+    counts.jobs = await b.run("document.querySelectorAll('.jobs-page .needs-row').length") + num(await b.run("document.querySelector('.jobs-quiet b')?.textContent"));
+    assert.equal(new Set(Object.values(counts)).size, 1, `${demo}: one count everywhere (${JSON.stringify(counts)})`);
+  }
+});
+
+test('the side menu never stacks rows: the crew list scrolls inside it, Settings and the person stay whole and tappable', { skip: !bin && 'no Chromium here' }, async () => {
+  // With a long crew on a short screen the person at the foot once sat over Settings; the crew list now takes the
+  // menu's free height and scrolls, so every row keeps its own box. Crew rows count only where the list shows them.
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  for (const [w, h] of [[1280, 832], [1280, 720]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    for (const demo of ['crew5', 'crew12', 'crew30']) {
+      await b.open(`demo=${demo}&day#/`);
+      await until('the side menu', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+      const r = await b.run(`(() => {
+        const crew = document.querySelector('.side-crew').getBoundingClientRect();
+        const boxes = [...document.querySelectorAll('.side .brand, .side-nav, .side-row, .side-label, .side-me')].map((e) => {
+          const r = e.getBoundingClientRect(), inCrew = e.closest('.side-crew');
+          return { t: e.textContent.trim().slice(0, 24), top: inCrew ? Math.max(r.top, crew.top) : r.top, bottom: inCrew ? Math.min(r.bottom, crew.bottom) : r.bottom, left: r.left, right: r.right };
+        }).filter((b) => b.bottom - b.top > 1);
+        const overlap = [];
+        boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => { if (Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1 && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1) overlap.push(a.t + ' / ' + b.t); }));
+        const hit = (sel) => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return r.bottom <= innerHeight && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('a') === e; };
+        return { overlap, settings: hit('.side-more a[href="#/settings"]'), me: hit('.side-me') };
+      })()`);
+      assert.deepEqual(r, { overlap: [], settings: true, me: true }, `${demo} at ${w}x${h}: menu rows stay apart, Settings and the person whole and tappable`);
+    }
   }
 });
 
@@ -299,12 +320,10 @@ test('your crew page reads the rail status: every tile matches its rail row', { 
     await until('the crew tiles', () => b.run("document.querySelectorAll('.st-tile').length > 3"), 30_000);
     const r = await b.run(`(() => ({
       page: Object.fromEntries([...document.querySelectorAll('.st-tile:not(.st-new)')].map((t) => [t.querySelector('b')?.textContent.trim(), t.querySelector('.st-pill')?.textContent.trim()])),
-      rail: Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [row.querySelector('b')?.textContent.trim(), row.querySelector('.side-seat')?.textContent.trim()])),
-      chief: document.querySelector('.side-status')?.textContent.trim() }))()`);
+      rail: Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [row.querySelector('b')?.textContent.trim(), row.querySelector('.side-seat')?.textContent.trim()])) }))()`);
     const page = r.page as Record<string, string>, rail = r.rail as Record<string, string>;
     assert.ok(Object.keys(rail).length > 2, `${demo}: the rail lists the crew (${JSON.stringify(rail)})`);
     for (const [name, status] of Object.entries(rail)) assert.equal(page[name], status, `${demo}: the crew page reads ${name} as the rail does`);
-    assert.equal(page.Chief, r.chief, `${demo}: Chief's tile reads his rail status`);
   }
 });
 
@@ -535,11 +554,10 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('Scout done on its card', async () => /^Done /.test((await row())?.word ?? ''), 30_000);
   // Chief relayed Scout's reply, so it is unread in Chief's thread and not in Scout's: only Chief carries a badge, so the desk rail's Scout row has none.
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await until('the rail row with its last reply', async () => /Three Friday flights are ready\./.test(await b.run("document.querySelector('.side-row')?.innerText ?? ''")), 30_000);
+  await until('the menu row says Done', async () => /^Done/.test(await b.run("document.querySelector('.side-row .side-seat')?.textContent ?? ''")), 30_000);
   assert.equal((await api('/api/bots/chief')).bot.unread > 0, true);
   assert.equal((await api('/api/bots/scout')).bot.unread, 0, 'a reply Chief relayed is not unread in the helper’s own thread');
   assert.equal(await b.run("document.querySelectorAll('.side-row .badge').length"), 0, 'no crew rail row carries a badge');
-  assert.match(await b.run("document.querySelector('.side-row').innerText"), /Done[^]*Three Friday flights are ready\./, 'the rail row carries its status word and last line');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await b.run('location.hash = "#/chief"');
   await until('opening NEW divider', () => b.run("!!document.querySelector('.new-divider')"), 30_000);

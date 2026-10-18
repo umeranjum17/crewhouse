@@ -6,7 +6,7 @@ screen per device size, a rich install sheet, and one quiet install row in Setti
 
 ## What it proves
 
-- `meta[name=theme-color]` is `#F3EEE3` in day and `#0C0C0B` at night, and follows a look change
+- `meta[name=theme-color]` is `#F4F3EF` in day and `#000000` at night, and follows a look change
   (`useLook` in `web/src/main.tsx`); at night the iOS status bar style is `black-translucent`.
 - With safe-area insets (iPhone 393×852, top 59, bottom 34) `body` pads 59px on top, the header starts
   at 59 and a page-coloured band covers the status bar; landscape pads left and right by the cutout.

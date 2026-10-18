@@ -50,7 +50,7 @@ Outputs in `--out`: `<slug>-<theme>.png` (and `.xml` on Android), `<slug>-<theme
 - A phone shot: `strip: left edge — a 132px band of rgb(22,24,21)`. On the emulator,
   letterboxing (`wm set-ignore-orientation-request true` with the device turned) draws black bands beside the
   portrait-locked app. The day look fails on them (`left 169px`, `right 85px` of rgb(0,0,0); a band is measured up to the first thing drawn on it, here the status-bar clock). The night look cannot
-  see them, since black sits within 10 of night's bg #0C0C0B.
+  see them, since night's bg is black (#000000).
 - Web, 21 screens × 2 looks clean: the real crewd's chief-chat, crew, things, routines, settings, apps, skills and
   crew/add, plus the demo's Home, crew5, calm, nophone, connect, things, settings, crew, apps, routines and the
   Office at office/crew12/crew30. Of 20 more demo variants, only `?demo=plan` fails, and that is a real defect:

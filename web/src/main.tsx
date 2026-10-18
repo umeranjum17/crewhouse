@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, KEPT } from './parts.tsx';
+import { AiMark, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, KEPT } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -23,7 +23,7 @@ let week: K.Kept | null = null;
 const keptWeek = (): K.Kept => (week ??= demo ? K.empty('') : K.readKept(paired?.host ?? location.origin));
 const keepWeek = (f: (k: K.Kept) => K.Kept) => { if (!demo) week = K.writeKept(f(keptWeek())); };
 
-type View = 'home' | 'chief' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
+type View = 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string; title?: string };
@@ -42,7 +42,7 @@ function parseRoute(): Route {
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
-  return { view: (['chief', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
+  return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
 let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
@@ -993,7 +993,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
 }
 
 /** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
- *  his one notification switch, his instructions read-only, and his crew. Take control is on the first phone screen. */
+ *  his one notification switch, his instructions (the personality editable, the limits read-only), and his crew. Take control is on the first phone screen. */
 const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
   ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
@@ -1009,8 +1009,8 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   const head = (title: string) => <div className="sticky-top"><header className="chat-head">
     <a href="#/chief" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b></div></header></div>;
   if (tab === 'instructions') return <div className="page helper">{head('How Chief works for you')}<section className="detail rest-screen">
-    <p className="lead">Plain words Chief reads before every job. Only you change them.</p>
-    <h2 className="plate">Who Chief is</h2><div className="card"><ChatText text={page?.soul ?? ''} /></div>
+    <p className="lead">Plain words Chief reads before every reply. Only you change them.</p>
+    <h2 className="plate">Chief's personality</h2><ChiefSoul tick={ctx.tick} />
     <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
   if (list) return <div className="page helper">{head('Things')}<section className="detail rest-screen chief-profile">
     <div className="seg cp-seg" role="tablist" aria-label="Things">{THINGS.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} className={k === tab ? 'on' : ''}
@@ -1138,6 +1138,23 @@ function JobSection({ id, name, page, reload }: { id: string; name: string; page
     {writing && <div className="card form"><b>Tell me roughly what {name} should do</b><textarea className="input" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} />
       <button className="btn go" disabled={!idea.trim()} onClick={() => attempt(async () => { await api.draftJob(id, idea); setWriting(false); setIdea(''); reload(); }, 'Asked Chief to write it')}>Ask Chief</button></div>}
   </>;
+}
+
+/** Chief's personality: the engine reads it as its own SOUL.md on his next reply. The person writes it; Chief never does. */
+function ChiefSoul({ tick }: { tick: number }) {
+  const [page, setPage] = useState<Json>(null), [draft, setDraft] = useState<string | null>(null);
+  const load = useCallback(() => api.bot('chief').then(setPage).catch(() => {}), []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const body = String(page?.soul ?? '').replace(/^# .*\n+/, ''), text = `# Chief\n\n${(draft ?? '').trim()}`, left = (page?.soulCap ?? 2000) - text.length;
+  if (draft === null) return <div className="card chief-soul"><ChatText text={body} />
+    <div className="btns"><button className="btn" onClick={() => setDraft(body)}>Change</button>
+      <button className="btn ghost" onClick={() => confirm('Put Chief back the way he started?') && attempt(async () => { await api.soulReset('chief'); await load(); }, 'Chief is back to how he started')}>Put back how Chief started</button></div></div>;
+  return <div className="card form chief-soul"><b>How should Chief talk to you?</b>
+    <p className="mute small">Plain words. Change what he calls you, his tone, anything. Your next message gets the new Chief.</p>
+    <textarea className="input" rows={14} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Chief's personality" />
+    <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
+    <div className="btns"><button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul('chief', text); setDraft(null); await load(); }, 'Saved')}>Save</button>
+      <button className="btn ghost" onClick={() => setDraft(null)}>Cancel</button></div></div>;
 }
 
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
@@ -1603,6 +1620,9 @@ function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { loo
 
       <div className="label">You</div>
       <You state={state} act={act} plan={A.planName(accounts)} />
+      <div className="label" id="chief-soul">Chief's personality</div>
+      <p className="mute small">How Chief talks to you. Change it any time; his next reply follows it.</p>
+      <ChiefSoul tick={tick} />
       <Memory tick={tick} />
 
       <div className="label" id="setup-signin">Your AI accounts</div>
@@ -1831,11 +1851,11 @@ function You({ state, act, plan }: { state: Json; act: (fn: () => Promise<unknow
       <div className="row">
         <span className="initial">{(display || 'You')[0]}</span>
         <div className="grow"><b>{display || 'You'}</b>
-          <div className="mute small">{m.address ? `Chief calls you “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
+          <div className="mute small">{m.address ? `Chief greets you as “${m.address}”` : 'Chief will say hello the first time you open Crewhouse'}</div></div>
       </div>
       <label className="field">Your name
         <input className="input" value={name} placeholder="Your name" autoComplete="given-name" onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== named && act(() => api.person(m.id, { name }), 'Saved')} /></label>
-      <label className="field">Chief calls you
+      <label className="field">Chief greets you as
         <input className="input" value={address} placeholder="a name, or leave it to Chief" onChange={(e) => setAddress(e.target.value)} onBlur={() => address.trim() && address !== m.address && act(() => api.person(m.id, { address }), 'Saved')} /></label>
       <label className="toggle-row"><span className="grow">Quiet hours{m.quiet ? `, ${from} to ${to}` : ''}<div className="mute small">Nothing new pings you then; the crew keeps going on what's already OK.</div></span>
         <input type="checkbox" role="switch" checked={!!m.quiet} onChange={(e) => act(() => api.person(m.id, { quiet: e.target.checked ? '22:00-07:00' : null }))} /></label>
@@ -1938,54 +1958,55 @@ function useLook() {
   const night = look === 'night' || (look === 'auto' && dark);
   useEffect(() => {
     document.documentElement.dataset.theme = night ? 'night' : 'day';
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#0C0C0B' : '#F3EEE3'); // the browser's bar and the phone's status bar
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#000000' : '#F4F3EF'); // the browser's bar and the phone's status bar
     document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.setAttribute('content', night ? 'black-translucent' : 'default'); // iOS reads it at launch; kept in step with the look
   }, [night]);
   const setLook = (l: string) => { localStorage.setItem('crewhouse.look', l); setLookState(l); };
   return { look, setLook, night };
 }
 
-/** The desk rail: Chief's helmet and status, every helper with the word the office uses for them (A.roster),
- *  and what's on a schedule. Chief's own line stays in the nav above; this is his face for the rail. */
-function SideCrew({ state, live, id, signedOut, offline }: { state: Json; live: A.OfficeView; id?: string; signedOut?: boolean; offline?: boolean }) {
-  const word = chiefWord(live, signedOut, offline);
-  // The crew summary is the office's own count line (A.summaryOf): every member once, Chief too, by the status the
-  // rail rows and the Office read, so a row that shows "Free" is counted as free.
-  const sub = A.summaryOf(live);
-  const crew = A.crew(state), chats = new Map(A.chats(state).map((c) => [c.id, c]));
-  const sched = A.routines(state).filter((r: Json) => !r.paused).slice(0, 4);
-  const schedWho = (h: string) => (h === 'chief' ? 'Chief' : crew.find((x) => x.id === h)?.name ?? 'Chief');
+/** The frame's four places, in this order on the phone's tab bar and the computer's side menu (Stack). Chief is the
+ *  primary one: his tab is the filled one, and in the side menu he wears his face and his one status word. */
+const PLACES: [string, string, IconName, View][] = [['#/', 'Home', 'home', 'home'], ['#/chief', 'Chief', 'talk', 'chief'], ['#/jobs', 'Jobs', 'jobs', 'jobs'], ['#/crew', 'Crew', 'crew', 'crew']];
+/** The computer side menu's lower places, quieter than the four above. */
+const MORE: [string, string, IconName, View][] = [['#/things', 'Your things', 'copy', 'things'], ['#/routines', 'Routines', 'clock', 'routines'], ['#/apps', 'Apps', 'plus', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
+/** Which place a screen belongs to, so its tab reads as the one you are in. */
+const placeOf = (r: Route): View => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'add' || r.view === 'room' ? 'crew' : r.view === 'ai' || r.view === 'computer' ? 'settings' : r.view;
+
+/** The side menu's crew: every helper with the word the office uses for them (A.roster), one line each. Only Chief
+ *  says "Needs you"; a crew row never asks the person. */
+function SideCrew({ live, id }: { live: A.OfficeView; id?: string }) {
   return (
     <div className="side-crew">
-      <a className="side-chief" href="#/chief" aria-label="Chief's chat"><span className="side-helmet"><ChiefArt mood={live.chief.mood} rail /></span><b>Chief</b></a>
-      <div className={`side-status${word === A.WORDS.needs || signedOut ? ' needs' : ''}`}><i />{word}</div>
-      {sub && <div className="mute small side-sub">{sub}</div>}
-      <a className="label side-label" href="#/crew">Your crew<span>{live.crew.length}</span></a>
+      <a className="label side-label" href="#/crew">Your crew</a>
       {A.roster(live.crew).map((h) => {
         const r = A.statusOf(h, live);
-        // Only Chief carries a badge or an ask; a crew row never does, and its dot means working, nothing else. The seat class is namespaced (`seat-…`) so a seat
-        // word like "chat" never collides with an unrelated rule (`.chat`'s own min-height once stretched the label
-        // over the nav).
-        // Under the name, its last line (what it is doing now, while at work) and when.
-        const c = chats.get(h.id), working = r.seat === 'working';
+        // The seat class is namespaced (`seat-…`) so a seat word like "chat" never collides with an unrelated rule.
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
           <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={30} />
-          <span className="grow side-two"><span className="side-top"><b className="clamp1">{h.name}</b>
-            <span className={`side-seat seat-${r.seat}`}>{working && <i />}<span className="clamp1">{r.word}</span></span></span>
-            <span className="small mute clamp1">{(working && h.step) || c?.line}</span></span>
-          <time className="side-at">{working ? 'now' : c?.at ? A.when(c.at) : ''}</time>
+          <b className="grow clamp1">{h.name}</b>
+          <span className={`side-seat seat-${r.seat}`}><span className="clamp1">{r.word}</span></span>
         </a>;
       })}
-      {!live.crew.length && <div className="mute small side-blank">No helpers yet.</div>}
-      {live.crew.length > 0 && <div className="mute small side-ro">Read only. Results come back in Chief's chat.</div>}
-      {sched.length > 0 && <>
-        <div className="label side-label">On a schedule</div>
-        {sched.map((r: Json) => <a key={r.id} className="side-sched" href="#/routines">
-          <span className="grow"><b className="clamp1">{schedWho(r.helper)} · {r.name}</b><span className="mute small clamp1">{r.when || r.next}</span></span>
-        </a>)}
-      </>}
+      {!live.crew.length && <a className="side-blank" href="#/crew/add">No helpers yet. Add one</a>}
     </div>
   );
+}
+
+/** Jobs: what waits on your yes (Chief's asks, each opening its review), then what the crew is at work on. */
+function Jobs({ state, live }: Ctx) {
+  const jobs = new Map(A.work(state).map((w) => [w.helper, w]));
+  const busy = A.roster(live.crew).filter((c) => jobs.has(c.id));
+  const quiet = live.counts.needs - live.needs.length; // each helper gone quiet: its Stop card waits in Chief's thread
+  return <div className="page stack rest-screen jobs-page"><h1 className="wide">Jobs</h1><p className="st-line">What needs your yes, and what the crew is doing.</p>
+    <div className="st-label"><span>Needs you</span></div>
+    {live.needs.length > 0 && <div className="list-group"><NeedsRows state={state} cards={live.needs} all /></div>}
+    {quiet > 0 && <a className="st-room jobs-quiet" href="#/chief"><span className="grow"><b className="semi">{quiet} gone quiet</b><span>Stop it or leave it, in Chief's thread</span></span><Icon name="next" /></a>}
+    {!live.counts.needs && <Empty>Nothing needs you.</Empty>}
+    <div className="st-label"><span>At work</span></div>
+    {busy.length ? <div className="st-crew">{busy.map((c) => <CrewCard key={c.id} c={c} live={live} job={jobs.get(c.id)} />)}</div> : <Empty>Nobody is on a job right now.</Empty>}
+    <a className="st-room" href="#/things"><span className="grow"><b className="semi">Your things</b><span>Finished jobs and their files</span></span><Icon name="next" /></a>
+  </div>;
 }
 
 function App() {
@@ -2074,28 +2095,28 @@ function App() {
   const asks = ctx.live.counts.needs;
   const sheet = route.view === 'ask' ? A.cards(ctx.state).find((c) => String(c.id) === route.id) : undefined;
   const book = route.file && route.id ? { bot: route.id, path: route.file, title: route.title } : undefined;
-  // The desk rail (B1): Home, Chief, your things, routines and apps; the crew under it; you and the gear at the foot.
-  const rail: [string, string, IconName, number][] = [['#/', 'Home', 'office', 0], ['#/chief', 'Chief', 'chief', asks], ['#/things', 'Your things', 'things', ctx.live.counts.done], ['#/routines', 'Routines', 'routines', 0], ['#/apps', 'Add to your crew', 'apps', 0]];
-  const railOn = (h: string) => (h === '#/' ? v.view === 'home' : h === `#/${v.view}`);
+  const place = placeOf(v);
   const me = A.displayName(ctx.state.person), quiet = A.quietLine(ctx.state.person);
   return (
     <>
       {splash}
       <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book ? ' with-book' : ''}`}>
         <aside className="side">
-          <a href="#/" className="brand"><Logo night={night} />{demo && <span className="demo-tag">Demo</span>}</a>
-          <nav className="side-navs">{rail.map(([h, l, i, n]) => <a key={h} href={h} className={`side-nav ${railOn(h) ? 'on' : ''}`}><Icon name={i} />{l}{n > 0 && <span className={`side-count${h === '#/chief' ? ' hot' : ''}`}>{n}</span>}</a>)}</nav>
-          <SideCrew state={ctx.state} live={ctx.live} id={v.view === 'helper' ? v.id : undefined} signedOut={chiefLocal(ctx).signedOut && !ctx.offline} offline={ctx.offline} />
-          <div className="grow" />
-          {A.meter(ctx.state) && <a href="#/settings" className="side-meter mute small">{A.meter(ctx.state)}</a>}
-          <a href="#/settings" className={`side-me ${v.view === 'settings' || v.view === 'computer' ? 'on' : ''}`} aria-label={`Settings${me ? `, ${me}` : ''}`}>
-            <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{quiet && <span className="clamp1">{quiet}</span>}</span><Icon name="settings" />
+          <a href="#/" className="brand"><Face who="chief" size={36} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
+          <nav className="side-navs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav nav-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
+            <Icon name={i} size={22} /><span className="grow">{l}</span>
+            {k === 'jobs' && asks > 0 && <span className="side-count">{asks}</span>}</a>)}</nav>
+          <SideCrew live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
+          <nav className="side-more" aria-label="More">{MORE.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}><Icon name={i} size={22} />{l}</a>)}</nav>
+          <a href="#/settings" className="side-me" aria-label={`Settings${me ? `, ${me}` : ''}`}>
+            <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{(A.meter(ctx.state) || quiet) && <span className="clamp1">{A.meter(ctx.state) || quiet}</span>}</span>
           </a>
         </aside>
         <main className="main">
           {offline && <div className="offline" role="status">Can't reach the home computer{heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}. Meanwhile you can read your recent chats. You can reply once it's back. <button className="link inline" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
+          {v.view === 'jobs' && <Jobs {...ctx} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}
@@ -2108,6 +2129,8 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share {...ctx} />}
         </main>
+        <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
+          <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'jobs' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === sheet.helper)} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => history.length > 1 ? history.back() : go('#/')} />}

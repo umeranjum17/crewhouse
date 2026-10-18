@@ -69,7 +69,7 @@ function open() {
   if (win) { win.show(); win.focus(); return; }
   win = new BrowserWindow({
     width: 1200, height: 800, minWidth: 380, minHeight: 560, title: 'Crewhouse', icon, show: false, autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0C0C0B' : '#F3EEE3', // the app's own day and night (web/src/main.tsx)
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#F4F3EF', // the app's own day and night (web/src/main.tsx)
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   win.once('ready-to-show', () => win?.show());
