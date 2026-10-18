@@ -7,21 +7,13 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createEmulator } from 'emulate';
+import { startGoogleEmulator, ME, THREAD, CLIENT } from './emulate-google.ts';
 
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as { port: number }; s.close(() => r(port)); }); });
 // crewd's redirect is fixed when the crew starts, and the emulator's client registers exactly that address.
 process.env.CREWHOUSE_PORT = String(await free());
-const ME = 'umer@example.com', THREAD = '19a0c0ffee000001', CLIENT = { id: `123-fixture.apps.google${'usercontent'}.com`, secret: ['GOCSPX', 'abcdefghijklmnopqrstuvwxyz12'].join('-') };
-const tomorrow = (h: number) => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(h, 0, 0, 0); return d.toISOString(); };
-const google = await createEmulator({ service: 'google', port: 0, seed: { tokens: { witness: { login: ME } }, google: {
-  users: [{ email: ME, name: 'Umer' }],
-  oauth_clients: [{ client_id: CLIENT.id, client_secret: CLIENT.secret, name: 'Crewhouse', redirect_uris: [`http://127.0.0.1:${process.env.CREWHOUSE_PORT}/connect/callback`] }],
-  messages: [{ id: THREAD, thread_id: THREAD, from: 'Ada <ada@example.com>', to: ME, subject: 'Friday plan', body_text: 'Are we still on for Friday?', message_id: '<friday@example.com>' }],
-  calendar_events: [{ id: 'standup0001', summary: 'Standup', start_date_time: tomorrow(9), end_date_time: tomorrow(10) }, { id: 'dentist0001', summary: 'Dentist', start_date_time: tomorrow(15), end_date_time: tomorrow(16) }],
-} } });
+const { server: google, url: EMU } = await startGoogleEmulator(Number(process.env.CREWHOUSE_PORT));
 after(() => google.close());
-const EMU = `http://127.0.0.1:${new URL(google.url).port}`;
 process.env.CREWHOUSE_GOOGLE_EMULATOR = EMU;
 const { setup, settled, task, until, grantApps } = await import('./lab.ts');
 const { startServer } = await import('../src/server.ts');
