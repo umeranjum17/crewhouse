@@ -458,8 +458,8 @@ test('things, routines and helper profiles: shared file cards, names in full, no
       assert.ok(!r.cut, `${at} row ${i}: names read in full`);
     }
     await b.open(`demo&${theme}#/h/scribe/chat`);
-    await until('helper read-along', () => b.run("!!document.querySelector('.st-helper-chat .read-along')"), 30_000);
-    assert.equal(await b.run("document.querySelectorAll('.st-helper-chat textarea').length"), 0, `${at}: helper stays read only`);
+    await until('helper composer', () => b.run("!!document.querySelector('.st-helper-chat .composer textarea')"), 30_000);
+    assert.equal(await b.run("document.querySelectorAll('.st-helper-chat textarea').length"), 1, `${at}: helper has its own composer`);
     if (!mobile) assert.equal(await b.run(`(() => { const p = document.querySelector('.st-helper-chat'),
       a = p.querySelector('.lines').getBoundingClientRect(), c = p.querySelector('.working-on').getBoundingClientRect();
       return c.left >= a.right - 1 && Math.abs(c.top - a.top) < 2 && p.getBoundingClientRect().width === document.querySelector('.main').getBoundingClientRect().width; })()`), true, `${at}: helper context sits beside the full-width transcript, never below it`);
@@ -593,7 +593,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await b.run('location.hash = "#/h/scout"');
   await until("Scout's own thread", () => b.run(`!!document.querySelector('.line') && !document.querySelector('.stuck')`), 30_000);
   assert.equal(await b.run(`document.querySelectorAll('.stuck').length`), 0, 'Scout\'s own thread asks nothing: the Stop card is Chief\'s alone');
-  assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [true, 0], 'a helper\'s thread is read only: Ask Chief about this, no composer');
+  assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [false, 1], 'a helper\'s own thread has a composer');
   await b.run('location.hash = "#/"');
   await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);

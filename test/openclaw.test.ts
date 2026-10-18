@@ -36,7 +36,9 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.equal(safeConfig.agents.entries.m9.memory.search.provider, 'none');
     assert.equal(kit.memoryLimited('m9'), true);
     const { env } = kit.doctorContext();
-    assert.equal(env.HOME, join(engine, 'home'));
+    assert.equal(env.HOME, owner); // 0.16.6 runs the supported Codex CLI route with the person's HOME.
+    assert.equal(env.OPENCLAW_HOME, join(engine, 'home')); // Engine state remains under Crewhouse's isolated directory.
+    assert.equal(env.CODEX_HOME, join(engine, 'home', '.codex')); // Gateway/doctor never read or refresh the installed Codex login.
     assert.equal(env.OPENAI_API_KEY, undefined);
     // The one PATH the engine may borrow: the folder holding the `claude` CLI the Claude route drives, nothing else.
     const claudeDirs = (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude')));

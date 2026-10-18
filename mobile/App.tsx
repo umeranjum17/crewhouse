@@ -2121,8 +2121,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       </ScrollView>
       {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
-      {id !== 'chief' ? <View style={s.dock}><T tone="mute" style={s.small}>You can read along here. To change this job or ask {name} anything, ask Chief.</T><Btn ghost label="Ask Chief about this" onPress={() => { keepDraft('chief', `${name}, `); go({ view: 'chief' }); }} /></View>
-        : canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder="Tell Chief anything…" onSend={send} chat={id} docs away={offline} thread stop={ln?.state === 'working' || ln?.state === 'reading' ? stopChief : undefined} /></View>
+      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}`} onSend={send} chat={id} docs away={offline} thread={id === 'chief'} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
