@@ -18,17 +18,18 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
   delete env.NODE_TEST_CONTEXT;
   const probe = (extra: NodeJS.ProcessEnv = {}) => spawnSync(process.execPath, ['--input-type=module', '-e',
     'import {loadConfig} from "./src/config.ts"; console.log(JSON.stringify(loadConfig()))'], { cwd: repo, env: { ...env, ...extra }, encoding: 'utf8', timeout: 30_000 });
-  const configs = [{}, { CREWHOUSE_ENGINE: 'stub', CREWHOUSE_RUN_MODE: 'product' }, { NODE_TEST_CONTEXT: 'child-v8', CREWHOUSE_RUN_MODE: 'product' }, { CREWHOUSE_RUN_MODE: 'verify' }].map((extra) => {
+  const configs = [{}, { CREWHOUSE_ENGINE: 'stub', CREWHOUSE_RUN_MODE: 'product' }, { NODE_TEST_CONTEXT: 'child-v8', CREWHOUSE_RUN_MODE: 'product' }, { CREWHOUSE_RUN_MODE: 'verify' }, { XDG_CONFIG_HOME: join(userInfo().homedir, '.config') }].map((extra) => {
     const r = probe(extra); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout);
   });
-  assert.equal(new Set(configs.map(c => c.crewDir)).size, 4, 'each invocation has a fresh home');
+  assert.equal(new Set(configs.map(c => c.crewDir)).size, 5, 'each invocation has a fresh home');
   for (const c of configs) for (const field of ['stateDir', 'crewDir', 'toolsDir', 'engineDir', 'googleClient']) {
     assert.ok(c[field].startsWith(root + '/'), `${field} stays beneath the owned temporary root`);
     assert.notEqual(c[field], join(home, 'Crewhouse'));
   }
-  const product = probe({ CREWHOUSE_RUN_MODE: 'product' });
+  const product = probe({ CREWHOUSE_RUN_MODE: 'product', XDG_CONFIG_HOME: join(root, 'product-config') });
   assert.equal(product.status, 0, product.stderr);
   assert.equal(JSON.parse(product.stdout).crewDir, join(home, 'Crewhouse'), 'product mode keeps its normal HOME');
+  assert.equal(JSON.parse(product.stdout).googleClient, join(root, 'product-config/byokit/google-oauth-client.json'), 'product mode keeps its XDG config');
   const owner = userInfo().homedir;
   symlinkSync(join(owner, 'Crewhouse'), join(root, 'alias'));
   for (const extra of [
@@ -44,7 +45,7 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
     assert.equal(r.status, 1, r.stdout);
     assert.match(r.stderr, /crewd: refusing isolated start.*owner/);
   }
-  const child = spawn(process.execPath, ['src/main.ts'], { cwd: repo, env: { ...env, CREWHOUSE_ENGINE: 'stub' } });
+  const child = spawn(process.execPath, ['src/main.ts'], { cwd: repo, env: { ...env, CREWHOUSE_ENGINE: 'stub', XDG_CONFIG_HOME: join(userInfo().homedir, '.config') } });
   let log = ''; child.stdout.on('data', b => log += b); child.stderr.on('data', b => log += b);
   const exited = once(child, 'exit');
   t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); await exited; });
