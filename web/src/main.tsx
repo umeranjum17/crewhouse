@@ -741,7 +741,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
-          const content = <>{l.text && l.id !== doneLine?.id && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+          const content = <>{l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
             {l.files.map((f) => f === doneFile && doneBy ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} settle={(later) => keep(f, later)} />
               : <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved

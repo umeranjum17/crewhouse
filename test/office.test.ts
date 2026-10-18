@@ -358,6 +358,7 @@ test('a finished sheet ends Chief\'s thread on its Done card: Later keeps it wit
     await b.run(`document.querySelector('.done-later').click(), 0`);
     await until('the Kept toast', () => b.run(`!document.querySelector('.done-card') && !!document.querySelector('.chat .wb-made') && document.querySelector('.toast')?.textContent`), 10_000);
     assert.equal(await b.run(`document.querySelector('.toast').textContent`), 'Kept: Monthly budgetUndo');
+    assert.match(await b.run(`document.querySelector('.chat .lines').innerText`), /Your monthly budget is ready/, 'the settled card keeps Chief\'s words above it');
     await b.run(`document.querySelector('.toast .toast-act').click(), 0`);
     await until('the Done card back after Undo', () => b.run(card), 10_000);
     // Open it: the read-only sheet over Chief's thread (on a computer the wide page), then Back to a settled card.
