@@ -41,7 +41,8 @@ for (const name of ['prepare-engine.mjs', 'headless.mjs']) cpSync(join(repo, 'sc
 const bundledEnv = { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${process.env.PATH}` };
 sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: bundledEnv });
 const engineState = join(stage, 'engine-prepare');
-sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: bundledEnv });
+// The download carries its engine in app/runtime/openclaw (Config.engineDir finds it there once installed).
+sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: { ...bundledEnv, CREWHOUSE_ENGINE_DIR: join(app, 'runtime', 'openclaw') } });
 // Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
 const engineSet = readFileSync(join(engineState, 'openclaw', 'engine-set'), 'utf8').trim();
 sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', engineSet], { cwd: app, env: bundledEnv });
