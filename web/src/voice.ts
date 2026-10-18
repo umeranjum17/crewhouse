@@ -1,27 +1,42 @@
-// Speaking to Chief: the browser's own recognizer, on this device only (never its online one), turns speech into
-// words for the message box. No sound leaves the device, and the words go nowhere until the person taps send.
+// Speaking to Chief: the browser's own recognizer turns speech into words for the message box. It listens on this
+// device when it can; where it has no on-device recognizer (Android Chrome in a PWA, for one), its online recognizer
+// does instead, and the app says so before it listens (the words are `VOICE_WORDS` in adapter.ts). Nothing is sent
+// by speaking: the words go nowhere until the person taps send.
 const Heard = (globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition;
-const want = () => ({ langs: [navigator.language || 'en-US'], processLocally: true });
+const lang = () => navigator.language || 'en-US';
+const want = (local: boolean) => ({ langs: [lang()], processLocally: local });
 
-/** Whether this browser can hear on this device, perhaps after fetching its voice pack once. */
-export async function canHear(): Promise<boolean> {
-  try { return !!Heard?.available && (await Heard.available(want())) !== 'unavailable'; } catch { return false; }
+/** `device`: this browser's own recognizer, on this device; `online`: its online one (its service hears the audio);
+ *  `none`: neither can hear here. */
+export type Ears = 'device' | 'online' | 'none';
+
+/** Whether the browser can recognize speech this way, perhaps after fetching its voice pack once. An error from the
+ *  check (the browser doesn't know this option) counts as no. */
+async function offers(local: boolean): Promise<boolean> {
+  try { return !!Heard?.available && (await Heard.available(want(local))) !== 'unavailable'; } catch { return false; }
 }
 
-/** Listens until the person pauses (or `stop()`), then gives what was heard ('' for nothing); `heard` gets the words
- *  so far while they speak. It fails `blocked` when the microphone isn't allowed, `nomic` when none can be opened, `unready`
- *  when the voice pack can't be fetched. */
-export function hear(heard?: (words: string) => void): { words: Promise<string>; stop: () => void } {
+/** The recognizer this browser should listen with: on this device first, else the online one, else none. */
+export async function ears(): Promise<Ears> {
+  return (await offers(true)) ? 'device' : (await offers(false)) ? 'online' : 'none';
+}
+
+/** Listens until the person pauses (or `stop()`), then gives what was heard ('' for nothing) with `route`'s recognizer;
+ *  `heard` gets the words so far while they speak. It fails `blocked` when the microphone isn't allowed, `nomic` when
+ *  none can be opened, `offline` when the online recognizer can't be reached, `unready` when the voice pack can't be
+ *  fetched or there is no recognizer at all. */
+export function hear(route: Ears, heard?: (words: string) => void): { words: Promise<string>; stop: () => void } {
   let r: any = null, stopped = false;
   const words = (async () => {
-    if ((await Heard.available(want())) !== 'available' && !(await Heard.install(want()).catch(() => false))) throw new Error('unready');
+    if (route === 'none') throw new Error('unready');
+    if (route === 'device' && (await Heard.available(want(true))) !== 'available' && !(await Heard.install(want(true)).catch(() => false))) throw new Error('unready');
     if (stopped) return '';
     r = new Heard();
-    Object.assign(r, { lang: want().langs[0], processLocally: true, interimResults: !!heard, continuous: false });
+    Object.assign(r, { lang: lang(), processLocally: route === 'device', interimResults: !!heard, continuous: false });
     return new Promise<string>((done, fail) => {
       let said = '';
       r.onresult = (e: any) => { said = [...e.results].map((x: any) => x[0].transcript).join(' ').trim(); heard?.(said); };
-      r.onerror = (e: any) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') fail(new Error('blocked')); else if (e.error === 'audio-capture') fail(new Error('nomic')); };
+      r.onerror = (e: any) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') fail(new Error('blocked')); else if (e.error === 'audio-capture') fail(new Error('nomic')); else if (e.error === 'network') fail(new Error('offline')); };
       r.onend = () => done(said);
       r.start();
     });
@@ -37,8 +52,8 @@ const synth: SpeechSynthesis | undefined = globalThis.speechSynthesis;
  *  where it has no voice of its own). */
 export async function voices(): Promise<SpeechSynthesisVoice[]> {
   if (synth && !synth.getVoices().length) await new Promise((r) => { synth.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1000); });
-  const own = synth?.getVoices().filter((v) => v.localService) ?? [], lang = (l: string) => l.split(/[-_]/)[0].toLowerCase();
-  const mine = own.filter((v) => lang(v.lang) === lang(want().langs[0]));
+  const own = synth?.getVoices().filter((v) => v.localService) ?? [], l = (x: string) => x.split(/[-_]/)[0].toLowerCase();
+  const mine = own.filter((v) => l(v.lang) === l(lang()));
   return (mine.length ? mine : own).sort((a, b) => Number(!!b.default) - Number(!!a.default));
 }
 

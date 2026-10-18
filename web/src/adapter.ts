@@ -562,6 +562,12 @@ export function reached(p: Json) {
 
 /** Settings, Phones: one plain line when notifications can't reach phones yet (README, "Phone notifications"). */
 export const pushWords = (link: Json) => (link?.push === 'missing' ? "Phone notifications aren't switched on for this app yet, so phones hear news only when they open Crewhouse." : '');
+/** Speaking to Chief (web/src/voice.ts picks the recognizer): where the words are heard, said before it listens. */
+export const VOICE_WORDS = {
+  device: 'Your voice stays on this device. Only the words go to Chief.',
+  online: "Your browser's online service hears this to turn it into text. Only the words go to Chief.",
+  none: "This browser can't turn speech into words here, so type instead.",
+};
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */
 /** A show in progress on a helper's screen: what, and how many steps so far, in words. */
