@@ -1,9 +1,7 @@
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-/** Everything the daemon needs to know about where it lives. All overridable by env,
- *  because the tests need their own data dir. Never inside the repo. */
+/** Everything the daemon needs to know about where it lives. All overridable by env, because the tests need their own data dir. Never inside the repo. */
 export interface Config {
   /** SQLite, the endpoint file, the engine's own folder and the person's sign-ins live here. */
   stateDir: string;
@@ -41,7 +39,7 @@ export function relayOrigin(value: string | null): string | null {
 }
 
 export function loadConfig(): Config {
-  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = resolve(import.meta.dirname, '..'), own = join(repoDir, 'runtime', 'openclaw');
+  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw');
   return {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),

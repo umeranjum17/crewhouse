@@ -1,14 +1,18 @@
 {
   "name": "crewhouse",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Local-first crew of persistent AI helpers, run by Chief on your own AI accounts.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
     "node": ">=22.22.3"
   },
+  "bin": { "crewhouse": "bin/crewhouse.mjs" },
+  "files": ["bin", "dist", "web/dist", "templates", "skills", "tools", "scripts/prepare-engine.mjs", "scripts/build-web.mjs", "scripts/grok-recipe.mjs", "src/openclaw/*.json", "package.json", "package-lock.json", "crewhouse"],
   "scripts": {
+    "prepack": "npm run build:web && npm run build:cli",
+    "build:cli": "node scripts/build-cli.mjs",
     "start": "node src/main.ts",
     "build:web": "node scripts/build-web.mjs",
     "test": "node scripts/test.mjs",

@@ -1,19 +1,19 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
-import { loadConfig } from '../config.ts';
+import { appDir, loadConfig } from '../config.ts';
 import { PARAMETERS } from '../engine.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
 export { ENGINE_VERSION } from '@byokit/openclaw';
 
-const repo = resolve(import.meta.dirname, '../..');
+const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
@@ -67,7 +67,7 @@ export class OpenClawRuntime implements AgentRuntime {
       stateDir, offered: Object.values(PROVIDER_OF), engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude'))), // the Claude route drives the `claude` CLI: the engine's own PATH is /usr/bin:/bin only
       authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
-      installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
+      installPolicy: { trustedSkills: join(appDir, 'src/openclaw/trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
       host: {
         // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
         gate: async (ref, tool, input) => {
@@ -246,7 +246,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** The reviewed ClawHub starter set (starter-skills.json): what each one does, what it needs, and whether
    *  the engine already holds it in the workspace. Listing only — installs go through the engine's own gate. */
   starterSkills() {
-    return (JSON.parse(readFileSync(join(import.meta.dirname, 'starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version),
+    return (JSON.parse(readFileSync(join(appDir, 'src/openclaw/starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version),
       summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String),
       on: existsSync(join(this.workspaceOf(), String(s.slug))) }));
   }
