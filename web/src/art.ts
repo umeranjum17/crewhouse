@@ -116,6 +116,9 @@ const TRAIT = {
   tuft: `<circle cx="38" cy="20" r="9" fill="${LIGHT}"/><circle cx="50" cy="15" r="10" fill="${LIGHT}"/><circle cx="62" cy="20" r="9" fill="${LIGHT}"/>`,
   antenna: `<path d="M50 22V10" stroke="${LIGHT}" stroke-width="3.5" stroke-linecap="round"/><circle cx="50" cy="8" r="5" fill="${LIGHT}"/>`,
   antlers: `<path d="M36 22L28 6M30 14L20 12M64 22L72 6M70 14L80 12" fill="none" stroke="${LIGHT}" stroke-width="4" stroke-linecap="round"/>`,
+  crop: `<path d="M10 26V10H26M74 10H90V26M90 74V90H74M26 90H10V74" fill="none" stroke="${LIGHT}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  speed: `<path d="M4 42H18M2 54H20M4 66H18" fill="none" stroke="${LIGHT}" stroke-width="3.5" stroke-linecap="round"/>`,
+  spark: badge('M81 70L75 80H80L77 90L85 79H80Z'),
 };
 const geo = (shape: keyof typeof SHAPE, c: string, trait: string, o: Partial<Geo> = {}): Geo =>
   ({ c, shape: SHAPE[shape](c), trait, ey: shape === 'circle' ? 60 : shape === 'square' ? 50 : shape === 'hex' ? 53 : shape === 'arch' ? 58 : 56, my: shape === 'circle' ? 74 : shape === 'square' ? 68 : shape === 'hex' ? 66 : 70, ...o });
@@ -149,6 +152,9 @@ export const PALS = {
   support: geo('pill', '#4CC9F0', TRAIT.headset), // Support Sam: a headset
   xgrowth: geo('arch', '#B8E04A', TRAIT.sprout), // Growth Gus: a sprout
   cto: geo('square', '#FF9F43', TRAIT.prompt, { eyes: 'bar' }), // Terminal Tess: a prompt
+  frame: geo('square', '#D946EF', TRAIT.crop), // Frame Fay: crop marks
+  motion: geo('pill', '#0D9488', TRAIT.speed), // Motion Milo: speed lines
+  prototype: geo('hex', '#E11D48', TRAIT.spark), // Spark Stella: a spark
   bunny: geo('pill', '#FF7AB8', TRAIT.bow),
   panda: geo('circle', '#C4B5FD', '', { shape: TRAIT.ears('#C4B5FD') + SHAPE.circle('#C4B5FD') }),
   pig: geo('square', '#FDA4AF', TRAIT.curl),
