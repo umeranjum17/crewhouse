@@ -177,14 +177,13 @@ function Critter({ who, mode, cols, beat, label, d }: { who: art.Kind | 'chief';
 /** Chief, head and shoulders (`whole` for the mock rail's 38-column box). `d` keeps the old 14-dot footprint, so
  *  callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink, and
  *  reads along while he works. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean; rail?: boolean }) {
+export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean }) {
   const flash = useChangeBlink(!!hero, mood);
   const mode = art.faceOf(flash ? 'blink' : mood);
   const beat = useTicker(140, !!hero && mode === 'think');
-  // The phone header's mascot and the desk rail keep their boxes (52 px at 100:92, 200 px at 5:4), sized by width
+  // The phone header's mascot keeps its box (52 px at 100:92), sized by width
   // alone like every Ink face, so the person's text size never rescales them.
   if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.critter('chief', mode, { beat, aspect: 100 / 92 })} />;
-  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.critter('chief', mode, { beat, aspect: 1.25 })} />;
   return <Critter who="chief" mode={mode} cols={whole ? 38 : 24} beat={beat} label="Chief" d={whole ? undefined : d} />;
 }
 export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
@@ -200,16 +199,6 @@ export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { 
   return (
     <span className={`face ${ring}`} style={{ width: size, height: size }}>
       <Ink svg={svg} w={size} label={chief ? 'Chief' : who.name} />
-    </span>
-  );
-}
-
-/** The mark is Chief's bowler on a paper tile (B1), then the wordmark in the display serif. */
-export function Logo({ night }: { night?: boolean }) {
-  return (
-    <span className="logo" aria-label="Crewhouse">
-      <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden><rect x="2" y="2" width="60" height="60" rx="15" fill="var(--solid)" stroke="var(--ink)" strokeWidth="3" /><g transform="translate(10 9) scale(1.84)" fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round"><path d="M6.6 14.2c0-4.4 2.4-7.7 5.4-7.7s5.4 3.3 5.4 7.7" /><path d="M3 14.6c2.8 1.7 5.8 2.4 9 2.4s6.2-.7 9-2.4" /><path d="M6.9 12.3h10.2" stroke="#F0482A" /></g></svg>
-      <span>Crewhouse</span>
     </span>
   );
 }

@@ -55,7 +55,7 @@ png('notify.svg', mobile + 'notification-icon.png', 96);
 rmSync(web + 'splash', { recursive: true, force: true });
 mkdirSync(web + 'splash');
 for (const [w, h, d] of [[440, 956, 3], [430, 932, 3], [428, 926, 3], [402, 874, 3], [393, 852, 3], [390, 844, 3], [375, 812, 3], [414, 896, 2], [375, 667, 2], [1024, 1366, 2], [834, 1194, 2], [820, 1180, 2], [810, 1080, 2]])
-  for (const [look, bg] of [['day', '#F3EEE3'], ['night', '#0C0C0B']])
+  for (const [look, bg] of [['day', '#F4F3EF'], ['night', '#000000']])
     execFileSync('magick', ['-size', `${w * d}x${h * d}`, `xc:${bg}`, '(', '-background', 'none', '-density', '300', web + 'icon.svg', '-resize', `${120 * d}x${120 * d}`, ')', '-gravity', 'center', '-composite', '-depth', '8', '-strip', `PNG8:${web}splash/${w}x${h}@${d}-${look}.png`]);
 const desktop = new URL('../packaging/icons/', import.meta.url).pathname;
 mkdirSync(desktop, { recursive: true });

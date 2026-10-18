@@ -1,17 +1,17 @@
 // Shared web/phone values; styles.css mirrors these as custom properties.
-// The Term look: muxr paper by day, dark canvas by night, one blue accent (no coral).
+// The Stack look (design C): a warm grey ground by day, black by night, one blue accent (no coral).
 export const color = {
   day: {
-    bg: '#F3EEE3', surface: '#EBE5D7', sunken: '#E0D7C0', line: '#D3C9B0', line2: '#BDB096',
-    ink: '#1D1B18', ink2: '#575046', mute: '#6B665D', accent: '#3D6FD6', onAccent: '#FFFFFF',
+    bg: '#F4F3EF', surface: '#FFFFFF', sunken: '#E6E4DE', line: '#D9D7D0', line2: '#C4C2BA',
+    ink: '#0B0B0B', ink2: '#3D3C38', mute: '#5F5E59', accent: '#3D6FD6', onAccent: '#FFFFFF',
     // The one blue accent, text-safe on paper wherever it is text on paper
     pink: '#3D6FD6', fill: '#3D6FD6', softAccent: '#DBE6F8', green: '#1C9F63', amber: '#B86E00', danger: '#C4372C',
     // a spreadsheet's cells: soft yellow for what the person fills in, soft blue for what works itself out
     cellIn: '#FFEFB8', cellCalc: '#DAE8FB',
   },
   night: {
-    bg: '#0C0C0B', surface: '#131312', sunken: '#060605', line: '#262625', line2: '#3A3A38',
-    ink: '#ECECEC', ink2: '#C9C9C5', mute: '#9B9B98', accent: '#0A84FF', onAccent: '#FFFFFF',
+    bg: '#000000', surface: '#141414', sunken: '#1F1F1F', line: '#262626', line2: '#3A3A38',
+    ink: '#F4F3EF', ink2: '#C9C9C5', mute: '#8E8D88', accent: '#0A84FF', onAccent: '#FFFFFF',
     pink: '#0A84FF', fill: '#0A84FF', softAccent: '#16283F', green: '#30D158', amber: '#F2B04B', danger: '#FF6B5E',
     cellIn: '#3A3118', cellCalc: '#1B2B42',
   },
