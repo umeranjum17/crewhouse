@@ -210,8 +210,8 @@ export class Connections {
     this.flows.clear(); this.views.clear();
     await Promise.all([...this.clients.values()].map((c) => c.close())); this.clients.clear();
   }
-  private toolCache?: Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }>;
-  async tools(): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool> }> {
+  private toolCache?: Promise<{ tools: CrewTool[]; effects: Record<string, AppTool>; owner: Record<string, string> }>;
+  async tools(): Promise<{ tools: CrewTool[]; effects: Record<string, AppTool>; owner: Record<string, string> }> {
     await this.ready;
     if (this.toolCache) return this.toolCache;
     const out = this.loadTools(); this.toolCache = out;
@@ -219,10 +219,10 @@ export class Connections {
     return out;
   }
   private async loadTools() {
-    const tools: CrewTool[] = [], effects: Record<string, AppTool> = {};
+    const tools: CrewTool[] = [], effects: Record<string, AppTool> = {}, owner: Record<string, string> = Object.create(null); // looked up by a model's tool name: no inherited keys
     for (const id of this.on()) {
       const a = this.app(id);
-      if (a.tool) tools.push(a.tool(() => this.token(id)));
+      if (a.tool) { const t = a.tool(() => this.token(id)); tools.push(t); owner[t.name] = id; }
       if (!a.mcpUrl) continue;
       try {
         const mcp = this.clients.get(id) ?? await this.handle(id).mcp({ clientInfo: { name: 'crewhouse', version: '1' } });
@@ -232,7 +232,7 @@ export class Connections {
           const page = await mcp.listTools(cursor ? { cursor } : undefined);
           for (const t of page.tools) {
             const name = `${id}_${t.name}`.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 64);
-            effects[name] = { app: a.name, title: String(t.annotations?.title ?? t.title ?? t.name).replace(/[-_]/g, ' '), readOnly: t.annotations?.readOnlyHint === true, destructive: t.annotations?.destructiveHint === true };
+            effects[name] = { app: a.name, title: String(t.annotations?.title ?? t.title ?? t.name).replace(/[-_]/g, ' '), readOnly: t.annotations?.readOnlyHint === true, destructive: t.annotations?.destructiveHint === true }; owner[name] = id;
             tools.push(tool(name, `${a.name}: ${t.description ?? t.title ?? t.name}`, t.inputSchema,
               async (args, signal) => { try { return await mcp.callTool({ name: t.name, arguments: args }, CallToolResultSchema, { signal }); } finally { await this.sync(id); } }));
           }
@@ -240,7 +240,7 @@ export class Connections {
         } while (cursor);
       } catch { this.toolCache = undefined; await this.sync(id); }
     }
-    return { tools, effects };
+    return { tools, effects, owner };
   }
 }
 export type AppTool = { app: string; title: string; readOnly: boolean; destructive: boolean };

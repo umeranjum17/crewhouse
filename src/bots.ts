@@ -14,6 +14,7 @@ export interface Template {
   models?: string[];
   color: string;
   tools: string[];
+  /** The connected apps (src/connections.ts ids) this helper may use; Chief reaches every one. A made helper copies it. */ apps?: string[];
   /** Skills copied from the repo's skills/ library into the new bot's own skills/ folder. */
   skills?: string[];
   /** Promises the bot makes on Home; each is shown only while every tool it needs is granted and ready. `needs` may name
@@ -27,7 +28,7 @@ export interface Template {
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
-type BotConfig = { tools: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; handoff?: 'ask' | 'go'; ideas?: Template['ideas'] };
+type BotConfig = { tools: string[]; apps?: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; handoff?: 'ask' | 'go'; ideas?: Template['ideas'] };
 
 export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
@@ -290,6 +291,7 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
     if (existsSync(job)) writeFileSync(job, readFileSync(job, 'utf8').replace(/\n## Voice\n[\s\S]*?(?=\n## |$)/, ''));
     commit(dir, ['soul.md', 'AGENTS.md'], 'A soul of its own');
   }
+  if (tpl && !botConfig(cfg, id).apps) patchConfig(cfg, id, { apps: tpl.apps ?? [] }); // joined before app grants: the template's apps
   if (!tpl) return;
   // Only untouched template copies may move with a release; a person's edits and uncommitted changes win.
   try {

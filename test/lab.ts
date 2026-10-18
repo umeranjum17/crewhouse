@@ -1,6 +1,7 @@
 // Shared test setup: a Crew on a temp data dir, running the real engine on the stub model. No network, no quota.
 import { after } from 'node:test';
 import { createServer } from 'node:http';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 
@@ -30,6 +31,11 @@ export function setup(maxConcurrent = 3) {
   return { root: dir, cfg, db, crew, done };
 }
 
+/** A helper's app grant: the apps its bot.json lists (src/bots.ts), as its template copies them. */
+export function grantApps(cfg: { crewDir: string }, bot: string, apps: string[]) {
+  const file = join(cfg.crewDir, 'bots', bot, 'bot.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), apps }, null, 2));
+}
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const task = (db: any, id: number) => db.get('SELECT * FROM tasks WHERE id = ?', id);
 const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;
