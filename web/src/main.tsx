@@ -442,7 +442,7 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
 }
 
 /** A helper's starters in its own fresh chat: its own ready rows only, never another helper's. A tap fills Chief's box
- *  ("Penny, …", which goes straight to Penny), it never sends: a helper's own chat is read only. */
+ *  ("Penny, …", which goes straight to Penny); it never sends. */
 function HelperIdeas({ state, chat, name }: { state: Json; chat: string; name: string }) {
   const rows = A.ideas(state).filter((i: Json) => i.bot === chat).slice(0, 3); // three starters; the rest wait in Hand me a job
   if (!rows.length) return null;
@@ -807,7 +807,7 @@ function resultOpen(state: Json, t: A.Thing) {
 }
 
 /** Chief's hand-off as the person sees it: what the helper may do and the one limit, in crewd's words from its grants
- *  (A.limitOf), then "Asked Penny" with the job's state, into the helper's chat, which is read only. */
+ *  (A.limitOf), then "Asked Penny" with the job's state, into the helper's chat. */
 function HandOff({ c, state }: { c: A.HandChip; state: Json }) {
   const h = A.crew(state).find((x) => x.id === c.helper);
   if (!h) return null;
