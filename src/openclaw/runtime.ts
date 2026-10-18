@@ -15,7 +15,7 @@ export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' }, providerOf = (account: string) => account === 'chatgpt' && process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'openai-codex' : PROVIDER_OF[account];
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
@@ -64,7 +64,7 @@ export class OpenClawRuntime implements AgentRuntime {
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
-      stateDir, offered: [...new Set(Object.keys(PROVIDER_OF).map(providerOf))], engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli)))), // only installed CLI directories enter the engine's otherwise /usr/bin:/bin PATH
+      stateDir, offered: [...new Set([...Object.values(PROVIDER_OF), 'openai-codex'])], engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli)))), // only installed CLI directories enter the engine's otherwise /usr/bin:/bin PATH
       authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(appDir, 'src/openclaw/trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
@@ -97,7 +97,8 @@ export class OpenClawRuntime implements AgentRuntime {
 
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
 
-  async signedIn(account: string) { const provider = providerOf(account); return provider ? await this.kit.signedIn(ME, provider) : false; }
+  private async routeOf(account: string) { if (account !== 'chatgpt') return PROVIDER_OF[account]; if (process.env.CREWHOUSE_CODEX_CLI_ONLY === '1') return 'openai-codex'; const signed = await this.kit.providerStatus(ME).catch(() => undefined) ?? []; return signed.includes('openai-codex') && !signed.includes('openai') ? 'openai-codex' : 'openai'; }
+  async signedIn(account: string) { const provider = await this.routeOf(account); return provider ? await this.kit.signedIn(ME, provider) : false; }
 
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> } {
     if (this.signInRecovery()) {
@@ -138,11 +139,11 @@ export class OpenClawRuntime implements AgentRuntime {
     };
   }
 
-  async signOut(account: string) { const provider = providerOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
+  async signOut(account: string) { const provider = await this.routeOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
 
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
-    const provider = providerOf(account), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'default' }, { timeoutMs: 20_000 });
+    const provider = await this.routeOf(account), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'default' }, { timeoutMs: 20_000 });
     return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && m.available !== false).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
@@ -165,7 +166,7 @@ export class OpenClawRuntime implements AgentRuntime {
   async setLearning(on: boolean) { await this.kit.patchConfig({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }); }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const provider = providerOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
+    const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
     this.runs.set(spec.key, spec);
     try {
       const lane = provider === 'opencode-go' ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;

@@ -175,6 +175,17 @@ test('Codex CLI-only mode routes ChatGPT picks to Codex and has no sign-in fallb
   }
 });
 
+test('a ChatGPT sign-in the kit reports on the Codex route shows ChatGPT signed in with its models', async () => {
+  const f = faked({}, { 'models.list': () => ({ models: [{ id: 'openai-codex/gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai-codex', available: true }] }) });
+  try {
+    await f.started;
+    // The kit's own report: its Codex login probe needs a real engine, so the fake reports the one row it would.
+    f.runtime.kit.providerStatus = async () => ['openai-codex'];
+    assert.equal(await f.runtime.signedIn('chatgpt'), true);
+    assert.deepEqual(await f.runtime.models('chatgpt'), [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }]);
+  } finally { await f.done(); }
+});
+
 test('resolved engine config disables silent memory flush and heartbeat without disabling the workshop', async () => {
   const f = faked();
   const configPath = join(f.state, 'openclaw', 'openclaw.json');
