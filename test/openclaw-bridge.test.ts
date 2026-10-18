@@ -153,6 +153,28 @@ test('Claude signed in on this computer is usable: the kit reports it as claude-
   } finally { await f.done(); }
 });
 
+test('Codex CLI-only mode routes ChatGPT picks to Codex and has no sign-in fallback', async () => {
+  const previous = process.env.CREWHOUSE_CODEX_CLI_ONLY;
+  process.env.CREWHOUSE_CODEX_CLI_ONLY = '1';
+  const f = faked({}, { 'models.list': () => ({ models: [{ id: 'openai-codex/gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai-codex', available: true }] }) });
+  try {
+    await f.started;
+    assert.deepEqual(await f.runtime.models('chatgpt'), [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }]);
+    const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'chatgpt',
+      model: 'gpt-6-luna', cwd: '', system: '', message: 'Explain this repo.', builtins: [] }, () => {});
+    assert.ok(!end.ok && 'message' in end);
+    assert.match(end.message, /openai-codex is not signed in/);
+    const signInError = await new Promise<string>((resolve) => {
+      f.runtime.signIn('chatgpt', 'browser', (step) => resolve(step.error ?? ''));
+    });
+    assert.match(signInError, /Sign in to Codex CLI/);
+  } finally {
+    await f.done();
+    if (previous === undefined) delete process.env.CREWHOUSE_CODEX_CLI_ONLY;
+    else process.env.CREWHOUSE_CODEX_CLI_ONLY = previous;
+  }
+});
+
 test('resolved engine config disables silent memory flush and heartbeat without disabling the workshop', async () => {
   const f = faked();
   const configPath = join(f.state, 'openclaw', 'openclaw.json');

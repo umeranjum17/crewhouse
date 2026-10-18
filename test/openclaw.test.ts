@@ -7,7 +7,7 @@ import { OpenClawKit } from '@byokit/openclaw';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { runSandboxed, sandboxReady } from '../src/engine.ts';
 
-test('pinned engine uses isolated home, loopback token and no Control UI', { timeout: 120_000 }, async () => {
+test('pinned engine uses the owner HOME and isolated Codex state, with loopback token and no Control UI', { timeout: 120_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'crewhouse-gateway-'));
   const owner = join(root, 'owner');
   mkdirSync(owner);
@@ -40,9 +40,9 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     assert.equal(env.OPENCLAW_HOME, join(engine, 'home')); // Engine state remains under Crewhouse's isolated directory.
     assert.equal(env.CODEX_HOME, join(engine, 'home', '.codex')); // Gateway/doctor never read or refresh the installed Codex login.
     assert.equal(env.OPENAI_API_KEY, undefined);
-    // The one PATH the engine may borrow: the folder holding the `claude` CLI the Claude route drives, nothing else.
-    const claudeDirs = (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude')));
-    assert.deepEqual(env.PATH.split(':').slice(2), claudeDirs, 'no other folder of the owner\'s PATH reaches the engine');
+    // Only folders holding installed CLI backends may be borrowed; nothing else from the owner's PATH reaches the engine.
+    const cliDirs = (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli))));
+    assert.deepEqual(env.PATH.split(':').slice(2), cliDirs, 'no other folder of the owner\'s PATH reaches the engine');
     await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => 'no calls here' });
     const health = await kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
     assert.equal(health.ok, true);
@@ -52,6 +52,8 @@ test('pinned engine uses isolated home, loopback token and no Control UI', { tim
     const pid = Number(readFileSync(join(engine, 'gateway.pid'), 'utf8'));
     const childEnv = readFileSync(`/proc/${pid}/environ`, 'utf8');
     assert.doesNotMatch(childEnv, /decoy-secret|\.pi|\.clawdbot/);
+    assert.ok(childEnv.includes(`HOME=${owner}`));
+    assert.ok(childEnv.includes(`CODEX_HOME=${join(engine, 'home', '.codex')}`));
     assert.match(childEnv, /OPENCLAW_SKIP_CHANNELS=1/);
     assert.match(childEnv, /OPENCLAW_STATE_DIR=/);
     const sockets = new Set(readdirSync(`/proc/${pid}/fd`).flatMap((fd) => {
