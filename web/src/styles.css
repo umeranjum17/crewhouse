@@ -1602,15 +1602,13 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-gear { width: 44px; height: 44px; border-radius: 50%; background: var(--soft); flex: none; }
 .sh-chief { margin-top: 18px; padding: 18px; border-radius: 26px; background: var(--solid); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
 .sh-top { display: flex; gap: 14px; align-items: center; color: inherit; text-decoration: none; }
-.sh-top .grow, .st-card .grow, .st-room .grow { display: grid; gap: 2px; min-width: 0; }
+.sh-top .grow, .st-card .grow, .st-kept .grow { display: grid; gap: 2px; min-width: 0; }
 .sh-top b { font-size: 22px; line-height: 1.15; }
 .st-word { font-size: 16px; font-weight: 600; }
 .st-line { font-size: 16px; color: var(--mute); overflow-wrap: anywhere; }
 .st-label { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin: 26px 4px 10px; color: var(--mute); }
 .st-label span:first-child { font-size: 14px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .st-label span + span { font-size: 16px; }
-.st-crew { display: grid; gap: 8px; }
-@media (min-width: 900px) { .st-crew { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .st-card { display: flex; align-items: center; gap: 12px; min-height: 76px; min-width: 0; padding: 12px 14px; border-radius: 22px; color: #0B0B0B; text-decoration: none; }
 .st-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .st-top b { flex: 1; min-width: 0; font-size: 18px; line-height: 1.15; overflow-wrap: anywhere; }
@@ -1619,14 +1617,6 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-new { border: 2px dashed var(--line2); color: var(--ink); }
 .st-new .lucide { margin: 0 10px; flex: none; }
 .stack .nudge { font-size: 16px; }
-.st-new .grow b { font-size: 18px; }
-.st-new .grow span, .st-room .grow span { font-size: 16px; color: var(--mute); overflow-wrap: anywhere; }
-.st-room { display: flex; align-items: center; gap: 12px; margin-top: 8px; min-height: 64px; padding: 12px 16px; border-radius: 22px; background: var(--solid); border: 1px solid var(--line); color: inherit; text-decoration: none; }
-.st-room b { font-size: 18px; }
-.stack .jobs { margin-top: 26px; }
-.stack .jobs .label { font-size: 14px; line-height: 1.2; font-weight: 800; letter-spacing: .08em; }
-.stack .jobs .list-row b, .stack .jobs .list-row .small { font-size: 16px; line-height: 1.35; }
-.stack .job-ic { width: 36px; height: 36px; } /* the dollar sits in the same 36px slot as a face, so every row's words line up */
 .stack > h1.wide { margin-top: 8px; font-size: 40px; line-height: 1; }
 .stack > .st-line { margin: 8px 0 0; }
 .st-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 18px; }
@@ -1683,3 +1673,71 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .me-av { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--soft); font: 800 18px/1 var(--ui); }
 }
 .jobs-page .needs-row .small, .jobs-page .needs-row time { font-size: 16px; }
+/* Home (Stack J02): Chief's card with his box, Today's rows in each helper's colour, Kept and Hand me a job; on a
+   computer a header bar, and Chief's asks in the column beside (Today leaves them out there, so none shows twice). */
+.st-date, .st-hand, .st-asks { display: none; }
+.st-head .grow { min-width: 0; }
+.sh-top b { font-size: 22px; }
+.sh-acts { display: flex; gap: 8px; }
+.sh-acts .btn, .btn.st-hand { min-height: 50px; padding: 0 20px; border-radius: 16px; border: 0; font: 700 16px/1.2 Archivo, var(--ui); }
+.sh-acts .btn { background: var(--tint2); color: var(--ink); }
+.sh-acts .btn.go, .btn.st-hand { flex: 1; background: var(--ink); color: var(--bg); }
+.has-asks .sh-chief .composer { display: none; }
+.sh-chief .composer { align-items: center; min-height: 54px; border-radius: 18px; padding: 0 6px 0 16px; background: var(--bg); }
+.sh-chief .composer .send { width: 42px; height: 42px; border-radius: 13px; background: var(--ink); color: var(--bg); border: 0; opacity: 1; }
+.st-label span:only-child { font-size: 14px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.st-today { display: grid; gap: 8px; margin: 0 -4px; }
+.st-today .st-card { min-height: 76px; }
+.st-ask { background: #FF7AB8; }
+.st-today .st-top b { flex: 1 1 auto; }
+.st-pill.needs-k { background: #0B0B0B; color: #FFFFFF; }
+.st-rest { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border: 0; border-radius: 24px; background: var(--tint2); }
+.st-rest .grow { display: grid; gap: 4px; }
+.st-rest .lucide { flex: none; align-self: flex-start; margin-top: 2px; }
+.st-rest b { font-size: 17px; line-height: 1.3; }
+.st-rest .grow span { font-size: 16px; line-height: 1.4; color: var(--mute); }
+.st-empty { display: grid; gap: 8px; padding: 24px; border-radius: 28px; background: var(--solid); border: 1px solid var(--line); }
+.st-empty b, .st-empty b.wide { font-size: 28px; line-height: 1.05; }
+.st-empty span, .st-kept .grow span, .st-idea .grow span { font-size: 16px; color: var(--mute); }
+.st-kept { display: flex; align-items: center; gap: 14px; margin-top: 18px; min-height: 56px; color: inherit; text-decoration: none; }
+.st-kept b { font-size: 18px; }
+.st-fan { position: relative; width: 84px; height: 56px; flex: none; }
+.st-fan i { position: absolute; left: 10px; top: 6px; width: 56px; height: 42px; border-radius: 9px; border: 2px solid var(--bg); background: #2FCB93; transform: rotate(-12deg); }
+.st-fan i + i { background: #FFC93C; transform: rotate(-2deg); }
+.st-fan i + i + i { background: #8A5CF6; transform: rotate(9deg); }
+.stack .jobs { margin-top: 0; }
+.st-ideas { display: grid; gap: 8px; }
+.st-idea { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 16px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: inherit; font: 600 16px/1.3 Archivo, var(--ui); text-align: left; text-decoration: none; }
+.st-idea .grow { display: grid; gap: 2px; min-width: 0; }
+.st-room { margin-top: 16px; }
+.st-idea b { font-weight: 600; overflow-wrap: anywhere; }
+@media (min-width: 900px) {
+  .page.stack-home { max-width: none; width: 100%; padding: 0; }
+  .stack-home .st-head { min-height: 76px; padding: 12px 28px; border-bottom: 1px solid var(--line); }
+  .stack-home .st-head h1 { font-size: 26px; line-height: 1.1; }
+  .st-date { display: block; margin-top: 4px; font-size: 16px; color: var(--mute); }
+  .stack-home .st-gear { display: none; }
+  .btn.st-hand { display: inline-flex; flex: none; min-height: 50px; }
+  .st-body { display: flex; align-items: stretch; min-height: calc(100vh - var(--top) - 77px); }
+  .st-pri { flex: 1; min-width: 0; padding: 24px 28px; }
+  .st-pri > .sh-chief:first-child, .st-pri > :first-child { margin-top: 0; }
+  .has-asks .sh-chief .composer { display: flex; }
+  .sh-acts, .st-today .st-ask, .st-kept { display: none; }
+  .st-today { gap: 10px; margin: 0; }
+  .st-ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .st-asks { display: flex; flex-direction: column; gap: 12px; width: 368px; flex: none; padding: 20px; border-left: 1px solid var(--line); }
+  .st-asks .st-label { margin: 0 0 4px; }
+  .st-how ol { display: grid; gap: 18px; margin: 0; padding: 0; list-style: none; counter-reset: how; }
+  .st-how li { display: flex; gap: 14px; align-items: flex-start; font-size: 17px; line-height: 1.35; counter-increment: how; }
+  .st-how li::before { content: counter(how); flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-top: -4px; border-radius: 50%; background: var(--ink); color: var(--bg); font: 800 16px/1 Archivo, var(--ui); }
+  .st-how p { display: flex; gap: 12px; margin: 12px 0 0; font-size: 16px; line-height: 1.4; color: var(--mute); }
+  .st-how p .lucide { flex: none; margin-top: 1px; }
+  .st-cc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 18px; border-radius: 26px; background: #FF7AB8; color: #0B0B0B; text-decoration: none; }
+  .st-cc-top { display: flex; align-items: center; gap: 10px; }
+  .st-cc b { font: 800 20px/1.15 Archivo, var(--ui); }
+  .st-cc > span:not(.st-cc-top):not(.st-cc-acts) { font-size: 16px; line-height: 1.35; }
+  .st-cc-acts { display: flex; gap: 8px; margin-top: 4px; }
+  .st-cc-acts .btn { flex: 1; min-height: 50px; border-radius: 16px; border: 0; padding: 8px 14px; white-space: normal; font: 700 16px/1.2 Archivo, var(--ui); background: rgba(11,11,11,.1); color: #0B0B0B; }
+  .st-cc-acts .btn:not(.go) { flex: none; }
+  .st-cc-acts .btn.go { background: #0B0B0B; color: #FFFFFF; }
+}
