@@ -132,4 +132,6 @@ More: [install and run](docs/install.md) (every command, the phone app, the inst
 
 **Contributing:** `npm run check` and `./crewhouse test` (no account, no network). Conventions are in [AGENTS.md](AGENTS.md).
 
+Tests, the stub engine and unmarked lab/proof scripts use a fresh temporary Crewhouse home, an OS-assigned API port and no phone listener. `CREWHOUSE_RUN_MODE=lab` (or `test` / `verify`) forces this mode, including through a product launcher. Explicit `CREWHOUSE_*_DIR` and XDG paths still work, but isolated starts refuse the installed owner's crew, state, tools, engine or Google-client paths, including symlink aliases. Set `TMPDIR` to your lab's scratch folder; its `CREWHOUSE_RUN_HOME` is inherited by children so they share that run's private crew. Product launchers and the installed service keep the normal persistent defaults.
+
 Crewhouse is licensed under the [Apache License 2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE). Your AI account stays subject to its provider's terms.

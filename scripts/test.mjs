@@ -8,7 +8,10 @@ const { root, cleanup } = testRoot();
 mkdirSync(join(root, 'h'));
 mkdirSync(join(root, 'tmp'));
 const scratch = join(root, 'tmp');
-const env = { ...process.env, HOME: join(root, 'h'), TMPDIR: scratch,
+const env = { ...process.env, CREWHOUSE_RUN_MODE: 'test', CREWHOUSE_RUN_HOME: join(root, 'h'),
+  CREWHOUSE_STATE_DIR: join(root, 'state/crewhouse'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools'),
+  CREWHOUSE_ENGINE_DIR: process.env.CREWHOUSE_ENGINE_DIR || join(root, 'engine'), CREWHOUSE_GOOGLE_CLIENT: join(root, 'config/absent-google-client.json'),
+  HOME: join(root, 'h'), TMPDIR: scratch,
   XDG_STATE_HOME: join(root, 'state'), XDG_DATA_HOME: join(root, 'data'), XDG_CONFIG_HOME: join(root, 'config'),
   XDG_CACHE_HOME: join(root, 'cache'), XDG_RUNTIME_DIR: join(root, 'runtime'),
   DBUS_SESSION_BUS_ADDRESS: `unix:path=${join(root, 'no-bus')}` }; // the kit provisions its own isolated host key

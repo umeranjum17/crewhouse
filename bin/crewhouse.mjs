@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../dist/config.js';
 
+process.env.CREWHOUSE_RUN_MODE ??= 'product';
 const here = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const [cmd = 'start', ...args] = process.argv.slice(2);
 const node = process.versions.node.split('.').map(Number);
@@ -14,8 +14,9 @@ if (node[0] < 22 || node[0] === 22 && (node[1] < 22 || node[1] === 22 && node[2]
   process.exit(1);
 }
 
+const config = loadConfig();
 const version = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8')).version;
-const app = join(process.env.XDG_DATA_HOME || join(homedir(), '.local/share'), 'crewhouse/app', version);
+const app = join(dirname(config.toolsDir), 'app', version);
 const current = join(app, 'node_modules/crewhouse');
 if (process.env.CREWHOUSE_NPM_HOME !== current) {
   mkdirSync(app, { recursive: true });
@@ -42,14 +43,13 @@ const setup = launch('setup');
 if (setup.status !== 0) process.exit(setup.status ?? 1);
 const child = spawn('bash', [join(here, 'crewhouse'), 'start'], { cwd: here, env: process.env, detached: true, stdio: 'ignore' });
 child.unref();
-const config = loadConfig();
 const key = join(config.stateDir, 'person.key');
 let authority;
 for (let i = 0; i < 240; i++) {
   if (existsSync(key)) {
     authority = readFileSync(key, 'utf8');
     try {
-      const r = await fetch(`http://${process.env.CREWHOUSE_HOST || '127.0.0.1'}:${process.env.CREWHOUSE_PORT || 7711}/api/state`, {
+      const r = await fetch(`${readFileSync(join(config.stateDir, 'endpoint'), 'utf8').trim()}/api/state`, {
         headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` },
       });
       if (r.ok) break;
@@ -58,7 +58,7 @@ for (let i = 0; i < 240; i++) {
   await new Promise((r) => setTimeout(r, 500));
 }
 if (!authority) throw new Error('Crewhouse did not start; check ~/.local/state/crewhouse/crewd.log.');
-const port = config.port;
+const port = new URL(readFileSync(join(config.stateDir, 'endpoint'), 'utf8').trim()).port;
 const pair = await fetch(`http://127.0.0.1:${port}/api/phones/pair`, {
   method: 'POST', headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}`, 'content-type': 'application/json' },
   body: JSON.stringify({ role: 'control' }),

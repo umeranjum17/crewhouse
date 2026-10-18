@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { status } from '../web/src/adapter.ts';
 import { loadConfig } from '../src/config.ts';
 
+process.env.CREWHOUSE_RUN_MODE ??= 'product';
 let pill = { text: '', tooltip: '', class: 'quiet' };
 try {
   const port = process.env.CREWHOUSE_PORT || '7711';

@@ -3,7 +3,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { appDir, CHIEF, type Config } from './config.ts';
+import { appDir, assertSafeConfig, CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watcher } from './desktop.ts';
@@ -240,7 +240,7 @@ export class Crew {
   private mailFiling: MailSend | undefined;
 
   constructor(cfg: Config, db: Store) {
-    this.cfg = cfg; this.db = db;
+    assertSafeConfig(cfg); this.cfg = cfg; this.db = db;
     this.desktops = new Desktops(cfg.stateDir);
     this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
     this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir, cfg.crewDir);

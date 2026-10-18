@@ -6,7 +6,7 @@ import { isIPv4 } from 'node:net';
 import { tailscaleState } from '@byokit/discover';
 import { keyPairFrom } from '@byokit/pair';
 import { qrText } from '@byokit/ui-core/link';
-import { loadConfig } from '../src/config.ts';
+import { isolatedRun, loadConfig } from '../src/config.ts';
 import { startRelay } from '../relay/main.ts';
 
 const cfg = loadConfig(), repo = cfg.repoDir, relayPort = Number(process.env.CREWHOUSE_RELAY_PORT || 7300), publicRelay = process.env.CREWHOUSE_RELAY_PUBLIC;
@@ -26,7 +26,8 @@ async function tailnet() {
   return ip;
 }
 async function api(path, body, method = body ? 'POST' : 'GET') {
-  const r = await fetch(`http://127.0.0.1:${cfg.port}/api/${path}`, { method, signal: AbortSignal.timeout(5000),
+  const base = cfg.port ? `http://127.0.0.1:${cfg.port}` : readFileSync(join(cfg.stateDir, 'endpoint'), 'utf8').trim();
+  const r = await fetch(`${base}/api/${path}`, { method, signal: AbortSignal.timeout(5000),
     headers: { 'x-crewhouse': '1', 'content-type': 'application/json', authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}` }, body: body && JSON.stringify(body) });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || `Crewhouse returned HTTP ${r.status}`);
@@ -72,6 +73,7 @@ async function setup() {
   if (process.platform !== 'linux') throw new Error('Headless setup needs Linux and systemd.');
   await tailnet();
   if (process.argv.includes('--install-only')) { console.log('Headless files ready; start scripts/headless.mjs serve in your own unit, then run ./crewhouse headless pair.'); return; }
+  if (isolatedRun(cfg.engine)) throw new Error('Lab/test runs cannot install a login service; use --install-only.');
   const root = process.getuid() === 0, scope = root ? [] : ['--user'];
   const dir = root ? '/etc/systemd/system' : join(process.env.XDG_CONFIG_HOME || join(process.env.HOME, '.config'), 'systemd/user');
   execFileSync('systemctl', [...scope, 'show-environment'], { stdio: ['ignore', 'ignore', 'inherit'] });

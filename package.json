@@ -14,7 +14,7 @@
   "scripts": {
     "prepack": "npm run build:web && npm run build:cli",
     "build:cli": "node scripts/build-cli.mjs",
-    "start": "node src/main.ts",
+    "start": "CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product} node src/main.ts",
     "build:web": "node scripts/build-web.mjs",
     "test": "node scripts/test.mjs",
     "check": "tsc"

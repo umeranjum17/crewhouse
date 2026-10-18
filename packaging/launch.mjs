@@ -8,28 +8,29 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { trouble } from './trouble.mjs';
 
+process.env.CREWHOUSE_RUN_MODE ??= 'product';
 const root = dirname(new URL(import.meta.url).pathname); // /opt/crewhouse
 const node = join(root, 'node', 'bin', 'node');
 const app = join(root, 'app');
-const url = `http://127.0.0.1:${process.env.CREWHOUSE_PORT || 7711}`;
-// The helpers' tools install with the bundled npm, so it goes first on the PATH crewd and its tools see.
+const { isolatedRun, loadConfig } = await import(join(app, 'src', 'config.ts'));
+const cfg = loadConfig(), stateDir = cfg.stateDir, keyFile = join(stateDir, 'person.key');
+let url = `http://127.0.0.1:${cfg.port}`;
+// Capture config's private run home too, so a launcher and its child use the same crew.
 const env = { ...process.env, PATH: `${join(root, 'node', 'bin')}:${process.env.PATH ?? ''}`, CREWHOUSE_PACKAGED: process.env.CREWHOUSE_PACKAGED ?? '1' };
-
-// Liveness only: crewd answers this unauthenticated probe with its gate's 403 and its own code (or a 200 from a pre-gate build); anything else is not crewd.
-const { loadConfig } = await import(join(app, 'src', 'config.ts'));
-const stateDir = loadConfig().stateDir;
-const keyFile = join(stateDir, 'person.key');
-const up = () => fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) })
-  .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({})))?.code === 'no-authority'), () => false);
-// CREWHOUSE_NO_SERVICE=1 (tests): never touch the login services of whoever runs this.
-const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
+// Liveness only: crewd's own gate 403 (or an older 200), never another program's 403.
+const up = async () => {
+  if (!cfg.port) { if (!existsSync(join(stateDir, 'endpoint'))) return false; url = readFileSync(join(stateDir, 'endpoint'), 'utf8').trim(); }
+  return fetch(`${url}/api/state`, { signal: AbortSignal.timeout(1500) })
+    .then(async (r) => r.ok || (r.status === 403 && (await r.json().catch(() => ({})))?.code === 'no-authority'), () => false);
+};
+const systemd = () => !process.env.CREWHOUSE_NO_SERVICE && !isolatedRun(cfg.engine) && spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' }).status === 0;
 
 function service() {
   const unit = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'systemd', 'user', 'crewhouse.service');
   const vars = Object.entries(env).filter(([k]) => k.startsWith('CREWHOUSE_')).map(([k, v]) => `Environment=${k}=${v}`).join('\n');
   mkdirSync(dirname(unit), { recursive: true });
   // The same crewd.log as the no-service path: the marks a first run is timed by are in one file either way.
-  const out = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'crewd.log');
+  const out = join(stateDir, 'crewd.log');
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(unit, `[Unit]\nDescription=Crewhouse\nAfter=network-online.target\n\n[Service]\nWorkingDirectory=${app}\n` +
     `Environment=PATH=${env.PATH}\n${vars}\nExecStart=${node} src/main.ts\nStandardOutput=append:${out}\nStandardError=append:${out}\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n`);
@@ -49,7 +50,7 @@ let why = 'Crewhouse started, but never answered'; // what actually went wrong, 
 if (!(await up())) {
   // A login service where the desktop has one; otherwise crewd runs on its own until the computer restarts.
   if (!(systemd() && service())) {
-    const log = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse');
+    const log = stateDir;
     mkdirSync(log, { recursive: true });
     const out = openSync(join(log, 'crewd.log'), 'a');
     // It may not even start (a half-removed install); the wait below then shows the plain screen.
@@ -60,7 +61,7 @@ if (!(await up())) {
   // Nothing came up. From the app menu there is no terminal to read a path in, so the person gets a plain screen instead.
   if (!(await up())) {
     if (process.argv.includes('--no-open')) { console.error(`Crewhouse didn't start; see ~/.local/state/crewhouse/crewd.log`); process.exit(1); }
-    const page = join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'crewhouse', 'trouble.html');
+    const page = join(stateDir, 'trouble.html');
     mkdirSync(dirname(page), { recursive: true });
     const key = existsSync(keyFile) ? readFileSync(keyFile, 'utf8') : '';
     rmSync(page, { force: true });
