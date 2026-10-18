@@ -44,7 +44,8 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
 
   // Each app the way the person connects it: Connect, the sign-in page, their own account, back to crewd.
   for (const app of ['gmail', 'gmailwrite', 'calendar']) {
-    crew.connections.apps[app] = { ...crew.connections.apps[app], oauth: { authorize: `${EMU}/o/oauth2/v2/auth`, token: `${EMU}/oauth2/token` } };
+    // BYOKit 0.7.0's endpoint settings omit the distinct gmailwrite provider id.
+    if (app === 'gmailwrite') crew.connections.apps[app] = { ...crew.connections.apps[app], oauth: { authorize: `${EMU}/o/oauth2/v2/auth`, token: `${EMU}/oauth2/token` } };
     const { url } = await api('POST', `/api/connections/${app}`);
     assert.ok(url.startsWith(`${EMU}/o/oauth2/v2/auth?`), `${app} signs in on the emulated Google`);
     const page = await (await fetch(url)).text(), form = page.split('<form').find((f) => f.includes(`value="${ME}"`));
