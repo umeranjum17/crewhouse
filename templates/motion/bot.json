@@ -1,0 +1,14 @@
+{
+  "display": "Motion Milo",
+  "role": "Makes timing and easing variants of a real animation spec, so you can pick the one that feels right.",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#0F766E",
+  "tools": [
+    "crew",
+    "files",
+    "media",
+    "computer"
+  ]
+}

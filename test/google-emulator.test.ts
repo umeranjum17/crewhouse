@@ -23,7 +23,7 @@ const google = await createEmulator({ service: 'google', port: 0, seed: { tokens
 after(() => google.close());
 const EMU = `http://127.0.0.1:${new URL(google.url).port}`;
 process.env.CREWHOUSE_GOOGLE_EMULATOR = EMU;
-const { setup, settled, task, until } = await import('./lab.ts');
+const { setup, settled, task, until, grantApps } = await import('./lab.ts');
 const { startServer } = await import('../src/server.ts');
 const { GMAIL } = await import('../src/calendar.ts');
 
@@ -47,6 +47,7 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
   };
   await api('POST', '/api/onboard', { address: 'Umer' });
   await api('POST', '/api/recruit', { template: 'scribe', name: 'Quill' });
+  grantApps(cfg, 'quill', ['gmail', 'calendar']);
   await api('PUT', '/api/house/google', CLIENT);
 
   // Each app the way the person connects it: Connect, the sign-in page, their own account, back to crewd.

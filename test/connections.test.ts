@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled, task, until, release } from './lab.ts';
+import { setup, settled, task, until, release, grantApps } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
 const { Connections, connectError } = await import('../src/connections.ts');
@@ -206,9 +206,10 @@ test('kit refresh stays sealed; transient failures preserve sign-in, expired tok
 });
 
 test('a connected app\'s tools: reading runs silently, changing something asks in plain words', async () => {
-  const { db, crew, done } = lab();
+  const { cfg, db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['mocknote']);
   const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
   const t = crew.assign('quill', 'find it [tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]', 'chief').task;
@@ -226,6 +227,46 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   assert.equal(task(db, u).state, 'unsure', 'it changed something and never said it saw it work');
   assert.ok(seen.auth.every((a) => /^Bearer A[12]$/.test(a)), 'the bot never holds the token; crewd adds it');
   assert.ok(!existsSync(join(crew['cfg'].crewDir, 'bots', 'quill', 'connections.json')));
+  done();
+});
+
+test('a helper reaches only the apps its job grants, even a connected one; Chief reaches them all, and the refusal says why in plain words', async () => {
+  const { cfg, db, crew, done } = lab();
+  crew.onboard('sir');
+  crew.recruit('scribe', 'Quill', 'person');
+  await back(crew, await start(crew), { code: 'good' });
+  const search = '[tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]';
+  // Writer Will's job grants Drive and Notion: Mocknote is refused, and nothing reaches the app.
+  const refused = crew.assign('quill', `find it ${search}`, 'chief').task;
+  await settled(db, refused);
+  assert.match(task(db, refused).result, /Mocknote isn't part of this job, so you can't use it/);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", refused)!.n, 0);
+  // Not even asking for it, connected or not.
+  const connect = crew.assign('quill', 'and [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  await settled(db, connect);
+  assert.match(task(db, connect).result, /Mocknote isn't part of this job, so you can't connect it/);
+  assert.equal(db.all('SELECT * FROM asks').length, 0);
+  // The person grants it to this job: the same call reaches the app.
+  grantApps(cfg, 'quill', ['drive', 'notion', 'mocknote']);
+  const granted = crew.assign('quill', `find it ${search}`, 'chief').task;
+  await settled(db, granted);
+  assert.match(task(db, granted).result, /did search/);
+  // Chief reaches every connected app without a grant.
+  const chief = (await crew.post('chief', `find it ${search}`)) as { task: number };
+  await settled(db, chief.task);
+  assert.match(task(db, chief.task).result, /did search/);
+  done();
+});
+
+test('a helper joined before app grants takes its template\'s apps when the crew starts again', () => {
+  const { cfg, crew, done } = setup();
+  crew.onboard('sir');
+  crew.recruit('scout', 'Rae', 'person');
+  const older = disk.botConfig(cfg, 'rae');
+  delete older.apps;
+  writeFileSync(join(disk.botDir(cfg, 'rae'), 'bot.json'), JSON.stringify(older));
+  disk.upgradeFolder(cfg, 'rae', disk.loadTemplate(cfg, 'scout'), 'Rae');
+  assert.deepEqual(disk.botConfig(cfg, 'rae').apps, ['drive', 'notion', 'gmail', 'calendar']);
   done();
 });
 
@@ -353,9 +394,10 @@ test('the house Google client: present, a Google app connects in one tap with no
 });
 
 test('in chat: a helper asks for an app, the person connects it from the card, and the task carries on with it', async () => {
-  const { db, crew, done } = lab();
+  const { cfg, db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['mocknote', 'canva']);
   const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"mocknote"}]', 'chief').task;
   await until('asked', () => task(db, t).state === 'needs_you');
   const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
@@ -381,9 +423,10 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
 });
 
 test("a Google app a helper needs is Chief who asks, and the helper's own task carries on once it is connected", async () => {
-  const { db, crew, done } = googleLab();
+  const { cfg, db, crew, done } = googleLab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['calendar']);
   await house(crew);
   const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"calendar"}]', 'chief').task;
   await until('asked', () => task(db, t).state === 'needs_you');
@@ -403,6 +446,7 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   const { cfg, db, crew, done } = lab();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['mocknote']);
   await back(crew, await start(crew), { code: 'good' });
   disk.setSettings(cfg, 'quill', { allow: ['app:Mocknote:create a page'] }); // "Always": no card, so the call goes straight through
   const book = '[tool crew_app {"tool":"mocknote_create_page","input":{"title":"Dentist"}}]';
