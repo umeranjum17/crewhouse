@@ -57,7 +57,7 @@ function webRoot(): string {
 }
 
 /** A real crewd with Chief's thread open in a real Chromium, the device stand-in loaded before the app boots. */
-async function boot(device: string) {
+async function boot(device: string, withHelper = false) {
   const parent = webRoot();
   process.env.CREWHOUSE_STUB_GOLDEN = '1'; // "hi" gets Chief's scripted "Hi. What would you like to work on?"
   const { cfg, db, crew, done } = setup();
@@ -66,6 +66,7 @@ async function boot(device: string) {
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const key = readFileSync(join(cfg.stateDir, 'person.key'), 'utf8');
   await fetch(`${base}/api/onboard`, { method: 'POST', headers: { authorization: `Bearer ${key}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: JSON.stringify({ address: 'Umer' }) });
+  const helper = withHelper ? crew.recruit('scribe', 'Scribe', 'person') : undefined;
 
   const profile = mkdtempSync(join(tmpdir(), 'voice-call-browser-'));
   const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
@@ -95,8 +96,8 @@ async function boot(device: string) {
   await send('Page.addScriptToEvaluateOnNewDocument', { source: device });
   await send('Page.navigate', { url: `${base}/?day#person=${key}` });
   await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
-  await run('location.hash = "#/chief"');
-  return { run, db, turns: (): Promise<string[]> => run('window.turns') };
+  await run(`location.hash = ${JSON.stringify(helper ? `#/h/${helper.id}` : '#/chief')}`);
+  return { run, db, helper, turns: (): Promise<string[]> => run('window.turns') };
 }
 
 test('a call with Chief listens, sends, reads the reply aloud, listens again, Stop ends it, and a missing microphone says so', { skip: !bin && 'no Chromium here' }, async () => {
@@ -127,6 +128,19 @@ test('a call with Chief listens, sends, reads the reply aloud, listens again, St
   await run("document.querySelector('.chat .dock button.send.talk').click()");
   await until('a call with no microphone to end and say so', () => run("!document.querySelector('.call') && /microphone/.test(document.querySelector('.toast')?.textContent ?? '')"), 10_000);
   assert.match(await run("document.querySelector('.toast').textContent"), /I can't hear a microphone on this computer\. Type instead\./);
+});
+
+test('a helper chat listens, sends, speaks that helper\'s reply and listens again until Stop', { skip: !bin && 'no Chromium here' }, async () => {
+  const { run, helper, turns } = await boot(DEVICE({ device: true, online: true }), true);
+  assert.ok(helper);
+  await until('Talk in the helper box', () => run("!!document.querySelector('.chat .dock button.send.talk')"), 30_000);
+  assert.equal(await run("document.querySelector('.send.talk').title"), 'Talk with Scribe');
+  await run("document.querySelector('.send.talk').click()");
+  await until('helper reply spoken and microphone reopened', async () => (await turns()).filter((t) => t === 'listen').length === 2, 30_000);
+  assert.equal(await run("document.querySelector('.call').getAttribute('aria-label')"), 'Call with Scribe');
+  assert.ok((await turns()).some((t) => t.startsWith('say Hi.')));
+  await run("document.querySelector('.call-stop').click()");
+  await until('helper call stopped', () => run("!document.querySelector('.call')"), 10_000);
 });
 
 test('with no recognizer of its own, the browser\'s online one hears, and its line shows before the call listens', { skip: !bin && 'no Chromium here' }, async () => {
