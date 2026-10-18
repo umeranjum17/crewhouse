@@ -152,7 +152,7 @@ export const CLOUD = {
 export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
 export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
 /** The page's one call: no `act` reads the computer, an act does it and reads again. It stops at the kit:
- *  @byokit/cloud (machine.update, reset, copies, remove) is not on npm yet, so no computer is reached and nothing
+ *  @byokit/cloud's machine.update, reset, copies and remove aren't wired here yet, so no computer is reached and nothing
  *  changes. The 404 is crewd's own "not here yet" (api.ts `trouble`), so each surface says it isn't ready. */
 export async function computerCall(_act?: ComputerAct): Promise<Computer> {
   throw Object.assign(new Error("Chief's computer isn't connected yet"), { status: 404 });

@@ -6,7 +6,7 @@ this phone, the sign-in-yourself note and "You can change this later in Settings
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
-The cloud row is behind a build flag (the branch builds against a vendored tarball packed from BYOKit main):
+The cloud row is behind a build flag (`@byokit/cloud` 0.1.0 from npm, on its `next` tag):
 `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for
 `scripts/build-web.mjs`. Without it the screen has two rows, On my computer first. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
