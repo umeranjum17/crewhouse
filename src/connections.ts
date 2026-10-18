@@ -88,8 +88,7 @@ export class Connections {
   private handle(id: string) {
     const a = this.app(id), client = a.google ? this.googleClient : undefined, key = JSON.stringify([a, client]), cached = this.handles.get(id);
     if (cached?.key === key) return cached.connection;
-    const emulator = process.env.CREWHOUSE_GOOGLE_EMULATOR;
-    const endpoints = emulator ? { google: { authorize: `${emulator}/o/oauth2/v2/auth`, token: `${emulator}/oauth2/token`, api: emulator } } : undefined;
+    const emulator = process.env.CREWHOUSE_GOOGLE_EMULATOR, endpoints = emulator ? { google: { authorize: `${emulator}/o/oauth2/v2/auth`, token: `${emulator}/oauth2/token`, api: emulator } } : undefined;
     const connection = connect(a, { store: this.store, person: '1', redirectUri: this.redirect, client, clientName: 'Crewhouse', flowTimeoutMs: CONNECT_MS, endpoints }); this.handles.set(id, { key, connection });
     return connection;
   }
