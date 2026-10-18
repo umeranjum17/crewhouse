@@ -1,7 +1,7 @@
 // The installed web app's end of the link, as the phone's (mobile/src/link.ts): @byokit/pair's device side, its grant
 // sealed in this browser's IndexedDB. Paired, the link carries every call, the live events and a bot's screen
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
-import { DeviceLink, LinkError, browserDeviceStore, pairWithCode, type DeviceGrant } from '@byokit/pair';
+import { DeviceLink, LinkError, browserDeviceStore, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { NO_COMPUTER, NO_RELAY, readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
@@ -37,6 +37,12 @@ export async function pair(text: string, onWords: (w: string) => void) {
   await store.save(grant);
 }
 
+/** The computer's QR (src/link.ts `offer()`) through the kit's own scan path. Its ws:// addresses are the computer's
+ *  LAN ones, which an https page cannot dial, so they dial this page's address the way the typed code does (`dialHere`). */
+export async function scanned(qr: string, onWords: (w: string) => void) {
+  await store.save(await pairWithOffer(qr, { name: deviceName(), onWords, resolve: dialHere }));
+}
+
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 export async function unpair(link: DeviceLink) {
   const bounded = (step: Promise<unknown>) => Promise.race([step, new Promise((ok) => setTimeout(ok, 2500))]).catch(() => {});
@@ -60,10 +66,15 @@ export async function leave() {
   location.replace('/');
 }
 
+/** A ws:// address the computer named (its LAN address) dials this page's own origin instead: an https page cannot open
+ *  ws://, and the computer's https route serves /link. wss (the relay) is dialled as it is. */
+const dialHere = (url: string) => (url.startsWith('ws://') ? `${location.origin.replace(/^http/, 'ws')}/link` : url);
+
 function start(grant: DeviceGrant) {
   const listeners = new Set<(e: Json) => void>();
   const link: DeviceLink = new DeviceLink(grant, {
     store,
+    resolve: dialHere,
     // The computer says where else it can be reached: remember each one.
     onEvent: (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else listeners.forEach((f) => f(e)); },
     onStatus: (s) => { if (s === 'online') listeners.forEach((f) => f({ kind: 'connected' })); if (s === 'removed') void forgotten(); },

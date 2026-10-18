@@ -1608,6 +1608,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .cmds .chat-code { font-size: 1em; padding: 0; background: none; }
 .pair-label { width: 100%; display: grid; gap: 6px; text-align: left; font-weight: 600; margin-top: 4px; }
 .pair-code { font: 500 15px/1.5 var(--ui); letter-spacing: .02em; }
+.pair-scan { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 16px; background: #000; }
 .flow .pair-problem { color: var(--danger); }
 .pair-words { font: 800 26px/1.2 var(--ui); padding: 12px 20px; background: var(--soft); border-radius: 16px; }
 
