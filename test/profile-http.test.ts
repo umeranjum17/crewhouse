@@ -111,6 +111,10 @@ test('a helper profile previews a GitHub skill and adds only its linked files af
   assert.equal(readFileSync(join(folder, 'guide.md'), 'utf8'), files['guide.md']);
   assert.equal(existsSync(join(folder, 'scripts/unsafe.sh')), true, 'a same-folder referenced file is copied, not run');
   assert.equal(existsSync(join(folder, 'executed.marker')), false, 'adding a skill never runs its scripts');
+  const again = await api('POST', `/api/bots/${helper.id}/skills/add`, { link, token: preview.body.token });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.error, 'This helper already has this skill, so nothing changed.', 'a plain line, and the skill it has is kept');
+  assert.match(readFileSync(join(folder, 'SKILL.md'), 'utf8'), /added: yes/);
   const changed = files['SKILL.md']; files['SKILL.md'] += '\nChanged after review.\n';
   const stale = await api('POST', `/api/bots/${helper.id}/skills/add`, { link, token: preview.body.token });
   assert.equal(stale.status, 409, 'changed content must be reviewed again');

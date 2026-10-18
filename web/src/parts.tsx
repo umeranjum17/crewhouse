@@ -66,7 +66,7 @@ function Toast({ children }: { children: ReactNode }) {
 /** Run an action; a failure becomes a friendly toast, never a stack trace. `quiet` leaves the word to the caller —
  *  the composer, whose failed send keeps the words on screen with a Retry instead. */
 export async function attempt(fn: () => Promise<unknown>, ok?: string, quiet = false) {
-  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { if (!quiet) toast(FRIENDLY[trouble(e)]); return false; }
+  try { await fn(); if (ok) toast(ok); return true; } catch (e: any) { if (!quiet) toast(e?.status === 409 ? e.message : FRIENDLY[trouble(e)]); return false; }
 }
 const FRIENDLY = {
   missing: "That isn't ready yet. It arrives with the next Crewhouse update.",

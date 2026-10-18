@@ -69,7 +69,7 @@ export async function routeLinkedSkill(action, bot, link, token, save, event) {
 
 export function addLinkedSkill(bot, skill, save) {
   const name = slugOf(skill.name), dir = join(bot, 'skills', name);
-  if (existsSync(join(dir, 'SKILL.md'))) throw Object.assign(new Error(`this helper already has a skill called ${name}`), { status: 409 });
+  if (existsSync(join(dir, 'SKILL.md'))) throw Object.assign(new Error('This helper already has this skill, so nothing changed.'), { status: 409 });
   for (const r of skill.resources) if (!r.path || r.path.startsWith('/') || r.path.split('/').some((p) => !p || p === '.' || p === '..') || !/^[\w./-]+$/.test(r.path)) throw new Error('the skill has an unsafe file path');
   const front = /^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/.exec(skill.markdown), lines = (front?.[1] ?? `name: ${name}\ndescription: ${JSON.stringify(skill.description)}`).split('\n').filter((s) => !/^(says|added|source):/i.test(s)).join('\n');
   const files = [`skills/${name}/SKILL.md`]; mkdirSync(dir, { recursive: true });
