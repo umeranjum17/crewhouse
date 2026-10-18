@@ -196,7 +196,7 @@ test('every string the app shows keeps to the plain-words rule', () => {
   const linkView = { on: true, lan: false, pinned: false, tailscale: false, hosts: ['127.0.0.1'], relay: 'https://go.example.com', relayStatus: 'online', push: 'ready', asking: [] };
   const accounts = [{ account: 'chatgpt', name: 'ChatGPT', signedIn: true, restingUntil: 0 }];
   const texts: string[] = [
-    ...collect(A.where(false)), ...collect(A.computer(null)),
+    ...collect(A.where(false)), ...collect(A.CLOUD), ...collect(A.computer(null)),
     ...collect(A.atHome()), ...collect(A.trust), A.keptWhere, A.awake(),
     ...collect(A.shares('ChatGPT plan')), ...collect(A.share(state)), ...collect(A.money(state)), A.resting(state), A.meter(state),
     A.chief(state).line, ...collect(A.stripLine(state)), A.zoneNote(state),
