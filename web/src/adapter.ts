@@ -1424,8 +1424,11 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   const mine = (bot: string, origin?: string) => bot === o.id || (o.id === 'chief' && origin === 'chief');
   const tasks = new Map<number, Json>();
   for (const t of o.tasks) if (mine(t.bot, t.origin)) tasks.set(t.id, t);
+  // A job known only by its events (just made, or older than the thread's newest 50) is as its own end says, never
+  // queued: an old ended one taken for "waiting" stole the line, so a quick turn's end vanished on the next reload.
+  const ends = new Map(all.filter((e) => e.kind in END).map((e) => [e.data?.task, e.kind.slice(5)]));
   for (const e of all) if (e.kind === 'task.created' && mine(e.bot, e.data?.origin) && !tasks.has(e.data.task))
-    tasks.set(e.data.task, { id: e.data.task, bot: e.bot, origin: e.data.origin, state: 'queued', created_at: e.at });
+    tasks.set(e.data.task, { id: e.data.task, bot: e.bot, origin: e.data.origin, state: ends.get(e.data.task) ?? 'queued', created_at: e.at });
   // The line follows the job that is actually running (or waits on the person); only when none is does the newest
   // one own it. A queued job behind a running one is the person's "Next: …", never a second, restarted clock.
   const list = [...tasks.values()], titleOf = (x: Json) => plain(String(all.find((e) => e.kind === 'task.created' && e.data?.task === x.id)?.data?.title ?? x.title ?? ''));

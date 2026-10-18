@@ -33,7 +33,9 @@ when no route is usable (expired sign-in, quota), say "not proven" with the caus
 **Gate (stub engine, no account).** `node --test test/chat-live.test.ts`: real crewd, the built web app, headless
 Chromium at 1440 and 390, a held Chief turn and a job passed to Scout, with the phone link listening and no phone paired
 so Add your phone is in the thread as on a normal install. After every send the person's words and the live line must
-be in sight inside the thread's box, and a quick stub turn (its reply hidden) must end on a "Done" line in sight. It fails if the visible thread sits still for
+be in sight inside the thread's box, and a quick stub turn (its reply hidden) must end on a "Done" line in sight;
+`test/chat-follows-run.test.ts` keeps that end line past the thread's newest 50 jobs (an older ended job known only by
+its events once read as queued and took the line, so the end vanished on the next reload). It fails if the visible thread sits still for
 over a second (one frame of timer jitter allowed), and it fails if the live line skips the engine's own first steps —
 it requires the admission row (`/Started on/`, `/Passed to Scout/`) and `/Thinking/` while the turn is held. In the
 Chief turn it also waits for "Chief · at work · N s · still

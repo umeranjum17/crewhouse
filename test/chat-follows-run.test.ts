@@ -4,7 +4,7 @@
 // feeds web chat and the phone app. Runs on the real crewd with the stub engine: no account, no network, no quota.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { setup as lab, holding } from './lab.ts';
+import { setup as lab, holding, settled } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
 /** The live line exactly as the app builds it: this thread's page plus the snapshot's tasks and events. */
@@ -87,4 +87,22 @@ test('the header says Chief at work from the send, before his job exists (chat q
   await crew.post('chief', 'ask permission to plan my week');
   await holding(crew, 'chief');
   assert.equal(A.chiefStatus(A.office(crew.snapshot())).word, 'At work', 'the running job is at work');
+});
+
+test('past the thread\'s newest 50 jobs an old ended one never takes the line: a quick end stays, and no stale Next (ch-chat-silent-gap)', { timeout: 60_000 }, async () => {
+  const { db, crew } = lab();
+  crew.onboard('Umer');
+  for (let i = 1; i <= 51; i++) await settled(db, (await crew.post('chief', `Quick note ${i}`))!.task);
+  const t = (await crew.post('chief', 'One more quick note'))!.task;
+  await settled(db, t);
+  const state = crew.snapshot(), page = crew.botPage('chief');
+  assert.ok(!page.tasks.some((x: any) => x.id === 1) && page.trail.some((e: any) => e.kind === 'task.created' && e.data.task === 1), 'the first job is past the page\'s tasks but still in its trail');
+  // The thread was open, so the live feed heard this turn: its end is one the person watched.
+  const heard = db.all("SELECT * FROM events WHERE json_extract(data, '$.task') = ?", t).map((e: any) => ({ ...e, data: JSON.parse(e.data), seen: Date.now() }));
+  const ln = A.liveLine({ id: 'chief', name: 'Chief', crew: A.crew(state), writing: new Map(), heard,
+    tasks: [...page.tasks, ...(state.tasks ?? [])], events: [...page.trail, ...(state.events ?? [])] });
+  assert.deepEqual([ln?.task, ln?.state], [t, 'done'], 'the quick turn keeps its end line after the page reloads');
+  await crew.post('chief', 'ask permission to plan my week');
+  await holding(crew, 'chief');
+  assert.equal(line(crew)?.next, undefined, 'an old ended job never reads as Next');
 });
