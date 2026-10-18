@@ -48,6 +48,10 @@ export async function unpair(link: DeviceLink) {
   await leave();
 }
 
+/** The computer forgot this browser: clear the grant before the page reloads. The kit clears it only after its own
+ *  callback returns, so a reload that began there could boot the new page on the grant still sealed here. */
+const forgotten = async () => { try { await store.clear(); } catch { /* the page leaves either way; a grant left behind is cleared next time */ } await leave(); };
+
 /** The same installed app opens fresh: the grant (or its absence) decides the mode at boot. A deliberate restart
  *  lands Home, never on the last place, so it flags itself for `resume()` (web/src/resume.ts). */
 export async function leave() {
@@ -62,7 +66,7 @@ function start(grant: DeviceGrant) {
     store,
     // The computer says where else it can be reached: remember each one.
     onEvent: (e: any) => { if (e?.kind === 'link.urls') (e.data?.urls ?? []).forEach((u: string) => link.addUrl(u)); else listeners.forEach((f) => f(e)); },
-    onStatus: (s) => { if (s === 'online') listeners.forEach((f) => f({ kind: 'connected' })); if (s === 'removed') void leave(); },
+    onStatus: (s) => { if (s === 'online') listeners.forEach((f) => f({ kind: 'connected' })); if (s === 'removed') void forgotten(); },
   });
   setLink({
     name: grant.hostName,
