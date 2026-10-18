@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Logo, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, takeShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -155,23 +155,33 @@ function GettingReady({ view, refresh }: { view: { failed: boolean; words: strin
   );
 }
 
-/** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, one blue primary first. */
+/** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, one blue primary first. The
+ *  words come on the link and the photos (up to four) from the share cache; both go with whatever the person picks. */
 function Share({ refresh }: Ctx) {
   const q = new URLSearchParams(location.search);
   const text = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
+  const more = Number(q.get('more') ?? 0);
+  const [pics, setPics] = useState<Picked[] | null>(null);
   const [other, setOther] = useState(false);
+  useEffect(() => { void takeShared().then(setPics); }, []);
   const home = () => { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
-  const send = async (what: string) => { if (await attempt(() => api.post('chief', `${what}\n\nWhat I shared:\n${text}`), undefined, true)) { refresh(); home(); } return true; };
-  if (!text) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
+  const send = async (what: string) => {
+    const said = text ? `${what}\n\nWhat I shared:\n${text}` : what;
+    if (await attempt(() => api.post('chief', said, (pics ?? []).map(({ type, data }) => ({ type, data }))), undefined, true)) { refresh(); home(); } return true;
+  };
+  if (!text && pics && !pics.length) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
   return (
     <div className="page share">
-      <div className="card shared"><div className="mute small">Shared with Crewhouse</div><div className="said">{text}</div></div>
+      <div className="card shared"><div className="mute small">Shared with Crewhouse</div>
+        {!!text && <div className="said">{text}</div>}
+        {!!pics?.length && <div className="share-pics">{pics.map((p, i) => <img key={i} src={`data:${p.type};base64,${p.data}`} alt={`Photo ${i + 1}`} />)}</div>}
+        {more > 0 && <div className="mute small">Only the first 4 photos came through.</div>}</div>
       <div className="line chief"><div className="line-by"><Face who="chief" size={36} /><span className="who">Chief</span></div>
         <div className="bubble-text">Got it. What shall the crew do with this?</div>
         <div className="share-acts">
-          <button className="btn go" onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
-          <button className="btn" onClick={() => send('Just remember this for me')}>Just remember it</button>
-          <button className="btn" onClick={() => setOther(true)}>Something else…</button>
+          <button className="btn go" disabled={!pics} onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
+          <button className="btn" disabled={!pics} onClick={() => send('Just remember this for me')}>Just remember it</button>
+          <button className="btn" disabled={!pics} onClick={() => setOther(true)}>Something else…</button>
         </div></div>
       {other && <div className="dock"><Composer placeholder="What shall the crew do with it?" onSend={send} /></div>}
     </div>

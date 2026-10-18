@@ -750,6 +750,8 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .share .line-by { display: grid; justify-items: start; gap: 4px; }
 .share-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .share-acts .btn { white-space: normal; text-align: left; }
+.share-pics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.share-pics img { width: 88px; height: 88px; object-fit: cover; border-radius: 12px; background: var(--soft); }
 .pair { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .pair > .grow { min-width: 220px; }
 .qr { width: 220px; height: 220px; flex: none; background: #fff; border-radius: 14px; overflow: hidden; }
