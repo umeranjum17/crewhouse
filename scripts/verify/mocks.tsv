@@ -4,8 +4,11 @@ chats	data/ch-grok-samples/mocks/png/2-crew-390-{theme}.png
 chief-chat	data/evidence/ch-pwa-simplify/mock-r3/shots/chat-top-{theme}-390.png
 hello	data/evidence/ch-pwa-simplify/mock-r3/shots/first-{theme}-390.png
 where	data/ch-cloud-onboarding-mock/png/c-{look}.png
-cloud-pick	data/ch-cloud-onboarding-mock/png/provider-{look}.png
-cloud-key	data/ch-cloud-onboarding-mock/png/signin-key-{look}.png
+cloud-key	data/ch-cloud-byo-connect/mocks/key-390-{theme}.png
+cloud-pick	data/ch-cloud-byo-connect/mocks/pick-390-{theme}.png
+cloud-make	data/ch-cloud-byo-connect/mocks/new-390-{theme}.png
+cloud-steps	data/ch-cloud-byo-connect/mocks/progress-390-{theme}.png
+cloud-other	data/ch-cloud-byo-connect/mocks/options-390-{theme}.png
 computer	data/ch-cloud-onboarding-mock/png/computer-{look}.png
 chief-attach	data/ch-grok-samples/mocks/png/3a-expenses-chief-390-{theme}.png
 unlock-card	data/ch-grok-samples/mocks/png/3a-expenses-chief-390-{theme}.png

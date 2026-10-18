@@ -41,7 +41,9 @@ import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { canPush, connect, desktopSignaling, forgetGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
-import { cloudOn, connectCloud } from './src/cloud';
+import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, phoneKey } from './src/cloud';
+import { checkKey, connect as setUpCloud, cost, progress, said } from '../web/src/cloud.ts';
+import type { MachineRef, SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -800,12 +802,11 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
  *  in a build with the cloud on, src/cloud.ts). */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
-  const [at, setAt] = useState<'where' | 'computer' | 'cloud' | 'key'>('where');
-  const back = at === 'computer' || at === 'cloud' ? () => setAt('where') : at === 'key' ? () => setAt('cloud') : null;
+  const [at, setAt] = useState<'where' | 'computer' | 'cloud'>('where');
+  const back = at === 'where' ? null : () => setAt('where');
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
   if (at === 'computer') return <Pair onPaired={onPaired} />;
-  if (at === 'cloud') return <CloudPick onBack={back!} onNext={() => setAt('key')} />;
-  if (at === 'key') return <CloudKey onBack={back!} />;
+  if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} />;
   const w = A.where(cloudOn);
   return (
     <ScrollView contentContainerStyle={s.screen}>
@@ -834,64 +835,81 @@ function Note({ children }: { children: ReactNode }) {
     <Image source={WHERE.shield} style={{ width: 18, height: 18, marginTop: 1, tintColor: t.ink }} /><T tone="ink2" style={[s.small, { flex: 1, lineHeight: 19 }]}>{children}</T>
   </View>;
 }
-function StepTop({ step, title, onBack }: { step: string; title: string; onBack: () => void }) {
-  return <>
-    <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}><T tone="ink2" style={{ fontSize: 22, width: 28 }}>‹</T><T tone="ink2">Back</T></Pressable>
-    <T tone="mute" style={[s.label2, { marginTop: 8 }]}>{step}</T>
-    <T style={[s.title, { marginTop: 4 }]}>{title}</T>
-  </>;
-}
-
-/** Step 1 of the cloud: pick the company that rents Chief his computer. boat.dev for now; Hetzner is shown, not ready. */
-function CloudPick({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+/** In my cloud (mock key-first): paste the boat.dev key, choose the computer (or see what a new one costs), then the
+ *  kit's real setup steps tick the list. The kit calls are web/src/cloud.ts; the key stays on this phone (src/cloud.ts). */
+function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => void }) {
   const t = useLook();
   const c = A.CLOUD;
-  return (
-    <View style={{ flex: 1 }}><ScrollView contentContainerStyle={s.screen}>
-      <StepTop step={c.pick.step} title={c.pick.title} onBack={onBack} />
-      <T tone="ink2" style={{ marginTop: 6, marginBottom: 16 }}>{c.pick.lead}</T>
-      <View style={{ gap: 10 }}>{c.clouds.map((p, i) =>
-        <View key={p.name} accessibilityState={{ selected: !i, disabled: !!i }} style={[s.opt, { backgroundColor: t.solid, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2, opacity: i ? 0.6 : 1 }]}>
-          <View style={[s.radio, { borderColor: i ? t.line2 : t.go, borderWidth: i ? 2 : 7 }]} />
-          <View style={[s.mark, { backgroundColor: p.tile }]}><Text style={s.markText}>{p.mark}</Text></View>
-          <View style={{ flex: 1 }}><T style={s.b}>{p.name}</T><T tone="mute" style={s.small}>{p.sub}</T></View>
-          {!!p.soon && <T tone="mute" style={[s.label2, { alignSelf: 'flex-start', ...fw('600'), backgroundColor: t.soft, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{p.soon}</T>}
-        </View>)}</View>
-      <T tone="mute" style={[s.small, { marginTop: 10, marginHorizontal: 4 }]}>{c.more}</T>
-      <Note><Text style={[s.b, { color: t.ink }]}>{c.sandbox[0]}</Text> {c.sandbox[1]}</Note>
-    </ScrollView>
-    {/* Pinned under the list, as in the mock, so the largest text never pushes it out of sight. */}
-    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 }}><Btn go big label={c.next} onPress={onNext} /></View></View>
-  );
-}
-
-/** Step 2 of the cloud: make a key on boat.dev and paste it here. The box clears on Connect, so the key never stays on
- *  screen; the kit checks it and keeps it on this phone (src/cloud.ts). */
-function CloudKey({ onBack }: { onBack: () => void }) {
-  const t = useLook();
-  const c = A.CLOUD;
-  const [key, setKey] = useState('');
+  const [view, setView] = useState<'key' | 'pick' | 'make' | 'steps' | 'other'>('key');
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const connect = async () => {
-    const k = key.trim();
-    setKey(''); setErr('');
-    try { await connectCloud(k); } catch { setErr(FRIENDLY.missing); }
+  const [listed, setListed] = useState<MachineRef[]>([]);
+  const [picked, setPicked] = useState('');
+  const [steps, setSteps] = useState<SetupStep[]>([]);
+  const [way, setWay] = useState(-1);
+  const held = useRef(''); // the checked key, never on screen
+  const check = async (k: string) => {
+    if (!k.trim() || busy) return;
+    setBusy(true); setErr('');
+    try { setListed(await checkKey(boatOn(k.trim()), cloudStore, k.trim())); held.current = k.trim(); setView('pick'); }
+    catch (e) { setErr(said(e)); } finally { setBusy(false); }
   };
+  // One action with a key already kept: straight to the computers.
+  useEffect(() => { void keptKey().then((k) => { if (k) void check(k); }); }, []);
+  const run = async (id: string) => {
+    setPicked(id); setSteps([]); setView('steps');
+    for await (const step of setUpCloud(boatOn(held.current), cloudStore, id, await phoneKey())) setSteps((x) => [...x, step]);
+  };
+  const p = progress(steps), ready = steps.at(-1)?.step === 'ready';
+  const box = (lead: boolean, body: ReactNode) => <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: lead ? 2 : 1, borderColor: lead ? t.go : t.line }]}>{body}</View>;
+  const pill = (w: string) => <T style={[s.label2, { alignSelf: 'flex-start', color: t.go, backgroundColor: t.softAccent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{w}</T>;
+  const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
+    <T style={[s.small, s.b]}>{c.key.label}</T>
+    <TextInput style={[s.input, { minHeight: 48, color: t.ink, borderColor: t.line2, backgroundColor: t.bg }]} value="" editable={!busy} secureTextEntry autoCapitalize="none" autoCorrect={false}
+      placeholder={busy ? c.key.checking : c.key.paste} placeholderTextColor={t.mute} accessibilityLabel={c.key.label}
+      onChangeText={(v) => { if (v.trim().length >= 16) void check(v); }} /* paste-only: the box never holds the key, and a few typed letters are never sent */ />
+    {err ? <T tone="pinkInk">{err}</T> : <T tone="mute" style={s.small}>{c.key.after}</T>}
+    <Pressable onPress={() => setWay(way === 9 ? -1 : 9)} accessibilityRole="button" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.key.make}</T></Pressable>
+    {way === 9 && <><T tone="ink2" style={s.small}>{c.key.how}</T><Btn label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} /></>}
+    <View style={{ backgroundColor: t.soft, borderRadius: radius.card, padding: 12 }}><T tone="ink2" style={s.small}>{c.kept.map((x, i) => i % 2 ? <Text key={i} style={s.b}>{x}</Text> : x)}</T></View></>;
+  const pick = <>{pill(c.pick.pill)}<T style={s.title}>{c.pick.title}</T><T tone="ink2">{listed.length ? c.pick.lead : c.pick.none}</T>
+    {listed.map((r, i) => <View key={r.id} style={{ gap: 6, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12, backgroundColor: t.bg }}>
+      <T style={s.b}>{c.pick.name(i, listed.length)}</T><T tone="mute" style={s.small}>{c.pick.sub}</T><T tone="ink2" style={s.small}>{c.pick.setup}</T>
+      <Btn go big label={c.pick.use} onPress={() => void run(r.id)} /></View>)}
+    {!!listed.length && <T tone="mute" style={s.small}>{c.pick.bill}</T>}
+    <Btn big label={c.pick.make} onPress={() => setView('make')} /></>;
+  const make = <>{pill(c.make.pill)}<T style={s.title}>{c.make.title}</T><T>{c.make.lead}</T>
+    <View style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}><T style={s.b}>{c.make.size}</T><T tone="ink2" style={s.small}>{cost()}</T><T tone="mute" style={s.small}>{c.make.check}</T></View>
+    <Btn big disabled label={c.make.create} onPress={() => {}} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
+  const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}</> : <>
+    {pill(c.steps.pill)}<T style={s.title}>{c.steps.title}</T>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><T tone="mute" style={[s.small, { flex: 1 }]}>{c.pick.name(listed.findIndex((r) => r.id === picked), listed.length)}</T><T style={[s.small, s.b]}>{p.failed < 0 ? c.steps.count(p.done) : c.steps.help}</T></View>
+    {c.steps.rows.map(([title, sub], i) => <View key={title} style={[s.row, { alignItems: 'flex-start', opacity: i > p.done && i !== p.failed ? 0.6 : 1 }]}>
+      <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
+      <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
+    {p.failed < 0 ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
+      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked)} />}</View>}</>;
+  const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
+    {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
+      style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
+      <View style={s.row}><T style={[s.b, { flex: 1 }]}>{title}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{sub}</T>
+      {way === i && <T tone="ink2" style={s.small}>{more}</T>}</Pressable>)}
+    <T tone="mute" style={s.small}>{c.other.foot}</T></>;
+  const back = view === 'key' ? onBack : () => setView(view === 'make' || view === 'steps' ? 'pick' : 'key');
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-      <ScrollView contentContainerStyle={s.screen} keyboardShouldPersistTaps="handled">
-        <StepTop step={c.key.step} title={c.key.title} onBack={onBack} />
-        <View style={{ gap: 14, marginVertical: 14 }}>{c.steps.map((parts, i) =>
-          <View key={i} style={[s.row, { alignItems: 'flex-start', gap: 12 }]}>
-            <Text style={[s.stepNum, { width: 26, height: 26, borderRadius: 13, lineHeight: 26, fontSize: 13, ...fw('600'), backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text>
-            <T style={{ flex: 1 }}>{parts.map((p, j) => j % 2 ? <Text key={j} style={s.b}>{p}</Text> : p)}</T>
-          </View>)}</View>
-        <Btn big label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} />
-        <TextInput style={[s.input, { marginTop: 14, minHeight: 48, color: t.ink, borderColor: t.line2, backgroundColor: t.bg }]} value={key} onChangeText={setKey}
-          placeholder={c.key.paste} placeholderTextColor={t.mute} accessibilityLabel={c.key.paste} autoCapitalize="none" autoCorrect={false} secureTextEntry />
-        <View style={{ marginTop: 10 }}><Btn go big label={c.key.connect} disabled={!key.trim()} onPress={connect} /></View>
-        {!!err && <T tone="pinkInk" style={[s.centerText, { marginTop: 10 }]}>{err}</T>}
-        <T tone="mute" style={[s.small, s.centerText, s.foot]}>{c.kept}</T>
+      <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]} keyboardShouldPersistTaps="handled">
+        <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}>
+          <T tone="ink2" style={{ fontSize: 22, width: 24 }}>‹</T><T tone="ink2" style={{ flex: 1 }}>{c.top[0]}</T><T tone="mute" style={s.small}>{c.top[1]}</T></Pressable>
+        <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{c.title}</T>
+          <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
+        <T tone="ink2">{c.lede}</T>
+        {box(view !== 'make' && view !== 'other', { key, pick, make, steps: progressList, other }[view])}
+        {view === 'key' && <Btn ghost label={`${c.other.link} →`} onPress={() => setView('other')} />}
+        {view === 'pick' && <Btn ghost label={c.pick.other} onPress={() => { held.current = ''; setView('key'); }} />}
+        {view === 'other' && <Btn ghost label={c.other.back} onPress={() => setView('key')} />}
+        <Note>{c.trust[0]}</Note>
+        <T tone="mute" style={[s.small, s.centerText]}>{c.trust[1]}</T>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -2626,10 +2644,11 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
   const nudgeT = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroll = useRef<ScrollView | null>(null);
   const reasonY = useRef(0);
-  useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
+  const [held, setHeld] = useState(false); // this phone keeps the boat.dev key
+  useEffect(() => { A.computerCall().then(setC, () => setC(null)); void keptKey().then((k) => setHeld(!!k)); }, []);
   useEffect(() => () => { if (nudgeT.current) clearTimeout(nudgeT.current); }, []);
   const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
-  const w = A.computer(c), boat = A.CLOUD.clouds[0], off = !c;
+  const w = A.computer(c), boat = A.CLOUD.boat, off = !c;
   // Not connected: the dimmed rows never act — a tap flashes the reason line, says it aloud, and brings it into
   // view (at the largest text it starts below the fold) instead.
   const nudge = () => {
@@ -2666,6 +2685,7 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
       {off && <View onLayout={(e) => { reasonY.current = e.nativeEvent.layout.y; }}><T tone="mute" style={[s.small, { marginHorizontal: 16 }, nudged && { color: t.ink }]}>{w.connect}</T></View>}
       {!!note && <Text accessibilityLiveRegion="polite" style={{ height: 0, opacity: 0 }}>{note}</Text>}
       <View style={group}>{row(0, <><View style={[s.mark, { backgroundColor: boat.tile }]}><Text style={s.markText}>{boat.mark}</Text></View>{two(w.host)}</>)}</View>
+      {held && <View style={group}>{row(0, <>{two(w.key)}<Btn label={w.forget} onPress={() => void attempt(async () => { await forgetKey(); setHeld(false); })} /></>)}</View>}
       <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel={w.more} style={[s.row, { minHeight: 48, paddingHorizontal: 4 }]}>
         <T tone="ink2" style={{ flex: 1, ...fw('500') }}>{w.more}</T><T tone="mute">{more ? '⌄' : '›'}</T></Pressable>
       {more && <View style={group}>
