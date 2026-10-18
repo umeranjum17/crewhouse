@@ -1011,7 +1011,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
     const named = c.evidence === 'draft' ? receiptWhat(c) : '';
-    const action = receiptAction(String(a.kind ?? ''), a.detail ?? {});
+    const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
     return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });
   const seen = new Set<string>();
