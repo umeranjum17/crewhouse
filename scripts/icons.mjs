@@ -116,4 +116,6 @@ const draw = (name, art, w, h) => {
 };
 for (const k of ['cloud', 'computer', 'phone', 'shield']) draw(k, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`, 60, 60);
 for (const look of ['day', 'night']) draw(`chief-${look}`, critter('chief', 'here', { aspect: 132 / 121 }).replace('<svg ', '<svg width="132" height="121" '), 132, 121);
-console.log('first-screen marks written into mobile/assets/where/');
+// The tab bar's four places, in the web's stroke (parts.tsx Icon): 22 dp on screen, tinted there.
+for (const k of ['home', 'talk', 'jobs', 'crew']) draw(`tab-${k}`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`, 66, 66);
+console.log('first-screen marks and tab bar icons written into mobile/assets/where/');

@@ -1199,7 +1199,7 @@ function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => vo
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone' | 'computer'; id?: string; tab?: string; m?: number };
+type Route = { view: 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone' | 'computer'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
@@ -1386,9 +1386,60 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
         {route.view === 'computer' && <ChiefComputer back={['Settings', back]} />}
+        {route.view === 'jobs' && <JobsPage {...ctx} />}
       </View>
+      <Tabs place={placeOf(route)} go={go} state={state} offline={offline} />
       {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
+  );
+}
+
+// ---------- tabs ----------
+/** The phone's tab bar, as the computer's (web/src/main.tsx PLACES, styles.css .tabs): Home, Chief, Jobs, Crew. */
+const PLACES: [Route['view'], string, number][] = [['home', 'Home', WHERE['tab-home']], ['chief', 'Chief', WHERE['tab-talk']], ['jobs', 'Jobs', WHERE['tab-jobs']], ['crew', 'Crew', WHERE['tab-crew']]];
+/** Which place a screen belongs to, so its tab reads as the one you are in: a helper's chat with Chief is Chief's, the
+ *  other helpers and the crew's rooms are Crew's. A screen off the bar matches no place and lights none. */
+const placeOf = (r: Route): Route['view'] => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'room' || r.view === 'add' ? 'crew' : r.view;
+
+/** Jobs: what needs the person's yes, and what the crew is at work on. The same asks as Home's Needs you. */
+function JobsPage(ctx: Ctx) {
+  const { state, refresh, canAct, offline, open } = ctx;
+  const view = useOffice(state, offline, OUT);
+  const work = A.work(state);
+  return (
+    <Page>
+      <T style={s.wide}>Jobs</T>
+      <T tone="ink2" style={s.read}>What needs your yes, and what the crew is doing.</T>
+      <Label count={view.counts.needs || undefined}>Needs you</Label>
+      {view.needs.length > 0
+        ? view.needs.map((c) => <AskCard key={c.id} c={c} who={A.crew(state).find((h) => h.id === c.helper)} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)
+        : <Card><T tone="ink2" style={s.read}>Nothing needs you.</T></Card>}
+      <Label>At work</Label>
+      {work.length > 0
+        ? work.map((w) => <Card key={w.helper}><T style={s.semi}>{w.title}</T><T tone="mute" style={s.read}>{w.line}</T></Card>)
+        : <Card><T tone="ink2" style={s.read}>Nobody is on a job right now.</T></Card>}
+    </Page>
+  );
+}
+
+/** The bar under every paired screen. Tapping a place opens it fresh (replace, as the web's links do); Jobs wears the
+ *  count of asks in the colour of a bunny-coloured pill. */
+function Tabs({ place, go, state, offline }: { place: Route['view']; go: (r: Route, replace?: boolean) => void; state: Json; offline: boolean }) {
+  const t = useLook();
+  const asks = useOffice(state, offline, OUT).counts.needs;
+  return (
+    <View accessibilityRole="tablist" style={[s.tabs, { backgroundColor: t.bg, borderTopColor: t.line }]}>
+      {PLACES.map(([view, label, icon]) => {
+        const on = place === view;
+        return (
+          <Pressable key={view} onPress={() => go({ view }, true)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }} style={s.tab}>
+            <View style={[s.tabIc, on && { backgroundColor: t.soft }]}><Image source={icon} style={{ width: 22, height: 22, tintColor: on ? t.ink : t.mute }} /></View>
+            <Text style={[s.tabLabel, { color: on ? t.ink : t.mute }]}>{label}</Text>
+            {view === 'jobs' && asks > 0 && <Text style={[s.tabBadge, { backgroundColor: art.colourOf('bunny') }]}>{asks}</Text>}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -2720,6 +2771,11 @@ const s = StyleSheet.create({
   centerScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   centerText: { textAlign: 'center' },
   page: { padding: 16, gap: 12, paddingBottom: 32 },
+  tabs: { flexDirection: 'row', paddingHorizontal: 8, paddingTop: 6, paddingBottom: 10, borderTopWidth: 1 },
+  tab: { flex: 1, minWidth: 0, minHeight: 54, alignItems: 'center', gap: 2, paddingVertical: 4 },
+  tabIc: { width: 56, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  tabLabel: { fontSize: 14, lineHeight: 17, ...fw('700') },
+  tabBadge: { position: 'absolute', top: 0, left: '50%', marginLeft: 10, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, overflow: 'hidden', fontSize: 13, lineHeight: 20, color: color.day.ink, textAlign: 'center', ...fw('700') },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   text: { fontFamily: 'Inter', fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
