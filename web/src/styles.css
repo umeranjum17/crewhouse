@@ -1689,7 +1689,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-today { display: grid; gap: 8px; margin: 0 -4px; }
 .st-today .st-card { min-height: 76px; }
 .st-ask { background: #FF7AB8; }
-.st-today .st-top b { flex: 1 1 auto; }
+.st-today .st-top { flex-wrap: nowrap; align-items: flex-start; }
+.st-today .st-pill { flex: none; }
 .st-pill.needs-k { background: #0B0B0B; color: #FFFFFF; }
 .st-rest { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border: 0; border-radius: 24px; background: var(--tint2); }
 .st-rest .grow { display: grid; gap: 4px; }

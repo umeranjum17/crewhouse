@@ -152,9 +152,9 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and
           // Body text is 16px or more; only the small-caps labels and the status pills are 14px (a button is a control).
           const tiny = [...document.querySelectorAll('.stack-home *')].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim())
             && shown(e) && !e.closest('.btn') && parseFloat(getComputedStyle(e).fontSize) < (e.matches('.st-pill, .st-label span') ? 14 : 16)).map((e) => e.textContent.slice(0, 30));
-          // A title never wraps beside its pill: when both do not fit on one line the pill moves under it.
-          const wrapsBeside = [...document.querySelectorAll('.st-today .st-top')].filter((t) => { const b = t.querySelector('b'), p = t.querySelector('.st-pill');
-            return b && p && b.getClientRects().length && b.getBoundingClientRect().height > parseFloat(getComputedStyle(b).lineHeight) * 1.5 && Math.abs(box(b).top - box(p).top) < 8; }).map((t) => t.innerText);
+          // The pill keeps the title's first line, top right; a long title wraps beside it, never above or under it.
+          const pillOff = [...document.querySelectorAll('.st-today .st-top')].filter((t) => { const b = t.querySelector('b'), p = t.querySelector('.st-pill');
+            return b && p && shown(t) && (Math.abs(box(b).top - box(p).top) > 6 || box(p).left < box(b).right - 1); }).map((t) => t.innerText);
           const names = units.map((p) => p.getAttribute('href'));
           const words = units.map((p) => p.querySelector('.st-pill')?.textContent?.trim());
           const chiefTitle = document.querySelector('.sh-chief .sh-top b')?.textContent ?? '';
@@ -163,7 +163,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and
           const crewText = units.map((p) => p.innerText);
           const waitRows = units.filter((p) => p.querySelector('.st-pill.needs')).map((p) => p.querySelector('.st-sub')?.textContent ?? '');
           const doneText = units.filter((p) => p.querySelector('.st-pill.done')).map((p) => p.innerText);
-          return { asks, pairs, out, clipped, tiny, wrapsBeside, names, words, chiefTitle, rail, crewActs, crewText, waitRows, doneText,
+          return { asks, pairs, out, clipped, tiny, pillOff, names, words, chiefTitle, rail, crewActs, crewText, waitRows, doneText,
             pins: document.querySelectorAll('.stack-home .needs-pin').length, hscroll: document.documentElement.scrollWidth > innerWidth + 1 };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
@@ -183,7 +183,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and
           assert.equal(m.pairs.length, 0, `${at}: no card covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
           assert.deepEqual(m.tiny, [], `${at}: body text is 16px or more`);
-          assert.deepEqual(m.wrapsBeside, [], `${at}: no title wraps beside its pill`);
+          assert.deepEqual(m.pillOff, [], `${at}: every pill sits top right on its title's first line`);
           assert.equal(m.hscroll, false, `${at}: no sideways scroll`);
           // Only Chief says "Needs you"; crew never ask the person: no crew row answers or approves or carries the ask, a
           // waiting one reads "Waiting for Chief", and a done one never says waiting.
