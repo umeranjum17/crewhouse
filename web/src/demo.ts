@@ -291,6 +291,8 @@ const pages: Record<string, Json> = {
 };
 if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good standing desk under $400, compare the best five' },
   { id: 72, author: 'chief', text: 'Happy to, Maya. Scout will take it; here is how, before anything starts.' });
+// A helper's finished sheet ends Chief's thread: its Done card (Stack J16a).
+if (variant === 'done') pages.chief.messages.push({ id: 73, author: 'bot', text: 'Your monthly budget is ready: what is planned and spent, the bills by due date, and the savings goals.', files: [{ bot: 'scribe', path: 'files/monthly-budget.xlsx' }] });
 if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Maya. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
 if (variant === 'ask-hire') {

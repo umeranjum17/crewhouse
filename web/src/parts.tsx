@@ -9,7 +9,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { VOICE_WORDS, clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -52,7 +52,7 @@ export function Toasts() {
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return s ? <Toast>{s.m}{s.act && <> · <a href="#" onClick={(e) => { e.preventDefault(); s.act!.run(); }}>{s.act.label}</a></>}</Toast> : null;
+  return s ? <Toast>{s.act ? <><span>{s.m}</span><button type="button" className="toast-act" onClick={() => { s.act!.run(); setS(null); }}>{s.act.label}</button></> : s.m}</Toast> : null;
 }
 /** Every toast sits in one place, never over the words: just above the box you type in where the screen has one,
  *  else in a bar along the foot of the screen, with room left below the page so its end clears the bar. */
@@ -299,11 +299,11 @@ export function ReviewCard({ f }: { f: FileView }) {
   </div>;
 }
 
-export function Media({ f, big, forget }: { f: FileView; big?: boolean; forget?: boolean }) {
+export function Media({ f, big, forget, who }: { f: FileView; big?: boolean; forget?: boolean; who?: Maker }) {
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
   if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span></span><b>Open</b></a><ReviewCard f={f} /></div>;
-  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} forget={forget} />;
+  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} forget={forget} who={who} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
@@ -340,7 +340,7 @@ function usePreview(f: FileView) {
   const [read, setRead] = useState<{ book: Workbook | null; doc: DocView | null; deck: DeckView | null; text: string | null }>({ book: null, doc: null, deck: null, text: null });
   useEffect(() => {
     const src = fileSource(f.url);
-    if (!src) return;
+    if (!src || !['sheet', 'page'].includes(f.kind)) return;
     let on = true;
     let got = previews.get(f.url);
     if (!got) previews.set(f.url, got = f.kind === 'sheet' ? api.workbook(src.bot, src.path) : api.document(src.bot, src.path));
@@ -356,8 +356,10 @@ function usePreview(f: FileView) {
 
 const bare = (t: string) => t.toLowerCase().replace(/^the\s+|[^a-z0-9]/g, '');
 /** The line under a file's name: what kind of thing it is, and how much is in it. */
+const KIND = { sheet: 'Spreadsheet', page: 'Document', image: 'Picture', video: 'Video' };
+const kindOf = (f: FileView, deck: DeckView | null) => deck ? 'Deck' : f.kind === 'doc' ? fileTarget(f)?.chip ?? 'File' : KIND[f.kind];
 function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null, deck: DeckView | null) {
-  const kind = deck ? 'Deck' : f.kind === 'page' ? 'Document' : 'Spreadsheet';
+  const kind = kindOf(f, deck);
   if (book) {
     const rows = book.sheets.reduce((n, s) => n + (s.total || s.rows.length), 0);
     return rows ? `${kind} · ${rows === 1 ? '1 row' : `${rows} rows`}` : kind;
@@ -381,10 +383,10 @@ function pagePeek(name: string, doc: DocView | null, text: string | null) {
 export function Thumb({ name, book, doc, deck, text }: { name: string; book: Workbook | null; doc: DocView | null; deck: DeckView | null; text: string | null }) {
   const s = book?.sheets[0];
   if (s && [s.head, ...s.rows].some((r) => r.some(Boolean))) {
-    const rows = [s.head, ...s.rows].slice(0, 4);
-    const cols = [...Array(Math.min(4, Math.max(...rows.map((r) => r.length)))).keys()];
-    return <span className="wb-thumb" aria-hidden style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>{rows.flatMap((r, j) => cols.map((c) =>
-      <i key={`${j}-${c}`} className={s.roles[j]?.[c] || (j ? undefined : 'head')}>{r[c] ?? ''}</i>))}</span>;
+    const rows = [s.head, ...s.rows].slice(0, 3);
+    const cols = [...Array(Math.min(3, Math.max(...rows.map((r) => r.length)))).keys()];
+    return <span className="wb-thumb" aria-hidden style={{ gridTemplateColumns: `repeat(${cols.length}, auto)` }}>{rows.flatMap((r, j) => cols.map((c) =>
+      <i key={`${j}-${c}`} className={j ? cell(r[c]) : 'head'}>{j ? money(s.head[c], r[c]) : r[c] ?? ''}</i>))}</span>;
   }
   const first = deck?.slides[0];
   const page = first ? { head: first.title, lines: first.lines.slice(0, 3) } : doc || text ? pagePeek(name, doc, text) : null;
@@ -395,24 +397,39 @@ export function Thumb({ name, book, doc, deck, text }: { name: string; book: Wor
   </span>;
 }
 
-/** A finished file the helper made — a workbook or a document — in the chat: a peek inside, then what kind of file it
- *  is, its name, a line about it, and Open. */
-export function PreviewCard({ f, big, forget }: { f: FileView; big?: boolean; forget?: boolean }) {
+/** Who made a file: a helper, or Chief himself. Their card colour and name. */
+type Maker = Helper | 'chief';
+export const tint = (who?: Maker) => who ? { background: art.colourOf(who === 'chief' ? 'chief' : who.kind) } : undefined;
+const nameOf = (who: Maker) => who === 'chief' ? 'Chief' : who.name;
+
+/** A finished file the helper made, in the chat or in Your things: a peek inside, what kind of file it is, its name,
+ *  and Open. Given the helper who made it, it is that helper's colour card with their face (Stack J07a). */
+export function PreviewCard({ f, big, forget, who, meta }: { f: FileView; big?: boolean; forget?: boolean; who?: Maker; meta?: string }) {
   const { book, doc, deck, text } = usePreview(f);
-  const src = fileSource(f.url);
-  const about = aboutFile(f, book, doc, deck);
+  const t = fileTarget(f), out = !t?.href.startsWith('#');
   const card = (
-    <a className={`wb-card${big ? ' big' : ''}`} href={fileTarget(f)?.href} aria-label={`Open ${f.name}`}>
-      <Thumb name={f.name} book={book} doc={doc} deck={deck} text={text} />
-      <span className={`wb-ic wb-${f.kind}`} aria-hidden>{src?.path.split('.').pop()?.toUpperCase().slice(0, 4)}</span>
-      <span className="grow wb-what">
-        <b>{f.name}</b>
-        <span className="mute small">{about}</span>
-      </span>
-      <b className="wb-open">Open</b>
+    <a className={`wb-card${big ? ' big' : ''}${who ? ` wb-made${who === 'chief' ? ' wb-chief' : ''}` : ''}`} style={tint(who)} href={t?.href}
+      target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined} aria-label={`Open ${f.name}`}>
+      {who ? <Face who={who} /> : <span className={`wb-ic wb-${f.kind}`} aria-hidden>{t?.chip.slice(0, 4)}</span>}
+      <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{meta ? `${kindOf(f, deck)} · ${meta}` : aboutFile(f, book, doc, deck)}</span></span>
+      {f.kind === 'image' ? <img className="wb-picture" src={f.url} alt="" /> : <Thumb name={f.name} book={book} doc={doc} deck={deck} text={text} />}
+      <span className="wb-open">Open</span>
     </a>
   );
   return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
+}
+
+/** A job just finished, in Chief's thread (Stack J16a): its maker's colour and face, Done., the thread's own words for
+ *  what came of it, a peek inside, then Open it or Later. Either one settles it into the plain file card. */
+export function DoneCard({ f, who, text, settle }: { f: FileView; who: Maker; text: string; settle: (later: boolean) => void }) {
+  const { book, doc, deck, text: md } = usePreview(f);
+  return <section className={`done-card${who === 'chief' ? ' wb-chief' : ''}`} style={tint(who)} aria-label={`Done: ${f.name}`}>
+    <Face who={who} size={96} />
+    <div className="done-say"><h2>Done.</h2><p>{text}</p></div>
+    <Thumb name={f.name} book={book} doc={doc} deck={deck} text={md} />
+    <div className="done-go"><a className="done-open" href={fileTarget(f)?.href} onClick={() => settle(false)}>Open it</a>
+      <button type="button" className="done-later" onClick={() => settle(true)}>Later</button></div>
+  </section>;
 }
 
 const HUES = ['var(--go)', 'var(--ok)', 'var(--amber)', 'var(--danger)', 'var(--ink2)', 'var(--line2)'];
@@ -449,20 +466,24 @@ export function SheetChart({ c }: { c: Chart }) {
   </figure>;
 }
 
-/** One sheet as a grid, read-only: letters over every column any row reaches, the file's own row numbers down the
- *  side, each cell tinted by its role, and what is not shown said under it. */
+/** A cell's look: what the helper filled in, a sum it worked out, or a number, which reads from the right. */
+/** A sum in a column its header calls money reads to the penny (42.50), as a bill does; the file keeps its own number.
+ *  ponytail: the header's words decide, so a "Total visits" column reads 3.00; read the file's number format when one matters. */
+const money = (head = '', v = '') => /amount|cost|price|total|fee|balance|spent|budget|owed|[£$€]/i.test(head) && /^-?\d+(\.\d+)?$/.test(v) ? Number(v).toFixed(2) : v;
+const cell = (v = '', role = '') => [role, /^[-+(]?[£$€]?\d[\d,.]*%?\)?$/.test(v.trim()) ? 'n' : ''].filter(Boolean).join(' ') || undefined;
+
+/** One sheet as a table, read-only: its own header row on top, each cell tinted by its role, and what is not shown
+ *  said under it. */
 export function SheetTable({ s }: { s: Sheet }) {
   const cols = [...Array(Math.max(...[s.head, ...s.rows].map((r) => r.length))).keys()];
   const more = s.total - s.rows.length - 1;
   return <div className="wb-rows">
     {s.charts.map((c, i) => <SheetChart key={i} c={c} />)}
     <table className="wb-grid wb-sheet">
-      <thead><tr><th className="wb-n" />{cols.map((c) => <th key={c}>{column(c)}</th>)}</tr></thead>
-      <tbody>{[s.head, ...s.rows].map((r, i) => <tr key={i}><th className="wb-n" scope="row">{s.nums[i] ?? i + 1}</th>
-        {cols.map((c) => i ? <td key={c} className={s.roles[i]?.[c] || undefined}>{r[c] ?? ''}</td>
-          : <th key={c} scope="col" className="head">{r[c] ?? ''}</th>)}</tr>)}</tbody>
+      <thead><tr>{cols.map((c) => <th key={c} scope="col">{s.head[c] ?? ''}</th>)}</tr></thead>
+      <tbody>{s.rows.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c} className={cell(r[c], s.roles[i + 1]?.[c])}>{money(s.head[c], r[c])}</td>)}</tr>)}</tbody>
     </table>
-    {more > 0 && <div className="mute small">…and {more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.</div>}
+    {more > 0 && <div className="mute">…and {more === 1 ? 'one more row' : `${more} more rows`}. Download it to see the whole sheet.</div>}
   </div>;
 }
 
@@ -504,37 +525,51 @@ function SlideBody({ deck }: { deck: DeckView }) {
 
 /**
  * A finished file read-only: a workbook is sheet tabs over a table; a document is its headings, paragraphs, lists and
- * tables; a deck is one frame per slide. On a desk it is a panel beside the chat it came from; on a phone it is the
- * whole screen. Reading edits nothing, and Download hands over the file itself.
+ * tables; a deck is one frame per slide. On a desk it is a panel beside the chat it came from, or, opened from Your
+ * things (`wide`), the whole page with what it is beside it; on a phone it is the whole screen above the tabs. `inline`
+ * is Your things' peek at its newest file. Reading edits nothing, and Download hands over the file itself.
  */
-export function PreviewPanel({ bot, path, title, onClose }: { bot: string; path: string; title?: string; onClose: () => void }) {
-  const box = useRef<HTMLDivElement>(null);
+export function PreviewPanel({ bot, path, title, onClose, inline, wide, who, made, summary }: { bot: string; path: string; title?: string; onClose: () => void; inline?: boolean; wide?: boolean; who?: Maker; made?: string; summary?: string }) {
+  const box = useRef<HTMLDivElement>(null), none = useRef(null);
   const [tab, setTab] = useState(0);
-  useDialogOwn(box, onClose);
+  useDialogOwn(inline ? none : box, onClose);
   const f = fileView(bot, path, undefined, undefined, title);
   const { book, doc, deck, text } = usePreview(f);
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
-  const about = aboutFile(f, book, doc, deck);
+  const about = aboutFile(f, book, doc, deck), t = fileTarget(f);
+  const chip = <span className={`wb-ic wb-${f.kind}`} style={tint(who)} aria-hidden>{t?.chip.slice(0, 4)}</span>;
+  const download = <a className={`btn wb-down${inline ? '' : ' go'}`} href={f.url} target="_blank" rel="noreferrer" download><Icon name="download" size={20} />Download</a>;
+  const ask = async (words: string) => {
+    const ok = await attempt(() => api.post('chief', `${words}\n\n(About “${f.name}”${who ? `, made by ${nameOf(who)}` : ''}.)`), undefined, true);
+    if (ok) location.hash = '#/chief';
+    return ok;
+  };
   return (
-    <div className="scrim wb-scrim" onClick={onClose}>
-      <div ref={box} className="wb-panel" role="dialog" aria-modal aria-label={f.name} onClick={(e) => e.stopPropagation()}>
-        <header className="wb-head">
-          <span className={`wb-ic wb-${f.kind}`} aria-hidden>{f.kind === 'page' ? '▤' : '▦'}</span>
-          <span className="grow wb-what"><b>{f.name}</b><span className="mute small">{about}</span></span>
-          <a className="btn go" href={f.url} target="_blank" rel="noreferrer">Download</a>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
-        </header>
-        {!book && !doc && !deck && text === null && <div className="mute">Opening “{f.name}”…</div>}
-        {book && !sheets.length && <div className="mute">There is nothing in it to show yet.</div>}
-        {doc && !doc.parts.length && <div className="mute">There is nothing in it to show yet.</div>}
-        {s && <SheetTable s={s} />}
-        {sheets.length > 0 && <nav className="wb-tabs" aria-label="Sheets">
-          {sheets.map((x, i) => <button key={`${x.name}-${i}`} className={`wb-tab${x === s ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
-        </nav>}
-        {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
-        {deck && <SlideBody deck={deck} />}
-        {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
+    <div className={inline ? 'wb-peek' : `scrim wb-scrim${wide ? ' wb-wide' : ''}`} onClick={inline ? undefined : onClose}>
+      <div ref={box} className="wb-panel" role={inline ? undefined : 'dialog'} aria-modal={inline ? undefined : true} aria-label={f.name} onClick={(e) => e.stopPropagation()}>
+        {inline ? <a className="wb-file" href={t?.href}>{chip}<span className="grow wb-what"><b>{f.name}</b><span>{[about, made].filter(Boolean).join(' · ')}</span></span><Icon name="next" size={20} /></a>
+          : <header className="wb-head">
+            <button className="wb-close" onClick={onClose} aria-label="Close file"><Icon name="back" size={20} /></button>
+            {chip}<span className="grow wb-what"><b>{f.name}</b><span>{who ? `By ${nameOf(who)}` : about}<span className="wb-ro"> · read-only</span></span></span>
+            {download}
+          </header>}
+        <div className="wb-content"><div className="wb-reading">
+          {!book && !doc && !deck && text === null && <div className="mute" role="status">Opening “{f.name}”…</div>}
+          {(book && !sheets.length || doc && !doc.parts.length) && <div className="mute">There is nothing in it to show yet.</div>}
+          {!inline && sheets.length > 1 && <nav className="wb-tabs" aria-label="Sheets">
+            {sheets.map((x, i) => <button key={`${x.name}-${i}`} aria-pressed={x === s} className={`wb-tab${x === s ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
+          </nav>}
+          {s && <SheetTable s={s} />}
+          {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
+          {deck && <SlideBody deck={deck} />}
+          {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
+          {summary && !inline && <p className="wb-note"><Icon name="lock" size={20} /><span>{summary}</span></p>}
+          {inline && download}
+        </div>{wide && <aside className="wb-about"><div className="label">About this file</div>
+          <p><b>Made by</b><span>{who ? nameOf(who) : 'The crew'}{made && `, ${made}`}</span></p><p><b>Holds</b><span>{about}</span></p>
+          <div className="label">Ask about it</div><Composer placeholder="Ask Chief about this file…" onSend={ask} />
+        </aside>}</div>
       </div>
     </div>
   );

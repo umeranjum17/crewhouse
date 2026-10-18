@@ -338,6 +338,40 @@ test('a finished file opens beside its chat: the chat\'s foot (a helper\'s Ask C
   assert.ok(composer <= panel, `the chat's foot ends at ${composer}px, left of the panel at ${panel}px`);
 });
 
+test('a finished sheet ends Chief\'s thread on its Done card: Later keeps it with Undo, Open it lands on the read-only sheet, and the kept card opens it again', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  const card = `(() => { const c = document.querySelector('.done-card'); if (!c?.querySelector('.wb-thumb')) return null;
+    const small = [...c.querySelectorAll('*')].filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 16).map((e) => e.textContent);
+    return { head: c.querySelector('h2').textContent, say: c.querySelector('p').textContent, tint: c.style.background, open: c.querySelector('.done-open').getAttribute('href'), small }; })()`;
+  for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await b.open('demo=done&day', '/'); await b.run(`localStorage.removeItem('crewhouse.done.kept'), location.hash = '#/chief', 0`);
+    await until(`the Done card at ${w}`, () => b.run(card), 30_000);
+    const c = await b.run(card);
+    assert.equal(c.head, 'Done.');
+    assert.match(c.say, /monthly budget is ready/);
+    assert.ok(c.tint, 'the card wears its maker\'s colour');
+    assert.match(c.open, /^#\/f\/scribe\//);
+    assert.deepEqual(c.small, [], `${w}: nothing on the Done card reads under 16px`);
+    // Later: the card settles into its maker's file card and the toast offers Undo; Undo brings the card back.
+    await b.run(`document.querySelector('.done-later').click(), 0`);
+    await until('the Kept toast', () => b.run(`!document.querySelector('.done-card') && !!document.querySelector('.chat .wb-made') && document.querySelector('.toast')?.textContent`), 10_000);
+    assert.equal(await b.run(`document.querySelector('.toast').textContent`), 'Kept: Monthly budgetUndo');
+    assert.match(await b.run(`document.querySelector('.chat .lines').innerText`), /Your monthly budget is ready/, 'the settled card keeps Chief\'s words above it');
+    await b.run(`document.querySelector('.toast .toast-act').click(), 0`);
+    await until('the Done card back after Undo', () => b.run(card), 10_000);
+    // Open it: the read-only sheet over Chief's thread (on a computer the wide page), then Back to a settled card.
+    await b.run(`document.querySelector('.done-open').click(), 0`);
+    await until('the open sheet', () => b.run(`!!document.querySelector('.wb-scrim .wb-grid')`), 30_000);
+    if (!mobile) assert.ok(await b.run(`!!document.querySelector('.wb-scrim.wb-wide')`), 'a computer opens the wide file page');
+    await b.run('history.back(), 0');
+    await until('Chief\'s thread with the plain file card', () => b.run(`location.hash === '#/chief' && !document.querySelector('.wb-scrim') && !document.querySelector('.done-card') && !!document.querySelector('.chat .wb-made')`), 10_000);
+    await b.run(`document.querySelector('.chat .wb-made').click(), 0`);
+    await until('the kept card opens the sheet again', () => b.run(`!!document.querySelector('.wb-scrim .wb-grid')`), 30_000);
+  }
+});
+
 test('a routine\'s switch keeps its knob inside the track, clear of its On or Paused words, day and night, phone and computer, text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   // The knob is a ::after, so its box comes from the computed style; translateX counts too (two switch rules once stacked both).
