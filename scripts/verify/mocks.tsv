@@ -1,7 +1,7 @@
 # screen slug	its approved mock, under $EVIDENCE_HOME ({theme} = day|night, {look} = light|dark); a screen with none says so in every report
 # Approved = that mock round has a recorded approval; the newest round wins.
 chats	data/ch-grok-samples/mocks/png/2-crew-390-{theme}.png
-chief-chat	data/evidence/ch-pwa-simplify/mock-r3/shots/chat-top-{theme}-390.png
+chief-chat	data/evidence/ch-canvas-overlap-start/final/J03a-390-{theme}.png
 hello	data/evidence/ch-pwa-simplify/mock-r3/shots/first-{theme}-390.png
 where	data/ch-cloud-onboarding-mock/png/c-{look}.png
 cloud-key	data/ch-cloud-byo-connect/mocks/key-390-{theme}.png

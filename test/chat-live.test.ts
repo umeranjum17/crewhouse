@@ -121,7 +121,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     }
     if (bot === 'chief') {
       // The engine can stay silent for tens of seconds while the model writes a big file: after 4 s with no
-      // event the live line says so beside its one clock ("Chief · at work · 27 s · still working"), and the next
+      // event the live card says so beside its one clock ("Chief · 27 s · still working"), and the next
       // event clears it. Read only while in sight: inside the thread's scrolling box, not under the composer.
       const head = () => run(`(() => { const q = [...document.querySelectorAll('.chat .lines .live-head')].find((e) => e.offsetParent);
         if (!q) return ''; const r = q.getBoundingClientRect(), b = q.closest('.lines').getBoundingClientRect();
@@ -132,10 +132,10 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       const lastAt = db.get("SELECT max(at) AS at FROM events WHERE json_extract(data, '$.task') = ?", job)!.at;
       assert.ok(shown - lastAt >= 4000, `${width}: it waits 4 s of silence (it showed after ${shown - lastAt} ms)`);
       const said = await head();
-      assert.match(said, /^Chief · at work · \d+ s · still working$/, `${width}: one line, one clock`);
+      assert.match(said, /^Chief( · step \d+ of \d+)? · \d+ s · still working$/, `${width}: one line, one clock`);
       assert.equal(await run("[...document.querySelectorAll('.chat .lines .live-line')].find((e) => e.offsetParent).innerText.match(/\\d+ s\\b/g).length"), 1, `${width}: no second clock under it`);
       db.event('run.tool', 'chief', { task: job, words: 'Wrote the week plan' });
-      await until('the next event to clear it', async () => /^Chief · at work · \d+ s$/.test(await head()), 3_000);
+      await until('the next event to clear it', async () => /^Chief( · step \d+ of \d+)? · \d+ s$/.test(await head()), 3_000);
     }
     // Reading up mid-turn keeps the place: the reply lands below without moving the thread, a New pill says so,
     // and its tap goes back to the newest line (chat quality map gap 3).
@@ -161,10 +161,10 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await until('the reply and the end line', async () => /All set for Umer/.test(await screen()) && /done/i.test(await run(end)) && (bot !== 'scout' || !(await run("!!document.querySelector('.live-end')"))), 15_000);
   };
   for (const width of [1440, 390]) {
-    await journey(width, 'chief', 'Please ask permission before you plan my week', /Chief · at work[\s\S]*Started on/);
+    await journey(width, 'chief', 'Please ask permission before you plan my week', /At work[\s\S]*Chief ·[\s\S]*Started on/);
     // On a phone there is no side column: the job passed to Scout is followed in Chief's thread itself. Scout's own
     // progress note is the doing line; its small steps stay behind the expand.
-    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', /Scout · at work[\s\S]*Passed to Scout/);
+    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', /At work[\s\S]*Scout ·[\s\S]*Passed to Scout/);
     // A turn that ends at once with a reply the thread does not show (the stub's own) keeps its end line, so the
     // send still says it finished; a quick Chief reply in the thread lets "Done · 0 s" go.
     const quick = `What did you finish at ${width}?`;
