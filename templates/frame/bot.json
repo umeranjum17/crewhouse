@@ -1,0 +1,14 @@
+{
+  "display": "Frame Fay",
+  "role": "Fills production cards and layouts from one template. The components you export are the truth.",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#A21CAF",
+  "tools": [
+    "crew",
+    "files",
+    "documents",
+    "web"
+  ]
+}

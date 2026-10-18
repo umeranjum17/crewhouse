@@ -1,0 +1,22 @@
+{
+  "display": "Spark Stella",
+  "role": "Turns a rough idea into a working prototype, then hands the motion and the build questions on.",
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#BE123C",
+  "tools": [
+    "crew",
+    "files",
+    "web",
+    "computer"
+  ],
+  "net": [
+    "api.github.com",
+    "github.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+    "registry.npmjs.org",
+    "registry.yarnpkg.com"
+  ]
+}

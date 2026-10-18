@@ -2176,6 +2176,7 @@ export function cardLines(c: OfficeMember, v: OfficeView, job?: Work) {
 /** A crew tile's one short line (the full role stays on the member's sheet): a template helper's own, else the first
  *  clause of the role Chief wrote. */
 const TAGS: Partial<Record<Kind, string>> = { scout: 'Finds things out', scribe: 'Writes it for you', tracer: 'Finds customers',
-  reel: 'Makes videos', support: 'Answers bug reports', xgrowth: 'Grows your X', cto: 'Keeps the coders going' };
+  reel: 'Makes videos', support: 'Answers bug reports', xgrowth: 'Grows your X', cto: 'Keeps the coders going',
+  frame: 'Fills production layouts', motion: 'Tunes motion timing', prototype: 'Builds quick prototypes' };
 export const tagOf = (h: Helper) => TAGS[h.kind] ?? h.role.split(/[.,:;]| and /)[0].trim();
 export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v).group;

@@ -22,7 +22,10 @@ test('Chief sees what each template knows, and a drafted reply waits on a card t
   crew.onboard('sir');
   const { task: r } = (await crew.post('chief', `who can help ${call('crew_roster', {})}`))!;
   await settled(db, r);
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text, /"id":"reel","name":"Video Vic","role":"[^"]+","knows":\["make-reel","make-store-shots","use-the-browser"\]/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id DESC")!.text, /crew_roster said \{"crew":\[\],"templates":\[/);
+  // The stub cuts a tool's result at 300 characters, so the roster is read whole here, not from the chat line.
+  const roster = JSON.parse(await (crew as any).crewTools('chief').find((t: any) => t.name === 'crew_roster').run({}));
+  assert.deepEqual(roster.templates.find((t: any) => t.id === 'reel').knows, ['make-reel', 'make-store-shots', 'use-the-browser']);
 
   assert.deepEqual(disk.loadTemplate(cfg, 'support').skills, ['triage-issue', 'sandbox-patch']);
   crew.recruit('support', 'Desk', 'person');

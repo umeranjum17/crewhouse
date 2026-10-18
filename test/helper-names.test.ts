@@ -9,6 +9,7 @@ import { setup, settled, until } from './lab.ts';
 const NAMES: Record<string, string> = {
   scout: 'Research Rae', scribe: 'Writer Will', reel: 'Video Vic', support: 'Support Sam',
   tracer: 'Finder Finn', xgrowth: 'Growth Gus', cto: 'Terminal Tess', helper: 'Helper Hal',
+  frame: 'Frame Fay', motion: 'Motion Milo', prototype: 'Spark Stella',
 };
 const template = (id: string) => JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', id, 'bot.json'), 'utf8'));
 
