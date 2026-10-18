@@ -109,11 +109,7 @@ b { font-weight: 600; }
 .art i { font-style: normal; }
 /* A face slot (.helmet, parts.tsx Critter) is sized in em, as the text helmet it replaced: whole faces size like the old figure: the hero slot first, then anywhere centred. */
 .helmet { font-size: 9px; }
-.ch-art .helmet { font-size: 9.5px; } /* the whole 38-column rail grid fits the art column */
 /* The old figure bled past the slot's edge; text art must not clip, so the helmet resets the bleed. */
-@media (max-width: 899px) { .ch-art .helmet { font-size: 9px; } .ch-art:has(> .helmet) { margin-left: 0; } }
-@media (max-width: 359px) { .ch-art .helmet { font-size: 6px; } }
-@media (max-width: 359px) and (max-height: 700px) { .home-chat .ch-art .helmet { font-size: 4.5px; } }
 /* Standalone times and counts set in a column, and inline code chips in chat answers (.chat-code below): the only mono outside the art. */
 .time { font-family: var(--art); font-size: 12px; letter-spacing: 0; color: var(--mute); }
 .dots { display: grid; grid-template-columns: repeat(var(--w), var(--d)); gap: calc(var(--d) * .22); width: max-content; }
@@ -1031,9 +1027,7 @@ details.card[open] > summary { margin-bottom: 10px; }
 .home-bar .stat { padding: 5px 10px 6px; text-decoration: none; }
 .home-bar .stat b { font-size: 17px; line-height: 22px; }
 .home-top { position: sticky; top: var(--top); z-index: 4; background: var(--bg); padding: 4px 0 2px; max-height: 55dvh; overflow-y: auto; }
-.needs-pin { margin-bottom: 8px; }
 /* "See all N" opens the list inside the pin, never over Chief's thread or box. */
-.needs-pin .list-group { max-height: 36dvh; overflow-y: auto; }
 @media (min-width: 900px) {
   .home-top { position: static; flex: none; max-width: 1072px; }
   .home-chat .dock { bottom: 0; }
@@ -1048,21 +1042,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .seg button .lucide { display: none; }
 
 .home-bar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
-.home-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font: 500 13px/18px var(--ui); color: var(--ink2); }
-.home-meta > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.home-meta i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.m-working i { box-shadow: inset 0 0 0 1.6px var(--ink); }
 .m-needs i { background: var(--pink); } .m-needs[data-n="0"] i { background: var(--line2); }
-.home-bar.is-chat { align-items: center; }
-.home-bar.is-chat .home-meta { margin: 0; font-size: 15px; }
 /* B1 phone Chat: the bar is the hero; its caption and Needs you carry the counts. */
-@media (max-width: 899px) { .home-bar.is-chat .home-meta { display: none; } .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; } .home-bar.is-chat:has(> .chief-hero) { display: flex; flex-direction: column; align-items: stretch; } }
 /* A desk keeps the same bar: the counts live in the rail, so only the links and the gear stay on top. */
-@media (min-width: 900px) {
-  .home-bar.is-chat .home-meta { display: none; }
-  .home-bar.is-chat .home-tools { flex: 1; justify-content: space-between; }
-  .home-bar.is-chat .home-gear { order: 2; }
-}
 /* The desk's ask column: the claim's title beside its Needs-you flag, then the card itself. */
 .desk-ask .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .desk-ask .m-needs { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pink-ink); white-space: nowrap; }
@@ -1071,11 +1053,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    buttons wrap their words instead of pushing past the column. */
 .tonight-rail > * { min-width: 0; max-width: 100%; }
 .desk-ask .btn { white-space: normal; text-align: center; }
-.home-bar.is-chat .m-needs:not([data-n="0"]) { color: var(--pink-ink); font-weight: 600; }
-.home-bar.is-chat .m-working i { background: var(--ok); box-shadow: none; }
 .m-quiet { color: var(--ink2); } .m-quiet .lucide { flex: none; }
-.home-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
-.home-tools .m-quiet { display: inline-flex; gap: 5px; align-items: center; font: 500 12px/16px var(--ui); white-space: nowrap; }
 
 .home-section .section-head .small { margin-left: auto; }
 
@@ -1089,20 +1067,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 
 /* The pinned Needs-you card (B1 polish .ask): serif who-needs-you, the evidence's first lines over a hairline, the
    page's own money in serif, then the yes (it opens the review), Ask Chief and Not now. */
-.needs-big { display: block; padding: 16px; background: var(--solid); border: 1px solid var(--line2); border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.nb-top { display: flex; gap: 12px; align-items: flex-start; }
-.nb-top .grow { min-width: 0; display: grid; gap: 2px; }
-.nb-title { font: 600 22px/26px var(--serif); letter-spacing: -.005em; color: var(--ink); }
-.nb-ask { font: 400 14px/19px var(--ui); color: var(--ink2); overflow-wrap: anywhere; }
-.nb-when { font: 500 12px/16px var(--ui); color: var(--pink-ink); white-space: nowrap; }
-.nb-detail { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
-.nb-detail .grow { min-width: 0; display: grid; overflow-wrap: anywhere; font: 400 13px/19px var(--ui); color: var(--ink2); }
-.nb-detail b { color: var(--ink); font-weight: 600; }
-.nb-price { font: 600 32px/1 var(--serif); color: var(--ink); white-space: nowrap; }
-.nb-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
-.nb-acts .btn { min-height: 38px; padding: 9px 14px; white-space: normal; text-align: left; border-radius: 12px; font: 600 14px/20px var(--ui); border: 1px solid var(--line2); background: var(--solid); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
-.nb-acts .btn.go { border-color: transparent; }
-.nb-acts .btn.ghost { border-color: transparent; background: none; color: var(--ink2); padding-inline: 6px; } /* the three actions share one row on the 420 rail, as B1 */
 .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* The desk feed's composer (B1 web): the words on top, a bar under them with attach, two starters, mic and send. */
@@ -1125,56 +1089,18 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 /* Chief's hero over his chat (B1 polish): his whole figure in its own column, feet on the card's floor, the serif name,
    his own line in a bubble, the crew with a badge each. The figure's box keeps headroom over the hat for his poses, so it
    is drawn larger than the mock's (214px on a desk, the hero's 268px tall, 180 on a phone); the lifted hat uses it. */
-.chief-hero { display: grid; grid-template-columns: 256px minmax(0, 1fr); min-height: 268px; overflow: hidden; margin: 4px 0 12px; background: var(--solid); border: 1px solid var(--line2); border-radius: 24px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.ch-art { align-self: end; display: grid; padding-left: 16px; }
-.ch-art .ink { width: 214px; height: auto; }
-.ch-body { min-width: 0; display: grid; gap: 10px; justify-items: start; align-content: start; padding: 30px 28px 22px 6px; }
-.ch-name { margin: 0; font: 600 52px/1 var(--serif); letter-spacing: -.01em; color: var(--ink); }
-.ch-say { margin: 0; padding: 12px 18px; border: 1px solid var(--line2); border-radius: 16px; font: 400 16px/1.45 var(--ui); color: var(--ink); max-width: 60ch; }
-.ch-crew { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ch-face { position: relative; display: grid; border-radius: 50%; box-shadow: 0 0 0 1px var(--line2); text-decoration: none; }
-.ch-badge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 10px/1 var(--ui); font-style: normal; color: #fff; border: 2px solid var(--solid); background: var(--mute); }
-.ch-badge.needs, .ch-badge.chat, .ch-badge.failed { background: #D63A1E; }
-.ch-badge.working { background: #1F9D62; }
-.ch-badge.done { background: #3B6FE0; }
-.ch-more { font: 600 13px/1 var(--ui); color: var(--ink2); text-decoration: none; padding: 0 4px; }
-.ch-caption { margin: -2px 0 0; font: 400 13px/18px var(--ui); color: var(--ink2); }
 @media (max-width: 899px) {
-  .chief-hero { grid-template-columns: 164px minmax(0, 1fr); min-height: 236px; }
-  .ch-art { padding-left: 0; margin: 0 0 0 -14px; }
-  .ch-art .ink { width: 180px; }
-  .ch-body { padding: 20px 12px 14px 4px; }
-  .ch-name { font-size: 40px; }
   /* B1 phone: the five faces sit in one row under his line (zoom scales the badge with its face). */
-  .ch-crew { gap: 3px; }
-  .ch-face { zoom: .74; }
-  .ch-say { font-size: 15px; padding: 10px 14px; }
-}
-@media (max-width: 359px) {
-  .chief-hero { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; }
-  .ch-art { margin-left: -8px; }
-  .ch-art .ink { width: 120px; }
 }
 
 /* The Tonight rail beside Chief's chat on a desk: card per helper or tray item, and a plain line where a section is empty. */
 @media (min-width: 900px) { .tonight-rail { display: grid; align-content: start; gap: 10px; } }
 .tonight-rail .label { margin: 10px 0 0; }
-.tr-card { position: relative; display: flex; gap: 14px; align-items: center; padding: 14px 16px; background: var(--solid); border: 1px solid var(--line); border-radius: 18px; text-decoration: none; color: var(--ink); }
-.tr-card .grow { min-width: 0; display: grid; gap: 2px; }
-.tr-card b { font: 600 15px/20px var(--ui); }
-.tr-card .grow > span { font: 400 13px/18px var(--ui); color: var(--ink2); }
-.tr-card em { position: absolute; top: 12px; right: 14px; font: 400 12px/16px var(--ui); font-style: normal; color: var(--mute); }
 .tr-empty { margin: 0; padding: 4px 2px; font: 400 13px/18px var(--ui); color: var(--mute); }
 
 
 /* In Chief's chat the pinned question is one flat card (B1 chat): the accent label inside it, the question in serif
    with the evidence on one line under it and the money to the right, then the three ways on. */
-.needs-pin.flat { padding: 14px 18px 16px; background: var(--solid); border: 1px solid var(--line2); border-radius: 20px; box-shadow: 0 1px 2px rgba(20, 26, 42, .04), 0 14px 32px -22px rgba(20, 26, 42, .32); }
-.needs-pin.flat .section-head .label { color: var(--pink-ink); }
-.needs-pin.flat .section-head .label .count::before { content: '· '; }
-.needs-pin.flat .needs-big { padding: 0; border: 0; box-shadow: none; background: none; border-radius: 0; }
-.needs-pin.flat .nb-top { align-items: center; }
-.needs-pin.flat .nb-acts { margin-top: 12px; }
 
 .o-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--ink2); }
 /* A file's extension sits in the shared tile: four capitals at tile size, never cut. */
@@ -1194,9 +1120,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .page.chat-page.home-chat > .chat > .dock { grid-column: 1; grid-row: 3; }
   .page.chat-page.home-chat > .chat > .working-on { grid-column: 2; grid-row: 1 / -1; min-height: 0; overflow-y: auto; padding-top: 24px; }
   .with-book .page.chat-page.home-chat { grid-template-columns: minmax(0, 720px); }
-/* Below the board's width the two columns would squeeze the thread until its hero clips: the rail waits under the box
+/* Below 1200 the two columns would squeeze the thread: the rail waits under the box
    instead, full width, nothing cut. */
-@media (min-width: 900px) and (max-width: 1439px) {
+@media (min-width: 900px) and (max-width: 1199px) {
   .page.chat-page.home-chat { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .page.chat-page.home-chat > .home-top { grid-column: 1; grid-row: 1; }
   .page.chat-page.home-chat > .chat > .lines { grid-column: 1; grid-row: 2; }
@@ -1211,11 +1137,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    (+, words, mic, a dark send) on a solid dock, so no thread line shows under it. */
 .line.note:has(.note-by) { display: flex; gap: 8px; align-items: center; color: var(--ink2); font: 400 13.5px/18px var(--ui); }
 .note-by { display: grid; flex: none; }
-.nb-av { flex: none; display: grid; width: 44px; height: 44px; place-items: center; }
 @media (max-width: 899px) {
-  .needs-pin.flat .nb-acts { gap: 6px; }
-  .needs-pin.flat .nb-acts .btn { padding: 9px 12px; }
-  .needs-pin.flat .nb-acts .btn.ghost { padding: 9px 6px; }
   .home-chat .dock { background: var(--bg); }
   .home-chat .composer.has-bar { flex-wrap: nowrap; align-items: center; border-radius: 999px; padding: 6px 6px 6px 8px; }
   .home-chat .composer.has-bar textarea { flex: 1; padding: 9px 0; }
@@ -1224,10 +1146,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat .send { border-radius: 12px; }
   .home-chat .send:disabled { background: var(--ink); color: var(--solid); transform: none; }
   /* the pinned ask's title holds one line at 390 (the mock's face, gap and padding); 320 and large type wrap. */
-  .needs-pin.flat { padding: 14px 14px 16px; }
-  .needs-pin.flat .nb-top { gap: 10px; }
-  .needs-pin.flat .nb-av { width: 34px; height: 34px; }
-  .needs-pin.flat .nb-av .ink { width: 34px; height: auto; }
 }
 
 
@@ -1251,28 +1169,9 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   /* The phone header (Term): one compact centred line — the helmet, the name, the single status and the gear. No card, no say, no crew row, no caption. */
   .home-chat > .home-top { display: flex; flex-direction: column; align-items: stretch; }
   .home-chat > .home-top > * { flex: none; max-width: none; }
-  .home-chat .chief-hero { order: -1; display: flex; flex-direction: column; gap: 8px; min-height: 0; background: none; border: 0; border-radius: 0; box-shadow: none; margin: 2px 0 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-  .home-chat .ch-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .home-chat .ch-art { flex: none; padding: 0; margin: 0; width: auto; overflow: visible; display: grid; align-items: center; }
-  .home-chat .ch-art .helmet { font-size: 2.2px; line-height: 1; }
-  .home-chat .ch-name { margin: 0; font-size: 22px; line-height: 26px; }
-  .home-chat .ch-status { display: flex; gap: 6px; align-items: center; margin: 0; min-width: 0; font: 500 13px/18px var(--ui); color: var(--pink-ink); }
-  .home-chat .ch-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .home-chat .ch-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--pink); flex: none; }
-  .home-chat .ch-status.rest { color: var(--ink2); }
-  .home-chat .ch-status.rest i { background: var(--line2); }
-  .home-chat .ch-status.work { color: var(--ink2); }
-  .home-chat .ch-status.work i { background: var(--ok); }
-  .home-chat .ch-row > .icon-btn { margin-left: auto; flex: none; }
   /* With the box focused (the keyboard up) the face and "What happened" step aside, so the thread keeps the room; the name and status stay on one line. */
-  .home-chat:has(.dock textarea:focus) .ch-art,
-  .home-chat:has(.dock textarea:focus) .home-did { display: none; }
+  .home-chat:has(.dock textarea:focus) .ch-art { display: none; }
   /* The conversation carries no pinned card: the ask already sits inline in the thread. */
-  .home-chat .needs-pin { display: none; }
-  .home-chat .needs-pin.flat .section-head { margin-bottom: 4px; }
-  .home-chat .needs-pin.flat .nb-title { font-size: 21px; }
-  .home-chat .needs-pin.flat .nb-ask { font: 400 13px/17px var(--ui); }
-  .home-chat .needs-pin.flat .nb-acts { margin-top: 10px; }
 }
 /* 097: on a short phone the top region scrolls by itself above a thread that keeps its floor; a rule marks its edge so a
    card cut there reads as more above, not as overlap. */
@@ -1280,21 +1179,12 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .home-chat > .home-top { border-bottom: 1px solid var(--line2); }
 }
 /* 099/101: at 320 the one-line header packs tighter so more of the pinned ask shows above the thread. */
-@media (max-width: 359px) {
-  .home-chat .ch-row { gap: 8px; }
-  .home-chat .ch-art .helmet { font-size: 2.6px; }
-  .home-chat .ch-name { font-size: 20px; line-height: 24px; }
-  .home-chat .ch-status { font-size: 12px; }
-}
 
 /* A chat header names who you talk to: the name and what they do, wrapped whole-word, never cut mid-word. */
 .chat-head .sub { display: block; }
 
 /* The desk middle column is only the conversation: the hero card and the pinned ask never sit above the thread
    (the crew and the urgent ask live in the rails, which lane 3 builds). Office keeps both. */
-@media (min-width: 900px) {
-  .home-chat .chief-hero, .home-chat .needs-pin { display: none; }
-}
 
 /* The crew room on a phone, one screen like Chief's chat (096): the bar and picker stay put, only the thread
    scrolls, opened at its top, above a picker and composer docked at the foot. Nothing sits under them. */
@@ -1402,12 +1292,6 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   .chat .card.ask .btn.go { min-height: 40px; padding: 8px 18px; font: 600 15px/20px var(--ui); }
   .chat .card.ask .more-act { display: none; }
   .chat .card.ask .more-dots { display: grid; place-items: center; width: 40px; min-height: 40px; padding: 0; }
-  .home-chat .chief-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: 10px; align-items: center; padding-bottom: 8px; border-bottom: 0; }
-  .home-chat .ch-row { display: contents; }
-  .home-chat .ch-art { grid-row: 1 / 3; }
-  .home-chat .ch-name { grid-column: 2; grid-row: 1; align-self: end; font-size: 20px; line-height: 24px; }
-  .home-chat .ch-status { grid-column: 2; grid-row: 2; align-self: start; font-size: 12px; line-height: 16px; }
-  .home-chat .ch-row > .icon-btn { grid-column: 4; grid-row: 1 / 3; margin-left: 0; }
   .hello { min-height: calc(100dvh - var(--top)); display: flex; flex-direction: column; align-items: center; }
   .hello .hello-ask { position: sticky; bottom: 0; margin-top: auto; padding: 8px 0 max(12px, env(safe-area-inset-bottom)); background: var(--bg); }
 }
@@ -1423,27 +1307,13 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
   /* Muse's header, compact: the mascot drawn smooth at the top centre, overlapping a one-line pill with the
      name and the one status; Home and the gear round buttons on the mascot's line. */
   .page.chat-page.home-chat { padding-top: 8px; }
-  .home-bar.is-chat { margin: 0; }
   .home-chat > .home-top { padding: 0; }
-  .home-chat .chief-hero { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; }
   /* No band under the switch: the thread's fade is 12px and its first day line sits at the top. */
   /* Words scrolled up fade out under the header (in em, so the fade grows with the text) rather than cut hard. */
   .home-chat .lines, .page.chat-page.home-chat:has(> .chat) .lines { padding-top: 1.5em; mask-image: linear-gradient(transparent, #000 1.5em); }
   .home-chat .lines > .day:first-child, .home-chat .lines > :first-child > .day:first-child { margin-top: 0; }
-  .home-chat .ch-row { position: relative; display: grid; grid-template-columns: 1fr auto auto 1fr; grid-template-rows: 40px auto; gap: 0; align-self: stretch; }
-  .home-chat .ch-row::before { content: ''; grid-column: 2 / 4; grid-row: 2; justify-self: stretch; align-self: stretch; margin: 0 -14px; border-radius: 19px; background: var(--tint); }
   /* On a whole CSS pixel at any width (round), so its edges stay sharp at 2x and 3x. */
-  .home-chat .ch-art { grid-column: 1 / -1; grid-row: 1; position: absolute; top: 0; left: calc(50% - 26px); left: round(50% - 26px, 1px); z-index: 1; width: 52px; height: 48px; margin: 0; padding: 0; background: none; box-shadow: none; display: block; }
   /* A soft contact shadow seats the 3D figure on the pill, as Muse's does; deeper at night so it still reads. */
-  .home-chat .ch-art .helmet { display: block; width: 52px; height: auto; filter: drop-shadow(0 2px 3px rgb(29 27 24 / .22)); }
-  [data-theme='night'] .home-chat .ch-art .helmet { filter: drop-shadow(0 2px 4px rgb(0 0 0 / .6)); }
-  .home-chat .ch-name { grid-column: 2; grid-row: 2; align-self: baseline; margin: 0; padding: 9px 4px 5px 0; font: 600 17px/22px var(--ui); }
-  .home-chat .ch-status { grid-column: 3; grid-row: 2; align-self: baseline; display: block; margin: 0; padding: 9px 0 5px 4px; font: 500 13px/22px var(--ui); color: var(--ink); white-space: nowrap; }
-  .home-chat .ch-status > span { display: inline; }
-  .home-chat .ch-status i { display: inline-block; width: 7px; height: 7px; margin: 0 6px 0 0; vertical-align: 1px; background: var(--ink); }
-  .home-chat .ch-status.rest, .home-chat .ch-status.work { color: var(--ink2); }
-  .home-chat .ch-row > .icon-btn { grid-column: 4; grid-row: 1; justify-self: end; align-self: start; width: 44px; height: 44px; margin: 2px 0 0; border-radius: 50%; background: var(--tint); }
-  .home-chat .ch-row > .back { grid-column: 1; grid-row: 1; justify-self: start; align-self: start; display: grid; place-items: center; width: 44px; height: 44px; margin: 2px 0 0; padding: 0 0 3px; border-radius: 50%; background: var(--tint); color: var(--ink); font-size: 28px; line-height: 1; text-decoration: none; }
   .day-time { display: inline; }
   .chat .day { margin: 22px 0 14px; }
   .chat .day span { font: 500 13px/18px var(--ui); }
@@ -1742,3 +1612,55 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .st-cc-acts .btn:not(.go) { flex: none; }
   .st-cc-acts .btn.go { background: #0B0B0B; color: #FFFFFF; }
 }
+/* Chief's thread (J03, Stack): one header (face, name, what he does, the gear); his face beside each of his lines;
+   "Asked <helper>" as a chip; the job as a card in the helper's colour with its check list and Open; a one-row box.
+   On a desk the thread sits beside Made in this chat and Also today. */
+.home-chat { font-family: Archivo, var(--ui); }
+.chief-head { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; margin: 0; padding: 10px 0 14px; border-bottom: 1px solid var(--line); }
+.chief-head .grow { display: grid; min-width: 0; }
+.chief-head .ch-name { margin: 0; font: 800 28px/1.05 Archivo, var(--ui); font-stretch: 125%; letter-spacing: -.01em; }
+.chief-head .ch-status { margin: 0; font-size: 16px; line-height: 1.3; color: var(--mute); overflow-wrap: anywhere; }
+.chief-head .ch-status.wait { color: var(--pink-ink); font-weight: 600; }
+.chief-head .st-gear { color: var(--ink); }
+.home-chat .chat .line-by { position: static; width: auto; height: auto; overflow: visible; clip-path: none; padding: 0; align-self: end; }
+.home-chat .chat .line-by .who, .home-chat .chat .line.me > .line-by { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.home-chat .chat .line { position: relative; } /* its screen-reader names stay inside the scrolling thread */
+.home-chat .chat .line.note .bubble-text { font-size: 16px; line-height: 1.4; } /* "<helper> finished … · it's in Your things" */
+.home-chat .chat .line:has(> .line-by) { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 10px; align-items: end; margin-top: 12px; }
+.home-chat .chat .line.me { display: flex; flex-direction: column; align-items: flex-end; max-width: none; align-self: stretch; }
+.home-chat .chat .line:is(.them, .chief, .me) > .bubble-text { width: fit-content; max-width: 100%; padding: 12px 15px; border: 1px solid var(--line); border-radius: 20px 20px 20px 6px; background: var(--solid); color: var(--ink); font: 400 16px/1.4 Archivo, var(--ui); }
+.home-chat .chat .line.me > .bubble-text { max-width: 82%; border-color: transparent; border-radius: 20px 20px 6px 20px; background: var(--ink); color: var(--bg); }
+.home-chat .chat .hand-off .hand { gap: 12px; margin: 0; padding: 6px 18px 6px 6px; border: 0; background: var(--soft); font: 700 18px/1.2 Archivo, var(--ui); font-stretch: 108%; }
+.home-chat .chat .hand b { font-weight: inherit; }
+.home-chat .chat .hand .hand-word { font-size: 16px; font-weight: 600; }
+.home-chat .chat .hand .chev { display: none; }
+.home-chat .chat .live-line { margin-top: 12px; padding: 0; }
+.home-chat .chat .live-line .live-body { gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 24px; background: var(--solid); color: var(--ink); }
+.home-chat .chat .live-line .live-body[style] { border-color: transparent; color: #0B0B0B; }
+.live-top { display: flex; align-items: center; gap: 12px; }
+.live-top b { min-width: 0; font: 700 20px/1.15 Archivo, var(--ui); font-stretch: 108%; overflow-wrap: anywhere; }
+.home-chat .chat .live-line .live-head { padding: 0; font: 600 16px/1.3 Archivo, var(--ui); color: inherit; opacity: .75; }
+.home-chat .chat .live-line .live-word i { display: none; }
+.home-chat .chat .live-line .live-todos { gap: 10px; }
+.home-chat .chat .live-line .live-todos li { grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; font: 600 16px/22px Archivo, var(--ui); color: inherit; }
+.home-chat .chat .live-line .live-todos li.todo { opacity: .55; }
+.home-chat .chat .live-line .live-todos li .tick { display: grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; margin: 0; border: 2px solid currentColor; border-radius: 50%; background: none; color: inherit; font: 800 13px/1 var(--ui); -webkit-mask: none; mask: none; animation: none; }
+.home-chat .chat .live-line .live-todos li.done .tick { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+.home-chat .chat .live-line .live-body[style] .live-todos li.done .tick { border-color: #0B0B0B; background: #0B0B0B; color: #fff; }
+.home-chat .chat .live-line .live-todos li.doing .tick { border-color: color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; width: 22px; height: 22px; font-size: 0; animation: spin 900ms linear infinite; }
+.home-chat .chat .live-line :is(.live-next, .live-detail summary, .live-detail li) { padding: 0; font: 600 16px/1.35 Archivo, var(--ui); color: inherit; opacity: .75; }
+.home-chat .chat .live-open { width: 100%; min-height: 50px; border: 0; border-radius: 16px; background: #0B0B0B; color: #fff; font: 700 16px/1 Archivo, var(--ui); text-decoration: none; }
+.home-chat .chat .live-end { padding-left: 46px; font-size: 16px; line-height: 1.35; }
+.home-chat .chat .dock .composer, .home-chat .chat .dock .composer.has-bar { flex-wrap: nowrap; align-items: center; gap: 6px; min-height: 54px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--solid); }
+.home-chat .chat .dock .composer textarea { flex: 1 1 0; min-width: 0; order: 0; min-height: 0; padding: 9px 0; border-radius: 0; background: none; font: 400 16px/24px Archivo, var(--ui); }
+.home-chat .chat .dock .c-bar { flex: none; order: -1; }
+.home-chat .chat .dock .send-away { bottom: calc(100% + 1px); } /* the box's border is its own: the held line sits wholly above it */
+.home-chat .chat .dock .send { width: 42px; height: 42px; border-radius: 13px; background: var(--ink); color: var(--bg); }
+.home-chat .working-on .label { margin: 0 4px 12px; font-size: 14px; line-height: 1.2; font-weight: 800; letter-spacing: .08em; color: var(--mute); }
+.home-chat .working-on :is(.desk-ask, .made-here) { order: -1; }
+.home-chat .working-on .home-section { display: grid; gap: 10px; margin-bottom: 28px; }
+.made-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--solid); color: var(--ink); text-decoration: none; }
+.made-row .grow { display: grid; min-width: 0; }
+.made-row b { font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; }
+.made-row .grow span { font-size: 16px; color: var(--mute); }
+.made-row .file-chip { width: 48px; height: 48px; border-radius: 12px; background: var(--pink); color: #fff; font: 800 13px/1 var(--ui); }

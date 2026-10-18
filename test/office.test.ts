@@ -111,6 +111,7 @@ const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], 
 test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and Chief\'s asks are clear and whole, Chief\'s card opens his thread, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
+  const asked: Record<string, number> = {};
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
     for (const [demo, n] of HOUSES) {
@@ -126,7 +127,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
           const lines = [...document.querySelectorAll('.home-chat .lines .line')];
           const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
-          return { pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen([...document.querySelectorAll('.home-chat .lines .line, .home-chat .lines .ask')].at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
+          return { pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), thread: lines.length > 0 && seen([...document.querySelectorAll('.home-chat .lines .line, .home-chat .lines .ask')].at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
         })()`);
         // The thread's newest item (a line, or an ask card after it) is in view above the box and the tab bar.
         const lead = `${demo} ${theme} at ${width}, Chief's thread from Home`;
@@ -172,7 +173,8 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and
           // (never both), and either way there is one card per thing he has.
           assert.equal(m.pins, 0, `${at}: Home renders no Needs you pin`);
           const has = Number(/^Chief has (\d+)/.exec(m.chiefTitle)?.[1] ?? 0);
-          if (first.chatPin) assert.equal(has, first.chatPin, `${at}: Chief's card says what he has for you (${m.chiefTitle})`);
+          // His count is one number for a house, at every width and theme.
+          assert.equal(has, asked[demo] ??= has, `${at}: Chief's count is the same at every width and theme (${m.chiefTitle})`);
           if (width > 900) assert.equal(m.asks, has, `${at}: one card in the column per thing Chief has, none repeated in Today`);
           else assert.ok(m.asks <= has, `${at}: Today shows no more asks than Chief has`);
           if (width > 900 && has) assert.equal(m.rail, m.chiefTitle, `${at}: the column's label and Chief's card agree`);
@@ -575,7 +577,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await b.run('location.hash = "#/chief"');
   await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
   // The Friday request was Chief's first hand-off to Scout, so it carries the limit; this Monday one is the second and does not.
-  const chip = await b.run(`(() => { const hs = [...document.querySelectorAll('.hand-off')], h = hs.at(-1), lines = [...document.querySelectorAll('.chat .lines > .line')];
+  const chip = await b.run(`(() => { const hs = [...document.querySelectorAll('.hand-off')], h = hs.at(-1), lines = [...document.querySelectorAll('.chat .lines .line:not(.live-line)')];
     return { limit: hs[0].querySelector('.hand-limit').textContent, second: h.querySelector('.hand-limit'), href: h.querySelector('a.hand').getAttribute('href'), after: lines.indexOf(h) > lines.findIndex((l) => /Monday trains/.test(l.textContent)) }; })()`);
   assert.match(chip.limit, /^Scout .*can't pay or send anything without asking you\.$/);
   assert.deepEqual([chip.href, chip.after, chip.second], ['#/h/scout', true, null], 'the chip opens Scout\'s thread and sits after the request that handed it on');

@@ -1013,6 +1013,24 @@ export function work(state: Json): Work[] {
   });
 }
 
+/** Chief's desk panel, Also today: the crew's other jobs today, never one he handed from his thread (the thread shows
+ *  those): at work or waiting first, then what is ready. */
+export type TodayRow = { helper: string; title: string; word: string; sub: string };
+export function alsoToday(state: Json): TodayRow[] {
+  const today = dayLabel(Date.now()), fromChief = (id: number | undefined) => state.tasks.find((x: Json) => x.id === id)?.origin === 'chief';
+  const open = work(state).filter((w) => !fromChief(state.bots.find((b: Json) => b.id === w.helper)?.task?.id))
+    .map((w) => ({ helper: w.helper, title: w.title, word: w.waiting ? WORDS.wait : WORDS.work, sub: `${crewName(state, w.helper)} · ${w.line}` }));
+  const ready = things(state).filter((t) => t.helper !== 'chief' && dayLabel(at(t.at)) === today && !fromChief(t.id))
+    .map((t) => ({ helper: t.helper, title: t.title, word: 'Ready', sub: `${crewName(state, t.helper)} · ready ${clock(at(t.at))}` }));
+  return [...open, ...ready].slice(0, 4);
+}
+/** What a made file is, in a word, beside its time (Made in this chat). */
+/** Chief's Made in this chat: the files his chat's lines carry and what helpers made on jobs he handed from it, never
+ *  a file the person sent or a job they started elsewhere. */
+export const madeInChat = (state: Json, page: Json) => chatThings(state, page).files.filter((x) => x.by !== 'You sent it'
+  && !things(state).some((t) => t.files.some((g) => g.url === x.key) && state.tasks.find((k: Json) => k.id === t.id)?.origin !== 'chief'));
+export const KIND_WORD: Record<FileView['kind'], string> = { sheet: 'Spreadsheet', page: 'Document', doc: 'Document', image: 'Picture', video: 'Video' };
+
 export function things(state: Json): Thing[] {
   const gone = goneFiles(state);
   return state.tasks.filter((t: Json) => t.state === 'done' && (answerOf(t) || (t.files ?? []).length)).map((t: Json) => ({
@@ -1388,6 +1406,8 @@ export type LiveStep = { text: string; at: number };
  *  Every row names the thing it acts on; nothing repeats. The small tool calls live in `detail`, behind the expand. */
 export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: number };
 export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
+  /** The job's own short title, the live card's heading. */
+  title?: string;
   state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
   /** The next queued job behind the running one, as a short title ("Next: …"). Never on the waiting/done line. */
   next?: string;
@@ -1487,7 +1507,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
   todos.forEach((x, i) => { x.state = i < todos.length - 1 ? 'done' : 'doing'; });
   for (const p of planOf(t.body)) if (p && !said.has(p)) { said.add(p); todos.push({ text: p, state: 'todo', at: start }); }
   // A progress note rides both rows (the call and the note); the list said it, so the expand must not repeat it.
-  return { who, helper: helper?.id, chief: t.bot === 'chief', todos, detail: detail.filter((d) => !said.has(d.text)), since: began, state, ...(next ? { next } : {}),
+  return { who, helper: helper?.id, chief: t.bot === 'chief', title, todos, detail: detail.filter((d) => !said.has(d.text)), since: began, state, ...(next ? { next } : {}),
     heard: Math.max(start, writing ?? 0, o.last?.get(t.id) ?? 0, ...own.map(when)) };
 }
 
@@ -1609,7 +1629,7 @@ export function limitOf(state: Json, id: string): string {
   return `${b.display} ${can.length ? `can ${can.join(' and ')}, but ` : ''}can't pay or send anything without asking you.`;
 }
 
-/** A job Chief handed a helper (its task, origin chief), as one chip in his thread: "Messaged Penny · at work ›", then
+/** A job Chief handed a helper (its task, origin chief), as one chip in his thread: "Asked Penny", then
  *  "done · 3 s". The word is the office's own and never "Needs you": a crew member only ever waits, Chief asks. `limit` is
  *  the one sentence on what the helper can do, on that helper's first hand-off only; later chips leave it empty. */
 export type HandChip = { task: number; helper: string; at: number; done: boolean; working: boolean; word: string; limit: string };
