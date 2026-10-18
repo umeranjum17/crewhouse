@@ -2203,7 +2203,7 @@ function HandOff({ c, state, go }: { c: A.HandChip; state: Json; go: Ctx['go'] }
     <Pressable onPress={() => go({ view: 'helper', id: h.id })} accessibilityRole="link" accessibilityLabel={`Asked ${h.name}: ${c.word}`} style={({ pressed }) => [s.hand, { backgroundColor: t.soft }, pressed && { opacity: 0.7 }]}>
       <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={32} />
       <Text style={[s.semi, { flexShrink: 1, color: t.ink }]}>Asked {h.name}</Text>
-      {c.done ? <><Text style={{ color: t.ok, ...fw('700') }}>✓</Text><T tone="mute" style={[s.read, s.b]}>{c.word}</T></> : c.working && <View style={[s.statusDot, { backgroundColor: t.ok }]} />}
+      {c.done ? <View style={[s.row, { gap: 8 }]}><Text style={{ color: t.ok, ...fw('700') }}>✓</Text><T tone="mute" style={[s.read, s.b]}>{c.word}</T></View> : c.working && <View style={[s.statusDot, { backgroundColor: t.ok }]} />}
     </Pressable>
   </View>;
 }
@@ -2934,7 +2934,7 @@ const s = StyleSheet.create({
   // Chief's thread (J03): the bubbles, the "Asked Rae" chip, and the job card in its helper's colour.
   them: { alignSelf: 'flex-start', maxWidth: '100%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 20, borderBottomLeftRadius: 6, borderWidth: 1 },
   mine: { alignSelf: 'flex-end', maxWidth: '82%', paddingVertical: 12, paddingHorizontal: 15, borderRadius: 20, borderBottomRightRadius: 6 },
-  hand: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 12, paddingVertical: 6, paddingLeft: 6, paddingRight: 18, borderRadius: 999 },
+  hand: { flexDirection: 'row', flexWrap: 'wrap', maxWidth: '100%', alignItems: 'center', alignSelf: 'flex-start', gap: 12, paddingVertical: 6, paddingLeft: 6, paddingRight: 18, borderRadius: 24 },
   live: { flex: 1, minWidth: 0, gap: 12, padding: 16, borderRadius: 24 },
   liveBtn: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   tick: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
