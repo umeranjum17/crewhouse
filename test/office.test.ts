@@ -449,9 +449,10 @@ test('things, routines and helper profiles: shared file cards, names in full, no
     assert.deepEqual(await b.run(`(() => ({ hero: !!document.querySelector('.st-profile-hero .face'),
       job: [...document.querySelectorAll('.st-profile-job .st-job dt')].map((d) => d.textContent).join(), remembers: document.body.textContent.includes('What Scribe remembers'),
       chief: [...document.querySelectorAll('.st-profile-job > .btn')].map((x) => x.textContent).join(), scroll: document.documentElement.scrollWidth > innerWidth + 1,
-      typed: document.querySelectorAll('.st-profile-job input:not([type=checkbox]), .st-profile-job textarea').length,
+      typed: document.querySelectorAll('.st-profile-job input:not([type=checkbox]):not([type=url]), .st-profile-job textarea').length,
+      skillAddress: document.querySelectorAll('.st-profile-job input[type=url]').length,
       seen: ${mobile} || document.querySelector('.st-change').getBoundingClientRect().bottom <= innerHeight }))()`),
-      { hero: true, job: 'Does,Aims,Asks', remembers: true, chief: "Ask Chief to change Scribe's job", scroll: false, typed: 0, seen: true }, `${at}: profile reads the job in three rows, nothing is typed to the helper, and Chief is the one way to change it, in view on a computer`);
+      { hero: true, job: 'Does,Aims,Asks', remembers: true, chief: "Ask Chief to change Scribe's job", scroll: false, typed: 0, skillAddress: 1, seen: true }, `${at}: profile reads the job in three rows, nothing is typed to the helper, and Chief is the one way to change it, in view on a computer`);
     for (const [i, r] of m.rows.entries()) {
       assert.ok(!r.overlap, `${at} row ${i}: never overlaps`);
       assert.ok(!r.clip, `${at} row ${i}: nothing spills past the row`);

@@ -331,6 +331,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.undone', r[1], { seq: e.seq, text: d.text, commit });
       return { ok: true };
     }
+    if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/skills\/(preview|add)$/)) && m === 'POST') { crew.botPage(r[1]); return (await import(new URL('../scripts/claude-skill.mjs', import.meta.url).href)).routeLinkedSkill(r[2], disk.botDir(cfg, r[1]), String(body.link ?? ''), body.token, disk.commit, (a: { name: string; says: string }, s: { link: string }) => db.event('skill.added', r![1], { name: a.name, says: a.says, source: s.link })); }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)$/)) && m === 'DELETE') {
       crew.botPage(r[1]); // 404 for unknown bots
       const k = disk.archiveSkill(cfg, r[1], r[2]);

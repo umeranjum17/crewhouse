@@ -1154,7 +1154,8 @@ function ChiefSoul({ tick }: { tick: number }) {
 
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
 function AboutMe({ id, name, page, reload }: { id: string; name: string; page: Json; reload: () => void }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null), [skillLink, setSkillLink] = useState('');
+  const [skillPreview, setSkillPreview] = useState<{ name: string; description: string; token: string } | null>(null);
   const traits = A.aboutTraits(name, page.soul);
   const knows = A.knows(page.skills);
   const left = (page.soulCap ?? 2000) - A.soulText(name, draft ?? '').length;
@@ -1182,9 +1183,22 @@ function AboutMe({ id, name, page, reload }: { id: string; name: string; page: J
         </div>
       )}
       <div className="label">{name} knows how to</div>
-      {knows.length ? <div className="card list">{knows.map((k) => <div key={k.name} className="row-item"><span className="grow">{k.says}{k.learned && <div className="mute small">Learned from you</div>}</span>
-        {k.learned && <button className="link" onClick={() => confirm(`Should ${name} stop doing it this way?`) && attempt(async () => { await api.removeSkill(id, k.name); reload(); }, 'Put away')}>Remove</button>}</div>)}</div>
+      {knows.length ? <div className="card list">{knows.map((k) => <div key={k.name} className="row-item"><span className="grow">{k.says}{(k.learned || k.added) && <div className="mute small">{k.learned ? 'Learned from you' : 'Added by you'}</div>}</span>
+        {(k.learned || k.added) && <button className="link" onClick={() => confirm(`Should ${name} stop using this skill?`) && attempt(async () => { await api.removeSkill(id, k.name); reload(); }, 'Put away')}>Remove</button>}</div>)}</div>
         : <div className="card empty">Plain jobs, the way you ask for them.</div>}
+      <div className="card form">
+        <b>Add a skill from GitHub</b>
+        <p className="mute small">Paste a GitHub address to a SKILL.md or its folder. Crewhouse reads that file and files it points to in the same folder; it never runs scripts when adding a skill.</p>
+        <label className="small" htmlFor={`skill-link-${id}`}>GitHub address</label>
+        <input id={`skill-link-${id}`} className="input" type="url" value={skillLink} placeholder="https://github.com/owner/repo/tree/main/skills/name" onChange={(e) => { setSkillLink(e.target.value); setSkillPreview(null); }} />
+        {!skillPreview ? <button className="btn" disabled={!skillLink.trim()} onClick={() => void attempt(async () => setSkillPreview(await api.previewSkill(id, skillLink.trim())))}>Check skill</button>
+          : <div className="card">
+            <b>{skillPreview.name}</b><p>{skillPreview.description}</p>
+            <p className="mute small">Add these instructions to {name}? They will guide future jobs. No scripts are run.</p>
+            <div className="btns"><button className="btn go" onClick={() => void attempt(async () => { await api.addSkill(id, skillLink.trim(), skillPreview.token); setSkillLink(''); setSkillPreview(null); reload(); }, `Added to ${name}`)}>Yes, add skill</button>
+              <button className="btn ghost" onClick={() => setSkillPreview(null)}>No, cancel</button></div>
+          </div>}
+      </div>
     </>
   );
 }

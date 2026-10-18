@@ -106,7 +106,10 @@ export const api = {
   draftJob: (id: string, idea: string) => call('POST', `/api/bots/${id}/job/draft`, { idea }),
   soul: (id: string, text: string) => call('PUT', `/api/bots/${id}/soul`, { text }),
   soulReset: (id: string) => call('POST', `/api/bots/${id}/soul/reset`),
-  /** Put away a skill a helper learned (it is kept, just no longer used). */
+  /** Review a public GitHub skill before adding only its SKILL.md and same-folder resources. */
+  previewSkill: (id: string, link: string) => call('POST', `/api/bots/${id}/skills/preview`, { link }) as Promise<{ name: string; description: string; token: string }>,
+  addSkill: (id: string, link: string, token: string) => call('POST', `/api/bots/${id}/skills/add`, { link, token }),
+  /** Put away a skill a helper learned or you added (it is kept, just no longer used). */
   removeSkill: (id: string, name: string) => call('DELETE', `/api/bots/${id}/skills/${name}`),
   settings: (id: string, body: { allow?: string[]; memory?: boolean; handoff?: 'ask' | 'go' }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),

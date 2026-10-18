@@ -1811,7 +1811,7 @@ export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).j
 /** The helper's instructions, composed behind the scenes from the person's plain words. */
 export const soulText = (name: string, draft: string) => `# ${name}\n\n## How you come across\n${draft.trim().split('\n').map((l) => `- ${l.replace(/^[-*]\s*/, '').trim()}`).filter((l) => l !== '- ').join('\n')}\n`;
 /** What a helper knows how to do, from its skills: their own descriptions, in plain words. */
-export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(k.name), says: plain(k.says || String(k.name).replace(/-/g, ' ')), learned: !!k.learned }));
+export const knows = (skills: Json[] = []) => skills.map((k) => ({ name: String(k.name), says: plain(k.says || String(k.name).replace(/-/g, ' ')), learned: !!k.learned, added: !!k.added }));
 
 // ---------- routines, people, accounts, apps ----------
 export function routines(state: Json, bot?: string) {
