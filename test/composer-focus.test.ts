@@ -69,13 +69,13 @@ test('the phone chat keeps the box usable, and a photo picked there goes as a sh
   await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
   // A headless window never has OS focus, so :focus would not match; emulate a focused page, as a phone in hand has.
   await send('Emulation.setFocusEmulationEnabled', { enabled: true });
-  await send('Page.navigate', { url: `${base}/?demo` });
+  await send('Page.navigate', { url: `${base}/?demo#/chief` });
   // The chat's own box: the visible one inside the Chat page (the phone-only dock elsewhere is not on screen).
   const box = "[...document.querySelectorAll('.home-chat .dock textarea')].find((t) => t.offsetParent)";
   await until('the chat box', () => run(`!!${box}`), 30_000);
 
   // Before: the header is on screen. With the box focused it steps aside (the phone breakpoint's :has rule).
-  const headerShown = () => run("[...document.querySelectorAll('.home-chat .ch-art, .home-chat .home-mode, .home-chat .home-did')].filter((e) => getComputedStyle(e).display !== 'none').length");
+  const headerShown = () => run("[...document.querySelectorAll('.home-chat .ch-art, .home-chat .home-did')].filter((e) => getComputedStyle(e).display !== 'none').length");
   const shownBefore = await headerShown();
   assert.ok(shownBefore > 0, 'the header is on screen before the box is focused');
   await run(`${box}.focus()`);

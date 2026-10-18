@@ -82,6 +82,8 @@ test('a call with Chief listens, sends, reads the reply aloud, listens again, St
   await send('Page.enable');
   await send('Page.addScriptToEvaluateOnNewDocument', { source: DEVICE });
   await send('Page.navigate', { url: `${base}/?day#person=${key}` });
+  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await run('location.hash = "#/chief"');
   await until('Talk in the empty box', () => run("!!document.querySelector('.chat .dock button.send.talk')"), 30_000);
   assert.equal(await run("document.querySelector('.chat .dock button.send.talk').title"), 'Talk with Chief');
 

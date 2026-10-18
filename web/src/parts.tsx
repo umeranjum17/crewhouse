@@ -7,7 +7,6 @@ import { canHear, hear, speak, voices } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
-import { color } from './tokens.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
 import { clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
@@ -153,13 +152,11 @@ export function useListen() {
   return on;
 }
 
-/** Set by the shell as it renders, so the art matches day or night without waiting a frame — and so every little
- *  Chief face (avatars, headers) carries the mood without each caller holding the state. */
-let night = false;
-export const setNight = (n: boolean) => { night = n; };
 /** Set by the shell while the home computer isn't answering: every composer keeps its words and holds Send. */
 let away = false;
 export const setAway = (a: boolean) => { away = a; };
+/** Set by the shell as it renders, so every little Chief face (avatars, headers) carries the mood without each caller
+ *  holding the state. */
 let chiefMood: art.Mood = 'idle';
 export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
 
@@ -169,10 +166,10 @@ export function Ink({ svg, w, label, className = '' }: { svg: string; w: number;
   return <img className={`ink ${className}`} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} width={w} alt={label ?? ''} aria-hidden={label ? undefined : true} draggable={false} />;
 }
 
-/** A critter (art.critter) in the box the text helmet filled: `cols` art-font columns (0.6em each) by half as many
+/** A Geo face (art.critter) in the box the text helmet filled: `cols` art-font columns (0.6em each) by half as many
  *  lines, so the slot's font size, and every rule that sets it, still sizes the face and no layout moves. */
 function Critter({ who, mode, cols, beat, label, d }: { who: art.Kind | 'chief'; mode: art.FaceMode; cols: number; beat: number; label: string; d?: number }) {
-  const svg = useMemo(() => art.critter(who, mode, { night, beat, aspect: 1.2 }), [who, mode, beat]);
+  const svg = useMemo(() => art.critter(who, mode, { beat, aspect: 1.2 }), [who, mode, beat]);
   return <img className="art helmet" data-mode={mode} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} alt={label} draggable={false}
     style={{ display: 'block', width: `${cols * 0.6}em`, height: `${Math.round(cols / 2)}em`, fontSize: d }} />;
 }
@@ -186,29 +183,22 @@ export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot, rail }: { 
   const beat = useTicker(140, !!hero && mode === 'think');
   // The phone header's mascot and the desk rail keep their boxes (52 px at 100:92, 200 px at 5:4), sized by width
   // alone like every Ink face, so the person's text size never rescales them.
-  if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.critter('chief', mode, { night, beat, aspect: 100 / 92 })} />;
-  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.critter('chief', mode, { night, beat, aspect: 1.25 })} />;
+  if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.critter('chief', mode, { beat, aspect: 100 / 92 })} />;
+  if (rail) return <Ink className="helmet" w={200} label="Chief" svg={art.critter('chief', mode, { beat, aspect: 1.25 })} />;
   return <Critter who="chief" mode={mode} cols={whole ? 38 : 24} beat={beat} label="Chief" d={whole ? undefined : d} />;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name, live }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean; live?: boolean }) {
-  const mode = art.faceOf(mood);
-  // A working helper's eyes read along a line (the Office panels pass live); every other face is still, and Reduce Motion
-  // runs none (useTicker). The mood still shows in the eyes and mouth: that is the mood, not motion.
-  const beat = useTicker(140, !!live && mode === 'think');
-  return <Critter who={kind} mode={mode} cols={14} beat={beat} label={name ?? kind} d={d} />;
+export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
+  // A helper's face is still: the mood shows in the eyes and mouth, never as motion.
+  return <Critter who={kind} mode={art.faceOf(mood)} cols={14} beat={0} label={name ?? kind} d={d} />;
 }
 
-/** A round face: Chief or a helper, with a ring when it's working or needs you. The critter is its own disc. */
-/** A face's disc, under the critter's own: neutral in both themes. Night tints the raised surface faintly and seats
- *  Chief on warm dark; day seats every face on the raised surface, or one step down on a `row` that is itself raised
- *  (the Chats list, mock 2). */
-export const discOf = (who: 'chief' | { kind: art.Kind }, row = false) => night ? (who === 'chief' ? '#2A2622' : `color-mix(in srgb, ${art.PALS[who.kind].bg} 16%, var(--solid))`) : row ? color.day.sunken : color.day.surface;
-export function Face({ who, size = 44, ring = '', row }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
+/** A round face: Chief or a helper, with a ring when it's working or needs you. The Geo face is its own black disc. */
+export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
   const chief = who === 'chief', look = chief ? 'chief' : who.kind;
   const mode = art.faceOf(chief ? chiefMood : who.mood);
-  const svg = useMemo(() => art.critter(look, mode, { night }), [look, mode]);
+  const svg = useMemo(() => art.critter(look, mode), [look, mode]);
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size, background: discOf(who, row) }}>
+    <span className={`face ${ring}`} style={{ width: size, height: size }}>
       <Ink svg={svg} w={size} label={chief ? 'Chief' : who.name} />
     </span>
   );

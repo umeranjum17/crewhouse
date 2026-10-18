@@ -48,7 +48,7 @@ const card = "document.querySelector('.card.ask .more-ways')";
 const open = async (theme: string, w: 1440 | 390) => {
   await send('Emulation.setDeviceMetricsOverride', SIZES[w]);
   await send('Page.navigate', { url: 'about:blank' }); // a real load each time: the same URL twice is only a hash visit
-  await send('Page.navigate', { url: `${base}/?${theme}#/` });
+  await send('Page.navigate', { url: `${base}/?${theme}#/chief` });
   await until('the card', `!!${card} && document.readyState === 'complete'`);
   await new Promise((r) => setTimeout(r, 400)); // fonts and images settle before the shot
 };

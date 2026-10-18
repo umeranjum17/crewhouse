@@ -1,6 +1,6 @@
 // Draws Crewhouse's icons from the helmet in web/src/art.ts: native/store and desktop exports, the maskable icon, the
 // favicon (his head) and notification glyph (his head in white). It also renders the phone's faces into
-// mobile/assets/pals/ from the critters: Chief and every look in each face mode, required from mobile/src/faces.ts
+// mobile/assets/pals/ from the Geo faces: Chief and every look in each face mode, required from mobile/src/faces.ts
 // (written here too). Run after changing either (`node scripts/icons.mjs`; the PNGs need ImageMagick's `magick`).
 // The outputs are committed.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -73,7 +73,7 @@ for (const [key, d] of Object.entries(MARKS)) {
   rmSync(`${ai}${key}.svg`);
 }
 console.log('icons written into web/, mobile/assets/, mobile/store/ and packaging/icons/');
-// The phone's faces: Chief and every critter in each face mode, at 3x for the densest screens (56 dp). The phone
+// The phone's faces: Chief and every Geo face in each face mode, at 3x for the densest screens (56 dp). The phone
 // draws these with <Image>, and Metro needs literal requires, so this writes mobile/src/faces.ts beside them.
 const pals = new URL('../mobile/assets/pals/', import.meta.url).pathname;
 rmSync(pals, { recursive: true, force: true });
@@ -85,7 +85,7 @@ for (const who of ['chief', ...Object.keys(PALS)]) for (const mode of FACE_MODES
   rmSync(`${pals}${who}-${mode}.svg`);
   faces.push(`  '${who}-${mode}': require('../assets/pals/${who}-${mode}.png'),`);
 }
-writeFileSync(new URL('../mobile/src/faces.ts', import.meta.url), `// Written by scripts/icons.mjs: Chief and every critter (web/src/art.ts) in each face mode, keyed \`\${who}-\${mode}\`.
+writeFileSync(new URL('../mobile/src/faces.ts', import.meta.url), `// Written by scripts/icons.mjs: Chief and every Geo face (web/src/art.ts) in each face mode, keyed \`\${who}-\${mode}\`.
 // Metro needs literal requires.
 export const FACES: Record<string, number> = {
 ${faces.join('\n')}
@@ -106,7 +106,7 @@ for (const m of ['idle', 'work', 'ask', 'happy', 'rest', 'worried', 'error']) {
 execFileSync('magick', [web + 'notify-96.png', `PNG32:${bubbles}glyph.png`]);
 console.log('bubble written into mobile/assets/bubble/');
 // The phone's first screen (mock C): the line marks white on transparent (the screen tints each one), and Chief's
-// critter in each look, at 3x.
+// face in each look, at 3x.
 const where = new URL('../mobile/assets/where/', import.meta.url).pathname;
 mkdirSync(where, { recursive: true });
 const draw = (name, art, w, h) => {
@@ -115,5 +115,5 @@ const draw = (name, art, w, h) => {
   rmSync(`${where}${name}.svg`);
 };
 for (const k of ['cloud', 'computer', 'phone', 'shield']) draw(k, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`, 60, 60);
-for (const look of ['day', 'night']) draw(`chief-${look}`, critter('chief', 'here', { night: look === 'night', aspect: 132 / 121 }).replace('<svg ', '<svg width="132" height="121" '), 132, 121);
+for (const look of ['day', 'night']) draw(`chief-${look}`, critter('chief', 'here', { aspect: 132 / 121 }).replace('<svg ', '<svg width="132" height="121" '), 132, 121);
 console.log('first-screen marks written into mobile/assets/where/');

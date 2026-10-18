@@ -66,13 +66,12 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     return r.result.value;
   };
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  // `#/chief` and `#/` are one Chief screen now: the bare chief link lands on Home's own URL, the same
-  // thread the route below drives. An anchored `#/chief/m<id>` keeps its hash (its own test below).
-  await send('Page.navigate', { url: `${base}/?demo=longthread&night#/chief` });
-  await until('the redirect', () => run("location.hash === '#/' && document.readyState === 'complete'"), 30_000);
-  await until('Home\'s one Chief screen', () => run("!!document.querySelector('.home-chat')"), 30_000);
-  assert.equal(await run("!!document.querySelector('.home-chat')"), true, '#/chief opens Home\'s one Chief screen');
-  for (const route of ['#/']) {
+  // Home is the crew view; `#/chief` is Chief's thread, the route below drives. An anchored `#/chief/m<id>` keeps its
+  // hash too (its own test below).
+  await send('Page.navigate', { url: `${base}/?demo=longthread&night#/` });
+  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  assert.equal(await run("!!document.querySelector('.home-chat')"), false, '#/ is the crew view, not Chief\'s thread');
+  for (const route of ['#/chief']) {
     await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
     await until('the new route', () => run(`location.hash === '${route}' && document.readyState === 'complete'`), 30_000);
     // Signed out, so the thread ends on the sign-in card with every provider's button; "Use another account" opened,
@@ -152,7 +151,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
   // beside the sign-in buttons, even while the accounts answer is still on its way (as slow as the real engine's).
   for (const [w, h, sel] of [[390, 844, '.home-chat .ch-status'], [1440, 900, '.side-status']] as const) {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 900 });
-    await send('Page.navigate', { url: `${base}/?demo=longthread&day&slowaccounts#/` });
+    await send('Page.navigate', { url: `${base}/?demo=longthread&day&slowaccounts#/chief` });
     const seen: string[] = [];
     await until('the sign-in wait', async () => {
       const s = await run(`(() => { const st = document.querySelector('${sel}');

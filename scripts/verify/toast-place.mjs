@@ -43,7 +43,7 @@ for (const look of ['day', 'night']) {
   report[`settings-${look}`] = JSON.parse(await run(under));
   await shot(`settings-${look}-390`);
   // Chief's chat, inside the toast's 3 s: the same toast follows to the new screen.
-  await run(`location.hash = '#/'; true`);
+  await run(`location.hash = '#/chief'; true`);
   await until(() => run("!!document.querySelector('.chat .dock textarea')"));
   const had = await until(() => run("!!document.querySelector('.toast')"), 4000).catch(() => false);
   await sleep(400);

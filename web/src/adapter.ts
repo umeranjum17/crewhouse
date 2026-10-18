@@ -2164,4 +2164,18 @@ export const waitsOnYou = (c: OfficeMember) => c.seat === 'chat' || !!c.ask || c
 /** The latest thing this helper landed today, if any. */
 export const landed = (c: OfficeMember, v: OfficeView) =>
   v.done.filter((t) => t.helper === c.id && t.at >= midnight()).sort((a, b) => b.at - a.at)[0];
+/** A crew card's line and meta (Home, web and phone): what the member is on, or what it finished today (never "Free to
+ *  help" under a Done pill), then one meta line. */
+export function cardLines(c: OfficeMember, v: OfficeView, job?: Work) {
+  const done = statusOf(c, v).group === 'done' ? landed(c, v) : undefined;
+  const line = waitsOnYou(c) ? job?.title || c.step || NO_JOB
+    : done ? done.summary || done.title || (done.files[0] ? `Made “${done.files[0].name}”` : 'Finished a job') : c.status;
+  const meta = waitsOnYou(c) ? WAIT_CHIEF : job && seatOf(c) === 'working' ? job.title : done?.title ?? '';
+  return { line, meta: meta === line ? '' : meta };
+}
+/** A crew tile's one short line (the full role stays on the member's sheet): a template helper's own, else the first
+ *  clause of the role Chief wrote. */
+const TAGS: Partial<Record<Kind, string>> = { scout: 'Finds things out', scribe: 'Writes it for you', tracer: 'Finds customers',
+  reel: 'Makes videos', support: 'Answers bug reports', xgrowth: 'Grows your X', cto: 'Keeps the coders going' };
+export const tagOf = (h: Helper) => TAGS[h.kind] ?? h.role.split(/[.,:;]| and /)[0].trim();
 export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v).group;

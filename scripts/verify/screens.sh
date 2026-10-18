@@ -11,12 +11,12 @@
 # is pure CSS. Set CHROME_DEVTOOLS_AXI_SESSION to your task-named session first.
 # EXPAND_MORE=1 opens up to eight long replies; AFTER runs after expansion (e.g. scroll .lines).
 # WIDTHS defaults to both sizes. FULL_PAGE=1 captures document scroll only, not nested .lines on desktop.
-# A screen that lives behind an in-memory switch (Home's Office view is never in the URL)
+# A screen reached by a tap rather than a URL (Chief's thread opened from his card on Home)
 # needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
 #   THEN="$(cat <<'JS'
-#   (async () => { document.querySelector('[data-mode=office]')?.click(); for (let i = 0; i < 50 && !document.querySelector('.office'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.office'); })()
+#   (async () => { document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()
 #   JS
-#   )" scripts/verify/screens.sh "$EV/screens" office "http://127.0.0.1:$PORT/"
+#   )" scripts/verify/screens.sh "$EV/screens" chief "http://127.0.0.1:$PORT/"
 set -euo pipefail
 
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

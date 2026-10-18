@@ -148,13 +148,13 @@ for (const tag of tags.split(',')) {
   await until('the sign-in ask', openAsk);
   const ask = await openAsk();
   // 2. The card, in Chief's thread.
-  await go(theme, '#/');
+  await go(theme, '#/chief');
   await until('the card', seen("!!document.querySelector('.signin-card') && document.readyState === 'complete'"));
   await run("document.querySelector('.signin-card').scrollIntoView({ block: 'center' }), true");
   await until('the site icon', seen("!!document.querySelector('.signin-card .site-ic img')?.complete"), 5000).catch(() => {});
   await sleep(500);
   const card = await run(`(() => { const c = document.querySelector('.signin-card'), b = c.getBoundingClientRect(); return { text: c.innerText, icon: !!c.querySelector('.site-ic img')?.naturalWidth,
-    button: c.querySelector('.btn.go').textContent, inChief: location.hash === '#/', copies: [...document.querySelectorAll('.signin-card')].filter((e) => e.getBoundingClientRect().width > 0).length, box: [b.x, b.y, b.width, b.height].map(Math.round), sideways: document.documentElement.scrollWidth - innerWidth }; })()`);
+    button: c.querySelector('.btn.go').textContent, inChief: location.hash === '#/chief', copies: [...document.querySelectorAll('.signin-card')].filter((e) => e.getBoundingClientRect().width > 0).length, box: [b.x, b.y, b.width, b.height].map(Math.round), sideways: document.documentElement.scrollWidth - innerWidth }; })()`);
   report.push({ tag, step: 'card', ...card, file: await shot(`card-${tag}`) });
   if (clip) await record.start();
   // 3. One tap: the helper's screen, large and already driving.

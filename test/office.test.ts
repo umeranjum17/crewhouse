@@ -1,7 +1,7 @@
-// The office's battery and layout rules, measured in a real browser on the ?demo households (web/src/office.tsx): the
-// panels are flat with no 3D library anywhere, their only motion is a working face reading along (still otherwise,
-// none under Reduce Motion), and at every crew size (?demo=crew1, crew5, crew12, crew30) on a phone and a computer
-// every panel sits clear of the others, nothing clips, counts agree with A.office, and the grid scrolls past six.
+// Home's battery and layout rules, measured in a real browser on the ?demo households (web/src/main.tsx Home, the
+// Stack crew view): flat with no 3D library anywhere, every face still, and at every crew size (?demo=crew1, crew5,
+// crew12, crew30) on a phone and a computer every crew card sits clear of the others, nothing clips, counts agree with
+// A.office, and Chief's card is the one way to his asks and his thread.
 // Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -87,187 +87,111 @@ async function browse(external?: string) {
 
 /** Measuring that nothing happens needs a window, so this one is a measurement, not a wait. */
 const WINDOW_MS = 600;
-/** Home opens on Chat; Office is one tap away on the Chat | Office switch (found by its word, not its mode). */
-const toOffice = async (b: Awaited<ReturnType<typeof browse>>) => {
-  await until('the Chat | Office switch', () => b.run("[...document.querySelectorAll('.home-mode [role=tab]')].some((e) => /office/i.test(e.textContent))"), 30_000);
-  await b.run("[...document.querySelectorAll('.home-mode [role=tab]')].find((e) => /office/i.test(e.textContent)).click()");
-  await until('the office rows', () => b.run("!!document.querySelector('.office .panel, .office .grow-row')"), 30_000);
-};
 
-// What moves: a working face reading along only (a 140 ms re-render, never a frame callback or a CSS loop).
-const helmets = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => {
-  const on = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations === Infinity);
-  const panels = [...document.querySelectorAll('.office .panel')];
-  return { loops: on.length, panels: panels.length,
-    think: panels.filter((p) => p.querySelector('.helmet')?.dataset.mode === 'think').length,
-    art: panels.map((p) => p.querySelector('.helmet')?.getAttribute('src') ?? '') };
-})()`);
+// What moves on Home: nothing. Every face is still Geo art; no animation loops.
+const faces = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => ({
+  loops: document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations === Infinity).length,
+  art: [...document.querySelectorAll('.stack-home .face img')].map((i) => i.getAttribute('src') ?? '') }))()`);
 
-test('the office keeps the battery budget: a face reads along while working, still otherwise, none with Reduce Motion', { skip: !bin && 'no Chromium here' }, async (t) => {
+test('Home keeps the battery budget: every face is still and nothing loops, at work or calm', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
-    await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-    await toOffice(b);
-    const q0 = await helmets(b);
-    t.diagnostic(`${demo}: ${q0.panels} panels, ${q0.think} thinking`);
-    assert.equal(q0.loops, 0, `${demo}: no looping animation in the office`);
+    await until('the crew cards', () => b.run("document.querySelectorAll('.st-card .face img').length > 0"), 30_000);
+    const q0 = await faces(b);
+    assert.equal(q0.loops, 0, `${demo}: no looping animation on Home`);
     await new Promise((r) => setTimeout(r, WINDOW_MS));
-    const q1 = await helmets(b);
-    const moved = q0.art.filter((a: string, i: number) => a !== q1.art[i]).length;
-    assert.equal(moved, q1.think, `${demo}: exactly the thinking faces move (${moved} of ${q1.panels})`);
-    if (demo === 'calm') assert.equal(q1.think, 0, 'calm: nobody works, every face still');
-    else assert.ok(q1.think > 0, 'office: someone working is seen working');
+    assert.deepEqual((await faces(b)).art, q0.art, `${demo}: every face still, even at work`);
   }
-  await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-  await b.open('demo=office&day');
-  await toOffice(b);
-  const r0 = await helmets(b);
-  await new Promise((r) => setTimeout(r, WINDOW_MS));
-  assert.deepEqual((await helmets(b)).art, r0.art, 'Reduce Motion: every face still, even at work');
-  await b.send('Emulation.setEmulatedMedia', { features: [] });
 });
 
 // Each demo house and its crew size.
 const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['calm', 5], ['finished', 5]];
-test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is clear and whole, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s crew cards are clear and whole, Chief\'s card opens his thread, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
     for (const [demo, n] of HOUSES) {
       for (const theme of ['day', 'night']) {
+        // Each launch opens on Home, the crew view; Chief's card is the way into his thread.
         await b.open(`demo=${demo}&${theme}`);
+        await until('Home', () => b.run("!!document.querySelector('.stack-home .sh-chief a[href=\"#/chief\"]')"), 30_000);
+        assert.equal(await b.run("!!document.querySelector('.home-chat')"), false, `${demo} ${theme} at ${width}: Home is the crew view, not Chief's thread`);
+        await b.run("document.querySelector('.sh-chief a[href=\"#/chief\"]').click()");
         await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
-        // Each launch opens on Chat: no room drawn, no pinned card in the conversation, and the thread with Chief's box on the first screen.
         await until('a thread line', () => b.run("document.querySelectorAll('.home-chat .lines .line').length > 0"), 30_000);
         const first = await b.run(`(() => {
           const seen = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
           const lines = [...document.querySelectorAll('.home-chat .lines .line')];
           const asks = [...document.querySelectorAll('.home-chat .lines .ask')].map((e) => ({ text: e.innerText ?? '', on: (() => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight && r.bottom > 0; })() }));
-          return { room: !!document.querySelector('.o-room'), pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
+          return { pin: seen(document.querySelector('.home-chat .needs-pin .needs-row')), chatPin: Number(document.querySelector('.home-chat .needs-pin .count')?.textContent ?? 0), thread: lines.length > 0 && seen(lines.at(-1)), box: seen(document.querySelector('.home-chat .composer')), asks };
         })()`);
-        const lead = `${demo} ${theme} at ${width}, first open`;
-        assert.equal(first.room, false, `${lead}: Chat by default, the room is not drawn`);
+        const lead = `${demo} ${theme} at ${width}, Chief's thread from Home`;
         assert.equal(first.pin, false, `${lead}: no pinned card in the conversation (the ask sits inline)`);
         assert.ok(first.thread && first.box, `${lead}: the conversation and Chief's box on the first screen`);
-        // Where the demo has an ask, the pinned row's replacement is the inline ask itself: its words in the thread, on screen.
         if (first.asks.length) assert.ok(first.asks.some((a: { text: string; on: boolean }) => a.on && a.text.length > 40), `${lead}: the inline ask carries its words on the first screen (${first.asks.map((a: { text: string }) => JSON.stringify(a.text.slice(0, 60))).join(' | ')})`);
-        // A long thread leaves the page scrolled to its end; Office must still open on its room.
-        await b.run('scrollTo(0, document.documentElement.scrollHeight)');
-        await toOffice(b);
-        // Phone width renders the grouped list, a desk the panels; the slim header's count line reads on both.
+        await b.run('location.hash = "#/"');
+        await until('the crew cards', () => b.run("!!document.querySelector('.stack-home .st-crew')"), 30_000);
         const m = await b.run(`(() => {
-          const narrow = innerWidth < 900;
-          const units = [...document.querySelectorAll(narrow ? '.office .grow-row' : '.office .panel')];
-          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.office'));
+          const units = [...document.querySelectorAll('.st-crew .st-card:not(.st-new)')];
+          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.st-crew'));
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
           const rects = units.map(box);
           const pairs = [];
           rects.forEach((a, i) => rects.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(i + ' x ' + (i + 1 + j)); }));
           const out = rects.filter((r) => r.left < st.left - 1 || r.right > st.right + 1).length;
-          const clipped = units.flatMap((p) => [...p.querySelectorAll('b, .p-line, .p-meta, .p-steps span, .btn')])
+          const clipped = [...document.querySelectorAll('.stack-home b, .st-pill, .st-sub, .st-line, .st-head h1')]
             .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
-          const names = units.map((p) => p.getAttribute('aria-label'));
-          const line = document.querySelector('.office-counts')?.textContent ?? '';
+          // Body text is 16px or more; only the small-caps labels and the status pills are 14px (a button is a control).
+          const tiny = [...document.querySelectorAll('.stack-home *')].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim())
+            && !e.closest('.btn') && parseFloat(getComputedStyle(e).fontSize) < (e.matches('.st-pill, .st-label span:first-child, .jobs .label') ? 14 : 16)).map((e) => e.textContent.slice(0, 30));
+          const names = units.map((p) => (p.getAttribute('aria-label') ?? '').split(':')[0]);
+          const line = document.querySelector('.st-label span + span')?.textContent ?? '';
           const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|free)/g)].map((x) => Number(x[1]));
-          const officePins = document.querySelectorAll('.needs-pin').length;
-          const onCards = document.querySelectorAll('.office-main .on-card').length;
-          const memberNeeds = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs')).length;
-          const chiefGlows = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.needs'));
-          const chiefRests = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.rest'));
-          const chiefWorks = units.some((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '') && p.querySelector('.p-state.work'));
-          const work = units.filter((p) => p.querySelector('.p-state.work')).length;
-          const done = units.filter((p) => p.querySelector('.p-state.done')).length;
-          const rest = units.filter((p) => p.querySelector('.p-state.rest')).length;
-          const modes = [...new Set(units.map((p) => p.querySelector('.helmet')?.dataset.mode))];
-          const words = units.map((p) => p.querySelector('.p-state')?.textContent?.trim());
-          const memberWords = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim());
-          const chiefWord = units.filter((p) => /^Chief:/.test(p.getAttribute('aria-label') ?? '')).map((p) => p.querySelector('.p-state')?.textContent?.trim())[0];
-          const crewUnits = units.filter((p) => !/^Chief:/.test(p.getAttribute('aria-label') ?? ''));
-          const crewActs = crewUnits.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
-          const crewText = crewUnits.map((p) => p.innerText);
-          const waitRows = crewUnits.filter((p) => p.querySelector('.p-state.needs')).map((p) => [p.querySelector('.p-line')?.textContent, p.querySelector('.p-meta')?.textContent]);
-          const doneText = crewUnits.filter((p) => p.querySelector('.p-state.done')).map((p) => p.innerText);
-          const pinnedTop = document.querySelector('.home-office .home-top');
-          const topH = pinnedTop ? pinnedTop.getBoundingClientRect().height : 0, topNotes = pinnedTop ? pinnedTop.querySelectorAll('.card, .nudge').length : 0;
-          const toChief = [...document.querySelectorAll('.office a.btn')].filter((e) => !crewUnits.some((p) => p.contains(e))).map((e) => [e.textContent, e.getAttribute('href')]);
-          const idle = document.querySelector('[aria-label="On it now"] .frame-empty')?.textContent ?? '';
-          // The chat list beside the Office (phone): each crew row by name, with its line and whether it has a dot.
-          const chatRows = [...document.querySelectorAll('[aria-label="Chats"] .list-row')].map((r) => [r.querySelector('b')?.textContent, r.querySelector('.small')?.textContent, !!r.querySelector('.badge'), r.querySelector('.p-state')?.textContent?.trim()]);
-          const grouped = [...document.querySelectorAll('.office .grp')].flatMap((g) => [...g.querySelectorAll('.grow-row')].map((r) => [(r.getAttribute('aria-label') ?? '').split(':')[0], g.getAttribute('aria-label')]));
-          const officeText = document.querySelector('.office')?.innerText ?? '';
-          const groups = [...document.querySelectorAll('.office .grp')].map((g) => g.getAttribute('aria-label'));
-          const office = document.querySelector('.office-main > .office');
-          return { narrow, units: units.length, pairs, out, clipped, names, nums, officePins, onCards, memberNeeds, chiefGlows, chiefRests, chiefWorks, work, done, rest, modes, words, memberWords, chiefWord, crewActs, crewText, waitRows, doneText, topH, topNotes, toChief, idle, officeText, chatRows, grouped, groups,
-            scroll: document.documentElement.scrollHeight > innerHeight + 1 || (office && office.scrollHeight > office.clientHeight + 1),
-            cols: narrow ? 1 : getComputedStyle(document.querySelector('.panels')).gridTemplateColumns.split(' ').length };
+          const words = units.map((p) => p.querySelector('.st-pill')?.textContent?.trim());
+          const chiefTitle = document.querySelector('.sh-chief .sh-top b')?.textContent ?? '';
+          const chiefWord = document.querySelector('.sh-chief .st-word')?.textContent ?? '';
+          const crewActs = units.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
+          const crewText = units.map((p) => p.innerText);
+          const waitRows = units.filter((p) => p.querySelector('.st-pill.needs')).map((p) => [...p.querySelectorAll('.st-sub')].map((e) => e.textContent));
+          const doneText = units.filter((p) => p.querySelector('.st-pill.done')).map((p) => p.innerText);
+          const scrolls = [document.documentElement, ...document.querySelectorAll('main, .main, .page')].some((e) => e.scrollHeight > e.clientHeight + 1);
+          return { units: units.length, pairs, out, clipped, tiny, names, nums, words, chiefTitle, chiefWord, crewActs, crewText, waitRows, doneText, scrolls,
+            pins: document.querySelectorAll('.stack-home .needs-pin').length, crewHref: units.every((p) => /^#\\/h\\//.test(p.getAttribute('href') ?? '')),
+            cols: getComputedStyle(document.querySelector('.st-crew')).gridTemplateColumns.split(' ').length };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
-        m.pinned = first.chatPin;
         try {
-          // Needs you is pinned over Chief's thread only: the Office reaches the asks through Chief's one action.
-          assert.equal(m.officePins, 0, `${at}: Office renders no Needs you pin`);
-          assert.deepEqual(m.nums.length, 4, `${at}: the header counts waiting, at work, done and free (${m.nums})`);
-          assert.deepEqual([...new Set(m.names)].length, m.units, `${at}: nobody twice, nobody missing`);
-          assert.equal(m.out, 0, `${at}: every row inside the office column`);
-          assert.equal(m.pairs.length, 0, `${at}: no row covers another: ${m.pairs.join('; ')}`);
+          // Chief's card is the one way to the asks: no Needs you pin on Home, and his title carries the count.
+          assert.equal(m.pins, 0, `${at}: Home renders no Needs you pin`);
+          if (first.chatPin) assert.deepEqual([m.chiefTitle, m.chiefWord], [`Chief has ${first.chatPin} thing${first.chatPin === 1 ? '' : 's'} for you`, ''], `${at}: Chief's card says what he has for you`);
+          else assert.equal(m.chiefTitle, 'Chief', `${at}: Chief's card names him when he has nothing for you`);
+          assert.equal(m.nums.length, 4, `${at}: the crew line counts waiting, at work, done and free (${m.nums})`);
+          assert.equal(m.units, n, `${at}: every helper has exactly one card`);
+          assert.equal(new Set(m.names).size, m.units, `${at}: nobody twice, nobody missing`);
+          assert.ok(m.crewHref, `${at}: every crew card opens that helper`);
+          assert.equal(m.out, 0, `${at}: every card inside the crew column`);
+          assert.equal(m.pairs.length, 0, `${at}: no card covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
-          // One status per member: the header counts every member once by the word its row shows, Chief too (his
-          // "Needs you" counts as waiting).
+          assert.deepEqual(m.tiny, [], `${at}: body text is 16px or more`);
+          // One status per member: the crew line counts every member once by the word its card shows, Chief too (what he
+          // has for you counts as waiting).
           const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' ? 1 : 3;
           const seen = [0, 0, 0, 0];
           for (const w of m.words as string[]) seen[groupOf(w)]++;
-          const extra = m.nums.map((x: number, i: number) => x - seen[i]);
-          assert.deepEqual(m.nums, seen, `${at}: the header counts the rows' own words, Chief's too (${extra}: ${m.words.join(' | ')})`);
-          assert.equal(m.onCards, m.work - (m.chiefWorks ? 1 : 0), `${at}: On it now shows the crew at work`);
-          // Needs-you rows no crew row holds ride on Chief's: his panel glows exactly when rows are left over.
-          // Phone width has no Chief row; the leftover rows live in the pinned Needs you, counted above.
-          if (width < 900) assert.ok(m.memberNeeds <= m.pinned, `${at}: no crew row holds a row twice (${m.memberNeeds} held, ${m.pinned} rows)`);
-          else assert.equal(m.chiefGlows, m.pinned > m.memberNeeds, `${at}: Chief carries the leftover needs rows (${m.pinned} rows, ${m.memberNeeds} on crew panels)`);
-          // Only Chief says "Needs you": no crew panel or grouped row does, in the Office too.
-          assert.ok(m.memberWords.every((w: string) => w !== 'Needs you'), `${at}: no crew panel says "Needs you" (${m.memberWords.join(' | ')})`);
-          if (m.chiefGlows) assert.equal(m.chiefWord, 'Needs you', `${at}: Chief still says "Needs you"`);
-          // Crew never ask the person: no crew panel or row answers or approves, or leads with the ask's head; a waiting one
-          // waits for Chief, and Chief's one action carries every ask (Needs you's count) to his thread.
-          assert.deepEqual(m.crewActs, [], `${at}: no crew panel or row has an answer or approve button`);
-          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order/i.test(x)), `${at}: no crew panel or row carries the ask (${m.crewText.join(' | ')})`);
-          // Every waiting row reads its job (or plainly no job) over "Waiting for Chief"; the status is never promoted to its title.
-          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting row is its job, then "Waiting for Chief"; one with no job rests (${JSON.stringify(m.waitRows)})`);
-          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
-          // Nobody in the Office is said to need the person or ask them for an OK: crew wait for Chief, Chief carries the asks.
-          assert.doesNotMatch(m.officeText, /\w needs you|your OK/, `${at}: no crew member asks the person in the Office`);
-          // On it now's idle line uses the rows' words and the header's waiting count.
-          assert.ok(!/on you/.test(m.idle) && (!/^No helper is at work:/.test(m.idle) || m.idle === `No helper is at work: ${m.memberNeeds} waiting for Chief.`), `${at}: On it now says the ${m.memberNeeds} waiting rows wait for Chief (${m.idle})`);
-          // One status per crew member: the chat list says what the Office group does, and an ask dots only Chief's row.
-          const chat = new Map<string, { line: string; dot: boolean; word: string }>(m.chatRows.map(([name, line, dot, word]: [string, string, boolean, string]) => [name, { line, dot, word }]));
-          for (const [name, g] of m.grouped as [string, string][]) {
-            const row = chat.get(name);
-            if (!row || name === 'Chief') continue;
-            // A chats row reads its thread's last line (or the helper's role before it ever spoke), never the
-            // status word: the word lives in the row's end column, the same word the Office group shows.
-            if (g === 'Waiting') assert.equal(row.word, 'Waiting', `${at}: ${name} shows the same status in Chats`);
-            if (g === 'Done today') assert.equal(row.word, 'Done', `${at}: ${name} shows the same status in Chats`);
-            if (g === 'Waiting') assert.notEqual(row.line, 'Waiting', `${at}: ${name} waits in the Office but its row reads its last line`);
-            if (g === 'Done today') assert.doesNotMatch(row.line, /^Done: /, `${at}: ${name} is done in the Office but its row reads its last line`);
-            if (g === 'Waiting' || g === 'Done today') assert.equal(row.dot, false, `${at}: ${name}'s chat row has no dot for an ask Chief carries`);
-          }
-          // Only the bar stays put over the Office; the banner and nudges scroll with the rows, so none hides half a row.
-          assert.equal(m.topNotes, 0, `${at}: no card or nudge pinned over the Office`);
-          assert.ok(m.topH < 0.4 * height, `${at}: the pinned bar stays short (${m.topH}px of ${height})`);
-          assert.deepEqual(m.toChief, m.pinned ? [[`Chief has ${m.pinned} thing${m.pinned === 1 ? '' : 's'} for you`, '#/chief']] : [], `${at}: one Chief action, with the count, opening Chief`);
-          if (width < 900) {
-            assert.equal(m.units, n + (m.chiefWord ? 1 : 0), `${at}: every helper has exactly one grouped row, and Chief one in his group`);
-            const order = ['Waiting', 'At work', 'Done today', 'Free'];
-            assert.ok(m.groups.every((g: string) => order.includes(g)) && m.groups.length === new Set(m.groups).size, `${at}: only the board's groups (${m.groups})`);
-            assert.deepEqual([...m.groups].sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b)), m.groups, `${at}: groups in the board's order`);
-          } else {
-            assert.equal(m.units, n + 1, `${at}: Chief plus every helper has a panel`);
-            assert.equal(m.cols, 3, `${at}: three columns on a desk`);
-          }
-          if (n === 30) assert.ok(m.scroll, `${at}: thirty rows scroll past six, on the page or in the column`);
-          assert.ok(m.modes.every((x: string) => ['here', 'needs', 'think', 'rest'].includes(x)), `${at}: faces wear only their four moods (${m.modes})`);
+          seen[m.chiefWord ? groupOf(m.chiefWord) : 0]++;
+          assert.deepEqual(m.nums, seen, `${at}: the crew line counts the cards' own words, Chief's too (${m.chiefWord || m.chiefTitle} | ${m.words.join(' | ')})`);
+          // Only Chief says "Needs you"; crew never ask the person: no crew card answers or approves or carries the ask, a
+          // waiting one is its job (or plainly no job) over "Waiting for Chief", and a done one never says waiting.
+          assert.ok(m.words.every((w: string) => w !== 'Needs you'), `${at}: no crew card says "Needs you" (${m.words.join(' | ')})`);
+          assert.deepEqual(m.crewActs, [], `${at}: no crew card has an answer or approve button`);
+          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order|\w needs you|your OK/i.test(x)), `${at}: no crew card carries the ask (${m.crewText.join(' | ')})`);
+          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting card is its job, then "Waiting for Chief" (${JSON.stringify(m.waitRows)})`);
+          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done card never says waiting (${m.doneText.join(' | ')})`);
+          assert.equal(m.cols, width < 900 ? 1 : 2, `${at}: one column of cards on a phone, two on a desk`);
+          if (n === 30) assert.ok(m.scrolls, `${at}: thirty cards scroll`);
           assert.ok(m.words.every((w: string) => !/session|terminal|console|pane|live|split|shell|tmux|command|prompt|cursor/i.test(w)), `${at}: no terminal words in the state words (${m.words.join(' | ')})`);
         } catch (e) {
           const dir = process.env.OFFICE_SHOTS;
@@ -281,54 +205,53 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, every row and panel is
         }
       }
     }
-    // Day draws day art and night draws night art: the same faces differ between the two.
+    // One shared face per member: a Geo face is its own black disc, the same in day and night.
     const art: string[] = [];
     for (const theme of ['day', 'night']) {
       await b.open(`demo=crew5&${theme}`);
-      await toOffice(b);
-      art.push(await b.run("[...document.querySelectorAll('.office .helmet')].map((h) => h.getAttribute('src')).join('\\n')"));
+      await until('the crew cards', () => b.run("document.querySelectorAll('.st-card .face img').length > 4"), 30_000);
+      art.push((await faces(b)).art.join('\n'));
     }
-    assert.notEqual(art[0], art[1], `day and night draw different faces at ${width}`);
+    assert.equal(art[0], art[1], `day and night draw the same faces at ${width}`);
   }
 });
 
 
-test('your crew reads whole: every face is its critter in its own shape, and no row overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
+test('your crew reads whole: every tile has its Geo face in its own shape, and no tile overlaps or clips, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
-  const rows = `(() => [...document.querySelectorAll('.crew-row')].map((row) => {
+  const tiles = `(() => [...document.querySelectorAll('.st-tile')].map((row) => {
     const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
     const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
-    const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
+    const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1) || [...row.querySelectorAll('b, span')].some((e) => e.scrollWidth > e.clientWidth + 1);
     // The face's box follows the drawing (its viewBox): a box forced to another shape squashes or shrinks the head.
     const squashed = [...row.querySelectorAll('.face img.ink')].filter((i) => !i.naturalHeight
       || Math.abs(i.width / i.height - i.naturalWidth / i.naturalHeight) > 0.05).length;
-    return { faces: row.querySelectorAll('.face img.ink').length + (row.querySelector('.face.add') ? 1 : 0), kids: kids.length, overlap, clip, squashed };
+    return { faces: row.querySelectorAll('.face img.ink').length + (row.classList.contains('st-new') ? 1 : 0), overlap, clip, squashed };
   }))()`;
   for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
     await b.open(`demo=crew5&${theme}#/crew`);
-    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3 && [...document.querySelectorAll('.face img.ink')].every((i) => i.complete)"), 30_000);
-    const found = await b.run(rows), at = `${theme} ${w}`;
-    assert.ok(found.length > 3, `${at}: the crew lists every helper (${found.length} rows)`);
+    await until('the crew tiles', () => b.run("document.querySelectorAll('.st-tile').length > 3 && [...document.querySelectorAll('.face img.ink')].every((i) => i.complete)"), 30_000);
+    const found = await b.run(tiles), at = `${theme} ${w}`;
+    assert.equal(found.length, 7, `${at}: Chief, every helper and Add a helper (${found.length} tiles)`);
     for (const [i, f] of found.entries()) {
-      assert.equal(f.faces, 1, `${at} row ${i}: one critter face`);
-      assert.equal(f.squashed, 0, `${at} row ${i}: the critter keeps its own shape`);
-      assert.ok(!f.overlap, `${at} row ${i}: name, role and status never overlap`);
-      assert.ok(!f.clip, `${at} row ${i}: nothing spills past the row`);
+      assert.equal(f.faces, 1, `${at} tile ${i}: one Geo face`);
+      assert.equal(f.squashed, 0, `${at} tile ${i}: the face keeps its own shape`);
+      assert.ok(!f.overlap, `${at} tile ${i}: status, face, name and role never overlap`);
+      assert.ok(!f.clip, `${at} tile ${i}: nothing spills past the tile`);
     }
   }
   // Only Chief says "Needs you" (Main: one person, one Chief): a crew member waiting on the person reads "Waiting", on the
-  // crew page and on the desk rail beside Chief. `?demo` is the mixed crew whose Tracer waits on the person.
+  // crew page and on the desk rail beside Chief, and Chief's tile says his real status, the rail's own.
   for (const theme of ['day', 'night']) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await b.open(`demo&${theme}#/crew`);
-    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
-    const page = await b.run("[...document.querySelectorAll('.crew-row .status-word')].map((e) => e.textContent)"), at = `${theme} crew page`;
-    assert.ok(!page.includes('Needs you'), `${at}: no crew row says "Needs you" (${page.join(' | ')})`);
+    await until('the crew tiles and the rail', () => b.run("document.querySelectorAll('.st-tile').length > 3 && !!document.querySelector('.side-status')"), 30_000);
+    const page = await b.run("[...document.querySelectorAll('.st-tile:not([href=\"#/chief\"]) .st-pill')].map((e) => e.textContent)"), at = `${theme} crew page`;
+    assert.ok(!page.includes('Needs you'), `${at}: no crew tile says "Needs you" (${page.join(' | ')})`);
     assert.ok(page.includes('Waiting'), `${at}: a waiting crew member says "Waiting" (${page.join(' | ')})`);
-    await b.open(`demo&${theme}`);
-    await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 3"), 30_000);
+    assert.equal(await b.run("document.querySelector('.st-tile[href=\"#/chief\"] .st-pill')?.textContent"), 'Needs you', `${at}: Chief's tile says his real status`);
     const rail = await b.run("[...document.querySelectorAll('.side-row .side-seat')].map((e) => e.textContent)"), atRail = `${theme} rail`;
     assert.ok(!rail.includes('Needs you'), `${atRail}: no crew rail row says "Needs you" (${rail.join(' | ')})`);
     assert.equal(await b.run("document.querySelector('.side-status')?.textContent"), 'Needs you', `${atRail}: Chief still says "Needs you"`);
@@ -364,32 +287,24 @@ test('the desk rail summary under Chief counts the same status its rows show', {
   }
 });
 
-test('your crew page reads the rail status: every row matches its rail row', { skip: !bin && 'no Chromium here' }, async () => {
-  // The Your crew page's status word and dot are the rail's own (A.statusOf). This fails on a
-  // second status rule (the reported bug: Reel and Scout showed their job with a green dot while the rail said
-  // Waiting, and Scribe said "Waiting for Chief" while the rail said Done).
+test('your crew page reads the rail status: every tile matches its rail row', { skip: !bin && 'no Chromium here' }, async () => {
+  // The Your crew tiles' status word is the rail's own (A.statusOf). This fails on a second status rule (the reported
+  // bug: Reel and Scout showed their job while the rail said Waiting, and Scribe said "Waiting for Chief" while the
+  // rail said Done).
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     await b.open(`demo=${demo}&day#/crew`);
-    await until('the crew rows', () => b.run("document.querySelectorAll('.crew-row').length > 3"), 30_000);
-    const r = await b.run(`(() => {
-      const page = Object.fromEntries([...document.querySelectorAll('.crew-row')].filter((row) => row.querySelector('.status-word')).map((row) => [
-        row.querySelector('.grow b')?.textContent.trim(),
-        [row.querySelector('.status-word')?.textContent.trim(), !!row.querySelector('.status-word i.working')],
-      ]));
-      const rail = Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [
-        row.querySelector('b')?.textContent.trim(),
-        [row.querySelector('.side-seat')?.textContent.trim(), !!row.querySelector('.side-seat.seat-working, .side-seat.seat-done')],
-      ]));
-      return { page, rail };
-    })()`);
-    const page = r.page as Record<string, [string, boolean]>, rail = r.rail as Record<string, [string, boolean]>;
+    await until('the crew tiles', () => b.run("document.querySelectorAll('.st-tile').length > 3"), 30_000);
+    const r = await b.run(`(() => ({
+      page: Object.fromEntries([...document.querySelectorAll('.st-tile:not(.st-new)')].map((t) => [t.querySelector('b')?.textContent.trim(), t.querySelector('.st-pill')?.textContent.trim()])),
+      rail: Object.fromEntries([...document.querySelectorAll('.side-row')].map((row) => [row.querySelector('b')?.textContent.trim(), row.querySelector('.side-seat')?.textContent.trim()])),
+      chief: document.querySelector('.side-status')?.textContent.trim() }))()`);
+    const page = r.page as Record<string, string>, rail = r.rail as Record<string, string>;
     assert.ok(Object.keys(rail).length > 2, `${demo}: the rail lists the crew (${JSON.stringify(rail)})`);
-    for (const [name, status] of Object.entries(rail)) {
-      assert.deepEqual(page[name], status, `${demo}: the crew page reads ${name} as the rail does (${JSON.stringify(status)})`);
-    }
+    for (const [name, status] of Object.entries(rail)) assert.equal(page[name], status, `${demo}: the crew page reads ${name} as the rail does`);
+    assert.equal(page.Chief, r.chief, `${demo}: Chief's tile reads his rail status`);
   }
 });
 
@@ -526,7 +441,7 @@ test('a phone card is one primary and ⋯: the sheet names the card and its rows
   for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
     const at = `${theme} ${w}`;
-    await b.open(`demo&${theme}`);
+    await b.open(`demo&${theme}#/chief`);
     await until('a card in Chief\'s thread', () => b.run("!!document.querySelector('.chat .lines .card.ask .btns')"), 30_000);
     const m = await b.run(`({ dots: ${shown('.chat .lines .more-dots')}.length, acts: ${shown('.chat .lines .more-act')}.length })`);
     if (!mobile) { assert.equal(m.dots, 0, `${at}: a desk shows no ⋯`); assert.ok(m.acts > 0, `${at}: a desk keeps every choice inline`); continue; }
@@ -548,14 +463,14 @@ test('a phone card is one primary and ⋯: the sheet names the card and its rows
 test('after sign-in with no phone paired, the chat offers Add your phone with its code; paired, it stays away', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
-  await b.open('demo=nophone&day');
+  await b.open('demo=nophone&day#/chief');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   await until('the pairing offer', () => b.run("!!document.querySelector('[aria-label=\"Add your phone\"] .qr svg')"), 30_000);
   const card = await b.run(`(() => { const c = document.querySelector('[aria-label="Add your phone"]');
     return { qr: !!c.querySelector('.qr svg'), code: /^[2-9A-HJKMNP-Z]{4}(-[2-9A-HJKMNP-Z]{4}){2}$/.test(c.querySelector('.pair-typed')?.textContent ?? ''),
       skip: [...c.querySelectorAll('button')].some((x) => x.innerText === 'Not now') }; })()`);
   assert.deepEqual(card, { qr: true, code: true, skip: true }, 'nophone: the QR, the code and Not now are in place');
-  await b.open('demo=maya&day');
+  await b.open('demo=maya&day#/chief');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   assert.equal(await b.run("!!document.querySelector('[aria-label=\"Add your phone\"]')"), false, 'paired phones: no offer in the chat');
 });
@@ -577,7 +492,7 @@ test('an open ask card is in view when Chief\'s chat opens, with Add your phone 
   assert.ok(at.left > 8, `the thread lands on the ask, not the very bottom (${at.left} left below)`);
 });
 
-test('live Chats keep the last reply separate from status and the opening NEW divider after read', { skip: !bin && 'no Chromium here' }, async () => {
+test('live crew cards keep one status, Chief carries the ask, and the opening NEW divider after read', { skip: !bin && 'no Chromium here' }, async () => {
   const lab = setup();
   lab.crew.onboard('Umer');
   lab.cfg.port = 0; lab.cfg.linkPort = 0;
@@ -597,20 +512,17 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   await b.send('Page.enable'); await b.send('Runtime.enable');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await b.open(`day#person=${person}`);
-  await until('Chief chat', () => b.run("!!document.querySelector('.home-mode')"), 30_000);
-  await toOffice(b);
-  const row = () => b.run(`(() => { const r = document.querySelector('[aria-label="Chats"] a[href="#/h/scout"]'); return r && { line: r.querySelector('.small').textContent, word: r.querySelector('.p-state').textContent, badge: !!r.querySelector('.badge'), working: r.parentElement.querySelector('.chat-working')?.textContent, time: r.querySelector('time').textContent }; })()`);
-  const live = await row();
-  assert.equal(live.word, 'At work'); assert.match(live.working, /Scout is working/);
-  assert.match(live.line, /^You: Check my Friday flights/); assert.ok(live.time); assert.equal(live.badge, false);
+  await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
+  const row = () => b.run(`(() => { const r = document.querySelector('.st-card[href="#/h/scout"]'); return r && { word: r.querySelector('.st-pill').textContent, badge: !!r.querySelector('.badge'), stuck: !!r.querySelector('.stuck') }; })()`);
+  await until('Scout at work', async () => (await row())?.word === 'At work', 30_000);
+  assert.equal((await row()).badge, false);
   // Scout goes quiet past the limit: still one status on its row, no ask card under it; the ask is Chief's alone.
   lab.db.run('UPDATE tasks SET updated_at = updated_at - 300000 WHERE id = ?', job);
-  // Chief's row carries the ask as his blue count, never the words "Needs you".
-  const chief = () => b.run(`(() => { const r = document.querySelector('[aria-label="Chats"] a[href="#/chief"]'); return [r.querySelector('.badge')?.textContent, r.querySelector('.p-state')?.textContent ?? null]; })()`);
-  await until('Chief asks about Scout', async () => (await chief())[0] === '1', 30_000);
-  assert.deepEqual(await chief(), ['1', null], 'Chief\'s row: the count, no status words');
-  assert.deepEqual([(await row()).word, await b.run(`!!document.querySelector('[aria-label="Chats"] a[href="#/h/scout"]').parentElement.querySelector('.stuck')`)],
-    ['At work', false], 'a quiet helper\'s Chats row carries its status and no ask card');
+  // Chief's card carries the ask as what he has for you, never a second status word beside it.
+  const chief = () => b.run(`[document.querySelector('.sh-chief .sh-top b')?.textContent, document.querySelector('.sh-chief .st-word')?.textContent ?? null]`);
+  await until('Chief asks about Scout', async () => (await chief())[0] === 'Chief has 1 thing for you', 30_000);
+  assert.deepEqual(await chief(), ['Chief has 1 thing for you', null], 'Chief\'s card: what he has for you, no status word');
+  assert.deepEqual(await row(), { word: 'At work', badge: false, stuck: false }, 'a quiet helper\'s card carries its status and no ask card');
   await b.run('location.hash = "#/chief"');
   await until("the Stop card in Chief's thread", () => b.run(`[...document.querySelectorAll('.stuck')].some((e) => /Scout has been quiet/.test(e.textContent))`), 30_000);
   await b.run('location.hash = "#/h/scout"');
@@ -618,13 +530,12 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   assert.equal(await b.run(`document.querySelectorAll('.stuck').length`), 0, 'Scout\'s own thread asks nothing: the Stop card is Chief\'s alone');
   assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [true, 0], 'a helper\'s thread is read only: Ask Chief about this, no composer');
   await b.run('location.hash = "#/"');
-  await toOffice(b);
+  await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
-  await until('last reply in the row', async () => (await row())?.line === 'Three Friday flights are ready.', 30_000);
-  assert.equal((await row()).word, 'Done');
+  await until('Scout done on its card', async () => /^Done /.test((await row())?.word ?? ''), 30_000);
   // Scout's reply is still unread: only Chief carries a badge, so the desk rail's Scout row has none.
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await until('the desk rail', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+  await until('the rail row with its last reply', async () => /Three Friday flights are ready\./.test(await b.run("document.querySelector('.side-row')?.innerText ?? ''")), 30_000);
   assert.equal((await api('/api/bots/scout')).bot.unread > 0, true);
   assert.equal(await b.run("document.querySelectorAll('.side-row .badge').length"), 0, 'no crew rail row carries a badge');
   assert.match(await b.run("document.querySelector('.side-row').innerText"), /Done[^]*Three Friday flights are ready\./, 'the rail row carries its status word and last line');
@@ -635,7 +546,7 @@ test('live Chats keep the last reply separate from status and the opening NEW di
   const boundary = await b.run("(() => { const n = document.querySelector('.new-divider'); return {word:n?.textContent, after:n?.nextElementSibling?.textContent}; })()");
   assert.equal(boundary.word, 'New'); assert.match(boundary.after, /Three Friday flights are ready/);
   await b.run('location.hash = "#/"');
-  await until('left the helper thread', () => b.run("!!document.querySelector('.home-mode')"));
+  await until('left the helper thread', () => b.run("!!document.querySelector('.stack-home')"));
   await b.run('location.hash = "#/h/scout"');
   await until('opened the read thread', () => b.run("!!document.querySelector('.chat-page .line.them')"));
   assert.equal(await b.run("!!document.querySelector('.new-divider')"), false, 'a read thread has no NEW on the next visit');

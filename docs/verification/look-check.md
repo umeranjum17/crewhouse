@@ -9,8 +9,8 @@ the phone's squashed Chief helmet and the black strip down the left of a phone s
 
 **Web/PWA.** Against the run's own crewd (`--person "$LAB/state/person.key"` opens the person's link first) or
 the static demo shell (`scripts/verify/serve-web.mjs web/dist`, then `?demo=<variant>`). Each `<slug>=<url>` runs in
-`?day` and `?night`; the theme rides before the route's hash. A screen behind an in-memory switch takes
-`--then '<js expression>'`, run in the page after it loads (Office: `document.querySelector('[data-mode=office]')?.click()`).
+`?day` and `?night`; the theme rides before the route's hash. A screen reached by a tap takes
+`--then '<js expression>'`, run in the page after it loads (Chief's thread from Home: `document.querySelector('.sh-chief a')?.click()`).
 The script starts its own headless Chromium with a throwaway profile and removes it on exit.
 
 **Android.** Your own emulator (runbook.md's rules: your serial on every `adb` call), the app installed and on the

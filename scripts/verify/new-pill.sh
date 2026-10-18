@@ -49,7 +49,7 @@ chrome-devtools-axi open "$B/#person=$(<"$LAB/state/person.key")" >/dev/null
 n=0
 for look in day night; do for w in 390 1440; do
   h=844; [ "$w" = 1440 ] && h=900; n=$((n + 1))
-  chrome-devtools-axi resize "$w" "$h" >/dev/null; chrome-devtools-axi open "$B/?$look#/" >/dev/null
+  chrome-devtools-axi resize "$w" "$h" >/dev/null; chrome-devtools-axi open "$B/?$look#/chief" >/dev/null
   wait_js "!!document.querySelector('.chat .live-line') && $PLACE.st >= $PLACE.max - 1"
   probe "$look-$w-open" | tee -a "$EV/measure.txt"
   if [ "$look-$w" = night-390 ]; then
@@ -86,7 +86,7 @@ const steps = [
 for (const look of ["day", "night"]) for (const [w, h] of [[390, 844], [1440, 900]]) {
   const tag = `${look}-${w}`;
   steps.push(
-    { name: `open-${tag}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: `${B}/?${look}#/`, wait: `!!document.querySelector(".chat .live-line") && ${PLACE}.st >= ${PLACE}.max - 1`, timeout: 20000 },
+    { name: `open-${tag}`, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, url: `${B}/?${look}#/chief`, wait: `!!document.querySelector(".chat .live-line") && ${PLACE}.st >= ${PLACE}.max - 1`, timeout: 20000 },
     { name: `up-${tag}`, eval: `${BOX}.scrollTop = 0` }, { name: `read-up-${tag}`, wait: `${PLACE}.st === 0`, timeout: 5000 },
     { name: `land-${tag}`, run: say(`And keep the evening free, installed ${tag}.`), wait: `${PLACE}.inBox`, timeout: 20000,
       eval: `[matchMedia("(display-mode: standalone)").matches, ${PLACE}]`, out: `${EV}/pwa/${tag}-pill.png` },

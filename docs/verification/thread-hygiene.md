@@ -47,7 +47,7 @@ The thread reads in the order things happened, and opens where the person last i
    the finished notice is before the later message, the card after the reply; the notice says "Your things".
 5. Eval `{ st, max }` on `.chat .lines`: `st == max` on open. Open a card's `<details>` after scrolling up and
    confirm `st` does not move; confirm it sticks when at the bottom.
-6. Home's Office view: read `.jobs .list-row` text for a job whose helper is not hired — the plain name, no raw id.
+6. Home: read `.jobs .list-row` text for a job whose helper is not hired — the plain name, no raw id.
 7. Load `#/chief` and confirm `location.hash` becomes `#/` with `.home-chat` present; load `#/chief/m<id>` and
    confirm the hash stays and `#m<id>` is near the viewport centre.
 8. The ask-in-view leg: `EVIDENCE_HOME=<your evidence folder> bash scripts/verify/ask-in-view.sh "$EV"`.

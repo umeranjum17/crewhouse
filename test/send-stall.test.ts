@@ -66,6 +66,8 @@ test('a stalled send says it is held, a failed one offers Retry, and Retry sends
   // The browser's own network, paused on the send POST: the words are in flight and unanswered.
   await send('Fetch.enable', { patterns: [{ urlPattern: '*bots/chief/messages*', requestStage: 'Request' }] });
   await send('Page.navigate', { url: `${base}/?day#person=${key}` });
+  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await run('location.hash = "#/chief"');
   await until('Chief\'s box', () => run("!!document.querySelector('.chat .dock textarea')"), 30_000);
   await run("document.querySelector('.chat .dock textarea').focus()");
   await send('Input.insertText', { text: 'Book the dentist' });

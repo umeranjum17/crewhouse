@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # done-done journey `screens` (hand/agent only: needs a browser session): boot one
-# isolated stub-engine crewd, capture the fixed visual smoke set (Chief's thread and
-# the Office view, day and night, 1440 and 390) into <out>/screens/, tear down.
+# isolated stub-engine crewd, capture the fixed visual smoke set (Home and Chief's
+# thread opened from it, day and night, 1440 and 390) into <out>/screens/, tear down.
 #
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"
 #
@@ -41,7 +41,8 @@ curl -fsS --max-time 10 "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard" > /dev
 curl -fsS --max-time 10 "${H[@]}" -d '{"text":"smoke"}' "$B/api/bots/chief/messages" > /dev/null
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 URL="$B/#person=$PERSON"
-bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" chief "$URL"
-THEN="(async () => { document.querySelector('[data-mode=office]')?.click(); for (let i = 0; i < 50 && !document.querySelector('.office'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.office'); })()" \
-  bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" office "$URL"
+bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" home "$URL"
+# Chief's thread, opened the way a person does: a tap on Chief's card on Home.
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+  bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" chief "$URL"
 echo "screens-smoke: $(ls "$OUT"/screens/*.png | wc -l) captures in $OUT/screens"

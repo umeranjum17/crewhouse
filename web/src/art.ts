@@ -1,4 +1,4 @@
-// The mascot family as data: the critters (Chief's and every helper's face), dot bitmaps for the logo, and the ASCII brand moments
+// The mascot family as data: the Geo faces (Chief's and every helper's), dot bitmaps for the logo, and the ASCII brand moments
 // (the block-letter boot splash, Chief's laptop, confetti). Framework-free, so the Expo app draws the same art:
 // a bitmap is an array of equal-width strings, '.' is an unlit dot, any other letter indexes a palette.
 
@@ -86,88 +86,93 @@ export const POSES: Pose[] = ['listen', 'work', 'needs', 'pleased', 'rest'];
 export const poseOf = (m: Mood | Pose = 'idle'): Pose =>
   m === 'needs' || m === 'pleased' ? m : m === 'work' ? 'work' : m === 'happy' ? 'pleased' : m === 'rest' ? 'rest' : m === 'ask' || m === 'worried' || m === 'error' ? 'needs' : 'listen';
 
-// ── The critters: Chief is a bear in a captain's cap, each template helper its own animal, and a helper Chief makes up
-// gets an animal from the made-up pool (adapter.kindOf). Flat colour on a calm disc, one thin outline: warm, never a
-// sticker. Hand-written SVG in a 100×100 box on its own disc, so one drawing serves every face slot and the phone's
-// PNGs (scripts/icons.mjs). ──
-const INK = '#2A2320';
-type Critter = { fur: string; inner?: string; muzzle?: string; ears: 'round' | 'pointy' | 'long' | 'tufts' | 'mouse' | 'floppy' | 'none' | 'mane'; bg: string; eye?: string;
-  mask?: string; patches?: string; beak?: boolean; owl?: boolean; whiskers?: boolean; cap?: boolean; snout?: string; tuft?: boolean; earInk?: string };
-/** Eyes, brows and mouth in each mode, centred between the eyes at (50, 54). `glance` (-1 left to 1 right) is where a
- *  working face's eyes are along the line it reads. */
-function face(m: FaceMode, glance: number, o: { ink: string; blush: boolean; mouthY: number }) {
-  const x = 50, y = 54, g = 12, s = 0.95, ink = o.ink, my = o.mouthY;
-  const line = (d: string, w: number) => `<path d="${d}" stroke="${ink}" stroke-width="${w * s}" fill="none" stroke-linecap="round"/>`;
-  const r = (m === 'needs' ? 4 : 3.4) * s, dx = m === 'think' ? 1.6 * s * glance : 0, dy = m === 'think' ? -1.8 * s : 0;
-  const eyes = m === 'rest' ? [-g, g].map((d) => line(`M${x + d - 4 * s} ${y}q${4 * s} ${3.6 * s} ${8 * s} 0`, 2.4)).join('')
-    : [-g, g].map((d) => `<circle cx="${x + d + dx}" cy="${y + dy}" r="${r}" fill="${ink}"/><circle cx="${x + d + dx + r * 0.35}" cy="${y + dy - r * 0.35}" r="${r * 0.32}" fill="#fff"/>`).join('');
-  const brows = m === 'needs' ? [-g, g].map((d) => line(`M${x + d - 4 * s} ${y - 9 * s}q${4 * s} ${-3 * s} ${8 * s} 0`, 2)).join('') : '';
-  const mouth = m === 'needs' ? `<ellipse cx="${x}" cy="${my + s}" rx="${3 * s}" ry="${3.6 * s}" fill="${ink}"/>`
-    : m === 'think' ? line(`M${x - 3 * s} ${my + s}q${3 * s} ${-1.6 * s} ${6 * s} ${-0.4 * s}`, 2.2)
-    : m === 'rest' ? line(`M${x - 2.6 * s} ${my}q${2.6 * s} ${1.8 * s} ${5.2 * s} 0`, 2)
-    : line(`M${x - 6 * s} ${my - s}q${6 * s} ${6.4 * s} ${12 * s} 0`, 2.4);
-  const blush = o.blush && m !== 'think' ? [-g - 4 * s, g + 4 * s].map((d) => `<ellipse cx="${x + d}" cy="${y + 7 * s}" rx="${4 * s}" ry="${2.4 * s}" fill="#FF8FA3" opacity=".55"/>`).join('') : '';
-  return blush + eyes + brows + mouth;
+// ── The faces, Geo: Chief and every helper a flat shape in its own crew colour with one trait, on a black disc.
+// Chief is the blue circle in the white cap, each template keys its own look by template id, and a helper Chief makes up
+// gets a look from the made-up pool (adapter.kindOf). Hand-written SVG in a 100×100 box, so one drawing serves every face
+// slot and the phone's PNGs (scripts/icons.mjs). `c` is the crew colour: the face, and the person's card for it. ──
+const INK = '#0B0B0B', LIGHT = '#F7F7FB';
+type Geo = { c: string; shape: string; trait?: string; eyes?: 'dot' | 'glasses' | 'arc' | 'bar'; ey: number; my: number; mouth?: 'smile' | 'flat' };
+const SHAPE = {
+  circle: (c: string) => `<circle cx="50" cy="56" r="38" fill="${c}"/>`,
+  pill: (c: string) => `<rect x="22" y="18" width="56" height="72" rx="28" fill="${c}"/>`,
+  square: (c: string) => `<rect x="20" y="20" width="60" height="60" rx="14" fill="${c}"/>`,
+  arch: (c: string) => `<path d="M20 82V52A30 30 0 0 1 80 52V82Z" fill="${c}"/>`,
+  hex: (c: string) => `<path d="M50 10L85 30V70L50 90L15 70V30Z" fill="${c}"/>`,
+};
+const badge = (glyph: string) => `<circle cx="80" cy="80" r="12" fill="${INK}"/><path d="${glyph}" fill="none" stroke="${LIGHT}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+const TRAIT = {
+  cap: `<rect x="26" y="18" width="48" height="18" rx="4" fill="${LIGHT}"/><rect x="20" y="32" width="60" height="8" rx="3" fill="${INK}"/>`,
+  bow: `<path d="M50 27L36 16V38ZM50 27L64 16V38Z" fill="#E0408A"/>`,
+  sparkle: `<path d="M84 8L86.5 15L94 17.5L86.5 20L84 27L81.5 20L74 17.5L81.5 15Z" fill="${LIGHT}"/>`,
+  arrow: badge('M74 80H86M82 75.5L86.5 80L82 84.5'),
+  play: `<circle cx="80" cy="80" r="12" fill="${INK}"/><path d="M76.5 74.5L86 80L76.5 85.5Z" fill="${LIGHT}"/>`,
+  prompt: badge('M74 75L78.5 79.5L74 84M80 85H86'),
+  headset: `<path d="M24 54A26 26 0 0 1 76 54" fill="none" stroke="${LIGHT}" stroke-width="4"/><rect x="18" y="50" width="9" height="16" rx="4" fill="${LIGHT}"/><rect x="73" y="50" width="9" height="16" rx="4" fill="${LIGHT}"/>`,
+  sprout: `<path d="M50 22V8" stroke="${LIGHT}" stroke-width="3.5" stroke-linecap="round"/><path d="M50 12C42 4 34 8 34 8C36 16 46 16 50 12ZM50 10C58 2 66 6 66 6C64 14 54 14 50 10Z" fill="#2FCB93"/>`,
+  ears: (c: string) => `<circle cx="24" cy="26" r="11" fill="${c}"/><circle cx="76" cy="26" r="11" fill="${c}"/>`,
+  curl: `<path d="M50 20C50 10 60 8 62 14C64 20 54 20 56 12" fill="none" stroke="${LIGHT}" stroke-width="3.5" stroke-linecap="round"/>`,
+  leaf: `<path d="M76 24C76 12 88 6 94 6C94 16 88 26 76 24Z" fill="#2FCB93"/><path d="M76 24L88 12" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`,
+  crown: `<path d="M30 30L34 8L44 20L50 6L56 20L66 8L70 30Z" fill="#FFC93C"/>`,
+  tuft: `<circle cx="38" cy="20" r="9" fill="${LIGHT}"/><circle cx="50" cy="15" r="10" fill="${LIGHT}"/><circle cx="62" cy="20" r="9" fill="${LIGHT}"/>`,
+  antenna: `<path d="M50 22V10" stroke="${LIGHT}" stroke-width="3.5" stroke-linecap="round"/><circle cx="50" cy="8" r="5" fill="${LIGHT}"/>`,
+  antlers: `<path d="M36 22L28 6M30 14L20 12M64 22L72 6M70 14L80 12" fill="none" stroke="${LIGHT}" stroke-width="4" stroke-linecap="round"/>`,
+};
+const geo = (shape: keyof typeof SHAPE, c: string, trait: string, o: Partial<Geo> = {}): Geo =>
+  ({ c, shape: SHAPE[shape](c), trait, ey: shape === 'circle' ? 60 : shape === 'square' ? 50 : shape === 'hex' ? 53 : shape === 'arch' ? 58 : 56, my: shape === 'circle' ? 74 : shape === 'square' ? 68 : shape === 'hex' ? 66 : 70, ...o });
+/** Eyes and mouth in each mode, centred between the eyes. `glance` (-1 left to 1 right) is where a working face's eyes
+ *  are along the line it reads. */
+function geoFace(p: Geo, m: FaceMode, glance: number) {
+  const y = p.ey, my = p.my, g = 11;
+  const line = (d: string, w = 4) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const dx = m === 'think' ? 3 * glance : 0, dy = m === 'think' ? -2 : 0;
+  const style = m === 'needs' && p.eyes !== 'glasses' ? 'dot' : p.eyes ?? 'dot';
+  const eyes = m === 'rest' ? line([-g, g].map((d) => `M${50 + d - 5} ${y}Q${50 + d} ${y + 5} ${50 + d + 5} ${y}`).join(''))
+    : [-g, g].map((d) => {
+      const x = 50 + d + dx, ey = y + dy;
+      return style === 'glasses' ? `<circle cx="${50 + d}" cy="${y - 2}" r="9" fill="${LIGHT}"/><circle cx="${x + (m === 'think' ? 0 : 3)}" cy="${ey}" r="${m === 'needs' ? 5.5 : 4.5}" fill="${INK}"/>`
+        : style === 'arc' ? line(`M${x - 5} ${ey}Q${x} ${ey - 8} ${x + 5} ${ey}`, 4.2)
+        : style === 'bar' ? `<rect x="${x - 5.5}" y="${ey - 3}" width="11" height="6" rx="3" fill="${INK}"/>`
+        : `<circle cx="${x}" cy="${ey}" r="${m === 'needs' ? 6.5 : 5.5}" fill="${INK}"/>`;
+    }).join('');
+  const mouth = m === 'think' || m === 'rest' || p.mouth === 'flat' ? line(`M${m === 'think' ? 46 : 44} ${my}H${m === 'think' ? 56 : 56}`)
+    : line(`M41 ${my}Q50 ${my + 7} 59 ${my}`);
+  return eyes + mouth;
 }
-function drawCritter(p: Critter, m: FaceMode, night: boolean, glance: number, aspect: number) {
-  const L = INK, w = 2.4, inner = p.inner ?? p.fur;
-  const ears = {
-    round: [27, 73].map((x) => `<circle cx="${x}" cy="34" r="12" fill="${p.earInk ?? p.fur}" stroke="${L}" stroke-width="${w}"/><circle cx="${x}" cy="34" r="6" fill="${inner}"/>`).join(''),
-    pointy: `<path d="M22 46L25 15L47 33Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M78 46L75 15L53 33Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M28 36L29 23L39 32Z" fill="${inner}"/><path d="M72 36L71 23L61 32Z" fill="${inner}"/>`,
-    long: [[38, -8], [62, 8]].map(([x, a]) => `<g transform="rotate(${a} ${x} 30)"><ellipse cx="${x}" cy="18" rx="7.5" ry="20" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/><ellipse cx="${x}" cy="19" rx="3.4" ry="14" fill="${inner}"/></g>`).join(''),
-    tufts: `<path d="M26 40L24 18L42 31Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M74 40L76 18L58 31Z" fill="${p.fur}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/>`,
-    mouse: [24, 76].map((x) => `<circle cx="${x}" cy="34" r="15" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/><circle cx="${x}" cy="34" r="9" fill="${inner}"/>`).join(''),
-    floppy: '',
-    none: '',
-    mane: `<circle cx="50" cy="55" r="40" fill="${inner}" stroke="${L}" stroke-width="${w}"/>` + Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return `<circle cx="${(50 + 37 * Math.cos(a)).toFixed(1)}" cy="${(55 + 37 * Math.sin(a)).toFixed(1)}" r="8" fill="${inner}"/>`; }).join(''),
-  }[p.ears];
-  const floppy = p.ears === 'floppy' ? `<path d="M22 42C10 46 10 70 18 76C26 72 28 56 30 46Z" fill="${inner}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M78 42C90 46 90 70 82 76C74 72 72 56 70 46Z" fill="${inner}" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/>` : '';
-  const head = `<ellipse cx="50" cy="57" rx="31" ry="28" fill="${p.fur}" stroke="${L}" stroke-width="${w}"/>`;
-  const tuft = p.tuft ? `<path d="M46 31q2 -10 6 -4q2 -8 6 0" stroke="${L}" stroke-width="2" fill="${p.fur}" stroke-linecap="round"/>` : '';
-  const patches = p.patches ? `<ellipse cx="38" cy="54" rx="8" ry="9.5" fill="${p.patches}" transform="rotate(20 38 54)"/><ellipse cx="62" cy="54" rx="8" ry="9.5" fill="${p.patches}" transform="rotate(-20 62 54)"/>` : '';
-  const mask = p.mask ? `<path d="M22 52C30 44 42 48 50 50C58 48 70 44 78 52C74 62 62 62 50 58C38 62 26 62 22 52Z" fill="${p.mask}"/>` : '';
-  const muzzle = p.muzzle ? `<ellipse cx="50" cy="69" rx="15" ry="11" fill="${p.muzzle}"/>` : '';
-  const owl = p.owl ? `<circle cx="38" cy="54" r="11" fill="#FFF6E6" stroke="${L}" stroke-width="2"/><circle cx="62" cy="54" r="11" fill="#FFF6E6" stroke="${L}" stroke-width="2"/>` : '';
-  const snout = p.snout ? `<ellipse cx="50" cy="67" rx="10" ry="7.5" fill="${p.snout}" stroke="${L}" stroke-width="2"/><circle cx="46.5" cy="67" r="1.8" fill="${L}"/><circle cx="53.5" cy="67" r="1.8" fill="${L}"/>` : '';
-  const nose = p.beak ? `<path d="M45 62L55 62L50 69Z" fill="#F7A23B" stroke="${L}" stroke-width="1.6" stroke-linejoin="round"/>` : p.snout ? '' : `<ellipse cx="50" cy="63" rx="4" ry="3" fill="${L}"/>`;
-  const whisk = p.whiskers ? `<path d="M30 66l-12 -2M30 70l-11 3M70 66l12 -2M70 70l11 3" stroke="${L}" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>` : '';
-  const f = face(m, glance, { ink: p.eye ?? INK, blush: !(p.owl || p.mask || p.patches), mouthY: p.beak ? 73 : p.snout ? 77 : 71 });
-  const cap = p.cap ? `<path d="M26 34C26 16 74 16 74 34Z" fill="#1F3A68" stroke="${L}" stroke-width="${w}" stroke-linejoin="round"/><path d="M26 33H74" stroke="#fff" stroke-width="4"/><path d="M22 36Q50 44 78 36" stroke="${L}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="50" cy="25" r="3.6" fill="#F5C542" stroke="${L}" stroke-width="1.4"/>` : '';
-  const zz = m === 'rest' ? `<text x="76" y="26" font-family="Georgia, serif" font-style="italic" font-size="18" fill="${INK}" opacity=".55">z</text>` : '';
-  // A box wider than tall (the old text helmet's 1.2:1 slot) centres the disc in it rather than stretching it.
-  const pad = 50 * (aspect - 1);
-  return `<svg viewBox="${-pad} 0 ${100 + 2 * pad} 100" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="d"><circle cx="50" cy="50" r="50"/></clipPath></defs>`
-    + `<circle cx="50" cy="50" r="50" fill="${p.bg}"/><g clip-path="url(#d)">${ears + floppy + head + tuft + patches + mask + muzzle + owl + snout + nose + whisk + f + cap + zz}</g>`
-    + `${night ? '' : '<circle cx="50" cy="50" r="49.4" fill="none" stroke="#000" stroke-opacity=".06" stroke-width="1.2"/>'}</svg>`;
-}
-
-/** Chief: the bear in the navy captain's cap. Nobody else is a bear, so no helper is ever mistaken for him. */
-const CHIEF: Critter = { fur: '#B98252', inner: '#E8C49A', muzzle: '#F1D9B8', ears: 'round', bg: '#F7E3C8', cap: true };
-/** Each look: a template helper's animal (keyed by template id), then the made-up pool (MADE), each with its own disc colour. */
+/** Chief: the blue circle in the white cap. Nobody else wears the cap, so no helper is ever mistaken for him. */
+const CHIEF = geo('circle', '#3157F2', TRAIT.cap);
+/** Each look: a template helper's (keyed by template id), then the made-up pool (MADE). */
 export const PALS = {
-  scout: { fur: '#EE8A3C', inner: '#FFE3C8', muzzle: '#FFF6EC', ears: 'pointy', bg: '#FFE3D0' }, // fox
-  scribe: { fur: '#A27A55', ears: 'tufts', bg: '#F6E9C9', owl: true, beak: true }, // owl
-  reel: { fur: '#9C9CAA', inner: '#55556A', muzzle: '#F2F2F6', ears: 'round', earInk: '#9C9CAA', bg: '#DCE6FF', mask: '#3B3B4A', eye: '#fff' }, // raccoon
-  support: { fur: '#E2AA6E', inner: '#9C6A3C', muzzle: '#F8E6CC', ears: 'floppy', bg: '#E2F2D8' }, // dog
-  tracer: { fur: '#BDB6CC', inner: '#FFC4D2', muzzle: '#EFEAF6', ears: 'mouse', bg: '#EEE6FF', whiskers: true }, // mouse
-  xgrowth: { fur: '#FFD640', ears: 'none', bg: '#FFF2BF', beak: true, tuft: true }, // chick
-  cto: { fur: '#4D4D5A', inner: '#FFB3C4', muzzle: '#6A6A78', ears: 'pointy', bg: '#D3F0EA', eye: '#D7F27A', whiskers: true }, // cat
-  bunny: { fur: '#FFFFFF', inner: '#FFC4D2', muzzle: '#FFF', ears: 'long', bg: '#FFE0EA' },
-  panda: { fur: '#FFFFFF', patches: '#2E2E38', ears: 'round', earInk: '#2E2E38', inner: '#2E2E38', bg: '#E4F1E6', eye: '#fff' },
-  pig: { fur: '#FFB6C6', inner: '#FF8FA8', ears: 'pointy', bg: '#E3ECF6', snout: '#FF9AB2' },
-  koala: { fur: '#A9AEB8', inner: '#E9D9E0', muzzle: '#D8DCE2', ears: 'mouse', bg: '#D3F0EA' },
-  lion: { fur: '#F2B544', inner: '#C9782A', muzzle: '#FFE7B8', ears: 'mane', bg: '#FFEFD2' },
-  sheep: { fur: '#EED9C4', inner: '#FFFFFF', ears: 'mane', bg: '#E3ECF6' },
-  frog: { fur: '#8BCB6B', inner: '#6BAF4E', ears: 'none', bg: '#E2F5D6', snout: '#A6DC8A' },
-  deer: { fur: '#C7A27C', inner: '#8A6440', muzzle: '#EAD7BF', ears: 'pointy', bg: '#F1E4D3' },
-} satisfies Record<string, Critter>;
+  scout: geo('square', '#FF6B5B', '', { eyes: 'glasses', ey: 52, mouth: 'flat' }), // Research Rae: glasses
+  scribe: geo('arch', '#FFC93C', TRAIT.sparkle, { eyes: 'arc' }), // Writer Will: a sparkle
+  tracer: geo('hex', '#2FCB93', TRAIT.arrow, { eyes: 'bar', mouth: 'flat' }), // Finder Finn: the arrow
+  reel: geo('circle', '#A98BFA', TRAIT.play), // Video Vic: play
+  support: geo('pill', '#4CC9F0', TRAIT.headset), // Support Sam: a headset
+  xgrowth: geo('arch', '#B8E04A', TRAIT.sprout), // Growth Gus: a sprout
+  cto: geo('square', '#FF9F43', TRAIT.prompt, { eyes: 'bar' }), // Terminal Tess: a prompt
+  bunny: geo('pill', '#FF7AB8', TRAIT.bow),
+  panda: geo('circle', '#C4B5FD', '', { shape: TRAIT.ears('#C4B5FD') + SHAPE.circle('#C4B5FD') }),
+  pig: geo('square', '#FDA4AF', TRAIT.curl),
+  koala: geo('hex', '#A3B4C8', TRAIT.leaf, { eyes: 'bar' }),
+  lion: geo('circle', '#E8C39E', TRAIT.crown),
+  sheep: geo('pill', '#E7E2D6', TRAIT.tuft),
+  frog: geo('arch', '#86E3A8', TRAIT.antenna),
+  deer: geo('pill', '#D4A373', TRAIT.antlers, { mouth: 'flat' }),
+} satisfies Record<string, Geo>;
 export type Kind = keyof typeof PALS;
-/** The animals for helpers no template draws (Chief's made-up hires): never a template's, never Chief's bear. */
+/** The looks for helpers no template draws (Chief's made-up hires): never a template's, never Chief's. */
 export const MADE: Kind[] = ['bunny', 'panda', 'pig', 'koala', 'lion', 'sheep', 'frog', 'deer'];
-/** Chief or a helper as a critter SVG. `beat` (a working face's ticker) moves its eyes along a line, left to right,
- *  as it reads; `aspect` is the slot's width over its height. */
-export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { night?: boolean; beat?: number; aspect?: number } = {}) =>
-  drawCritter(who === 'chief' ? CHIEF : PALS[who], mode, !!o.night, (((o.beat ?? 0) % 24) / 23) * 2 - 1, o.aspect ?? 1);
+/** The crew colour: a face's own, and the card the person sees for it. Chief's blue is 3.8:1 with black words, so his
+ *  card's words are light (5.6:1): `inkOn`. */
+export const colourOf = (who: Kind | 'chief') => (who === 'chief' ? CHIEF : PALS[who]).c;
+export const inkOn = (who: Kind | 'chief') => who === 'chief' ? LIGHT : INK;
+/** Chief or a helper as a Geo face SVG on its black disc. `beat` (a working face's ticker) moves its eyes along a line,
+ *  left to right, as it reads; `aspect` is the slot's width over its height. */
+export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { beat?: number; aspect?: number } = {}) => {
+  const p = who === 'chief' ? CHIEF : PALS[who], pad = 50 * ((o.aspect ?? 1) - 1);
+  // A box wider than tall centres the disc in it rather than stretching it.
+  return `<svg viewBox="${-pad} 0 ${100 + 2 * pad} 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="50" fill="${INK}"/>`
+    + `<g transform="translate(13 13) scale(.74)">${p.shape + geoFace(p, mode, (((o.beat ?? 0) % 24) / 23) * 2 - 1) + (p.trait ?? '')}</g></svg>`;
+};
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──
 export const HOUSE: Bitmap = [

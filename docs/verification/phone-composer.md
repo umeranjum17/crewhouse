@@ -9,14 +9,12 @@ wrap to their own row under it; at normal text nothing changes.
 ## Drive
 
 1. Your own emulator (never the test phone: this changes density, font scale and theme), a lab crewd on the stub
-   engine, the release APK installed and paired (see [phone-pairing.md](phone-pairing.md)); a helper recruited so
-   Chats has a second row.
+   engine, the release APK installed and paired (see [phone-pairing.md](phone-pairing.md)); a helper (Reel) recruited.
 2. `adb -s <serial> shell wm density 480; adb -s <serial> shell settings put system font_scale 2.0; adb -s <serial>
-   shell cmd uimode night no|yes`, then a cold start (`am force-stop` + `monkey`) so Home opens on Chief.
-3. Chief's chat is Home. The helper's chat is **not** reachable by a plain tap: switch to Office, then scroll the
-   Chats list into view and tap its row — `phone-ui.mjs tap '^Office$'`, `reveal '^CHATS$'`, `tap '^Reel$'` for a
-   helper named Reel. Tapping the office *panel* instead opens the DeskSheet, and a modal's scrim makes
-   `look-check.mjs` read the screen as the wrong look, so never take that path.
+   shell cmd uimode night no|yes`, then a cold start (`am force-stop` + `monkey`) so the app opens on Home.
+3. Chief's chat opens from Chief's card on Home (`phone-ui.mjs tap '^Chief'`). A helper's chat opens from its card on
+   Home, which shows its desk sheet first, then the sheet's button: `tap '^Reel$'`, `tap "^Open Reel's chat$"`. Take
+   the shot only once the sheet is gone: a modal's scrim makes `look-check.mjs` read the screen as the wrong look.
 
 ## Prove it
 
@@ -29,7 +27,7 @@ wrap to their own row under it; at normal text nothing changes.
   and count the bands of dark rows: two text bands before, one after.
 - `SERIAL=<serial> look-check.mjs android --out <dir> chief-chat` — the field and the buttons, day and night, at
   360dp and the largest text. The helper's chat needs the taps above:
-  `--then 'Office>>reveal:^CHATS$>>^Reel$' helper-chat`.
+  `--then '^Reel$>>^Open Reel.s chat$' helper-chat`.
 - Keep the emulator awake first (`adb shell svc power stayon true`): a sleeping display screenshots black, which
   `look-check` reads as the night look and the run then never settles.
 

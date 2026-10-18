@@ -35,8 +35,8 @@ are not proven (say so), and persistence is proven with the turns you have.
 The approval sheet (`AskSheet`, the paired app) shows the exact outgoing text in full (no preview cut),
 two answer buttons, and Edit / Read all / a standing answer only as small links; nothing answers on a
 timer. `scripts/verify/phone-asksheet.mjs` proves it on a paired emulator (`phone-pairing.md`, the lab from
-`pair-lab.sh`), paired by the typed code: a Reel file-write ask reaches the sheet through Office -> Reel's
-desk -> Review (the phone has no Needs you pin for a helper's ask) and stays up 30 s unanswered; a Reel
+`pair-lab.sh`), paired by the typed code: a Reel file-write ask reaches the sheet through Reel's card on Home ->
+its desk -> Review (the phone has no Needs you pin for a helper's ask) and stays up 30 s unanswered; a Reel
 `crew_draft` email lands in Chief's thread with the body exactly as written, whole:
 
 ```bash

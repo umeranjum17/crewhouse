@@ -75,6 +75,8 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
   const journey = async (width: number, bot: string, words: string, expect: RegExp) => {
     await send('Emulation.setDeviceMetricsOverride', { width, height: width < 600 ? 844 : 900, deviceScaleFactor: 1, mobile: width < 600 });
     await send('Page.navigate', { url: `${base}/?day#person=${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}` });
+    await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+    await run('location.hash = "#/chief"');
     await until('Chief\'s box', () => run("!!document.querySelector('.chat .dock textarea')"), 30_000);
     await run("document.querySelector('.chat .dock textarea').focus()");
     await send('Input.insertText', { text: words });
