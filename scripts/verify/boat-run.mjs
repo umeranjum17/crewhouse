@@ -1,20 +1,18 @@
 // A real boat.dev run for the cloud connect (docs/verification/where-cloud.md) on the one long-lived fleet key in
 // $BOAT_KEY_FILE (mode 600). With no file yet, it makes the one claim (the kit's claim(): a link and code a person
 // approves, for $BOAT_EMAIL) and saves the key there. The key is never printed, never revoked; each run deletes the
-// computer it made. A control port drives it:
-//   GET /list      the ids the key lists (no names, no key)
-//   GET /make      one small computer of this run's own (at most one), its id kept in <out>/mine.json
-//   GET /deliver   the key into the emulator's focused field (adb input text, then copy it into the app's paste box)
-//   GET /cost      usage() of this run's computer
-//   GET /cleanup   delete this run's computer and its named snapshots (kit remove), never another id
-//   GET /me        GET /me for this key (200 while it works)
-//   GET /stop      cleanup, exit (also on SIGTERM/SIGINT)
-//   BOAT_KEY_FILE=… [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <ctrl port> <adb server port> <serial> <out dir>
+// computer it made. Driver control uses <out>/ctrl.sock (mode 600):
+//   GET /list, /make, /deliver, /cost, /cleanup, /me, /stop
+//   /stop cleans up and exits (also on SIGTERM/SIGINT)
+//   curl --unix-socket <out>/ctrl.sock http://x/<action>
+//   BOAT_KEY_FILE=… [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <adb server port> <serial> <out dir>
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
-const [ctrlPort, adbPort, serial, out] = process.argv.slice(2);
+const [adbPort, serial, out] = process.argv.slice(2);
+const socket = join(out, 'ctrl.sock');
 const need = createRequire(`${process.cwd()}/package.json`);
 const { claim } = await import(need.resolve('@byokit/cloud'));
 const { provider, BOAT } = await import(new URL('web/src/cloud.ts', `file://${process.cwd()}/`).href);
@@ -64,9 +62,10 @@ const stop = async () => {
   key = ''; process.exit(0);
 };
 process.on('SIGTERM', stop); process.on('SIGINT', stop);
+try { unlinkSync(socket); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 http.createServer(async (q, r) => {
   const a = acts[q.url.slice(1)];
   if (q.url === '/stop') { r.end('stopping\n'); return void stop(); }
   try { const v = a ? await a() : { unknown: q.url }; log({ [q.url.slice(1)]: v }); r.end(JSON.stringify(v) + '\n'); }
   catch (e) { const v = { error: String(e?.code ?? ''), why: String(e?.message ?? e) }; log({ [q.url.slice(1)]: v }); r.end(JSON.stringify(v) + '\n'); }
-}).listen(Number(ctrlPort), '127.0.0.1', () => log({ ready: Number(ctrlPort) }));
+}).listen(socket, () => { chmodSync(socket, 0o600); log({ ready: socket }); });

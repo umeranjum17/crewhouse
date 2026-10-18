@@ -51,11 +51,12 @@ typed relay code ([chief-computer.md](chief-computer.md)) without `pm clear`, wh
 A real boat.dev run spends money. Every Boat run, from Crewhouse or BYOKit, uses the one long-lived fleet key in
 `~/firstmate/config/boat-api-key` (mode 600): never print it, never put it in a repo, log or evidence, and
 never revoke it. Each run deletes the computers it made. Start
-`BOAT_KEY_FILE=~/firstmate/config/boat-api-key node scripts/verify/boat-run.mjs <ctrl port> <adb port> <serial> <out dir>`
-from the repo root. It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its
-own computer (kit `remove`). Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`)
-and save the key there. Boat documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers
-403 to an agent key.
+`BOAT_KEY_FILE=~/firstmate/config/boat-api-key node scripts/verify/boat-run.mjs <adb port> <serial> <out dir>`
+from the repo root. All driver actions use the mode-600 Unix socket `<out>/ctrl.sock`, never a TCP port; for example:
+`curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/cost`, `/cleanup`, `/me`, `/stop`).
+It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its own computer (kit `remove`).
+Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`) and save the key there. Boat
+documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
 
 ## Evidence
 
