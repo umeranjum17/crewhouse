@@ -1,0 +1,49 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish after the dry-run (automatic on successful main CI)
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.20.0
+      - run: npm ci --no-audit --no-fund
+      - run: npm publish --dry-run
+      - name: Publish new package version
+        if: github.event_name == 'workflow_run' || inputs.publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          VERSIONS=$(npm view crewhouse versions --json)
+          if node -e 'process.exit(JSON.parse(process.argv[1]).includes(process.argv[2]) ? 0 : 1)' "$VERSIONS" "$VERSION"; then
+            echo "crewhouse@$VERSION is already published; nothing to do."
+            exit 0
+          fi
+          npm publish --provenance --access public

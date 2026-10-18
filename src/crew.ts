@@ -3,7 +3,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { CHIEF, type Config } from './config.ts';
+import { appDir, CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watcher } from './desktop.ts';
@@ -325,7 +325,7 @@ export class Crew {
    *  run on the real engine; the stand-in answers the list, all off, and says the rest needs it. */
   starterSkills() {
     const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] };
-    const { approved, purposes } = JSON.parse(readFileSync(join(import.meta.dirname, 'openclaw', 'starter-skills.json'), 'utf8'));
+    const { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
     return { live: !!runtime.starterSkills, purposes, starter: runtime.starterSkills?.() ?? approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
       version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
   }

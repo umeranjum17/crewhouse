@@ -82,7 +82,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
   const install = (id: string) => installing.get(id) ?? installing.set(id, new Promise<boolean>((resolve) => {
     db.event('tool.installing', null, { tool: id });
     // Its own process group: the stall kill reaches npm, pip and the download as well as the installer.
-    const child = spawn(process.execPath, [join(cfg.repoDir, 'src', 'tools.ts'), 'install', id], {
+    const child = spawn(process.execPath, [join(cfg.repoDir, 'dist', existsSync(join(cfg.repoDir, 'dist', 'tools.js')) ? 'tools.js' : '../src/tools.ts'), 'install', id], {
       // crewd's own folders, spelled out; none of the owner's desktop session (XDG_*, display) reaches the installers.
       env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(XDG_|WAYLAND_DISPLAY$|DISPLAY$|XAUTHORITY$)/.test(k))),
         CREWHOUSE_TOOLS_DIR: cfg.toolsDir, CREWHOUSE_STATE_DIR: cfg.stateDir, CREWHOUSE_CREW_DIR: cfg.crewDir }, detached: true, stdio: ['ignore', 'inherit', 'inherit'] }), pid = child.pid;
