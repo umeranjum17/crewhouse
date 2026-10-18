@@ -614,7 +614,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     const el = box.current;
     if (!el) return;
     // The newest open ask is new to this view on a thread open or when it just arrived: while it is off the top, land
-    // on it instead of the bottom, because the footer card (Add your phone) can push the ask that needs them out of
+    // on it instead of the bottom, because the cards below it (a sign-in, a stuck helper) can push the ask that needs them out of
     // sight. Landing stops at the person's own hand and at the first new line the thread takes; a thread they are
     // reading an older part of is pinned off and never moved.
     const newestAsk = cards.at(-1), askId = newestAsk ? `ask${newestAsk.id}` : '', card = askId ? el.querySelector<HTMLElement>(`#${askId}`) : null;
@@ -674,8 +674,13 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const last = lines.at(-1);
   // The newest answer reads in full, never folded; older long answers keep the 700-char fold behind More.
   const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
-  // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer.
   const answered = newestAnswer !== undefined || !!partial;
+  // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer, and never at
+  // the thread's foot: the thread holds its newest line, so a footer card filled a phone screen after every send and
+  // hid the echo, the live line and the reply above it.
+  const firstAnswer = id === 'chief' ? lines.find((l) => l.from === 'them' && l.text)?.id : undefined;
+  // A quick end goes unsaid only when its reply is in the thread to say it; a reply the thread drops leaves the end line.
+  const replied = !!ln?.task && (page?.messages ?? []).some((x: Json) => x.task_id === ln.task && x.author === 'bot' && lines.some((l) => l.id === x.id));
   // The New pill's tap: back to the newest line and pinned again — the same hand a send is.
   const jump = () => {
     pinned.current = true; touched.current = false;
@@ -743,20 +748,20 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
           const shown = start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`);
-          return <Fragment key={l.id}>{before}{l.id === mark.current && <div className="new-divider" role="separator"><span>New</span></div>}{shown ? null : wrap}</Fragment>;
+          return <Fragment key={l.id}>{before}{l.id === mark.current && <div className="new-divider" role="separator"><span>New</span></div>}{shown ? null : wrap}
+            {l.id === firstAnswer && <AddPhonePrompt accounts={accounts} tick={tick} />}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
-        {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
         {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
-        {id === 'chief' && answered && <AddPhonePrompt accounts={accounts} tick={tick} />}
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
         {newBelow && <button className="new-pill" onClick={jump} aria-label="Jump to the newest line">↓ New</button>}
       </div>
@@ -806,12 +811,12 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
  *  A job passed to a helper links to that helper's chat. */
 const TICK: Record<A.LiveTodo['state'], string> = { done: '✓', doing: '', todo: '○' };
 const QUIET_MS = 4000;
-function LiveRow({ ln, quiet, chipped }: { ln: A.LiveLine; quiet: boolean; chipped: boolean }) {
+function LiveRow({ ln, quiet, chipped, replied }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean }) {
   const link = ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>;
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
-  // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes.
-  if (ln.took !== undefined) return chipped || (ln.state === 'done' && ln.took < 1000 && !ln.helper) ? null : <div className={`live-end ${ln.state}`} role="status">
+  // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there.
+  if (ln.took !== undefined) return chipped || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{link}</div>;
   // One quiet line over the to-do: who, the state and the clock in plain type, then the helper's chat.
   return <div className={`line them live-line ${ln.state}`}>

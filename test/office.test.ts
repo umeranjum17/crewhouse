@@ -476,20 +476,20 @@ test('after sign-in with no phone paired, the chat offers Add your phone with it
 });
 
 // ch-ask-card-in-view: Add your phone at the foot of the thread used to push the open ask that needs the person
-// off the top, so the chat opened on the footer and the ask was never seen. On a phone the thread lands on the
-// newest open ask's own top; a thread whose ask already fits still lands at its newest line (thread-clear.test.ts).
-test('an open ask card is in view when Chief\'s chat opens, with Add your phone below it', { skip: !bin && 'no Chromium here' }, async () => {
+// off the top, so the chat opened on the footer and the ask was never seen. The card now waits under Chief's first
+// answer (ch-chat-silent-gap), so nothing sits below the newest open ask and the thread opens with it whole in view.
+test('an open ask card is in view when Chief\'s chat opens, with Add your phone above it', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await b.open('demo=nophone&day#/chief');
   await until('the ask and the phone offer', () => b.run("!!document.querySelector('[aria-label=\"Add your phone\"] .qr svg') && document.querySelectorAll('.chat .lines .card.ask').length > 1"), 30_000);
   const at = await b.run(`(() => { const el = document.querySelector('.chat .lines'), cards = [...el.querySelectorAll('.card.ask')];
-    const r = cards.at(-1).getBoundingClientRect(), box = el.getBoundingClientRect();
-    return { wide: el.scrollHeight > el.clientHeight + 1, top: Math.round(r.top - box.top), left: Math.round(el.scrollHeight - el.scrollTop - el.clientHeight) }; })()`);
+    const r = cards.at(-1).getBoundingClientRect(), box = el.getBoundingClientRect(), pair = el.querySelector('[aria-label="Add your phone"]').getBoundingClientRect();
+    return { wide: el.scrollHeight > el.clientHeight + 1, top: Math.round(r.top - box.top), bottom: Math.round(box.bottom - r.bottom), above: pair.bottom <= r.top }; })()`);
   assert.ok(at.wide, 'the thread is longer than its box');
-  assert.ok(at.top >= 0 && at.top < 8, `the newest open ask sits at the top of the thread (${at.top})`);
-  assert.ok(at.left > 8, `the thread lands on the ask, not the very bottom (${at.left} left below)`);
+  assert.ok(at.top >= 0 && at.bottom >= 0, `the newest open ask is whole in view (${at.top} from the top, ${at.bottom} from the foot)`);
+  assert.ok(at.above, 'Add your phone sits above the ask, never at the thread\'s foot');
 });
 
 test('live crew cards keep one status, Chief carries the ask, and the opening NEW divider after read', { skip: !bin && 'no Chromium here' }, async () => {
