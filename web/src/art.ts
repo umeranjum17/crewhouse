@@ -154,6 +154,7 @@ export const PALS = {
   cto: geo('square', '#FF9F43', TRAIT.prompt, { eyes: 'bar' }), // Terminal Tess: a prompt
   frame: geo('square', '#D946EF', TRAIT.crop), // Frame Fay: crop marks
   motion: geo('pill', '#0D9488', TRAIT.speed), // Motion Milo: speed lines
+  reverse: geo('hex', '#7C3AED', TRAIT.spark, { eyes: 'glasses' }), // Byte: a curious code detective
   prototype: geo('hex', '#E11D48', TRAIT.spark), // Spark Stella: a spark
   bunny: geo('pill', '#FF7AB8', TRAIT.bow),
   panda: geo('circle', '#C4B5FD', '', { shape: TRAIT.ears('#C4B5FD') + SHAPE.circle('#C4B5FD') }),

@@ -9,7 +9,7 @@ import { setup, settled, until } from './lab.ts';
 const NAMES: Record<string, string> = {
   scout: 'Research Rae', scribe: 'Writer Will', reel: 'Video Vic', support: 'Support Sam',
   tracer: 'Finder Finn', xgrowth: 'Growth Gus', cto: 'Terminal Tess', helper: 'Helper Hal',
-  frame: 'Frame Fay', motion: 'Motion Milo', prototype: 'Spark Stella',
+  frame: 'Frame Fay', motion: 'Motion Milo', prototype: 'Spark Stella', reverse: 'Byte',
 };
 const template = (id: string) => JSON.parse(readFileSync(join(import.meta.dirname, '..', 'templates', id, 'bot.json'), 'utf8'));
 
@@ -25,6 +25,7 @@ test('recruits show the picked names, and a made-up hire follows the same rule o
   for (const [id, display] of Object.entries(NAMES)) if (id !== 'helper') crew.recruit(id, display, 'person');
   const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); // bot ids come from display names
   for (const display of Object.values(NAMES)) if (display !== 'Helper Hal') assert.equal(crew.bot(slug(display))!.display, display, `${display} shows`);
+  assert.match(readFileSync(join(crew['cfg'].crewDir, 'bots', 'byte', 'skills', 'reverse-engineer', 'SKILL.md'), 'utf8'), /Read-only source inspection only/);
   const r = (await crew.post('chief', 'I need someone to sort out my invoices'))!;
   assert.ok(r?.task, 'a task runs');
   await until('the take-on card', () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'"));

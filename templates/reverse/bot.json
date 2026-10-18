@@ -1,0 +1,9 @@
+{
+  "display": "Byte",
+  "role": "Explains how your own app or code works",
+  "models": ["chatgpt"],
+  "color": "#7C3AED",
+  "apps": [],
+  "tools": ["crew", "files", "web", "search-files"],
+  "skills": ["reverse-engineer"]
+}
