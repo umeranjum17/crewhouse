@@ -858,6 +858,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
     {!!c.hire.wont_do.length && <><div className="hire-sect">Won't do</div>{c.hire.wont_do.map((l, i) => <div key={`n${i}`} className="hire-li no">{l}</div>)}</>}
     {!!c.hire.first_step && <><div className="hire-sect">First step for you</div><div className="hire-first"><b className="hire-n">1</b><span>{c.hire.first_step}</span></div></>}
     {!!c.hire.first_job && <><div className="hire-sect">First job</div><div className="hire-li">{c.hire.first_job}</div></>}
+    {c.lines?.filter((line) => line.startsWith('Can use: ')).map((line, i) => <div key={`app${i}`} className="hire-li">{line}</div>)}
     <div className="hire-foot">Nothing changes until you say yes.</div>
   </div>;
   if (c.lines) return <div className="ev">{c.lines.map((l, i) => <div key={i} className={i && c.kind === 'routine' ? 'ev-quiet' : undefined}>{l}</div>)}</div>;
