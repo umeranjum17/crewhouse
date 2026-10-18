@@ -863,15 +863,14 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
       for await (const step of setUpCloud(boatOn(held.current), cloudStore, id, await phoneKey())) setSteps((x) => [...x, step]);
     } catch (e) { setSetupError(said(e)); }
   };
-  const p = progress(steps), ready = steps.at(-1)?.step === 'ready';
-  if (setupError && p.failed < 0) p.failed = 2;
+  const p = progress(steps, setupError), ready = steps.at(-1)?.step === 'ready';
   const box = (lead: boolean, body: ReactNode) => <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: lead ? 2 : 1, borderColor: lead ? t.go : t.line }]}>{body}</View>;
   const pill = (w: string) => <T style={[s.label2, { alignSelf: 'flex-start', color: t.go, backgroundColor: t.softAccent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{w}</T>;
   const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
     <T style={[s.small, s.b]}>{c.key.label}</T>
-    <TextInput style={[s.input, { minHeight: 48, color: t.ink, borderColor: t.line2, backgroundColor: t.bg }]} value="" editable={!busy} secureTextEntry autoCapitalize="none" autoCorrect={false}
-      placeholder={busy ? c.key.checking : c.key.paste} placeholderTextColor={t.mute} accessibilityLabel={c.key.label}
-      onChangeText={(v) => { if (v.trim().length >= 16) void check(v); }} /* paste-only: the box never holds the key, and a few typed letters are never sent */ />
+    <Pressable onPress={() => void Clipboard.getString().then(check)} disabled={busy} accessibilityRole="button" accessibilityLabel={c.key.paste}
+      style={[s.input, { minHeight: 48, justifyContent: 'center', borderColor: t.line2, backgroundColor: t.bg }]} /* paste-only: nothing typed, the key never on screen */>
+      <T tone="mute">{busy ? c.key.checking : c.key.paste}</T></Pressable>
     {err ? <T tone="pinkInk">{err}</T> : <T tone="mute" style={s.small}>{c.key.after}</T>}
     <Pressable onPress={() => setWay(way === 9 ? -1 : 9)} accessibilityRole="button" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.key.make}</T></Pressable>
     {way === 9 && <><T tone="ink2" style={s.small}>{c.key.how}</T><Btn label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} /></>}
@@ -887,12 +886,12 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
     <Btn big disabled label={c.make.create} onPress={() => {}} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
   const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}</> : <>
     {pill(c.steps.pill)}<T style={s.title}>{c.steps.title}</T>
-    <View style={[s.row, { justifyContent: 'space-between' }]}><T tone="mute" style={[s.small, { flex: 1 }]}>{c.pick.name(listed.findIndex((r) => r.id === picked), listed.length)}</T><T style={[s.small, s.b]}>{p.failed < 0 ? c.steps.count(p.done) : c.steps.help}</T></View>
+    <View style={[s.row, { justifyContent: 'space-between' }]}><T tone="mute" style={[s.small, { flex: 1 }]}>{c.pick.name(listed.findIndex((r) => r.id === picked), listed.length)}</T><T style={[s.small, s.b]}>{p.why ? c.steps.help : c.steps.count(p.done)}</T></View>
     {c.steps.rows.map(([title, sub], i) => <View key={title} style={[s.row, { alignItems: 'flex-start', opacity: i > p.done && i !== p.failed ? 0.6 : 1 }]}>
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
-    {p.failed < 0 && !setupError ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{setupError || p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
-      {(setupError || p.retry) && <Btn go big label={c.steps.retry} onPress={() => void run(picked)} />}</View>}</>;
+    {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
+      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked)} />}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>

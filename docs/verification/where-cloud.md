@@ -14,11 +14,12 @@ tarball packed from BYOKit main): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone,
 ## What it proves
 
 - Phone, key first (mocks `cloud-key`, `cloud-pick`, `cloud-make`, `cloud-steps`, `cloud-other`): In my cloud opens
-  the boat.dev key card. The box is paste-only: typed letters are never sent, and the box never shows the key. A
+  the boat.dev key card. The box is a Paste key button: it reads the clipboard, nothing can be typed, and the key never shows. A
   refused key says "boat.dev didn't accept your key…" and nothing is kept. An accepted key lists the account's
   computers ("I didn't find a computer…" when there are none). Make a new computer shows the cost line, and its
   Create button stays off. Use this computer walks the kit's setup steps on the five-row progress list: a failure
-  marks its row "!" with Chief's words and Try again, and Try again resumes there. Ready says Chief knows this phone.
+  marks its row "!" with Chief's words and Try again, and Try again resumes there. A setup exception marks the row
+  setup was on (no row before the kit's first step), with the error and Try again. Ready says Chief knows this phone.
   Other ways lists the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
   hardware back, return one step. A kept key skips the paste on the next visit.
 - Web: On my computer opens the Pair sheet ([pwa-pair.md](pwa-pair.md)); the cloud and phone rows open "Use the
@@ -41,9 +42,9 @@ the flagged APK with `EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:<port>/api
 Changing an `EXPO_PUBLIC_*` value needs Metro's cache (`$TMPDIR/metro-cache`) cleared, or the bundle keeps the old
 value: grep `assets/index.android.bundle` in the APK for the address before you use it.
 
-The emulator has no shell clipboard, and the key box takes only a paste. So type the key into the pairing-code
+The emulator has no shell clipboard, and the key box only reads it. So type the key into the pairing-code
 field (On my computer › Type a code), then `input keycombination 113 29` (select all), `113 31` (copy) and
-`keyevent 67` (clear the field). Then paste it into the key box with `113 50`. Never dump the screen
+`keyevent 67` (clear the field). Then tap Paste key. Never dump the screen
 (`phone-ui.mjs texts`) while that field holds a real key. To show Chief's computer with the key row, pair by the
 typed relay code ([chief-computer.md](chief-computer.md)) without `pm clear`, which would drop the kept key.
 

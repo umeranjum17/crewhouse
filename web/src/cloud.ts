@@ -43,9 +43,11 @@ export function connect(p: Provider, store: MachineStore, id: string, phoneKey: 
  *  has no step of its own for the secure address (scout gap K-PUBLIC), so its `pairing` finishes the last two. */
 const DONE: Partial<Record<SetupStep['step'], number>> = { 'checking-access': 1, inspecting: 2, installing: 3, pairing: 5, ready: 5 };
 const AT = { 'checking-access': 0, listing: 1, inspecting: 1, installing: 2, pairing: 3 };
-export const progress = (steps: SetupStep[]) => {
+export const progress = (steps: SetupStep[], thrown = '') => {
   const last = steps.at(-1);
   const done = Math.max(0, ...steps.map((s) => DONE[s.step] ?? 0));
   // A step fails only after every row before it passed: adopt() installs before the kit says inspecting.
-  return last?.step === 'failed' ? { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: words(last.cause, vars), retry: last.retryable } : { done, failed: -1, why: '', retry: false };
+  if (last?.step === 'failed') return { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: words(last.cause, vars), retry: last.retryable };
+  // A throw, not a kit step: the kit names each step once it finishes, so setup was on the next row (none before the first).
+  return thrown ? { done, failed: last && done < 5 ? done : -1, why: thrown, retry: true } : { done, failed: -1, why: '', retry: false };
 };
