@@ -41,7 +41,6 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
   return { parts: blocks.length };
 }
 
-const HEADING = /^(title|heading)(\d)/i;
 
 /** One plain part of the preview: a heading, a paragraph, a bullet, or a table. */
 export type Part = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
@@ -84,7 +83,7 @@ export async function readDocument(file: string) {
     if (el.name !== 'w:p') return;
     const style = (el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements?.find((e: any) => e.name === 'w:pStyle')?.attributes?.['w:val'] ?? '', list = JSON.stringify((el.elements ?? []).find((e: any) => e.name === 'w:pPr')?.elements ?? []).includes('"w:numPr"'), { text, bold } = runs(el);
     if (!text) return;
-    if (HEADING.test(style)) push({ kind: 'heading', text });
+    if (/^(title|heading)(\d)/i.test(style)) push({ kind: 'heading', text });
     else if (list) push({ kind: 'li', text });
     else push({ kind: 'p', text, ...(bold ? { bold: true } : {}) });
   });

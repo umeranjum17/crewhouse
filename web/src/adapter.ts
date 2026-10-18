@@ -1584,12 +1584,16 @@ export function trayNotes(state: Json, lines: Line[]): Line[] {
 /** What a helper can do and the one thing it never does unasked, from crewd's own grants: the apps the person
  *  connected, the sites they signed it in to and its ready tools; never the model's words. Paying or sending always asks
  *  (policy.ts: a spend has no standing answer, a press on a signed-in site asks every time, no helper sends mail). */
-const CAN_APPS: Record<string, string> = { drive: 'Drive', calendar: 'Calendar', gmail: 'Gmail', gmailwrite: 'Gmail', notion: 'Notion', canva: 'Canva' };
 const CAN_TOOLS: [string, string][] = [['web', 'read the web'], ['browser', 'use its own browser'], ['files', 'work in its own folder']];
+/** The apps a helper's job grants, by crewd's names, and whether each is connected. */
+export function appsOf(state: Json, id: string): { id: string; name: string; connected: boolean }[] {
+  const b = (state.bots ?? []).find((x: Json) => x.id === id), on = (state.connections ?? []) as string[];
+  return ((b?.apps ?? []) as { id: string; name: string }[]).map((a) => ({ ...a, connected: on.includes(a.id) }));
+}
 export function limitOf(state: Json, id: string): string {
   const b = (state.bots ?? []).find((x: Json) => x.id === id);
   if (!b) return '';
-  const apps = [...new Set(((state.connections ?? []) as string[]).map((a) => CAN_APPS[a]).filter(Boolean))];
+  const apps = [...new Set(appsOf(state, id).filter((a) => a.connected).map((a) => a.name))];
   const can = [apps.length ? `use your ${apps.join(' and ')}` : '', ...((b.signedIn ?? []) as string[]).slice(0, 1).map((h) => `use ${h} as you`),
     ...CAN_TOOLS.filter(([t]) => (b.can ?? []).includes(t)).map(([, w]) => w)].filter(Boolean).slice(0, 2);
   return `${b.display} ${can.length ? `can ${can.join(' and ')}, but ` : ''}can't pay or send anything without asking you.`;

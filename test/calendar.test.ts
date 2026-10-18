@@ -3,7 +3,8 @@ import { signInApp } from './connect-fixture.ts';
 // a move that keeps the length, and the gate: looking is free, adding and moving ask, cancelling asks as a delete.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, settled, task, until, grantApps } from './lab.ts';
+import { setup, settled, task, until, grantApps, lastSaid } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
 
 const { CALENDAR, parseWhen, runCalendar, whenOf } = await import('../src/calendar.ts');
 const { effectOf } = await import('../src/policy.ts');
@@ -113,5 +114,42 @@ test('a helper uses the connected calendar through crewd: no Google MCP, the tok
   assert.equal(task(db, u).state, 'unsure', 'it added an event and never said it saw it there');
   assert.match(task(db, u).result, /on your Google Calendar/);
   assert.ok(asked.length > 0 && asked.every((a) => a.endsWith(' Bearer tok')), 'crewd adds the token to every call');
+  done();
+});
+
+test('Chief makes a helper for a calendar job: its card names calendar, the yes grants only that, it reaches calendar and is refused Gmail in plain words', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('sir');
+  await signInApp(crew.connections, 'calendar');
+  await signInApp(crew.connections, 'gmail');
+  store.clear(); asked.length = 0;
+  const made = crew.post('chief', 'keep my calendar tidy [tool crew_create {"name":"Calendar Cleo","role":"Keeps your calendar tidy","job":{"does":"Keeps your Google Calendar tidy: spots clashes and gaps in your week.","aim":"Your week has no clashes and no surprises.","gets":"Days and events you point it at.","how":"Reads your calendar, lists clashes and gaps, and offers to move or add events.","great":"A clean week; for example, one clash found and flagged first."},"personality":"You are Calendar Cleo. Tidy and calm.","first":"Tidy my week","apps":["calendar"]}]') as Promise<{ task: number }>;
+  await settled(db, (await made).task);
+  const card = db.get("SELECT id, detail FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'")!;
+  assert.match(card.detail, /Can use: Google Calendar/, 'the card names the one app the job needs');
+  await crew.answer(card.id, { answer: 'allow' });
+  assert.deepEqual(A.appsOf(crew.snapshot(), 'calendar-cleo'), [{ id: 'calendar', name: 'Google Calendar', connected: true }], 'the yes grants calendar and nothing else');
+  const job = { does: 'Keeps your Google Calendar tidy.', aim: 'Your week has no clashes.', gets: 'Days you point it at.', how: 'Reads your calendar.', great: 'A clean week.' };
+  await settled(db, (await crew.post('chief', `give Cleo this job [tool crew_create ${JSON.stringify({ bot: 'calendar-cleo', role: 'Keeps your calendar tidy', job, apps: ['gmail'] })}]`) as { task: number }).task);
+  assert.match(lastSaid(db, 'chief'), /keeps the apps it has/, 'adapting refuses an apps list rather than dropping it');
+  assert.equal(db.get("SELECT id FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'"), undefined);
+  await settled(db, (await crew.post('chief', `give Cleo this job [tool crew_create ${JSON.stringify({ bot: 'calendar-cleo', role: 'Keeps your calendar tidy', job })}]`) as { task: number }).task);
+  const adapt = db.get("SELECT id, detail FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'")!;
+  assert.doesNotMatch(adapt.detail, /Can use/, 'adapting a helper names no grant change');
+  await crew.answer(adapt.id, { answer: 'allow' });
+  assert.deepEqual(A.appsOf(crew.snapshot(), 'calendar-cleo').map((a) => a.id), ['calendar'], 'adapting keeps the helper\'s apps');
+  await settled(db, (await crew.post('chief', `send [tool crew_create ${JSON.stringify({ name: 'Send Sam', role: 'Sends mail', job, apps: ['gmailsend'] })}]`) as { task: number }).task);
+  assert.match(lastSaid(db, 'chief'), /apps must be a list of drive, calendar, gmail, notion, canva/, 'the send connection is never granted to a helper');
+  await settled(db, (await crew.post('chief', `send [tool crew_create ${JSON.stringify({ name: 'Draft Dan', role: 'Drafts mail', job, apps: ['gmailwrite'] })}]`) as { task: number }).task);
+  assert.match(lastSaid(db, 'chief'), /apps must be a list of drive, calendar, gmail, notion, canva/, 'drafts and labels have no tool of their own, so they are never granted');
+  // It reaches its one granted app.
+  const look = crew.assign('calendar-cleo', 'look [tool calendar {"args":["week"]}]', 'chief').task;
+  await settled(db, look);
+  assert.match(task(db, look).result, /total: 0/);
+  // Gmail is connected, but this job does not name it: refused, and nothing reaches Gmail.
+  const mail = crew.assign('calendar-cleo', 'read [tool crew_app {"tool":"mail","input":{"args":["search","school"]}}]', 'chief').task;
+  await settled(db, mail);
+  assert.match(task(db, mail).result, /Gmail isn't part of this job, so you can't use it\. Tell the person that\./);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", mail)!.n, 0);
   done();
 });

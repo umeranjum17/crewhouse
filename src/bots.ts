@@ -35,7 +35,7 @@ export function botConfig(cfg: Config, id: string): BotConfig {
   return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : { tools: [] };
 }
 
-function patchConfig(cfg: Config, id: string, patch: Partial<BotConfig>) {
+export function patchConfig(cfg: Config, id: string, patch: Partial<BotConfig>) {
   writeFileSync(join(botDir(cfg, id), 'bot.json'), JSON.stringify({ ...botConfig(cfg, id), ...patch }, null, 2) + '\n');
 }
 

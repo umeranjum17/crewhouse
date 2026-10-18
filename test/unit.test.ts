@@ -1459,6 +1459,10 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.match(lastSaid(db, 'chief')!, /job.*object.*does.*aim.*gets.*how.*great/);
   assert.equal(crew.snapshot().asks.length, 0);
   assert.equal(crew.bot('property-pip'), undefined);
+  const { task: badApps } = (await crew.post('chief', `please ${create({ ...pip, apps: 'calendar' })}`))!;
+  await settled(db, badApps);
+  assert.match(lastSaid(db, 'chief')!, /apps must be a list of drive, calendar, gmail, notion, canva/);
+  assert.equal(crew.snapshot().asks.length, 0);
   const { task: t } = (await crew.post('chief', `please ${create(pip)}`))!;
   await settled(db, t);
   const card = () => db.get("SELECT * FROM asks WHERE bot = 'chief' AND kind = 'propose' AND state = 'open'");
