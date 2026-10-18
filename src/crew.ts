@@ -40,7 +40,7 @@ export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|inst
   /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
-const TASK_TIMEOUT_MS = 60 * 60_000, QUIET_NUDGE_MS = 4 * 60 * 60_000, QUIET_STOP_MS = 24 * 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // quiet work gets its own 24-hour unsure boundary
+const TASK_TIMEOUT_MS = 60 * 60_000, QUIET_NUDGE_MS = 4 * 60 * 60_000, QUIET_STOP_MS = 24 * 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || QUIET_STOP_MS); // quiet work gets its own 24-hour unsure boundary
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
 /** OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed. */
