@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@byokit/accounts": "0.27.0",
-    "@byokit/cloud": "file:vendor/byokit-cloud-0.1.0.tgz"
+    "@byokit/cloud": "file:vendor/byokit-cloud-0.1.0.tgz",
     "@byokit/connect": "0.5.0",
     "@byokit/decide": "0.6.4",
     "@byokit/discover": "0.8.2",
