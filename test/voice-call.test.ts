@@ -136,11 +136,12 @@ test('a helper chat listens, sends, speaks that helper\'s reply and listens agai
   await until('Talk in the helper box', () => run("!!document.querySelector('.chat .dock button.send.talk')"), 30_000);
   assert.equal(await run("document.querySelector('.send.talk').title"), 'Talk with Scribe');
   await run("document.querySelector('.send.talk').click()");
-  await until('helper reply spoken and microphone reopened', async () => (await turns()).filter((t) => t === 'listen').length === 2, 30_000);
+  await until('helper reply starts speaking', () => run("document.querySelector('.call')?.classList.contains('speaking')"), 30_000);
   assert.equal(await run("document.querySelector('.call').getAttribute('aria-label')"), 'Call with Scribe');
   assert.ok((await turns()).some((t) => t.startsWith('say Hi.')));
   await run("document.querySelector('.call-stop').click()");
-  await until('helper call stopped', () => run("!document.querySelector('.call')"), 10_000);
+  await until('helper call and speech stop', () => run("!document.querySelector('.call')"), 10_000);
+  assert.equal((await turns()).filter((t) => t === 'listen').length, 1, 'Stop during speech never reopens the microphone');
 });
 
 test('with no recognizer of its own, the browser\'s online one hears, and its line shows before the call listens', { skip: !bin && 'no Chromium here' }, async () => {
