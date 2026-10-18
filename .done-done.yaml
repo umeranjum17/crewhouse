@@ -24,6 +24,8 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/slides-deck.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   unlock-card:
     command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  chief-soul:
+    command: 'timeout -k 10 600 bash scripts/verify/chief-soul.sh "$DONE_DONE_EVIDENCE_ROOT"'
   ask-in-view:
     command: 'timeout -k 10 600 bash scripts/verify/ask-in-view.sh "$DONE_DONE_EVIDENCE_ROOT"'
   signin-card:
