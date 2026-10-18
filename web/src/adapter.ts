@@ -2013,7 +2013,7 @@ export type OfficeMember = { id: string; name: string; kind: Kind; mood: Mood; r
  *  and Needs you. `needs` is Needs you itself; `counts.needs` is what waits on the person's yes in Chief's thread (Needs
  *  you's rows and each working helper gone quiet: its Stop card), `working` the helpers whose seat is working, `done` what landed in the tray
  *  today. `lead` is Chief's own seat, from his own job alone. */
-export type OfficeView = { chief: ChiefView; lead: Seat; crew: OfficeMember[]; done: Thing[]; needs: Card[];
+export type OfficeView = { chief: ChiefView; lead: Seat; crew: OfficeMember[]; done: Thing[]; needs: Card[]; talking?: string[];
   counts: { needs: number; working: number; done: number } };
 
 /** Where a helper is, in one word the whole office agrees on (helper()): a row of theirs in Needs you, a job stopped for
