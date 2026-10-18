@@ -86,4 +86,39 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
   await cold();
   await until('Home', () => run("location.hash === '#/'"));
   assert.equal(await run("!!document.querySelector('.page.mute')"), false, 'no error text is shown');
+
+  // J04: a cold approval link belongs to Chief. Close is not an answer, including after a reload.
+  for (const w of [390, 1280]) for (const theme of ['day', 'night']) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 1, mobile: w === 390 });
+    await cold(`${base}/?demo&${theme}#/ask/11`);
+    await until('the order review', () => run("!!document.querySelector('.sheet.approve')"));
+    assert.equal(await run("!!document.querySelector('.home-chat')"), true, 'a direct ask opens over Chief, not Home');
+    await until('the sheet entrance to finish', () => run("document.querySelector('.sheet.approve').getAnimations().every(a => a.playState === 'finished')"));
+    const r = await run("(() => { const r=document.querySelector('.sheet.approve').getBoundingClientRect(); return {left:r.left,right:r.right,bottom:r.bottom}; })()");
+    assert.ok(r.left >= 0 && r.right <= w && r.bottom <= 845, `review stays in the ${w}px viewport: ${JSON.stringify(r)}`);
+    assert.equal(await run('document.documentElement.scrollWidth > innerWidth'), false, 'no horizontal scroll');
+    const p = await run("(() => { const r=document.querySelector('.approve-close').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()");
+    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, ...p, button: 'left', clickCount: 1 });
+    await until('Chief after closing', () => run("location.hash === '#/chief' && !document.querySelector('.sheet.approve')"));
+    await run("location.hash = '#/ask/11'");
+    await until('the order still waits for an answer', () => run("!!document.querySelector('.sheet.approve')"));
+    const no = await run("(() => { const r=document.querySelector('.approve-btns button:not(.go)').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()");
+    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, ...no, button: 'left', clickCount: 1 });
+    await until('the declined-order receipt', () => run("[...document.querySelectorAll('.answered')].some(e=>e.textContent.includes('Not now'))"));
+    assert.doesNotMatch(await run("[...document.querySelectorAll('.answered')].map(e=>e.textContent).join(' ')"), /Placed the order/, 'a decline never claims the order was placed');
+  }
+  await cold(`${base}/?demo=chase&night#/chief`);
+  await until('the draft subject', () => run("!!document.querySelector('.draft-ask .ev-subject')"));
+  assert.equal(await run("document.querySelector('.draft-ask img').alt"), 'Scout', 'Chief’s thread keeps the draft author’s face');
+  const contrast = await run(`(() => { const e=document.querySelector('.draft-ask .ev-subject');
+    const luminance=s=>{const c=s.match(/[\\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
+    const a=luminance(getComputedStyle(e).color),b=luminance(getComputedStyle(e.closest('.ev')).backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
+  assert.ok(contrast >= 4.5, `the draft subject is readable on its paper in night mode: ${contrast}`);
+  await run("location.hash = '#/'");
+  await until('the same draft author on Home', () => run("!!document.querySelector('.st-asks img[alt=Scout]')"));
+  await cold(`${base}/?demo=live#/chief`);
+  await until('Chief’s live progress to animate', () => run("document.querySelector('.live-todos .doing .tick')?.getAnimations().length > 0"));
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  await until('reduced motion to stop the live progress', () => run('document.getAnimations().length === 0'));
+  assert.equal(await run("matchMedia('(prefers-reduced-motion: reduce)').matches"), true);
 });

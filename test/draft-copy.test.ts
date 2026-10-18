@@ -115,14 +115,14 @@ test('long terminal arguments remain whole and approval controls fit the sheet',
       const layout = await b.run(`(() => {
         const sheet = document.querySelector('.sheet'), heading = sheet.querySelector('.ask-words'), body = sheet.querySelector('.ev-body');
         const r = sheet.getBoundingClientRect();
-        const controls = [...sheet.querySelectorAll('.approve-btns button')];
+        const controls = [...sheet.querySelectorAll('.approve-btns button, .approve-remind')];
         return { heading: heading.textContent, body: body.textContent, width: sheet.clientWidth, scroll: sheet.scrollWidth,
           fits: [heading, body, ...controls].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right && e.scrollWidth <= e.clientWidth + 1; }),
           labels: controls.map((b) => b.textContent) };
       })()`);
       assert.equal(layout.heading, effect.words);
       assert.equal(layout.body, JSON.stringify(args));
-      assert.deepEqual(layout.labels, ['Remind me tomorrow', 'Not now', 'Yes, go ahead']);
+      assert.deepEqual(layout.labels, ['Yes, go ahead', 'Not now', 'Remind me tomorrow']);
       assert.ok(layout.fits && layout.scroll <= layout.width + 1, `${theme} ${width}px expanded=${expanded}: ${JSON.stringify(layout)}`);
     }
   }
