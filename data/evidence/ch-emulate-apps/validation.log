@@ -1,0 +1,15 @@
+npm notice run crewhouse@0.1.0 check
+npm notice run tsc
+[2026-10-18T16:04:46.642Z] crewd engine ready
+[2026-10-18T16:04:47.311Z] crewd first words
+✔ Gmail and Calendar on an emulated Google: connect, read, draft and file with one card each, nothing sent (1381.587616ms)
+ℹ emulator state: {"drafts":1,"draftThread":"19a0c0ffee000001","draftTo":"ada@example.com","draftSnippet":"Yes, Friday still works. See you then.","label":"Plans","threadLabels":["INBOX","UNREAD","Label_6ae0db8574f61406"],"sent":0}
+✔ src stays within its line budget (1.986272ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1764.072818
