@@ -282,6 +282,32 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
   }
 });
 
+test('the side menu never stacks rows: the crew list scrolls inside it, Settings and the person stay whole and tappable', { skip: !bin && 'no Chromium here' }, async () => {
+  // With a long crew on a short screen the person at the foot once sat over Settings; the crew list now takes the
+  // menu's free height and scrolls, so every row keeps its own box. Crew rows count only where the list shows them.
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  for (const [w, h] of [[1280, 832], [1280, 720]] as const) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    for (const demo of ['crew5', 'crew12', 'crew30']) {
+      await b.open(`demo=${demo}&day#/`);
+      await until('the side menu', () => b.run("document.querySelectorAll('.side-row').length > 0"), 30_000);
+      const r = await b.run(`(() => {
+        const crew = document.querySelector('.side-crew').getBoundingClientRect();
+        const boxes = [...document.querySelectorAll('.side .brand, .side-nav, .side-row, .side-label, .side-me')].map((e) => {
+          const r = e.getBoundingClientRect(), inCrew = e.closest('.side-crew');
+          return { t: e.textContent.trim().slice(0, 24), top: inCrew ? Math.max(r.top, crew.top) : r.top, bottom: inCrew ? Math.min(r.bottom, crew.bottom) : r.bottom, left: r.left, right: r.right };
+        }).filter((b) => b.bottom - b.top > 1);
+        const overlap = [];
+        boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => { if (Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1 && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1) overlap.push(a.t + ' / ' + b.t); }));
+        const hit = (sel) => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return r.bottom <= innerHeight && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('a') === e; };
+        return { overlap, settings: hit('.side-more a[href="#/settings"]'), me: hit('.side-me') };
+      })()`);
+      assert.deepEqual(r, { overlap: [], settings: true, me: true }, `${demo} at ${w}x${h}: menu rows stay apart, Settings and the person whole and tappable`);
+    }
+  }
+});
+
 test('your crew page reads the rail status: every tile matches its rail row', { skip: !bin && 'no Chromium here' }, async () => {
   // The Your crew tiles' status word is the rail's own (A.statusOf). This fails on a second status rule (the reported
   // bug: Reel and Scout showed their job while the rail said Waiting, and Scribe said "Waiting for Chief" while the

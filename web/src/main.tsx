@@ -2106,7 +2106,6 @@ function App() {
             <Icon name={i} size={22} /><span className="grow">{l}</span>
             {k === 'jobs' && asks > 0 && <span className="side-count">{asks}</span>}</a>)}</nav>
           <SideCrew live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
-          <div className="grow" />
           <nav className="side-more" aria-label="More">{MORE.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}><Icon name={i} size={22} />{l}</a>)}</nav>
           <a href="#/settings" className="side-me" aria-label={`Settings${me ? `, ${me}` : ''}`}>
             <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{(A.meter(ctx.state) || quiet) && <span className="clamp1">{A.meter(ctx.state) || quiet}</span>}</span>
