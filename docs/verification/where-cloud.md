@@ -47,10 +47,14 @@ field (On my computer › Type a code), then `input keycombination 113 29` (sele
 (`phone-ui.mjs texts`) while that field holds a real key. To show Chief's computer with the key row, pair by the
 typed relay code ([chief-computer.md](chief-computer.md)) without `pm clear`, which would drop the kept key.
 
-A real boat.dev run spends money and needs the person's sign-in: the kit's `claim()` (a code someone approves at
-boat.dev). It needs a lab driver that keeps the key in memory and deletes any computer it made (kit `remove`).
-Boat refuses a key revoking itself (403: it needs a dashboard session), so the person revokes it at boat.dev.
-Confirm the revoke with a 401 on `GET /me`.
+A real boat.dev run spends money. Every Boat run, from Crewhouse or BYOKit, uses the one long-lived fleet key in
+`~/firstmate/config/boat-api-key` (mode 600): never print it, never put it in a repo, log or evidence, and
+never revoke it. Each run deletes the computers it made. Start
+`BOAT_KEY_FILE=~/firstmate/config/boat-api-key node scripts/verify/boat-run.mjs <ctrl port> <adb port> <serial> <out dir>`
+from the repo root. It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its
+own computer (kit `remove`). Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`)
+and save the key there. Boat documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers
+403 to an agent key.
 
 ## Evidence
 
