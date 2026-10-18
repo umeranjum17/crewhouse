@@ -8,7 +8,7 @@
 //   BOAT_KEY_FILE=… [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <adb server port> <serial> <out dir>
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 const [adbPort, serial, out] = process.argv.slice(2);
@@ -63,9 +63,11 @@ const stop = async () => {
 };
 process.on('SIGTERM', stop); process.on('SIGINT', stop);
 try { unlinkSync(socket); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-http.createServer(async (q, r) => {
+const server = http.createServer(async (q, r) => {
   const a = acts[q.url.slice(1)];
   if (q.url === '/stop') { r.end('stopping\n'); return void stop(); }
   try { const v = a ? await a() : { unknown: q.url }; log({ [q.url.slice(1)]: v }); r.end(JSON.stringify(v) + '\n'); }
   catch (e) { const v = { error: String(e?.code ?? ''), why: String(e?.message ?? e) }; log({ [q.url.slice(1)]: v }); r.end(JSON.stringify(v) + '\n'); }
-}).listen(socket, () => { chmodSync(socket, 0o600); log({ ready: socket }); });
+});
+const mask = process.umask(0o177);
+server.listen(socket, () => { process.umask(mask); log({ ready: socket }); });
