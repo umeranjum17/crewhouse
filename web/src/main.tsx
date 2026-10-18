@@ -240,7 +240,7 @@ function ChiefHead({ ctx }: { ctx: Ctx }) {
  *  thread follows is its live card, never repeated here. */
 function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; refresh: () => void }) {
   const ask = live.needs.find((c) => c.helper !== 'chief'); // Needs you's own order; Chief's own asks already sit inline in his thread beside it, never twice on one screen
-  const who = ask ? A.crew(state).find((h) => h.id === ask.helper) : undefined;
+  const who = ask ? A.crew(state).find((h) => h.id === (ask.by ?? ask.helper)) : undefined;
   const crew = A.crew(state), today = A.alsoToday(state);
   return <>
     {ask && <section className="home-section desk-ask" aria-label="Needs you">
@@ -368,7 +368,7 @@ function TodayRow({ c, live, job, held }: { c: A.OfficeMember; live: A.OfficeVie
 /** One of Chief's asks in the computer's side column (Stack J02): who, what he asks and why in one line, then the way on.
  *  Home commits nothing: the yes opens the review sheet, where it is said for real; Not now answers no. */
 function HomeAsk({ c, state, onDone }: { c: A.Card; state: Json; onDone: () => void }) {
-  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === c.helper) ?? 'chief';
+  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === (c.by ?? c.helper)) ?? 'chief';
   const yes = c.choices[0], deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   const line = c.hire ? [c.hire.role, c.hire.first_job && `First job: ${c.hire.first_job}`, 'Nothing changes until you say yes'].filter(Boolean).join('. ') + '.'
     : c.kind === 'spend' ? `${c.question ?? c.words} Anything that costs money asks every time.` : c.question ?? c.words;
@@ -382,7 +382,7 @@ function HomeAsk({ c, state, onDone }: { c: A.Card; state: Json; onDone: () => v
 
 /** One of Chief's asks as a Today row on a phone: what he asks, in pink, under "Needs you"; a tap opens it. */
 function AskRow({ c, state }: { c: A.Card; state: Json }) {
-  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === c.helper) ?? 'chief';
+  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === (c.by ?? c.helper)) ?? 'chief';
   const of = c.hire?.first_job ? ` · first job: ${c.hire.first_job}` : c.helper !== 'chief' && typeof who === 'object' ? ` · for ${who.name}` : '';
   return <a className="st-card st-ask" href={askHref(c)} aria-label={`${c.head}: ${A.WORDS.needs}`}>
     <Face who={who} size={44} />
@@ -841,7 +841,7 @@ function Room(ctx: Ctx) {
       {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} ring={l.who.ring} />}<b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
       {l.text && <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestRoom} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
-      {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === c.helper)} onDone={() => { void load(); refresh(); }} />)}</div>
+      {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === (c.by ?? c.helper))} onDone={() => { void load(); refresh(); }} />)}</div>
       <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
       <ReadAlong name="the crew" />
     </div></div>;

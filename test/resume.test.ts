@@ -114,6 +114,8 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
     const luminance=s=>{const c=s.match(/[\\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
     const a=luminance(getComputedStyle(e).color),b=luminance(getComputedStyle(e.closest('.ev')).backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
   assert.ok(contrast >= 4.5, `the draft subject is readable on its paper in night mode: ${contrast}`);
+  await run("location.hash = '#/'");
+  await until('the same draft author on Home', () => run("!!document.querySelector('.st-asks img[alt=Scout]')"));
   await cold(`${base}/?demo=live#/chief`);
   await until('Chief’s live progress to animate', () => run("document.querySelector('.live-todos .doing .tick')?.getAnimations().length > 0"));
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
