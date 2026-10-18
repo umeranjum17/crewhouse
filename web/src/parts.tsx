@@ -223,9 +223,12 @@ export function AiMark({ ai, size = 36 }: { ai: { key: string; bg: string }; siz
 function useTicker(ms: number, on = true) {
   const [t, setT] = useState(0);
   useEffect(() => {
-    if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const i = setInterval(() => setT((x) => x + 1), ms);
-    return () => clearInterval(i);
+    if (!on) return;
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    let i: ReturnType<typeof setInterval> | undefined;
+    const sync = () => { clearInterval(i); if (!motion.matches) i = setInterval(() => setT((x) => x + 1), ms); };
+    sync(); motion.addEventListener('change', sync);
+    return () => { clearInterval(i); motion.removeEventListener('change', sync); };
   }, [ms, on]);
   return t;
 }

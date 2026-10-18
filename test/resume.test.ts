@@ -103,4 +103,9 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
     await run("location.hash = '#/ask/11'");
     await until('the order still waits for an answer', () => run("!!document.querySelector('.sheet.approve')"));
   }
+  await cold(`${base}/?demo=live#/chief`);
+  await until('Chief’s live progress to animate', () => run("document.querySelector('.live-todos .doing .tick')?.getAnimations().length > 0"));
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  await until('reduced motion to stop the live progress', () => run('document.getAnimations().length === 0'));
+  assert.equal(await run("matchMedia('(prefers-reduced-motion: reduce)').matches"), true);
 });
