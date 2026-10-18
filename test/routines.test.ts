@@ -571,16 +571,15 @@ test('the digest reads today\'s calendar itself once Calendar is connected, and 
   done();
 });
 
-test('a new job in a chat carries the chat\'s last line, so "OK, post it" knows what "it" is', async () => {
+test('a new job in a chat continues its session, so "OK, post it" knows what "it" is', async () => {
   const { db, crew, done } = setup();
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every day 7:00', task: 'draft the weekly post', name: 'Weekly post' }, 'person');
   crew.runRoutine(r.id);
   const first = db.get('SELECT id FROM tasks WHERE routine = ?', r.id)!.id;
   await settled(db, first);
   const { task: t } = (await crew.post('reel', 'OK, post it'))!;
-  const prompt = (crew as any).prompt(db.get('SELECT * FROM tasks WHERE id = ?', t));
-  assert.match(prompt, /Your last message in this chat, which this may answer: “stub reel: done with "draft the weekly post"”/);
   await settled(db, t);
+  assert.equal(db.get('SELECT session FROM tasks WHERE id = ?', t)!.session, db.get('SELECT session FROM tasks WHERE id = ?', first)!.session, 'the engine retains the whole conversation, not a copied last line');
   done();
 });
 

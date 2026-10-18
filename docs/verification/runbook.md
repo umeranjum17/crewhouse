@@ -77,6 +77,8 @@ to reproduce the failure. The desktop **start** refuses with the same words, at 
 
 ## Drive
 
+Helper identity, persistent conversations and private notes: [helper sessions](helper-sessions.md).
+
 **HTTP (the app's own consumer path).** Follow the authority contract in
 [`docs/ui-contract.md`](../ui-contract.md).
 Read the capability only from your own `$LAB/state/person.key`; never from the owner's
