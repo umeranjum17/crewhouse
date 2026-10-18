@@ -32,10 +32,14 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
   assert.equal(JSON.parse(product.stdout).googleClient, join(root, 'product-config/byokit/google-oauth-client.json'), 'product mode keeps its XDG config');
   const owner = userInfo().homedir;
   symlinkSync(join(owner, 'Crewhouse'), join(root, 'alias'));
+  const missing = join(owner, 'Crewhouse', `__isolation_missing_${process.pid}`);
+  assert.equal(existsSync(missing), false);
+  symlinkSync(missing, join(root, 'missing-alias'));
   for (const extra of [
     { CREWHOUSE_CREW_DIR: join(owner, 'Crewhouse') },
     { CREWHOUSE_STATE_DIR: join(owner, '.local/state/crewhouse') },
     { CREWHOUSE_CREW_DIR: join(root, 'alias/bots') },
+    { CREWHOUSE_CREW_DIR: join(root, 'missing-alias/bots') },
     { CREWHOUSE_TOOLS_DIR: join(owner, '.local/share/crewhouse/tools') },
     { CREWHOUSE_ENGINE_DIR: join(owner, '.local/share/crewhouse/engine'), CREWHOUSE_RUN_MODE: 'product', CREWHOUSE_ENGINE: 'stub' },
     { CREWHOUSE_GOOGLE_CLIENT: join(owner, '.config/byokit/google-oauth-client.json'), CREWHOUSE_RUN_MODE: 'product', NODE_TEST_CONTEXT: 'child-v8' },
