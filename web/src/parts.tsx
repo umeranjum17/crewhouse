@@ -612,8 +612,8 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
 }
 
 /** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
-export type Talk = { lines: { id: number; from: string; text: string }[]; reading: (id: number) => void };
-type Now = { phase: 'listening' | 'thinking' | 'speaking'; words: string };
+export type Talk = { chat: string; name: string; lines: { id: number; from: string; text: string }[]; reading: (id: number) => void };
+type Now = { phase: 'listening' | 'thinking' | 'speaking'; words: string; name: string };
 /** This device's voice and speed for Chief, kept on the device (its voices are its own). */
 const VOICE = 'crewhouse.voice';
 const kept = (): { voice?: string; rate?: number } => { try { return JSON.parse(localStorage.getItem(VOICE) ?? '{}'); } catch { return {}; } };
@@ -633,14 +633,14 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
   useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => setRoute(v.length > 0 ? r : 'none')); }, [!!talk]);
   const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
   useEffect(() => stop, []); // leaving the chat ends the call
-  const show = (n: Now) => { setNow(n); setListen('chief', n.phase === 'listening'); };
+  const show = (n: Omit<Now, 'name'>) => { setNow({ ...n, name: talk?.name ?? 'Chief' }); if (talk?.chat === 'chief') setListen('chief', n.phase === 'listening'); };
   const start = async () => {
     const r = run.current = { stopped: false, cut: () => {} }, mark = talk?.reading ?? (() => {});
-    const chief = () => lines.current.filter((l) => l.from === 'them' && l.text); // his words in his own thread
-    let read = chief().at(-1)?.id ?? 0, quiet = 0, end = 'Call ended.';
+    const replies = () => lines.current.filter((l) => l.from === 'them' && l.text);
+    let read = replies().at(-1)?.id ?? 0, quiet = 0, end = 'Call ended.';
     try {
       while (!r.stopped) {
-        const next = chief().find((l) => l.id > read);
+        const next = replies().find((l) => l.id > read);
         if (next) { // Chief's new lines first, one at a time, before the mic opens again
           read = next.id;
           const vs = await voices();
@@ -657,10 +657,10 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
         quiet = 0;
         show({ phase: 'thinking', words: '' });
         if (!(await send(said))) { end = 'Not sent, so the call ended. Your words are in the box.'; break; }
-        await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || chief().some((l) => l.id > read)) go(); }; arrived.current(); });
+        await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || replies().some((l) => l.id > read)) go(); }; arrived.current(); });
       }
     } catch (e) { end = heardWrong(e); }
-    run.current = null; mark(0); setNow(null); setListen('chief', false); toast(end);
+    run.current = null; mark(0); setNow(null); if (talk?.chat === 'chief') setListen('chief', false); toast(end);
   };
   return { can: route !== 'none' && !!talk, route, now, start, stop };
 }
@@ -672,8 +672,8 @@ function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => vo
   useEffect(() => { void voices().then(setVs); }, []);
   const choose = (k: { voice?: string; rate?: number }) => { const n = { ...pick, ...k }; setPick(n); try { localStorage.setItem(VOICE, JSON.stringify(n)); } catch { /* kept for this call only */ } };
   const lang = (l: string) => { try { return new Intl.DisplayNames([navigator.language], { type: 'language' }).of(l) ?? l; } catch { return l; } };
-  return <div className={`call ${now.phase}`} role="group" aria-label="Call with Chief">
-    <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: 'Chief is thinking', speaking: 'Chief is speaking' }[now.phase]}</span>
+  return <div className={`call ${now.phase}`} role="group" aria-label={`Call with ${now.name}`}>
+    <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: `${now.name} is thinking`, speaking: `${now.name} is speaking` }[now.phase]}</span>
     <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
       <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
       <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>

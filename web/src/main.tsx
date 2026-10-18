@@ -793,7 +793,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {id === 'chief' && <MadeHere made={hero ? A.madeInChat(state, page)
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
-      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={id === 'chief' ? { lines, reading: setReading } : undefined} {...typeInto(id)} /></div>
+      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={{ chat: id, name, lines, reading: setReading }} {...typeInto(id)} /></div>
     </div>
   );
 }
