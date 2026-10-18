@@ -19,8 +19,9 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
 - "Take control" / "Hand it back" everywhere: helper Details' Screen card, the stuck-helper line, the phone.
 - Notifications: "Tell me when Chief finishes or needs me" (`GET`/`PUT /api/notify`); off, no content-free news
   reaches any phone or browser.
-- Instructions (`#/h/chief/instructions`): read-only, Chief's soul and the plain-words limits of his job, no tool
-  names; changes only through a card the person approves.
+- Instructions (`#/h/chief/instructions`): Chief's personality, which the person changes or puts back there
+  ([chief-soul.md](chief-soul.md)), and the read-only plain-words limits of his job, no tool names; those change
+  only through a card the person approves.
 - Things: Files, Links and Pictures rows with counts ("None yet" when empty) open `#/h/chief/files|links|pictures`,
   one switch between the three; each list newest first with who and when ("You sent it", "Penny"), each with its
   own empty state. Approved mock: `chief-things` (things.html). Driver: `scripts/verify/chief-things.sh`

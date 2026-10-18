@@ -993,7 +993,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
 }
 
 /** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
- *  his one notification switch, his instructions read-only, and his crew. Take control is on the first phone screen. */
+ *  his one notification switch, his instructions (the personality editable, the limits read-only), and his crew. Take control is on the first phone screen. */
 const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
   ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {

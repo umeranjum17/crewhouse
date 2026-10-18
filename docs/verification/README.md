@@ -17,6 +17,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
+| chief-soul | `done-done run chief-soul` (live voice: the recipe's real-model leg) |
 | helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep it / Keep them, Forget this file, and Remove it when the job ends taking a copy) |
 | thread-hygiene | `done-done run ask-in-view` and `done-done run -- bash scripts/verify/new-pill.sh "$DONE_DONE_EVIDENCE_ROOT"` plus the recipe's other cases |
 | site-signin | `done-done run site-signin` |
