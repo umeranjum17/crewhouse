@@ -564,6 +564,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
+  // A helper's read-along card does not repeat the request the thread already shows above it (Chief's hand-off line).
+  const askedAbove = id !== 'chief' && !!ln?.title && lines.some((l) => l.from === 'chief' && A.plain(l.text).includes(A.plain(ln?.title ?? '')));
   // While Chief works the box's send becomes a stop square: the same reset a helper's Stop uses, its line then says so.
   const stopChief = () => void attempt(async () => { await api.reset('chief'); refresh(); });
   // The engine can say nothing for tens of seconds while the model writes a big file: never a silent gap,
@@ -772,7 +774,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={id === 'chief' ? 'chief' : h!} size={hero ? 36 : 28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
-        {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} who={A.crew(state).find((x) => x.id === ln.helper)} />}
+        {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} asked={askedAbove} who={A.crew(state).find((x) => x.id === ln.helper) ?? (id === 'chief' ? undefined : h)} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
@@ -824,7 +826,7 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
  *  and the job as a check list — done, doing, still to do — with the small tool calls kept behind the expand. At the
  *  end, one quiet line with how long it took. A job passed to a helper opens that helper's chat. */
 const QUIET_MS = 4000;
-function LiveRow({ ln, quiet, chipped, replied, who }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean; who?: A.Helper }) {
+function LiveRow({ ln, quiet, chipped, replied, asked, who }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean; asked: boolean; who?: A.Helper }) {
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there.
@@ -832,8 +834,8 @@ function LiveRow({ ln, quiet, chipped, replied, who }: { ln: A.LiveLine; quiet: 
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>}</div>;
   const at = ln.todos.findIndex((s) => s.state === 'doing');
   return <div className={`line them live-line ${ln.state}`}><div className="line-by" aria-hidden><Face who="chief" size={36} /></div>
-    <div className="live-body" style={who ? { background: art.colourOf(who.kind) } : undefined}>
-      <div className="live-top"><Face who={who ?? 'chief'} size={40} /><b className="grow">{A.plain(ln.title ?? ln.who)}</b><span className="st-pill">{word}</span></div>
+    <div className="live-body" style={ln.helper && who ? { background: art.colourOf(who.kind) } : undefined}>
+      <div className="live-top"><Face who={who ?? 'chief'} size={40} />{!asked && <b className="grow">{A.plain(ln.title ?? ln.who)}</b>}<span className="st-pill">{word}</span></div>
       <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who}{at >= 0 && ln.todos.length > 1 ? ` · step ${at + 1} of ${ln.todos.length}` : ''}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span></span></div>
       <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
         <span className={`tick ${s.state}`} aria-hidden>{s.state === 'done' ? '✓' : ''}</span><span>{s.text}</span></li>)}</ol>

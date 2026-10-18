@@ -1555,6 +1555,10 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-helper-chat .chat .line-by .who { font: 700 16px/1.4 var(--ui); color: var(--ink); }
 .st-helper-chat .chat .line.me { display: flex; flex-direction: column; align-items: flex-end; max-width: 82%; }
 .st-helper-chat .chat .line.me > .line-by { align-self: flex-end; }
+.st-helper-chat .live-line > .line-by { display: none; }
+.st-helper-chat .live-top > b { font: 700 16px/1.4 var(--ui); }
+.st-helper-chat .live-top > .st-pill { margin-left: auto; }
+[data-theme='night'] .st-helper-chat .chat .line.me > .helper-bubble { border-color: transparent; background: none; padding: 0; }
 .st-helper-chat .helper-bubble { border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px; background: var(--solid); overflow-wrap: anywhere; }
 .st-helper-chat .chat .line .bubble-text { max-width: none; padding: 0; background: none; color: inherit; font: 400 16px/1.45 var(--ui); }
 .st-helper-chat .helper-bubble > .wb-card { margin: 12px 0 0; }
