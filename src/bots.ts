@@ -321,7 +321,7 @@ export function listSkills(cfg: Config, id: string) {
   return readdirSync(dir).filter((s) => existsSync(join(dir, s, 'SKILL.md'))).map((s) => {
     const text = readFileSync(join(dir, s, 'SKILL.md'), 'utf8');
     // `says` is the skill in the person's words, for the app; `description` is for the model.
-    return { name: s, description: field(text, 'description'), says: field(text, 'says'), learned: field(text, 'learned') === 'yes' };
+    return { name: s, description: field(text, 'description'), says: field(text, 'says'), learned: field(text, 'learned') === 'yes', ...(field(text, 'added') === 'yes' ? { added: true } : {}) };
   });
 }
 
@@ -350,11 +350,10 @@ export function saveSkill(cfg: Config, id: string, d: SkillDraft) {
   return commit(botDir(cfg, id), [`skills/${d.slug}/SKILL.md`], `Learned how to: ${d.says}`);
 }
 
-/** "Remove" puts a learned skill away in skills/.archive (the engine skips dot folders), never deletes it. Bundled skills stay. */
 export function archiveSkill(cfg: Config, id: string, name: string) {
   const skill = listSkills(cfg, id).find((k) => k.name === name);
   if (!skill) throw Object.assign(new Error('no such skill'), { status: 404 });
-  if (!skill.learned) throw Object.assign(new Error('only a skill it learned can be removed'), { status: 400 });
+  if (!skill.learned && !skill.added) throw Object.assign(new Error('only a skill you or the helper added can be removed'), { status: 400 });
   const dir = join(botDir(cfg, id), 'skills');
   mkdirSync(join(dir, '.archive'), { recursive: true });
   renameSync(join(dir, name), join(dir, '.archive', `${name}-${Date.now()}`));

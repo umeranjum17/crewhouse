@@ -10,7 +10,7 @@
     "node": ">=22.22.3"
   },
   "bin": { "crewhouse": "bin/crewhouse.mjs" },
-  "files": ["bin", "dist", "web/dist", "templates", "skills", "tools", "scripts/prepare-engine.mjs", "scripts/build-web.mjs", "scripts/grok-recipe.mjs", "src/openclaw/*.json", "package.json", "package-lock.json", "crewhouse"],
+  "files": ["bin", "dist", "web/dist", "templates", "skills", "tools", "scripts/prepare-engine.mjs", "scripts/build-web.mjs", "scripts/grok-recipe.mjs", "scripts/claude-skill.mjs", "src/openclaw/*.json", "package.json", "package-lock.json", "crewhouse"],
   "scripts": {
     "prepack": "npm run build:web && npm run build:cli",
     "build:cli": "node scripts/build-cli.mjs",

@@ -1,5 +1,5 @@
 // Real HTTP profile writes on synthetic stub crews; no accounts or external services.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
@@ -8,6 +8,7 @@ const { setup } = await import('./lab.ts');
 const { startServer } = await import('../src/server.ts');
 const { Store } = await import('../src/db.ts');
 const { Crew } = await import('../src/crew.ts');
+const disk = await import('../src/bots.ts');
 
 for (const [label, fields] of Object.entries({
   'quiet-only': { quiet: 'invalid' },
@@ -71,4 +72,53 @@ for (const [label, fields] of Object.entries({
     assert.deepEqual(savedEvents, events, 'no durable event was appended');
     assert.deepEqual(seen, [], 'no profile event was published');
   }
+});
+
+test('a helper profile previews a GitHub skill and adds only its linked files after yes', async (t) => {
+  const { cfg, db, crew, done } = setup();
+  cfg.port = 0; cfg.host = '127.0.0.1'; cfg.linkPort = 0;
+  const server = await startServer(cfg, db, crew), base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const link = 'https://github.com/example/skills/tree/main/skills/trace-demo';
+  const prefix = 'https://raw.githubusercontent.com/example/skills/main/skills/trace-demo/';
+  const files: Record<string, string> = {
+    'SKILL.md': '---\nname: trace-demo\ndescription: Explain a small app from its source.\n---\n\nRead [the guide](guide.md). The referenced script is `scripts/unsafe.sh`.\n',
+    'guide.md': 'Follow the data from input to output.',
+    'scripts/unsafe.sh': 'touch executed.marker',
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.startsWith(prefix)) {
+      const content = files[url.slice(prefix.length)];
+      return new Response(content ?? '', { status: content ? 200 : 404 });
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+  const helper = crew.recruit('scout', 'Research Rae', 'person'), folder = join(disk.botDir(cfg, helper.id), 'skills', 'trace-demo');
+  const api = async (method: string, path: string, body?: object) => {
+    const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: await res.json() };
+  };
+  t.after(async () => { globalThis.fetch = realFetch; if (server.listening) await new Promise<void>((r, reject) => server.close((e) => e ? reject(e) : r())); done(); });
+  const preview = await api('POST', `/api/bots/${helper.id}/skills/preview`, { link });
+  assert.equal(preview.status, 200);
+  assert.deepEqual({ name: preview.body.name, description: preview.body.description }, { name: 'trace-demo', description: 'Explain a small app from its source.' });
+  assert.equal(existsSync(join(folder, 'SKILL.md')), false, 'preview alone adds nothing');
+  const added = await api('POST', `/api/bots/${helper.id}/skills/add`, { link, token: preview.body.token });
+  assert.equal(added.status, 200);
+  assert.equal(added.body.skill.added, true);
+  assert.match(readFileSync(join(folder, 'SKILL.md'), 'utf8'), /added: yes/);
+  assert.equal(readFileSync(join(folder, 'guide.md'), 'utf8'), files['guide.md']);
+  assert.equal(existsSync(join(folder, 'scripts/unsafe.sh')), true, 'a same-folder referenced file is copied, not run');
+  assert.equal(existsSync(join(folder, 'executed.marker')), false, 'adding a skill never runs its scripts');
+  const again = await api('POST', `/api/bots/${helper.id}/skills/add`, { link, token: preview.body.token });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.error, 'This helper already has this skill, so nothing changed.', 'a plain line, and the skill it has is kept');
+  assert.match(readFileSync(join(folder, 'SKILL.md'), 'utf8'), /added: yes/);
+  const changed = files['SKILL.md']; files['SKILL.md'] += '\nChanged after review.\n';
+  const stale = await api('POST', `/api/bots/${helper.id}/skills/add`, { link, token: preview.body.token });
+  assert.equal(stale.status, 409, 'changed content must be reviewed again');
+  files['SKILL.md'] = changed;
+  assert.equal((await api('DELETE', `/api/bots/${helper.id}/skills/trace-demo`)).status, 200, 'person-added skill can be put away');
+  assert.equal(disk.listSkills(cfg, helper.id).some((s) => s.name === 'trace-demo'), false);
 });
