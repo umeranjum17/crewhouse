@@ -1,0 +1,28 @@
+name: Cloud Linux download
+
+# A separate non-prerelease release keeps desktop releases on their existing preview channel.
+on:
+  push:
+    tags: ['cloud-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
+      - run: npm run build:web
+      - run: node scripts/package.mjs
+      - run: cp dist/crewhouse-*-linux-x64.tar.gz dist/crewhouse-linux-x64.tar.gz
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes dist/crewhouse-linux-x64.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -630,13 +630,13 @@ test('a null browser address is refused by the browser and by a phone alike', as
   db.close();
 });
 
-test('headless published relay accepts private LAN origins but refuses public IPv4', async () => {
+test('headless public relay accepts private IPv4 and secure DNS origins, refuses unsafe public shapes', async () => {
   const repo = join(import.meta.dirname, '..');
-  const setup = (ip: string) => new Promise<string>((yes, no) => execFile(process.execPath,
-    ['scripts/headless.mjs', 'setup', '--install-only'], { cwd: repo, env: { ...process.env, CREWHOUSE_RELAY_PUBLIC: `http://${ip}:7300` } },
+  const setup = (origin: string) => new Promise<string>((yes, no) => execFile(process.execPath,
+    ['scripts/headless.mjs', 'setup', '--install-only'], { cwd: repo, env: { ...process.env, CREWHOUSE_RELAY_PUBLIC: origin } },
     (error, stdout) => error ? no(error) : yes(stdout)));
-  for (const ip of ['192.168.1.144', '10.0.0.1', '172.16.0.1', '172.31.255.254']) assert.match(await setup(ip), /Headless files ready/);
-  for (const ip of ['8.8.8.8', '172.15.0.1', '172.32.0.1']) await assert.rejects(setup(ip), /tailnet or private IPv4/);
+  for (const origin of ['http://192.168.1.144:7300', 'http://10.0.0.1:7300', 'http://172.16.0.1:7300', 'http://172.31.255.254:7300', 'https://relay.example.com', 'wss://relay.example.com:8443']) assert.match(await setup(origin), /Headless files ready/);
+  for (const origin of ['http://8.8.8.8:7300', 'http://172.15.0.1:7300', 'https://localhost:7300', 'http://relay.example.com:7300', 'https://user@relay.example.com', 'https://relay.example.com/path', 'https://relay.example.com/?q=1', 'wss://relay.example.com/#x']) await assert.rejects(setup(origin), /private IPv4 origin, or a public HTTPS\/WSS DNS origin/);
 });
 
 for (const publicMode of [false, true]) test(`a headless runner pairs once and keeps owner authority across restart (${publicMode ? 'published relay, no Tailscale' : 'direct tailnet'})`, async (t) => {
