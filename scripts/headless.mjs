@@ -14,7 +14,10 @@ const pause = () => new Promise(r => setTimeout(r, 100));
 async function tailnet() {
   if (publicRelay) {
     const u = new URL(publicRelay);
-    if (!/^(https?|wss?):$/.test(u.protocol) || !isIPv4(u.hostname) || !/^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('CREWHOUSE_RELAY_PUBLIC needs a tailnet or private IPv4 relay origin, without credentials or a path.');
+    const privateIPv4 = isIPv4(u.hostname) && /^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname);
+    const dnsName = /^(?=.{1,253}$)(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z]{2,63}$/i.test(u.hostname);
+    const allowedTransport = privateIPv4 ? /^(https?:|wss?:)$/.test(u.protocol) : /^(https:|wss:)$/.test(u.protocol) && dnsName;
+    if (!allowedTransport || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('CREWHOUSE_RELAY_PUBLIC needs a private IPv4 origin, or a public HTTPS/WSS DNS origin, without credentials or a path.');
     return '0.0.0.0'; // operator-owned port publication; no Tailscale discovery in the container
   }
   const s = await tailscaleState({ timeoutMs: 5000 });
