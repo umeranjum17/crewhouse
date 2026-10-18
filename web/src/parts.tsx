@@ -4,7 +4,7 @@ import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, t
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
-import { ears, canHear, hear, speak, voices, type Ears } from './voice.ts';
+import { ears, hear, speak, voices, type Ears } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
