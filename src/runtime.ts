@@ -25,6 +25,7 @@ export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
   signInRecovery?(): string;
+  engine?(): { phase: string; words: string }; onEngine?: () => void;
   signedIn(account: string): Promise<boolean>;
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;

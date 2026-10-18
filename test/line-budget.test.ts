@@ -42,7 +42,10 @@ import { join } from 'node:path';
 // on acf5711 (net -25, src 7110 -> 7085): #531 had already joined 11 of the 37 and #532 rewrote one more away. The
 // remaining 72 lines of the email allocation are closed as an owner exception: they are real email-feature
 // code, and only line-packing or code moves could remove them.
-const BUDGET = 7085;
+// Raised 7085 -> 7099 for the relocatable engine dir and install progress (ch-install-s1-engine-dir, owner exception, +23):
+// CREWHOUSE_ENGINE_DIR in config.ts, the kit's phase and plain failure cause on /api/state, and Hello's Try again.
+// No trim paired: the engine-dir install is the feature; paid in the change, never by packing statements.
+const BUDGET = 7099;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

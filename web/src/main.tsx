@@ -139,6 +139,22 @@ function Hello({ state, refresh, night }: Ctx) {
   );
 }
 
+/** Before Chief's Hello on a first open: the AI engine installing or starting, in the kit's own words, or why it failed,
+ *  with Try again. Progress is the kit's phase, never a timer. */
+function GettingReady({ view, refresh }: { view: { failed: boolean; words: string }; refresh: () => void }) {
+  return (
+    <div className="hello getting-ready" role="status" aria-live="polite">
+      <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
+      <span className="halo"><ChiefArt mood={view.failed ? 'worried' : 'work'} d={7.4} hero whole /></span>
+      <div className="speech">
+        <h1>{view.failed ? "Your crew couldn't get ready" : 'Getting your crew ready'}</h1>
+        {view.words && <p className="lead">{view.words}</p>}
+      </div>
+      {view.failed && <button className="btn big" onClick={() => attempt(async () => { await api.retryEngine(); refresh(); })}>Try again</button>}
+    </div>
+  );
+}
+
 /** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, one blue primary first. */
 function Share({ refresh }: Ctx) {
   const q = new URLSearchParams(location.search);
@@ -2045,7 +2061,8 @@ function App() {
   if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
   // Every little Chief face on the page carries the mood from here, the way the night palette does.
   setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
-  if (!ctx.state.person.onboarded) return <>{splash}<Hello {...ctx} /><Toasts /></>;
+  const engine = A.engineView(ctx.state);
+  if (!ctx.state.person.onboarded) return <>{splash}{engine ? <GettingReady view={engine} refresh={refresh} /> : <Hello {...ctx} />}<Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
   const asks = ctx.live.counts.needs;

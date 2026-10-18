@@ -2,11 +2,12 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { OpenClawKit, stateWords, type KitOptions, type ToolSpec } from '@byokit/openclaw';
+import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
+import { loadConfig } from '../config.ts';
 import { PARAMETERS } from '../engine.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
@@ -21,6 +22,14 @@ const AUTH_CHOICE: Record<string, string> = {
 }, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool;
+/** Why the engine failed, in the person's words: the kit's typed refusal and, for an install, its retained diagnosis (README: engine-install-drift.json). */
+function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) {
+  const cause = (e as { cause?: string })?.cause, d = cause === 'write' && existsSync(diagnosis) ? JSON.parse(readFileSync(diagnosis, 'utf8')) : null, fresh = d && Date.parse(d.at) >= since;
+  if (cause === 'drift-after-build') return "The download didn't match what Crewhouse trusts, so it wasn't used. Try again.";
+  if (fresh && !d.npm?.version) return "Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again.";
+  if (fresh && /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|network/.test(d.npmStderrTail)) return "Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again.";
+  return s.why === 'engine-already-running' || s.why?.startsWith('auth-store') ? stateWords(s) : "Your crew couldn't start on this computer. Try again.";
+}
 
 const ABOUT: Record<string, string> = {
   shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.', crew_signin: 'Ask for a sign-in',
@@ -50,10 +59,12 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly stateDir: string;
   private host?: ToolHost;
   private runs = new Map<string, RunRef & { account?: string }>();
+  private failed = '';
+  onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
     this.kit = new OpenClawKit({
-      stateDir, offered: Object.values(PROVIDER_OF), engineDir: join(repo, 'runtime/openclaw'), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude'))), // the Claude route drives the `claude` CLI: the engine's own PATH is /usr/bin:/bin only
+      stateDir, offered: Object.values(PROVIDER_OF), engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, 'claude'))), // the Claude route drives the `claude` CLI: the engine's own PATH is /usr/bin:/bin only
       authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(import.meta.dirname, 'trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
@@ -77,7 +88,9 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** The run behind a callback: a key-lane run's engine key is the member's own under the kit's key-agent prefix. */
   private runOf(sessionKey: string) { return this.runs.get(sessionKey) ?? this.runs.get(sessionKey.replace(/^agent:byokit-key-/, 'agent:')); }
-  async start(host: ToolHost) { this.host = host; await this.kit.start(); }
+  async start(host: ToolHost) { this.host = host; this.failed = ''; const since = Date.now(); await this.kit.start().catch((e: unknown) => { this.failed = failedWords(e, this.kit.state, join(this.stateDir, 'logs', 'engine-install-drift.json'), since); this.onEngine?.(); throw e; }); }
+  /** The engine as the app's first screen shows it: the kit's real phase and its words, or why the last start failed. */
+  engine() { return this.failed ? { phase: 'failed', words: this.failed } : { phase: this.kit.state.phase, words: stateWords(this.kit.state) }; }
   async stop() { await this.kit.stop(); }
   signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }

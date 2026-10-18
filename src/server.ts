@@ -181,6 +181,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/phones\/([\w-]+)$/)) && m === 'DELETE') { await link.revoke(r[1]); return { ok: true }; }
     // What is installing now, and a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing.keys()], showing: teacher.showing(), ...(update ? { update } : {}) };
+    if (m === 'POST' && p === '/api/engine/retry') { if (crew.runtime.engine?.().phase === 'failed') void crew.startEngine(); return { ok: true }; }
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
     if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
