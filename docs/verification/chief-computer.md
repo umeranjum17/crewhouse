@@ -12,8 +12,8 @@ The words are `A.computer` in `web/src/adapter.ts`, one source for both. Approve
 
 Behind the same build flag as the cloud row ([where-cloud.md](where-cloud.md)): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for
 the phone, `CREWHOUSE_CLOUD=1` for `scripts/build-web.mjs`. Without it Settings has no row and `#/computer` opens
-Home. Every action goes to `A.computerCall`, which stops at the kit until `@byokit/cloud` is published: the
-kit-only values (update state, snapshot time, disk) read "Not connected" or are left out. While nothing is
+Home. The phone can forget its stored boat.dev key; computer actions and kit-only values (update state, snapshot
+time, disk) remain unconnected and read "Not connected" or are left out. While nothing is
 connected, Reset computer and the Daily snapshots switch stay dimmed and disabled with one muted line under the
 group (`A.computer(null).connect`: "Connect Chief's computer first."); a tap on either answers with that reason
 (the line flashes and is announced) — the Reset sheet never opens and no toast appears. Other rows keep the

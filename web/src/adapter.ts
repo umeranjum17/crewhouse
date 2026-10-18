@@ -91,8 +91,7 @@ export type App = { id: string; line: string; name: string; logo: string; on: bo
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
-/** Chief asks where he should work. `cloud` shows the cloud row and its line: each surface keeps it off in a release
- *  build until BYOKit's cloud kit is published. */
+/** Chief asks where he should work. `cloud` shows the cloud row and its line; each surface controls whether to include it. */
 export const where = (cloud: boolean) => ({
   hello: "Hi, I'm Chief. Where should I work?",
   line: cloud ? 'In the cloud I get my own computer: my sandbox, away from your phone and your files. Nothing to install at home.' : '',
