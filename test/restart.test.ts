@@ -44,5 +44,5 @@ test('crewd killed mid-run: the task resumes in the same conversation and finish
   assert.ok(state.events.some((e: any) => e.kind === 'system.recovered' && e.data.resumed === 1));
   const { DatabaseSync } = await import('node:sqlite');
   const session = (new DatabaseSync(join(root, 'state', 'crew.db')).prepare('SELECT session FROM tasks WHERE id = ?').get(task) as any).session;
-  assert.match(session, /^agent:m1:crewhouse:reel:\d+$/, 'one conversation: the same session key continues it');
+  assert.match(session, /^agent:m1:crewhouse:reel$/, 'one conversation: the same session key continues it');
 });

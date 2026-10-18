@@ -213,6 +213,7 @@ export interface Memory { bot: string | null }
 export const personDir = (cfg: Config) => join(cfg.crewDir, 'people', '1');
 const memoryFile = (m: Memory) => m.bot ? `notes/${m.bot}.md` : 'about.md', capOf = (m: Memory) => m.bot ? NOTES_CAP : ABOUT_CAP;
 
+export function initNotes(cfg: Config, id: string) { if (!existsSync(join(personDir(cfg), memoryFile({ bot: id })))) saveNotes(cfg, { bot: id }, '', 'Joined the crew'); }
 export function readNotes(cfg: Config, m: Memory) {
   return readText(join(personDir(cfg), memoryFile(m)));
 }
@@ -278,6 +279,7 @@ export const profileForPrompt = (cfg: Config) => readProfile(cfg).trim().slice(0
  *  a soul still written into the job file moves into its own file. Runs at every start; a no-op once done. */
 export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, display: string) {
   const dir = botDir(cfg, id), old = join(dir, 'notes.md');
+  initNotes(cfg, id);
   if (existsSync(old)) {
     const text = readFileSync(old, 'utf8'), m = { bot: id };
     if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
@@ -385,9 +387,9 @@ export function addressLine(address: string | null) {
   return `The person's name is "${address}". Use the name at most once, when greeting them; never in an ordinary reply. Never use sir or ma’am.`;
 }
 
-/** What the engine is told about the bot for a whole session: a helper's own soul (Chief's is the engine's SOUL.md), its job, then how Crewhouse works. */
+/** Session-local persona and job: no helper ever rewrites the shared engine workspace. */
 export function systemPrompt(cfg: Config, id: string, chief: boolean) {
-  const dir = botDir(cfg, id), own = (f: string) => readText(join(dir, f)).trim(), persona = (chief ? [own('AGENTS.md')] : ['SOUL.md is Chief\'s voice for the house; in your own work, who you are below comes first.', own('soul.md'), own('AGENTS.md')]).filter(Boolean).join('\n\n');
+  const dir = botDir(cfg, id), own = (f: string) => readText(join(dir, f)).trim(), persona = [own('soul.md'), own('IDENTITY.md'), own('AGENTS.md')].filter(Boolean).join('\n\n');
   // Chief's installed job is the person's file and may predate shipped product knowledge.
   const about = chief ? readFileSync(join(templatesDir(cfg), 'chief', 'AGENTS.md'), 'utf8').match(/## About Crewhouse\n[\s\S]*?(?=\n## |$)/)?.[0] ?? '' : '';
   return `${persona}${about && !persona.includes('## About Crewhouse') ? `\n\n${about}` : ''}\n\n## Crewhouse\nYour id in Crewhouse is ${id}. Your working folder is your own space: work in \`work/\`, put finished things in \`files/\`, ` +

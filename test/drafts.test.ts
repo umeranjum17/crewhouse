@@ -60,7 +60,7 @@ test('what the person decided on drafts reaches the next job, in plain words', a
   }
   const { task: next } = (await crew.post('scribe', 'Another note for the landlord. Write it fresh.'))!;
   await settled(db, next);
-  const said = String((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe:${next}`)?.message ?? '');
+  const said = String((crew.runtime as any).specOf(`agent:m1:crewhouse:scribe`)?.message ?? '');
   const record = said.split('\n').find((l) => l.includes('already decided on drafts')) ?? '';
   assert.match(record, /Sara — approved as written/, 'an approved draft is on the record');
   assert.match(record, /the dentist — approved after they changed it/, 'an edit is recorded as theirs');

@@ -1,4 +1,4 @@
-// Chief's personality is the engine's own SOUL.md: the person edits it in Settings and the very next turn the model
+// Each personality is session-local: the person edits it in Settings and the very next turn the model
 // sees it; Put back brings the template again. Real crewd, the pinned Gateway (crewd builds its own
 // `new OpenClawRuntime`), and the scripted model: no account, no network.
 import { test, after } from 'node:test';
@@ -11,7 +11,7 @@ import { temp } from './tmp.ts';
 import { until } from './lab.ts';
 import { startModelStub } from './openclaw-stub.ts';
 
-test('a saved personality reaches Chief\'s next turn as SOUL.md, helpers keep their own, and Put back restores it', { timeout: 280_000 }, async () => {
+test('a saved personality reaches Chief\'s next turn, helpers keep their own, and Put back restores it', { timeout: 280_000 }, async () => {
   const root = temp('crewhouse-soul'), stub = await startModelStub();
   const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
   const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0',
@@ -38,8 +38,8 @@ test('a saved personality reaches Chief\'s next turn as SOUL.md, helpers keep th
   await until('the scripted model is set', () => /crewhouse-stub[\s\S]*"autonomous"|"autonomous"[\s\S]*crewhouse-stub/.test(readText(join(root, 'state', 'openclaw', 'openclaw.json'))), 60_000);
   await api('POST', '/api/onboard', { address: 'Umer' });
   const first = await turn('chief', 'Plan my week');
-  assert.equal(once(first, 'first mate of the Crewhouse'), 1, 'the default soul reaches the model once, as the engine\'s SOUL.md');
-  assert.match(first, /SOUL\.md: persona\/tone[\s\S]*SOUL\.md\n# Chief[\s\S]*Call the person "Captain"/);
+  assert.equal(once(first, 'first mate of the Crewhouse'), 1, 'the default soul reaches the model once, in the session context');
+  assert.match(first, /# Chief[\s\S]*Call the person "Captain"/);
   assert.doesNotMatch(first, /You're not a chatbot|Bootstrap Pending|BOOTSTRAP\.md - Birth Sequence|pick something you like/, 'no stock OpenClaw persona or first-run ritual');
 
   // Settings › Chief's personality: the person's words, applied on the next turn, in place of the old ones.
@@ -49,10 +49,12 @@ test('a saved personality reaches Chief\'s next turn as SOUL.md, helpers keep th
   assert.match(edited, /Call the person "Skipper"/);
   assert.doesNotMatch(edited, /"Captain"/);
 
-  // A helper runs on the same engine agent: the house SOUL.md is Chief's, its own soul governs its work.
+  // A helper runs on the same engine agent, but no Chief identity or voice enters its context.
   await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
   const helper = await turn('scout', 'Compare two kettles');
-  assert.match(helper, /Call the person "Skipper"[\s\S]*SOUL\.md is Chief's voice for the house; in your own work, who you are below comes first\.\n\n# Scout/);
+  assert.match(helper, /# Scout/);
+  assert.doesNotMatch(helper, /# Chief|Call the person "Skipper"|- Name: Chief/);
+  assert.equal(readText(join(root, 'state/openclaw/workspaces/m1/IDENTITY.md')).trim(), 'Use the identity supplied for this session.');
 
   // Put back how Chief started: the template again, on the next turn.
   assert.equal((await api('POST', '/api/bots/chief/soul/reset')).soul.trim(), template);

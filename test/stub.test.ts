@@ -609,7 +609,7 @@ test('memory: the bot proposes a note, crewd caps and commits it, Undo reverts i
   const sessionDb = openDb();
   const session = sessionDb.prepare('SELECT session FROM tasks WHERE id = ?').get(first) as any;
   sessionDb.close();
-  assert.match(session.session, /^agent:m1:crewhouse:writer-quill:\d+$/, 'the run has its own session key');
+  assert.match(session.session, /^agent:m1:crewhouse:writer-quill$/, 'the run has its own session key');
 
   await remember({ text: 'Prefers 0.5 s transitions' });
   await remember({ text: 'Signs off with "Best"' });

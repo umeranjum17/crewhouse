@@ -978,6 +978,7 @@ export class Crew {
         id, display, role, template, color, randomBytes(16).toString('hex'), Date.now());
       this.say(id, 'system', `${display} joined the crew (${role.toLowerCase()}).`);
     });
+    disk.initNotes(this.cfg, id);
     disk.setBrains(this.cfg, id, disk.brains(this.cfg, CHIEF).map(disk.brainKey)); // on the crew's own picks
     return this.bot(id)!;
   }
@@ -1183,13 +1184,11 @@ export class Crew {
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
       'call crew_remember with `text` set to one short line (and `replaces` naming an old note to correct one). Set `everyone` when every helper should know it ' +
       '(diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
-    // A new job in a chat often answers the last thing said there ("OK, post it"): a new session carries that line.
-    const said = task.origin === 'person' && task.bot !== CHIEF && this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'bot' AND COALESCE(task_id, 0) != ? AND at > ? ORDER BY id DESC LIMIT 1", task.bot, task.id, Date.now() - 2 * 86_400_000)?.text;
     // What the person already chose on drafts, in plain words, so the next job never asks twice.
     const decided = this.db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved', 'draft.rejected') ORDER BY seq DESC LIMIT 3")
       .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; });
-    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '', last = said ? `[Crewhouse] Your last message in this chat, which this may answer: “${short(said, 800)}”\n` : '';
-    if (task.bot !== CHIEF) return `${this.memory(task.bot)}${last}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
+    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
+    if (task.bot !== CHIEF) return `${this.memory(task.bot)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet', history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
@@ -1298,7 +1297,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
   private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
-    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
+    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : `agent:m1:crewhouse:${bot.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): Chief reaches every one; a helper only the ones its bot.json grants (src/bots.ts). Through the gate either way.
@@ -1341,9 +1340,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const l = this.live.get(botId);
     if (!l) return;
     this.live.delete(botId);
-    this.busy.delete(botId);
     l.browser?.end();
-    void this.runtime.abort(l.key).catch(() => {});
+    if (this.busy.delete(botId)) void this.runtime.abort(l.key).catch(() => {});
   }
 
   /** One turn: the prompt goes into the run's session, and when it settles the reply (or the account's error) is handled. */
@@ -1354,12 +1352,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     this.db.run('UPDATE tasks SET session = ? WHERE id = ?', l.key, task.id); // the session key, so a resume continues it
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId); l.news = Date.now();
-    // The bot's own words and job, its skills listed by name, and the connected app's tools it may call.
     const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
-      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [], soul: disk.readSoul(this.cfg, CHIEF) };
+      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
       (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });

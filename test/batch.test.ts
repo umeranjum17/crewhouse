@@ -38,7 +38,7 @@ test('one question over three items: three parallel sessions, one merged answer,
     assert.equal(specOf(crew, batchKey('scout', id, 3)), undefined, 'no fourth session');
 
     // The parent got one JSON array back, in item order.
-    const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
+    const parent = transcript(crew, `agent:m1:crewhouse:scout`);
     const returned = JSON.parse(/crew_batch: (\{.*\})$/m.exec(parent)![1]);
     assert.deepEqual(returned.answers.map((a: any) => a.item), items);
     assert.ok(returned.answers.every((a: any) => a.ok));
@@ -63,7 +63,7 @@ test('a batch item cannot start another batch: nesting is refused, never fanned 
     (crew as any).batching.add(id);
     await settled(db, id);
     assert.equal(task(db, id).state, 'done', 'a refused batch is a result the model reads, never a crashed run');
-    assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /cannot start another batch/);
+    assert.match(transcript(crew, `agent:m1:crewhouse:scout`), /cannot start another batch/);
     assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'no sub-run started from the nested call');
   } finally { done(); }
 });
@@ -77,7 +77,7 @@ test('a resting account stops later waves early and says so in plain words', asy
     assert.match(task(db, id).result, /^Your ChatGPT reached its limit/, 'a tired account waits for the person\'s pick, never a crashed run');
     assert.ok(specOf(crew, batchKey('scout', id, 7)), 'the first wave of eight ran');
     assert.equal(specOf(crew, batchKey('scout', id, 8)), undefined, 'the second wave never started');
-    const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
+    const parent = transcript(crew, `agent:m1:crewhouse:scout`);
     const returned = JSON.parse(/crew_batch: (\{.*\})$/m.exec(parent)![1]);
     assert.ok(returned.answers.slice(0, 8).every((a: any) => !a.ok));
     assert.match(returned.note, /resting/);
@@ -93,7 +93,7 @@ test('at most 24 items per job: the rest are named, not silently dropped', async
     await settled(db, id);
     assert.ok(specOf(crew, batchKey('scout', id, MAX_ITEMS - 1)));
     assert.equal(specOf(crew, batchKey('scout', id, MAX_ITEMS)), undefined);
-    const parent = transcript(crew, `agent:m1:crewhouse:scout:${id}`);
+    const parent = transcript(crew, `agent:m1:crewhouse:scout`);
     assert.match(parent, new RegExp(`only the first ${MAX_ITEMS} of 30 items`));
   } finally { done(); }
 });
@@ -104,7 +104,7 @@ test('an empty question or item list is a plain error, not a run of nothing', as
     const id = (await crew.post('scout', `compare ${call('crew_batch', { question: '', items: [] })}`))!.task;
     await settled(db, id);
     assert.equal(task(db, id).state, 'done');
-    assert.match(transcript(crew, `agent:m1:crewhouse:scout:${id}`), /error: (say the one question|list the items)/);
+    assert.match(transcript(crew, `agent:m1:crewhouse:scout`), /error: (say the one question|list the items)/);
     assert.equal(specOf(crew, batchKey('scout', id, 0)), undefined, 'nothing ran');
   } finally { done(); }
 });
