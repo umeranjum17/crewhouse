@@ -15,8 +15,7 @@ export { ENGINE_VERSION } from '@byokit/openclaw';
 
 const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
-const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' }, providerOf = (account: string) => account === 'chatgpt' && process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'openai-codex' : PROVIDER_OF[account];
-/** The engine's own sign-in route per account (the pin's wizard choices). */
+const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' }, providerOf = (account: string) => account === 'chatgpt' && process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'openai-codex' : PROVIDER_OF[account], modelProviderOf = (account: string) => account === 'chatgpt' && process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'openai' : providerOf(account);
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-oauth', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
 }, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
@@ -63,8 +62,9 @@ export class OpenClawRuntime implements AgentRuntime {
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
+    const codexCliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1';
     this.kit = new OpenClawKit({
-      stateDir, offered: [...new Set(Object.keys(PROVIDER_OF).map(providerOf))], engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli)))), // only installed CLI directories enter the engine's otherwise /usr/bin:/bin PATH
+      stateDir, offered: [...new Set(Object.keys(PROVIDER_OF).map(providerOf))], engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: { ...CONFIG, plugins: { ...CONFIG.plugins, allow: [...CONFIG.plugins.allow, ...(codexCliOnly ? ['codex'] : [])], entries: { ...CONFIG.plugins.entries, codex: { enabled: codexCliOnly } } } }, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'codex' : 'claude'))), // only installed CLI directories enter the engine's otherwise /usr/bin:/bin PATH
       authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
       installPolicy: { trustedSkills: join(appDir, 'src/openclaw/trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
@@ -142,7 +142,7 @@ export class OpenClawRuntime implements AgentRuntime {
 
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
-    const provider = providerOf(account), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'default' }, { timeoutMs: 20_000 });
+    const provider = modelProviderOf(account), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'default' }, { timeoutMs: 20_000 });
     return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && m.available !== false).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */

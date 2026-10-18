@@ -156,9 +156,12 @@ test('Claude signed in on this computer is usable: the kit reports it as claude-
 test('Codex CLI-only mode routes ChatGPT picks to Codex and has no sign-in fallback', async () => {
   const previous = process.env.CREWHOUSE_CODEX_CLI_ONLY;
   process.env.CREWHOUSE_CODEX_CLI_ONLY = '1';
-  const f = faked({}, { 'models.list': () => ({ models: [{ id: 'openai-codex/gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai-codex', available: true }] }) });
+  const f = faked({}, { 'models.list': () => ({ models: [{ id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai', available: true }] }) });
   try {
     await f.started;
+    const config = JSON.parse(readFileSync(join(f.state, 'openclaw', 'openclaw.json'), 'utf8'));
+    assert.ok(config.plugins.allow.includes('codex'));
+    assert.equal(config.plugins.entries.codex.enabled, true);
     assert.deepEqual(await f.runtime.models('chatgpt'), [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }]);
     const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'chatgpt',
       model: 'gpt-6-luna', cwd: '', system: '', message: 'Explain this repo.', builtins: [] }, () => {});
