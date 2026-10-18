@@ -41,8 +41,7 @@ test('pinned engine uses the owner HOME and isolated Codex state, with loopback 
     assert.equal(env.CODEX_HOME, join(engine, 'home', '.codex')); // Gateway/doctor never read or refresh the installed Codex login.
     assert.equal(env.OPENAI_API_KEY, undefined);
     // Only folders holding installed CLI backends may be borrowed; nothing else from the owner's PATH reaches the engine.
-    const cli = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' ? 'codex' : 'claude';
-    const cliDirs = (process.env.PATH ?? '').split(':').filter((d) => d && existsSync(join(d, cli)));
+    const cliDirs = (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli))));
     assert.deepEqual(env.PATH.split(':').slice(2), cliDirs, 'no other folder of the owner\'s PATH reaches the engine');
     await runtime.start({ tools: () => [], gate: async () => ({ allow: false, reason: 'no runs here' }), call: async () => 'no calls here' });
     const health = await kit.call('health', {}) as { ok: boolean; plugins: { loaded: string[] } };
@@ -114,10 +113,8 @@ test('pinned engine uses the owner HOME and isolated Codex state, with loopback 
     assert.equal(byName.weather?.blockedByAllowlist, true, 'a bundled skill outside the reviewed list is blocked');
     for (const allowed of ['video-frames', 'summarize', 'diagram-maker'])
       assert.equal(byName[allowed]?.blockedByAllowlist, false, `${allowed} stays eligible`);
-    for (const name of ['.pi', '.openclaw', '.clawdbot', '.codex']) {
-      assert.equal(readFileSync(join(owner, name, 'decoy'), 'utf8'), 'unchanged');
-      assert.deepEqual(readdirSync(join(owner, name)), ['decoy']);
-    }
+    assert.deepEqual(readdirSync(owner).sort(), ['.clawdbot', '.codex', '.openclaw', '.pi']);
+    for (const name of readdirSync(owner)) assert.equal(readFileSync(join(owner, name, 'decoy'), 'utf8'), 'unchanged');
   } finally {
     await runtime.stop();
     if (original === undefined) delete process.env.HOME; else process.env.HOME = original;
