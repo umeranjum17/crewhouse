@@ -48,7 +48,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 }
 /** A message the stub model answers with one tool call, then a reply saying what the tool returned. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
-const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
+const say = (bot: string, text: string) => api('POST', '/api/bots/chief/messages', { text: bot === 'chief' ? text : `Scribe, ${text}` }); // the person's words to a helper go through Chief
 const finished = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
 const ready = () => until(async () => (await api('GET', '/api/state').catch(() => null))?.body.person);
 // Whatever crewd sends, nothing a person reads may show a path, a command, an engine name or a percentage.
