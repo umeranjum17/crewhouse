@@ -1728,7 +1728,7 @@ function ChiefComputer() {
   useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
   useEffect(() => () => window.clearTimeout(nudgeT.current), []);
   const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
-  const w = A.computer(c), boat = A.CLOUD.clouds[0], off = !c;
+  const w = A.computer(c), boat = A.CLOUD.boat, off = !c;
   // Not connected: the dimmed rows never act — a tap flashes the reason line and says it aloud instead.
   const nudge = () => {
     setNudged(true); setNote(w.connect);
@@ -1753,6 +1753,7 @@ function ChiefComputer() {
       {off && <p ref={connectRef} className={`mute small computer-cap computer-connect${nudged ? ' nudge' : ''}`}>{w.connect}</p>}
       {note ? <span role="status" className="vh">{note}</span> : null}
       <div className="card list"><div className="row-item"><span className="o-ic" style={{ background: boat.tile, color: '#fff' }}>{boat.mark}</span>{two(w.host)}</div></div>
+      <p className="mute small computer-cap">{w.keyAway}</p>
       <details className="more-ways"><summary><span className="grow">{w.more}</span><i aria-hidden>›</i></summary>
         <div className="card list"><button className="row-item" onClick={() => act('undo')}><span className="grow">{w.undo}</span></button>
           <button className="row-item" onClick={() => confirm(w.removeAsk.join('\n\n')) && act('delete')}><span className="grow danger">{w.remove}</span></button></div></details>

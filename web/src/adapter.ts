@@ -91,8 +91,7 @@ export type App = { id: string; line: string; name: string; logo: string; on: bo
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
-/** Chief asks where he should work. `cloud` shows the cloud row and its line: each surface keeps it off in a release
- *  build until BYOKit's cloud kit is published. */
+/** Chief asks where he should work. `cloud` shows the cloud row and its line; each surface controls whether to include it. */
 export const where = (cloud: boolean) => ({
   hello: "Hi, I'm Chief. Where should I work?",
   line: cloud ? 'In the cloud I get my own computer: my sandbox, away from your phone and your files. Nothing to install at home.' : '',
@@ -106,20 +105,45 @@ export const where = (cloud: boolean) => ({
   /** The web app can't set up a cloud (or run Chief on the phone alone): both live in the phone app. */
   app: 'Use the phone app to set this up',
 });
-/** The cloud set-up steps on the phone: pick a cloud, then paste its key. */
+/** The cloud connect on the phone (mock key-first): the boat.dev key, then the computer, then Chief sets it up. The kit
+ *  side is web/src/cloud.ts; a web page can't call boat.dev, so only the phone app shows these. */
 export const CLOUD = {
-  pick: { step: 'Step 1 of 3 · Your cloud', title: "Where should Chief's computer live?", lead: 'Pick a cloud company. You rent the computer from them, in your own name.' },
-  clouds: [
-    { name: 'boat.dev', sub: 'Ready in about a minute · about $20 a month · free trial first', mark: 'b', tile: '#111111' },
-    { name: 'Hetzner', sub: 'About €6 a month · coming next', mark: 'H', tile: '#D50C2D', soon: 'Soon' },
-  ],
-  more: 'More clouds later.',
-  sandbox: ["Chief's own sandbox.", 'He works on this computer, away from your phone and your files. boat.dev bills you directly. Crewhouse charges nothing and never sees your card.'],
-  next: 'Continue with boat.dev',
-  key: { step: 'Step 2 of 3 · Your cloud', title: 'Connect boat.dev', open: 'Open boat.dev', url: 'https://boat.dev', paste: 'Paste your key', connect: 'Connect' },
-  /** Each step's words; the middle part of the second is the page's own name, set bold. */
-  steps: [['Open boat.dev and sign in. New there? Make an account and start the free trial.'], ['Go to ', 'API keys', ', make a new key and copy it.'], ['Come back and paste it here.']],
-  kept: "The key stays on this phone, locked by your phone's own lock. It never goes to Crewhouse.",
+  top: ['Chief’s computer', 'Your own cloud'], title: 'Connect your cloud computer.', boat: { mark: 'b', tile: '#111111' },
+  lede: 'One key lets me set up your computer and help manage it later.',
+  key: {
+    pill: 'boat.dev · Your own account', title: 'Paste your boat.dev key', lead: 'Two actions if your key is ready: paste it, then choose your computer.',
+    label: 'Key from boat.dev', paste: 'Paste key', after: 'Your computers appear after you paste. You choose before I install anything.',
+    checking: 'Checking your key with boat.dev…', make: 'Need to make a key first?', open: 'Open boat.dev', url: 'https://boat.dev',
+    how: 'In your own boat.dev account, open API keys, make a key for setup and computer management, then copy it. Use only the permissions needed.',
+  },
+  kept: ['The key can set up and manage computers in your boat.dev account. It stays on ', 'this phone only', ', not Chief’s computer, and is sent only to boat.dev. Forget it in Chief’s computer settings; revoke it at boat.dev to end its access.'],
+  pick: {
+    pill: 'Choose before setup', title: 'Which computer should I use?', lead: 'I found these in your boat.dev account. I won’t make a new one unless you ask.',
+    /** The kit lists no display name (every computer is `computer`), so they are told apart by order. */
+    name: (i: number, n: number) => n > 1 ? `Cloud computer ${i + 1}` : 'Your cloud computer', sub: 'Already rented in your account', setup: 'Setup installs Chief here and allows this phone to connect. Existing files and services are checked first.',
+    use: 'Use this computer', none: 'I didn’t find a computer in your boat.dev account.', bill: 'No new rental. boat.dev keeps billing your existing computer as usual.',
+    make: 'Make a new computer instead', other: 'Use a different key',
+  },
+  make: {
+    pill: 'New rental', title: 'Make a cloud computer?', lead: 'It will be in your own boat.dev account. boat.dev bills you, not Crewhouse.', size: 'Standard · 2 CPU / 4 GB',
+    check: 'Your account’s balance and trial limit must be checked before I make one.', create: 'Check cost before creating', back: 'Use my existing computer instead',
+  },
+  steps: {
+    pill: 'Setting up', title: 'I’m setting up your computer.', count: (n: number) => `${n} of 5 steps done`, help: 'Setup needs your help',
+    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again picks up where this stopped. Don’t make another computer.',
+    rows: [['Checked your access', 'Only your chosen computer.'], ['Checked the computer', 'Files and services checked before installing.'],
+      ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
+      ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
+  },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. Talking to Chief there from this phone arrives with the next Crewhouse update.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'] },
+  other: {
+    link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
+    ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],
+      ['SSH from a computer', 'Use the SSH key you already have there.', 'This is set up from the computer that holds your SSH key, and that isn’t ready yet. The private key never leaves that computer.'],
+      ['Use Tailscale', 'An option if you want it. You never need it.', '']],
+    foot: 'boat.dev first. Hetzner setup comes later. Every computer and cloud account stays yours.',
+  },
+  trust: ['Your chats travel encrypted between this phone and Chief’s computer. Your cloud company can access files on that computer.', 'Your cloud bill. No Crewhouse server in the middle.'],
 };
 
 // ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer) ----------
@@ -127,7 +151,7 @@ export const CLOUD = {
 export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
 export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
 /** The page's one call: no `act` reads the computer, an act does it and reads again. It stops at the kit:
- *  @byokit/cloud (machine.update, reset, copies, remove) is not on npm yet, so no computer is reached and nothing
+ *  @byokit/cloud's machine.update, reset, copies and remove aren't wired here yet, so no computer is reached and nothing
  *  changes. The 404 is crewd's own "not here yet" (api.ts `trouble`), so each surface says it isn't ready. */
 export async function computerCall(_act?: ComputerAct): Promise<Computer> {
   throw Object.assign(new Error("Chief's computer isn't connected yet"), { status: 404 });
@@ -146,6 +170,9 @@ export const computer = (c: Computer | null) => {
     daily: ['Daily snapshots', `Keeps the last 7.${at && ` Last one ${at}.`}`],
     disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
     host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
+    /** The boat.dev key: kept only on the phone that set the computer up, never on the computer or the web. */
+    key: ['boat.dev key', 'Kept on this phone only. Revoke it at boat.dev to end its access.'], forget: 'Forget key',
+    keyAway: 'Your boat.dev key stays on the phone that set this computer up. Forget it there.',
     more: 'More', undo: 'Undo update', remove: 'Delete my cloud computer',
     removeAsk: ['Delete your cloud computer?', "Chief's computer and its snapshots are removed for good, with everything on them. Your phone and your own files are not touched."],
     sheet: {

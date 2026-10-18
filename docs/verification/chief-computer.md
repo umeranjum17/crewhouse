@@ -2,14 +2,18 @@
 
 Chief's settings page for the one cloud computer the crew shares (`ChiefComputer` in `web/src/main.tsx` and in
 `mobile/App.tsx`): Update computer, Reset computer (red) with its sheet "Reset Chief's computer?", the sandbox
-caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer).
+caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer). The
+web says the key stays on the phone that set up this computer; key management is phone-only. On
+the phone that kept a boat.dev key, a "boat.dev key" row with Forget key follows Runs on boat.dev. Forget removes the
+key from the phone's secure store, and the row goes away. The web shows "Your boat.dev key stays on the phone that set
+this computer up. Forget it there." instead.
 The words are `A.computer` in `web/src/adapter.ts`, one source for both. Approved mock: `computer` in
 `scripts/verify/mocks.tsv`.
 
 Behind the same build flag as the cloud row ([where-cloud.md](where-cloud.md)): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for
 the phone, `CREWHOUSE_CLOUD=1` for `scripts/build-web.mjs`. Without it Settings has no row and `#/computer` opens
-Home. Every action goes to `A.computerCall`, which stops at the kit until `@byokit/cloud` is published: the
-kit-only values (update state, snapshot time, disk) read "Not connected" or are left out. While nothing is
+Home. The phone can forget its stored boat.dev key; computer actions and kit-only values (update state, snapshot
+time, disk) remain unconnected and read "Not connected" or are left out. While nothing is
 connected, Reset computer and the Daily snapshots switch stay dimmed and disabled with one muted line under the
 group (`A.computer(null).connect`: "Connect Chief's computer first."); a tap on either answers with that reason
 (the line flashes and is announced) — the Reset sheet never opens and no toast appears. Other rows keep the
