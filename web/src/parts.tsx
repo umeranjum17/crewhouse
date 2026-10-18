@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
+import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
 import { ears, hear, speak, voices, type Ears } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
@@ -700,7 +701,7 @@ function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => vo
 const HOLD_MS = 4000;
 
 /** A file waiting to send: the picker's own name and size for its chip, its bytes for crewd (which names it itself). */
-type Pick = { name: string; type: string; size: number; data: string };
+export type Pick = { name: string; type: string; size: number; data: string };
 const PICK_ACCEPT = '.pdf,.docx,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png,.webp';
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const readBase64 = (b: Blob) => new Promise<string>((resolve, reject) => {
@@ -732,7 +733,22 @@ const pickOne = async (f: File): Promise<Pick | null> => {
   if (f.size > 10 << 20) { toast(`“${f.name}” is too big; try one under 10 MB.`); return null; }
   return readBase64(f).then((data) => ({ name: f.name, type: f.type, size: f.size, data })).catch(() => null);
 };
-const pickFiles = (list: FileList | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map(pickOne)).then((ps) => ps.filter((p): p is Pick => !!p?.data));
+const pickFiles = (list: ArrayLike<File> | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map(pickOne)).then((ps) => ps.filter((p): p is Pick => !!p?.data));
+/** The photos the installed app's Share sheet sent (web/src/sw.ts holds them): read once, cleared, and each one made
+ *  small as a picked photo is. Nothing when this page wasn't opened by a share. */
+export async function takeShared(): Promise<Pick[]> {
+  try {
+    const cache = await caches.open(SHARE_CACHE), files: File[] = [];
+    for (let i = 0; i < SHARE_KEEP; i++) {
+      const hit = await cache.match(sharedKey(i));
+      if (!hit) break;
+      const blob = await hit.blob();
+      files.push(new File([blob], decodeURIComponent(hit.headers.get('X-Name') ?? '') || 'Photo', { type: blob.type }));
+    }
+    await caches.delete(SHARE_CACHE);
+    return pickFiles(files);
+  } catch { return []; }
+}
 
 /** A send handler's answer for words kept for the person, not sent and not failed (Hello asks for a name first): the box
  *  gets them back, with no Not sent line. */

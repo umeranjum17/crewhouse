@@ -1,6 +1,8 @@
 // Crewhouse's service worker: the offline app shell, and the notification handler web push needs on a phone.
 // Built to web/dist/sw.js by scripts/build-web.mjs, which injects the precache list and the cache name; it bundles
 // no app code, and the served shell is the browser's own copy, never crewd's live data (that is uncached, always fresh).
+import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
+
 declare const __PRECACHE__: string[];
 declare const __CACHE__: string;
 
@@ -22,17 +24,32 @@ sw.addEventListener('install', (e) => {
 });
 
 sw.addEventListener('activate', (e) => {
-  // Drop yesterday's shell, so a new build never has an old index served to it.
+  // Drop yesterday's shell, so a new build never has an old index served to it. A share waiting for its page is kept.
   e.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== __CACHE__) await caches.delete(key);
+    for (const key of await caches.keys()) if (key !== __CACHE__ && key !== SHARE_CACHE) await caches.delete(key);
     await sw.clients.claim();
   })());
 });
 
+/** The Share sheet's POST: the first photos go into the share cache, and the browser lands on /share with the words on
+ *  the link, as a GET share does. The page reads the photos and clears them. */
+async function takeShare(req: Request): Promise<Response> {
+  const form = await req.formData().catch(() => new FormData());
+  const photos = form.getAll('photos').filter((f): f is File => f instanceof File && f.size > 0 && f.type.startsWith('image/'));
+  await caches.delete(SHARE_CACHE);
+  const cache = await caches.open(SHARE_CACHE);
+  for (const [i, f] of photos.slice(0, SHARE_KEEP).entries()) await cache.put(sharedKey(i), new Response(f, { headers: { 'X-Name': encodeURIComponent(f.name) } }));
+  const q = new URLSearchParams();
+  for (const k of ['title', 'text', 'url']) { const v = form.get(k); if (typeof v === 'string' && v.trim()) q.set(k, v); }
+  if (photos.length > SHARE_KEEP) q.set('more', String(photos.length - SHARE_KEEP));
+  return Response.redirect(new URL(`/share?${q}`, sw.location.origin).href, 303);
+}
+
 sw.addEventListener('fetch', (e) => {
   const req = e.request as Request;
-  if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (req.method === 'POST' && url.origin === sw.location.origin && url.pathname === '/share') { e.respondWith(takeShare(req)); return; }
+  if (req.method !== 'GET') return;
   if (url.origin !== sw.location.origin || LIVE.test(url.pathname)) return;
   if (req.mode === 'navigate') {
     // A reachable computer always wins, so an update shows on the next visit; the cached shell is the offline floor.
