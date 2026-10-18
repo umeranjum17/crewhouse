@@ -5,6 +5,7 @@
     "chatgpt"
   ],
   "color": "#3355C2",
+  "apps": ["drive", "notion", "gmail", "calendar"],
   "tools": [
     "crew",
     "files",

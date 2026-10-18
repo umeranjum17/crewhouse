@@ -3,7 +3,7 @@ import { signInApp } from './connect-fixture.ts';
 // a move that keeps the length, and the gate: looking is free, adding and moving ask, cancelling asks as a delete.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, settled, task, until } from './lab.ts';
+import { setup, settled, task, until, grantApps } from './lab.ts';
 
 const { CALENDAR, parseWhen, runCalendar, whenOf } = await import('../src/calendar.ts');
 const { effectOf } = await import('../src/policy.ts');
@@ -96,6 +96,7 @@ test('a helper uses the connected calendar through crewd: no Google MCP, the tok
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['calendar']);
   await signInApp(crew.connections, 'calendar');
   store.clear(); asked.length = 0;
   const t = crew.assign('quill', 'look [tool calendar {"args":["week"]}]', 'chief').task;

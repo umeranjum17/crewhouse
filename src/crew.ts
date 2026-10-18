@@ -183,7 +183,7 @@ function inhibitor() {
 interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<string>; end: () => void; release: () => void }
 
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
-interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>;
+interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; owners?: Record<string, string>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
@@ -1297,11 +1297,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: `agent:m1:crewhouse:${bot.id}:${task.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
-    // The person's connected apps (their Notion, their Google…): every helper working for them can use them, through the gate.
+    // The person's connected apps (their Notion, their Google…): Chief reaches every one; a helper only the ones its bot.json grants (src/bots.ts). Through the gate either way.
     const apps = await this.connections.tools();
-    l.apps = apps.effects;
+    l.apps = apps.effects; l.owners = apps.owner;
     this.mailFiling ??= new MailSend(this.db, this.connections);
-    l.appTools = new Map(apps.tools.map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space, this.mailFiling, bot.id) : t])); // mail saves into this run's own files; drafts/labels reuse the guarded MailSend path
+    l.appTools = new Map(apps.tools.filter((t) => bot.id === CHIEF || (conf.apps ?? []).includes(apps.owner[t.name])).map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space, this.mailFiling, bot.id) : t])); // mail saves into this run's own files; drafts/labels reuse the guarded MailSend path
     const axi = g.axi.browser;
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
@@ -1523,8 +1523,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
           }
           // crew_app carries connected app tools and granted command tools; the policy still checks each call.
           const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot, this.live.get(run.bot)!.grants).run, name)
-            : this.toolAllowed(run.bot, name);
-          if (!ok) return { allow: false, reason: 'This run does not have that tool.' };
+            : this.toolAllowed(run.bot, name), owner = this.live.get(run.bot)?.owners?.[name];
+          if (!ok) return { allow: false, reason: owner ? `${this.connections.apps[owner].name} isn't part of this job, so you can't use it. Tell the person that.` : 'This run does not have that tool.' };
           const result = await this.gate(run.bot, name, input);
           if (result) {
             if (result.terminate) { // the person hasn't answered: stop the run here; the answer arrives as the next prompt
@@ -1566,10 +1566,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
           if (!selected) throw new Error('Unknown web tool');
           return String(await selected.run(input, signal));
         }
-        if ((name === 'calendar' || name === 'mail' || tool === 'crew_app') && l?.appTools?.has(name)) {
-          const app = l.appTools.get(name)!;
-          return said(app, input, signal);
-        }
+        const app = l?.appTools?.get(name);
+        if (app && (name === 'calendar' || name === 'mail' || tool === 'crew_app')) return said(app, input, signal);
         // Command-line tools that need the person's own sign-in: fixed argv on this computer, outside the sandbox.
         const runTool = registry(this.cfg, l?.grants ?? []).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);
         if (runTool) return await new Promise<string>((resolve) => {
@@ -2119,8 +2117,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
   private askConnect(botId: string, app: string) {
-    const a = this.connections.apps[app];
-    if (!a) throw fail(`no app called ${app}`);
+    const a = this.connections.apps[app], granted = botId === CHIEF || (disk.botConfig(this.cfg, botId).apps ?? []).includes(app);
+    if (!a || !granted) throw fail(a ? `${a.name} isn't part of this job, so you can't connect it. Tell the person that.` : `no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
     // Google is Chief's to ask: the person talks only to Chief about it, never to the helper that needs it.
     const owner = a.google ? CHIEF : botId;

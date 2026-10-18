@@ -6,6 +6,7 @@
     "chatgpt"
   ],
   "color": "#C2577A",
+  "apps": [],
   "tools": [
     "crew",
     "files",

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { DeviceLink, pairWithOffer } from '@byokit/pair';
 import { startServer } from '../src/server.ts';
 import assert from 'node:assert/strict';
-import { setup, settled, task, until } from './lab.ts';
+import { setup, settled, task, until, grantApps } from './lab.ts';
 import { temp } from './tmp.ts';
 const A = await import('../web/src/adapter.ts');
 
@@ -180,9 +180,10 @@ test('draftReply hardens attacker-shaped thread headers: refuses splits, encodes
 });
 
 test('a helper drafts and files through crewd: one card per message, the yes writes, never sends', async () => {
-  const { db, crew, done } = setup();
+  const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['gmail']);
   await signInApp(crew.connections, 'gmail');
   await signInApp(crew.connections, 'gmailwrite');
   assert.equal(A.apps(crew.snapshot()).find((a) => a.id === 'gmailwrite')!.status, 'On · changes ask first');
@@ -234,6 +235,7 @@ test('a helper reads the connected Gmail through crewd: no Google MCP, the token
   const { db, crew, cfg, done } = setup();
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
+  grantApps(cfg, 'quill', ['gmail']);
   await signInApp(crew.connections, 'gmail');
   asked.length = 0;
   const t = crew.assign('quill', 'check [tool mail {"args":["search","from:school"]}]', 'chief').task;
