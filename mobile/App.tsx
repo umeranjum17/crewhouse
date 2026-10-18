@@ -894,7 +894,7 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
     {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
-      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked, true) />}</View>}</>;
+      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked, true)} />}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
