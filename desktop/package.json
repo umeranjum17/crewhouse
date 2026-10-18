@@ -1,0 +1,18 @@
+{
+  "name": "crewhouse-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crewhouse, opened like any other app: the crew in a window of its own, with its counts in the tray.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "out/main.mjs",
+  "author": "Crewhouse <crewhouse@users.noreply.github.com>",
+  "homepage": "https://github.com/umeranjum17/crewhouse",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0"
+  }
+}

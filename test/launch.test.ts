@@ -21,7 +21,7 @@ function install(withKey: boolean) {
   const root = mkdtempSync(join(tmpdir(), 'launch-test-'));
   const opt = join(root, 'opt'), bin = join(root, 'bin'), state = join(root, 'state');
   mkdirSync(opt); mkdirSync(bin); mkdirSync(join(state, 'crewhouse'), { recursive: true });
-  cpSync(join(repo, 'packaging', 'launch.mjs'), join(opt, 'launch.mjs'));
+  for (const f of ['launch.mjs', 'trouble.mjs']) cpSync(join(repo, 'packaging', f), join(opt, f)); // as scripts/package.mjs lays out /opt
   symlinkSync(repo, join(opt, 'app'));
   writeFileSync(join(bin, 'xdg-open'), '#!/bin/sh\nexit 0\n');
   chmodSync(join(bin, 'xdg-open'), 0o755);

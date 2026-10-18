@@ -14,3 +14,4 @@ relay-data/
 # Review evidence media is never committed (see data/ch-pm-16/evidence/README.md).
 data/**/screens/
 data/**/motion/
+/desktop/out/

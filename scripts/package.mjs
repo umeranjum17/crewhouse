@@ -3,12 +3,9 @@
 // Both carry their own Node (pinned, checksum-verified), crewd, the built web app and the launcher, under /opt/crewhouse.
 // Run after `npm run build:web`. Needs curl, tar, xz and ar (binutils).
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-
-const NODE = '24.21.0';
-const NODE_SHA256 = 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6'; // node-v24.21.0-linux-x64.tar.xz
+import { crewd, node } from '../packaging/bundle.mjs';
 
 const repo = new URL('..', import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
@@ -16,30 +13,13 @@ const dist = resolve(process.argv[2] || join(repo, 'dist'));
 const stage = join(dist, 'stage');
 const opt = join(stage, 'opt', 'crewhouse');
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', ...opts });
-if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) throw new Error('build the web app first: npm run build:web');
 
 // The engine set ships read-only, so an earlier build's stage needs write access back before it goes.
 if (existsSync(stage)) sh('chmod', ['-R', 'u+w', stage]);
 rmSync(stage, { recursive: true, force: true });
-mkdirSync(join(opt, 'node'), { recursive: true });
-
-// Node, as nodejs.org ships it, checked against the pinned checksum.
-const tarball = join(dist, `node-v${NODE}-linux-x64.tar.xz`);
-if (!existsSync(tarball)) sh('curl', ['-fsSLo', tarball, `https://nodejs.org/dist/v${NODE}/node-v${NODE}-linux-x64.tar.xz`]);
-const sum = createHash('sha256').update(readFileSync(tarball)).digest('hex');
-if (sum !== NODE_SHA256) { rmSync(tarball); throw new Error(`Node checksum mismatch: ${sum}`); }
-sh('tar', ['-xJf', tarball, '-C', join(opt, 'node'), '--strip-components=1']);
-
-// crewd and what it reads at run time; production dependencies only, installed with the bundled npm.
+node(dist, join(opt, 'node'));
 const app = join(opt, 'app');
-for (const part of ['src', 'templates', 'tools', 'skills', 'relay', 'crewhouse', 'package.json', 'package-lock.json', '.npmrc']) {
-  if (existsSync(join(repo, part))) cpSync(join(repo, part), join(app, part), { recursive: true });
-}
-cpSync(join(repo, 'web', 'dist'), join(app, 'web', 'dist'), { recursive: true });
-mkdirSync(join(app, 'scripts'), { recursive: true });
-for (const name of ['prepare-engine.mjs', 'headless.mjs']) cpSync(join(repo, 'scripts', name), join(app, 'scripts', name));
-const bundledEnv = { ...process.env, PATH: `${join(opt, 'node', 'bin')}:${process.env.PATH}` };
-sh(join(opt, 'node', 'bin', 'npm'), ['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: app, env: bundledEnv });
+const bundledEnv = crewd(app, join(opt, 'node'));
 const engineState = join(stage, 'engine-prepare');
 // The download carries its engine in app/runtime/openclaw (Config.engineDir finds it there once installed).
 sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: { ...bundledEnv, CREWHOUSE_ENGINE_DIR: join(app, 'runtime', 'openclaw') } });
@@ -58,7 +38,7 @@ sh('chmod', ['-R', 'a+rX', join(app, 'runtime')]);
 rmSync(engineState, { recursive: true, force: true });
 
 // The launcher, the menu entry and the icon.
-cpSync(join(repo, 'packaging', 'launch.mjs'), join(opt, 'launch.mjs'));
+for (const name of ['launch.mjs', 'trouble.mjs']) cpSync(join(repo, 'packaging', name), join(opt, name));
 mkdirSync(join(stage, 'usr', 'share', 'applications'), { recursive: true });
 cpSync(join(repo, 'packaging', 'crewhouse.desktop'), join(stage, 'usr', 'share', 'applications', 'crewhouse.desktop'));
 for (const px of [16, 24, 32, 48, 64, 128, 256, 512]) {
