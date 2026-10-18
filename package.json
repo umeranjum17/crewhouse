@@ -4,6 +4,7 @@
   "private": false,
   "description": "Local-first crew of persistent AI helpers, run by Chief on your own AI accounts.",
   "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/umeranjum17/crewhouse.git" },
   "type": "module",
   "engines": {
     "node": ">=22.22.3"
