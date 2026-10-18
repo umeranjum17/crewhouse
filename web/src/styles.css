@@ -419,6 +419,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .mic { width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; color: var(--ink2); flex: none; display: grid; place-items: center; transition: background 120ms var(--ease); }
 .mic:hover { background: var(--soft); }
 .mic.on { background: var(--pink); color: var(--on-pink); }
+.mic.off { opacity: .45; }
 .mic-stop { width: 12px; height: 12px; border-radius: 3px; background: currentColor; }
 @media (prefers-reduced-motion: no-preference) { .mic.on { animation: mic-on 1.2s var(--ease) infinite alternate; } }
 @keyframes mic-on { to { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pink) 35%, transparent); } }
@@ -431,6 +432,7 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .call.speaking .call-state i { background: var(--ok); }
 .call-words { grid-column: 1 / -1; margin: 0 0 4px; font: 400 17px/24px var(--ui); color: var(--ink); overflow-wrap: anywhere; }
 .call-words.mute { color: var(--mute); }
+.call-heard { grid-column: 1 / -1; margin: 0 0 4px; font: 400 13px/18px var(--ui); color: var(--mute); }
 .call-voice > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: 999px; font: 500 13px/18px var(--ui); color: var(--ink2); background: var(--soft); white-space: nowrap; }
 .call-voice > summary::-webkit-details-marker { display: none; }
 .call-menu { position: absolute; right: 8px; bottom: calc(100% + 8px); z-index: 5; width: min(320px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--bg); box-shadow: var(--e2); }

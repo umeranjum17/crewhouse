@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom';
 import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
-import { canHear, hear, speak, voices } from './voice.ts';
+import { ears, hear, speak, voices, type Ears } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { VOICE_WORDS, clock, column, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -560,28 +560,31 @@ export function Steps({ steps, max = 6, onUndo, onForget }: { steps: Step[]; max
   );
 }
 
-const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.";
+const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "The browser's online service couldn't hear you. Check the connection, or type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.";
 
-/** The voice note to Chief: a mic in the box when this browser can hear on this device. What was said lands in the
- *  box after what is already there, for the person to read and send; nothing is sent by speaking. */
+/** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
+ *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
+ *  read and send; nothing is sent by speaking. */
 function useVoice(on: boolean, text: string, put: (t: string) => void) {
-  const [can, setCan] = useState(false);
+  const [route, setRoute] = useState<Ears | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
   const now = useRef(text);
   now.current = text;
-  useEffect(() => { if (on) void canHear().then(setCan); }, [on]);
+  useEffect(() => { if (on) void ears().then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
-  if (!can) return null;
+  if (!route) return null;
   const start = () => {
-    const h = hear();
+    if (route === 'online') toast(VOICE_WORDS.online);
+    const h = hear(route);
     setEar(h);
     setListen('chief', true);
     h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
       (e) => toast(heardWrong(e)))
       .finally(() => { setEar(null); setListen('chief', false); });
   };
-  return <button type="button" className={`mic${ear ? ' on' : ''}`} aria-label={ear ? 'Stop listening' : 'Speak to Chief'} aria-pressed={!!ear}
-    onClick={() => (ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  const off = route === 'none';
+  return <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
+    onClick={() => (off ? toast(VOICE_WORDS.none) : ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
 }
 
@@ -597,14 +600,14 @@ const spoken = (t: string) => t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(
 /** Talking with Chief: listen, send the words once the person stops, read his reply aloud, then listen again. It never
  *  listens while it reads, so it can't hear itself; Stop ends it at any point, and every word stays in the chat. */
 function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean>) {
-  const [can, setCan] = useState(false);
+  const [route, setRoute] = useState<Ears>('none');
   const [now, setNow] = useState<Now | null>(null);
   const lines = useRef(talk?.lines ?? []);
   lines.current = talk?.lines ?? [];
   const arrived = useRef(() => {});
   const run = useRef<{ stopped: boolean; cut: () => void } | null>(null);
   useEffect(() => arrived.current(), [talk?.lines]);
-  useEffect(() => { if (talk) void Promise.all([canHear(), voices()]).then(([h, v]) => setCan(h && v.length > 0)); }, [!!talk]);
+  useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => setRoute(v.length > 0 ? r : 'none')); }, [!!talk]);
   const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
   useEffect(() => stop, []); // leaving the chat ends the call
   const show = (n: Now) => { setNow(n); setListen('chief', n.phase === 'listening'); };
@@ -623,7 +626,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
           continue;
         }
         show({ phase: 'listening', words: '' });
-        const h = hear((w) => show({ phase: 'listening', words: w }));
+        const h = hear(route, (w) => show({ phase: 'listening', words: w }));
         r.cut = h.stop;
         const said = await h.words;
         if (r.stopped) break;
@@ -636,11 +639,11 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
     } catch (e) { end = heardWrong(e); }
     run.current = null; mark(0); setNow(null); setListen('chief', false); toast(end);
   };
-  return { can: can && !!talk, now, start, stop };
+  return { can: route !== 'none' && !!talk, route, now, start, stop };
 }
 
 /** The call in the box's place: what's happening, the words being heard or read, this device's voice and speed, Stop. */
-function CallPanel({ now, stop }: { now: Now; stop: () => void }) {
+function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => void }) {
   const [vs, setVs] = useState<SpeechSynthesisVoice[]>([]);
   const [pick, setPick] = useState(kept);
   useEffect(() => { void voices().then(setVs); }, []);
@@ -651,8 +654,9 @@ function CallPanel({ now, stop }: { now: Now; stop: () => void }) {
     <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
       <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
       <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>
-      <p>Your voice stays on this device. Only the words go to Chief.</p></div></details>
+      {hears === 'device' && <p>{VOICE_WORDS.device}</p>}</div></details>
     <button type="button" className="call-stop" onClick={stop}><i className="mic-stop" />Stop</button>
+    {hears === 'online' && <p className="call-heard">{VOICE_WORDS.online}</p>}
     {(now.words || now.phase === 'listening') && <p className={`call-words${now.words ? '' : ' mute'}`}>{now.words || 'Go ahead, I’m listening.'}</p>}
   </div>;
 }
@@ -745,7 +749,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
     if (!ok) { setText(said); setFailed(true); if (chat) sent(chat, false, said); }
     return ok;
   });
-  if (call.now) return <CallPanel now={call.now} stop={call.stop} />;
+  if (call.now) return <CallPanel now={call.now} hears={call.route} stop={call.stop} />;
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>

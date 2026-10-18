@@ -1,7 +1,7 @@
 # Talk with Chief (a hands-free call)
 
 With Chief's box empty, Talk (the waveform in the send slot, "Talk with Chief") shows only when the browser can
-hear on the device and has a voice of its own. The call takes the box's place: Listening (words as they come),
+hear (on the device, else its online recognizer, which the call says first) and has a voice of its own. The call takes the box's place: Listening (words as they come),
 Chief is thinking, Chief is speaking (a sentence at a time, the line being read marked green), Listening again,
 never listening while it reads. Voice and speed sit under Voice, kept per device (`crewhouse.voice`). Stop ends it
 ("Call ended."); two silent turns, a failed send (words back in the box) and no microphone each say so. Code:
