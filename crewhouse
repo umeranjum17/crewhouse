@@ -5,6 +5,12 @@ cd "$(dirname "$0")"
 # Portable release: use its checksum-pinned Node, not the machine's PATH.
 [ ! -x ../node/bin/node ] || export PATH="$(cd ../node/bin && pwd -P):$PATH"
 
+entry() {
+  if [ -f dist/crewd.js ]; then
+    case "$1" in src/main.ts) echo dist/crewd.js ;; src/doctor.ts) echo dist/doctor.js ;; src/tools.ts) echo dist/tools.js ;; scripts/prepare-engine.mjs) echo dist/prepare-engine.js ;; esac
+  else echo "$1"; fi
+}
+
 need_node() {
   command -v node >/dev/null || { echo "Crewhouse needs Node 22.22.3 or later: https://nodejs.org" >&2; exit 1; }
   node -e 'const [a,b,c]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&(b>22||(b===22&&c>=3)))?0:1)' \
@@ -14,7 +20,7 @@ need_node() {
 # Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).
 paths() {
   IFS=$'\t' read -r STATE CREW TOOLS < <(node --input-type=module -e \
-    "const { loadConfig } = await import('./src/config.ts'); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir].join('\t'))")
+    "const { existsSync } = await import('node:fs'); const { loadConfig } = await import('./' + (existsSync('dist/config.js') ? 'dist/config.js' : 'src/config.ts')); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir].join('\t'))")
 }
 
 # crewd's pid, only if that process really is this checkout's crewd.
@@ -22,7 +28,7 @@ crewd_pid() {
   local f="$STATE/crewd.pid" pid
   # ponytail: Linux /proc check; add a ps fallback when macOS is supported.
   [ -f "$f" ] && pid=$(cat "$f") && [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$(pwd -P)" ] \
-    && tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q 'src/main.ts' && echo "$pid"
+    && tr '\0' ' ' < "/proc/$pid/cmdline" | grep -Eq 'src/main.ts|dist/crewd.js' && echo "$pid"
 }
 
 stop_crewd() {
@@ -48,7 +54,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=$(pwd -P)
-ExecStart=$(node -p process.execPath) src/main.ts
+ExecStart=$(node -p process.execPath) $(entry src/main.ts)
 Restart=on-failure
 $(env | grep '^CREWHOUSE_' | sed 's/^/Environment=/')
 
@@ -84,7 +90,7 @@ remove() {
 # for almost a minute while it verifies the engine set, which would stall an in-process heartbeat.
 prepare_engine() {
   local eng started el
-  node scripts/prepare-engine.mjs & eng=$!
+  node "$(entry scripts/prepare-engine.mjs)" & eng=$!
   trap 'kill "$eng" 2>/dev/null; exit 130' INT TERM
   started=$(date +%s)
   while kill -0 "$eng" 2>/dev/null; do
@@ -100,17 +106,19 @@ prepare_engine() {
 case "${1:-}" in
   setup)
     need_node
-    if [ ! -x ../node/bin/node ]; then
-      npm ci --no-audit --no-fund
+    paths
+    if [ ! -x ../node/bin/node ] && [ ! -f "$STATE/npm-ready" ]; then
+      if [ ! -f dist/crewd.js ]; then npm ci --no-audit --no-fund; fi
       echo "Installing the AI engine (this can take a couple of minutes; it reports progress as it goes)."
       prepare_engine
-      npm run build:web
+      [ -f web/dist/index.html ] || npm run build:web
+      touch "$STATE/npm-ready"
     fi
     if [ "${2:-}" = --headless ]; then exec node scripts/headless.mjs setup "${@:3}"; fi
     # Helpers fetch their own tools the first time they need them: setup installs nothing beyond the engine.
     echo "Helpers fetch their own tools the first time they need them, so there is nothing more to install."
     echo
-    node src/doctor.ts || true
+    node "$(entry src/doctor.ts)" || true
     echo
     if [ -t 0 ] && has_systemd && [ ! -f "$UNIT" ]; then
       read -r -p "Start Crewhouse by itself whenever you log in? [Y/n] " yn
@@ -142,7 +150,7 @@ case "${1:-}" in
       node --input-type=module - <<'NODE' 2>/dev/null
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig } from './src/config.ts';
+const { loadConfig } = await import('./' + (existsSync('./dist/config.js') ? 'dist/config.js' : 'src/config.ts'));
 try {
   const c = loadConfig(), key = join(c.stateDir, 'person.key');
   if (!existsSync(key)) process.exit(1);
@@ -164,7 +172,7 @@ NODE
       echo "Crewhouse is already running; opened ${url%%#*} in your browser."
       exit 0
     fi
-    node src/main.ts & crewd=$!
+    node "$(entry src/main.ts)" & crewd=$!
     trap 'kill "$crewd" 2>/dev/null; exit 130' INT TERM
     url=
     for _ in $(seq 360); do
@@ -201,13 +209,13 @@ NODE
     # A restarted crewd keeps fetching helpers' tools on first use, like start.
     export CREWHOUSE_FIRST_USE_TOOLS=1
     # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.
-    node src/tools.ts install --refresh || echo "A tool didn't update; ./crewhouse tools install tries again." >&2
+    node "$(entry src/tools.ts)" install --refresh || echo "A tool didn't update; ./crewhouse tools install tries again." >&2
     if autostarted; then
       systemctl --user restart crewhouse.service
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on."
     elif stop_crewd; then
       mkdir -p "$STATE"
-      nohup node src/main.ts >> "$STATE/crewd.log" 2>&1 &
+      nohup node "$(entry src/main.ts)" >> "$STATE/crewd.log" 2>&1 &
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on (log: $STATE/crewd.log)."
     else
       echo "Updated to $(git log -1 --format='%h %s'). Start it with ./crewhouse start."
@@ -305,12 +313,12 @@ NODE
     ;;
   doctor)
     need_node
-    exec node src/doctor.ts
+    exec node "$(entry src/doctor.ts)"
     ;;
   tools)
     need_node
     shift
-    exec node src/tools.ts "$@"
+    exec node "$(entry src/tools.ts)" "$@"
     ;;
   test)
     need_node
