@@ -348,6 +348,7 @@ function Home(ctx: Ctx) {
       {demo && <PairRow />}
       <AccountCard accounts={accounts} onReady={refresh} />
       <SetupRow state={state} accounts={accounts} tick={tick} />
+      <NewsOffer tick={tick} />
       {A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. I'll pick things back up then.</span></div>}
       {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
       {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
@@ -1323,6 +1324,30 @@ function Routines(ctx: Ctx) {
 }
 
 // ---------- settings ----------
+/** Turn this device's news on and say what came of it, in the same words for Settings and the paired offer. */
+async function turnOnHere() {
+  const r = await turnOnNotifications(true);
+  if (r === 'on') toast('This device shows Crewhouse news.');
+  else if (r === 'off') toast('Notifications were not allowed.');
+  else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
+}
+
+/** The paired installed app's notifications, offered once: a browser shows its permission prompt only from a tap, so
+ *  nothing is asked here by itself. Shown only where the mailbox can carry news and the browser has not answered yet;
+ *  either button puts it away on this device for good. Settings keeps its own row. */
+const NEWS_OFFER = 'crewhouse.newsOffer';
+function NewsOffer({ tick }: { tick: number }) {
+  const [ready, setReady] = useState(false);
+  const [gone, setGone] = useState(() => { try { return !!localStorage.getItem(NEWS_OFFER); } catch { return false; } });
+  useEffect(() => { if (paired && pushPossible() && Notification.permission === 'default') void api.pushKey().then((k) => setReady(k.ready)).catch(() => {}); }, [tick]);
+  if (!paired || gone || !ready || !pushPossible() || Notification.permission !== 'default') return null;
+  const put = () => { try { localStorage.setItem(NEWS_OFFER, '1'); } catch { /* this visit only */ } setGone(true); };
+  return <div className="card nudge">
+    <span className="grow"><b>Get news when the app is closed?</b><div className="mute small">Only a line when Chief finishes or needs you, never what you chat about.</div>
+      <div className="btns"><button className="btn go" onClick={() => { put(); void attempt(turnOnHere); }}>Turn on</button><button className="btn ghost" onClick={put}>Not now</button></div></span>
+  </div>;
+}
+
 /** The paired app's own notifications, on the paired card. One line: the state and the one action that changes it.
  *  `relay`: whether a mailbox can carry them — null while the key is still being asked over the link; false says
  *  `norelay` in plain words, no dead button; 'offline' and 'unreachable' say why under the switch. */
@@ -1337,12 +1362,7 @@ function NotifyLine({ relay, norelay }: { relay: boolean | 'offline' | 'unreacha
   return <>
     <p className="mute small">Notifications: {on ? 'On' : 'Off'} · <button className={`link inline notify-${on ? 'off' : 'on'}`} onClick={() => attempt(async () => {
       if (on) { await turnOffNotifications(); toast('Notifications are off on this device.'); }
-      else {
-        const r = await turnOnNotifications(true);
-        if (r === 'on') toast('This device shows Crewhouse news.');
-        else if (r === 'off') toast('Notifications were not allowed.');
-        else if (r === 'offline') toast("Your mailbox isn't connected right now. Try again in a moment.");
-      }
+      else await turnOnHere();
     }).then(() => look())}>{on ? 'Turn off' : 'Turn on'}</button></p>
     {relay === 'offline' && <p className="mute small">Your computer can't send notifications right now. They come back when it reconnects.</p>}
     {relay === 'unreachable' && <p className="mute small">Couldn't reach your computer. Try again when it's on.</p>}
