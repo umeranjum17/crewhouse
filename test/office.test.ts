@@ -98,7 +98,7 @@ test('Home keeps the battery budget: every face is still and nothing loops, at w
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
-    await until('the crew cards', () => b.run("document.querySelectorAll('.st-card .face img').length > 0"), 30_000);
+    await until('Home', () => b.run("document.querySelectorAll('.stack-home .face img').length > 0"), 30_000);
     const q0 = await faces(b);
     assert.equal(q0.loops, 0, `${demo}: no looping animation on Home`);
     await new Promise((r) => setTimeout(r, WINDOW_MS));
@@ -108,7 +108,7 @@ test('Home keeps the battery budget: every face is still and nothing loops, at w
 
 // Each demo house and its crew size.
 const HOUSES: [string, number][] = [['crew1', 1], ['crew5', 5], ['crew12', 12], ['crew30', 30], ['office', 5], ['calm', 5], ['finished', 5]];
-test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s crew cards are clear and whole, Chief\'s card opens his thread, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
+test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s Today rows and Chief\'s asks are clear and whole, Chief\'s card opens his thread, and counts agree', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const [width, height, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
@@ -134,65 +134,64 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s crew cards are
         assert.ok(first.thread && first.box, `${lead}: the conversation and Chief's box on the first screen`);
         if (first.asks.length) assert.ok(first.asks.some((a: { text: string; on: boolean }) => a.on && a.text.length > 40), `${lead}: the inline ask carries its words on the first screen (${first.asks.map((a: { text: string }) => JSON.stringify(a.text.slice(0, 60))).join(' | ')})`);
         await b.run('location.hash = "#/"');
-        await until('the crew cards', () => b.run("!!document.querySelector('.stack-home .st-crew')"), 30_000);
+        await until('Home', () => b.run("!!document.querySelector('.stack-home .sh-chief')"), 30_000);
         const m = await b.run(`(() => {
-          const units = [...document.querySelectorAll('.st-crew .st-card:not(.st-new)')];
-          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.st-crew'));
+          const shown = (e) => e.getBoundingClientRect().height > 0;
+          const units = [...document.querySelectorAll('.st-today .st-card:not(.st-ask)')];
+          const asks = [...document.querySelectorAll('.st-today .st-ask, .st-asks .st-cc')].filter(shown).length;
+          const box = (e) => e.getBoundingClientRect(), st = box(document.querySelector('.st-pri'));
           const hit = (a, c) => a.left < c.right - 0.5 && c.left < a.right - 0.5 && a.top < c.bottom - 0.5 && c.top < a.bottom - 0.5;
-          const rects = units.map(box);
+          const rects = [...document.querySelectorAll('.st-today .st-card, .st-asks .st-cc')].filter(shown).map(box);
           const pairs = [];
           rects.forEach((a, i) => rects.slice(i + 1).forEach((c, j) => { if (hit(a, c)) pairs.push(i + ' x ' + (i + 1 + j)); }));
-          const out = rects.filter((r) => r.left < st.left - 1 || r.right > st.right + 1).length;
+          // A phone's rows sit 4px wider than the column on each side, as drawn; none leaves its column's padding.
+          const pad = parseFloat(getComputedStyle(document.querySelector('.st-pri')).paddingLeft);
+          const out = units.map(box).filter((r) => r.left < st.left + pad - 5 || r.right > st.right - pad + 5).length;
           const clipped = [...document.querySelectorAll('.stack-home b, .st-pill, .st-sub, .st-line, .st-head h1')]
             .filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent?.slice(0, 40));
           // Body text is 16px or more; only the small-caps labels and the status pills are 14px (a button is a control).
           const tiny = [...document.querySelectorAll('.stack-home *')].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim())
-            && !e.closest('.btn') && parseFloat(getComputedStyle(e).fontSize) < (e.matches('.st-pill, .st-label span:first-child, .jobs .label') ? 14 : 16)).map((e) => e.textContent.slice(0, 30));
-          const names = units.map((p) => (p.getAttribute('aria-label') ?? '').split(':')[0]);
-          const line = document.querySelector('.st-label span + span')?.textContent ?? '';
-          const nums = [...line.matchAll(/(\\d+) (?:waiting|at work|done|free)/g)].map((x) => Number(x[1]));
+            && shown(e) && !e.closest('.btn') && parseFloat(getComputedStyle(e).fontSize) < (e.matches('.st-pill, .st-label span') ? 14 : 16)).map((e) => e.textContent.slice(0, 30));
+          // The pill keeps the title's first line, top right; a long title wraps beside it, never above or under it.
+          const pillOff = [...document.querySelectorAll('.st-today .st-top')].filter((t) => { const b = t.querySelector('b'), p = t.querySelector('.st-pill');
+            return b && p && shown(t) && (Math.abs(box(b).top - box(p).top) > 6 || box(p).left < box(b).right - 1); }).map((t) => t.innerText);
+          const names = units.map((p) => p.getAttribute('href'));
           const words = units.map((p) => p.querySelector('.st-pill')?.textContent?.trim());
           const chiefTitle = document.querySelector('.sh-chief .sh-top b')?.textContent ?? '';
-          const chiefWord = document.querySelector('.sh-chief .st-word')?.textContent ?? '';
+          const rail = document.querySelector('.st-asks .st-label')?.textContent ?? '';
           const crewActs = units.flatMap((p) => [...p.querySelectorAll('button, .btn')]).map((e) => e.textContent);
           const crewText = units.map((p) => p.innerText);
-          const waitRows = units.filter((p) => p.querySelector('.st-pill.needs')).map((p) => [...p.querySelectorAll('.st-sub')].map((e) => e.textContent));
+          const waitRows = units.filter((p) => p.querySelector('.st-pill.needs')).map((p) => p.querySelector('.st-sub')?.textContent ?? '');
           const doneText = units.filter((p) => p.querySelector('.st-pill.done')).map((p) => p.innerText);
-          const scrolls = [document.documentElement, ...document.querySelectorAll('main, .main, .page')].some((e) => e.scrollHeight > e.clientHeight + 1);
-          return { units: units.length, pairs, out, clipped, tiny, names, nums, words, chiefTitle, chiefWord, crewActs, crewText, waitRows, doneText, scrolls,
-            pins: document.querySelectorAll('.stack-home .needs-pin').length, crewHref: units.every((p) => /^#\\/h\\//.test(p.getAttribute('href') ?? '')),
-            cols: getComputedStyle(document.querySelector('.st-crew')).gridTemplateColumns.split(' ').length };
+          return { asks, pairs, out, clipped, tiny, pillOff, names, words, chiefTitle, rail, crewActs, crewText, waitRows, doneText,
+            pins: document.querySelectorAll('.stack-home .needs-pin').length, hscroll: document.documentElement.scrollWidth > innerWidth + 1 };
         })()`);
         const at = `${demo} ${theme} at ${width}`;
         try {
-          // Chief's card is the one way to the asks: no Needs you pin on Home, and his title carries the count.
+          // Chief's card carries the count; on a phone his asks sit at the top of Today, on a computer in the column beside
+          // (never both), and either way there is one card per thing he has.
           assert.equal(m.pins, 0, `${at}: Home renders no Needs you pin`);
-          if (first.chatPin) assert.deepEqual([m.chiefTitle, m.chiefWord], [`Chief has ${first.chatPin} thing${first.chatPin === 1 ? '' : 's'} for you`, ''], `${at}: Chief's card says what he has for you`);
-          else assert.equal(m.chiefTitle, 'Chief', `${at}: Chief's card names him when he has nothing for you`);
-          assert.equal(m.nums.length, 4, `${at}: the crew line counts waiting, at work, done and free (${m.nums})`);
-          assert.equal(m.units, n, `${at}: every helper has exactly one card`);
-          assert.equal(new Set(m.names).size, m.units, `${at}: nobody twice, nobody missing`);
-          assert.ok(m.crewHref, `${at}: every crew card opens that helper`);
-          assert.equal(m.out, 0, `${at}: every card inside the crew column`);
+          const has = Number(/^Chief has (\d+)/.exec(m.chiefTitle)?.[1] ?? 0);
+          if (first.chatPin) assert.equal(has, first.chatPin, `${at}: Chief's card says what he has for you (${m.chiefTitle})`);
+          if (width > 900) assert.equal(m.asks, has, `${at}: one card in the column per thing Chief has, none repeated in Today`);
+          else assert.ok(m.asks <= has, `${at}: Today shows no more asks than Chief has`);
+          if (width > 900 && has) assert.equal(m.rail, m.chiefTitle, `${at}: the column's label and Chief's card agree`);
+          assert.equal(new Set(m.names).size, m.names.length, `${at}: nobody twice in Today`);
+          assert.ok(m.names.every((h: string) => /^#\/h\//.test(h)), `${at}: every Today row opens that helper`);
+          assert.ok(m.words.every((w: string) => w !== 'Free'), `${at}: Today holds jobs, never an idle helper (${m.words.join(' | ')})`);
+          assert.equal(m.out, 0, `${at}: every row inside the column`);
           assert.equal(m.pairs.length, 0, `${at}: no card covers another: ${m.pairs.join('; ')}`);
           assert.deepEqual(m.clipped, [], `${at}: no word cut off`);
           assert.deepEqual(m.tiny, [], `${at}: body text is 16px or more`);
-          // One status per member: the crew line counts every member once by the word its card shows, Chief too (what he
-          // has for you counts as waiting).
-          const groupOf = (w: string) => /^Done/.test(w) ? 2 : w === 'Waiting' || w === 'Up next' || w === 'Needs you' ? 0 : w === 'At work' ? 1 : 3;
-          const seen = [0, 0, 0, 0];
-          for (const w of m.words as string[]) seen[groupOf(w)]++;
-          seen[m.chiefWord ? groupOf(m.chiefWord) : 0]++;
-          assert.deepEqual(m.nums, seen, `${at}: the crew line counts the cards' own words, Chief's too (${m.chiefWord || m.chiefTitle} | ${m.words.join(' | ')})`);
-          // Only Chief says "Needs you"; crew never ask the person: no crew card answers or approves or carries the ask, a
-          // waiting one is its job (or plainly no job) over "Waiting for Chief", and a done one never says waiting.
-          assert.ok(m.words.every((w: string) => w !== 'Needs you'), `${at}: no crew card says "Needs you" (${m.words.join(' | ')})`);
-          assert.deepEqual(m.crewActs, [], `${at}: no crew card has an answer or approve button`);
-          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order|\w needs you|your OK/i.test(x)), `${at}: no crew card carries the ask (${m.crewText.join(' | ')})`);
-          assert.ok(m.waitRows.every(([l, meta]: string[]) => l && l !== 'Waiting for Chief' && l !== 'No job right now' && meta === 'Waiting for Chief'), `${at}: a waiting card is its job, then "Waiting for Chief" (${JSON.stringify(m.waitRows)})`);
-          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done card never says waiting (${m.doneText.join(' | ')})`);
-          assert.equal(m.cols, width < 900 ? 1 : 2, `${at}: one column of cards on a phone, two on a desk`);
-          if (n === 30) assert.ok(m.scrolls, `${at}: thirty cards scroll`);
+          assert.deepEqual(m.pillOff, [], `${at}: every pill sits top right on its title's first line`);
+          assert.equal(m.hscroll, false, `${at}: no sideways scroll`);
+          // Only Chief says "Needs you"; crew never ask the person: no crew row answers or approves or carries the ask, a
+          // waiting one reads "Waiting for Chief", and a done one never says waiting.
+          assert.ok(m.words.every((w: string) => w !== 'Needs you'), `${at}: no crew row says "Needs you" (${m.words.join(' | ')})`);
+          assert.deepEqual(m.crewActs, [], `${at}: no crew row has an answer or approve button`);
+          assert.ok(m.crewText.every((x: string) => !/has a question|needs your OK|Review .*order|Answer |Place order|\w needs you|your OK/i.test(x)), `${at}: no crew row carries the ask (${m.crewText.join(' | ')})`);
+          assert.ok(m.waitRows.every((l: string) => /Waiting for Chief$/.test(l)), `${at}: a waiting row reads "Waiting for Chief" (${JSON.stringify(m.waitRows)})`);
+          assert.ok(m.doneText.every((x: string) => !/waiting/i.test(x)), `${at}: a done row never says waiting (${m.doneText.join(' | ')})`);
           assert.ok(m.words.every((w: string) => !/session|terminal|console|pane|live|split|shell|tmux|command|prompt|cursor/i.test(w)), `${at}: no terminal words in the state words (${m.words.join(' | ')})`);
         } catch (e) {
           const dir = process.env.OFFICE_SHOTS;
@@ -210,7 +209,7 @@ test('at 1, 5, 12 and 30 crew, on a phone and a computer, Home\'s crew cards are
     const art: string[] = [];
     for (const theme of ['day', 'night']) {
       await b.open(`demo=crew5&${theme}`);
-      await until('the crew cards', () => b.run("document.querySelectorAll('.st-card .face img').length > 4"), 30_000);
+      await until('Home', () => b.run("document.querySelectorAll('.stack-home .face img').length > 1"), 30_000);
       art.push((await faces(b)).art.join('\n'));
     }
     assert.equal(art[0], art[1], `day and night draw the same faces at ${width}`);
