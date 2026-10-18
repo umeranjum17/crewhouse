@@ -30,12 +30,22 @@ export function useOffice(state: Json, offline = false, signedOut = false): A.Of
   const sent = useSyncExternalStore(A.onChiefSend, A.chiefSend);
   const view = useMemo(() => (state ? A.office(state, { signedOut }) : null), [state, signedOut]);
   const [live, setLive] = useState(view);
-  useEffect(() => setLive(view), [view]);
+  const [talking, setTalking] = useState<string[]>([]);
   useEffect(() => {
-    const f = (e: Json) => setLive((v) => v && A.officeEvent(v, e));
+    setLive(view);
+    setTalking((ids) => ids.filter((id) => state?.bots.some((b: Json) => b.id === id && b.task?.state === 'working')));
+  }, [view, state]);
+  useEffect(() => {
+    const f = (e: Json) => {
+      setLive((v) => v && A.officeEvent(v, e));
+      if (e.kind === 'reply.partial' && e.data?.text) setTalking((ids) => ids.includes(e.bot) ? ids : [...ids, e.bot]);
+      else if (['run.thinking', 'run.tool', 'task.working', 'task.progress', 'task.done', 'task.failed', 'task.unsure', 'task.paused', 'task.queued', 'task.needs_you'].includes(e.kind)) {
+        setTalking((ids) => ids.includes(e.bot) ? ids.filter((id) => id !== e.bot) : ids);
+      }
+    };
     ears.add(f);
     return () => { ears.delete(f); };
   }, []);
   const shown = live && sent ? A.sending(live, sent) : live;
-  return shown && offline ? A.officeAway(shown) : shown;
+  return shown && { ...(offline ? A.officeAway(shown) : shown), talking: offline ? [] : talking };
 }

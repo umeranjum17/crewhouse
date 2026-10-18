@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setChiefMood, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, takeShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, takeShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -111,7 +111,7 @@ function Hello({ state, refresh, night }: Ctx) {
   return (
     <div className="hello">
       <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} hero whole /></span>
+      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} whole /></span>
       <div className="speech">
         <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
         <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
@@ -145,7 +145,7 @@ function GettingReady({ view, refresh }: { view: { failed: boolean; words: strin
   return (
     <div className="hello getting-ready" role="status" aria-live="polite">
       <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={view.failed ? 'worried' : 'work'} d={7.4} hero whole /></span>
+      <span className="halo"><ChiefArt mood={view.failed ? 'worried' : 'work'} d={7.4} whole /></span>
       <div className="speech">
         <h1>{view.failed ? "Your crew couldn't get ready" : 'Getting your crew ready'}</h1>
         {view.words && <p className="lead">{view.words}</p>}
@@ -344,7 +344,7 @@ function Home(ctx: Ctx) {
         {n > 0 && <aside className="st-asks" aria-label={A.chiefHas(live)}>
           <div className="st-label"><span>{A.chiefHas(live)}</span></div>
           {live.needs.map((c) => <HomeAsk key={c.id} c={c} state={state} onDone={refresh} />)}
-          {quiet.map((c) => <a key={c.id} className="st-cc" href="#/chief"><span className="st-cc-top"><Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={40} /><span className="st-pill needs-k">{A.WORDS.needs}</span></span>
+          {quiet.map((c) => <a key={c.id} className="st-cc" href="#/chief"><span className="st-cc-top"><Face who={c} size={40} /><span className="st-pill needs-k">{A.WORDS.needs}</span></span>
             <b className="semi">{c.name} has gone quiet</b><span>Stop the job, or take control, in Chief's chat.</span></a>)}
         </aside>}
       </div>
@@ -356,7 +356,7 @@ function Home(ctx: Ctx) {
 function CrewCard({ c, live, job }: { c: A.OfficeMember; live: A.OfficeView; job?: A.Work }) {
   const glow = glowOf(c, live), { line, meta } = A.cardLines(c, live, job);
   return <a className="st-card" href={hrefOf(c.id)} style={{ background: art.colourOf(c.kind) }} aria-label={`${c.name}: ${glow.word}`}>
-    <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={48} />
+    <Face who={c} size={48} />
     <span className="grow"><span className="st-top"><b className="semi">{c.name}</b><span className={`st-pill ${glow.cls}`}>{glow.word}</span></span>
       {line !== glow.word && <span className="st-sub">{line}</span>}{meta && <span className="st-sub">{meta}</span>}</span>
   </a>;
@@ -369,7 +369,7 @@ function TodayRow({ c, live, job, held }: { c: A.OfficeMember; live: A.OfficeVie
   const glow = glowOf(c, live), done = job || held ? undefined : A.landed(c, live);
   const how = job ? (A.waitsOnYou(c) ? A.WAIT_CHIEF : job.line) : held ? c.status : done?.files[0] ? `Made “${done.files[0].name}”` : '';
   return <a className="st-card" href={hrefOf(c.id)} style={{ background: art.colourOf(c.kind) }} aria-label={`${c.name}: ${glow.word}`}>
-    <Face who={{ kind: c.kind, name: c.name, mood: c.mood }} size={44} />
+    <Face who={c} size={44} />
     <span className="grow"><span className="st-top"><b className="semi">{job?.title ?? held ?? done?.title}</b><span className={`st-pill ${glow.cls}`}>{glow.word}</span></span>
       <span className="st-sub">{how ? `${c.name} · ${how}` : c.name}</span></span>
   </a>;
@@ -734,7 +734,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     <div className={`chat${live && h ? ' with-live' : ''}`}>
       <div className="lines" ref={box}>
         {start && !hero && (id === 'chief' || fresh) && <div className="chat-intro">
-          <span className="halo">{h ? <PalArt kind={h.kind} mood={h.mood} d={4.4} name={h.name} /> : <ChiefArt mood="idle" d={3.6} />}</span>
+          <span className="halo">{h ? <PalArt kind={h.kind} mood={h.mood} id={h.id} d={4.4} name={h.name} /> : <ChiefArt mood="idle" d={3.6} />}</span>
           <b>{name}</b><span>{h ? h.role : 'Runs the crew and answers to you'}</span>
         </div>}
         {!page && <div className="skeleton" aria-busy="true" aria-label="Opening the chat"><i /><i /><i /></div>}
@@ -770,7 +770,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
         {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
-        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
+        {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={id === 'chief' ? 'chief' : h!} size={hero ? 36 : 28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
         {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} who={A.crew(state).find((x) => x.id === ln.helper)} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
@@ -878,7 +878,7 @@ function Crew(ctx: Ctx) {
   return <div className="page stack rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1 className="wide">Your crew</h1><p className="st-line">Chief deals each job to one of them. Tap one to see what they are doing.</p>
     <div className="st-tiles">
       {tile('#/chief', 'chief', 'chief', 'Chief', chiefWord(live, out, ctx.offline), 'Hands out the jobs')}
-      {A.roster(live.crew).map((c) => tile(hrefOf(c.id), { kind: c.kind, name: c.name, mood: c.mood }, c.kind, c.name, A.statusOf(c, live).word, roles.get(c.id) ?? ''))}
+      {A.roster(live.crew).map((c) => tile(hrefOf(c.id), c, c.kind, c.name, A.statusOf(c, live).word, roles.get(c.id) ?? ''))}
       <a className="st-tile st-new" href="#/crew/add"><Icon name="plus" size={36} /><b className="semi">Add a helper</b><span>Tell Chief who you need</span></a>
     </div>
     {live.crew.length > 0 && <a className="st-idea st-room" href="#/room"><span className="grow"><b>The crew room</b><span>{A.chats(state).at(-1)!.line}</span></span><Icon name="next" /></a>}</div>;
@@ -1069,7 +1069,7 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
       <div className="card list">{A.roster(live.crew).map((m) => {
         const r = A.statusOf(m, live), working = r.seat === 'working';
         // A crew row's dot means working, and nothing else: only Chief's own row ever shows something for you.
-        return <a key={m.id} className="row-item cp-link" href={hrefOf(m.id)}><Face who={{ kind: m.kind, name: m.name, mood: m.mood }} size={36} />
+        return <a key={m.id} className="row-item cp-link" href={hrefOf(m.id)}><Face who={m} size={36} />
           <span className="grow">{m.name}<span className="mute small clamp1">{working && <i className="cp-dot" aria-hidden />}{working && m.step ? `${r.word} · ${m.step}` : r.word}</span></span><span className="mute">›</span></a>;
       })}</div>
     </>}
@@ -1957,6 +1957,9 @@ function useLook() {
   const [dark, setDark] = useState(() => media.matches);
   // Layout effect: subscribed in the same commit that paints, and re-read at once, so no change is missed in between.
   useLayoutEffect(() => { const on = () => setDark(media.matches); on(); media.addEventListener('change', on); return () => media.removeEventListener('change', on); }, [media]);
+  const [motion] = useState(() => matchMedia('(prefers-reduced-motion: reduce)'));
+  const [reduced, setReduced] = useState(() => motion.matches);
+  useLayoutEffect(() => { const on = () => setReduced(motion.matches); on(); motion.addEventListener('change', on); return () => motion.removeEventListener('change', on); }, [motion]);
   const night = look === 'night' || (look === 'auto' && dark);
   useEffect(() => {
     document.documentElement.dataset.theme = night ? 'night' : 'day';
@@ -1964,7 +1967,7 @@ function useLook() {
     document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.setAttribute('content', night ? 'black-translucent' : 'default'); // iOS reads it at launch; kept in step with the look
   }, [night]);
   const setLook = (l: string) => { localStorage.setItem('crewhouse.look', l); setLookState(l); };
-  return { look, setLook, night };
+  return { look, setLook, night, reduced };
 }
 
 /** The frame's four places, in this order on the phone's tab bar and the computer's side menu (Stack). Chief is the
@@ -1985,7 +1988,7 @@ function SideCrew({ live, id }: { live: A.OfficeView; id?: string }) {
         const r = A.statusOf(h, live);
         // The seat class is namespaced (`seat-…`) so a seat word like "chat" never collides with an unrelated rule.
         return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
-          <Face who={{ kind: h.kind, name: h.name, mood: h.mood }} size={30} />
+          <Face who={h} size={30} />
           <b className="grow clamp1">{h.name}</b>
           <span className={`side-seat seat-${r.seat}`}><span className="clamp1">{r.word}</span></span>
         </a>;
@@ -2028,7 +2031,7 @@ function App() {
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
   const answered = useRef(false); // the computer has answered this visit, with state or with no authority
-  const { look, setLook, night } = useLook();
+  const { look, setLook, night, reduced } = useLook();
   // The kept week stands in, read-only, and says when it was last heard. Nothing kept, nothing shown.
   const showKept = () => {
     const k = keptWeek();
@@ -2086,11 +2089,11 @@ function App() {
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
   useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
   useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
+  // Install before pairing/startup returns too: every face obeys Reduce Motion from its first paint.
+  setFaceMoods(ctx ? A.chief(ctx.state, chiefLocal(ctx)).mood : 'idle', ctx?.live.crew ?? [], ctx?.live.talking, reduced);
   const splash = <Splash done={!!ctx || offline || noauth} />;
   if (pairable && !paired) return <><Where pairing={route.view === 'pair'} /><Toasts /></>;
   if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
-  // Every little Chief face on the page carries the mood from here, the way the night palette does.
-  setChiefMood(A.chief(ctx.state, chiefLocal(ctx)).mood);
   const engine = A.engineView(ctx.state);
   if (!ctx.state.person.onboarded) return <>{splash}{engine ? <GettingReady view={engine} refresh={refresh} /> : <Hello {...ctx} />}<Toasts /></>;
   const v = under.current;
