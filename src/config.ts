@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -10,6 +11,8 @@ export interface Config {
   crewDir: string;
   /** Pinned tool installs (npm, pip, single binaries): Crewhouse's own folder, never global. */
   toolsDir: string;
+  /** The AI engine's install: a checkout or the .deb keeps its own runtime/openclaw; any other install uses the person's data folder. */
+  engineDir: string;
   host: string;
   port: number;
   /** The phone link (src/link.ts). Empty host: loopback and Tailscale, plus the LAN when the owner turns
@@ -38,11 +41,12 @@ export function relayOrigin(value: string | null): string | null {
 }
 
 export function loadConfig(): Config {
-  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state');
+  const home = homedir(), xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = resolve(import.meta.dirname, '..'), own = join(repoDir, 'runtime', 'openclaw');
   return {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
-    toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'crewhouse', 'tools')),
+    toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(xdgData, 'crewhouse', 'tools')),
+    engineDir: envPath('CREWHOUSE_ENGINE_DIR', existsSync(join(repoDir, '.git')) || existsSync(own) ? own : join(xdgData, 'crewhouse', 'engine')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
     port: Number(process.env.CREWHOUSE_PORT || 7711),
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
@@ -54,7 +58,7 @@ export function loadConfig(): Config {
     engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY
       ? { baseUrl: process.env.CREWHOUSE_ENGINE_BASE_URL, apiKey: process.env.CREWHOUSE_ENGINE_API_KEY } : undefined,
     googleClient: envPath('CREWHOUSE_GOOGLE_CLIENT', join(process.env.XDG_CONFIG_HOME?.trim() || join(home, '.config'), 'byokit', 'google-oauth-client.json')),
-    repoDir: resolve(import.meta.dirname, '..'),
+    repoDir,
   };
 }
 

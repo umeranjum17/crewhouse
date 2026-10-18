@@ -229,3 +229,20 @@ process.exit(spawnSync('npm', args, { stdio: 'inherit' }).status ?? 1);
     assert.ok(existsSync(runtime.kit.doctorContext().entry));
   } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
 });
+
+// A first open that cannot install says why on Hello, from the kit's own refusal and retained diagnosis: no npm at all,
+// then an npm that cannot reach the registry. Neither touches the network.
+test('a failed first install names its real cause: no npm, then no network', { timeout: 60_000 }, async () => {
+  const state = mkdtempSync(join(tmpdir(), 'ch-install-fail-'));
+  const npm = join(state, 'npm'), host = { gate: async () => ({ allow: true }), call: async () => '' } as never;
+  try {
+    const missing = new OpenClawRuntime(state, '', { engineDir: join(state, 'engine'), npmPath: npm, authSeal: undefined });
+    await assert.rejects(missing.start(host));
+    assert.deepEqual(missing.engine(), { phase: 'failed', words: "Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again." });
+    writeFileSync(npm, `#!/bin/sh\n[ "$1" = --version ] && { echo 10.9.0; exit 0; }\necho 'npm error code EAI_AGAIN' >&2\necho 'npm error request to https://registry.npmjs.org/openclaw failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org' >&2\nexit 1\n`);
+    chmodSync(npm, 0o700);
+    const offline = new OpenClawRuntime(state, '', { engineDir: join(state, 'engine'), npmPath: npm, authSeal: undefined });
+    await assert.rejects(offline.start(host));
+    assert.deepEqual(offline.engine(), { phase: 'failed', words: "Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again." });
+  } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
+});

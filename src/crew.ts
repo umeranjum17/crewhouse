@@ -247,6 +247,7 @@ export class Crew {
     this.accounts = new Accounts(this.runtime);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
+    this.runtime.onEngine = () => this.db.live('system.engine', '', {}); // each install or start phase, live for Hello's getting-ready screen
     this.accounts.onSignedIn = () => { stamp('account signed in'); this.wake(`You're signed in. I'll start now.`); };
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
@@ -282,23 +283,25 @@ export class Crew {
     const last = Number(this.db.get("SELECT value FROM settings WHERE key = 'crew.lastTick'")?.value ?? 0);
     if (last) this.lastTick = last;
     if (last && Date.now() - last > SLEPT_MS) this.slept(last, Date.now());
-    void this.eachLegacy('migrate').then(async () => {
-      if (this.stopped) return; // crewd stopped before the engine came up
-      // The engine comes up in the background: a first install can take minutes, and crewd boots without it.
-      const up = await this.runtime.start(this.toolHost()).then(() => { stamp('engine ready'); return true; }).catch((e) => {
-        console.error('engine start:', e);
-        this.db.event('system.engine', null);
-        return false;
-      });
-      // The gateway is the witness: only a sign-in it reports retires crewhouse's staged copy.
-      if (up && !this.stopped) await this.eachLegacy('confirm');
-      if (this.cfg.engineProvider && this.runtime.configureModelProvider)
-        await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
-      if (this.stopped) return;
-      await this.runtime.setLearning?.(this.learningOn()).catch((e: unknown) => console.error('learning:', e));
-      if (this.learningOn()) this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
-    });
+    void this.eachLegacy('migrate').then(() => this.startEngine());
     this.dispatch();
+  }
+
+  /** The engine comes up in the background (a first install takes minutes, and crewd boots without it); Hello's Try again restarts a failed one. */
+  async startEngine() {
+    if (this.stopped) return; // crewd stopped before the engine came up
+    const up = await this.runtime.start(this.toolHost()).then(() => { stamp('engine ready'); return true; }).catch((e) => {
+      console.error('engine start:', e);
+      this.db.event('system.engine', null);
+      return false;
+    });
+    // The gateway is the witness: only a sign-in it reports retires crewhouse's staged copy.
+    if (up && !this.stopped) await this.eachLegacy('confirm');
+    if (this.cfg.engineProvider && this.runtime.configureModelProvider)
+      await this.runtime.configureModelProvider(this.cfg.engineProvider.baseUrl, this.cfg.engineProvider.apiKey).catch((e: unknown) => console.error('engine provider:', e));
+    if (this.stopped) return;
+    await this.runtime.setLearning?.(this.learningOn()).catch((e: unknown) => console.error('learning:', e));
+    if (this.learningOn()) this.curationAt = Date.now() + 60_000; // first look a minute after the engine is up, then weekly from the job
   }
 
   /** Stage the person's old sign-in offline; retire it only after the gateway witnesses the import. */
@@ -494,6 +497,7 @@ export class Crew {
       share: { choice: person.share ?? 'light', used: this.overShare(), week: this.week() },
       money: { cap: this.moneyCap(), spent: this.spentThisMonth() },
       forgotten: this.forgotten(),
+      engine: this.runtime.engine?.(), // the engine's install and start as the kit reports them, for Hello; absent on the stand-in
     };
   }
 
