@@ -158,11 +158,11 @@ export const PALS = {
   bunny: geo('pill', '#FF7AB8', TRAIT.bow),
   panda: geo('circle', '#C4B5FD', '', { shape: TRAIT.ears('#C4B5FD') + SHAPE.circle('#C4B5FD') }),
   pig: geo('square', '#FDA4AF', TRAIT.curl),
-  koala: geo('hex', '#A3B4C8', TRAIT.leaf, { eyes: 'bar' }),
-  lion: geo('circle', '#E8C39E', TRAIT.crown),
-  sheep: geo('pill', '#E7E2D6', TRAIT.tuft),
+  koala: geo('hex', '#4CC9F0', TRAIT.leaf, { eyes: 'bar' }),
+  lion: geo('circle', '#FF9F43', TRAIT.crown),
+  sheep: geo('pill', '#FFC93C', TRAIT.tuft),
   frog: geo('arch', '#86E3A8', TRAIT.antenna),
-  deer: geo('pill', '#D4A373', TRAIT.antlers, { mouth: 'flat' }),
+  deer: geo('pill', '#A98BFA', TRAIT.antlers, { mouth: 'flat' }),
 } satisfies Record<string, Geo>;
 export type Kind = keyof typeof PALS;
 /** The looks for helpers no template draws (Chief's made-up hires): never a template's, never Chief's. */
