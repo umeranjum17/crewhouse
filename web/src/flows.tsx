@@ -96,6 +96,9 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const [cancelled, setCancelled] = useState(false);
   const [keepWork, setKeepWork] = useState(false);
   const [pasted, setPasted] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const choose = (id: string) => { setPicking(true); toast('Connecting'); void api.signInWorkspace(ai.key, id).catch((e: any) => toast(e.status === 400 ? e.message : 'That didn’t work. Please try again.')).finally(() => setPicking(false)); };
   const tab = useTab(first);
   const start = (body: { fresh?: boolean; via?: 'code' | 'key' } = {}) => { setCancelled(false); void (async () => {
     if (body.via === 'code') await api.signInCancel(ai.key);
@@ -121,12 +124,18 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
       <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'key' && <>
-        <h2>Paste your {name} key</h2>
-        <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
-        <form className="stack" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key'); }}>
-          <input className="input" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
-          <button className="btn go big" disabled={!pasted.trim()}>Sign in with {name}</button>
-        </form>
+        {g.pick ? <>
+          <h2>Which workspace should Crewhouse use?</h2>
+          <p className="mute">Your {name} key works in more than one workspace. Pick the one Crewhouse should think with.</p>
+          <div className="stack ws-pick">{g.pick.map((w: { id: string; name: string }) => <button key={w.id} className="btn go big" disabled={picking} onClick={() => choose(w.id)}>{w.name}</button>)}</div>
+        </> : <>
+          <h2>Paste your {name} key</h2>
+          <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key').then(() => setChecking(false)); }}>
+            <input className="input" value={pasted} disabled={checking} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
+            <button className="btn go big" disabled={checking || !pasted.trim()}>{checking ? 'Checking…' : <>Sign in with {name}</>}</button>
+          </form>
+        </>}
         {g.key?.error && <p className="warn-line">{g.key.error}</p>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}

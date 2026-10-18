@@ -2,7 +2,6 @@
 // the sign-in step of the build; these pin the product words and states around it, which never change).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SignInStep } from '../src/runtime.ts';
 
 const { setup, settled, task, until } = await import('./lab.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
@@ -174,7 +173,7 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
 
 test('a Go key added with no workspace clears the workspace an earlier pick left on the engine', async () => {
   const { faked } = await import('./kit-fake.ts');
-  const restore = opencodeConsole({ 'synthetic-login': [{ id: 'org-a', name: 'Team A' }], 'synthetic-team': [{ id: 'org-a', name: 'Team A' }, { id: 'org-b', name: 'Team B' }] });
+  const restore = opencodeConsole({ 'synthetic-login': [{ id: 'org-a', name: 'Team A' }] });
   const f = faked();
   try {
     await f.started;
@@ -184,17 +183,111 @@ test('a Go key added with no workspace clears the workspace an earlier pick left
     // A bound service key lists no workspace, so its add names none: the earlier pick must not ride its calls.
     assert.equal((await f.runtime.kit.addKey('m1', { authChoice: 'opencode-go', apiKey: 'synthetic-service-key' })).status, 'ok');
     assert.equal(await header(), undefined, 'the service key runs with no workspace header');
-    // A login acting for several workspaces is not saved: the person is told why, plainly, and the paste stays open.
-    const steps: SignInStep[] = [];
-    f.runtime.signIn('opencode-go', 'key', (s) => steps.push(s)).paste('synthetic-team');
-    await until('the several-workspace key result', () => steps.some((s) => s.error));
-    assert.equal(steps.at(-1)!.waiting, true);
-    assert.match(steps.at(-1)!.error!, /several OpenCode workspaces/);
   } finally {
     restore();
     await f.done();
   }
 });
+
+test('a Go key for several workspaces asks which one, then connects with it; one connects unasked', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { startServer } = await import('../src/server.ts');
+  const { faked } = await import('./kit-fake.ts');
+  const s = setup(), f = faked();
+  s.cfg.port = 0; s.cfg.linkPort = 0;
+  s.crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
+  for (const key of Object.keys(PROVIDERS)) s.crew.accounts.ready.set(key, false);
+  // The kit's own console listing, scripted per pasted key: two workspaces, one, or a refusal.
+  const realFetch = globalThis.fetch;
+  let heldStarted = false, release: () => void = () => {}, slowStarted = false, releaseSlow: () => void = () => {};
+  const gate = new Promise<void>((yes) => { release = () => yes(); });
+  const slowGate = new Promise<void>((yes) => { releaseSlow = () => yes(); });
+  globalThis.fetch = (async (url: any, init: any) => {
+    if (String(url) === 'https://opencode.ai/console/api/orgs') {
+      const pasted = String(init?.headers?.authorization ?? '').replace(/^Bearer /, '');
+      if (pasted === 'synthetic-multi') return Response.json([{ id: 'wrk_personal', name: 'Personal' }, { id: 'wrk_team', name: 'Team' }]);
+      if (pasted === 'synthetic-single') return Response.json([{ id: 'wrk_personal', name: 'Personal' }]);
+      if (pasted === 'synthetic-unread') return new Response(null, { status: 503 });
+      if (pasted === 'synthetic-held') { heldStarted = true; await gate; return Response.json([{ id: 'wrk_personal', name: 'Personal' }, { id: 'wrk_team', name: 'Team' }]); }
+      if (pasted === 'synthetic-slow') { slowStarted = true; await slowGate; return Response.json([{ id: 'wrk_personal', name: 'Personal' }]); }
+      return new Response(null, { status: 401 });
+    }
+    return realFetch(url, init);
+  }) as any;
+  const server = await startServer(s.cfg, s.db, s.crew);
+  const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+  const headers = { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(s.cfg.stateDir, 'person.key'), 'utf8')}` };
+  const api = async (path: string, body?: object) => {
+    const r = await fetch(base + '/api/' + path, { headers, ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}) });
+    assert.equal(r.status, 200); return r.json();
+  };
+  const rows = () => api('accounts');
+  const go = async () => (await rows()).find((r: any) => r.account === 'opencode-go');
+  const action = (act: string, body = {}) => api('accounts/1/opencode-go/' + act, body);
+  const headerOf = () => {
+    const patches = (f.fake.calls as { method: string; params: any }[]).filter((c) => c.method === 'config.patch' && String(c.params?.raw ?? '').includes('x-opencode-org-id'));
+    return patches.length ? JSON.parse(patches.at(-1)!.params.raw).models.providers['opencode-go'].headers['x-opencode-org-id'] : undefined;
+  };
+  try {
+    await f.started;
+    await api('onboard', { address: 'Umer' });
+    // An unreadable listing (console down): nothing connects, and the card never blames the key.
+    await action('login', { via: 'key' });
+    await action('paste', { text: 'synthetic-unread' });
+    await until('unread listing fails the add', async () => !!(await go()).signIn?.error);
+    assert.notEqual((await go()).signedIn, true, 'a key whose workspaces could not be read is never connected');
+    assert.match((await go()).signIn.error, /Couldn’t reach OpenCode to check this key’s workspaces/, 'an unreadable listing shows the kit words, never a bad key');
+    // Several: the card asks which workspace, then connects with the pick.
+    await action('login', { via: 'key' });
+    await action('paste', { text: 'synthetic-multi' });
+    await until('workspace pick', async () => (await go()).signIn?.workspaces?.length === 2);
+    assert.deepEqual((await go()).signIn.workspaces.map((w: { name: string }) => w.name), ['Personal', 'Team'], 'the card names workspaces, never ids');
+    const shown = A.account(await rows(), 'opencode-go');
+    assert.deepEqual(shown.pick?.map((w: { name: string }) => w.name), ['Personal', 'Team'], 'the adapter carries the pick to the sheet');
+    assert.ok(shown.key, 'the sheet stays on the key step while it asks');
+    await action('workspace', { id: 'wrk_team' });
+    await until('Go connected with the pick', async () => (await go()).signedIn === true);
+    assert.equal((await go()).signIn.state, 'done');
+    assert.equal(headerOf(), 'wrk_team', 'the engine carries the picked workspace on every call');
+    // One check at a time: a paste during a check is refused, and the checked key's own listing is what the card shows.
+    await action('login', { via: 'key' });
+    const held = action('paste', { text: 'synthetic-held' });
+    await until('held check running', async () => heldStarted);
+    const refused = await fetch(base + '/api/accounts/1/opencode-go/paste', { method: 'POST', headers, body: JSON.stringify({ text: 'synthetic-single' }) });
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).error, /Still checking the last key/);
+    release();
+    await held;
+    assert.deepEqual((await go()).signIn.workspaces.map((w: { name: string }) => w.name), ['Personal', 'Team'], 'the held check lists its own workspaces');
+    await action('workspace', { id: 'wrk_personal' });
+    await until('held key connects with the pick', async () => (await go()).signedIn === true);
+    // A cancelled check releases the lock: the next paste is accepted while the cancelled probe is still open.
+    await action('login', { via: 'key' });
+    action('paste', { text: 'synthetic-slow' }).catch(() => {});
+    await until('slow check running', async () => slowStarted);
+    await action('cancel');
+    await action('login', { via: 'key' });
+    action('paste', { text: 'synthetic-single' }).catch(() => {});
+    releaseSlow();
+    await until('key pasted after a cancel connects', async () => (await go()).signIn?.state === 'done');
+    // One: no question, connected with it.
+    await action('login', { via: 'key' });
+    await action('paste', { text: 'synthetic-single' });
+    await until('single-workspace key connects', async () => (await go()).signedIn === true);
+    assert.equal((await go()).signIn?.workspaces, undefined, 'no pick shown for one workspace');
+    assert.equal(headerOf(), 'wrk_personal', 'the one workspace is used unasked');
+    // A refused listing (or a bound service key): connects with no workspace, the old words.
+    await action('login', { via: 'key' });
+    await action('paste', { text: 'synthetic-bound' });
+    await until('bound key connects', async () => (await go()).signedIn === true);
+  } finally {
+    globalThis.fetch = realFetch;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    s.done(); await f.done();
+  }
+});
+
 
 test('a sign-in that stopped working (a password change): signed out for real, said once, and the task waits for a new one', async () => {
   const { cfg, db, crew, done } = setup();

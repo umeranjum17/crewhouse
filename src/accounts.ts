@@ -30,7 +30,7 @@ export function provider(key: string) {
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
-type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'key'; url?: string; code?: string; error?: string; why?: string };
+type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'key'; url?: string; code?: string; error?: string; why?: string; workspaces?: { id: string; name: string }[] };
 
 /** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
  *  engine's own wizard. The credentials themselves never pass through here. */
@@ -44,7 +44,7 @@ export class Accounts {
   readonly excluded = new Set<string>();
   private rests = new Map<string, number>();
   private views = new Map<string, View>();
-  private running = new Map<string, { paste(text: string): void; cancel(): Promise<unknown> | void; finished: Promise<void> }>();
+  private running = new Map<string, { handle: { paste(text: string): void; pick?(id: string): Promise<unknown> | void }; cancel(): Promise<unknown> | void; finished: Promise<void> }>();
   /** Set by Crew: the person signed in, so waiting work starts now. */
   onSignedIn?: () => void;
 
@@ -89,30 +89,31 @@ export class Accounts {
     const finished = new Promise<void>((yes) => { over = yes; }), done = (ok: boolean) => {
       if (view.state !== 'waiting') return;
       view.state = ok ? 'done' : 'failed';
+      delete view.workspaces;
       if (ok) { this.ready.set(account, true); this.expired.delete(account); this.excluded.delete(account); this.rests.delete(account); this.onSignedIn?.(); }
       this.running.delete(account);
       over();
     }, handle = this.runtime.signIn(account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
-      if (step.error) view.error = step.error;
+      if (step.error) { view.error = step.error; delete view.workspaces; }
+      if (step.workspaces) { view.workspaces = step.workspaces; delete view.error; }
       if (step.notIncluded) { this.excluded.add(account); done(false); } else if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);
     });
-    this.running.set(account, {
-      paste: (t) => handle.paste(t),
-      cancel: () => { handle.cancel(); done(false); this.views.delete(account); return handle.done; },
-      finished,
-    });
+    this.running.set(account, { handle, cancel: () => { handle.cancel(); done(false); this.views.delete(account); return handle.done; }, finished });
     return this.view(account);
   }
-  paste(account: string, text: string) { this.running.get(account)?.paste(text); }
+  async paste(account: string, text: string) { await this.running.get(account)?.handle.paste(text); }
+  async workspace(account: string, id: string) {
+    const view = this.views.get(account);
+    try { await this.running.get(account)?.handle.pick?.(id); } catch (e: any) { if (view) view.error = e.message; }
+  }
   cancel(account: string) { return this.running.get(account)?.cancel(); }
   async logout(account: string) {
     this.views.delete(account);
     await this.runtime.signOut(account).catch(() => {});
-    this.ready.delete(account); this.fresh.delete(account);
-    this.expired.add(account);
+    this.ready.delete(account); this.fresh.delete(account); this.expired.add(account);
   }
   /** The sign-in is over (either way): the card's last word is in. */
   async finished(account: string) { await this.running.get(account)?.finished.catch(() => {}); }
