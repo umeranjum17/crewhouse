@@ -42,14 +42,14 @@ try {
       const tiny = texty.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16 && !small(e)).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const clipped = texty.filter((e) => { const cs = getComputedStyle(e); return (e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'visible' && cs.overflowX !== 'auto') || (e.scrollHeight > e.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !/clamp/.test(e.className)); }).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const hscroll = document.documentElement.scrollWidth > innerWidth + 1;
-      return { tiny, clipped, hscroll };
+      return { checked: texty.length, tiny, clipped, hscroll };
     })()`);
     const key = `${w}-${theme}`; gate[key] = m;
     if (m.tiny.length || m.clipped.length || m.hscroll) bad = true;
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(join(out, `${slug}-${key}.png`), Buffer.from(shot.data, 'base64'));
   }
-  writeFileSync(join(out, `${slug}-gate.json`), JSON.stringify(gate, null, 1));
+  writeFileSync(join(out, `${slug}-gate.json`), JSON.stringify({ slug, url: base.replace(/#.*/, ''), ...gate }, null, 1));
   console.log(JSON.stringify(gate));
   ws.close();
   await done(bad ? 1 : 0);
