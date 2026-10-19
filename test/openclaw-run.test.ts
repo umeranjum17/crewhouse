@@ -3,12 +3,13 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { removeOnExit } from '../src/config.ts';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import type { RunSpec, ToolHost } from '../src/runtime.ts';
 import { startModelStub } from './openclaw-stub.ts';
 
 test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420_000 }, async () => {
-  const state = mkdtempSync(join(tmpdir(), 'crewhouse-run-'));
+  const state = removeOnExit(mkdtempSync(join(tmpdir(), 'crewhouse-run-')));
   const stub = await startModelStub();
   const gated: string[] = [];
   let called = 0;
@@ -63,7 +64,7 @@ test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420
     const stopped = await kit.call('agent.wait', { runId: denied.runId, timeoutMs: 240_000 }, { timeoutMs: 250_000 }) as any;
     assert.deepEqual(stopped.terminalReceipt?.successfulToolNames ?? [], []);
     assert.equal(called, 2);
-  } finally { await runtime.stop(); await stub.close(); rmSync(state, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); }
+  } finally { await runtime.stop(); await stub.close(); }
 });
 
 test('memory flush: crossing the soft threshold adds no silent provider turn; enabled control does', { timeout: 240_000 }, async () => {

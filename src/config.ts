@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir, tmpdir, userInfo } from 'node:os';
+import { spawnSync } from 'node:child_process'; import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 
 /** Product launchers keep the installed crew; tests and unmarked scripts get a private home. */
@@ -39,8 +39,9 @@ export function assertSafeConfig(cfg: Config) {
     if (roots.some(r => target === r || target.startsWith(r + '/') || r.startsWith(target + '/'))) throw new Error(`crewd: refusing isolated start: ${p} overlaps the owner's Crewhouse; set isolated CREWHOUSE_* directories`);
   }
 }
+export function removeOnExit(dir: string): string { if (process.env.CREWHOUSE_KEEP_RUN_HOME) return dir; const remove = () => { try { spawnSync('chmod', ['-R', 'u+w', dir]); rmSync(dir, { recursive: true, force: true }); } catch (error) { console.error(`crewhouse: could not remove ${dir}: ${(error as Error).message}`); } }; process.once('exit', remove); for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(signal, () => { remove(); if (!process.listenerCount(signal)) process.kill(process.pid, signal); }); return dir; } // Removes a run home this process created on exit or on a signal no other listener handles; the kit's engine files are read-only, so the tree is made writable first. The launcher's config probe sets CREWHOUSE_KEEP_RUN_HOME, since crewd inherits that home.
 export function loadConfig(): Config {
-  const product = !isolatedRun(), home = product ? homedir() : process.env.CREWHOUSE_RUN_HOME ||= mkdtempSync(join(tmpdir(), 'crewhouse-run-'));
+  const product = !isolatedRun(), home = product ? homedir() : process.env.CREWHOUSE_RUN_HOME ||= removeOnExit(mkdtempSync(join(tmpdir(), 'crewhouse-run-')));
   const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw');
   const cfg: Config = {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),

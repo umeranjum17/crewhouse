@@ -9,7 +9,6 @@ import { WebSocket } from 'ws';
 export type Raw = { kind: 'open'; url: string } | { kind: 'click' | 'fill' | 'choose'; label: string };
 
 const MAX_STEPS = 60;
-export const SHOW_MS = 15 * 60_000;
 
 /** The page's side, injected into every page of the bot's browser: labels only, and never inside a password field. */
 const PAGE = `(() => {
@@ -69,7 +68,7 @@ export class Teacher {
    *  left running for 15 minutes. */
   async start(bot: string, what: string, cdp: string, onTimeout: () => void) {
     this.stop(bot);
-    const ws = new WebSocket(cdp, { perMessageDeflate: false }), s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(), timer: setTimeout(onTimeout, SHOW_MS) };
+    const ws = new WebSocket(cdp, { perMessageDeflate: false }), s: Showing = { bot, what, raw: [], shots: [], seen: new Set(), ws, at: Date.now(), n: 0, pending: new Map(), pages: new Map(), timer: setTimeout(onTimeout, 15 * 60_000) };
     this.shows.set(bot, s);
     ws.on('message', (raw) => {
       let m: any;

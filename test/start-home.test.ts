@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -71,4 +71,41 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
     env: { ...env, CREWHOUSE_RUN_MODE: 'verify', CREWHOUSE_RELAY_PUBLIC: 'http://127.0.0.1:7300' }, encoding: 'utf8', timeout: 30_000 });
   assert.equal(install.status, 1, install.stdout);
   assert.match(install.stderr, /Lab\/test runs cannot install a login service/);
+});
+
+test('an isolated run removes the run home it created on exit or SIGTERM, never one it inherited', async () => {
+  const scratch = temp('run-home');
+  const env: NodeJS.ProcessEnv = { ...process.env, TMPDIR: scratch, CREWHOUSE_RUN_MODE: 'test' };
+  delete env.CREWHOUSE_RUN_HOME; // the outer test runner exports its own run home; this run must create one
+  const report = 'import {loadConfig} from "./src/config.ts"; loadConfig(); console.log(process.env.CREWHOUSE_RUN_HOME)';
+  // The kit's engine is read-only on disk: a run home holding a locked tree must still be removed.
+  const locked = 'import {chmodSync, mkdirSync} from "node:fs"; import {loadConfig} from "./src/config.ts"; loadConfig(); const sets = process.env.CREWHOUSE_RUN_HOME + "/engine/sets"; mkdirSync(sets, {recursive: true}); chmodSync(sets, 0o555); chmodSync(sets + "/..", 0o555); console.log(process.env.CREWHOUSE_RUN_HOME)';
+  const exited = spawnSync(process.execPath, ['--input-type=module', '-e', locked], { cwd: repo, env, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(exited.status, 0, exited.stderr);
+  const created = exited.stdout.trim();
+  assert.ok(created.startsWith(scratch + '/crewhouse-run-'), created);
+  assert.equal(existsSync(created), false, 'a normal exit removes the run home it created');
+  assert.deepEqual(readdirSync(scratch), [], 'nothing from the run is left in the temporary directory');
+
+  const child = spawn(process.execPath, ['--input-type=module', '-e', `${locked}; setInterval(() => {}, 1_000)`], { cwd: repo, env, stdio: ['ignore', 'pipe', 'inherit'] });
+  let out = '';
+  child.stdout.on('data', (b) => out += b);
+  const ended = once(child, 'exit');
+  for (const end = Date.now() + 30_000; !out.includes('\n'); await new Promise((r) => setTimeout(r, 20)) ) assert.ok(Date.now() < end, 'the probe never reported its run home');
+  const running = out.trim();
+  child.kill('SIGTERM');
+  assert.deepEqual(await ended, [null, 'SIGTERM']);
+  assert.equal(existsSync(running), false, 'SIGTERM removes the run home too');
+
+  const inherited = join(scratch, 'inherited-home');
+  mkdirSync(inherited);
+  const kept = spawnSync(process.execPath, ['--input-type=module', '-e', report], { cwd: repo, env: { ...env, CREWHOUSE_RUN_HOME: inherited }, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(kept.status, 0, kept.stderr);
+  assert.equal(kept.stdout.trim(), inherited);
+  assert.equal(existsSync(inherited), true, 'a run home set by someone else is never removed');
+
+  // The launcher's config probe keeps the home it creates: crewd inherits it from the launcher.
+  const handedOff = spawnSync(process.execPath, ['--input-type=module', '-e', report], { cwd: repo, env: { ...env, CREWHOUSE_KEEP_RUN_HOME: '1' }, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(handedOff.status, 0, handedOff.stderr);
+  assert.equal(existsSync(handedOff.stdout.trim()), true, 'the launcher probe hands its run home to crewd');
 });

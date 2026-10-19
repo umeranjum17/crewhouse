@@ -21,7 +21,8 @@ need_node() {
 
 # Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).
 paths() {
-  IFS=$'\t' read -r STATE CREW TOOLS RUN_HOME < <(node --input-type=module -e \
+  # The probe keeps any run home it creates: crewd inherits that home, so the probe's exit must not remove it.
+  IFS=$'\t' read -r STATE CREW TOOLS RUN_HOME < <(CREWHOUSE_KEEP_RUN_HOME=1 node --input-type=module -e \
     "const { existsSync } = await import('node:fs'); const { loadConfig } = await import('./' + (existsSync('dist/config.js') ? 'dist/config.js' : 'src/config.ts')); const c = loadConfig(); console.log([c.stateDir, c.crewDir, c.toolsDir, process.env.CREWHOUSE_RUN_HOME || '-'].join('\t'))")
   [ "$RUN_HOME" = - ] || export CREWHOUSE_RUN_HOME="$RUN_HOME";
 }
