@@ -117,7 +117,22 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
     })()`);
     assert.deepEqual(near.under, [], `${route} near the bottom, sign-in buttons under the composer (composer ${near.dock.top}-${near.dock.bottom}): ${near.under.join(' | ')}`);
 
-    // At the very bottom, the card's last button is whole and tappable above the composer.
+    // At the very bottom, the card's last button is whole and tappable above the composer. The web font swaps in after
+    // first paint and changes the card's height, so wait (bounded) for the fonts and two steady frames at the bottom,
+    // re-pinning the thread to its end on each try, before reading the geometry.
+    await until('the bottom settled after the fonts', () => scrollThread(1).then(() => run(`(async () => {
+      await document.fonts.ready;
+      const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+      const geometry = () => {
+        const last = [...document.querySelectorAll('.chat .card.ask .btn')].filter((e) => /^Sign in/.test(e.textContent.trim())).at(-1);
+        const dock = document.querySelector('.chat .dock');
+        return last && dock ? [last.getBoundingClientRect().bottom, dock.getBoundingClientRect().top].map(Math.round).join() : '';
+      };
+      const before = geometry();
+      await frame(); await frame();
+      const after = geometry();
+      return before !== '' && before === after;
+    })()`)), 30_000);
     await scrollThread(1);
     const bottom = await run(`(() => {
       const R = (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; };
