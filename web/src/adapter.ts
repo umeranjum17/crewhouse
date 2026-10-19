@@ -244,6 +244,7 @@ export const atHome = (home = 'this computer') => [
 export const trust = {
   kept: 'What the crew remembers (see or forget any line)', home: 'Runs on this computer, nothing sent to us',
   hello: 'Runs on this computer. See or forget anything the crew remembers.',
+  hub: ['Runs on this computer. Nothing is sent to us.', 'Only what a job needs goes to your AI plan or the app it uses.'],
 };
 /** Hello's promise behind `trust.kept`: before the first job there is nothing to show, so it says where it will be. */
 export const keptWhere = 'Everything the crew remembers about you shows in Settings, where you can forget any line.';
