@@ -476,13 +476,13 @@ test('a bot\'s screen over the link: a watch-only phone may open it, and crewd a
   const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'view' })).body.qr, 'Watcher');
   const w = open(grant);
   await until(async () => w.status() === 'online');
-  const s = await w.link.stream('desktop', { bot: 'chief', build: 'p9b' });
+  const s = await w.link.stream('desktop', { bot: 'tracer', build: 'p9b' });
   const lines: any[] = [];
   let buf = '';
   s.onData = (c) => { buf += new TextDecoder().decode(c); for (let i; (i = buf.indexOf('\n')) >= 0; buf = buf.slice(i + 1)) lines.push(JSON.parse(buf.slice(0, i))); };
   await s.write(JSON.stringify({ id: 1, method: 'session.open', params: { permissions: ['view'] } }) + '\n');
   const reply = await until(async () => lines.find((l) => l.id === 1));
-  assert.equal(reply.error.code, 'no-screen', 'Chief has no computer; said as the computer\'s socket says it');
+  assert.equal(reply.error.code, 'no-screen', 'Tracer has no computer; said as the computer\'s socket says it');
   s.end();
   // Watching isn't hiring: a watch-only phone can't add a helper; a phone that can answer adds one from the gallery.
   assert.equal((await w.req('POST', '/api/recruit', { template: 'scribe', name: 'Quill' })).status, 403);
