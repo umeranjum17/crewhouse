@@ -75,7 +75,7 @@ test('the app is built', () => {
 
 test('the one Memory record: a sentence can be forgotten with an Undo, and added to', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
-  await b.open('demo=calm&day#/settings');
+  await b.open('demo=calm&day#/settings/memory');
   await until('the record in plain parts', () => b.run(`document.querySelectorAll('.profile-part').length >= 3`), 30_000);
   assert.deepEqual(await b.run(parts()), [
     'I run a bakery for my neighbourhood.',
@@ -91,7 +91,7 @@ test('the one Memory record: a sentence can be forgotten with an Undo, and added
   ]);
   // Leave and come back: the section reads the record afresh, so the shorter record proves the Forget landed.
   await b.run(`location.hash = '#/';`);
-  await b.run(`location.hash = '#/settings';`);
+  await b.run(`location.hash = '#/settings/memory';`);
   await until('the shorter record after leaving and coming back', () => b.run(`document.querySelectorAll('.profile-part').length === 2`), 30_000);
   assert.deepEqual(await b.run(parts()), [
     'I run a bakery for my neighbourhood.',
@@ -139,7 +139,7 @@ test('the rail footer shows what Chief calls you, never the stored default "Owne
 // an Undo that puts the exact line back. Driven in real Chromium.
 test('one Memory section lists both records, and a crew line can be forgotten and put back', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
-  await b.open('demo=calm&day#/settings');
+  await b.open('demo=calm&day#/settings/memory');
   await until('the one Memory section', () => b.run(`document.getElementById('memory')?.textContent === 'Memory'`), 30_000);
   await until('both lists in one card', () => b.run(`document.querySelectorAll('.memory-lines .profile-part').length === 3 && document.querySelectorAll('.memory-lines .memory-you').length === 3`), 30_000);
   const you = `[...document.querySelectorAll('.memory-you .grow')].map((el) => el.textContent.trim())`;

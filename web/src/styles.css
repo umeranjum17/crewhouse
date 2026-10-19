@@ -1918,3 +1918,15 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .done-say h2 { font-size: 64px; }
   .done-later { padding: 0 28px; }
 }
+
+/* Settings (J09-J12): the hub's rows and trust card, and the sub-pages' round back with its two-line title. */
+.trust-card { display: flex; gap: 12px; align-items: flex-start; background: var(--soft); border-color: transparent; }
+.trust-card p { margin: 0; color: var(--ink2); }
+.trust-card b { color: var(--ink); }
+.settings .go-to .small { display: block; }
+.settings.sub .chat-head { padding-top: 12px; }
+.settings.sub .back, .settings > .back.phone-only { margin: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--soft); padding: 0 0 3px; }
+.settings.sub .chat-head b { font: 700 18px/1.2 var(--ui); }
+.add-crew > .back { width: 44px; height: 44px; border-radius: 50%; background: var(--soft); margin: 0 0 8px; padding: 0 0 3px; }
+.settings.sub .row-item .btn, .settings.sub .row-item .mini { flex: none; }
+.settings.sub .row-item .small { overflow-wrap: anywhere; }

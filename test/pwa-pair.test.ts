@@ -120,9 +120,9 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   assert.equal(await run(`localStorage.getItem('crewhouse.newsOffer')`), '1', 'and this device remembers the answer');
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
-  assert.equal(await run(`!!document.getElementById('setup-phones')`), false, 'phones stay the computer’s to manage');
+  assert.equal(await run(`!![...document.querySelectorAll('.go-to .grow b')].find((b) => b.textContent === 'Phones')`), false, 'phones stay the computer’s to manage');
   // Chief's computer is the cloud kit's too: a release build lists no row for it.
-  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to')].map((a) => a.textContent)`), ['Your things', 'Routines', 'Add to your crew', 'Your crew']);
+  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to .grow b')].map((a) => a.textContent)`), ['You', 'What the crew remembers', 'AI accounts', 'Apps']);
   // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
   // over the link (`POST /api/push {key}`, never /api/phones/link).
   await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));

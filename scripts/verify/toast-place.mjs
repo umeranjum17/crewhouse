@@ -30,8 +30,8 @@ await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, devi
 const report = {};
 for (const look of ['day', 'night']) {
   // Settings: add a line to "About me and my work", with the accounts list at the foot of the screen.
-  await send('Page.navigate', { url: `${base}/?${look}#/settings` });
-  await until(() => run("!!document.querySelector('.settings, .page') && document.body.textContent.includes('Your AI accounts')"));
+  await send('Page.navigate', { url: `${base}/?${look}#/settings/memory` });
+  await until(() => run("!!document.querySelector('.settings, .page') && document.body.textContent.includes('What the crew remembers')"));
   await sleep(600);
   const input = "[...document.querySelectorAll('input')].find((i) => /vegetarian|about you|your work/i.test(i.placeholder))";
   await run(`${input}.scrollIntoView({ block: 'start' }); window.scrollBy(0, -40); true`);

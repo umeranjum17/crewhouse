@@ -40,6 +40,7 @@ function parseRoute(): Route {
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
+  if (a === 'settings' && ['you', 'memory', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
   return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
@@ -1524,7 +1525,6 @@ function Phones({ tick }: { tick: number }) {
   const left = offer ? Math.max(0, Math.round((offer.expires - now) / 1000)) : 0;
 
   return (<>
-    <div className="label" id="setup-phones">Phones</div>
     {phones === undefined ? <div className="card mute">Checking…</div> : phones === null || (!link?.on && !link?.relay) ? (
       <div className="card"><b>Crewhouse on your phone</b><p className="mute">The phone app is on its way. When it arrives, you'll scan a code here and the crew is in your pocket.</p></div>
     ) : (<>
@@ -1560,9 +1560,9 @@ function Phones({ tick }: { tick: number }) {
           onAway={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))} onNew={() => show(offer.role)} onClose={() => setOffer(null)} closeLabel="Close" />
       </>)}
       <label className="card row">
-        <input type="checkbox" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
         <span className="grow"><b>Phones on this Wi-Fi can reach the crew</b>
           <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">the connector app</a>, away from home. Either way everything between them is locked.</div></span>
+        <input type="checkbox" role="switch" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
       </label>
       <div className="card anywhere">
         <b>Reach it away from home</b>
@@ -1590,7 +1590,7 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   useEffect(() => { if (!paired) api.phoneLink().then(setLink).catch(() => {}); }, [tick]);
   if (paired) return null;
   const { rows, left } = A.homeSetup(state, accounts, link);
-  const jump = (key: string) => document.getElementById(`setup-${key}`)?.scrollIntoView({ behavior: 'smooth' });
+  const jump = (key: string) => go(key === 'signin' ? '#/settings/accounts' : key === 'phones' ? '#/settings/phones' : '#/apps');
   return (<>
     <div className="label">Getting set up</div>
     <div className="card list">{rows.map((r) => (
@@ -1604,8 +1604,6 @@ function HomeSetup({ state, accounts, tick }: { state: Json; accounts: Json[] | 
   </>);
 }
 
-const GO_TO: [string, string, IconName][] = [['#/things', 'Your things', 'things'], ['#/routines', 'Routines', 'routines'], ['#/apps', 'Add to your crew', 'apps'], ['#/crew', 'Your crew', 'chief'],
-  ...(cloudOn ? [['#/computer', A.computer(null).title, 'cloud'] as [string, string, IconName]] : [])];
 /** Paired: this installed app carries a crew from its own computer. Its notifications ride the same mailbox, so the
  *  switch sits on this card: whether one is there is asked over the link (`POST /api/push {key}`), the one call crewd
  *  answers for this device's own grant — never /api/phones/link, which it refuses away from the computer. */
@@ -1618,45 +1616,48 @@ function PairedCard({ tick }: { tick: number }) {
     <button className="btn" onClick={() => confirm('Unpair this app? It goes back to the demo, and you can pair again any time.') && attempt(paired!.unpair)}>Unpair</button>
   </div>;
 }
-function Settings({ state, refresh, tick, accounts, look, setLook }: Ctx & { look: string; setLook: (l: string) => void }) {
+/** A Settings sub-page: a round back to the hub, the page's name, and "Settings" under it. */
+function SettingsPage({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="page settings sub"><div className="sticky-top"><header className="chat-head">
+    <a href="#/settings" className="back" aria-label="Back to Settings">‹</a><div className="grow"><b>{title}</b><div className="mute small">Settings</div></div></header></div>{children}</div>;
+}
+/** One hub row: an icon tile, what it is, one plain line of where it stands, and a chevron. */
+const HubRow = ({ href, tile, title, says }: { href: string; tile: React.ReactNode; title: string; says: string }) =>
+  <a href={href} className="row-item go-to"><span className="o-ic">{tile}</span><span className="grow"><b>{title}</b><div className="mute small">{says}</div></span><Icon name="next" /></a>;
+
+function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & { look: string; setLook: (l: string) => void; tab?: string }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
+  const [lines, setLines] = useState<number | null>(null), [phones, setPhones] = useState<Json[] | null>(null);
+  useEffect(() => { void api.about().then((a) => setLines(A.memories(a.notes ?? '').length)).catch(() => {}); if (!paired) void api.phones().then(setPhones).catch(() => {}); }, [tick]);
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
+  const m = state.person, display = A.displayName(m), [from, to] = (m.quiet ?? '').split('-');
+  const mine = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready'), on = A.apps(state).filter((a) => a.on);
+  const signingSheet = signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />;
+  if (tab === 'you') return <SettingsPage title="You"><You state={state} act={act} plan={A.planName(accounts)} /><Money state={state} refresh={refresh} /></SettingsPage>;
+  if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
+  if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />{signingSheet}</SettingsPage>;
+  if (tab === 'phones' && !paired) return <SettingsPage title="Phones"><Phones tick={tick} /></SettingsPage>;
   return (
     <div className="page settings">
-      <a href="#/" className="back phone-only">‹ Home</a>
+      <a href="#/" className="back phone-only" aria-label="Back">‹</a>
       <h1>Settings</h1>
-      <p className="mute small"><b>{A.trust.home}.</b> {A.atHome().join(' ')}</p>
-      <button className="link trust" onClick={() => document.getElementById('memory')?.scrollIntoView({ behavior: 'smooth' })}>{A.trust.kept}</button>
+      <div className="card trust-card"><span className="o-ic"><Icon name="lock" /></span><p><b>{A.trust.hub[0]}</b> {A.trust.hub[1]}</p></div>
       {demo && <PairRow />}
-      {/* Paired: notifications ride the person's mailbox like at home — the switch lives here, since crewd refuses
-          the Phones screen over the link. `relay` is asked over the link too, so no refused call and no dead toggle. */}
       {paired && <PairedCard tick={tick} />}
-      {/* No tab bar on a phone (B1): the desk rail's places, reached from here. */}
-      <div className="card list go-tos">{GO_TO.map(([h, l, i]) => <a key={h} href={h} className="row-item go-to"><span className="o-ic"><Icon name={i} /></span><span className="grow">{l}</span><Icon name="next" /></a>)}</div>
+      <div className="card list go-tos">
+        <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
+        <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
+        <HubRow href="#/settings/accounts" tile={<Icon name="chief" />} title="AI accounts" says={mine.length ? `${mine[0].ai.name} · signed in` : 'Not signed in yet'} />
+        <HubRow href="#/apps" tile={<Icon name="plus" />} title="Apps" says={on.length ? on.map((a) => a.name).slice(0, 3).join(', ') : 'None added yet'} />
+        {!paired && <HubRow href="#/settings/phones" tile={<Icon name="phone" />} title="Phones" says={phones === null ? '' : phones.length ? `${phones.length} ${phones.length === 1 ? 'phone' : 'phones'} paired` : 'None paired yet'} />}
+        {cloudOn && <HubRow href="#/computer" tile={<Icon name="cloud" />} title={A.computer(null).title} says="" />}
+      </div>
+      <div className="label">Look</div>
+      <div className="seg">{[['auto', 'Match device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
       <Install />
       <HomeSetup state={state} accounts={accounts} tick={tick} />
-
-      <div className="label">You</div>
-      <You state={state} act={act} plan={A.planName(accounts)} />
-      <div className="label" id="chief-soul">Chief's personality</div>
-      <p className="mute small">How Chief talks to you. Change it any time; his next reply follows it.</p>
-      <ChiefSoul tick={tick} />
-      <Memory tick={tick} />
-
-      <div className="label" id="setup-signin">Your AI accounts</div>
-      <AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />
-
-      <div className="label">Add to your crew</div>
-      <a className="card row" href="#/apps"><span className="app-row">{A.apps(state).slice(0, 5).map((a) => <span key={a.id} className="app-ic sm"><img className="app-logo" src={a.logo} alt="" /></span>)}</span><span className="grow mute">{A.apps(state).filter((a) => a.on).length} apps connected</span><b>›</b></a>
-
-      {/* Phones are this computer's to add and remove: crewd refuses them over the link. */}
-      {!paired && <Phones tick={tick} />}
-
-      <div className="label">Look</div>
-      <div className="seg">{[['auto', 'Match my device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
-      <Money state={state} refresh={refresh} />
       <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
-      {signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />}
+      {signingSheet}
     </div>
   );
 }
@@ -1780,7 +1781,7 @@ function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
   const pick = (m: Json) => attempt(async () => { await api.pickModel(id, m.id); await load(); refresh(); }, `Your crew uses ${m.name} from now on`);
   return (
     <div className="page ai-page">
-      <a href="#/settings" className="back">‹ AI accounts</a>
+      <a href="#/settings/accounts" className="back">‹ AI accounts</a>
       <h2>{ai.name}</h2>
       <p className="mute small">{g.state === 'signed-out' ? 'Not signed in' : `Signed in · your ${plan}`}{g.resting ? ` · ${g.resting}` : ''}</p>
       <div className="label">Which model your crew uses</div>
@@ -1940,8 +1941,8 @@ function Apps({ state, refresh }: Ctx) {
   };
   return (
     <div className="page add-crew">
-      <a href="#/settings" className="back">‹ Settings</a>
-      <h1>Add to your crew</h1>
+      <a href="#/settings" className="back" aria-label="Back to Settings">‹</a>
+      <h1>Apps</h1>
       <form className="add-search" role="search" onSubmit={search}><Icon name="search" />
         <input value={q} onChange={(e) => { setQ(e.target.value); setFound(null); }} placeholder="Search apps and skills" aria-label="Search apps and skills" autoComplete="off" enterKeyHint="search" /></form>
       <div className="card list">
@@ -2157,7 +2158,7 @@ function App() {
           {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} />}
-          {v.view === 'settings' && <Settings {...ctx} look={look} setLook={setLook} />}
+          {v.view === 'settings' && <Settings {...ctx} tab={v.tab} look={look} setLook={setLook} />}
           {v.view === 'ai' && v.id && <AiAccount {...ctx} id={v.id} />}
           {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
