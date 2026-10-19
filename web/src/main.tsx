@@ -853,14 +853,16 @@ function Room(ctx: Ctx) {
   const newestRoom = [...lines].reverse().find((l) => l.text)?.id;
   const helpers = A.crew(state);
   const cards = A.cards(state).filter((c) => (page?.asks ?? []).some((a: Json) => a.id === c.id));
-  return <div className="page chat-page room-page"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} ring={h.ring} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Work handed between helpers</div></div></header>
+  return <div className="page chat-page room-page st-helper-chat"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Who asked whom</div></div></header>
     <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}`} key={l.id}>
-      {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} ring={l.who.ring} />}<b>{l.from && l.to ? `${l.from} → ${l.to}` : l.author === 'person' ? 'You → ' + l.who.name : l.who.name}</b></div>}
-      {l.text && <div className="bubble-text"><ChatText text={l.text} latest={l.id === newestRoom} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
+      {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} />}<b>{l.from && l.to ? `${l.from} to ${l.to}` : l.author === 'person' ? 'You to ' + l.who.name : l.who.name}</b></div>}
+      {l.text && <div className="bubble-text helper-bubble"><ChatText text={l.text} latest={l.id === newestRoom} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === (c.by ?? c.helper))} onDone={() => { void load(); refresh(); }} />)}</div>
-      <aside className="working-on">{(page?.busy ?? []).length > 0 && <section className="frame working-on-frame"><div className="label ascii">Working on</div>{(page.busy as string[]).map((id) => { const h = helpers.find((x) => x.id === id); return h && <div className="frame-row head" key={id}><Face who={h} size={32} ring={h.ring} /><b>{h.name}</b></div>; })}</section>}</aside>
-      <div className="dock read-along"><p className="ro"><Icon name="lock" /><span>The crew room is read-only. Open a crew member to talk directly.</span></p></div>
+      <aside className="working-on"><div className="label">Who's on it</div><div className="card list">
+        <div className="row-item"><Face who="chief" size={44} /><span className="grow"><b>Chief</b><span className="small">Hands out the jobs</span></span></div>
+        {A.roster(ctx.live.crew).map((c) => <div className="row-item" key={c.id}><Face who={c} size={44} /><span className="grow"><b>{c.name}</b><span className="small">{A.statusOf(c, ctx.live).word}</span></span></div>)}</div></aside>
+      <div className="dock read-along"><p className="ro"><Icon name="lock" /><span>You can read along here. To change a job, ask Chief.</span></p><a className="btn" href="#/chief">Ask Chief about this</a></div>
     </div></div>;
 }
 
@@ -884,19 +886,20 @@ function Crew(ctx: Ctx) {
 }
 
 function AddHelper({ state, refresh }: Ctx) {
-  const [names, setNames] = useState<Record<string, string>>({});
   const welcome = async (t: Json) => {
-    const name = (names[t.id] ?? t.name).trim() || t.name;
     let id = '';
-    if (await attempt(async () => { id = (await api.recruit(t.id, name)).id; }, `${name} joined the crew`)) { refresh(); go(`#/h/${id}`); }
+    if (await attempt(async () => { id = (await api.recruit(t.id, t.name)).id; }, `${t.name} joined the crew`)) { refresh(); go(`#/h/${id}`); }
   };
+  const hired = new Set(A.crew(state).map((h) => h.name));
   return (
-    <div className="page rest-screen">
-      <a href="#/crew" className="back">‹ Crew</a><h1>Add a helper</h1><p className="lead">Pick a starter, or tell Chief what you need.</p>
-      <div className="label">Starters</div><div className="card list">
-        {A.gallery(state).map((t: Json) => <div key={t.id} className="row-item starter-row"><Face who={{ kind: t.kind, name: t.name }} size={44} /><span className="grow"><input className="starter-name" value={names[t.id] ?? t.name} onChange={(e) => setNames({ ...names, [t.id]: e.target.value })} aria-label={`Name for ${t.name}`} /><span className="mute small">{t.does}</span></span><button className="btn go" onClick={() => welcome(t)}>Add</button></div>)}
+    <div className="page rest-screen st-add">
+      <a href="#/crew" className="back" aria-label="Back">‹</a><h1>Add a helper</h1><p className="lead">Pick one, or tell Chief who you need. Chief asks you before anyone joins.</p>
+      <div className="st-tiles">
+        {A.gallery(state).map((t: Json) => hired.has(t.name)
+          ? <div key={t.id} className="st-tile" style={{ background: art.colourOf(t.kind) }}><span className="st-pill">On the crew</span><Face who={{ kind: t.kind, name: t.name }} size={72} /><b className="semi">{t.name}</b><span>{t.does}</span></div>
+          : <button key={t.id} className="st-tile" style={{ background: art.colourOf(t.kind) }} onClick={() => welcome(t)} aria-label={`Add ${t.name}`}><span className="st-pill st-add-pill">Add</span><Face who={{ kind: t.kind, name: t.name }} size={72} /><b className="semi">{t.name}</b><span>{t.does}</span></button>)}
       </div>
-      <div className="label">Something else</div><div className="card"><p className="mute small">Tell Chief what you need help with.</p><Composer placeholder="Tell Chief what you need help with" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} /></div>
+      <div className="label">Someone else?</div><Composer placeholder="Tell Chief who you need…" onSend={async (t) => { const ok = await attempt(() => api.post('chief', t), undefined, true); if (ok) go('#/chief'); return ok; }} {...typeInto('chief')} />
     </div>
   );
 }
@@ -943,7 +946,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
     void load();
   }, 'Forgotten');
   return (
-    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : ''}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
+    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : ''}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
       {tab === 'chat' && h && <>
         <div className="sticky-top">
           <header className="chat-head">
@@ -997,11 +1000,11 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       {tab === 'did' && (page ? <>
         <div className="sticky-top"><header className="chat-head">
           <a href={id === 'chief' ? '#/chief' : `#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
-          <div className="grow"><b>What happened</b></div>
+          <div className="grow"><b>What happened</b><span className="st-reading">{name}, as it happened</span></div>
         </header></div>
-        <p className="lead">What {name} does, as it happens. Recorded by Crewhouse, not remembered by {name}.</p>
-        {A.steps(page.trail ?? []).length ? <Steps steps={A.steps(page.trail ?? [])} max={40} onUndo={undo} onForget={forget} />
+        {A.steps(page.trail ?? []).length ? <Steps trail steps={A.steps(page.trail ?? [])} max={40} onUndo={undo} onForget={forget} />
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
+        <p className="st-recorded"><Icon name="lock" /><span>Recorded by Crewhouse, not remembered by {short}.</span></p>
       </> : null)}
       {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
         <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>Computer</b></div></header></div>}
