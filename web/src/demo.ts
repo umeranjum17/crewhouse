@@ -19,7 +19,7 @@ import type { Json } from './api.ts';
 import { AIS } from './adapter.ts';
 import { describe, firstRun as firstRunWords, nextRun, parseSchedule } from '../../src/routines.ts';
 
-const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'maya';
+const variant = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('demo') || 'umer';
 const now = Date.now();
 // The local day's start, as the app counts "done today": jobs meant to be done today never slip into yesterday after midnight.
 const today = new Date(now).setHours(0, 0, 0, 0);

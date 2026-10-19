@@ -18,8 +18,8 @@ const desk = '1440x900x1', phone = '390x844x2,mobile,touch';
 const lines = (js) => `() => { const l = document.querySelector(".lines"); ${js}; return l.scrollTop }`;
 const scenes = [
   ['home', 'demo#/', desk], ['home-phone', 'demo#/', phone], ['ask', 'demo=hello#/', phone],
-  ['plan', 'demo=live#/', phone, lines('const m = [...l.children].find((e) => e.textContent.includes("great, and can")); l.scrollTop += m.getBoundingClientRect().top - 165')],
-  ['answer', 'demo=answer#/', phone, lines('l.scrollTop = 0')],
+  ['plan', 'demo=live#/chief', phone, lines('const m = [...l.children].find((e) => e.textContent.includes("great, and can")); l.scrollTop += m.getBoundingClientRect().top - 100')],
+  ['answer', 'demo=answer#/chief', phone, lines('l.scrollTop = 0')],
   ['spend', 'demo=meals#/ask/20', phone], ['files', 'demo#/f/scribe/files%2Fmonthly-budget.xlsx', desk],
 ];
 for (const [name, query, view, scroll] of scenes) {
@@ -29,7 +29,7 @@ for (const [name, query, view, scroll] of scenes) {
     const [q, hash] = query.split('#');
     axi('open', `${base}/?${q}&${look}#${hash}`);
     const end = Date.now() + 15000;
-    while (!axi('eval', '() => !!document.querySelector(".main, .hello") && !document.querySelector(".splash")').includes('true')) {
+    while (!axi('eval', '() => !!document.querySelector(".main, .hello, .fr") && !document.querySelector(".splash")').includes('true')) {
       if (Date.now() > end) throw new Error(`Screen not ready: ${name}`);
     }
     axi('eval', '() => { const s = document.createElement("style"); s.textContent = ".pair-row{display:none!important}"; document.head.append(s); return true }');
