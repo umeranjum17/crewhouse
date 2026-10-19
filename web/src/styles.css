@@ -1951,3 +1951,29 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .screen-btns .btn:nth-child(n+3) { background: var(--soft); border-color: transparent; }
 .card.screen > .row { margin-bottom: 12px; }
 .btn.soft { background: var(--soft); border-color: transparent; }
+
+/* Stack J05c What happened, J05d Add a helper, J06a the crew room. */
+.steps.trail { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.trail .step { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; align-items: start; border-bottom: 1px solid var(--line); padding: 14px 0; font-size: 16px; }
+.trail .step > i { display: none; }
+.trail .step > time { grid-column: 1; grid-row: 1; font-size: 16px; font-weight: 700; white-space: normal; }
+.trail .step > .grow { grid-column: 2; grid-row: 1; }
+.trail .step > .link { grid-column: 3; grid-row: 1; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--soft); color: var(--ink); font: 700 16px var(--ui); }
+.st-trail > :not(.sticky-top) { margin-left: 20px; margin-right: 20px; }
+.st-trail > .steps { max-width: 760px; }
+.st-recorded { display: flex; gap: 10px; align-items: flex-start; color: var(--mute); font-size: 16px; line-height: 1.4; }
+.st-recorded svg { flex: none; width: 20px; height: 20px; margin-top: 2px; }
+.st-add .st-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) { .st-add .st-tiles { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+.st-add button.st-tile { border: 0; font: inherit; text-align: left; cursor: pointer; }
+.st-add .st-add-pill { background: #0B0B0B; color: #fff; }
+.st-add .st-tile > .face { align-self: center; }
+.room-page .chat .line.me { align-items: stretch; max-width: none; }
+.room-page .chat .line .row { margin-bottom: 8px; }
+.room-page .chat .line .bubble-text.helper-bubble { display: inline-block; max-width: 100%; }
+.room-page .working-on .row-item { align-items: center; gap: 12px; }
+.room-page .working-on .row-item .grow > b, .room-page .working-on .row-item .grow > span { display: block; }
+.room-page .working-on .row-item .small { color: var(--mute); }
+.room-page.st-helper-chat .chat-head { padding: 16px 20px; gap: 12px; }
+.room-page.st-helper-chat .chat .line .bubble-text.helper-bubble { border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px; background: var(--solid); }
+.room-page .chat .line.me { margin-left: 0; }

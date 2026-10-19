@@ -556,18 +556,18 @@ export function PreviewPanel({ bot, path, title, onClose, inline, wide, who, mad
 }
 
 /** "Show the work", as a friendly list of steps. */
-export function Steps({ steps, max = 6, onUndo, onForget }: { steps: Step[]; max?: number; onUndo?: (s: Step) => void; onForget?: (s: Step) => void }) {
+export function Steps({ steps, max = 6, onUndo, onForget, trail }: { steps: Step[]; max?: number; onUndo?: (s: Step) => void; onForget?: (s: Step) => void; trail?: boolean }) {
   const [all, setAll] = useState(false);
   const shown = all ? steps : steps.slice(-max);
   if (!steps.length) return null;
   return (
-    <div className="card steps">
+    <div className={`card steps${trail ? ' trail' : ''}`}>
       {steps.length > shown.length && <button className="link" onClick={() => setAll(true)}>Show all {steps.length} steps</button>}
       {shown.map((s) => (
         <div key={s.seq} className={`step ${s.now ? 'now' : s.asked ? 'asked' : ''}`}>
           <i className="ascii" /><span className="grow">{s.text}</span>
           {onUndo && s.undo && <button className="link" onClick={() => onUndo(s)}>Undo</button>}
-          {onForget && s.forget && <button className="link" onClick={() => onForget(s)}>Forget that</button>}
+          {onForget && s.forget && <button className="link" onClick={() => onForget(s)}>Forget</button>}
           <time>{s.now ? 'now' : clock(s.at)}</time>
         </div>
       ))}
