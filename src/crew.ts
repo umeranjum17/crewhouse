@@ -2011,7 +2011,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         if (!text) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, text); this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task(), added: text.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter((s) => s && !was.includes(s)) });
       }),
       tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
-      tool('crew_case', 'Keep the facts of a case you noticed from new mail, so a later reply follows up in the same thread. `thread`: the thread id from its link; `facts`: its id, dates, the deadline you hold, and what is confirmed vs not yet, briefly.', (p) => {
+      tool('crew_case', 'Keep a mail case for a later follow-up in its thread. `thread`: id from its link; `facts`: id, dates, deadline held, confirmed vs not.', (p) => {
         const thread = String(p.thread ?? '').trim();
         const body = this.db.get('SELECT t.body FROM tasks t JOIN routines r ON r.id = t.routine WHERE t.id = ? AND r.mailwatch = 1', task() ?? 0)?.body ?? '';
         const at = body.indexOf(`⟧ (${mailLink(thread)})`);
