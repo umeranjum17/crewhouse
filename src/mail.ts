@@ -20,7 +20,7 @@ async function get(token: Token, path: string) {
   const t = await token();
   if (!t) throw new Error('Gmail is not connected any more. Ask the person to connect it again (crew_connect).');
   const res = await fetch(`${GMAIL}${path}`, { headers: { authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(20_000) });
-  if (res.status === 404) throw new Error('No such conversation. Search again for its id.');
+  if (res.status === 404) throw Object.assign(new Error('No such conversation. Search again for its id.'), { status: 404 });
   if (!res.ok) throw new Error(`Gmail said ${res.status}. Try again in a moment.`);
   return res.json() as Promise<any>;
 }
@@ -66,6 +66,26 @@ async function rows(token: Token, threads: { id: string }[]) {
 export async function newThreads(token: Token, after: number, limit = 25) {
   const list = await get(token, `/threads?${new URLSearchParams({ q: 'in:inbox', maxResults: String(limit) })}`);
   return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
+}
+
+/** Inbox mail added since `after`, a Gmail history id (an opaque string; it outgrows a JS number). No `after`, or one
+ *  Gmail has forgotten (a week or more away), starts again from now: old mail never counts as new. */
+export async function mailChanges(token: Token, after?: string) {
+  const ids = new Set<string>(), messages: { id: string; from: string; subject: string }[] = [], now = async () => ({ history: String((await get(token, '/profile')).historyId), messages });
+  if (!after) return now();
+  let page: string | undefined, history = after;
+  try {
+    do {
+      const out = await get(token, `/history?${new URLSearchParams({ startHistoryId: after, historyTypes: 'messageAdded', ...(page ? { pageToken: page } : {}) })}`);
+      history = String(out.historyId); page = out.nextPageToken;
+      for (const h of out.history ?? []) for (const { message: m } of h.messagesAdded ?? []) if (m.labelIds?.includes('INBOX')) ids.add(String(m.id));
+    } while (page);
+  } catch (e: any) { if (e.status === 404) return now(); throw e; }
+  for (const id of ids) {
+    const m = await get(token, `/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`).catch((e) => { if (e.status === 404) return null; throw e; }); // deleted since
+    if (m) messages.push({ id, from: header(m, 'From'), subject: header(m, 'Subject') });
+  }
+  return { history, messages };
 }
 
 export async function runMail(token: Token, args: string[], root?: string, filing?: MailSend, bot = 'chief'): Promise<string> {

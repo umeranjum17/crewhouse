@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, useColorScheme, useWindowDimensions, View,} from 'react-native';
+  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, Share, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -690,7 +690,7 @@ const PUSH_WORDS = {
   missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
 };
 
-function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () => void }) {
+function Pair({ onPaired, onBack, typeFirst = false }: { onPaired: (g: Grant) => void; onBack?: () => void; typeFirst?: boolean }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -698,7 +698,7 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Grant | null>(null);
   const [words, setWords] = useState('');
-  const [typing, setTyping] = useState(false);
+  const [typing, setTyping] = useState(typeFirst);
   const [code, setCode] = useState('');
   const seen = useRef('');
   // Whether the camera itself is the problem, kept as its own answer: the "Open phone settings" button belongs to
@@ -778,7 +778,7 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
         <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
           <ChiefArt mood="listen" size={72} whole />
           <T style={[s.h1, s.serif, { fontSize: 32, lineHeight: 36 }]}>Type a code</T>
-          <T tone="ink2" style={s.centerText}>Enter the code under Add a phone on your computer, or one someone there sent you.</T>
+          <T tone="ink2" style={s.centerText}>Enter the code your computer shows or printed, or one someone there sent you.</T>
           <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
             accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
           {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
@@ -818,9 +818,11 @@ function Pair({ onPaired, onBack }: { onPaired: (g: Grant) => void; onBack?: () 
  *  in a build with the cloud on, src/cloud.ts). */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
-  const [at, setAt] = useState<'where' | 'computer' | 'cloud'>('where');
-  const back = at === 'where' ? null : () => setAt('where');
+  const [at, setAt] = useState<'where' | 'put' | 'code' | 'computer' | 'cloud'>('where');
+  const back = at === 'where' ? null : () => setAt(at === 'code' ? 'put' : 'where');
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
+  if (at === 'put') return <PutChief onCode={() => setAt('code')} onHave={() => setAt('computer')} onBack={back!} />;
+  if (at === 'code') return <Pair typeFirst onPaired={onPaired} onBack={back!} />;
   if (at === 'computer') return <Pair onPaired={onPaired} />;
   if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} />;
   const w = A.where(cloudOn);
@@ -832,7 +834,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
       </View>
       {!!w.line && <T tone="ink2" style={[s.small, { marginLeft: 54, marginTop: 10 }]}>{w.line}</T>}
       <View style={{ gap: 10, marginTop: 12 }}>{w.rows.map((r, i) =>
-        <Pressable key={r.key} onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key)} accessibilityRole="button" accessibilityLabel={r.title}
+        <Pressable key={r.key} onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'computer' ? 'put' : r.key)} accessibilityRole="button" accessibilityLabel={r.title}
           style={({ pressed }) => [s.opt, { backgroundColor: t.solid, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }, pressed && { opacity: 0.7 }]}>
           <View style={[s.mark, { backgroundColor: i ? t.soft : t.softAccent }]}><Image source={WHERE[r.key]} style={{ width: 20, height: 20, tintColor: i ? t.ink : t.go }} /></View>
           <View style={{ flex: 1 }}><T style={s.b}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View>
@@ -840,6 +842,31 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
         </Pressable>)}</View>
       <Note>{w.note}</Note>
       <T tone="mute" style={[s.small, s.centerText, s.foot]}>{w.later}</T>
+    </ScrollView>
+  );
+}
+
+/** On my computer with nothing there yet: the one line that puts Chief on a Linux computer, which prints a code that
+ *  works once; Type the code opens Pair's box. Already there goes to Pair as before. */
+function PutChief({ onCode, onHave, onBack }: { onCode: () => void; onHave: () => void; onBack: () => void }) {
+  const t = useLook();
+  const p = A.PUT;
+  return (
+    <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]}>
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}>
+        <T tone="ink2" style={{ fontSize: 22, width: 24 }}>‹</T><T tone="ink2" style={{ flex: 1 }}>{p.top}</T></Pressable>
+      <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{p.title}</T>
+        <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
+      <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: 2, borderColor: t.go }]}>
+        <T tone="ink2">{p.lead}</T>
+        <Text selectable style={{ fontSize: 14, lineHeight: 20, color: t.ink, backgroundColor: t.bg, borderRadius: radius.card, padding: 12 }}>{p.line}</Text>
+        <Btn label={p.send} onPress={() => void Share.share({ message: p.line })} />
+        <T tone="ink2">{p.after}</T>
+        <Btn go big label={p.code} onPress={onCode} />
+      </View>
+      <Note>{p.needs}</Note>
+      <T tone="mute" style={s.small}>{p.app}</T>
+      <Btn ghost label={p.have} onPress={onHave} />
     </ScrollView>
   );
 }
@@ -1688,7 +1715,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
           {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I didn't catch that time. Try “every Monday 9:00”.</T>}
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
-            <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
+            {!!c.schedule && <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />}
             {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
           </View>
         </>

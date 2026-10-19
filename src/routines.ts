@@ -97,14 +97,19 @@ export function reminderAt(text: string, now = Date.now()) {
   try { return nextRun(parseSchedule(s.replace(/^(at|on)\s+/, '')), now); } catch { throw whenBad(text); }
 }
 
-/** A local event that starts a routine instead of (or as well as) a time: a file arriving in the helper's
- *  inbox, or the computer waking. The inbox is fixed per helper, so the words never carry a path. */
-export type Trigger = { file: true } | { wake: true };
+/** What starts a routine instead of (or as well as) a time: a file arriving in the helper's inbox, the computer
+ *  waking, a new email (literal sender and subject words) or a timed meeting N minutes ahead, on the person's own
+ *  Gmail and Calendar connections. The inbox is fixed per helper, so the words never carry a path. */
+export type Trigger = { file: true } | { wake: true } | { mail: true; from: string; subject: string } | { calendar: number };
 
-const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
+const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when an email from the bank arrives", "10 minutes before each meeting", "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
 
 export function parseTrigger(text: string): Trigger {
-  const s = String(text).toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = String(text).replace(/\s+/g, ' ').trim(), s = words.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
+  const meeting = /^(?:when (?:a |each |every )?(?:calendar event|meeting) starts|(\d{1,4}) minutes? before (?:each|every|a) (?:meeting|calendar event))$/i.exec(words);
+  if (meeting && Number(meeting[1] ?? 0) <= 1440) return { calendar: Number(meeting[1] ?? 0) };
+  const mail = /^when (?:a new |an? |new )?(?:email|mail)(?: from (.+?))?(?: (?:with (?:the )?subject|about) (.+?))? arrives?$/i.exec(words);
+  if (mail) return { mail: true, from: (mail[1] ?? '').replace(/^the /i, ''), subject: mail[2] ?? '' };
   if (!s.startsWith('when ')) throw triggerBad(text);
   if (/\b(wake|wakes|woke|waking)\b/.test(s) && /\b(computer|machine|laptop|mac|pc)\b/.test(s)) return { wake: true };
   if (/\b(file|files|photo|photos|picture|pictures|receipt|receipts|attachment|document)\b/.test(s) &&
@@ -113,4 +118,5 @@ export function parseTrigger(text: string): Trigger {
 }
 
 /** The trigger back in plain words; `who` is the helper's display name, whose inbox the file trigger watches. */
-export const describeTrigger = (t: Trigger, who: string) => 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';
+export const describeTrigger = (t: Trigger, who: string) => 'mail' in t ? `When an email${t.from ? ` from ${t.from}` : ''}${t.subject ? ` with subject ${t.subject}` : ''} arrives`
+  : 'calendar' in t ? (t.calendar ? `${t.calendar} minutes before each meeting` : 'When a meeting starts') : 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';

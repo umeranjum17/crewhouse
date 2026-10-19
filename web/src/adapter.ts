@@ -105,6 +105,22 @@ export const where = (cloud: boolean) => ({
   /** The web app can't set up a cloud (or run Chief on the phone alone): both live in the phone app. */
   app: 'Use the phone app to set this up',
 });
+/** The portable Linux download: the cloud recipe installs it, and so does the one line below. */
+export const LINUX_DOWNLOAD = 'https://github.com/umeranjum17/crewhouse/releases/latest/download/crewhouse-linux-x64.tar.gz';
+/** On my computer, when nothing is there yet (phone): a computer with nothing running can't be reached, so the person
+ *  pastes one line there. It installs the download and its service, then prints a code that works once for two
+ *  minutes (docs/install.md, Headless Linux host); the phone's code box takes it and this phone becomes the owner. */
+export const PUT = {
+  top: 'On my computer', title: 'Put Chief on your computer',
+  lead: 'Crewhouse runs on a Linux computer you leave on. Open a command window there and paste this one line:',
+  line: `curl -fsSL ${LINUX_DOWNLOAD} | tar -xz && crewhouse/app/crewhouse setup --headless`,
+  send: 'Send this line to my computer',
+  after: 'It installs Crewhouse, keeps it running and prints a code. The code works once, for two minutes. Type it here.',
+  code: 'Type the code',
+  needs: 'The computer and this phone both need Tailscale, signed in to your account. Nothing else is installed on this phone.',
+  app: 'No Tailscale? Install the Crewhouse app on the computer instead. Then open Settings, Phones, Add a phone.',
+  have: 'Crewhouse is already on my computer',
+};
 /** The cloud connect on the phone (mock key-first): the boat.dev key, then the computer, then Chief sets it up. The kit
  *  side is web/src/cloud.ts; a web page can't call boat.dev, so only the phone app shows these. */
 export const CLOUD = {
@@ -244,6 +260,7 @@ export const atHome = (home = 'this computer') => [
 export const trust = {
   kept: 'What the crew remembers (see or forget any line)', home: 'Runs on this computer, nothing sent to us',
   hello: 'Runs on this computer. See or forget anything the crew remembers.',
+  hub: ['Runs on this computer. Nothing is sent to us.', 'Only what a job needs goes to your AI plan or the app it uses.'],
 };
 /** Hello's promise behind `trust.kept`: before the first job there is nothing to show, so it says where it will be. */
 export const keptWhere = 'Everything the crew remembers about you shows in Settings, where you can forget any line.';

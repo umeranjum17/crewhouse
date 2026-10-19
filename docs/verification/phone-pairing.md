@@ -7,7 +7,7 @@ code the computer is showing, the person says yes on the computer, and the phone
 
 `scripts/verify/phone-pair.mjs` drives the whole journey and writes the evidence:
 
-The app opens on "Where should I work?": tap **On my computer** to reach Pair. On a task-owned debug APK
+The app opens on "Where should I work?": **On my computer** opens "Put Chief on your computer" (the one-line install, [headless-host.md](headless-host.md#the-phones-one-line)); tap **Crewhouse is already on my computer** to reach Pair, or **Type the code** for the code box. On a task-owned debug APK
 whose native dependencies are unchanged, first configure its own `debug_http_host` for the isolated Metro.
 Then use `--prepared` without `--apk`: it preserves those settings and pairs from the visible Pair screen,
 finds Scan/Open by their exact labels, and waits for the phone's words rather than fixed startup sleeps.
