@@ -349,7 +349,7 @@ const kindOf = (f: FileView, deck: DeckView | null) => deck ? 'Deck' : f.kind ==
 function aboutFile(f: FileView, book: Workbook | null, doc: DocView | null, deck: DeckView | null) {
   const kind = kindOf(f, deck);
   if (book) {
-    const rows = book.sheets.reduce((n, s) => n + (s.total || s.rows.length), 0);
+    const rows = book.sheets.reduce((n, s) => n + (s.total ? s.total - 1 : s.rows.length), 0) // `total` counts the heading row;
     return rows ? `${kind} · ${rows === 1 ? '1 row' : `${rows} rows`}` : kind;
   }
   const count = deck ? deck.slides.length : doc?.parts.filter((p) => p.kind === 'heading' && bare(p.text ?? '') !== bare(f.name)).length ?? 0;
