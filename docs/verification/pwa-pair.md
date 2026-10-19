@@ -27,7 +27,9 @@ clears the icon badge and goes back to "Where should I work?".
 
 `test/pwa-pair.test.ts` runs the whole journey headless: relay code, two words, yes, real data, onboarding as Umer,
 reload, Unpair, the 12-letter code. For the installed app, start the lab: a stub crewd with an isolated HOME and every XDG dir,
-the repo's relay, and the built shell on `http://crewhouse.localhost:<port>/`. Then run the plan under a real X server
+the repo's relay, and the built shell on `http://crewhouse.localhost:<port>/`. The plan follows the public link's journey: it installs
+from the demo (`?demo`, the README's link), pairs from its Pair card, and Unpair returns to "Where should I work?".
+Run it under a real X server
 so Chromium installs the app for real:
 
 ```bash
@@ -53,8 +55,8 @@ the device's grant id in `<lab>/relay/relay.json`, then post a message to Chief 
 
 ## Read it
 
-`run.json` lists every step. Expect no `error`, `standalone: true`, `rec-real` and `paired` as `real`, `rec-back` as
-`demo`, and two words for `words-day` and `words-night`. Shots: `demo-pair-button-`, `pair-card-`, `two-words-`,
+`run.json` lists every step. Expect no `error`, `standalone: true`, `rec-demo` as `demo`, `rec-real` and `paired` as
+`real`, `rec-back` as `where` (Unpair lands on "Where should I work?"), and two words for `words-day` and `words-night`. Shots: `demo-pair-button-`, `pair-card-`, `two-words-`,
 `paired-real-` and `paired-settings-{day,night}-{390,1440}.png`, plus `install-sheet.png` and `installed-window.png`.
 The recording is `motion/demo-pair-real-unpair.webm`.
 
