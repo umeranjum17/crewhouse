@@ -1688,7 +1688,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
           {when !== null && !!sched?.bad && <T tone="mute" style={s.small}>I didn't catch that time. Try “every Monday 9:00”.</T>}
           <View style={s.chips}>
             <Btn go label="Start it" disabled={stuck} onPress={() => act({ answer: 'allow', scope: 'once', ...(when !== null && when.trim() && when.trim() !== c.schedule ? { schedule: when.trim() } : {}) })} />
-            <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />
+            {!!c.schedule && <Btn label={when === null ? 'Change time' : 'Keep the time'} onPress={() => setWhen(when === null ? c.schedule || '' : null)} />}
             {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
           </View>
         </>

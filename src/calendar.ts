@@ -59,8 +59,12 @@ async function call(token: Token, method: string, path: string, body?: object) {
 
 /** Events between two times, soonest first, cancelled ones left out. */
 export async function events(token: Token, from: Date, to: Date, extra: Record<string, string> = {}) {
-  const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50', ...extra }), { items = [] } = await call(token, 'GET', `?${q}`);
-  return (items as any[]).filter((e) => e.status !== 'cancelled').map(toEvent);
+  const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '50', ...extra }), items: any[] = [];
+  for (let page: string | undefined = ''; page !== undefined;) {
+    if (page) q.set('pageToken', page);
+    const out = await call(token, 'GET', `?${q}`); items.push(...(out.items ?? [])); page = out.nextPageToken;
+  }
+  return items.filter((e) => e.status !== 'cancelled').map(toEvent);
 }
 
 const span = (at: Date, allDay: boolean, end: Date) => (allDay ? { start: { date: ymd(at) }, end: { date: ymd(end) } } : { start: { dateTime: at.toISOString() }, end: { dateTime: end.toISOString() } });
