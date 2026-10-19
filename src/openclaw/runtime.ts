@@ -189,6 +189,9 @@ export class OpenClawRuntime implements AgentRuntime {
     return rows.filter((p) => p.id && p.key && (p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md'))))).sort((a, b) => b.at - a.at);
   }
   /** What the person sees learned: one row per skill name, whichever lane learned it; the newest copy wins. */
+  composioBegin() { return this.kit.beginComposioSignIn(); }
+  composioDone() { return this.kit.completeComposioSignIn(); }
+  composioSignOut() { return this.kit.signOutComposio(); }
   async learned() {
     const rows = await this.proposals();
     return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state }));

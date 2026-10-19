@@ -245,6 +245,12 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     // Connections: the person's apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
+    // Composio's hosted tools: one sign-in through the engine's own MCP OAuth, the page opened by the person's tap.
+    if (p === '/api/composio') {
+      if (m === 'GET') return crew.composio.status();
+      if (m === 'POST') return crew.composio.connect();
+      if (m === 'DELETE') { await crew.composio.disconnect(); return { ok: true }; }
+    }
     // Herdr's own row on the Apps screen: missing, installed, or answering (probed when the screen opens).
     if (m === 'GET' && p === '/api/herdr') return herdrStatus(cfg);
     if (p === '/api/mail' || p === '/api/mail/review') {

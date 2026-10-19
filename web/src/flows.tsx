@@ -288,6 +288,47 @@ export function ConnectApp({ app, helper, state, tab: first, ask, onConnected, o
   );
 }
 
+/**
+ * Connect apps: Composio's own sign-in page opens in the tap; the person picks an account and says yes there, and the
+ * sheet turns to done by itself. Nothing is typed here, and nothing connects until that page says yes.
+ */
+export function ComposioSheet({ state, onChange, onClose }: { state: Json; onChange: () => void; onClose: () => void }) {
+  const [phase, setPhase] = useState<'opening' | 'waiting' | 'done' | 'failed'>(state?.state === 'on' ? 'done' : 'opening');
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const tab = useRef<Window | null>(null);
+  const start = () => {
+    setPhase('opening'); tab.current = openTab();
+    api.composioConnect().then((r) => { setUrl(r?.url ?? ''); if (tab.current && r?.url) tab.current.location.href = r.url; setPhase(r?.state === 'on' ? 'done' : 'waiting'); })
+      .catch((e) => { tab.current?.close(); setError(e?.status === 503 ? 'Connect apps is still starting. Try again in a moment.' : "Can't reach the home computer right now. Check it's on, then try again."); setPhase('failed'); });
+  };
+  useEffect(() => { if (state?.state !== 'on') start(); }, []);
+  const poll = usePoll(() => api.composio(), 1500, phase === 'waiting');
+  useEffect(() => {
+    const s = poll.value?.state;
+    if (s === 'on') { setPhase('done'); onChange(); }
+    else if (s === 'failed') { setError(poll.value?.error ?? ''); setPhase('failed'); }
+    else if (s === 'off') setPhase('failed');
+  }, [poll.value]);
+  const cancel = () => { void api.composioOff().catch(() => {}); onChange(); onClose(); };
+  return (
+    <Sheet label="Connect apps" onClose={onClose}>
+      {phase === 'opening' && <><h2>Opening the sign-in page…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
+      {phase === 'waiting' && <>
+        <h2>Say yes on the sign-in page</h2>
+        <p className="mute">Sign in once to Composio and pick the apps you want. Your password stays with Composio, and Chief can use the apps you pick.</p>
+        {url && <a className="btn go big" href={url} target="_blank" rel="noreferrer">Open the sign-in page ↗</a>}
+        <Pill tone="wait" live>Waiting for Composio…</Pill>
+        <button className="link" onClick={cancel}>Cancel</button>
+      </>}
+      {phase === 'done' && <><h2>Your apps are connected</h2><p>Chief can use the apps you picked. You can turn them off here any time.</p>
+        <button className="btn go big" onClick={onClose}>Done</button></>}
+      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{error || "Composio didn't finish signing you in. No harm done; let's try once more."}</p>
+        <button className="btn go big" onClick={start}>Try again</button><button className="link" onClick={onClose}>Not now</button></>}
+    </Sheet>
+  );
+}
+
 /** The in-chat offer, only when a task needs the app: one ask card (§4.4, connect). "Connect {App}" opens the app's
  *  page in that tap. */
 export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helper?: string; state: Json; onDone: () => void; id?: string }) {

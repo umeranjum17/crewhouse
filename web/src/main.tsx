@@ -12,7 +12,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
 import { glowOf, hear, useOffice } from './office.tsx';
-import { AccountCard, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 import * as K from './kept.ts';
@@ -1896,6 +1896,9 @@ function Apps({ state, refresh }: Ctx) {
   const [all, setAll] = useState<string[]>([]);
   const [found, setFound] = useState<A.CrewRow[] | null>(null);
   const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
+  const [composio, setComposio] = useState<Json>(null), [joining, setJoining] = useState(false);
+  const loadComposio = () => api.composio().then(setComposio).catch(() => setComposio({ state: 'off' }));
+  useEffect(() => { void loadComposio(); }, []);
   const load = () => api.skills().then(setSkills).catch(() => setSkills({ starter: [] }));
   useEffect(() => { void load(); void api.herdr().then(setHerdr).catch(() => setHerdr(false)); }, []);
   const rows = A.crewRows(state, skills, herdr), plugin = A.herdr(herdr), added = rows.filter((r) => r.on);
@@ -1941,6 +1944,13 @@ function Apps({ state, refresh }: Ctx) {
       <h1>Add to your crew</h1>
       <form className="add-search" role="search" onSubmit={search}><Icon name="search" />
         <input value={q} onChange={(e) => { setQ(e.target.value); setFound(null); }} placeholder="Search apps and skills" aria-label="Search apps and skills" autoComplete="off" enterKeyHint="search" /></form>
+      <div className="card list">
+        <div className="row-item app-row-item"><span className="app-ic" aria-hidden><b>C</b></span>
+          <div className="grow"><b>Connect apps</b><div className="mute small add-line">Sign in once, and Chief can use the apps you pick.</div></div>
+          {composio?.state === 'on' ? <button className="mini added" aria-label="Connect apps is on. Turn it off" onClick={() => void attempt(async () => { await api.composioOff(); await loadComposio(); }, 'Connect apps is off')}>Added ✓</button>
+            : <button className="mini" aria-label="Connect apps" onClick={() => setJoining(true)}>Connect</button>}
+        </div>
+      </div>
       <div className="add-chips">
         {!!added.length && <span className="add-count">{added.slice(0, 3).map((r) => mark(r, 'app-ic xs'))}{added.length} added</span>}
         {[['', 'All'], ...A.PURPOSES.filter(([k]) => rows.some((r) => r.purpose === k))].map(([k, l]) =>
@@ -1956,6 +1966,7 @@ function Apps({ state, refresh }: Ctx) {
         {!found && words.length > 1 && <> <button className="link" onClick={search}>Look in the catalog</button></>}</p>}
       {!!found?.length && <section aria-label="In the catalog"><div className="add-head"><b>In the catalog</b></div><div className="card list">{found.map((r, i) => row(r, i))}</div></section>}
       <p className="mute small center">Every app and skill here is reviewed. Adding one opens its own sign-in when it needs one.</p>
+      {joining && <ComposioSheet state={composio} onChange={() => void loadComposio()} onClose={() => setJoining(false)} />}
       {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
     </div>
   );

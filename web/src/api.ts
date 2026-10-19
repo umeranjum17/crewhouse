@@ -181,6 +181,9 @@ export const api = {
   push: (body: Json) => call('POST', '/api/push', body),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
+  composio: () => call('GET', '/api/composio'),
+  composioConnect: () => call('POST', '/api/composio'),
+  composioOff: () => call('DELETE', '/api/composio'),
   disconnect: (app: string) => call('DELETE', `/api/connections/${app}`),
   /** Herdr's setup state for its own row on the Apps screen: missing, installed, or answering. */
   herdr: () => call('GET', '/api/herdr'),
