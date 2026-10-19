@@ -25,7 +25,7 @@ clears the icon badge and goes back to "Where should I work?".
 
 ## How to drive it
 
-`test/pwa-pair.test.ts` runs the whole journey headless: relay code, two words, yes, real data, onboarding as Maya,
+`test/pwa-pair.test.ts` runs the whole journey headless: relay code, two words, yes, real data, onboarding as Umer,
 reload, Unpair, the 12-letter code. For the installed app, start the lab: a stub crewd with an isolated HOME and every XDG dir,
 the repo's relay, and the built shell on `http://crewhouse.localhost:<port>/`. Then run the plan under a real X server
 so Chromium installs the app for real:

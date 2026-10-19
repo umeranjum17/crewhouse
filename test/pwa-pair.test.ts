@@ -102,10 +102,10 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await run(`(() => { document.querySelector('button.name-ask')?.click(); })()`);
   await until('the name box', () => run(`!!document.querySelector('.name-ask input')`));
   await run(`(() => { const i = document.querySelector('.name-ask input');
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'Maya'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'Umer'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await run(`document.querySelector('.hello .idea').click()`);
   await until('onboarded over the link', async () => (await http('GET', '/api/state')).person.onboarded === 1, 20_000);
-  assert.equal((await http('GET', '/api/state')).person.address, 'Maya');
+  assert.equal((await http('GET', '/api/state')).person.address, 'Umer');
 
   // A cold start keeps the grant: the installed app opens paired, never on the demo.
   await send('Page.navigate', { url: shell });

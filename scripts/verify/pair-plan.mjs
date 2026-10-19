@@ -35,7 +35,7 @@ const steps = [
   { name: 'rec-approve', run: `${cli} phones approve "$(${cli} phones pending | tail -1 | sed 's/.*: //')"` },
   { name: 'rec-real', wait: `${mode.replace(/'/g, "'")} === 'real'`, timeout: 20000, eval: mode },
   // The real crew is new, so it opens on Hello: give a name and take the first idea, which reaches Home and Settings.
-  { name: 'rec-name', run: 'echo Maya', eval: put('.name-ask input') },
+  { name: 'rec-name', run: 'echo Umer', eval: put('.name-ask input') },
   { name: 'rec-onboard', click: '.hello .idea', settle: 4000 },
   { name: 'rec-hold2', run: 'sleep 3; true' },
   { name: 'rec-say', run: `echo 'I want to market my app'`, eval: put('.composer textarea') },
