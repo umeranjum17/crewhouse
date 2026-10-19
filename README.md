@@ -17,10 +17,15 @@
 </p>
 
 <p align="center">
+  <a href="https://crewhouse.pages.dev/?demo"><strong>Try the demo</strong></a> ·
   <a href="#quick-start"><strong>Quick start</strong></a> ·
   <a href="TRY-IT.md">30-minute tour</a> ·
   <a href="https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk">Android preview</a> ·
   <a href="docs/how-it-works.md">How it works</a>
+</p>
+
+<p align="center">
+  The demo is the web app on a made-up crew, in your browser: nothing to install, and you can add it to your home screen.
 </p>
 
 <p align="center">
