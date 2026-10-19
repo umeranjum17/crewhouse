@@ -55,6 +55,7 @@ Without that approval the journey is NOT RUN; never drop `spends:` or wrap its d
 |----|------|----------------|
 | herdr-setup | [herdr-setup.md](herdr-setup.md) | The helper's Herdr setup and prerequisite refusal |
 | phone-pairing | [phone-pairing.md](phone-pairing.md) | Native camera, typed and timed-code pairing on the release app |
+| put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: one pasted line installs the headless host on a clean Linux box, then the phone types its code |
 | look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/verify/mocks.tsv`) |
 | chat-attach | [chat-attach.md](chat-attach.md) | Chief's paperclip: a PDF or document lands in the helper's inbox under crewd's own name and shows as a one-line file card above the words, at 390/1440, the largest text and in the installed app; the phone app's + sheet, chip and big-file stream on an emulator |
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |

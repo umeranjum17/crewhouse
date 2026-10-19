@@ -1,6 +1,7 @@
 // The cloud connect's kit side (mock key-first): the phone app runs it on the person's own boat.dev key, since a web
 // page can't call boat.dev (BYOKit cloud kit D-6). Framework-free, so the phone and test/cloud-connect.test.ts share it.
 import { boat, errorKey, machine, MachineError, pairEnrol, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
+import { LINUX_DOWNLOAD } from './adapter.ts';
 
 export const BOAT = { label: 'boat.dev', api: 'https://boat.dev/api/v1' };
 const vars = { app: 'Chief', label: BOAT.label };
@@ -13,7 +14,7 @@ export const cost = () => `$${PRICES[0].perHour}/hour · about $${(PRICES[0].per
 export const RECIPE = {
   name: 'crewhouse', workDir: '/home/user/crewhouse',
   node: { version: '24.21.0', sha256: { 'linux-x64': 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6', 'linux-arm64': '6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2' } },
-  install: [['curl', '-fsSLo', 'crewhouse.tar.gz', 'https://github.com/umeranjum17/crewhouse/releases/latest/download/crewhouse-linux-x64.tar.gz'],
+  install: [['curl', '-fsSLo', 'crewhouse.tar.gz', LINUX_DOWNLOAD],
     ['tar', '-xzf', 'crewhouse.tar.gz'], ['crewhouse/app/crewhouse', 'setup', '--headless', '--install-only']],
   run: { argv: ['node', 'crewhouse/app/scripts/headless.mjs', 'serve'], env: {} },
 };
