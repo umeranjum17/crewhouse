@@ -6,7 +6,7 @@ this phone, the sign-in-yourself note and "You can change this later in Settings
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
-The cloud row is behind a build flag (`@byokit/cloud` 0.1.0 from npm, on its `next` tag):
+The cloud row is behind a build flag (`@byokit/cloud` 0.2.1 from npm):
 `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for
 `scripts/build-web.mjs`. Without it the screen has two rows, On my computer first. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
@@ -20,13 +20,23 @@ The cloud row is behind a build flag (`@byokit/cloud` 0.1.0 from npm, on its `ne
   Create button stays off. Use this computer walks the kit's setup steps on the five-row progress list: a failure
   marks its row "!" with Chief's words and Try again; retry reruns the kit setup sequence while retaining the
 completed-step display. A setup exception marks the row
-  setup was on (no row before the kit's first step), with the error and Try again. Ready says Chief knows this phone.
+  setup was on (no row before the kit's first step), with the error and Try again. Before setup the phone asks
+  boat.dev for the computer's own public address on port 7300 (`url()`); the recipe runs the headless host with its
+  relay published there (`CREWHOUSE_RELAY_PUBLIC`), so no Crewhouse server and no Tailscale sit in the middle. The kit
+  delivers this phone's public key; `scripts/headless.mjs` hands it to crewd (`POST /api/phones/enrol`, refused to
+  any phone), which enrols it as the host's owner and writes the kit's receipt. The receipt becomes the phone's link
+  grant: Ready says Chief knows this phone, and Talk to Chief opens the app on that computer, where Chief answers.
   Other ways lists the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
   hardware back, return one step. A kept key skips the paste on the next visit.
 - Web: On my computer opens the Pair sheet ([pwa-pair.md](pwa-pair.md)); the cloud and phone rows open "Use the
   phone app to set this up" with the app's download code.
 
 ## How to drive it
+
+Journey test (fake boat.dev plus a real headless runner on the stub engine, the provider's public port stood in by
+the runner's published relay): `node --test test/cloud-connect.test.ts`. It walks key, pick, a failed install,
+setup to ready, the receipt's grant reaching Chief, owner authority, a phone refused at `/api/phones/enrol`, and a
+restart that keeps the binding (a second phone's key is refused).
 
 Web, from the repo root:
 
@@ -56,6 +66,12 @@ never revoke it. Each run deletes the computers it made. Start
 from the repo root. All driver actions use the mode-600 Unix socket `<out>/ctrl.sock`, never a TCP port; for example:
 `curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/cost`, `/cleanup`, `/me`, `/stop`).
 It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its own computer (kit `remove`).
+For a run before the release carries the change, build the candidate download from the branch under test
+(`npm run build:web && node scripts/package.mjs <out>`), start the driver with `CANDIDATE=<out>/crewhouse-<version>-linux-x64.tar.gz`,
+and build the lab APK with `EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD=file:///tmp/crewhouse-candidate.tar.gz` and, for a
+computer with no AI sign-in, `EXPO_PUBLIC_CREWHOUSE_CLOUD_ENV='{"CREWHOUSE_ENGINE":"stub",...}'` (state, crew and
+tools dirs under `/home/user/crewhouse`). After `/make`, `/upload` puts the download on the driver's own computer;
+`/logs` reads the service journal there. Then paste, Use this computer, Talk to Chief and send a message.
 Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`) and save the key there. Boat
 documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
 
