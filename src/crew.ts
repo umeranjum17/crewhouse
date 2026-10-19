@@ -1266,7 +1266,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain) });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
-      if (handoff && handoff !== 'Crewhouse restarted') this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
+      if (handoff && !['Crewhouse restarted', 'The connection dropped'].includes(handoff)) this.say(bot.id, 'system', `${handoff}. ${bot.display} carries on${this.connected.delete(task.id) ? '' : ` with ${disk.brainName(brain)}`}.`, task.id);
       this.turn(bot.id, l, resumes ? `[Crewhouse] ${handoff ?? 'You were interrupted'}. Continue task #${task.id} where you left off; ` +
         'check work/ and files/ before redoing anything.' : this.prompt(task), resumes ? undefined : this.images(bot.id, task));
     } catch (e: any) {

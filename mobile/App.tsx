@@ -495,6 +495,22 @@ function PhotoView({ f }: { f: A.FileView }) {
 
 /** Files open right here, through the same crewd-parsed words the web's reader shows — a document (.docx, .md, .txt),
  *  a spreadsheet (.xlsx), a video fetched in pieces over the link. Anything else really is on the computer. */
+/** A job just finished, in Chief's thread (web/src/parts.tsx DoneCard, Stack J16a): its maker's colour and face, Done., the
+ *  thread's own words for what came of it, then Open it or Later. */
+function DoneCard({ f, who, text, later }: { f: A.FileView; who: A.Helper | 'chief'; text: string; later: () => void }) {
+  const [open, setOpen] = useState(false);
+  const chief = who === 'chief', ink = chief ? '#F7F7FB' : INK;
+  const btn = (label: string, onPress: () => void, go = false) => <Pressable key={label} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
+    style={({ pressed }) => [s.liveBtn, { flexGrow: 1, paddingHorizontal: 20, backgroundColor: go ? (chief ? '#F7F7FB' : INK) : 'rgba(0,0,0,0.1)' }, pressed && { opacity: 0.8 }]}>
+    <Text style={[s.read, { color: go ? (chief ? INK : '#fff') : ink, ...fw('700') }]}>{label}</Text></Pressable>;
+  return <View accessibilityLabel={`Done: ${f.name}`} style={[s.live, { flex: 0, width: '100%', alignItems: 'center', gap: 14, padding: 20, borderRadius: 30, backgroundColor: art.colourOf(chief ? 'chief' : who.kind) }]}>
+    <Face who={chief ? 'chief' : { kind: who.kind, name: who.name, mood: 'happy' }} size={96} />
+    <Text style={{ fontSize: 30, lineHeight: 32, color: ink, ...fw('800') }}>Done.</Text>
+    <Text style={[s.read, { color: ink, textAlign: 'center' }]}>{text}</Text>
+    <View style={[s.row, { alignSelf: 'stretch', gap: 8 }]}>{btn('Open it', () => setOpen(true), true)}{btn('Later', later)}</View>
+    {open && <DocSheet f={f} onClose={() => { setOpen(false); later(); }} />}
+  </View>;
+}
 function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
   const [open, setOpen] = useState(false);
   if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
@@ -1595,6 +1611,32 @@ function MailSetup({ c, canAct, done }: { c: A.Card; canAct: boolean; done: () =
     <View style={s.chips}><Btn label={status?.stopped ? 'Remove from do-not-email list' : 'Do not email this address'} disabled={!canAct || busy || !status} onPress={() => void act({ suppressed: !status!.stopped })} />
       <Btn go label="Review one email" disabled={!canAct || busy || !status} onPress={() => void review()} /></View>{!!error && <T tone="pinkInk" style={s.small}>{error}</T>}</View>;
 }
+/** A helper offer is a Stack card in the new helper's colour (web/src/parts.tsx AskCard, `stack-ask`): ink on colour, in light and night. */
+function HireCard({ c, yes, deny, act, oops }: { c: A.Card; yes?: A.Card['choices'][number]; deny?: A.Card['choices'][number]; act: (body: Json) => void; oops: boolean }) {
+  const h = c.hire!, sect = (w: string) => <Text style={[s.read, s.b, { color: INK, opacity: 0.7, letterSpacing: 1 }]}>{w}</Text>;
+  const list = (ls: string[], no = false) => ls.map((l, i) => <View key={`${no}${i}`} style={[s.row, { gap: 10, alignItems: 'flex-start' }]}>
+    <View style={[s.tick, { borderColor: INK, backgroundColor: no ? 'transparent' : INK }]}>{!no && <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14, ...fw('900') }}>✓</Text>}</View>
+    <Text style={[s.read, s.b, { flex: 1, color: INK }]}>{l}</Text></View>);
+  const btn = (x: NonNullable<typeof yes>, go: boolean) => <Pressable key={x.label} onPress={() => act(x.body)} accessibilityRole="button" accessibilityLabel={x.label}
+    style={({ pressed }) => [s.liveBtn, { paddingHorizontal: 20, flexGrow: go ? 1 : 0, backgroundColor: go ? INK : 'rgba(0,0,0,0.1)' }, pressed && { opacity: 0.8 }]}>
+    <Text style={[s.read, { color: go ? '#fff' : INK, ...fw('700') }]}>{x.label}</Text></Pressable>;
+  return <View style={[s.live, { flex: 0, width: '100%', gap: 16, padding: 20, borderRadius: 30, backgroundColor: art.colourOf(h.kind) }]}>
+    <View style={[s.row, { gap: 12 }]}>
+      <Face who={{ kind: h.kind, name: h.name }} size={64} />
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Text style={{ fontSize: 26, lineHeight: 28, color: INK, ...fw('800') }}>{h.name}</Text>
+        {!!h.role && <Text style={[s.read, s.b, { color: INK }]}>{h.role}</Text>}
+      </View>
+    </View>
+    {!!h.first_job && <View style={{ gap: 6 }}>{sect('FIRST JOB')}<Text style={{ fontSize: 18, lineHeight: 24, color: INK, ...fw('700') }}>{h.first_job}</Text></View>}
+    {!!h.will_do?.length && <View style={{ gap: 6 }}>{sect('WILL DO')}{list(h.will_do)}</View>}
+    {!!h.wont_do?.length && <View style={{ gap: 6 }}>{sect("WON'T DO")}{list(h.wont_do, true)}</View>}
+    {!!h.first_step && <View style={{ gap: 6 }}>{sect('FIRST STEP FOR YOU')}<Text style={[s.read, { color: INK }]}>{h.first_step}</Text></View>}
+    <Text style={[s.read, { color: INK }]}>Nothing changes until you say yes.</Text>
+    {oops && <Text style={[s.read, s.b, { color: INK }]}>That didn't go through. Try again.</Text>}
+    <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{yes && btn(yes, true)}{deny && btn(deny, false)}</View>
+  </View>;
+}
 function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
@@ -1617,6 +1659,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
+  if (c.hire && canAct && !offline) return <HireCard c={c} yes={yes} deny={deny} act={act} oops={oops} />;
   return (
     <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
@@ -1960,6 +2003,15 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
 
   const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
+  // The newest finished sheet or page in Chief's thread is a Done card until the person speaks again, opens it or says Later (web Chat).
+  const [laterDone, setLaterDone] = useState<string[]>([]);
+  const made = (f: A.FileView) => (f.kind === 'sheet' || f.kind === 'page') && !f.review && !A.sentFile(f);
+  const doneLine = id === 'chief' ? lines.findLast((l) => l.from === 'me' || l.files.some(made)) : undefined;
+  const doneFile = doneLine?.from === 'me' ? undefined : doneLine?.files.find((f) => made(f) && !laterDone.includes(f.url));
+  const doneBot = doneFile && A.fileSource(doneFile.url)?.bot;
+  const doneBy = doneBot === 'chief' ? 'chief' as const : doneBot ? A.crew(state).find((x) => x.id === doneBot) : undefined;
+  const fileCard = (l: { text: string }, f: A.FileView) => doneBy && f === doneFile ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} later={() => setLaterDone((v) => [...v, f.url])} />
+    : f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>;
   const echoed = pending && !(page?.messages ?? []).some((x: Json) => x.author === 'person' && x.id > pending.after && (A.plain(x.text) === A.plain(pending.text) || (!!pending.files && /\[file [a-z0-9-]+\] files\//.test(x.text))));
   const waiting = pending && !partial && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.id > pending.after);
   const crewNames = A.crew(state);
@@ -2083,24 +2135,24 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
           <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={[s.line, bubble && { maxWidth: '100%' }]}>
             {l.from === 'note' ? <>
               {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-              {!!l.text && !l.by && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
+              {!!l.text && !l.by && !(doneBy && l.id === doneLine?.id) && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
               {/* A delivered or kept file is a note too: its words, then its card. */}
               {!l.text && !!l.about && <ChatText text={l.about} />}
-              {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
+              {l.files.map((f) => fileCard(l, f))}
             </> : bubble && l.from === 'me' ? <View style={{ gap: 6 }}>
               {!!l.text && mine(l.text)}
-              {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
+              {l.files.map((f) => fileCard(l, f))}
             </View> : <View style={bubble ? [s.row, { alignItems: 'flex-end' }] : turn()}>
               {bubble ? <Face who={faceOf(l.helper)} size={36} /> : <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>}
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-                {!!l.text && !l.by && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} />
+                {!!l.text && !l.by && !(doneBy && l.id === doneLine?.id) && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} />
                   : bubble ? <View style={[s.them, { backgroundColor: t.solid, borderColor: t.line }]}><ChatText text={l.text} latest={l.id === newestAnswer} /></View>
                   : <ChatText text={l.text} latest={l.id === newestAnswer} />)}
                 {!!l.retry && (bubble ? <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
                   <View style={[s.tick, { borderColor: t.mute, borderWidth: 1.5 }]}><T tone="mute" style={[s.small, s.b]}>!</T></View><T style={[s.read, s.b, { textDecorationLine: 'underline' }]}>Try again</T>
                 </Pressable> : <Btn label="Try again" onPress={() => void send(l.retry!)} />)}
-                {l.files.map((f) => f.size ? <FileRow key={f.url} f={f} /> : <Card key={f.url}><FileRow f={f} /></Card>)}
+                {l.files.map((f) => fileCard(l, f))}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
                 {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
               </View>
@@ -2154,8 +2206,8 @@ function LiveCard({ ln, who, chief, quiet, chipped, replied, stuck, go, refresh,
   const [openDetail, setOpenDetail] = useState(false);
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
   const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
-  // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there.
-  if (ln.took !== undefined) return chipped || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null
+  // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there; a failed one waits for its reply, so the line never shows alone before it.
+  if (ln.took !== undefined) return chipped || (!ln.helper && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null
     : <View style={[s.row, { flexWrap: 'wrap', gap: 10, paddingLeft: chief ? 46 : 0 }]} accessibilityLiveRegion="polite">
       <T style={[s.read, { color: ln.state === 'failed' || ln.state === 'unsure' ? t.amber : t.mute }]}>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{!!ln.count && ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}`}</T>
       {!!ln.helper && <Pressable onPress={() => go({ view: 'helper', id: ln.helper })} accessibilityRole="link" hitSlop={8}><T style={[s.read, s.b]}>Open chat ›</T></Pressable>}
