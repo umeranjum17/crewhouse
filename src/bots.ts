@@ -231,14 +231,13 @@ const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).repl
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
 
-/** Remembered lines go into every later prompt, so they stay plain words about the person: a web page a bot read can't plant a link or a command in them. */
-const RISKY = /https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]|(^|\s)~?\/[\w.-]*\/|`|\$\(|&&/i;
 
 /** Capped memory: rewrite, don't append. `replaces` names words of the old note a correction replaces. Over the cap is refused, so the bot must consolidate. */
 export function remember(cfg: Config, m: Memory, line: string, replaces = ''): Learned {
   const clean = line.replace(/\s+/g, ' ').trim();
   if (!clean) throw new Error('nothing to remember');
-  if (RISKY.test(clean)) throw new Error('notes are plain words about the person: no links, email addresses, file locations or commands');
+  // Remembered lines go into every later prompt, so they stay plain words about the person: a web page a bot read can't plant a link or a command in them.
+  if (/https?:|www\.|[\w.+-]+@[\w-]+\.[a-z]|(^|\s)~?\/[\w.-]*\/|`|\$\(|&&/i.test(clean)) throw new Error('notes are plain words about the person: no links, email addresses, file locations or commands');
   const lines = noteLines(cfg, m), old = replaces.trim() ? lines.findIndex((l) => l.includes(replaces.trim())) : -1;
   if (replaces.trim() && old < 0) throw new Error(`no note mentions "${replaces.trim()}"; your notes are in your prompt`);
   const added = `- ${clean}`, removed = old >= 0 ? lines[old] : null;

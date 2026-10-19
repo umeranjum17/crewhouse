@@ -54,8 +54,6 @@ export async function tailscalePeer(ip: string, bin = 'tailscale'): Promise<bool
   return s.Peer ? isPeer(s, ip) : undefined;
 }
 
-/** The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`). */
-const ROUTES = ['home', 'tailscale', 'relay'];
 /** Every notification says only this; the phone fetches the words over the link (the relay enforces it too). */
 export const NEWS = 'Crewhouse has news';
 const WEB_DEVICE = 'web'; // the person's browser holds no link grant; a paired phone keeps its own grant id
@@ -218,8 +216,7 @@ export class Link {
 
   /** Every address a phone can dial now: the home network, Tailscale, then the person's own relay. */
   urls() {
-    const direct = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : [];
-    return [...direct, ...(this.relayUrl() ? [this.relayUrl()] : [])];
+    return [...(this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs).map((ip) => `ws://${ip}:${this.cfg.linkPort}/link`) : []), ...(this.relayUrl() ? [this.relayUrl()] : [])];
   }
 
   /** A phone paired before Tailscale was installed, or before the home address moved, learns the new address while any
@@ -413,7 +410,8 @@ export class Link {
     // that address as a peer (shared with this phone's account), for the words when the phone later can't reach it.
     if (op === 'GET /api/reach') {
       const a = (body ?? {}) as { via?: unknown; ip?: unknown };
-      if (ROUTES.includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
+      // The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`).
+      if (['home', 'tailscale', 'relay'].includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
       const peer = !(process.env.CREWHOUSE_HEADLESS === '1' && process.env.CREWHOUSE_RELAY_PUBLIC) && typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
       return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
     }

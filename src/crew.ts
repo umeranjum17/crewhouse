@@ -44,8 +44,6 @@ const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a 
 const TASK_TIMEOUT_MS = 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // the engine silent this long: the run has hung
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
-/** OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed. */
-const NATIVE_TOOLS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -82,8 +80,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
-const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
-const fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } }; // a file's own name, as the person knows it
+const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n), fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } }; // a file's own name, as the person knows it
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
 const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; }, hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
 /** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
@@ -328,8 +325,7 @@ export class Crew {
    *  reviewed row's purpose (skills, apps and plugins alike), which puts it in a section there. Switching and searching
    *  run on the real engine; the stand-in answers the list, all off, and says the rest needs it. */
   starterSkills() {
-    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] };
-    const { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
+    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] }, { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
     return { live: !!runtime.starterSkills, purposes, starter: runtime.starterSkills?.() ?? approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
       version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
   }
@@ -542,8 +538,7 @@ export class Crew {
   /** The person has read this thread up to now. */
   read(bot: string) {
     if (!this.bot(bot)) throw fail('no such bot', 404);
-    const top = this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ?', bot)!.id ?? 0;
-    this.db.run('INSERT INTO reads (member, bot, seen) VALUES (1, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', bot, top);
+    this.db.run('INSERT INTO reads (member, bot, seen) VALUES (1, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', bot, this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ?', bot)!.id ?? 0);
   }
 
   /** Words across the person's chats and finished work, newest first. Plain LIKE: an install has thousands of lines, not millions. */
@@ -1190,8 +1185,7 @@ export class Crew {
       '(diet, units, where they live); leave it out for how they like your own work. Otherwise save nothing.';
     // What the person already chose on drafts, in plain words, so the next job never asks twice.
     const decided = this.db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved', 'draft.rejected') ORDER BY seq DESC LIMIT 3")
-      .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; });
-    const decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
+      .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; }), decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet', history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
@@ -1591,7 +1585,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!l) return false;
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
-    if (NATIVE_TOOLS.has(name)) return !this.netOf(botId);
+    // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
+    if (new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']).has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
     if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
@@ -1697,8 +1692,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // The card says what the page charges, in the page's own money. Only a dollar price counts toward the dollar cap;
     // anything else says so in plain words, so a capped-looking yes can never hide a different currency.
     const not$ = o.total !== null && o.currency !== '$', words = o.total === null ? `${name} wants to act on a checkout page at ${site}. I couldn't read the total on this page.`
-      : `${name} wants to place this order at ${site}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`;
-    const body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
+      : `${name} wants to place this order at ${site}${few ? `: ${few}${o.items.length + o.more > 3 ? ', …' : ''}` : ''}. Total ${o.shown}.${not$ ? ` That's ${o.currency === '£' ? 'pounds' : 'euros'}, not dollars, so the monthly limit can't count it.` : ''}`, body = [...o.items, ...(o.more ? [`and ${o.more} more`] : []),
       o.total === null ? "Total: couldn’t read it on this page" : `Total ${o.shown}${not$ ? " — not dollars, the monthly limit can't count it" : ''}`].join('\n');
     return { effect: { ...e, words, ...(o.capped ? { cost: o.total! } : {}), preview: { head: `The order at ${site}`, body } }, checkout: { shop, total: o.total, basket: o.items.length > 0, shown: o.shown, currency: o.currency } };
   }
@@ -2145,8 +2139,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   /** A helper hit a password-locked PDF: one card in Chief's thread, a field per file (unlock). A file already unlocked is just named. */
   private async askUnlock(botId: string, files: unknown) {
-    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))];
-    const candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [], opened: string[] = [];
+    const space = disk.botDir(this.cfg, botId), rels = [...new Set([typeof files === 'string' && files.startsWith('[') ? JSON.parse(files) : files].flat().map((f) => relative(space, disk.insideBot(this.cfg, botId, String(f ?? '')))))], candidates = rels.filter((r) => { if (!existsSync(join(space, r))) throw fail(`there is no file at ${r}`); return !unlockedCurrent(space, r) && /\/Encrypt\b/.test(readFileSync(join(space, r), 'latin1')); }), locked: string[] = [], opened: string[] = [];
     for (const r of candidates) if (!sandboxReady() || !existsSync(unlockPy(this.cfg.toolsDir)) || ![0, 4].includes(await this.unlocking(space, r, ''))) locked.push(r); else opened.push(r);
     for (const r of opened) this.db.event('file.unlocked', botId, { task: this.activeTask(botId)?.id, path: unlockedAs(r) });
     if (this.fileRule(botId) === 'keep') for (const r of opened) { const kept = this.activeTask(botId)?.id; if (this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.path') = ?", botId, kept, unlockedAs(r))) continue; this.unforgotten(botId, unlockedAs(r)); this.db.event('file.delivered', botId, { task: kept, path: unlockedAs(r) }); this.say(botId, 'system', `Kept ${unlockedAs(r)}: ${this.knownName(botId, r)}`, kept ?? null); }

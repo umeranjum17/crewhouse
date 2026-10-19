@@ -42,8 +42,7 @@ export function assertSafeConfig(cfg: Config) {
 export function removeOnExit(dir: string): string { if (process.env.CREWHOUSE_KEEP_RUN_HOME) return dir; const remove = () => { try { spawnSync('chmod', ['-R', 'u+w', dir]); rmSync(dir, { recursive: true, force: true }); } catch (error) { console.error(`crewhouse: could not remove ${dir}: ${(error as Error).message}`); } }; process.once('exit', remove); for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.once(signal, () => { remove(); if (!process.listenerCount(signal)) process.kill(process.pid, signal); }); return dir; } // Removes a run home this process created on exit or on a signal no other listener handles; the kit's engine files are read-only, so the tree is made writable first. The launcher's config probe sets CREWHOUSE_KEEP_RUN_HOME, since crewd inherits that home.
 export function loadConfig(): Config {
   const product = !isolatedRun(), home = product ? homedir() : process.env.CREWHOUSE_RUN_HOME ||= removeOnExit(mkdtempSync(join(tmpdir(), 'crewhouse-run-')));
-  const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw');
-  const cfg: Config = {
+  const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw'), cfg: Config = {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(xdgData, 'crewhouse', 'tools')),

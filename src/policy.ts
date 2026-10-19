@@ -42,8 +42,7 @@ const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'cre
 const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
 // (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
-const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close', 'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']);
-const BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload', 'dialog-accept', 'mousedown', 'mouseup']);
+const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close', 'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']), BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload', 'dialog-accept', 'mousedown', 'mouseup']);
 /** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
 const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/, PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
 /** A flag's values in an argument list, as `--flag v` or `--flag=v`. */
@@ -187,8 +186,7 @@ export function orderOf(snapshot: string): { items: string[]; more: number; tota
  *  today, both read by crewd from the page. null when the page doesn't write both — then the card says nothing about
  *  money at all (src/crew.ts `press` puts this line on the claim card). */
 export function claimOf(snapshot: string): { shown: string } | null {
-  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200), amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; }, sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; };
-  const paid = sum(/\bpaid\b|you paid|bought for|price paid/i), today = sum(/\btoday\b|now |current price|price now|item total/i);
+  const lines = snapshot.split('\n').map(readable).filter((t) => t.length > 0 && t.length < 200), amount = (t: string) => { const m = MONEY.exec(t); return m ? { sign: m[1], n: Number(m[2].replace(/,/g, '')) } : null; }, sum = (re: RegExp) => { const t = lines.find((l) => re.test(l)); return t ? amount(t) : null; }, paid = sum(/\bpaid\b|you paid|bought for|price paid/i), today = sum(/\btoday\b|now |current price|price now|item total/i);
   if (!paid || !today || paid.sign !== today.sign || today.n >= paid.n || today.n <= 0) return null;
   return { shown: `${paid.sign}${(paid.n - today.n).toFixed(2)}` };
 }
