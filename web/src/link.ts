@@ -66,9 +66,10 @@ export async function leave() {
   location.replace('/');
 }
 
-/** A ws:// address the computer named (its LAN address) dials this page's own origin instead: an https page cannot open
- *  ws://, and the computer's https route serves /link. wss (the relay) is dialled as it is. */
-const dialHere = (url: string) => (url.startsWith('ws://') ? `${location.origin.replace(/^http/, 'ws')}/link` : url);
+/** On an https page a ws:// address the computer named (its LAN address) dials this page's own origin instead: an https
+ *  page cannot open ws://, and the computer's https route serves /link. wss (the relay), and anything on an http page,
+ *  is dialled as it is: there a plain-http relay is no address of this page. */
+const dialHere = (url: string) => (url.startsWith('ws://') && location.protocol === 'https:' ? `${location.origin.replace(/^http/, 'ws')}/link` : url);
 
 function start(grant: DeviceGrant) {
   const listeners = new Set<(e: Json) => void>();

@@ -18,8 +18,8 @@ remembers the current route on the device and reopens it on a home-screen launch
 ## How to drive it
 
 `test/resume.test.ts` is the fast gate: browser-driven, serving the built public shell from a
-`*.localhost` origin (the published shell's situation, so it boots the demo with no crewd). It
-opens Scout's thread, cold-loads `/`, and asserts `location.hash` returns to `#/h/scout`; then a
+`*.localhost` origin (the published shell's situation, opened on `?demo` with no crewd). It
+opens Scout's thread, cold-loads `/?demo`, and asserts `location.hash` returns to `#/h/scout`; then a
 named link wins; then a stored gone thread opens Home. Run it alone:
 
 ```bash
