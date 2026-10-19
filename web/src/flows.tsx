@@ -130,7 +130,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
           <div className="stack ws-pick">{g.pick.map((w: { id: string; name: string }) => <button key={w.id} className="btn go big" disabled={picking} onClick={() => choose(w.id)}>{w.name}</button>)}</div>
         </> : <>
           <h2>Paste your {name} key</h2>
-          <p className="mute">Sign in pastes one key; {A.paysFor(ai)}. The key stays on this computer, with your other sign-ins.</p>
+          <p className="mute">Paste the key from your {name} account. It uses your own {name} plan and stays on your computer.</p>
           <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key').then(() => setChecking(false)); }}>
             <input className="input" value={pasted} disabled={checking} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
             <button className="btn go big" disabled={checking || !pasted.trim()}>{checking ? 'Checking…' : <>Sign in with {name}</>}</button>

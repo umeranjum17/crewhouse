@@ -19,6 +19,9 @@ const f = faked({}, { 'openclaw.setup.activate': (p: { apiKey: string }) => ({ o
 await f.started;
 const cfg = loadConfig(), db = new Store(cfg.stateDir), crew = new Crew(cfg, db);
 crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
+// Key-entry routes list no models until the kit has an entry for them (the real kit returns none); the stub's placeholder names stay out of the shots.
+const stubModels = crew.runtime.models.bind(crew.runtime);
+crew.runtime.models = async (account: string) => ['minimax', 'opencode-go'].includes(account) ? [] : stubModels(account);
 for (const key of Object.keys(PROVIDERS)) crew.accounts.ready.set(key, false);
 crew.init();
 const server = await startServer(cfg, db, crew);
