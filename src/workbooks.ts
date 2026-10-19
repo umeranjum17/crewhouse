@@ -21,7 +21,6 @@ function sheetName(raw: string, taken: Set<string>, n: number) {
   return name;
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Dark header, blue for a calculated cell, yellow for an input cell. */
 const FILL = {
   header: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } }, formula: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }, input: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } },
@@ -63,7 +62,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
     for (const row of rows) {
       const added = ws.addRow(row.map((v) => {
         if (typeof v === 'string' && v.startsWith('=')) return { formula: v.slice(1) };
-        if (typeof v === 'string' && DATE.test(v)) return dateOf(v) ?? v;
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return dateOf(v) ?? v;
         return v ?? null;
       }));
       added.eachCell((cell: any) => {
@@ -77,8 +76,7 @@ export async function buildWorkbook(file: string, spec: WorkbookSpec) {
       const options = (Array.isArray(c?.options) ? c.options : []).map((o) => String(o).trim()).filter(Boolean).slice(0, MAX.options);
       if (!options.length) return;
       // Fill the dropdowns down past the finished rows, so the person can keep typing in it.
-      const until = Math.min(Math.max(rows.length + 10, 12), MAX.dropdown);
-      for (let r = 2; r <= until; r++) {
+      for (let r = 2; r <= Math.min(Math.max(rows.length + 10, 12), MAX.dropdown); r++) {
         const cell = ws.getCell(r, i + 1);
         cell.dataValidation = { type: 'list', allowBlank: true, formulae: [`"${options.join(',')}"`] };
         cell.fill = { ...FILL.input };
@@ -145,8 +143,7 @@ async function withCharts(buf: ArrayBuffer, charts: { ws: any; at: number[]; xml
     zip.file(sheet, (await zip.file(sheet)!.async('string')).replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>'));
     types.push(`<Override PartName="/xl/drawings/drawing${ws.id}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`);
   }
-  const ct = await zip.file('[Content_Types].xml')!.async('string');
-  zip.file('[Content_Types].xml', ct.replace('</Types>', `${types.join('')}</Types>`));
+  zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml')!.async('string')).replace('</Types>', `${types.join('')}</Types>`));
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 

@@ -13,15 +13,12 @@ const MAX_STEPS = 60;
 /** The page's side, injected into every page of the bot's browser: labels only, and never inside a password field. */
 const PAGE = `(() => {
   if (window.__crewhouseShow) return; window.__crewhouseShow = true;
-  const text = (s) => (s || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
-  const labelOf = (el) => {
+  const text = (s) => (s || '').replace(/\\s+/g, ' ').trim().slice(0, 60), labelOf = (el) => {
     if (!el) return '';
     const byId = el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
     return text(el.getAttribute('aria-label') || (byId && byId.innerText) || (el.closest('label') && el.closest('label').innerText)
       || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('alt') || el.innerText || el.value && el.type === 'submit' && el.value || el.name || '');
-  };
-  const secret = (el) => el && (el.type === 'password' || /pass|pin|otp|cvv|cvc|card.?num/i.test(el.name || el.id || el.autocomplete || ''));
-  const say = (m) => { try { window.__crewhouseStep(JSON.stringify(m)); } catch (e) {} };
+  }, secret = (el) => el && (el.type === 'password' || /pass|pin|otp|cvv|cvc|card.?num/i.test(el.name || el.id || el.autocomplete || '')), say = (m) => { try { window.__crewhouseStep(JSON.stringify(m)); } catch (e) {} };
   addEventListener('click', (e) => {
     const el = e.target && e.target.closest && e.target.closest('a,button,[role=button],[role=link],[role=tab],[role=menuitem],input[type=submit],input[type=button],input[type=checkbox],input[type=radio],summary,label');
     if (!el || secret(el)) return;

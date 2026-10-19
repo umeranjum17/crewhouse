@@ -5,8 +5,7 @@ import { GMAIL, GOOGLE } from './calendar.ts';
 import { Marked } from 'marked';
 import { receipt } from './crew.ts';
 // Free-mail domains hold many people, so one mailbox on them is never a whole organisation: attesting them domain-wide would email sole traders.
-const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status }), ATTEMPTED = 'This message was already sent or attempted. Check Gmail; it will not be sent again.';
-const address = (raw: unknown) => {
+const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'googlemail.co.uk', 'outlook.com', 'outlook.co.uk', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'live.co.uk', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'aol.co.uk', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.co.uk', 'btinternet.com', 'btopenworld.com', 'blueyonder.co.uk', 'ntlworld.com', 'virginmedia.com', 'virgin.net', 'sky.com', 'talktalk.net']), INDIVIDUALS = "Sole traders and small partnerships count as individuals under UK email rules. This job will not email them.", fail = (message: string, status = 409) => Object.assign(new Error(message), { status }), ATTEMPTED = 'This message was already sent or attempted. Check Gmail; it will not be sent again.', address = (raw: unknown) => {
   if (typeof raw !== 'string' || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(raw) || raw.length > 254) throw fail('Give one work email address, without names or extra recipients.', 400);
   return raw.toLowerCase();
 };
@@ -60,32 +59,21 @@ export class MailSend {
     return res.json() as Promise<any>;
   }
   private async sendAs(token: string) {
-    const list = await this.g('/settings/sendAs', token);
-    const mine = new Set((list.sendAs ?? []).flatMap((s: any) => { try { return [address(s.sendAsEmail)]; } catch { return []; } }));
-    const pick = (list.sendAs ?? []).find((s: any) => s.isDefault) ?? (list.sendAs ?? [])[0] ?? {};
-    const from = (() => { try { return address(pick.sendAsEmail); } catch { return null; } })();
-    const sig = String(pick.signature ?? '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 1000);
+    const list = await this.g('/settings/sendAs', token), mine = new Set((list.sendAs ?? []).flatMap((s: any) => { try { return [address(s.sendAsEmail)]; } catch { return []; } })), pick = (list.sendAs ?? []).find((s: any) => s.isDefault) ?? (list.sendAs ?? [])[0] ?? {}, from = (() => { try { return address(pick.sendAsEmail); } catch { return null; } })(), sig = String(pick.signature ?? '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 1000);
     if (!from) throw fail('Gmail has not confirmed your sending address. Nothing was sent; the draft was not created.');
     return { from, sig, mine };
   }
   async draftReply(threadId: string, body: string, bot: string) {
     if (!/^[a-f0-9]{8,32}$/i.test(threadId)) throw fail('Give the email id from mail or mail search.', 400);
     if (!body.trim() || body.length > 12000) throw fail('Write the reply in at most 12,000 characters.', 400);
-    const token = await this.filing(), t = await this.g(`/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-Id`, token);
-    const msgs: any[] = t.messages ?? [], first = msgs[0];
-    const head = (m: any, n: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? '');
+    const token = await this.filing(), t = await this.g(`/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-Id`, token), msgs: any[] = t.messages ?? [], first = msgs[0], head = (m: any, n: string) => String(m?.payload?.headers?.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? '');
     if (!msgs.length) throw fail('This conversation has no messages. Nothing was drafted.');
-    const { from: me, sig, mine } = await this.sendAs(token);
-    const other = [...msgs].reverse().find((m) => { const h = head(m, 'From'), a = (/<([^>]+)>/.exec(h)?.[1] ?? h.trim()).toLowerCase(); return !!a && !mine.has(a); });
+    const { from: me, sig, mine } = await this.sendAs(token), other = [...msgs].reverse().find((m) => { const h = head(m, 'From'), a = (/<([^>]+)>/.exec(h)?.[1] ?? h.trim()).toLowerCase(); return !!a && !mine.has(a); });
     if (!other) throw fail('This conversation holds only your own messages. Nothing was drafted.');
     const from = head(other, 'From'), to = address(/<([^>]+)>/.exec(from)?.[1] ?? from.trim()), subj = head(first, 'Subject') || '(no subject)';
     if (/[\r\n]/.test(subj)) throw fail('Gmail returned an unreadable subject. Nothing was drafted.'); const topic = /^re:/i.test(subj) ? subj : `Re: ${subj}`, subject = topic.match(/[\s\S]{1,10}/gu)!.map((s: string) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`).join('\r\n ');
     const mid = head(other, 'Message-Id').trim(); if (/[\r\n]/.test(mid)) throw fail('Gmail returned an unreadable reference. Nothing was drafted.');
-    const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '';
-    const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const html = new Marked({ renderer: { link({ tokens }) { return this.parser.parseInline(tokens); }, image() { return ''; } } }).parse(escape(text), { async: false });
-    const raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}${refs}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(html).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url');
-    const res = await fetch(`${GMAIL}/drafts`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ message: { threadId, raw } }), signal: AbortSignal.timeout(20_000) });
+    const text = sig && !body.includes(sig) ? `${body.trim()}\n\n${sig}` : body.trim(), refs = mid ? `\r\nIn-Reply-To: ${mid}\r\nReferences: ${mid}` : '', escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'), html = new Marked({ renderer: { link({ tokens }) { return this.parser.parseInline(tokens); }, image() { return ''; } } }).parse(escape(text), { async: false }), raw = Buffer.from(`From: ${me}\r\nTo: ${to}\r\nSubject: ${subject}${refs}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(html).toString('base64').match(/.{1,76}/g)!.join('\r\n')}\r\n`).toString('base64url'), res = await fetch(`${GMAIL}/drafts`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ message: { threadId, raw } }), signal: AbortSignal.timeout(20_000) });
     if (!res.ok) throw fail(`Gmail said ${res.status}. Nothing was sent; the draft was not created.`);
     const made = await res.json() as Row;
     if (typeof made.id !== 'string' || !made.id) throw fail('Gmail did not confirm the draft. Nothing was sent.');
@@ -96,8 +84,7 @@ export class MailSend {
     if (!/^[a-f0-9]{8,32}$/i.test(threadId)) throw fail('Give the email id from mail or mail search.', 400);
     const name = label.replace(/\s+/g, ' ').trim();
     if (!/^[A-Za-z0-9 _-]{1,64}$/.test(name)) throw fail('Name the label in letters, numbers, spaces, - or _ (at most 64).', 400);
-    const token = await this.filing(), labels = await this.g('/labels', token);
-    const found = (labels.labels ?? []).find((l: any) => String(l.name ?? '').toLowerCase() === name.toLowerCase());
+    const token = await this.filing(), labels = await this.g('/labels', token), found = (labels.labels ?? []).find((l: any) => String(l.name ?? '').toLowerCase() === name.toLowerCase());
     let id = found?.id;
     if (!id) {
       const res = await fetch(`${GMAIL}/labels`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }), signal: AbortSignal.timeout(20_000) });
@@ -126,8 +113,7 @@ export class MailSend {
     this.openDraft(id);
     const open = this.db.get("SELECT * FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", id);
     if (open) return { id: open.id };
-    const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } }, r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now());
-    const ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
+    const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } }, r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now()), ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
     return { id: ask };
   }
   private receiptOf(draft: number, kind: string) {

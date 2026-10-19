@@ -107,8 +107,7 @@ export class OpenClawRuntime implements AgentRuntime {
         .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
       return { paste() {}, cancel() { cancelled = true; } };
     }
-    const cliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' && account === 'chatgpt';
-    const authChoice = cliOnly ? undefined : via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
+    const cliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' && account === 'chatgpt', authChoice = cliOnly ? undefined : via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
     if (!authChoice) {
       queueMicrotask(() => on({ waiting: false, error: cliOnly ? 'Sign in to Codex CLI on this computer, then try again.' : `Sign-in for ${account} is not connected yet` }));
       return { paste() {}, cancel() {} };
@@ -129,8 +128,7 @@ export class OpenClawRuntime implements AgentRuntime {
   keyIn(account: string, authChoice: string, on: (step: SignInStep) => void) {
     const busy = 'Still checking the last key. Wait for it to finish, then paste again.';
     let cancelled = false, key = '', chosen = '', listed: { id: string; name: string }[] = [], pending: { cancel(): void } | undefined;
-    const step = ({ status, message }: { status: string; message?: string }): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: message ?? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` })));
-    const add = () => { const h = this.kit.addKey(ME, { authChoice, apiKey: key, ...(chosen ? { orgId: chosen } : {}) }); pending = h; this.keyChecks.add(account); const release = () => { if (pending === h) { pending = undefined; this.keyChecks.delete(account); } }; return h.then((r) => { release(); if (cancelled) return; if (r.status === 'needs_workspace') { listed = r.workspaces; on({ waiting: true, workspaces: r.workspaces }); } else step(r); }).catch(() => { release(); step({ status: 'retry' }); }); };
+    const step = ({ status, message }: { status: string; message?: string }): void => void (cancelled || (status === 'ok' ? on({ waiting: false, done: true }) : status === 'not_included' ? on({ waiting: false, notIncluded: true }) : status === 'retry' ? on({ waiting: false, error: message ?? `That didn't go through. Tap Sign in with ${PROVIDERS[account]?.name ?? account} to try again.` }) : on({ waiting: true, error: `That key didn't work. Check it and paste it again.` }))), add = () => { const h = this.kit.addKey(ME, { authChoice, apiKey: key, ...(chosen ? { orgId: chosen } : {}) }); pending = h; this.keyChecks.add(account); const release = () => { if (pending === h) { pending = undefined; this.keyChecks.delete(account); } }; return h.then((r) => { release(); if (cancelled) return; if (r.status === 'needs_workspace') { listed = r.workspaces; on({ waiting: true, workspaces: r.workspaces }); } else step(r); }).catch(() => { release(); step({ status: 'retry' }); }); };
     return {
       paste: (text: string) => { if (this.keyChecks.has(account)) throw new Error(busy); key = text.trim(); chosen = ''; listed = []; if (!cancelled) return add(); },
       pick: (id: string) => { if (this.keyChecks.has(account)) throw new Error(busy); if (!cancelled && listed.some((w) => w.id === id)) { chosen = id; return add(); } },
@@ -182,9 +180,7 @@ export class OpenClawRuntime implements AgentRuntime {
    *  made it, its key agent (`byokit-key-<member>`, the kit's README), each with its own proposals and skills root
    *  from the engine's roster. Newest first; a forgotten one has left its skills root, so it is gone here too. */
   private async proposals() {
-    const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined);
-    const lanes = (roster?.agents ?? []).filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') }));
-    const rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
+    const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined), lanes = (roster?.agents ?? []).filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') })), rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
       .map((p) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: p.status, lane }))))).flat();
     return rows.filter((p) => p.id && p.key && (p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md'))))).sort((a, b) => b.at - a.at);
   }
@@ -266,8 +262,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** Search the public skill and plugin catalogs the engine's own way; while the engine is still starting this answers
    *  empty. A plugin is never one of the reviewed rows, so it only ever shows as not reviewed. */
   async searchSkills(query: string) {
-    const [r, p] = await Promise.all([this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, this.kit.call('plugins.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined)]);
-    const items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], starter = this.starterSkills();
+    const [r, p] = await Promise.all([this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, this.kit.call('plugins.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined)]), items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], starter = this.starterSkills();
     // Reviewed means this publisher's skill: another owner's skill of the same name is not the one that was read.
     return [...items.slice(0, 10).map((i: any) => ({ slug: String(i.slug ?? ''), owner: String(i.ownerHandle ?? i.owner ?? ''), summary: String(i.summary ?? i.description ?? ''), version: String(i.version ?? i.latestVersion ?? '') }))
       .map((i: any) => ({ ...i, reviewed: starter.some((s) => s.slug === i.slug && s.owner === i.owner), on: starter.some((s) => s.on && s.slug === i.slug && s.owner === i.owner) })),
