@@ -176,7 +176,9 @@ test('Codex CLI-only mode routes ChatGPT picks to Codex and has no sign-in fallb
 });
 
 test('a ChatGPT sign-in the kit reports on the Codex route shows ChatGPT signed in with its models', async () => {
-  const f = faked({}, { 'models.list': () => ({ models: [{ id: 'openai-codex/gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai-codex', available: true }] }) });
+  // The engine's default view is empty; its 'all' view lists the Codex CLI models as missing-auth, because the CLI owns that login.
+  const codex = { id: 'gpt-6-luna', name: 'GPT-6 Luna', provider: 'openai-codex', available: false, unavailableReason: 'missing-auth' };
+  const f = faked({}, { 'models.list': ({ view }) => ({ models: view === 'all' ? [codex] : [] }) });
   try {
     await f.started;
     // The kit's own report: its Codex login probe needs a real engine, so the fake reports the one row it would.
