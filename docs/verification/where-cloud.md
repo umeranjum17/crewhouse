@@ -64,14 +64,18 @@ A real boat.dev run spends money. Every Boat run, from Crewhouse or BYOKit, uses
 never revoke it. Each run deletes the computers it made. Start
 `BOAT_KEY_FILE=~/firstmate/config/boat-api-key node scripts/verify/boat-run.mjs <adb port> <serial> <out dir>`
 from the repo root. All driver actions use the mode-600 Unix socket `<out>/ctrl.sock`, never a TCP port; for example:
-`curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/cost`, `/cleanup`, `/me`, `/stop`).
+`curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/upload`, `/model`, `/logs`, `/cost`, `/cleanup`, `/me`, `/stop`).
 It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its own computer (kit `remove`).
 For a run before the release carries the change, build the candidate download from the branch under test
 (`npm run build:web && node scripts/package.mjs <out>`), start the driver with `CANDIDATE=<out>/crewhouse-<version>-linux-x64.tar.gz`,
 and build the lab APK with `EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD=file:///tmp/crewhouse-candidate.tar.gz` and, for a
-computer with no AI sign-in, `EXPO_PUBLIC_CREWHOUSE_CLOUD_ENV='{"CREWHOUSE_ENGINE":"stub",...}'` (state, crew and
-tools dirs under `/home/user/crewhouse`). After `/make`, `/upload` puts the download on the driver's own computer;
-`/logs` reads the service journal there. Then paste, Use this computer, Talk to Chief and send a message.
+computer with no AI sign-in, `EXPO_PUBLIC_CREWHOUSE_CLOUD_ENV='{"CREWHOUSE_ENGINE_BASE_URL":"http://127.0.0.1:7399/v1",...}'` (state, crew and
+tools dirs under `/home/user/crewhouse`; delete `mobile/android/app/build/generated/assets/react` and Metro's cache
+first, or Gradle keeps the old bundle). After `/make`, `/upload` puts the download on the driver's own computer and
+`/model` starts `scripts/verify/boat-model.mjs` there, plus a unit drop-in with its `CREWHOUSE_ENGINE_API_KEY` (the
+kit refuses a run env name holding KEY, TOKEN, SECRET or PASSWORD), so OpenClaw runs Chief for real on fixed words
+(the app drops the stub engine's lines from the chat, so `CREWHOUSE_ENGINE=stub` never shows a reply); `/logs` reads
+the service journal. Then paste, Use this computer, Talk to Chief and send a message.
 Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`) and save the key there. Boat
 documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
 
@@ -79,3 +83,7 @@ documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /
 
 Each screen (day and night) beside its mock, the web screen at 390 and 1440, and one recording of Use this computer
 through the progress list (`adb shell screenrecord`).
+
+The real run adds one phone-side recording from Paste key to Chief's reply in the chat, with stills of each step and of
+the reply by day and night, and the service journal from the computer (`/logs`): the owner phone enrolled, the engine
+ready, and Chief's first words. Every computer the run made is deleted (`/cleanup`, then `/list` is empty).

@@ -2,7 +2,7 @@
 // $BOAT_KEY_FILE (mode 600). With no file yet, it makes the one claim (the kit's claim(): a link and code a person
 // approves, for $BOAT_EMAIL) and saves the key there. The key is never printed, never revoked; each run deletes the
 // computer it made. Driver control uses <out>/ctrl.sock (mode 600):
-//   GET /list, /make, /deliver, /upload, /logs, /cost, /cleanup, /me, /stop
+//   GET /list, /make, /deliver, /upload, /model, /logs, /cost, /cleanup, /me, /stop
 //   /upload puts $CANDIDATE (a download built from the branch under test) at /tmp/crewhouse-candidate.tar.gz on this
 //   run's own computer, for a lab phone build whose EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD names that file; /logs reads
 //   the Crewhouse service's journal there
@@ -59,9 +59,17 @@ const acts = {
     const put = await fetch(url, { method: 'PUT', body: Readable.toWeb(createReadStream(process.env.CANDIDATE)), duplex: 'half', headers: { 'content-length': String(size) } });
     return { uploaded: put.ok, status: put.status, mb: Math.round(size / 1048576), seconds: Math.round((Date.now() - t0) / 1000) };
   },
+  // After /upload: boat-model.mjs on the candidate's own node, the provider the lab phone build names. Its key goes in a
+  // drop-in, since the kit refuses a run env name holding KEY, TOKEN, SECRET or PASSWORD.
+  model: async () => {
+    if (!mine) return { none: true };
+    const src = readFileSync(new URL('boat-model.mjs', import.meta.url)).toString('base64');
+    const r = await p.exec(mine, ['sh', '-c', `mkdir -p /tmp/lab && tar -xzf /tmp/crewhouse-candidate.tar.gz -C /tmp/lab crewhouse/node/bin/node && echo ${src} | base64 -d > /tmp/lab/model.mjs && systemd-run --unit=lab-model --uid=user /tmp/lab/crewhouse/node/bin/node /tmp/lab/model.mjs && mkdir -p /etc/systemd/system/byokit-crewhouse.service.d && printf '[Service]\\nEnvironment=CREWHOUSE_ENGINE_API_KEY=lab\\n' > /etc/systemd/system/byokit-crewhouse.service.d/lab.conf && sleep 1 && curl -fsS -o /dev/null -w '%{http_code}' -X POST -d '{}' localhost:7399/v1/chat/completions`], { root: true, timeoutMs: 120_000 });
+    return { code: r.code, out: r.stdout.trim(), err: r.stderr.trim().slice(-300) };
+  },
   logs: async () => {
     if (!mine) return { none: true };
-    const r = await p.exec(mine, ['sh', '-c', 'journalctl --no-pager -n 80 -u crewhouse 2>&1; ls -la /home/user/crewhouse /home/user/crewhouse/.byokit/* 2>&1 | tail -20'], { root: true, timeoutMs: 30_000 });
+    const r = await p.exec(mine, ['sh', '-c', 'journalctl --no-pager -n 80 -u byokit-crewhouse 2>&1; journalctl --no-pager -n 80 --user-unit byokit-crewhouse 2>&1; ls -la /home/user/crewhouse /home/user/crewhouse/.byokit/* 2>&1 | tail -20'], { root: true, timeoutMs: 30_000 });
     return { code: r.code, out: r.stdout.split('\n') };
   },
   cost: async () => mine ? p.usage(mine, started.toISOString()) : { none: true },
