@@ -46,10 +46,11 @@ const steps = [
   { name: 'rec-back', wait: `${mode} === 'where'`, timeout: 20000, eval: mode },
   { name: 'rec-end', recwait: true },
 ];
-// The shots: the demo with its Pair button and the pair card, each look and width.
+// The shots: the demo with its Pair button and the pair card, each look and width. Each load names `#/`: a relaunch
+// reopens the last place (web/src/resume.ts), which would be the previous shot's card or Settings.
 for (const look of ['day', 'night']) for (const z of sizes) {
   const at = { w: z.w, h: z.h, dpr: z.mobile ? 2 : 1, mobile: z.mobile };
-  steps.push({ name: `demo-${look}-${z.tag}`, ...at, url: `${WEB}?demo&${look}`, settle: 3000, wait: `${mode} === 'demo'`, eval: toTop });
+  steps.push({ name: `demo-${look}-${z.tag}`, ...at, url: `${WEB}?demo&${look}#/`, settle: 3000, wait: `${mode} === 'demo'`, eval: toTop });
   steps.push({ name: `demo-${look}-${z.tag}-shot`, run: 'sleep 0.5; true', eval: mode, out: `${EV}/shots/demo-pair-button-${look}-${z.w}.png` });
   steps.push({ name: `card-${look}-${z.tag}`, eval: `location.hash = '#/pair'` });
   steps.push({ name: `card-${look}-${z.tag}-shot`, run: 'sleep 1.5; true', wait: `!!document.querySelector('.pair-code')`, out: `${EV}/shots/pair-card-${look}-${z.w}.png` });
@@ -66,7 +67,7 @@ steps.push({ name: 'approve', run: `${cli} phones approve "$(${cli} phones pendi
 steps.push({ name: 'paired', wait: `${mode} === 'real'`, timeout: 20000, eval: mode });
 for (const look of ['night', 'day']) for (const z of sizes) {
   const at = { w: z.w, h: z.h, dpr: z.mobile ? 2 : 1, mobile: z.mobile };
-  steps.push({ name: `real-${look}-${z.tag}`, ...at, url: `${WEB}?${look}`, settle: 4000, wait: `${mode} === 'real'`, eval: `[${mode}, matchMedia('(display-mode: standalone)').matches, document.body.innerText.slice(0, 300)]`, out: `${EV}/shots/paired-real-${look}-${z.w}.png` });
+  steps.push({ name: `real-${look}-${z.tag}`, ...at, url: `${WEB}?${look}#/`, settle: 4000, wait: `${mode} === 'real'`, eval: `[${mode}, matchMedia('(display-mode: standalone)').matches, document.body.innerText.slice(0, 300)]`, out: `${EV}/shots/paired-real-${look}-${z.w}.png` });
   steps.push({ name: `set-${look}-${z.tag}`, eval: `location.hash = '#/settings'` });
   steps.push({ name: `set-${look}-${z.tag}-shot`, run: 'sleep 2; true', eval: `[...document.querySelectorAll('.card')].some((c) => /Paired with/.test(c.textContent))`, out: `${EV}/shots/paired-settings-${look}-${z.w}.png` });
 }
