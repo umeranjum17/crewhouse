@@ -21,7 +21,7 @@
     { "src": "/notify-96.png", "sizes": "96x96", "type": "image/png", "purpose": "monochrome" }
   ],
   "screenshots": [
-    { "src": "/shots/phone.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Chat with Chief" },
+    { "src": "/shots/phone.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "What Chief has for you" },
     { "src": "/shots/desk.png", "sizes": "1440x900", "type": "image/png", "form_factor": "wide", "label": "Your crew at work" }
   ],
   "shortcuts": [

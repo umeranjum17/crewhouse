@@ -19,7 +19,7 @@ screen per device size, a rich install sheet, and one quiet install row in Setti
 
 ## How to drive it
 
-Start crewd per [Drive](runbook.md#drive), name the person Maya (`PUT /api/people/1 {"name":"Maya"}`),
+Start crewd per [Drive](runbook.md#drive), name the person Umer (`PUT /api/people/1 {"name":"Umer"}`),
 then write a plan for `scripts/verify/pwa-shell.mjs` (its header lists the step keys). Always give it its own
 `profile` and `home`: it masks every XDG dir, because an install writes a desktop entry and icons into
 `XDG_DATA_HOME` and an inherited one is the owner's own menu.

@@ -1,4 +1,4 @@
-// Capture the README's pictures, day and night, from the built-in demo (Maya and her crew).
+// Capture the README's pictures, day and night, from the built-in demo (Umer and his crew).
 // Serve the app first (a stub-engine crewd, as the done-done `stub-drive` journey boots it), then:
 //   CHROME_DEVTOOLS_AXI_SESSION=<yours> node scripts/capture-readme.mjs http://127.0.0.1:<port> [name ...]
 // Name the scenes to regenerate only those (e.g. `home-phone`); no names captures all.
