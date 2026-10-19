@@ -148,7 +148,7 @@ test('a Go key without helpers ends on the existing plan card; retry, reopen and
       await action('retry');
       assert.equal((await go()).notIncluded, false, "I've changed my plan clears only the existing exclusion");
     }
-    for (const [account, key, state, words] of [['opencode-go', 'synthetic-invalid', 'waiting', /That key didn't work/], ['opencode-go', 'synthetic-network', 'failed', /That didn't go through/]] as const) {
+    for (const [account, key, state, words] of [['opencode-go', 'synthetic-invalid', 'waiting', /That key didn't work/], ['opencode-go', 'synthetic-network', 'failed', /That didn't go through/], ['minimax', 'synthetic-invalid', 'waiting', /That key didn't work/]] as const) {
       await api(`accounts/1/${account}/login`, { via: 'key' });
       await api(`accounts/1/${account}/paste`, { text: key });
       await until('distinct key failure', async () => (await rows()).find((r: any) => r.account === account).signIn.error);
