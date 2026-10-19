@@ -68,7 +68,7 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
     return r.result.value;
   };
   // Unpair and reload navigate the page under a poll: a poll that lands mid-navigation is "not yet", not a failure.
-  const mode = () => run(`document.querySelector('.where') ? 'where' : document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.hello') ? 'real' : ''`)
+  const mode = () => run(`document.querySelector('.where') ? 'where' : document.querySelector('main') ? (document.querySelector('.demo-tag') ? 'demo' : 'real') : document.querySelector('.fr-hello') ? 'real' : ''`)
     .catch((e: Error) => { if (/navigated or closed/.test(e.message)) return ''; throw e; });
   const devices = async () => (await http('GET', '/api/phones')).length;
 
@@ -79,7 +79,7 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
     await run(`(() => { const t = document.querySelector('.pair-code');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(code)});
       t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-    await run(`document.querySelector('.flow .btn.go').click()`);
+    await run(`document.querySelector('.fr-acts .btn.go').click()`);
     let asking: { id: number; words: string } | undefined, words = '';
     await until('the computer to ask', async () => (asking = (await http('GET', '/api/phones/link')).asking[0]), 20_000);
     await until('the two words on the page', async () => (words = await run(`document.querySelector('.pair-words')?.textContent ?? ''`)));
@@ -93,17 +93,26 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   // A release build keeps the cloud row off until BYOKit's cloud kit is published (CREWHOUSE_CLOUD unset).
   assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['On my computer', 'Just on this phone']);
 
+  // A share that lands before the person has paired is kept, not dropped: the Share view asks to connect first (J14).
+  await send('Page.navigate', { url: `${shell}share?text=Dinner%20at%20Luigi` });
+  await until('the share view, unpaired', () => run(`!!document.querySelector('.share .share-tile') && /Dinner at Luigi/.test(document.body.innerText)`), 20_000);
+  assert.equal(await run(`!!document.querySelector('.where')`), false, 'a share is not swallowed by the first question');
+  await run(`[...document.querySelectorAll('.share .btn.go')].find((b) => /Connect to send/.test(b.textContent)).click()`);
+  await until('the pair page over the share', () => run(`!!document.querySelector('.pair-code')`));
+  await send('Page.navigate', { url: shell });
+  await until('the first question again', async () => (await mode()) === 'where', 30_000);
+
   // From anywhere: the relay's code, written as `./crewhouse phones code` prints it.
   const away = await http('POST', '/api/phones/code', { role: 'control' });
   await pair(`${away.short}-${away.code}@${away.relay}`);
   assert.equal(await devices(), 1, 'the computer lists this browser');
   // A change goes over the link too: the first-run name and idea land in crewd.
-  await until('the first run', () => run(`!!document.querySelector('.hello .idea')`));
+  await until('the first run', () => run(`!!document.querySelector('.fr-hello .idea')`));
   await run(`(() => { document.querySelector('button.name-ask')?.click(); })()`);
   await until('the name box', () => run(`!!document.querySelector('.name-ask input')`));
   await run(`(() => { const i = document.querySelector('.name-ask input');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'Umer'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  await run(`document.querySelector('.hello .idea').click()`);
+  await run(`document.querySelector('.fr-hello .idea').click()`);
   await until('onboarded over the link', async () => (await http('GET', '/api/state')).person.onboarded === 1, 20_000);
   assert.equal((await http('GET', '/api/state')).person.address, 'Umer');
 

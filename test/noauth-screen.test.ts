@@ -75,7 +75,7 @@ test('a refused read shows the app-menu screen; a dead computer still shows the 
     return r.result.value;
   };
   await send('Page.enable');
-  const screen = () => run(`(() => { const s = document.querySelector('.unreachable'); return s ? { head: s.querySelector('h1')?.textContent ?? '', body: s.innerText ?? '', retry: !!s.querySelector('.btn'), loop: /Trying again in/.test(s.innerText ?? '') } : null; })()`);
+  const screen = () => run(`(() => { const s = document.querySelector('.fr'); return s ? { head: s.querySelector('.fr-h')?.textContent ?? '', body: s.innerText ?? '', retry: !!s.querySelector('.btn'), loop: /Trying again in/.test(s.innerText ?? '') } : null; })()`);
 
   mode = 'deny';
   await send('Page.navigate', { url: `${base}/?day` });

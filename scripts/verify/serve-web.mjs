@@ -12,7 +12,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const handler = (req, res) => {
   const url = new URL(req.url ?? '/', 'http://x');
   let p = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
-  if (p === '/' || p.endsWith('/')) p += 'index.html';
+  if (p === '/' || p.endsWith('/') || p === '/share') p = p.replace(/\/share$/, '/') + 'index.html'; // /share is the Share target's page, served by the app shell
   const file = join(dir, p);
   if (!file.startsWith(dir) || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404); return res.end('not found'); }
   res.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' });

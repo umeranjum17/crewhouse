@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
 import * as A from './adapter.ts';
-import { attempt, Pill, SiteIcon } from './parts.tsx';
+import { attempt, Icon, Pill, SiteIcon } from './parts.tsx';
 
 const STATUS: Record<string, string> = {
   idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
@@ -113,10 +113,10 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
   return (
     <div className="card screen">
       <div className="row">
-        <b className="grow">{bot.display}'s screen</b>
+        <b className="grow screen-h">{bot.display}'s screen</b>
         <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have control' : STATUS[live] ?? 'Opening…'}</Pill>
       </div>
-      {control && <p className="nudge-line">{bot.display} is paused until you hand it back.</p>}
+      {control && <p className="screen-hand"><Icon name="hand" size={22} />{bot.display} is paused until you hand it back.</p>}
       {/* desklink types through its own hidden textarea; a tap on the picture must focus it (a tap, not a pinch), or keys never reach the bot's desktop. */}
       <div className={control ? 'screen-held' : undefined} onClick={() => { if (control) session.showKeyboard(); }}>
         <DesktopView
@@ -127,8 +127,9 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
         />
       </div>
       {err && <p className="nudge-line">{err}</p>}
-      {!control && <div className="btns">
-        {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn" onClick={stop}>Stop watching</button>}
+      {!control && <p className="screen-hand"><Icon name="hand" size={22} />While you have control, {bot.display} waits.</p>}
+      {!control && <div className="btns screen-btns">
+        {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn soft" onClick={stop}>Stop watching</button>}
         <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take control</button>
         {what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
       </div>}

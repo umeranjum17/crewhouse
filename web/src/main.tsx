@@ -7,12 +7,12 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, Banner, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, takeShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
 import { glowOf, hear, useOffice } from './office.tsx';
-import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Sheet, sheet, SignIn, Unreachable } from './flows.tsx';
+import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Removed, Sheet, sheet, SignIn, Split, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 import * as K from './kept.ts';
@@ -23,13 +23,17 @@ let week: K.Kept | null = null;
 const keptWeek = (): K.Kept => (week ??= demo ? K.empty('') : K.readKept(paired?.host ?? location.origin));
 const keepWeek = (f: (k: K.Kept) => K.Kept) => { if (!demo) week = K.writeKept(f(keptWeek())); };
 
+// A grant the home computer took back leaves this flag (link.ts `forgotten`); the shell says so until the person pairs again.
+const REMOVED = 'crewhouse.removed';
+const removed = (() => { try { return sessionStorage.getItem(REMOVED) === '1'; } catch { return false; } })();
+const clearRemoved = () => { try { sessionStorage.removeItem(REMOVED); } catch { /* nothing kept */ } };
 type View = 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string; title?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
-  if (location.pathname === '/share') return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
+  if (location.pathname === '/share' && !location.hash.startsWith('#/pair')) return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
   const [a, b, c, d] = location.hash.replace(/^#\/?/, '').split('/');
   if (a === 'h' && b) return { view: 'helper', id: b, tab: ANCHOR.test(c) ? 'chat' : c || 'chat', m: ANCHOR.test(c) ? c : undefined };
   // #/f/<helper>/<file>/<title>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
@@ -100,32 +104,26 @@ function Hello({ state, refresh, night }: Ctx) {
   const [other, setOther] = useState(!named);
   const input = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState('Ask Chief anything'); // the open line below the ideas turns the box to the person's own chore
-  const [tipped, setTipped] = useState(false); // he raises his bowler as he greets, then settles
   const how = useRef<HTMLDetailsElement>(null);
   // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
   const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
-  useEffect(() => { const t = setTimeout(() => setTipped(true), 2400); return () => clearTimeout(t); }, []);
   const pick = (ask: string, bot?: string) => {
     if (!address.trim()) { setOther(true); input.current?.focus(); return KEPT; }
     return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
-    <div className="hello">
-      <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={tipped ? 'idle' : 'hello'} d={7.4} whole /></span>
-      <div className="speech">
-        <h1>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</h1>
-        <p className="lead">I'm Chief, your personal assistant. I run your crew of helpers.</p>
-      </div>
+    <Split className="fr-hello" mark={<Face who="chief" size={88} />} title={`${A.greeting()}${address.trim() ? `, ${address.trim()}` : ''}.`}
+      lead="I'm Chief. I run a small crew of helpers that live on this computer and work for you.">
       {other
-        ? <label className="name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
+        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
         : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
-      <h2 className="plate">What can I take off your plate?</h2>
+      <h2 className="st-label plate"><span>What can I take off your plate?</span></h2>
       <div className="ideas">
-        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" onClick={() => pick(i.label, i.bot)}><span className="o-ic" aria-hidden>{i.icon}</span><b>{i.label}</b><i aria-hidden>›</i></button>)}
+        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" style={{ background: art.colourOf(i.face), color: art.inkOn(i.face) }} onClick={() => pick(i.label, i.bot)}>
+          <Face who={i.face === 'chief' ? 'chief' : { kind: i.face, name: i.who }} size={44} /><span className="grow"><b>{i.label}</b><span>{i.sub}</span></span><em>{i.who}</em></button>)}
       </div>
-      <button className="link put-off" onClick={() => { setPrompt("What have you been putting off?"); document.querySelector<HTMLTextAreaElement>('.hello-ask textarea')?.focus(); }}>Or tell Chief something you've been putting off</button>
-      <button className="link trust-line" onClick={showHow}>{A.trust.hello}</button>
+      <div className="hello-ask"><Composer placeholder={prompt} onSend={(t) => pick(t)} /></div>
+      <p className="fr-trust"><Icon name="lock" size={22} /><span>{A.trust.hello} <button className="link" onClick={showHow}>How it works</button></span></p>
       <details className="how" ref={how}><summary className="link">How it works</summary>
         <ul className="promises">
           <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
@@ -135,8 +133,7 @@ function Hello({ state, refresh, night }: Ctx) {
           <li>I'll ask before sending messages, deleting things or spending money.</li>
         </ul>
       </details>
-      <div className="hello-ask"><Composer placeholder={prompt} onSend={(t) => pick(t)} /></div>
-    </div>
+    </Split>
   );
 }
 
@@ -144,48 +141,47 @@ function Hello({ state, refresh, night }: Ctx) {
  *  with Try again. Progress is the kit's phase, never a timer. */
 function GettingReady({ view, refresh }: { view: { failed: boolean; words: string }; refresh: () => void }) {
   return (
-    <div className="hello getting-ready" role="status" aria-live="polite">
-      <div className="hello-brand" role="img" aria-label="Crewhouse"><Banner /></div>
-      <span className="halo"><ChiefArt mood={view.failed ? 'worried' : 'work'} d={7.4} whole /></span>
-      <div className="speech">
-        <h1>{view.failed ? "Your crew couldn't get ready" : 'Getting your crew ready'}</h1>
-        {view.words && <p className="lead">{view.words}</p>}
-      </div>
-      {view.failed && <button className="btn big" onClick={() => attempt(async () => { await api.retryEngine(); refresh(); })}>Try again</button>}
-    </div>
+    <Split mid className="getting-ready" mark={<Face who="chief" size={128} />} title={view.failed ? "Your crew couldn't get ready" : 'Getting your crew ready'} lead={view.words || undefined}>
+      <span role="status" aria-live="polite">{view.failed
+        ? <button className="btn go big" onClick={() => attempt(async () => { await api.retryEngine(); refresh(); })}>Try again</button>
+        : <span className="fr-wait"><i className="fr-spin" />Setting up…</span>}</span>
+    </Split>
   );
 }
 
 /** Shared from another app on the phone (the Share sheet): Chief asks what to do with it, one blue primary first. The
  *  words come on the link and the photos (up to four) from the share cache; both go with whatever the person picks. */
-function Share({ refresh }: Ctx) {
+function Share({ refresh, connected = true }: { refresh: () => void; connected?: boolean }) {
   const q = new URLSearchParams(location.search);
   const text = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join('\n').trim();
   const more = Number(q.get('more') ?? 0);
   const [pics, setPics] = useState<Picked[] | null>(null);
   const [other, setOther] = useState(false);
-  useEffect(() => { void takeShared().then(setPics); }, []);
-  const home = () => { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
+  useEffect(() => { void peekShared().then(setPics); }, []);
+  const home = () => { void dropShared(); history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); };
   const send = async (what: string) => {
     const said = text ? `${what}\n\nWhat I shared:\n${text}` : what;
     if (await attempt(() => api.post('chief', said, (pics ?? []).map(({ type, data }) => ({ type, data }))), undefined, true)) { refresh(); home(); } return true;
   };
-  if (!text && pics && !pics.length) return <div className="page"><div className="card empty">Nothing came through. Try sharing it again.</div></div>;
+  if (!text && pics && !pics.length) return <Split mid mark={<Face who="chief" size={96} />} title="Nothing came through" lead="Try sharing it again." />;
+  const tile = <div className="share-tile"><span className="st-label"><span>Shared with Crewhouse</span></span>
+    {!!text && <div className="said">{text}</div>}
+    {!!pics?.length && <div className="share-pics">{pics.map((p, i) => <img key={i} src={`data:${p.type};base64,${p.data}`} alt={`Photo ${i + 1}`} />)}</div>}
+    {!text && !pics?.length && <span className="fr-mark"><Icon name="image" size={32} /></span>}
+    {more > 0 && <div className="mute small">Only the first 4 photos came through.</div>}</div>;
   return (
-    <div className="page share">
-      <div className="card shared"><div className="mute small">Shared with Crewhouse</div>
-        {!!text && <div className="said">{text}</div>}
-        {!!pics?.length && <div className="share-pics">{pics.map((p, i) => <img key={i} src={`data:${p.type};base64,${p.data}`} alt={`Photo ${i + 1}`} />)}</div>}
-        {more > 0 && <div className="mute small">Only the first 4 photos came through.</div>}</div>
-      <div className="line chief"><div className="line-by"><Face who="chief" size={36} /><span className="who">Chief</span></div>
-        <div className="bubble-text">Got it. What shall the crew do with this?</div>
-        <div className="share-acts">
-          <button className="btn go" disabled={!pics} onClick={() => send('Add this to my calendar and remind me the day before')}>📅 Add to my calendar + remind me</button>
-          <button className="btn" disabled={!pics} onClick={() => send('Just remember this for me')}>Just remember it</button>
-          <button className="btn" disabled={!pics} onClick={() => setOther(true)}>Something else…</button>
-        </div></div>
-      {other && <div className="dock"><Composer placeholder="What shall the crew do with it?" onSend={send} /></div>}
-    </div>
+    <Split className="share" mark={<Face who="chief" size={96} />} title={connected ? 'Got it. What shall the crew do with this?' : 'Got it. Connect to send it'}
+      lead={connected ? undefined : 'What you shared is kept on this device until you pair with your computer.'}>
+      {tile}
+      {connected
+        ? <div className="share-acts">
+          <button className="btn go big" disabled={!pics} onClick={() => send('Add this to my calendar and remind me the day before')}>Add to my calendar + remind me</button>
+          <button className="btn soft big" disabled={!pics} onClick={() => send('Just remember this for me')}>Just remember it</button>
+          <button className="btn soft big" disabled={!pics} onClick={() => setOther(true)}>Something else…</button>
+          {other && <Composer placeholder="What shall the crew do with it?" onSend={send} />}
+        </div>
+        : <div className="share-acts"><button className="btn go big" onClick={() => go('#/pair')}>Connect to send</button></div>}
+    </Split>
   );
 }
 
@@ -2120,7 +2116,7 @@ function App() {
   // Install before pairing/startup returns too: every face obeys Reduce Motion from its first paint.
   setFaceMoods(ctx ? A.chief(ctx.state, chiefLocal(ctx)).mood : 'idle', ctx?.live.crew ?? [], ctx?.live.talking, reduced);
   const splash = <Splash done={!!ctx || offline || noauth} />;
-  if (pairable && !paired) return <><Where pairing={route.view === 'pair'} /><Toasts /></>;
+  if (pairable && !paired) return <>{removed ? <Removed onPair={() => { clearRemoved(); go('#/pair'); }} /> : location.pathname === '/share' ? <Share refresh={refresh} connected={false} /> : <Where pairing={false} />}{route.view === 'pair' && <PairSheet onClose={back} />}<Toasts /></>;
   if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
   const engine = A.engineView(ctx.state);
   if (!ctx.state.person.onboarded) return <>{splash}{engine ? <GettingReady view={engine} refresh={refresh} /> : <Hello {...ctx} />}<Toasts /></>;
@@ -2148,7 +2144,7 @@ function App() {
           </a>
         </aside>
         <main className="main">
-          {offline && <div className="offline" role="status">Can't reach the home computer{heard.current ? ` · last heard ${A.clock(heard.current)}` : ''}. Meanwhile you can read your recent chats. You can reply once it's back. <button className="link inline" onClick={refresh}>Try now</button></div>}
+          {offline && <div className="offline" role="status"><Icon name="wifioff" size={24} /><span className="grow"><b>Can't reach the home computer</b><span>{heard.current ? `Last heard ${A.clock(heard.current)}. ` : ''}You can read your recent chats. You can reply once it's back.</span></span><button className="btn soft" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'jobs' && <Jobs {...ctx} />}
@@ -2162,7 +2158,7 @@ function App() {
           {v.view === 'ai' && v.id && <AiAccount {...ctx} id={v.id} />}
           {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
-          {v.view === 'share' && <Share {...ctx} />}
+          {v.view === 'share' && <Share refresh={ctx.refresh} />}
         </main>
         <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
           <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'jobs' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>
@@ -2171,7 +2167,7 @@ function App() {
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === (sheet.by ?? sheet.helper))} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
       {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} wide={v.view === 'chief'} who={makerOf(ctx.state, book.bot)}
         made={made && A.clock(made.at)} summary={made?.summary} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
-      {route.view === 'pair' && <PairSheet onClose={back} />}
+      {route.view === 'pair' && !(pairable && !paired) && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}
       <Toasts />
     </>

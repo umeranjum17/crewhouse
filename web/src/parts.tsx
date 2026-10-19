@@ -227,31 +227,23 @@ export function Laptop() {
   return <pre className="art laptop" aria-hidden>{art.laptop(t)}</pre>;
 }
 
-/** The block-letter CREWHOUSE: solid strokes in ink, their shadow in the quiet line colour. */
-export function Banner() {
-  return <pre className="art banner" aria-hidden>
-    {art.BANNER.map((line, y) => <div key={y}>{line.split(/(█+)/).map((run, x) => <i key={x} className={run.startsWith('█') ? 'ink' : undefined}>{run}</i>)}</div>)}
-  </pre>;
-}
-
 /** ?splash keeps the boot splash up, for design review. */
 const holdSplash = typeof location !== 'undefined' && new URLSearchParams(location.search).has('splash');
-/** The boot splash: block letters over a living field of glyphs, and Chief waking the crew. */
+/** The boot splash (Stack J01a): Chief, the name, and four bars that fill while the crew wakes. */
 export function Splash({ done: ready }: { done: boolean }) {
   const done = ready && !holdSplash;
   const t = useTicker(110);
   const [gone, setGone] = useState(false);
   useEffect(() => { if (done) { const x = setTimeout(() => setGone(true), 450); return () => clearTimeout(x); } }, [done]);
   if (gone) return null;
-  const words = 'Waking the crew…';
+  const at = done ? 4 : Math.min(3.5, 0.6 + t * 0.05);
   return (
     <div className={`splash ${done ? 'out' : ''}`} role="status" aria-label="Opening Crewhouse">
-      <pre className="art field" aria-hidden>{art.field(t, 200, 72)}</pre>
       <div className="splash-in">
-        <Banner />
-        <ChiefArt mood="work" d={7} whole />
-        <Laptop />
-        <div className="splash-line">{words.slice(0, Math.min(words.length, 4 + t))}<span className="cur" /></div>
+        <Face who="chief" size={160} />
+        <b className="wide">Crewhouse</b>
+        <span className="splash-line">Waking the crew…</span>
+        <span className="splash-bars" aria-hidden>{[0, 1, 2, 3].map((i) => <i key={i}><u style={{ width: `${Math.max(0, Math.min(1, at - i)) * 100}%` }} /></i>)}</span>
       </div>
     </div>
   );
@@ -721,9 +713,10 @@ const pickOne = async (f: File): Promise<Pick | null> => {
   return readBase64(f).then((data) => ({ name: f.name, type: f.type, size: f.size, data })).catch(() => null);
 };
 const pickFiles = (list: ArrayLike<File> | null) => Promise.all(Array.from(list ?? []).slice(0, 4).map(pickOne)).then((ps) => ps.filter((p): p is Pick => !!p?.data));
-/** The photos the installed app's Share sheet sent (web/src/sw.ts holds them): read once, cleared, and each one made
- *  small as a picked photo is. Nothing when this page wasn't opened by a share. */
-export async function takeShared(): Promise<Pick[]> {
+/** The photos the installed app's Share sheet sent (web/src/sw.ts holds them), each made small as a picked photo is.
+ *  They stay in the share cache until `dropShared`, so a share that arrives before the person connects survives the
+ *  pairing reload. Nothing when this page wasn't opened by a share. */
+export async function peekShared(): Promise<Pick[]> {
   try {
     const cache = await caches.open(SHARE_CACHE), files: File[] = [];
     for (let i = 0; i < SHARE_KEEP; i++) {
@@ -732,10 +725,11 @@ export async function takeShared(): Promise<Pick[]> {
       const blob = await hit.blob();
       files.push(new File([blob], decodeURIComponent(hit.headers.get('X-Name') ?? '') || 'Photo', { type: blob.type }));
     }
-    await caches.delete(SHARE_CACHE);
     return pickFiles(files);
   } catch { return []; }
 }
+/** The share is sent or put aside: its photos go. */
+export const dropShared = () => caches.delete(SHARE_CACHE).catch(() => false);
 
 /** A send handler's answer for words kept for the person, not sent and not failed (Hello asks for a name first): the box
  *  gets them back, with no Not sent line. */
