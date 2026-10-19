@@ -20,7 +20,7 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/accounts": "0.27.0",
+    "@byokit/accounts": "0.28.2",
     "@byokit/cloud": "0.2.1",
     "@byokit/connect": "0.7.0",
     "@byokit/decide": "0.9.0",

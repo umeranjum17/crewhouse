@@ -3,6 +3,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
+import { provider as kitProvider } from '@byokit/accounts';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
@@ -166,7 +167,10 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
     const provider = await this.routeOf(account), codexSigned = provider === 'openai-codex' && await this.kit.signedIn(ME, provider), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 }); // 'all' is the kit's account read (default lists nothing); the Codex CLI owns its login, so its models read missing-auth until signed in
-    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
+    const listed = (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
+    // A key-entry plan the engine lists nothing for yet: the kit's catalogue names its models (strong, then fast), so none is invented.
+    if (!listed.length && account === 'minimax') return [...new Set(Object.values(kitProvider('minimax')?.models ?? {}))].map((id) => ({ id, name: id }));
+    return listed;
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
@@ -194,7 +198,7 @@ export class OpenClawRuntime implements AgentRuntime {
       const lane = provider === 'opencode-go' ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
       if (!this.personas.has(lane)) { for (const [name, content] of [['SOUL.md', 'Follow the persona and job supplied for this session.\n'], ['IDENTITY.md', 'Use the identity supplied for this session.\n']]) await this.kit.call('agents.files.set', { agentId: lane, name, content }); this.personas.add(lane); }
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: spec.thinking } : {}) },
+        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { this.runs.delete(spec.key); }
