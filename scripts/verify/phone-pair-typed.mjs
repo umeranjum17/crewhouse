@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Pairs a task-owned emulator to the lab crewd (pair-lab.sh) by the typed relay code and stops on the app's Home, for
-// a proof that starts there (docs/verification/chief-computer.md). From "Where should I work?": On my computer, Type a code,
+// a proof that starts there (docs/verification/chief-computer.md). From "Where should I work?": On my computer, Type the code,
 // the relay code (`phones code`'s last line: `input text` drops pieces of the relay code on a slow
 // emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports.
 //
@@ -40,7 +40,7 @@ await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past 
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
 A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
 await waitFor(/^On my computer$/, 60000); tap(/^On my computer$/);
-await waitFor(/^Type a code$/, 20000); tap(/^Type a code$/);
+await waitFor(/^Type the code$/, 20000); tap(/^Type the code$/); // Put Chief on your computer → the code box
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
 A('shell', 'input', 'text', code); await sleep(800);
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/); // close the keyboard, then Pair

@@ -44,7 +44,7 @@ Changing an `EXPO_PUBLIC_*` value needs Metro's cache (`$TMPDIR/metro-cache`) cl
 value: grep `assets/index.android.bundle` in the APK for the address before you use it.
 
 The emulator has no shell clipboard, and the key box only reads it. So type the key into the pairing-code
-field (On my computer › Type a code), then `input keycombination 113 29` (select all), `113 31` (copy) and
+field (On my computer › Type the code), then `input keycombination 113 29` (select all), `113 31` (copy) and
 `keyevent 67` (clear the field). Then tap Paste key. Never dump the screen
 (`phone-ui.mjs texts`) while that field holds a real key. To show Chief's computer with the key row, pair by the
 typed relay code ([chief-computer.md](chief-computer.md)) without `pm clear`, which would drop the kept key.
