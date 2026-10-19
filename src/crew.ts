@@ -9,6 +9,7 @@ import * as disk from './bots.ts';
 import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watcher } from './desktop.ts';
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS, GRANTABLE } from './connections.ts';
+import { Composio } from './composio.ts';
 import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
@@ -237,6 +238,8 @@ export class Crew {
   private db: Store;
   /** The replaceable agent process: the real engine, or the scripted stub the tests run on. */
   readonly runtime: AgentRuntime;
+  /** Composio's hosted tools, signed in once through the engine; Chief alone may call them. */
+  readonly composio: Composio;
   private mailFiling: MailSend | undefined;
 
   constructor(cfg: Config, db: Store) {
@@ -245,6 +248,7 @@ export class Crew {
     this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
     this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir, cfg.crewDir);
     this.accounts = new Accounts(this.runtime);
+    this.composio = new Composio(this.runtime, db);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
     this.runtime.onEngine = () => this.db.live('system.engine', '', {}); // each install or start phase, live for Hello's getting-ready screen
@@ -1593,6 +1597,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
     if (name === 'browser') return !!l.browserTool;
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
+    if (name.startsWith('composio__')) return botId === CHIEF && this.composio.on();
     if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
     if (name.startsWith('crew_')) return this.crewTools(botId).some((t) => t.name === name);
     return registry(this.cfg, grants).some((t) => t.run && grants.includes(t.id) && t.id.replace(/-/g, '_') === name);

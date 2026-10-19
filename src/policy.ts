@@ -135,6 +135,8 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (['read', 'list', 'status'].includes(action)) return { kind: 'safe' };
     return { kind: 'refuse', why: 'Skills that write come from how you work, reviewed between jobs; keep one with crew_learn.' };
   }
+  // Composio's hosted tools (the engine's composio__<tool>): no read-only hint is known here, so every call asks.
+  if (tool.startsWith('composio__')) return { kind: 'send', words: `${s.bot} wants to use your Composio apps: ${tool.slice(10).replaceAll('_', ' ').toLowerCase()}.` };
   const app = s.apps?.[tool];
   if (app) {
     if (app.readOnly) return { kind: 'safe' };

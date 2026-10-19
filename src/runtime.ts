@@ -41,4 +41,8 @@ export interface AgentRuntime {
   memoryLimited?(): boolean;
   /** Point the engine at a custom OpenAI-compatible model provider. Optional: only the real engine offers it. */
   configureModelProvider?(baseUrl: string, apiKey: string): Promise<void>;
+  /** Composio's hosted tools: the browser URL to open, the wait for its callback, and the native sign-out. Optional: only the real engine offers them. */
+  composioBegin?(): Promise<{ url: string }>;
+  composioDone?(): Promise<void>;
+  composioSignOut?(): Promise<void>;
 }
