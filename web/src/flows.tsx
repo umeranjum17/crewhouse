@@ -357,6 +357,34 @@ export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helpe
 
 // ---------- pairing the public app with the person's own computer ----------
 /** What to run on the computer: Crewhouse itself, then the one-use code (`./crewhouse phones code`). */
+/** The first-run layout (Stack J01, J13): a face and a wide headline on the left, what to do on the right; on a phone one
+ *  column. `top` is the step chips (above the headline on a phone, in the right column on a computer); `mid` centres a
+ *  phone's column. Text meant for one size alone takes `on-phone` or `on-desk`. */
+export function Split({ top, mark, title, lead, mid, children, className = '' }: { top?: ReactNode; mark?: ReactNode; title: ReactNode; lead?: ReactNode; mid?: boolean; children?: ReactNode; className?: string }) {
+  return (
+    <div className={`fr${mid ? ' mid' : ''} ${className}`}>
+      <section className="fr-l">
+        {top && <div className="on-phone fr-top">{top}</div>}
+        {mark && <span className="fr-mark">{mark}</span>}
+        <h1 className="fr-h">{title}</h1>
+        {lead && <p className="fr-lead">{lead}</p>}
+      </section>
+      <section className="fr-r">{top && <div className="on-desk fr-top">{top}</div>}{children}</section>
+    </div>
+  );
+}
+
+/** A first-run screen laid over whatever is open (pairing from Settings or the public shell). */
+function FullPage({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  useDialogOwn(box, onClose);
+  return createPortal(<div ref={box} className="fr-page" role="dialog" aria-modal aria-label={label}>{children}</div>, document.body);
+}
+
+const Steps3 = ({ at }: { at: number }) => <ol className="fr-steps" aria-label={`Step ${at + 1} of 3`}>
+  {['Computer', 'Words', 'Done'].map((w, i) => <li key={w} className={i === at ? 'now' : i < at ? 'did' : ''}>{i < at ? <Icon name="check" size={18} /> : i === at ? `${i + 1} ` : ''}{w}</li>)}
+</ol>;
+
 const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
 
 // Chrome on Android has BarcodeDetector; iOS Safari has none, so there only the typed code shows.
@@ -415,35 +443,39 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
   const phase = pinned === 'waiting' || pinned === 'done' ? pinned : done ? 'done' : words ? 'waiting' : 'code';
   const said = words ?? 'maple lantern';
   const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
+  // The pairing already started can't be taken back from here, so Cancel starts this page over.
+  const cancel = () => { history.replaceState(null, '', '/#/'); location.reload(); };
+  const top = <Steps3 at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} />;
   return (
-    <Sheet label="Pair with your computer" onClose={onClose}>
-      <Progress at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} steps={['Your computer', 'Two words', 'Done']} />
-      <Mood phase={phase} />
-      {phase === 'code' && scan && <Scanner onCode={scanned} onRefused={() => { setScan(false); setCamOff(true); }} onBack={() => setScan(false)} />}
-      {phase === 'code' && !scan && <>
-        <h2>Pair with your computer</h2>
-        <p className="mute">Your crew lives on your own computer. Run these there once:</p>
-        <div className="cmds">{PAIR_CMDS.split('\n').map((c) => <code className="chat-code" key={c}>{c}</code>)}</div>
-        <button className="link" onClick={() => copy(PAIR_CMDS)}>Copy these</button>
-        <p className="mute small">Already have Crewhouse? Run just the last one.</p>
-        {canScan() && <button className="btn" disabled={busy} onClick={() => { setCamOff(false); setScan(true); }}>Scan the code on your computer</button>}
-        <label className="pair-label">Paste the code it prints
-          <textarea className="input pair-code" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the code here" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
-        {camOff && <p className="mute small">Camera is off for this page. Type the code instead.</p>}
-        {problem && <p className="pair-problem" role="alert">{problem}</p>}
-        <button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
-        <button className="link" onClick={onClose}>Not now</button>
-      </>}
-      {phase === 'waiting' && <>
-        <h2>Check these two words</h2>
-        <p className="mute">Your computer shows two words too. If they match, say yes there:</p>
+    <FullPage label="Pair with your computer" onClose={onClose}>
+      {phase === 'code' && <Split top={top} mark={<span className="on-desk"><Face who="chief" size={96} /></span>} title="Pair with your computer"
+        lead={<>Your crew lives on your own computer. <span className="on-phone">In its crewhouse folder, run these once:</span><span className="on-desk">Pair once and this screen answers for it.</span></>}>
+        {scan ? <Scanner onCode={scanned} onRefused={() => { setScan(false); setCamOff(true); }} onBack={() => setScan(false)} /> : <>
+          <p className="fr-say on-desk">In its crewhouse folder, run these once:</p>
+          <div className="fr-cmds">{PAIR_CMDS.split('\n').map((c) => <code key={c} className="chat-code">{c}</code>)}</div>
+          <button className="btn soft fr-copy" onClick={() => copy(PAIR_CMDS)}><Icon name="copy" size={20} />Copy these</button>
+          {canScan() && <button className="btn soft" disabled={busy} onClick={() => { setCamOff(false); setScan(true); }}>Scan the code on your computer</button>}
+          <label className="fr-label">Paste the code it prints
+            <textarea className="input pair-code" rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (text.trim() && !busy) pair(); } }}
+              placeholder="For example VDXK-G97P-AQDB" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
+          {camOff && <p className="fr-note">Camera is off for this page. Type the code instead.</p>}
+          {problem && <p className="pair-problem" role="alert">{problem}</p>}
+          <div className="fr-acts"><button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
+            <button className="btn soft big" onClick={onClose}>Not now</button></div>
+        </>}
+      </Split>}
+      {phase === 'waiting' && <Split mid top={top} mark={<Face who="chief" size={96} />} title="Check these two words" lead="Your computer shows two words too. If they match, say yes there.">
         <b className="pair-words">{said}</b>
-        <div className="cmds"><code className="chat-code">./crewhouse phones approve '{said}'</code></div>
-        <p className="mute small">Or open Crewhouse on the computer and tap Yes under Phones.</p>
-        <Pill tone="wait" live>Waiting for your computer…</Pill>
-      </>}
-      {phase === 'done' && <><h2>Paired!</h2><p>Opening your own crew…</p></>}
-    </Sheet>
+        <p className="fr-say">Or type this on the computer:</p>
+        <code className="fr-cmd chat-code">./crewhouse phones approve '{said}'</code>
+        <span className="fr-wait" role="status"><i className="fr-spin" />Waiting for your computer…</span>
+        <button className="btn soft big" onClick={cancel}>Cancel</button>
+      </Split>}
+      {phase === 'done' && <Split mid top={top} mark={<span className="on-desk"><Face who="chief" size={96} /></span>} title="Paired." lead="This is your crew now. Opening it…">
+        <span className="fr-crew" aria-hidden>{(['bunny', 'scout', 'chief', 'scribe', 'tracer'] as const).map((k) => <Face key={k} who={k === 'chief' ? 'chief' : { kind: k, name: k }} size={k === 'chief' ? 88 : 64} />)}</span>
+        <button className="btn go big" onClick={() => void import('./link.ts').then((l) => l.leave())}>Open my crew</button>
+      </Split>}
+    </FullPage>
   );
 }
 
@@ -457,39 +489,34 @@ function OfflineWords({ onClose }: { onClose: () => void }) {
  *  read crewd refuses with 403 no-authority): the computer is up, so never the offline screen and no retry loop —
  *  one plain screen in the same tokens that says to open Crewhouse from this computer's app menu. */
 export function NoAuthority() {
-  return (
-    <div className="unreachable">
-      <div className="asleep">
-        <Dots rows={art.HOUSE} pal={art.HOUSE_PAL} d={9} label="Crewhouse" />
-      </div>
-      <h1>Open Crewhouse from this computer’s app menu</h1>
-      <p className="lead">This page opened in the browser on its own, so it can’t reach your crew. Your helpers are waiting on this computer — open Crewhouse from the app menu and everything picks up right here.</p>
-    </div>
-  );
+  return <Split mid mark={<Face who="chief" size={96} />} title="Open Crewhouse from this computer’s app menu"
+    lead="This page opened in the browser on its own, so it can’t reach your crew. Your helpers are waiting on this computer — open Crewhouse from the app menu and everything picks up right here." />;
 }
 
-/** Full screen when Crewhouse can't be reached at all: never a blank page or an error code. A paired app
+/** Full screen when Crewhouse can't be reached at all (J13a): never a blank page or an error code. A paired app
  *  keeps a way out: pairing again reuses the code flow and only replaces the kept grant once the new one succeeds. */
 export function Unreachable({ retry }: { retry: () => void }) {
-  const [n, setN] = useState(5);
+  const [n, setN] = useState(RETRY);
   const [pairing, setPairing] = useState(false);
-  useEffect(() => { const t = setInterval(() => setN((x) => (x <= 1 ? (retry(), 5) : x - 1)), 1000); return () => clearInterval(t); }, [retry]);
+  useEffect(() => { const t = setInterval(() => setN((x) => (x <= 1 ? (retry(), RETRY) : x - 1)), 1000); return () => clearInterval(t); }, [retry]);
   return (<>
-    <div className="unreachable">
-      <div className="asleep">
-        <pre className="art zzz" aria-hidden>{'      z\n    z\n  z'}</pre>
-        <Dots rows={art.HOUSE.map((r, i) => (i === 6 ? r.replace(/e/g, 'p') : r))} pal={art.HOUSE_PAL} d={9} label="Crewhouse, asleep" />
-      </div>
-      <h1>The home computer isn't answering</h1>
-      <p className="lead">It may be asleep, switched off, or offline. Crewhouse and your helpers live there, so everything picks up again the moment it's back.</p>
-      {paired && <p className="mute">This app is still paired with it. To use this computer or another one, pair again.</p>}
-      <div className="card tips">
-        <div><Face who="chief" size={34} /><span>Check the home computer is on and connected to the internet.</span></div>
-      </div>
-      <button className="btn go big" onClick={() => { setN(5); retry(); }}>Try now</button>
-      {paired && <button className="btn" onClick={() => setPairing(true)}>Pair again</button>}
-      <p className="mute small">Trying again in {n}s</p>
-    </div>
+    <Split mid mark={<Face who="chief" size={96} />} title="The home computer isn't answering"
+      lead="It may be asleep, switched off or offline. Your crew lives there, so everything picks up the moment it's back.">
+      <div className="fr-tip"><Icon name="check" size={22} /><span>Check it's on and connected to the internet.</span></div>
+      <button className="btn go big" onClick={() => { setN(RETRY); retry(); }}>Try now</button>
+      {paired && <button className="btn soft big" onClick={() => setPairing(true)}>Pair again</button>}
+      <p className="fr-note">Trying again in {n} second{n === 1 ? '' : 's'}</p>
+    </Split>
     {pairing && <PairSheet onClose={() => setPairing(false)} />}
   </>);
+}
+const RETRY = 15;
+
+/** This device was taken off the crew on the home computer (J13c): its kept sign-in is gone, so the way back is to pair again. */
+export function Removed({ onPair }: { onPair: () => void }) {
+  return <Split mid mark={<span className="fr-lock"><Icon name="lock" size={44} /></span>} title="This device was removed" lead="It was taken off the crew on the home computer. Pair it again to come back.">
+    <div className="fr-back on-desk"><span className="st-label"><span>To come back</span></span>
+      <ol>{['On the home computer, open Settings, then Phones.', 'Add this device again.', 'Check the two words match.'].map((t, i) => <li key={t}><i>{i + 1}</i>{t}</li>)}</ol></div>
+    <button className="btn go big" onClick={onPair}>Pair again</button>
+  </Split>;
 }

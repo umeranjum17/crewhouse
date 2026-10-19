@@ -44,7 +44,9 @@ export async function scanned(qr: string, onWords: (w: string) => void) {
 }
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
+let unpairing = false; // a deliberate Unpair is not "this device was removed"
 export async function unpair(link: DeviceLink) {
+  unpairing = true;
   const bounded = (step: Promise<unknown>) => Promise.race([step, new Promise((ok) => setTimeout(ok, 2500))]).catch(() => {});
   await bounded(turnOffNotifications());
   await bounded(link.unpair());
@@ -56,14 +58,14 @@ export async function unpair(link: DeviceLink) {
 
 /** The computer forgot this browser: clear the grant before the page reloads. The kit clears it only after its own
  *  callback returns, so a reload that began there could boot the new page on the grant still sealed here. */
-const forgotten = async () => { try { await store.clear(); } catch { /* the page leaves either way; a grant left behind is cleared next time */ } await leave(); };
+const forgotten = async () => { try { await store.clear(); } catch { /* the page leaves either way; a grant left behind is cleared next time */ } try { if (!unpairing) sessionStorage.setItem('crewhouse.removed', '1'); } catch { /* the page still leaves */ } await leave(); };
 
 /** The same installed app opens fresh: the grant (or its absence) decides the mode at boot. A deliberate restart
  *  lands Home, never on the last place, so it flags itself for `resume()` (web/src/resume.ts). */
 export async function leave() {
   await setBadge(0);
   try { sessionStorage.setItem('crewhouse.home', '1'); } catch { /* no storage: Home is the default anyway */ }
-  location.replace('/');
+  location.replace(location.pathname === '/share' ? '/share' + location.search : '/'); // a share that waited for pairing opens again, paired
 }
 
 /** A ws:// address the computer named (its LAN address) dials this page's own origin instead: an https page cannot open

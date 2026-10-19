@@ -495,12 +495,12 @@ test('first run and the Share sheet read Term: critter faces, shared tiles, no b
       const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect());
       return { overlap: kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1)),
         clip: r.left < -1 || r.right > W + 1 || kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1) }; });
-    return { ideas: document.querySelectorAll('.idea').length, tiles: document.querySelectorAll('.idea > .o-ic').length,
+    return { ideas: document.querySelectorAll('.idea').length, tiles: document.querySelectorAll('.idea > .face').length,
       bubble: !!st && (parseFloat(st.borderTopWidth) > 0 || st.backgroundColor !== 'rgba(0, 0, 0, 0)'),
       chips: document.querySelectorAll('.share .chip').length, primary: document.querySelectorAll('.share .btn.go').length,
-      faces: document.querySelectorAll('.share .line-by .face img.ink').length,
+      faces: document.querySelectorAll('.share .fr-mark .face img.ink').length,
       cut: [...document.querySelectorAll('.share .said, .idea b')].some((e) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1),
-      rows: boxes('.idea, .share .line, .share-acts') }; })()`;
+      rows: boxes('.idea, .share-acts') }; })()`;
   const shared = new URLSearchParams({ title: 'Dentist appointment', text: 'Dr Patel, Thursday 14 November at 10:30, Harley Street Dental Practice, please arrive 10 minutes early' });
   for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });

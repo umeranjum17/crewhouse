@@ -1346,17 +1346,17 @@ export const jobNeeds = (needs: string[]) => `Needs ${needs.join(' and ')} first
 
 /** Chief's three first-run ideas: one tap is both "hello" and the first job. The middle one goes straight to
  *  Scout: her side-income ask starts in Scout's thread, never through Chief. */
-export const FIRST_IDEAS: { icon: string; label: string; bot?: string }[] = [
-  { icon: '🍲', label: "Plan this week's dinners, with a shopping list" },
-  { icon: '💡', label: 'Help me earn a little on the side', bot: 'scout' },
-  { icon: '📅', label: "What's on this week?" },
+export const FIRST_IDEAS: { icon: string; label: string; bot?: string; sub: string; face: 'chief' | 'scout' | 'scribe' | 'bunny'; who: string }[] = [
+  { icon: '🍲', label: "Plan this week's dinners, with a shopping list", sub: 'A list you can shop from', face: 'bunny', who: 'Chief' },
+  { icon: '💡', label: 'Help me earn a little on the side', bot: 'scout', sub: 'Ideas that fit your week', face: 'scout', who: 'Rae' },
+  { icon: '📅', label: "What's on this week?", sub: 'From your calendar', face: 'chief', who: 'Chief' },
 ];
 
 /** The starters Hello offers: useful from the first tap, and never one that dead-ends in a connection. With Google
  *  not set up yet, the calendar starter sits out; a party plan takes its place. */
 export function firstIdeas(state: Json) {
   if (state.house?.google !== false) return FIRST_IDEAS;
-  return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party' });
+  return FIRST_IDEAS.filter((i) => !i.label.startsWith("What's on this week")).concat({ icon: '🎈', label: 'Help me plan a birthday party', sub: 'Guests, food and a plan', face: 'scribe', who: 'Chief' });
 }
 
 /** Your three setup jobs: what the crew thinks with, the phones reaching it, and Google setup.
