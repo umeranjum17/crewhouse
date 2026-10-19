@@ -1,7 +1,7 @@
 {
   "id": "computer",
   "name": "Computer (desklink)",
-  "provides": "The bot's own desktop: a virtual display with its own Chromium, which its browser tool drives. You can watch it and take over from the Screen tab",
+  "provides": "The bot's own desktop: a virtual display with its own Chromium, fenced off from your files. The bot sees it and clicks and types on it through OpenClaw's computer tool, and its browser tool drives the same Chromium. You can watch it and take over from the Screen tab",
   "kind": "desktop",
   "bins": [
     "Xvfb"
@@ -12,7 +12,8 @@
     "system": "Install Xvfb (apt install xvfb, dnf install xorg-x11-server-Xvfb, pacman -S xorg-server-xvfb) and Chromium. The desklink engine ships with Crewhouse (Linux x64)"
   },
   "asks": [
-    "nothing while you watch; taking over pauses it until you give the controls back"
+    "nothing while you watch; taking over pauses it until you give the controls back",
+    "a click or typing on a site you signed it in to, and anything on a checkout or payment page, every time"
   ],
   "env": {
     "DISPLAY": "{bot.display}",

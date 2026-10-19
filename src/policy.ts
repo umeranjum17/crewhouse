@@ -31,7 +31,7 @@ const READS = new Set(['read', 'ls', 'grep', 'find']), WRITES = new Set(['write'
 /** Whether a call that goes through does something out in the world (sends, buys, deletes, or presses and types on a web
  *  page): a job that did has to say whether it worked. */
 export function acts(tool: string, input: Record<string, any>, e: Effect) {
-  return e.kind === 'send' || e.kind === 'spend' || e.kind === 'delete' || (tool === 'browser' && BROWSER_ACTS.has(String(input.args?.[0] ?? '')));
+  return e.kind === 'send' || e.kind === 'spend' || e.kind === 'delete' || (tool === 'browser' && BROWSER_ACTS.has(String(input.args?.[0] ?? ''))) || (tool === 'computer' && COMPUTER_HANDS.has(String(input.action)));
 }
 
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
@@ -43,6 +43,8 @@ const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : to
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
 // (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
 const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close', 'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']), BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload', 'dialog-accept', 'mousedown', 'mouseup']);
+/** OpenClaw's `computer` on the bot's own screen: these look, these act (by the browser's asks on the visible page). */
+export const COMPUTER_LOOKS = new Set(['screenshot', 'zoom', 'wait', 'get_cursor_position', 'mouse_move', 'scroll']), COMPUTER_HANDS = new Set(['left_click', 'double_click', 'triple_click', 'left_click_drag', 'left_mouse_down', 'left_mouse_up', 'type', 'key', 'hold_key']);
 /** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
 const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/, PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;
 /** A flag's values in an argument list, as `--flag v` or `--flag=v`. */
@@ -103,6 +105,12 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     // read from the page by crewd, are added in the gate (src/crew.ts `press`).
     return act.spend ? { kind: 'spend', words: `${s.bot} wants to act on a checkout or payment page at ${act.host}.` }
       : { kind: 'send', press: true, words: `${s.bot} wants to act as you on ${act.host}, a site you signed it in to.` };
+  }
+  if (tool === 'computer') {
+    const a = String(input.action ?? '');
+    // Another gateway is the model's way off this screen; the node it names is checked in the gate.
+    if (input.gatewayUrl || input.gatewayToken || (!COMPUTER_LOOKS.has(a) && !COMPUTER_HANDS.has(a))) return { kind: 'refuse', why: "Your computer can't do that here. Look with screenshot or zoom; act with left_click, type, key and scroll." };
+    return COMPUTER_LOOKS.has(a) ? { kind: 'safe' } : effectOf('browser', { args: [a === 'type' ? 'type' : 'click'] }, s);
   }
   if (tool === 'calendar') {
     const [cmd = 'today', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String), words = rest.filter((a, i) => !a.startsWith('--') && !rest[i - 1]?.startsWith('--')).map((w) => w.replace(/\s+/g, ' ').trim().slice(0, 80));

@@ -55,7 +55,9 @@ import { join } from 'node:path';
 // Raised 7121 -> 7192 for routines that start on a new email or a meeting (ch-cap-event-routines, the captain's rank-1
 // capability gap, restored after being cut; awaiting owner decision on the exception, no trim paired): the Gmail history
 // reader, Calendar paging, the event trigger words and crewd's once-a-minute check on its own tick. Nothing was packed.
-const BUDGET = 7192;
+// Raised 7192 -> 7243 for agent computer use (ch-agent-computer-use, owner exception, +51): OpenClaw's own
+// computer tool and node host per bot desktop, its gate and policy entries, and the bot's Chromium fenced like the shell.
+const BUDGET = 7243;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

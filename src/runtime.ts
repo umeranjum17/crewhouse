@@ -37,6 +37,8 @@ export interface AgentRuntime {
   forget(id: string, skill?: string): Promise<void>;
   /** The "Learn from how I work" switch: the engine's learning mode, auto or off. Optional: the stub may ignore it. */
   setLearning?(on: boolean): Promise<void>;
+  /** Hands on the bot's own screen through the engine's `computer` tool; resolves to the node name its calls must use. */
+  computer?(bot: string, screen: { DISPLAY: string; XAUTHORITY: string }): Promise<string>;
   /** Whether this engine has only keyword memory search available. */
   memoryLimited?(): boolean;
   /** Point the engine at a custom OpenAI-compatible model provider. Optional: only the real engine offers it. */

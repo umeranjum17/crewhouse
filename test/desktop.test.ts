@@ -304,6 +304,19 @@ test('give back reads its tabs and keeps what the person ticked', { skip: noXvfb
   await until('crewd read both tabs', () => crew.desktops.pages('reel').then((p) => p.length === 2));
   assert.deepEqual([...(await crew.desktops.pages('reel'))].sort(), ['127.0.0.1', 'localhost'], 'bare hosts, deduped, no paths');
 
+  // Its hands reach this Chromium pixel by pixel (OpenClaw's computer tool), so it is fenced like the shell: a
+  // file:// page or file picker sees its own folder, never crewd's or the person's files.
+  if (sandboxReady()) {
+    writeFileSync(join(space, 'mine.txt'), 'its own words'); writeFileSync(join(cfg.stateDir, 'theirs.txt'), 'not for bots');
+    const read = (file: string) => (crew.desktops as any).withPipe('reel', async (call: any) => {
+      const { targetId } = await call('Target.createTarget', { url: `file://${file}`, background: true }), { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
+      const text = async () => (await call('Runtime.evaluate', { expression: 'document.readyState === "complete" && document.body.innerText', returnByValue: true }, sessionId))?.result?.value;
+      try { await until(`${file} loaded`, text); return String(await text()); } finally { await call('Target.closeTarget', { targetId }); }
+    });
+    assert.match(await read(join(space, 'mine.txt')), /its own words/);
+    assert.doesNotMatch(await read(join(cfg.stateDir, 'theirs.txt')), /not for bots/, "crewd's own state is not in the bot's browser");
+  }
+
   await crew.takeOver('reel');
   await crew.giveBack('reel', '', ['127.0.0.1']);
   assert.deepEqual(crew.botPage('reel').signedIn, ['127.0.0.1'], 'the tick is kept in bot.json');

@@ -13,7 +13,7 @@ import { Composio } from './composio.ts';
 import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
-import { acts, claimOf, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
+import { acts, claimOf, COMPUTER_LOOKS, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, describeTrigger, firstRun, hhmm, looksFor, nextRun, parseSchedule, parseTrigger, reminderAt, type Trigger } from './routines.ts';
 import { mailChanges, mailTool, newThreads } from './mail.ts';
@@ -186,7 +186,9 @@ interface Live { key: string; task: number; account: string; model?: string; gra
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
-  fills?: { label: string; value: string }[] }
+  fills?: { label: string; value: string }[];
+  /** Its own computer: the OpenClaw node on its display that every `computer` call must name. */
+  node?: string }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
 export class Crew {
@@ -1344,6 +1346,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     l.apps = apps.effects; l.owners = apps.owner;
     this.mailFiling ??= new MailSend(this.db, this.connections);
     l.appTools = new Map(apps.tools.filter((t) => bot.id === CHIEF || (conf.apps ?? []).includes(apps.owner[t.name])).map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space, this.mailFiling, bot.id) : t])); // mail saves into this run's own files; drafts/labels reuse the guarded MailSend path
+    if (g.tools.includes('computer') && browserBin() && this.cfg.engine !== 'stub' && this.runtime.computer) {
+      const d = await this.desktops.ensure(bot.id, space);
+      l.node = await this.runtime.computer(bot.id, { DISPLAY: d.display, XAUTHORITY: d.xauth }).catch((e) => { console.error(`${bot.id}'s computer:`, e); return undefined; });
+    }
     const axi = g.axi.browser;
     if (axi) {
       // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
@@ -1394,7 +1400,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
-      + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
+      + (l.node ? `\nYour own screen is the computer tool's node "${l.node}": name it on every computer call.\n` : '') + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
@@ -1632,6 +1638,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
     if (name === 'browser') return !!l.browserTool;
+    if (name === 'computer') return !!l.node;
     if (name === 'calendar' || name === 'mail') return l.appTools?.has(name) ?? false;
     if (name.startsWith('composio__')) return botId === CHIEF && this.composio.on();
     if (name === 'crew_app') return true; // the inner tool is checked inside the gate and again in call
@@ -1655,10 +1662,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** A call that goes through and acts out in the world marks its job: that job must now say whether it worked, and an
    *  earlier "it worked" no longer covers it. */
   private async gate(botId: string, tool: string, input: Record<string, any>, s = this.seen(botId)) {
+    if (tool === 'computer') { // its own screen only; its hands are judged on the page crewd reads there (the browser tool lets go of the pipe)
+      const l = this.live.get(botId);
+      if (input.node !== l?.node) return { block: true, terminate: false, reason: `Name your own computer on every call: node "${l?.node}".` };
+      if (!COMPUTER_LOOKS.has(String(input.action))) { l?.browser?.release(); s.page = (await this.desktops.pages(botId, true))[0] ?? s.page; }
+    }
     const e = effectOf(tool, input, s), r = await this.decide(botId, tool, input, e), task = !r && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? 'a web page';
-      try { if (tool === 'browser') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
+      try { if (tool === 'browser' || tool === 'computer') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
       this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', where, task.id);
     }
     return r;
