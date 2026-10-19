@@ -52,7 +52,9 @@ import { join } from 'node:path';
 // declarations inlined, rationale comments kept. The honest trim stops 20 short of the 7099 ceiling; the remaining
 // 20 lines are closed as an owner exception (the ch-src-trim-mail precedent), not packed or deleted to hide them.
 // Rebased onto #630 (removeOnExit for the isolated run home), which adds 2 lines to src: measured 7121, so BUDGET is 7121.
-const BUDGET = 7121;
+// Raised 7121 -> 7172 for agent computer use (ch-agent-computer-use, owner exception, +51): OpenClaw's own
+// computer tool and node host per bot desktop, its gate and policy entries, and the bot's Chromium fenced like the shell.
+const BUDGET = 7172;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

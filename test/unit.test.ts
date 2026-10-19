@@ -165,6 +165,13 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual(effectOf('browser', { args: ['goto', 'https://news.ycombinator.com'] }, s), { kind: 'safe' });
   assert.deepEqual(effectOf('browser', { args: ['screenshot', '--filename', 'files/page.png'] }, s), { kind: 'safe' });
   assert.equal(effectOf('browser', { args: ['upload', 'files/form.pdf'] }, s).kind, 'send', 'its own file, on a signed-in site: asks');
+  // OpenClaw's computer on the bot's own screen: looks are free, hands follow the browser's asks, the rest is refused.
+  assert.deepEqual(effectOf('computer', { action: 'screenshot' }, s), { kind: 'safe' });
+  assert.equal(effectOf('computer', { action: 'left_click', coordinate: [9, 9] }, s).kind, 'send', 'a click on a signed-in site asks');
+  assert.equal(effectOf('computer', { action: 'type', text: 'x' }, { ...s, page: 'https://elsewhere.test/form' }).kind, 'safe', 'typing on an ordinary page is free');
+  assert.equal(effectOf('computer', { action: 'key', text: 'Return' }, { ...s, page: 'https://shop.test/checkout' }).kind, 'spend', 'anything on a payment page asks');
+  for (const input of [{ action: 'launch_app' }, { action: 'browser_navigate' }, { action: 'start_recording' }, { action: 'screenshot', gatewayUrl: 'ws://evil.test' }])
+    assert.equal(effectOf('computer', input, s).kind, 'refuse', JSON.stringify(input));
   assert.equal(effectOf('teleport', {}, s).kind, 'refuse', 'unknown tools fail closed');
   assert.equal(effectOf('crew_unknown', {}, s).kind, 'refuse', 'a crew_ prefix cannot grant authority');
   assert.equal(toolWords('bash', { command: 'ffmpeg -y -i a.png out.mp4' }), 'Worked on a video');

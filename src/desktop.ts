@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpat
 import { join } from 'node:path';
 import { EngineClient, resolveEngine, explainMissingEngine, type EngineEvent } from '@desklink/host';
 import { WebSocket, WebSocketServer } from 'ws';
+import { sandboxReady } from './engine.ts';
 
 export const WIDTH = 1280, HEIGHT = 800;
 const IDLE_MS = Number(process.env.CREWHOUSE_DESKTOP_IDLE_MS || 10 * 60_000), BROWSERS = ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'];
@@ -129,7 +130,10 @@ export class Desktops {
     // It never offers to keep a password (a sign-in lives in cookies only), nor to restore pages after any unclean end.
     const prefs = join(botDir, 'browser', 'Default', 'Preferences'), was = (() => { try { return JSON.parse(readFileSync(prefs, 'utf8')); } catch { return {}; } })();
     mkdirSync(join(prefs, '..'), { recursive: true }); writeFileSync(prefs, JSON.stringify({ ...was, credentials_enable_service: false, profile: { ...was.profile, exit_type: 'Normal', exited_cleanly: true } }));
-    const child = spawn(bin, [
+    // Fenced like the shell: the person's home, /tmp and session sockets are not there, so no page, file picker or
+    // `file://` address the bot's hands reach on screen can see their files. Only its own folder and display are.
+    const [cmd, ...fence] = sandboxReady() ? ['bwrap', '--dev-bind', '/', '/', '--tmpfs', '/home', '--tmpfs', '/tmp', '--tmpfs', '/run/user', '--bind-try', '/tmp/.X11-unix', '/tmp/.X11-unix', '--bind', botDir, botDir, '--ro-bind', d.xauth, d.xauth, '--die-with-parent', '--', bin] : [bin];
+    const child = spawn(cmd, [...fence,
       // Last flag wins, so these beat a distro wrapper's own flags (for example a Wayland default).
       '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
       '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--force-device-scale-factor=1', '--start-maximized',
@@ -250,7 +254,7 @@ export class Desktops {
   }
 
   /** crewd reads bare hosts (`www.` stripped, matching policy.ts), visible first; never trust the bot's sign-in claim. */
-  async pages(bot: string): Promise<string[]> {
+  async pages(bot: string, urls = false): Promise<string[]> {
     const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } }, out: { host: string; on: boolean }[] = [];
     try {
       await this.withPipe(bot, async (call) => {
@@ -258,8 +262,8 @@ export class Desktops {
         for (const t of tabs) {
           try {
             const { sessionId } = await call('Target.attachToTarget', { targetId: t.targetId, flatten: true }), v = await call('Runtime.evaluate', { expression: 'document.visibilityState', returnByValue: true }, sessionId);
-            out.push({ host: host(t.url), on: v?.result?.value === 'visible' });
-          } catch { out.push({ host: host(t.url), on: false }); } // the tab went away while we read
+            out.push({ host: urls ? t.url : host(t.url), on: v?.result?.value === 'visible' });
+          } catch { out.push({ host: urls ? t.url : host(t.url), on: false }); } // the tab went away while we read
         }
       });
     } catch { /* no browser to read: an empty list, nothing to tick */ }
@@ -292,7 +296,7 @@ export class Desktops {
     this.ends.set(bot, gone);
     void gone.finally(() => { if (this.ends.get(bot) === gone) this.ends.delete(bot); });
     // Chromium shuts down before its display goes (or a stuck one is killed); a lost display is a crash to it.
-    const chrome = d.chrome, up = chrome && chrome.exitCode === null && chrome.signalCode === null; chrome?.kill(); d.devtools?.close();
+    const chrome = d.chrome, up = chrome && chrome.exitCode === null && chrome.signalCode === null; (chrome?.stdio[3] as NodeJS.WritableStream | undefined)?.write('{"id":-1,"method":"Browser.close"}\0'); d.devtools?.close(); // a signal would reach only bwrap
     if (up) { chrome.once('exit', () => d.xvfb.kill()); setTimeout(() => { if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill('SIGKILL'); }, 3000).unref(); } else d.xvfb.kill();
     return gone;
   }

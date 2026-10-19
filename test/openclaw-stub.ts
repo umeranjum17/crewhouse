@@ -7,6 +7,7 @@
 //   hit the limit        answer with the account's own usage-limit error (rests it)
 //   no helpers in plan   answer as a plan without helpers does
 //   sign me out          answer as an account whose sign-in stopped working does
+//   {frameId}            inside a call: the frame id of the last screenshot the engine's computer tool reported
 //   ask permission       hold the turn (after its tool calls) until the test releases it (`release`)
 //   anything else        reply `stub <bot>: done with "<the last line of the message>"`
 import { createServer, type Server } from 'node:http';
@@ -55,9 +56,11 @@ export function startModelStub(promptTokens?: number) {
     const messages: any[] = body.messages ?? [];
     const system = messages.filter((m: any) => m.role === 'system').map((m: any) => words(m)).join('\n');
     const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(system)?.[1] ?? 'bot';
-    const lastUser = [...messages].reverse().find((m: any) => m.role === 'user');
+    // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"): not the person's.
+    const asked = (m: any) => m.role === 'user' && !words(m).startsWith('Attached image(s) from tool result');
+    const lastUser = [...messages].reverse().find(asked);
     const said = words(lastUser);
-    const results = messages.slice(messages.findLastIndex((m: any) => m.role === 'user') + 1).filter((m: any) => m.role === 'tool');
+    const results = messages.slice(messages.findLastIndex(asked) + 1).filter((m: any) => m.role === 'tool');
     const scripted = toolCalls(said);
     const lastResult = results.at(-1);
     const done = () => {
@@ -91,7 +94,8 @@ export function startModelStub(promptTokens?: number) {
       res.writeHead(403, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ error: { message: "Your plan doesn't include this model." } }));
     }
-    const next = scripted[results.length];
+    // `{frameId}` in a scripted call is the frame the engine's computer tool last reported (its coordinates bind to it).
+    const frame = results.map((m: any) => /frameId ([\w-]+)/.exec(words(m))?.[1]).filter(Boolean).at(-1), next = scripted[results.length] && JSON.parse(JSON.stringify(scripted[results.length]).replaceAll('{frameId}', frame ?? ''));
     if (process.env.CREWHOUSE_STUB_DEBUG) console.log('STUB req', calls.length, 'roles', messages.map((m: any) => m.role).join(',').slice(0, 60), 'rss', Math.round(process.memoryUsage().rss / 1e6));
     const id = randomUUID();
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });

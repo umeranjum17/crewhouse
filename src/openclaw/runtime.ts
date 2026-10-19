@@ -1,5 +1,5 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
@@ -46,9 +46,11 @@ export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, paramete
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] }, compaction: { memoryFlush: { enabled: false } }, heartbeat: { every: '0m' } } },
-  tools: { profile: 'coding', alsoAllow: TOOLS.map((t) => t.name), deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'group:nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
-  plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai', 'opencode-go'], entries: {
-    'memory-core': { config: { dreaming: { enabled: false } } },
+  tools: { profile: 'coding', alsoAllow: [...TOOLS.map((t) => t.name), 'computer'], deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
+  // A bot's computer is OpenClaw's own node host on its display (`computer`); of a node host's commands only the screen's two pass.
+  gateway: { nodes: { pluginTools: { enabled: false }, allowSkills: false, commands: { deny: ['browser.proxy', 'browser.proxy.upload.v1', 'fs.listDir', 'mcp.tools.call.v1', 'ollama.chat', 'ollama.models', 'system.execApprovals.get', 'system.execApprovals.set', 'system.notify', 'system.run', 'system.run.prepare', 'system.which', 'terminal.upload'] } } },
+  plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai', 'opencode-go', 'cua-computer'], entries: {
+    'memory-core': { config: { dreaming: { enabled: false } } }, 'cua-computer': { enabled: true },
     codex: { enabled: false },
   } },
   skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
@@ -59,7 +61,7 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly stateDir: string;
   private host?: ToolHost; private keyChecks = new Set<string>();
   private runs = new Map<string, RunRef & { account?: string }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
-  private failed = '';
+  private failed = ''; private nodes = new Map<string, { display: string; child: ChildProcess }>();
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
@@ -91,7 +93,30 @@ export class OpenClawRuntime implements AgentRuntime {
   async start(host: ToolHost) { this.host = host; this.failed = ''; const since = Date.now(); await this.kit.start().catch((e: unknown) => { this.failed = failedWords(e, this.kit.state, join(this.stateDir, 'logs', 'engine-install-drift.json'), since); this.onEngine?.(); throw e; }); }
   /** The engine as the app's first screen shows it: the kit's real phase and its words, or why the last start failed. */
   engine() { return this.failed ? { phase: 'failed', words: this.failed } : { phase: this.kit.state.phase, words: stateWords(this.kit.state) }; }
-  async stop() { await this.kit.stop(); }
+  async stop() { for (const n of this.nodes.values()) n.child.kill(); this.nodes.clear(); await this.kit.stop(); }
+  /** `openclaw node run` with its bundled cua-computer on the bot's display, its own state and an env built from nothing;
+   *  crewd approves its command surface (docs/nodes/computer-use.md). ponytail: a node outlives an idle-swept desktop
+   *  until the next desktop replaces it; the kit should supervise node hosts (findings.md). */
+  async computer(bot: string, screen: { DISPLAY: string; XAUTHORITY: string }) {
+    const name = `crewhouse-${bot}`, had = this.nodes.get(bot);
+    if (had?.display === screen.DISPLAY && had.child.exitCode === null) return name;
+    had?.child.kill();
+    const { entry, env } = this.kit.doctorContext(), dir = join(this.stateDir, 'nodes', bot), port = readFileSync(join(this.stateDir, 'openclaw', 'port'), 'utf8').trim();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'openclaw.json'), JSON.stringify({ plugins: { entries: { 'cua-computer': { enabled: true } } } }));
+    const child = spawn(process.execPath, [entry, 'node', 'run', '--host', '127.0.0.1', '--port', port, '--no-tls', '--display-name', name], { cwd: dir, stdio: 'ignore', env: {
+      PATH: env.PATH, LANG: env.LANG, HOME: dir, TMPDIR: dir, OPENCLAW_STATE_DIR: dir, OPENCLAW_CONFIG_PATH: join(dir, 'openclaw.json'), OPENCLAW_GATEWAY_TOKEN: env.OPENCLAW_GATEWAY_TOKEN,
+      OPENCLAW_NO_RESPAWN: '1', OPENCLAW_DISABLE_BONJOUR: '1', XDG_SESSION_TYPE: 'x11', ...screen } });
+    this.nodes.set(bot, { display: screen.DISPLAY, child });
+    for (let i = 0; i < 90 && child.exitCode === null; i++, await sleep(1000)) {
+      const up = await this.kit.call('node.list', {}) as { nodes?: { displayName?: string; connected?: boolean; commands?: string[] }[] };
+      if (up.nodes?.some((n) => n.displayName === name && n.connected && n.commands?.includes('computer.act'))) return name;
+      const { pending } = await this.kit.call('node.pair.list', {}) as { pending?: { requestId: string; displayName?: string }[] }, ask = pending?.find((p) => p.displayName === name);
+      if (ask) await this.kit.call('node.pair.approve', { requestId: ask.requestId });
+    }
+    child.kill(); this.nodes.delete(bot);
+    throw new Error("the bot's computer did not start");
+  }
   signInRecovery() { return this.kit.state.phase === 'locked' || this.kit.state.why === 'engine-already-running' || this.kit.state.why === 'auth-store-unreadable' ? stateWords(this.kit.state) : ''; }
   memoryLimited() { return this.kit.memoryLimited(ME); }
 
@@ -152,7 +177,7 @@ export class OpenClawRuntime implements AgentRuntime {
     await this.kit.patchConfig({
       models: { providers: { 'crewhouse-stub': {
         baseUrl, apiKey, api: 'openai-completions',
-        models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text'],
+        models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text', 'image'],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048,
           compat: { supportsReasoningEffort: true, supportedReasoningEfforts: ['off', 'low', 'medium', 'high'] } }],
       } } },
