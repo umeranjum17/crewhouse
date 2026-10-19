@@ -151,7 +151,7 @@ export const CLOUD = {
       ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
       ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
   },
-  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. Talking to Chief there from this phone arrives with the next Crewhouse update.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'] },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
     link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],

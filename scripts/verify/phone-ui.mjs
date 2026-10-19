@@ -4,8 +4,10 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 const A = (...a) => execFileSync('adb', ['-s', process.env.SERIAL || 'emulator-5562', ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
 const dump = () => { A('shell', 'uiautomator', 'dump', '--windows', '/sdcard/ui.xml'); return A('shell', 'cat', '/sdcard/ui.xml'); };
+// A value holding a double quote is written in single quotes.
+const attr = (n, name) => { const m = n.match(new RegExp(` ${name}=(?:"([^"]*)"|'([^']*)')`)); return m ? m[1] ?? m[2] : ''; };
 const nodes = () => [...dump().matchAll(/<node [^>]*>/g)].map(([n]) => ({
-  text: (n.match(/ text="([^"]*)"/) || [])[1] || '', desc: (n.match(/content-desc="([^"]*)"/) || [])[1] || '',
+  text: attr(n, 'text'), desc: attr(n, 'content-desc'),
   pkg: (n.match(/package="([^"]*)"/) || [])[1], focused: /focused="true"/.test(n), scrollable: /scrollable="true"/.test(n),
   b: (n.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/) || []).slice(1).map(Number) }));
 const [cmd, arg, nth] = process.argv.slice(2);

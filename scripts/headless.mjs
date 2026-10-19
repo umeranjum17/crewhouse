@@ -1,8 +1,9 @@
 // Headless Linux host; the kit may own the unit (setup --headless --install-only, then this runner).
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isIPv4 } from 'node:net';
+import { PHONE_KEY_FILE, RECEIPT_FILE } from '@byokit/cloud';
 import { tailscaleState } from '@byokit/discover';
 import { keyPairFrom } from '@byokit/pair';
 import { qrText } from '@byokit/ui-core/link';
@@ -51,6 +52,19 @@ async function pair() {
   const offer = await api('phones/pair', { role: 'control', first: true });
   console.log(`Pairing code: ${offer.typed}\nWorks once; expires ${new Date(offer.expires).toISOString()}. Keep it private.\n${qrText(offer.qr)}`);
 }
+/** A cloud computer set up from the phone (@byokit/cloud): the person's cloud account delivers the phone's public key to
+ *  <workDir>/.byokit/inbox; crewd enrols it as this host's owner, and the receipt in the outbox tells the phone how to
+ *  pair. The inbox file goes only once its enrol answered, so a crash part-way is finished on the next start. */
+async function inbox(dir) {
+  const path = join(dir, 'inbox', PHONE_KEY_FILE);
+  if (!existsSync(path)) return;
+  const { receipt } = await api('phones/enrol', { key: readFileSync(path).toString('base64') });
+  mkdirSync(join(dir, 'outbox'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(dir, 'outbox', '.receipt.tmp'), receipt, { mode: 0o600 });
+  renameSync(join(dir, 'outbox', '.receipt.tmp'), join(dir, 'outbox', RECEIPT_FILE));
+  unlinkSync(path);
+  console.log('Crewhouse headless host: this computer\'s owner phone is enrolled.');
+}
 async function serve() {
   const ip = await tailnet();
   const relay = await startRelay({ host: ip, port: relayPort, dataDir: join(cfg.stateDir, 'relay') });
@@ -65,7 +79,9 @@ async function serve() {
     await relay.relay.admit(keys.publicKey, 'Crewhouse'); // enrol only this host; no public signup or owner routes
     await api('phones/relay', { url: null }, 'PUT');
     await ready(health, child);
-    console.log('Crewhouse headless host ready. Run ./crewhouse headless pair to enrol your first phone.');
+    const cloud = process.env.CREWHOUSE_CLOUD_DIR, enrol = () => inbox(cloud).catch((e) => console.error(`phone enrol: ${e.message}`));
+    if (cloud) setInterval(enrol, 1000).unref();
+    console.log(cloud ? 'Crewhouse headless host ready. Waiting for the phone that set this computer up.' : 'Crewhouse headless host ready. Run ./crewhouse headless pair to enrol your first phone.');
     process.exitCode = (await exited) ?? 1;
   } finally { stop(); await exited; await relay.close(); }
 }

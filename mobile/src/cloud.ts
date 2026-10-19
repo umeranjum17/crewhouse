@@ -2,7 +2,7 @@
 // live in this phone's secure store, readable only while it is unlocked and never moved to another device. The kit
 // calls are web/src/cloud.ts, shared with test/cloud-connect.test.ts.
 import { nativeStore } from '@byokit/secrets/native';
-import { b64url, keyPair, keyPairFrom, unb64url } from '@byokit/pair';
+import { b64url, keyPair, keyPairFrom, unb64url, type KeyPair } from '@byokit/pair';
 import * as SecureStore from 'expo-secure-store';
 import { BOAT, provider } from '../../web/src/cloud.ts';
 
@@ -23,11 +23,14 @@ export const forgetKey = () => keys.delete('record');
 /** boat.dev on this key; a lab build names its fixture boat.dev in EXPO_PUBLIC_CREWHOUSE_BOAT_API. */
 export const boatOn = (key: string) => provider(async () => key, process.env.EXPO_PUBLIC_CREWHOUSE_BOAT_API || BOAT.api);
 
-/** This phone's public key for Chief's computer, made once; the secret half never leaves this phone. */
-export async function phoneKey(): Promise<Uint8Array> {
+/** A lab build's own download and run settings for the computer (web/src/cloud.ts `recipe`); none in a release build. */
+export const lab = { download: process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD, env: JSON.parse(process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD_ENV || '{}') };
+
+/** This phone's key pair for Chief's computer, made once; the secret half never leaves this phone. */
+export async function phoneKeys(): Promise<KeyPair> {
   const kept = await keys.get('phone');
-  if (kept) return keyPairFrom(unb64url(kept)).publicKey;
+  if (kept) return keyPairFrom(unb64url(kept));
   const k = keyPair();
   await keys.set('phone', b64url(k.secretKey));
-  return k.publicKey;
+  return k;
 }

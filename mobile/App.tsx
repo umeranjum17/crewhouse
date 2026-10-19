@@ -39,9 +39,9 @@ import { useOffice } from './src/office';
 import { glowOf } from '../web/src/office.tsx';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
-import { canPush, connect, desktopSignaling, forgetGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
-import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, phoneKey } from './src/cloud';
+import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
 import { checkKey, connect as setUpCloud, cost, progress, said } from '../web/src/cloud.ts';
 import type { MachineRef, SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
@@ -824,7 +824,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
   if (at === 'put') return <PutChief onCode={() => setAt('code')} onHave={() => setAt('computer')} onBack={back!} />;
   if (at === 'code') return <Pair typeFirst onPaired={onPaired} onBack={back!} />;
   if (at === 'computer') return <Pair onPaired={onPaired} />;
-  if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} />;
+  if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} onPaired={onPaired} />;
   const w = A.where(cloudOn);
   return (
     <ScrollView contentContainerStyle={s.screen}>
@@ -880,7 +880,7 @@ function Note({ children }: { children: ReactNode }) {
 }
 /** In my cloud (mock key-first): paste the boat.dev key, choose the computer (or see what a new one costs), then the
  *  kit's real setup steps tick the list. The kit calls are web/src/cloud.ts; the key stays on this phone (src/cloud.ts). */
-function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => void }) {
+function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
   const c = A.CLOUD;
   const [view, setView] = useState<'key' | 'pick' | 'make' | 'steps' | 'other'>('key');
@@ -892,6 +892,7 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
   const [setupError, setSetupError] = useState('');
   const [way, setWay] = useState(-1);
   const held = useRef(''); // the checked key, never on screen
+  const [grant, setGrant] = useState<Grant | null>(null); // the computer's receipt, as this phone's link
   const check = async (k: string) => {
     if (!k.trim() || busy) return;
     setBusy(true); setErr('');
@@ -900,13 +901,16 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
   };
   // One action with a key already kept: straight to the computers.
   useEffect(() => { void keptKey().then((k) => { if (k) void check(k); }); }, []);
-  const run = async (id: string, retry = false) => {
-    setPicked(id);
+  const run = async (ref: MachineRef, retry = false) => {
+    setPicked(ref.id);
     if (!retry) setSteps([]);
     else setSteps((x) => x.filter((step) => step.step !== 'failed'));
     setSetupError(''); setView('steps');
     try {
-      for await (const step of setUpCloud(boatOn(held.current), cloudStore, id, await phoneKey())) setSteps((x) => [...x.filter((current) => current.step !== step.step && current.step !== 'failed'), step]);
+      for await (const step of setUpCloud(boatOn(held.current), cloudStore, ref, await phoneKeys(), lab)) {
+        if (step.grant) setGrant(await keepGrant(step.grant));
+        setSteps((x) => [...x.filter((current) => current.step !== step.step && current.step !== 'failed'), step]);
+      }
     } catch (e) { setSetupError(said(e)); }
   };
   const p = progress(steps, setupError), ready = steps.at(-1)?.step === 'ready';
@@ -926,20 +930,21 @@ function CloudConnect({ onBack, onPair }: { onBack: () => void; onPair: () => vo
   const pick = <>{pill(c.pick.pill)}<T style={s.title}>{c.pick.title}</T><T tone="ink2">{listed.length ? c.pick.lead : c.pick.none}</T>
     {listed.map((r, i) => <View key={r.id} style={{ gap: 6, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12, backgroundColor: t.bg }}>
       <T style={s.b}>{c.pick.name(i, listed.length)}</T><T tone="mute" style={s.small}>{c.pick.sub}</T><T tone="ink2" style={s.small}>{c.pick.setup}</T>
-      <Btn go big label={c.pick.use} onPress={() => void run(r.id)} /></View>)}
+      <Btn go big label={c.pick.use} onPress={() => void run(r)} /></View>)}
     {!!listed.length && <T tone="mute" style={s.small}>{c.pick.bill}</T>}
     <Btn big label={c.pick.make} onPress={() => setView('make')} /></>;
   const make = <>{pill(c.make.pill)}<T style={s.title}>{c.make.title}</T><T>{c.make.lead}</T>
     <View style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}><T style={s.b}>{c.make.size}</T><T tone="ink2" style={s.small}>{cost()}</T><T tone="mute" style={s.small}>{c.make.check}</T></View>
     <Btn big disabled label={c.make.create} onPress={() => {}} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
-  const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}</> : <>
+  const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}
+    {grant && <Btn go big label={c.ready.talk} onPress={() => onPaired(grant)} />}</> : <>
     {pill(c.steps.pill)}<T style={s.title}>{c.steps.title}</T>
     <View style={[s.row, { justifyContent: 'space-between' }]}><T tone="mute" style={[s.small, { flex: 1 }]}>{c.pick.name(listed.findIndex((r) => r.id === picked), listed.length)}</T><T style={[s.small, s.b]}>{p.why ? c.steps.help : c.steps.count(p.done)}</T></View>
     {c.steps.rows.map(([title, sub], i) => <View key={title} style={[s.row, { alignItems: 'flex-start', opacity: i > p.done && i !== p.failed ? 0.6 : 1 }]}>
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
     {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
-      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(picked, true)} />}</View>}</>;
+      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(listed.find((r) => r.id === picked)!, true)} />}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>

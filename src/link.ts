@@ -9,6 +9,7 @@ import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/discover';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
+import { bindPhoneKey, phoneReceipt } from '@byokit/cloud';
 import { relayOrigin, type Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -67,16 +68,12 @@ export class Link {
   host!: Host;
   private servers = new Map<string, Server>(); // one listener per bound address
   private wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
-  private asking = new Map<number, Asking>();
-  private n = 0;
-  private cfg: Config;
-  private db: Store;
-  private handle: Handler;
+  private asking = new Map<number, Asking>(); private n = 0;
+  private cfg: Config; private db: Store; private handle: Handler;
   private client?: RelayClient;
   private relayStatus: RelayStatus | 'off' = 'off';
   private told = ''; // the dial addresses paired phones were last told
-  private watch?: NodeJS.Timeout;
-  private first?: { token: string; expires: number; claimed: boolean };
+  private watch?: NodeJS.Timeout; private first?: { token: string; expires: number; claimed: boolean };
   private pairing = 0; // until when a pairing code holds the home network open
   private shut?: NodeJS.Timeout;
   private advertised = ''; // the address last advertised on the home network
@@ -133,13 +130,13 @@ export class Link {
   // Grants live in the devices table: one row per phone.
   private load(): Grant[] {
     return this.db.all('SELECT * FROM devices ORDER BY created_at').map((d) => ({
-      id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, created: d.created_at, lastSeen: d.last_seen ?? undefined }));
+      id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, kind: d.kind ?? undefined, created: d.created_at, lastSeen: d.last_seen ?? undefined }));
   }
   private save(grants: Grant[]) {
     const before = new Map(this.load().map((g) => [g.id, g]));
     this.db.tx(() => {
       this.db.run('DELETE FROM devices');
-      for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, g.created, g.lastSeen ?? null);
+      for (const g of grants) this.db.run('INSERT INTO devices (id, name, pk, role, kind, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)', g.id, g.name, g.key, g.role, g.kind ?? null, g.created, g.lastSeen ?? null);
       for (const g of grants) if (!before.has(g.id)) {
         if (this.first?.claimed && (g.meta as any)?.first === this.first.token) this.put('link.owner', g.id);
         this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role });
@@ -170,6 +167,8 @@ export class Link {
       setTimeout(() => done(false), PAIR_MS).unref();
     });
   }
+  /** A cloud computer's owner phone, delivered by the person's cloud account (scripts/headless.mjs), never by a phone. */
+  async enrol(key: Uint8Array) { this.put('link.owner', (await bindPhoneKey(this.host, key)).id); return phoneReceipt(this.host, key); }
   answer(id: number, yes: boolean) { (this.asking.get(id) ?? fail404('that phone stopped waiting')).answer(yes); }
   approve(words: string) { ([...this.asking.values()].find((a) => a.words === words.trim()) ?? fail404('those words do not match a waiting phone')).answer(true); }
 

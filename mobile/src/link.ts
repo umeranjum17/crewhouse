@@ -43,6 +43,8 @@ export async function loadGrant(): Promise<Grant | null> {
   return moved;
 }
 export const forgetGrant = store.clear;
+/** A grant made elsewhere (the cloud computer's receipt, web/src/cloud.ts), kept like a paired one. */
+export const keepGrant = async (g: Grant) => { await store.save(g); return g; };
 
 /** Scan result in, grant out, once the person at the computer says yes. `onWords`: the two words to show meanwhile. */
 export async function pair(scanned: string, onWords: (w: string) => void): Promise<Grant> {
