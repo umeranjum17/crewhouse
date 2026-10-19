@@ -58,8 +58,8 @@ export function bodyOf(payload: any): string {
 /** Threads as rows: who, what, how long ago (from each thread's newest message). */
 async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
-    const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`), m = t.messages?.at(-1);
-    return { id, from: header(m, 'From').slice(0, 60), subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
+    const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`), m = t.messages?.at(-1), who = t.messages?.filter((x: any) => !x.labelIds?.includes('SENT')).at(-1) ?? m, raw = header(who, 'From'), addr = raw.match(/<[^<>]*>$/)?.[0] ?? '';
+    return { id, from: raw.length > 60 && addr ? `${raw.slice(0, raw.length - addr.length).slice(0, 40).trimEnd()} ${addr}` : raw, subject: header(t.messages?.[0], 'Subject').slice(0, 100) || '(no subject)', age: ageOf(Number(m?.internalDate ?? 0)), at: Number(m?.internalDate ?? 0) };
   }));
 }
 
