@@ -37,10 +37,10 @@
     <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-phone-night.webp" />
     <source media="(max-width: 600px)" srcset="docs/screenshots/readme/home-phone-day.webp" />
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-night.webp" />
-    <img src="docs/screenshots/readme/home-day.webp" width="900" alt="Crewhouse on a computer: Chief's chat in the middle with a thank-you note Scribe drafted, a Google Drive connect card and a new weekly routine; the crew and their status on the left; Scout's $968 flight order waiting for a yes on the right" />
+    <img src="docs/screenshots/readme/home-day.webp" width="900" alt="Crewhouse on a computer: Home greets Umer with Chief's seven things and today's jobs, each in its helper's colour; the crew and their status on the left; the things waiting for a yes on the right, Scout's order first" />
   </picture>
   <br/>
-  <sub>The real app, showing its built-in demo: Maya and her crew. No one's real data.</sub>
+  <sub>The real app, showing its built-in demo: Umer and his crew. No one's real data.</sub>
 </p>
 
 ## Why Crewhouse
@@ -56,14 +56,14 @@ Crewhouse gives you a crew that does the work and one calm place to say yes. It 
     <td align="center" valign="top" width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/ask-night.webp" />
-        <img src="docs/screenshots/readme/ask-day.webp" width="280" alt="Chief's first screen on a phone: Good morning, Maya, and three jobs to take off her plate: plan this week's dinners, earn a little on the side, what's on this week" />
+        <img src="docs/screenshots/readme/ask-day.webp" width="280" alt="Chief's first screen on a phone: Good evening, Umer, and three jobs to take off his plate: plan this week's dinners, earn a little on the side, what's on this week" />
       </picture>
       <br/><strong>1. Ask Chief</strong><br/><sub>Say it in your own words, or tap an idea.</sub>
     </td>
     <td align="center" valign="top" width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/plan-night.webp" />
-        <img src="docs/screenshots/readme/plan-day.webp" width="280" alt="Chief's chat on a phone: Maya asks for somewhere nice for dinner on Saturday, Chief passes it to Scout, and Scout's to-do list shows two steps done, one in progress and one to go" />
+        <img src="docs/screenshots/readme/plan-day.webp" width="280" alt="Chief's chat on a phone: Umer asks for somewhere nice for dinner on Saturday, Chief passes it to Scout, and Scout's card shows two steps done and the next one in progress" />
       </picture>
       <br/><strong>2. Watch the plan</strong><br/><sub>Each step ticks off as the helper works.</sub>
     </td>

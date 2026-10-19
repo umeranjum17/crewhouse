@@ -120,24 +120,24 @@ test('task titles are cut at a word, never mid-word', async () => {
 
 test('policy: own space and the sandboxed shell run silently; the person\'s files, sending and spending ask; secrets never', () => {
   const home = homedir();
-  const s = { bot: 'Maya', space: '/data/bots/maya', secret: [join(home, '.pi'), '/state'], page: 'https://mail.google.com/x', signedIn: ['google.com'],
+  const s = { bot: 'Umer', space: '/data/bots/umer', secret: [join(home, '.pi'), '/state'], page: 'https://mail.google.com/x', signedIn: ['google.com'],
     run: { people_search: { name: 'people search', free: ['catalog', 'balance'], spend: ['call'] } } };
   assert.deepEqual(effectOf('write', { path: 'files/list.txt' }, s), { kind: 'safe' });
-  assert.deepEqual(effectOf('read', { path: '/data/bots/maya/notes.md' }, s), { kind: 'safe' });
+  assert.deepEqual(effectOf('read', { path: '/data/bots/umer/notes.md' }, s), { kind: 'safe' });
   assert.deepEqual(effectOf('bash', { command: 'fc-list 2>&1 | head -20' }, s), { kind: 'safe' }, 'the font lookup from the owner\'s screenshot runs silently');
   assert.deepEqual(effectOf('web_search', { query: 'x' }, s), { kind: 'safe' });
   const doc = effectOf('write', { path: join(home, 'Documents', 'probe.txt') }, s) as any;
   assert.equal(doc.kind, 'files');
-  assert.equal(doc.words, 'Maya wants to change a file in your Documents folder: “probe.txt”.');
+  assert.equal(doc.words, 'Umer wants to change a file in your Documents folder: “probe.txt”.');
   assert.equal(coversOf(doc.key), 'your Documents folder');
-  assert.equal((effectOf('ls', { path: join(home, 'Pictures') }, s) as any).words, 'Maya wants to look through your Pictures folder.');
+  assert.equal((effectOf('ls', { path: join(home, 'Pictures') }, s) as any).words, 'Umer wants to look through your Pictures folder.');
   assert.equal((effectOf('crew_copy', { from: 'files/card.mp4', to: join(home, 'Documents', 'card.mp4') }, s) as any).words,
-    'Maya wants to put a copy of “card.mp4” in your Documents folder.', 'a copy into the person\'s folders asks like any write there');
+    'Umer wants to put a copy of “card.mp4” in your Documents folder.', 'a copy into the person\'s folders asks like any write there');
   assert.equal(effectOf('crew_copy', { from: 'files/x', to: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse');
   assert.equal(effectOf('read', { path: join(home, '.pi', 'agent', 'auth.json') }, s).kind, 'refuse', 'sign-ins are never opened, not even with leave');
   assert.equal(effectOf('read', { path: '/state/people/1/engine/auth.json' }, s).kind, 'refuse');
   const pay = effectOf('people_search', { args: ['call', 'treg.people.phone.find', '--header', 'X-Treg-Route-Max-Cost: 0.05'] }, s) as any;
-  assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Maya wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
+  assert.deepEqual([pay.kind, pay.words, pay.key, pay.cost], ['spend', 'Umer wants to make a paid lookup with people search, up to $0.05.', undefined, 0.05], 'spending has no standing key');
   assert.deepEqual(effectOf('people_search', { args: ['catalog', 'search', 'phone'] }, s), { kind: 'safe' });
   assert.equal(effectOf('people_search', { args: ['logout'] }, s).kind, 'refuse');
   // Herdr drives the person's own terminal agents: looking asks once (a standing answer covers later
@@ -146,7 +146,7 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.deepEqual([herd.source, herd.bins, herd.grant], ['system', ['herdr'], { default: false }], 'a user-installed binary, never bundled, held only by its role');
   const hs = { ...s, run: { herdr: { name: herd.name, ...herd.run } } };
   const look = effectOf('herdr', { args: ['pane', 'list'] }, hs) as any;
-  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Maya wants to look at the coding helpers on your computer.', 'herdr:look'], 'reads ask once, under a standing answer');
+  assert.deepEqual([look.kind, look.words, look.key], ['files', 'Umer wants to look at the coding helpers on your computer.', 'herdr:look'], 'reads ask once, under a standing answer');
   assert.equal(coversOf(look.key), 'the coding helpers on your computer');
   const drive = effectOf('herdr', { args: ['agent', 'prompt', 'reviewer', 'ship it'] }, hs) as any;
   assert.deepEqual([drive.kind, drive.key], ['send', undefined], 'drives ask every time: no standing key');
@@ -176,7 +176,7 @@ test('policy: own space and the sandboxed shell run silently; the person\'s file
   assert.equal(effectOf('crew_unknown', {}, s).kind, 'refuse', 'a crew_ prefix cannot grant authority');
   assert.equal(toolWords('bash', { command: 'ffmpeg -y -i a.png out.mp4' }), 'Worked on a video');
   assert.equal(toolWords('bash', { command: 'fc-list | head' }), 'Worked in its own space', 'the trail never shows a command');
-  assert.equal(toolWords('write', { path: '/data/bots/maya/files/list.txt' }), 'Saved list.txt');
+  assert.equal(toolWords('write', { path: '/data/bots/umer/files/list.txt' }), 'Saved list.txt');
 });
 
 const { sandboxReady } = await import('../src/engine.ts');

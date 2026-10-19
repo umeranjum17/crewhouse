@@ -285,7 +285,7 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   const num = (s: string | null | undefined) => Number(/\d+/.exec(s ?? '')?.[0] ?? 0);
-  for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
+  for (const demo of ['umer', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     const counts: Record<string, number> = {};
     for (const [w, h] of [[1440, 900], [390, 844]] as const) {
       await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 900 });
@@ -336,7 +336,7 @@ test('your crew page reads the rail status: every tile matches its rail row', { 
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  for (const demo of ['maya', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
+  for (const demo of ['umer', 'b1', 'crew5', 'crew12', 'calm', 'finished']) {
     await b.open(`demo=${demo}&day#/crew`);
     await until('the crew tiles', () => b.run("document.querySelectorAll('.st-tile').length > 3"), 30_000);
     const r = await b.run(`(() => ({
@@ -556,7 +556,7 @@ test('after sign-in with no phone paired, the chat offers Add your phone with it
     return { qr: !!c.querySelector('.qr svg'), code: /^[2-9A-HJKMNP-Z]{4}(-[2-9A-HJKMNP-Z]{4}){2}$/.test(c.querySelector('.pair-typed')?.textContent ?? ''),
       skip: [...c.querySelectorAll('button')].some((x) => x.innerText === 'Not now') }; })()`);
   assert.deepEqual(card, { qr: true, code: true, skip: true }, 'nophone: the QR, the code and Not now are in place');
-  await b.open('demo=maya&day#/chief');
+  await b.open('demo=umer&day#/chief');
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   assert.equal(await b.run("!!document.querySelector('[aria-label=\"Add your phone\"]')"), false, 'paired phones: no offer in the chat');
 });

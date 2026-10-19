@@ -168,10 +168,10 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   decoy.on('error', (e) => { said = `${said}\nspawn error: ${e.message}`.slice(-1000); });
   t.after(async () => { pages.close(); decoy.kill('SIGKILL'); await Promise.all([new Promise((r) => (decoy.exitCode === null && decoy.signalCode === null ? decoy.once('exit', r) : r(0))), desks.stopAll()]); });
   const d = await desks.ensure('reel', botDir);
-  // The attacker, maya, has a computer and browser of its own too.
-  const space = join(root, 'bots', 'maya');
+  // The attacker, umer, has a computer and browser of its own too.
+  const space = join(root, 'bots', 'umer');
   mkdirSync(join(space, '.crewhouse'), { recursive: true });
-  const own = await desks.ensure('maya', space);
+  const own = await desks.ensure('umer', space);
   // A cold Chrome on a busy CI runner can take a while to open its port. A Chromium that DIED (crash, sandbox,
   // singleton) never will: say so at once with its last words, instead of burning the whole bound on an empty wait.
   await until(`the decoy's DevTools port (Chrome said: ${said.slice(-300)})`, () => {
@@ -196,7 +196,7 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   await drive(d.cdp!, '/crewd');
   await until("crewd drove the bot's browser", () => hits.includes('/crewd'));
 
-  // Bot "maya"'s own shell, exactly as a task gets it; it scans every port this test's processes listen on.
+  // Bot "umer"'s own shell, exactly as a task gets it; it scans every port this test's processes listen on.
   const scan = ours();
   assert.ok(scan.includes(decoyPort), 'the decoy is among the ports scanned');
   const attack = `
@@ -222,7 +222,7 @@ test("a bot's shell cannot find or drive another bot's browser", { skip: noAttac
   for (const cdp of [d.cdp!, own.cdp!]) assert.deepEqual((await drive(cdp, '')).filter((u) => /pwned/.test(u)), [], "nothing the shell sent reached a bot's browser");
 
   // What must keep working: each bot still drives its own browser through crewd, and its gate still asks at a checkout.
-  for (const [bot, cdp, dir] of [['reel', d.cdp!, botDir], ['maya', own.cdp!, space]]) {
+  for (const [bot, cdp, dir] of [['reel', d.cdp!, botDir], ['umer', own.cdp!, space]]) {
     const urls = await drive(cdp, `/${bot}/checkout`);
     await until(`${bot} drove its own browser`, () => hits.includes(`/${bot}/checkout`));
     const page = urls.find((u) => u.endsWith(`/${bot}/checkout`));
