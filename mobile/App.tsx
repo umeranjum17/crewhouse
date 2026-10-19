@@ -198,13 +198,14 @@ function Center({ children }: { children: ReactNode }) { return <View style={s.c
 function T({ children, style, tone = 'ink', lines }: { children: ReactNode; style?: any; tone?: 'ink' | 'ink2' | 'mute' | 'pinkInk'; lines?: number }) {
   return <Text style={[s.text, { color: useLook()[tone] }, style]} numberOfLines={lines}>{children}</Text>;
 }
-function Btn({ label, onPress, go, ghost, danger, big, disabled }: { label: string; onPress: () => void; go?: boolean; ghost?: boolean; danger?: boolean; big?: boolean; disabled?: boolean }) {
+function Btn({ label, onPress, go, ghost, danger, big, disabled, ink, soft, tall }: { label: string; onPress: () => void; go?: boolean; ghost?: boolean; danger?: boolean; big?: boolean; disabled?: boolean; ink?: boolean; soft?: boolean; tall?: boolean }) {
   const t = useLook();
+  const flat = go || ghost || danger || ink || soft;
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}
-      style={({ pressed }) => [s.btn, { backgroundColor: go ? t.go : danger ? t.danger : ghost ? 'transparent' : t.solid, borderColor: go || ghost || danger ? 'transparent' : t.line },
-        big && s.btnBig, (pressed || disabled) && { opacity: 0.55 }]}>
-      <Text style={[s.btnText, { color: go ? t.goInk : danger ? t.bg : ghost ? t.ink2 : t.ink }]}>{label}</Text>
+      style={({ pressed }) => [s.btn, { backgroundColor: go ? t.go : danger ? t.danger : ink ? t.ink : soft ? t.soft : ghost ? 'transparent' : t.solid, borderColor: flat ? 'transparent' : t.line },
+        big && s.btnBig, tall && s.btnTall, (pressed || disabled) && { opacity: 0.55 }]}>
+      <Text style={[s.btnText, tall && s.btnTallText, { color: go ? t.goInk : danger ? t.bg : ink ? t.bg : ghost ? t.ink2 : t.ink }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -690,7 +691,7 @@ const PUSH_WORDS = {
   missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
 };
 
-function Pair({ onPaired, onBack, typeFirst = false }: { onPaired: (g: Grant) => void; onBack?: () => void; typeFirst?: boolean }) {
+function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBack?: () => void; onPut?: () => void }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -698,7 +699,6 @@ function Pair({ onPaired, onBack, typeFirst = false }: { onPaired: (g: Grant) =>
   const [err, setErr] = useState('');
   const [done, setDone] = useState<Grant | null>(null);
   const [words, setWords] = useState('');
-  const [typing, setTyping] = useState(typeFirst);
   const [code, setCode] = useState('');
   const seen = useRef('');
   // Whether the camera itself is the problem, kept as its own answer: the "Open phone settings" button belongs to
@@ -771,44 +771,27 @@ function Pair({ onPaired, onBack, typeFirst = false }: { onPaired: (g: Grant) =>
       </View>
     );
   }
-  if (typing) {
-    // The keyboard takes half a small screen: the window shrinks to what's left and the form scrolls, so the field and Pair stay reachable.
-    return (
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-        <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
-          <ChiefArt mood="listen" size={72} whole />
-          <T style={[s.h1, s.serif, { fontSize: 32, lineHeight: 36 }]}>Type a code</T>
-          <T tone="ink2" style={s.centerText}>Enter the code your computer shows or printed, or one someone there sent you.</T>
-          <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
-            accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
-          {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Pair" disabled={!code.trim()} onPress={typed} />}
-          {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-          <Btn label="Scan instead" onPress={() => { setTyping(false); setErr(''); void openCamera(); }} />
-          {onBack && <Btn ghost label="Back" onPress={onBack} />}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-  // Scrolls on short screens: a centered View spills past both safe-area edges instead.
+  // Pair this phone (J17b): scan, or type the code below it, on one screen. The keyboard takes half a small screen, so the
+  // window shrinks to what's left and the form scrolls; the field and Pair stay reachable.
   return (
-    <ScrollView contentContainerStyle={s.centerScroll}>
-      <ChiefArt mood="hello" size={104} whole />
-      <T style={s.display}>Crewhouse</T>
-      <T tone="ink2" style={[s.centerText, { marginTop: -6 }]}>Your personal assistant, in your pocket.</T>
-      <Card style={{ alignSelf: 'stretch', gap: 10, marginVertical: 6 }}>
-        {['On your computer, open Crewhouse, then Settings, Phones, Add a phone.', 'Scan the code it shows, or type it in here.'].map((l, i) =>
-          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><Text style={[s.stepNum, { backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
-      </Card>
-      {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : (
-        <Btn go big label="Scan the code" onPress={openCamera} />
-      )}
-      {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-      {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
-      {!busy && <Btn label="Type a code" onPress={() => { setTyping(true); setErr(''); setCode(''); }} />}
-      {onBack && <Btn ghost label="Back" onPress={onBack} />}
-      <T tone="mute" style={[s.small, s.centerText, { marginTop: 20 }]}>{A.awake('your computer')}</T>
-      <T tone="mute" style={[s.small, s.centerText]}>🔒 Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
-    </ScrollView>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+      <ScrollView contentContainerStyle={[s.screen, { gap: 12 }]} keyboardShouldPersistTaps="handled">
+        {onBack && <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.roundBack, { backgroundColor: t.soft }]}><T style={s.backChevron}>{'\u2039'}</T></Pressable>}
+        <T style={[s.wide, { fontSize: 34, lineHeight: 38, marginTop: onBack ? 8 : 40 }]}>Pair this phone</T>
+        <T tone="ink2">On your computer open Settings, then Phones, then Add a phone. Scan its code, or type it here.</T>
+        <Btn ink tall label="Scan the code" onPress={openCamera} />
+        {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
+        <T style={[s.b, { marginTop: 8 }]}>Or type the code</T>
+        <TextInput style={[s.input, s.codeInput, { color: t.ink, borderColor: t.line, backgroundColor: t.solid }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
+          accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 12 }} /> : <Btn soft tall label="Pair" disabled={!code.trim()} onPress={typed} />}
+        {!!err && <T tone="pinkInk">{err}</T>}
+        <T tone="mute" style={{ marginTop: 4 }}>On the same Wi-Fi the 12-letter code works. Away from home, use the code with an @.</T>
+        {onPut && <Btn ghost label="Crewhouse isn't on my computer yet" onPress={onPut} />}
+        <T tone="mute" style={s.small}>{A.awake('your computer')}</T>
+        <T tone="mute" style={s.small}>Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -822,26 +805,21 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
   const back = at === 'where' ? null : () => setAt(at === 'code' ? 'put' : 'where');
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
   if (at === 'put') return <PutChief onCode={() => setAt('code')} onHave={() => setAt('computer')} onBack={back!} />;
-  if (at === 'code') return <Pair typeFirst onPaired={onPaired} onBack={back!} />;
-  if (at === 'computer') return <Pair onPaired={onPaired} />;
+  if (at === 'code' || at === 'computer') return <Pair onPaired={onPaired} onBack={back!} onPut={at === 'computer' ? () => setAt('put') : undefined} />;
   if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} onPaired={onPaired} />;
-  const w = A.where(cloudOn);
+  // Get started (J17a): Chief on his disc, the name, one line, then where he should work. In my cloud shows only in a
+  // build with the cloud on (A.where).
   return (
-    <ScrollView contentContainerStyle={s.screen}>
-      <View style={[s.row, { alignItems: 'flex-start', marginTop: 22 }]}>
-        <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 44, height: 40.5 }} accessibilityIgnoresInvertColors />
-        <View style={{ flex: 1, paddingTop: 2 }}><T style={s.b}>Chief</T><T>{w.hello}</T></View>
+    <ScrollView contentContainerStyle={[s.screen, { gap: 12, paddingTop: 64 }]}>
+      <View style={{ alignItems: 'center', gap: 16, marginBottom: 12 }}>
+        <ChiefArt mood="hello" size={120} whole />
+        <Text style={[s.wide, s.centerText, { color: t.ink, fontSize: 40, lineHeight: 44 }]}>Crewhouse</Text>
+        <T tone="ink2" style={[s.centerText, { fontSize: 18, lineHeight: 25 }]}>Your crew lives on your computer. This phone answers them and gives them jobs.</T>
       </View>
-      {!!w.line && <T tone="ink2" style={[s.small, { marginLeft: 54, marginTop: 10 }]}>{w.line}</T>}
-      <View style={{ gap: 10, marginTop: 12 }}>{w.rows.map((r, i) =>
-        <Pressable key={r.key} onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'computer' ? 'put' : r.key)} accessibilityRole="button" accessibilityLabel={r.title}
-          style={({ pressed }) => [s.opt, { backgroundColor: t.solid, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }, pressed && { opacity: 0.7 }]}>
-          <View style={[s.mark, { backgroundColor: i ? t.soft : t.softAccent }]}><Image source={WHERE[r.key]} style={{ width: 20, height: 20, tintColor: i ? t.ink : t.go }} /></View>
-          <View style={{ flex: 1 }}><T style={s.b}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View>
-          <T tone="mute" style={{ fontSize: 20 }}>›</T>
-        </Pressable>)}</View>
-      <Note>{w.note}</Note>
-      <T tone="mute" style={[s.small, s.centerText, s.foot]}>{w.later}</T>
+      <Btn ink tall label="Pair with my computer" onPress={() => setAt('computer')} />
+      {cloudOn && <Btn soft tall label="In my cloud" onPress={() => setAt('cloud')} />}
+      <Btn soft tall label="Use this phone only" onPress={onPhoneOnly} />
+      <T tone="mute" style={[s.small, { marginHorizontal: 4 }]}>Phone only: Chief runs on your AI account from this phone, no computer needed.</T>
     </ScrollView>
   );
 }
@@ -1432,7 +1410,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule." back={toHome}><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
-        {route.view === 'phone' && <ThisPhone grant={grant} status={status} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
+        {route.view === 'phone' && <ThisPhone grant={grant} status={status} person={state.person} writer={canAct} refresh={refresh} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
         {route.view === 'computer' && <ChiefComputer back={['Settings', back]} />}
         {route.view === 'jobs' && <JobsPage {...ctx} />}
       </View>
@@ -2777,13 +2755,51 @@ function BubbleRow({ grant }: { grant: Grant }) {
 /** The places the desk's rail reaches, listed first in Settings on the phone (web/src/main.tsx GO_TO): no tab bar. */
 const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew'],
   ...(cloudOn ? [['computer', A.computer(null).title, null] as [Route['view'], string, null]] : [])];
-function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Grant; status: Status; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
+function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget, onClear }: { grant: Grant; status: Status; person: Json; writer: boolean; refresh: () => void; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
   const t = useLook();
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
   useEffect(() => { void pushState().then(setPush).catch(() => {}); }, []);
+  const quiet = /^(\d\d):(\d\d)-(\d\d):(\d\d)$/.exec(String(person?.quiet ?? ''));
+  const hm = (h: string, m: string) => `${+h}:${m}`;
+  // News is the phone's own permission: a switch that asks, or sends the person to the phone's settings when asking can't.
+  const news = async () => {
+    if (push === 'on') return void Linking.openSettings();
+    const now = await pushState(true).catch(() => push);
+    setPush(now);
+    if (now === 'off') void Linking.openSettings();
+  };
+  const sw = (on: boolean, label: string, change: () => void, off = false) => <Switch value={on} disabled={off} accessibilityLabel={label} trackColor={{ false: t.line, true: t.ink }} thumbColor={t.bg} onValueChange={change} />;
+  const line = { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line };
+  const group = [s.listGroup, { backgroundColor: t.solid, borderColor: t.line, borderRadius: 24 }];
   return (
-    <Page title="Settings" back={back}>
+    <Page>
+      <View style={[s.row, { gap: 12 }]}>
+        <Pressable onPress={back[1]} accessibilityRole="button" accessibilityLabel={`Back to ${back[0]}`} hitSlop={8} style={[s.roundBack, { backgroundColor: t.soft, marginTop: 0 }]}><T style={s.backChevron}>{'\u2039'}</T></Pressable>
+        <View style={{ flex: 1 }}><T style={s.semi}>This phone</T><T tone="ink2">Settings</T></View>
+      </View>
+      <View style={group}>
+        <View style={[s.listRow, { minHeight: 80 }]}>
+          <View style={[s.markTile, { backgroundColor: t.soft }]}><View style={[s.phoneGlyph, { borderColor: t.ink }]} /></View>
+          <View style={{ flex: 1 }}>
+            <T style={s.rowTitle}>{A.displayName(person) ? `Paired with ${A.displayName(person)}'s computer` : 'Paired with your computer'}</T>
+            <T tone="ink2">{status !== 'online' ? 'Looking for your computer…' : grant.device.role === 'view' ? 'Watches the crew, can’t answer' : 'Answers as you'}</T>
+          </View>
+        </View>
+        <View style={[s.listRow, line, { minHeight: 80 }]}>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>News when the app is closed</T><T tone="ink2">{push === 'missing' ? PUSH_WORDS.missing : push === 'off' ? 'Off for Crewhouse on this phone' : 'Content-free: it only says something happened'}</T></View>
+          {sw(push === 'on', 'News when the app is closed', () => void news(), push === null || push === 'missing')}
+        </View>
+        <View style={[s.listRow, line, { minHeight: 80 }]}>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Quiet hours</T><T tone="ink2">{quiet ? `${hm(quiet[1], quiet[2])} to ${hm(quiet[3], quiet[4])}` : 'Off'}</T></View>
+          {sw(!!quiet, 'Quiet hours', () => void attempt(async () => { await api.person(person.id, { quiet: quiet ? null : '22:00-07:00' }); refresh(); }), !writer)}
+        </View>
+      </View>
+      <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel="Clear what this phone kept" style={({ pressed }) => [...group, s.listRow, { minHeight: 80 }, pressed && { opacity: 0.6 }]}>
+        <View style={{ flex: 1 }}><T style={s.rowTitle}>Clear what this phone kept</T><T tone="ink2">The crew keeps everything at home</T></View>
+        <T tone="ink2" style={{ fontSize: 24 }}>›</T>
+      </Pressable>
+      <Btn soft tall label="Remove this phone" onPress={onForget} />
       <View style={[s.listGroup, { backgroundColor: t.solid, borderColor: t.line }]}>{GO_TO.map(([v, label, icon], i) => {
         const body = <>
           <View style={{ width: 24, alignItems: 'center' }}>{icon && <Dots rows={art.TABS[icon]} pal={{ x: t.ink2 }} d={20 / 9} crisp />}
@@ -2792,34 +2808,16 @@ function ThisPhone({ grant, status, go, back, onForget, onClear }: { grant: Gran
           <View style={{ flex: 1 }}><T style={s.rowTitle}>{label}</T>{!v && <T tone="mute" style={s.small}>Connected on the home computer, in Apps.</T>}</View>
           {!!v && <T tone="mute">›</T>}
         </>;
-        const line = { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line };
-        return v ? <Pressable key={label} onPress={() => go({ view: v })} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.listRow, line, pressed && { opacity: 0.6 }]}>{body}</Pressable>
-          : <View key={label} style={[s.listRow, line]}>{body}</View>;
+        const edge = { borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: t.line };
+        return v ? <Pressable key={label} onPress={() => go({ view: v })} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.listRow, edge, pressed && { opacity: 0.6 }]}>{body}</Pressable>
+          : <View key={label} style={[s.listRow, edge]}>{body}</View>;
       })}</View>
-      <Label>This phone</Label>
-      <Card>
-        <T style={s.b}>{grant.device.name}</T>
-        <T tone="mute">{grant.device.role === 'view' ? 'Watches the crew; can’t answer or give jobs.' : 'Answers the crew and gives them jobs, as you.'}</T>
-        <View style={[s.row, { marginTop: 6 }]}><Pill tone={status === 'online' ? 'ok' : 'wait'}>{status === 'online' ? 'With the home computer' : 'Looking for the home computer…'}</Pill></View>
-      </Card>
       <Label>Your AI accounts</Label>
       <PhoneAccounts />
-      <Card>
-        <T style={s.b}>News</T>
-        <T tone={push === 'on' ? 'ink' : 'mute'}>{push ? PUSH_WORDS[push] : 'Checking…'}</T>
-        {push === 'off' && <View style={s.row}><Btn label="Open phone settings" onPress={() => void Linking.openSettings()} /></View>}
-      </Card>
       {Platform.OS === 'android' && <StatusBarRow />}
       {Platform.OS === 'android' && grant.device.role === 'control' && <BubbleRow grant={grant} />}
       {Platform.OS === 'ios' && <OnYourScreen />}
-      <Card>
-        <T style={s.b}>Chats kept on this phone</T>
-        <T tone="mute">This phone keeps the last week of your chats, so you can read them while the home computer is off. Clearing removes them from this phone only; unpairing clears them too.</T>
-        <View style={s.row}><Btn label="Clear" onPress={onClear} /></View>
-      </Card>
       <T tone="mute" style={s.small}>{A.atHome('the home computer').join(' ')}</T>
-      <T tone="mute" style={s.small}>🔒 Only the computer this phone was paired with can read what it sends.</T>
-      <Btn label="Unpair this phone" onPress={onForget} />
       <T tone="mute" style={s.small}>To take a phone's access away for good, remove it on the computer too: Settings, Phones.</T>
     </Page>
   );
@@ -2950,6 +2948,14 @@ const s = StyleSheet.create({
   btn: { borderRadius: radius.control, paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40 },
   btnBig: { alignSelf: 'stretch', minHeight: 48 },
   btnText: { fontFamily: 'Inter', fontSize: 14, ...fw('600') },
+  // J17's wide buttons: the black one and the grey one, 50 tall with a 16 corner.
+  btnTall: { alignSelf: 'stretch', minHeight: 50, borderRadius: 16 },
+  btnTallText: { fontSize: 17, ...fw('700') },
+  markTile: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  phoneGlyph: { width: 16, height: 26, borderWidth: 2, borderRadius: 5 },
+  roundBack: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  backChevron: { fontSize: 28, lineHeight: 30 },
+  codeInput: { minHeight: 54, borderRadius: 16, fontSize: 17 },
   input: { fontFamily: 'Inter', borderWidth: 1, borderRadius: radius.control, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, borderRadius: radius.pill, borderWidth: 1, paddingVertical: 7, paddingRight: 7, paddingLeft: 14, minHeight: 52 },
   composerInput: { fontFamily: 'Inter', flex: 1, fontSize: 15, paddingVertical: 8, maxHeight: 140 },
