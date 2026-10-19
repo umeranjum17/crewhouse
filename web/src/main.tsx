@@ -1813,12 +1813,15 @@ function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
     .then((rows) => setTheir(Object.fromEntries(rows.filter(([, n]) => n) as [string, string][]))); }, [keys]);
   if (!ai) return null;
   const g = A.account(accounts, id), plan = ai.billing === 'api' ? 'account' : 'plan';
+  const [pasting, setPasting] = useState(false), keyed = 'keyEntry' in ai && ai.keyEntry === true;
   const pick = (m: Json) => attempt(async () => { await api.pickModel(id, m.id); await load(); refresh(); }, `Your crew uses ${m.name} from now on`);
   return (
     <div className="page ai-page">
       <a href="#/settings/accounts" className="back">‹ AI accounts</a>
       <h2>{ai.name}</h2>
       <p className="mute small">{g.state === 'signed-out' ? 'Not signed in' : `Signed in · your ${plan}`}{g.resting ? ` · ${g.resting}` : ''}</p>
+      {keyed && <button className={`btn ${g.state === 'signed-out' ? 'go' : 'quiet'}`} onClick={() => setPasting(true)}>{g.state === 'signed-out' ? `Paste your ${ai.name} key` : 'Paste a new key'}</button>}
+      {pasting && <SignIn ai={ai} tab={null} onReady={() => { setPasting(false); refresh(); }} onClose={() => setPasting(false)} />}
       <div className="label">Which model your crew uses</div>
       {!cat ? <p className="mute small">Checking your plan…</p> : cat.models.length ? <div role="radiogroup" aria-label="Which model your crew uses">
         {cat.models.map((m: Json) => <button key={m.id} role="radio" aria-checked={cat.picked === m.id} className={`pick ${cat.picked === m.id ? 'on' : ''}`} onClick={() => cat.picked !== m.id && pick(m)}>

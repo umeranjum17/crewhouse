@@ -1904,7 +1904,7 @@ const GO_ON = GO.billing === 'subscription' || GO.billing === 'api';
 export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude', ...(GO_ON ? [GO_KEY] : [])].map((key) => {
   const mark = MARKS[key];
   const route = key === GO_KEY ? { name: GO.name, billing: GO.billing } : ROUTES[key];
-  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription', ...(key === GO_KEY ? { keyEntry: true as const } : {}) };
+  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription', ...(key === GO_KEY || key === 'minimax' ? { keyEntry: true as const } : {}) };
 });
 /** How one account is paid for, in the person's words: their own plan, or money charged for each use. */
 export function paysFor(ai: { name: string; billing: string }) {
