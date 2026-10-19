@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  The demo is the web app on a made-up crew, in your browser: nothing to install, and you can add it to your home screen.
+  The demo is the web app on a made-up crew, in your browser: nothing to install, and you can add it to your home screen. Its Pair button connects it to your own computer.
 </p>
 
 <p align="center">
