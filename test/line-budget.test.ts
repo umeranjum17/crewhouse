@@ -45,7 +45,10 @@ import { join } from 'node:path';
 // Raised 7085 -> 7099 for the relocatable engine dir and install progress (ch-install-s1-engine-dir, owner exception, +23):
 // CREWHOUSE_ENGINE_DIR in config.ts, the kit's phase and plain failure cause on /api/state, and Hello's Try again.
 // No trim paired: the engine-dir install is the feature; paid in the change, never by packing statements.
-const BUDGET = 7099;
+// Raised 7099 -> 7162 for Connect apps (ch-apps-connect-build, owner exception, +63 net): the Composio state module,
+// its routes, the gate and policy entries, and the kit's sign-in calls. The paired trim lane ch-src-trim-composio
+// restores the ceiling; nothing was packed or deleted to hide the net.
+const BUDGET = 7162;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
