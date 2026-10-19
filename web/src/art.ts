@@ -5,6 +5,28 @@
 export type Mood = 'idle' | 'blink' | 'twitch' | 'hello' | 'happy' | 'work' | 'ask' | 'listen' | 'rest' | 'worried' | 'error';
 /** Every mood, for the sprite pipelines that must render each one (scripts/icons.mjs, mobile/assets/pals/). */
 export const MOODS: Mood[] = ['idle', 'blink', 'twitch', 'hello', 'happy', 'work', 'ask', 'listen', 'rest', 'worried', 'error'];
+export type Motion = 'idle' | 'work' | 'talk' | 'done' | 'ask' | 'still';
+export function motionOf(mood: Mood = 'idle', talking = false): Motion {
+  if (mood === 'rest' || mood === 'blink') return 'still';
+  if (talking) return 'talk';
+  const pose = poseOf(mood);
+  if (pose === 'needs') return 'ask';
+  if (pose === 'pleased') return 'done';
+  return pose === 'work' ? 'work' : 'idle';
+}
+// Little nudge: the disc stays put; only the character moves. SVG images keep the markup isolated.
+const NUDGE = `<style>
+.actor{transform-box:view-box;transform-origin:50px 75px;animation-fill-mode:both}
+.idle{animation:alive 7s ease-in-out infinite}.work{animation:curious 2.8s ease-in-out infinite}
+.talk{animation:chatty 1.7s ease-in-out infinite}.done{animation:yay .8s cubic-bezier(.2,.7,.3,1) both}
+.ask{animation:notice 1.2s ease-in-out both}
+@keyframes alive{0%,66%,100%{transform:none}78%{transform:translateY(-.8px) rotate(-1.5deg)}86%{transform:translateY(-.5px) rotate(.8deg)}}
+@keyframes curious{0%,100%{transform:none}28%,42%{transform:translateY(-1.5px) rotate(-5deg)}68%,78%{transform:translateY(-.4px) rotate(3deg)}}
+@keyframes chatty{0%,100%{transform:none}12%{transform:translateY(-2px) rotate(-3deg)}25%{transform:translateY(.4px)}48%{transform:translateY(-1px) rotate(2deg)}66%{transform:none}80%{transform:translateY(-1.6px) rotate(-1deg)}}
+@keyframes yay{0%,100%{transform:none}18%{transform:translateY(1px) scale(1.04,.95)}44%{transform:translateY(-6px) rotate(-5deg) scale(.97,1.03)}70%{transform:translateY(.5px) scale(1.02,.98)}}
+@keyframes notice{0%{transform:none}35%{transform:translateY(-2px) rotate(-7deg)}64%{transform:translateY(-1px) rotate(2deg)}100%{transform:rotate(-3deg)}}
+@media(prefers-reduced-motion:reduce){.actor{animation:none;transform:none}}
+</style>`;
 export type Bitmap = string[];
 export type Palette = Record<string, string>;
 
@@ -174,11 +196,11 @@ export const colourOf = (who: Kind | 'chief') => (who === 'chief' ? CHIEF : PALS
 export const inkOn = (who: Kind | 'chief') => who === 'chief' ? LIGHT : INK;
 /** Chief or a helper as a Geo face SVG on its black disc. `beat` (a working face's ticker) moves its eyes along a line,
  *  left to right, as it reads; `aspect` is the slot's width over its height. */
-export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { beat?: number; aspect?: number } = {}) => {
+export const critter = (who: Kind | 'chief', mode: FaceMode = 'here', o: { beat?: number; aspect?: number; motion?: Motion; instance?: string } = {}) => {
   const p = who === 'chief' ? CHIEF : PALS[who], pad = 50 * ((o.aspect ?? 1) - 1);
-  // A box wider than tall centres the disc in it rather than stretching it.
-  return `<svg viewBox="${-pad} 0 ${100 + 2 * pad} 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="50" fill="${INK}"/>`
-    + `<g transform="translate(13 13) scale(.74)">${p.shape + geoFace(p, mode, (((o.beat ?? 0) % 24) / 23) * 2 - 1) + (p.trait ?? '')}</g></svg>`;
+  // Static by default for the PNG/icon pipeline; web faces opt into A, Little nudge.
+  return `<svg viewBox="${-pad} 0 ${100 + 2 * pad} 100" xmlns="http://www.w3.org/2000/svg"${o.motion ? ` data-motion="${o.motion}" data-instance="${o.instance ?? ''}"` : ''}>${o.motion ? NUDGE : ''}<circle cx="50" cy="50" r="50" fill="${INK}"/>`
+    + `${o.motion ? `<g class="actor ${o.motion}">` : ''}<g transform="translate(13 13) scale(.74)">${p.shape + geoFace(p, mode, (((o.beat ?? 0) % 24) / 23) * 2 - 1) + (p.trait ?? '')}</g>${o.motion ? '</g>' : ''}</svg>`;
 };
 
 // ── The logo: a dot house with a smile, and the wordmark in the same dots ──

@@ -1,6 +1,6 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
 import { createPortal } from 'react-dom';
-import { createElement, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
+import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
@@ -110,22 +110,6 @@ export function Dots({ rows, pal, d = 6, label, crisp = false }: { rows: art.Bit
   );
 }
 
-/** One 170 ms blink frame when the mood changes, then the new face. No tween, no slide; Reduce Motion changes at once.
- *  The face is otherwise still — no idle blink, no twitch (the calmer-look pass removed them). */
-function useChangeBlink(on: boolean, mood: art.Mood) {
-  const [flash, setFlash] = useState(false);
-  const prev = useRef(mood);
-  useEffect(() => {
-    if (prev.current === mood) return;
-    prev.current = mood;
-    if (!on || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    setFlash(true);
-    const t = setTimeout(() => setFlash(false), 170);
-    return () => clearTimeout(t);
-  }, [mood, on]);
-  return flash;
-}
-
 /** Chief's mood holds: a higher-priority mood takes over at once, a lower one waits until the current one has held for
  *  6 s, so the 120 ms refresh and the 15 s poll never flicker him. Hero-sized faces only; small faces change at once. */
 export function useHeld<V extends { mood: art.Mood; rank: number }>(view: V): V {
@@ -156,10 +140,22 @@ export function useListen() {
 /** Set by the shell while the home computer isn't answering: every composer keeps its words and holds Send. */
 let away = false;
 export const setAway = (a: boolean) => { away = a; };
-/** Set by the shell as it renders, so every little Chief face (avatars, headers) carries the mood without each caller
- *  holding the state. */
-let chiefMood: art.Mood = 'idle';
-export const setChiefMood = (m: art.Mood) => { chiefMood = m; };
+/** The shell installs the office's live moods once: every size and screen reads the same face state. */
+let chiefMood: art.Mood = 'idle', faceMoods = new Map<string, art.Mood>(), talking = new Set<string>(), reducedFaces = false;
+export const setFaceMoods = (m: art.Mood, crew: { id: string; mood: art.Mood }[], writing: string[] = [], reduced = false) => {
+  chiefMood = m; faceMoods = new Map(crew.map((c) => [c.id, c.mood])); talking = new Set(writing); reducedFaces = reduced;
+};
+function useFaceArt(who: art.Kind | 'chief', mood: art.Mood = 'idle', id?: string, aspect = 1) {
+  const live = (id && faceMoods.get(id)) || mood, mode = art.faceOf(live);
+  // Embedded SVG media queries do not reliably update with the page's preference override.
+  const motion = reducedFaces ? 'still' : art.motionOf(live, !!id && talking.has(id));
+  const phase = useRef({ motion, turn: 0 });
+  if (phase.current.motion !== motion) phase.current = { motion, turn: phase.current.turn + 1 };
+  // A fresh image per transition replays one-shots, never on each streamed word or snapshot refresh.
+  const instance = `${useId()}-${phase.current.turn}`;
+  const svg = useMemo(() => art.critter(who, mode, { aspect, motion, instance }), [who, mode, aspect, motion, instance]);
+  return { svg, mode, motion };
+}
 
 /** A B1 drawing (art.ts) as a picture: crisp at any size, and never markup in the page. Sized by width only: the
  *  height follows the drawing's own viewBox, so no box ever squashes it. */
@@ -169,36 +165,27 @@ export function Ink({ svg, w, label, className = '' }: { svg: string; w: number;
 
 /** A Geo face (art.critter) in the box the text helmet filled: `cols` art-font columns (0.6em each) by half as many
  *  lines, so the slot's font size, and every rule that sets it, still sizes the face and no layout moves. */
-function Critter({ who, mode, cols, beat, label, d }: { who: art.Kind | 'chief'; mode: art.FaceMode; cols: number; beat: number; label: string; d?: number }) {
-  const svg = useMemo(() => art.critter(who, mode, { beat, aspect: 1.2 }), [who, mode, beat]);
-  return <img className="art helmet" data-mode={mode} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} alt={label} draggable={false}
+function Critter({ who, mood, id, cols, label, d, mascot }: { who: art.Kind | 'chief'; mood: art.Mood; id?: string; cols: number; label: string; d?: number; mascot?: boolean }) {
+  const { svg, mode, motion } = useFaceArt(who, mood, id, mascot ? 100 / 92 : 1.2);
+  if (mascot) return <Ink className="helmet" w={52} label={label} svg={svg} />;
+  return <img className="art helmet" data-mode={mode} data-motion={motion} src={`data:image/svg+xml,${encodeURIComponent(svg)}`} alt={label} draggable={false}
     style={{ display: 'block', width: `${cols * 0.6}em`, height: `${Math.round(cols / 2)}em`, fontSize: d }} />;
 }
 
-/** Chief, head and shoulders (`whole` for the mock rail's 38-column box). `d` keeps the old 14-dot footprint, so
- *  callers keep their size. `hero` marks the one face on screen that lives: it shows the 170 ms change-blink, and
- *  reads along while he works. */
-export function ChiefArt({ mood = 'idle', d = 6, hero, whole, mascot }: { mood?: art.Mood; d?: number; dark?: boolean; hero?: boolean; whole?: boolean; mascot?: boolean }) {
-  const flash = useChangeBlink(!!hero, mood);
-  const mode = art.faceOf(flash ? 'blink' : mood);
-  const beat = useTicker(140, !!hero && mode === 'think');
-  // The phone header's mascot keeps its box (52 px at 100:92), sized by width
-  // alone like every Ink face, so the person's text size never rescales them.
-  if (mascot) return <Ink className="helmet" w={52} label="Chief" svg={art.critter('chief', mode, { beat, aspect: 100 / 92 })} />;
-  return <Critter who="chief" mode={mode} cols={whole ? 38 : 24} beat={beat} label="Chief" d={whole ? undefined : d} />;
+/** Chief and helpers keep their old boxes; the same Little nudge SVG serves every size. */
+export function ChiefArt({ mood = 'idle', d = 6, whole, mascot }: { mood?: art.Mood; d?: number; dark?: boolean; whole?: boolean; mascot?: boolean }) {
+  return <Critter who="chief" mood={mood} id="chief" cols={whole ? 38 : 24} label="Chief" d={whole ? undefined : d} mascot={mascot} />;
 }
-export function PalArt({ kind, mood = 'idle', d = 4, name }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; crisp?: boolean }) {
-  // A helper's face is still: the mood shows in the eyes and mouth, never as motion.
-  return <Critter who={kind} mode={art.faceOf(mood)} cols={14} beat={0} label={name ?? kind} d={d} />;
+export function PalArt({ kind, mood = 'idle', d = 4, name, id }: { kind: art.Kind; mood?: art.Mood; d?: number; name?: string; id?: string; crisp?: boolean }) {
+  return <Critter who={kind} mood={mood} id={id} cols={14} label={name ?? kind} d={d} />;
 }
 
 /** A round face: Chief or a helper, with a ring when it's working or needs you. The Geo face is its own black disc. */
-export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
+export function Face({ who, size = 44, ring = '' }: { who: Helper | 'chief' | { id?: string; kind: art.Kind; name: string; mood?: art.Mood }; size?: number; ring?: string; row?: boolean }) {
   const chief = who === 'chief', look = chief ? 'chief' : who.kind;
-  const mode = art.faceOf(chief ? chiefMood : who.mood);
-  const svg = useMemo(() => art.critter(look, mode), [look, mode]);
+  const { svg, motion } = useFaceArt(look, chief ? chiefMood : who.mood, chief ? 'chief' : who.id);
   return (
-    <span className={`face ${ring}`} style={{ width: size, height: size }}>
+    <span className={`face ${ring}`} data-motion={motion} style={{ width: size, height: size }}>
       <Ink svg={svg} w={size} label={chief ? 'Chief' : who.name} />
     </span>
   );
@@ -625,8 +612,8 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
 }
 
 /** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
-export type Talk = { lines: { id: number; from: string; text: string }[]; reading: (id: number) => void };
-type Now = { phase: 'listening' | 'thinking' | 'speaking'; words: string };
+export type Talk = { chat: string; name: string; lines: { id: number; from: string; text: string }[]; reading: (id: number) => void };
+type Now = { phase: 'listening' | 'thinking' | 'speaking'; words: string; name: string };
 /** This device's voice and speed for Chief, kept on the device (its voices are its own). */
 const VOICE = 'crewhouse.voice';
 const kept = (): { voice?: string; rate?: number } => { try { return JSON.parse(localStorage.getItem(VOICE) ?? '{}'); } catch { return {}; } };
@@ -646,14 +633,14 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
   useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => setRoute(v.length > 0 ? r : 'none')); }, [!!talk]);
   const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
   useEffect(() => stop, []); // leaving the chat ends the call
-  const show = (n: Now) => { setNow(n); setListen('chief', n.phase === 'listening'); };
+  const show = (n: Omit<Now, 'name'>) => { setNow({ ...n, name: talk?.name ?? 'Chief' }); if (talk?.chat === 'chief') setListen('chief', n.phase === 'listening'); };
   const start = async () => {
     const r = run.current = { stopped: false, cut: () => {} }, mark = talk?.reading ?? (() => {});
-    const chief = () => lines.current.filter((l) => l.from === 'them' && l.text); // his words in his own thread
-    let read = chief().at(-1)?.id ?? 0, quiet = 0, end = 'Call ended.';
+    const replies = () => lines.current.filter((l) => l.from === 'them' && l.text);
+    let read = replies().at(-1)?.id ?? 0, quiet = 0, end = 'Call ended.';
     try {
       while (!r.stopped) {
-        const next = chief().find((l) => l.id > read);
+        const next = replies().find((l) => l.id > read);
         if (next) { // Chief's new lines first, one at a time, before the mic opens again
           read = next.id;
           const vs = await voices();
@@ -670,10 +657,10 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
         quiet = 0;
         show({ phase: 'thinking', words: '' });
         if (!(await send(said))) { end = 'Not sent, so the call ended. Your words are in the box.'; break; }
-        await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || chief().some((l) => l.id > read)) go(); }; arrived.current(); });
+        await new Promise<void>((go) => { arrived.current = () => { if (r.stopped || replies().some((l) => l.id > read)) go(); }; arrived.current(); });
       }
     } catch (e) { end = heardWrong(e); }
-    run.current = null; mark(0); setNow(null); setListen('chief', false); toast(end);
+    run.current = null; mark(0); setNow(null); if (talk?.chat === 'chief') setListen('chief', false); toast(end);
   };
   return { can: route !== 'none' && !!talk, route, now, start, stop };
 }
@@ -685,8 +672,8 @@ function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => vo
   useEffect(() => { void voices().then(setVs); }, []);
   const choose = (k: { voice?: string; rate?: number }) => { const n = { ...pick, ...k }; setPick(n); try { localStorage.setItem(VOICE, JSON.stringify(n)); } catch { /* kept for this call only */ } };
   const lang = (l: string) => { try { return new Intl.DisplayNames([navigator.language], { type: 'language' }).of(l) ?? l; } catch { return l; } };
-  return <div className={`call ${now.phase}`} role="group" aria-label="Call with Chief">
-    <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: 'Chief is thinking', speaking: 'Chief is speaking' }[now.phase]}</span>
+  return <div className={`call ${now.phase}`} role="group" aria-label={`Call with ${now.name}`}>
+    <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: `${now.name} is thinking`, speaking: `${now.name} is speaking` }[now.phase]}</span>
     <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
       <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
       <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>
@@ -819,7 +806,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
       {stop && !text.trim() && !picked.length
         ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
         : call.can && !text.trim() && !picked.length && !busy
-        ? <button type="button" className="send talk" aria-label="Talk with Chief" title="Talk with Chief" onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
+        ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
         // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.
         : <button className="send" aria-label="Send" onPointerDown={(e) => e.preventDefault()} disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
     </form>

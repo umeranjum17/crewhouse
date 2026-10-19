@@ -1,5 +1,5 @@
 // Home's battery and layout rules, measured in a real browser on the ?demo households (web/src/main.tsx Home, the
-// Stack crew view): flat with no 3D library anywhere, every face still, and at every crew size (?demo=crew1, crew5,
+// Stack crew view): flat with no 3D library anywhere, SVG face motion without a JS frame loop, and at every crew size (?demo=crew1, crew5,
 // crew12, crew30) on a phone and a computer every crew card sits clear of the others, nothing clips, counts agree with
 // A.office, and Chief's card is the one way to his asks and his thread.
 // Needs a Chromium on PATH (skipped without one).
@@ -88,21 +88,41 @@ async function browse(external?: string) {
 /** Measuring that nothing happens needs a window, so this one is a measurement, not a wait. */
 const WINDOW_MS = 600;
 
-// What moves on Home: nothing. Every face is still Geo art; no animation loops.
+// Face motion lives inside isolated SVG images; the page has no looping animation or per-frame URI rewrites.
 const faces = (b: Awaited<ReturnType<typeof browse>>) => b.run(`(() => ({
   loops: document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations === Infinity).length,
+  motion: [...document.querySelectorAll('.stack-home .face')].map((e) => e.dataset.motion),
   art: [...document.querySelectorAll('.stack-home .face img')].map((i) => i.getAttribute('src') ?? '') }))()`);
 
-test('Home keeps the battery budget: every face is still and nothing loops, at work or calm', { skip: !bin && 'no Chromium here' }, async () => {
+test('Home keeps the battery budget: A moves in SVGs without a page animation loop, at work or calm', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   for (const demo of ['calm', 'office']) {
     await b.open(`demo=${demo}&day`);
     await until('Home', () => b.run("document.querySelectorAll('.stack-home .face img').length > 0"), 30_000);
     const q0 = await faces(b);
-    assert.equal(q0.loops, 0, `${demo}: no looping animation on Home`);
-    await new Promise((r) => setTimeout(r, WINDOW_MS));
-    assert.deepEqual((await faces(b)).art, q0.art, `${demo}: every face still, even at work`);
+    assert.equal(q0.loops, 0, `${demo}: no looping page animation on Home`);
+    assert.ok(q0.motion.includes(demo === 'office' ? 'work' : 'idle'), `${demo}: the shared face carries the real mood`);
+    for (const src of q0.art) assert.match(decodeURIComponent(src.split(',')[1]), /prefers-reduced-motion:reduce/, 'every face respects reduced motion');
+    await b.run(`new Promise((resolve) => { const end = performance.now() + ${WINDOW_MS}; function frame() { if (performance.now() >= end) resolve(true); else requestAnimationFrame(frame); } requestAnimationFrame(frame); })`);
+    assert.deepEqual((await faces(b)).art, q0.art, `${demo}: no per-frame image rewrites, even at work`);
+    if (demo === 'office') {
+      // Native image pixels, not only the SVG source: positive motion control, then Reduce Motion.
+      const clip = await b.run(`(async () => { await document.fonts.ready; const e = [...document.querySelectorAll('.stack-home .face[data-motion="work"] img')].find(e=>e.getBoundingClientRect().width>0); e.scrollIntoView({block:'center'}); await new Promise(requestAnimationFrame); const r=e.getBoundingClientRect(); return {x:r.x+scrollX,y:r.y+scrollY,width:r.width,height:r.height,scale:1}; })()`);
+      const shot = async () => (await b.send('Page.captureScreenshot', { clip })).data;
+      const moving = await shot();
+      await until('the working SVG really moves', async () => (await shot()) !== moving, 5000);
+      await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await until('every face chooses a static SVG', () => b.run(`[...document.querySelectorAll('.stack-home .face')].every(e=>e.dataset.motion==='still')`), 5000);
+      await b.run(`Promise.all([...document.querySelectorAll('.stack-home .face img')].map(i=>i.decode()))`);
+      await b.run('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))');
+      const still = await shot();
+      const end = Date.now() + 900;
+      await until('the reduced-motion measurement window', async () => {
+        assert.equal(await shot(), still, 'Reduce Motion freezes the actual SVG image pixels');
+        return Date.now() >= end;
+      }, 5000);
+    }
   }
 });
 
@@ -582,6 +602,8 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   const row = () => b.run(`(() => { const r = document.querySelector('.st-card[href="#/h/scout"]'); return r && { word: r.querySelector('.st-pill').textContent, badge: !!r.querySelector('.badge'), stuck: !!r.querySelector('.stuck') }; })()`);
   await until('Scout at work', async () => (await row())?.word === 'At work', 30_000);
   assert.equal((await row()).badge, false);
+  const rowMotion = () => b.run(`document.querySelector('.st-card[href="#/h/scout"] .face')?.dataset.motion`);
+  assert.equal(await rowMotion(), 'work', 'the real working task leans on Home');
   // Scout goes quiet past the limit: still one status on its row, no ask card under it; the ask is Chief's alone.
   lab.db.run('UPDATE tasks SET updated_at = updated_at - 300000 WHERE id = ?', job);
   // Chief's card carries the ask as what he has for you, never a second status word beside it.
@@ -595,10 +617,22 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until("Scout's own thread", () => b.run(`!!document.querySelector('.line') && !document.querySelector('.stuck')`), 30_000);
   assert.equal(await b.run(`document.querySelectorAll('.stuck').length`), 0, 'Scout\'s own thread asks nothing: the Stop card is Chief\'s alone');
   assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [false, 1], 'a helper\'s own thread has a composer');
+  // Use crewd's real ephemeral fan-out, the same path the scripted runtime's text callback uses.
+  lab.db.live('reply.partial', 'scout', { task: job, text: 'Umer, three Friday flights are ready.' });
+  await until('the header and streamed reply nod together', () => b.run(`document.querySelector('.chat-head .face')?.dataset.motion === 'talk' && document.querySelector('.streaming .face')?.dataset.motion === 'talk'`));
+  assert.deepEqual(await b.run(`[document.querySelector('.chat-head .face').offsetWidth, document.querySelector('.streaming .face').offsetWidth]`), [44, 28]);
+  const speaking = await b.run(`document.querySelector('.chat-head .face img').src`);
+  lab.db.live('reply.partial', 'scout', { task: job, text: 'Umer, three Friday flights are ready. I checked the times.' });
+  await until('the next streamed words', () => b.run(`document.querySelector('.streaming')?.textContent.includes('checked the times')`));
+  assert.equal(await b.run(`document.querySelector('.chat-head .face img').src`), speaking, 'streaming words do not restart the nod');
   await b.run('location.hash = "#/"');
   await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
   await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
   await until('Scout done on its card', async () => /^Done /.test((await row())?.word ?? ''), 30_000);
+  assert.equal(await rowMotion(), 'done', 'the real completed job hops once instead of continuing to talk');
+  await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  assert.equal(await b.run(`matchMedia('(prefers-reduced-motion: reduce)').matches`), true);
+  await b.send('Emulation.setEmulatedMedia', { features: [] });
   // Chief relayed Scout's reply, so it is unread in Chief's thread and not in Scout's: only Chief carries a badge, so the desk rail's Scout row has none.
   await b.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await until('the menu row says Done', async () => /^Done/.test(await b.run("document.querySelector('.side-row .side-seat')?.textContent ?? ''")), 30_000);
