@@ -171,15 +171,15 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
 }
 
 if (process.argv[1] === import.meta.filename) {
-  const cfg = loadConfig(), [cmd, ...ids] = process.argv.slice(2), kit = toolStatus(cfg);
+  const cfg = loadConfig(), [cmd, ...ids] = process.argv.slice(2), kit = () => toolStatus(cfg);
   if (cmd === 'install') {
     // --refresh (what `./crewhouse update` runs): only tools installed before whose pin has moved, never new ones.
-    const refresh = ids[0] === '--refresh' ? ids.shift() : undefined, pick = ids.length ? ids : kit.filter((t) => t.installable && (!t.ready || t.outdated) && (!refresh || existsSync(pinFile(cfg, t.id)))).map((t) => t.id);
+    const refresh = ids[0] === '--refresh' ? ids.shift() : undefined, pick = ids.length ? ids : kit().filter((t) => t.installable && (!t.ready || t.outdated) && (!refresh || existsSync(pinFile(cfg, t.id)))).map((t) => t.id);
     let failed = 0;
     for (const id of pick) await installTool(cfg, id, console.log).catch((e) => { failed++; console.error(`✗ ${id}: ${e.message}`); });
     if (!pick.length && !refresh) console.log('Nothing to install: every pinned tool is ready.');
     process.exit(failed ? 1 : 0);
   }
-  for (const t of kit) console.log(`${t.ready ? '✓' : '·'} ${t.id.padEnd(15)} ${t.name} (${t.license})${t.ready ? '' : ` — ${t.howto || t.source}`}`);
+  for (const t of kit()) console.log(`${t.ready ? '✓' : '·'} ${t.id.padEnd(15)} ${t.name} (${t.license})${t.ready ? '' : ` — ${t.howto || t.source}`}`);
   console.log(`\nInstall the pinned kit into ${cfg.toolsDir}: ./crewhouse tools install [ids...]`);
 }

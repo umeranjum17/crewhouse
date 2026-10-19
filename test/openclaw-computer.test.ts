@@ -26,7 +26,7 @@ test("Chief fills a form on its own screen with the engine's computer tool", { s
     q.on('data', (c) => { body += c; }).on('end', () => {
       if (q.method === 'POST') posted = body;
       r.setHeader('content-type', 'text/html').end(q.method === 'POST' ? '<h1>Thanks, saved.</h1>'
-        : '<h1>Library card renewal</h1><form method="post"><label>Name <input name="name" style="font:32px sans-serif;width:90%;height:200px"></label><p><button>Save</button></p></form>');
+        : '<title>Renew</title><h1>Library card renewal</h1><form method="post"><label>Name <input name="name" style="font:32px sans-serif;width:90%;height:400px"></label><p><button>Save</button></p></form>');
     });
   }).listen(0, '127.0.0.1');
   await new Promise((r) => site.once('listening', r));
@@ -38,8 +38,11 @@ test("Chief fills a form on its own screen with the engine's computer tool", { s
     // The bot's Chromium shows the form (crewd's own DevTools endpoint; the model never gets it).
     const ws = new WebSocket(desk.cdp!);
     await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
-    ws.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: `http://127.0.0.1:${(site.address() as AddressInfo).port}/renew` } }));
-    await new Promise((r) => ws.on('message', (m) => { if (JSON.parse(String(m)).id === 1) r(0); }));
+    let n = 0;
+    const cdp = (method: string, params = {}) => new Promise<any>((r) => { const id = ++n; ws.on('message', (m) => { const x = JSON.parse(String(m)); if (x.id === id) r(x.result); }); ws.send(JSON.stringify({ id, method, params })); });
+    await cdp('Target.createTarget', { url: `http://127.0.0.1:${(site.address() as AddressInfo).port}/renew` });
+    // The form is on screen before the model's first look: a slow runner still has it loading otherwise.
+    for (let i = 0; i < 300 && !(await cdp('Target.getTargets')).targetInfos.some((t: any) => t.title === 'Renew'); i++) await new Promise((r) => setTimeout(r, 100));
     ws.close();
     if (process.env.CREWHOUSE_RECORD) film = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'x11grab', '-video_size', '1280x800', '-framerate', '10', '-i', desk.display, '-pix_fmt', 'yuv420p', process.env.CREWHOUSE_RECORD],
       { env: { PATH: process.env.PATH, DISPLAY: desk.display, XAUTHORITY: desk.xauth }, stdio: ['pipe', 'ignore', 'inherit'] });
