@@ -1797,6 +1797,8 @@ export function withoutMemory(notes = '', i: number) {
 export const profileParts = (text = '') => text.split(/(?<=[.!?…])\s+/).map((p) => plain(p.trim())).filter(Boolean);
 /** The record with its parts changed, forgotten or added to: one space between sentences. */
 export const profileText = (parts: string[]) => parts.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean).join(' ');
+/** A case Chief holds from new mail: one line in Memory, Forget deletes it. */
+export const caseLines = (cases: { thread: string; facts: string }[] = []) => cases.map((c) => ({ thread: c.thread, text: `Case: ${plain(c.facts)}` }));
 
 /** Who a helper is, as plain lines: its own name heading dropped, section headings and bullets read as sentences. */
 export const personality = (soul = '') => soul.split('\n').slice(soul.startsWith('# ') ? 1 : 0)
@@ -1835,12 +1837,19 @@ export function routines(state: Json, bot?: string) {
   return state.routines.filter((r: Json) => !bot || r.bot === bot).map((r: Json) => {
     const one = r.kind === 'remind'; // a reminder is for one moment: its own words, and where it ended up
     return {
-    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: one ? 'One time' : plain(r.words ?? ''), on: one ? '' : plain(r.on ?? ''), paused: r.state === 'paused',
+    id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: one ? 'One time' : plain(r.words ?? ''), ...bigTime(one ? '' : plain(r.words ?? '')), on: one ? '' : plain(r.on ?? ''), paused: r.state === 'paused',
     next: one ? (r.next_at ? `at ${moment(Number(r.next_at))}` : r.last_at ? `reminded ${clock(Number(r.last_at))}` : '') : r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest', remind: one, reminded: one && !r.next_at,
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '', looks: plain(r.looks ?? ''),
     runs: (r.history ?? []).slice(0, 5).map((h: Json) => runOf(h, one)), // newest first
   };
   });
+}
+/** A routine's time as the big line on its card ("Mon 8:00 am", "8:00 am" for every day) and its cadence under it
+ *  ("Every Monday"); a schedule of another shape (every 2 hours, a date each month) is its own big line. */
+function bigTime(words: string) {
+  const m = /^(Every day|Weekdays|Weekends|Every (\w+)) at (.+)$/.exec(words);
+  if (!m) return { big: words || 'One time', cadence: '' };
+  return { big: m[1] === 'Every day' ? m[3] : `${m[2] ? m[2].slice(0, 3) : m[1]} ${m[3]}`, cadence: m[1] };
 }
 /** A reminder's moment in full: the clock alone today, the day with it later, so the row never reads as a bare time. */
 function moment(at: number) {
@@ -1895,7 +1904,7 @@ const GO_ON = GO.billing === 'subscription' || GO.billing === 'api';
 export const AIS = ['chatgpt', 'grok', 'copilot', 'openrouter', 'minimax', 'claude', ...(GO_ON ? [GO_KEY] : [])].map((key) => {
   const mark = MARKS[key];
   const route = key === GO_KEY ? { name: GO.name, billing: GO.billing } : ROUTES[key];
-  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription', ...(key === GO_KEY ? { keyEntry: true as const } : {}) };
+  return { ...mark, key, name: route?.name ?? mark.name ?? key, billing: route?.billing ?? 'subscription', ...(key === GO_KEY || key === 'minimax' ? { keyEntry: true as const } : {}) };
 });
 /** How one account is paid for, in the person's words: their own plan, or money charged for each use. */
 export function paysFor(ai: { name: string; billing: string }) {

@@ -76,3 +76,11 @@ not a real vendor plan, real sign-in, model call, native Expo shell or physical 
 - `Page.navigate` to the URL the tab is already on is only a hash visit: the fold keeps its open state, so the
   script loads `about:blank` between shots.
 - Real sign-ins are out of scope here: the stub proves the card, not a provider's page.
+
+## Key-entry account page (OpenCode Go, MiniMax)
+
+Every account the kit marks `keyEntry` (`A.AIS` `keyEntry`) shows "Paste your <name> key" on its page
+(`#/settings/ai/<key>`, `AiAccount`), and Settings' Sign in opens the same key sheet. Gate: `node --test
+test/onboard.test.ts` (MiniMax's invalid key waits with "That key didn't work" through the kit's `addKey`).
+Drive: `scripts/verify/go-plan.ts` fixture, then `node scripts/verify/look-check.mjs web` on the page, with
+`--then` clicking `.ai-page .btn` for the sheet. Use only fake keys.

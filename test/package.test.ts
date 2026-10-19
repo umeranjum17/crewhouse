@@ -121,11 +121,16 @@ test('a stalled install stops at its bound: its job fails in one line, no instal
   let c: any;
   for (let i = 0; i < 300 && (c = await taskOf('chief', chief))?.state !== 'done'; i++) await sleep(100);
   assert.equal(c?.state, 'done', 'Chief answers while the install is stalled');
-  let t: any;
-  for (let i = 0; i < 300 && (t = await taskOf('scribe', job))?.state !== 'failed'; i++) await sleep(100);
-  assert.equal(t?.state, 'failed');
-  assert.match(t.result, /^.+ took too long to install, so this one stopped\. It will try again next time\.$/);
-  for (let i = 0; i < 100 && !existsSync(pids); i++) await sleep(100);
+  const fails = async (id: number) => {
+    let t: any;
+    for (let i = 0; i < 300 && (t = await taskOf('scribe', id))?.state !== 'failed'; i++) await sleep(100);
+    assert.equal(t?.state, 'failed');
+    assert.match(t.result, /^.+ took too long to install, so this one stopped\. It will try again next time\.$/);
+  };
+  await fails(job);
+  // A cold node can spend the whole bound loading src/tools.ts, so the stop lands before any npm, pip or curl starts and
+  // no pid is written. The job fails the same way; the next one tries again, warm, until an installer was there to stop.
+  for (let n = 0; n < 4 && !existsSync(pids); n++) await fails((await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task);
   const installers = readFileSync(pids, 'utf8').trim().split('\n').map(Number);
   assert.ok(installers.length >= 1);
   for (const pid of installers) {

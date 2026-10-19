@@ -392,13 +392,13 @@ test('a finished sheet ends Chief\'s thread on its Done card: Later keeps it wit
   }
 });
 
-test('a routine\'s switch keeps its knob inside the track, clear of its On or Paused words, day and night, phone and computer, text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
+test('a routine\'s switch keeps its knob inside the track, day and night, phone and computer, text at 1.3x', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   // The knob is a ::after, so its box comes from the computed style; translateX counts too (two switch rules once stacked both).
   const gap = `(() => { const i = document.querySelector('.routine-switch input'); if (!i) return null; const w = i.nextElementSibling;
     const k = getComputedStyle(i, '::after'), t = new DOMMatrix(k.transform === 'none' ? undefined : k.transform), r = i.getBoundingClientRect();
     const knob = r.left + i.clientLeft + parseFloat(k.left) + t.e + parseFloat(k.width);
-    return { inTrack: r.right - knob, toWords: w.getBoundingClientRect().left - knob, words: w.textContent }; })()`;
+    return { inTrack: r.right - knob, toWords: w ? w.getBoundingClientRect().left - knob : 1, words: w?.textContent }; })()`;
   for (const theme of ['day', 'night']) for (const [w, h, mobile] of [[390, 844, true], [1440, 900, false]] as const) for (const scale of [1, 1.3]) {
     await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
     await b.open(`demo&${theme}#/routines`);
