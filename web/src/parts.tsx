@@ -1096,7 +1096,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
           <div className="btns">
             <button className="btn go" disabled={stuck} onClick={start}>{yes?.label ?? 'Start it'}</button>
             <More title={title} sub={sub} acts={[
-              { label: when === null ? 'Change time' : 'Keep the time', pressed: when !== null, run: () => setWhen(when === null ? c.schedule || '' : null) },
+              !!c.schedule && { label: when === null ? 'Change time' : 'Keep the time', pressed: when !== null, run: () => setWhen(when === null ? c.schedule || '' : null) },
               deny && { label: deny.label, run: () => act(deny.body) },
               remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
           </div>
