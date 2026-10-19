@@ -26,7 +26,7 @@ test("Chief fills a form on its own screen with the engine's computer tool", { s
     q.on('data', (c) => { body += c; }).on('end', () => {
       if (q.method === 'POST') posted = body;
       r.setHeader('content-type', 'text/html').end(q.method === 'POST' ? '<h1>Thanks, saved.</h1>'
-        : '<title>Renew</title><h1>Library card renewal</h1><form method="post"><label>Name <input name="name" style="font:32px sans-serif;width:90%;height:400px"></label><p><button>Save</button></p></form>');
+        : '<title>Renew</title><form method="post"><input name="name" placeholder="Name" style="font:32px sans-serif;position:fixed;inset:0;width:100%;height:100%"></form>');
     });
   }).listen(0, '127.0.0.1');
   await new Promise((r) => site.once('listening', r));
@@ -64,7 +64,8 @@ test("Chief fills a form on its own screen with the engine's computer tool", { s
         act({ action: 'type', text: 'Umer Farooq' }), act({ action: 'key', text: 'Return' }), act({ action: 'screenshot' })].join(' ') }, () => {});
     assert.ok(end.ok, JSON.stringify(end).slice(0, 600));
     assert.deepEqual(gated.map((g) => g.action), ['screenshot', 'left_click', 'type', 'key', 'screenshot'], 'every computer call crossed the gate');
-    assert.equal(decodeURIComponent(posted.replace(/\+/g, ' ')), 'name=Umer Farooq', 'the form on its screen was filled and saved');
+    const said = (stub.calls.at(-1)?.body.messages ?? []).filter((m: any) => m.role === 'tool').map((m: any) => JSON.stringify(m.content).slice(0, 300));
+    assert.equal(decodeURIComponent(posted.replace(/\+/g, ' ')), 'name=Umer Farooq', `the form on its screen was filled and saved; the tool said: ${said.join(' | ')}`);
     const seen = stub.calls.flatMap((c) => c.body.messages ?? []).filter((m: any) => m.role === 'tool' || m.role === 'user').flatMap((m: any) => Array.isArray(m.content) ? m.content : []);
     assert.ok(seen.some((c: any) => c.type === 'image_url'), 'the model saw its screen');
   } finally {
