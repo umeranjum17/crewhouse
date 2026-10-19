@@ -514,7 +514,6 @@ a.back:not([aria-label]) { font: 500 15px/20px var(--ui); padding: 0 8px; margin
   .crew-grid .pal-card .pill { padding: 2px 0; background: none; box-shadow: none; }
   .crew-grid .pal-card.add { padding: 14px 16px; }
 }
-.routine.paused { opacity: .7; }
 .form { display: grid; gap: 10px; }
 .pal-chip { padding: 4px 12px 4px 4px; }
 
@@ -1977,3 +1976,69 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .room-page.st-helper-chat .chat-head { padding: 16px 20px; gap: 12px; }
 .room-page.st-helper-chat .chat .line .bubble-text.helper-bubble { border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px; background: var(--solid); }
 .room-page .chat .line.me { margin-left: 0; }
+
+/* Routines (Stack J08): a card per routine in its helper's colour, the time as the big line; Change time is its own page
+   with the next four times; "Talk to Chief" sits beside the cards on a computer and below them on a phone. */
+.routines-page .st-head { display: flex; align-items: center; gap: 12px; }
+.routines-page .st-head .back { margin: 0; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--soft); padding: 0 0 3px; }
+.routines-page .st-line { margin: 4px 0 0; }
+.routine-cards { display: grid; gap: 10px; align-content: start; }
+.card.routine { margin: 0; padding: 18px 20px; border: 0; border-radius: 26px; font-family: Archivo, var(--ui); }
+.routine > .row { display: flex; align-items: center; gap: 12px; }
+.routine > .row b { font-size: 22px; }
+.routine > .row + .routine-big { margin-top: 20px; }
+.routine-big { margin: 14px 0 0; font: 800 44px/1 Archivo, var(--ui); font-stretch: 125%; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.routine-sub { margin: 10px 0 0; font: 600 17px/1.4 Archivo, var(--ui); opacity: .9; }
+.routine-last-wrap { color: inherit; }
+.routine .link { color: inherit; text-decoration: underline; }
+.routine-run { margin-top: 16px; gap: 8px 10px; }
+.routine-run .btn, .routine-runs .btn { min-height: 50px; padding: 0 20px; border: 0; border-radius: 16px; font: 700 17px/1.2 Archivo, var(--ui); background: color-mix(in srgb, currentColor 16%, transparent); color: inherit; }
+.routine-run .btn.go { background: #F7F7FB; color: #0B0B0B; }
+.routine-run .btn:not(.go) { background: color-mix(in srgb, currentColor 16%, transparent); }
+.routine-runs { margin-top: 12px; }
+.routine-runs summary { color: inherit; opacity: .8; font-size: 16px; }
+.routine-runs ol { color: inherit; font-size: 16px; }
+.routine-runs .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.routine-runs .chip { min-height: 44px; font-size: 16px; color: inherit; border-color: currentColor; background: none; }
+.routine-switch { display: inline-flex; flex: none; }
+.routine input[role='switch'] { width: 52px; height: 32px; background: rgba(247,247,251,.55); }
+.routine input[role='switch']::after { top: 3px; left: 3px; width: 26px; height: 26px; background: #6B6963; }
+.routine input[role='switch']:checked { background: #0B0B0B; }
+.routine input[role='switch']:checked::after { left: 23px; background: #F7F7FB; }
+.routine input[role='switch']:focus-visible { outline-color: currentColor; }
+.routine-hint { margin: 0; font-size: 17px; line-height: 1.4; color: var(--mute); }
+.routine-talk .routine-ask { margin: 0; padding: 0; border: 0; background: none; }
+.routine-ask form { margin: 0; }
+.routine-ask .input { min-height: 54px; border-radius: 18px; font-size: 17px; }
+.routine-ask .send { width: 42px; height: 42px; border-radius: 13px; background: var(--ink); color: var(--bg); border: 0; opacity: 1; }
+.routine-ask .send:disabled { opacity: .35; }
+.routine-banner { padding: 20px; border-radius: 26px; font-family: Archivo, var(--ui); }
+.routine-banner .routine-big { margin: 0; }
+.routine-when { margin: 22px 4px 8px; color: var(--ink); }
+.routine-time .input { width: 100%; min-height: 54px; border-radius: 18px; font-size: 17px; }
+.routine-say { display: flex; gap: 12px; align-items: flex-start; margin: 14px 4px 0; font-size: 17px; line-height: 1.4; color: var(--mute); }
+.routine-say .lucide, .routine-hint .lucide { flex: none; margin-top: 2px; }
+.routine-time .routine-run .btn { flex: 1 1 0; background: var(--tint2); color: var(--ink); }
+.routine-time .routine-run .btn.go { background: var(--ink); color: var(--bg); }
+.routine-time .st-head h1 { font-size: 26px; line-height: 1.1; }
+.routine-times { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 26px; background: var(--solid); overflow: hidden; }
+.routine-times li { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.routine-times li:first-child { border-top: 0; }
+.routine-times li > :nth-child(2), .routine-times li > :nth-child(3) { grid-column: 2; font-size: 17px; }
+.routine-times li > :nth-child(3) { color: var(--mute); }
+.routine-clock { grid-row: 1 / 3; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--soft); }
+.routine-next { gap: 14px; }
+@media (min-width: 900px) {
+  .routine-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .routines-page .st-head .back { display: none; }
+  .routine-time .st-head .back { display: inline-grid; }
+  .routine-time .st-pri { max-width: 560px; }
+  .routine-next { width: 420px; }
+}
+@media (max-width: 899px) {
+  .routines-page .st-asks { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 24px; }
+  .routines-page .st-body { display: block; }
+  .routines-page .st-pri, .routines-page .st-head { padding-inline: 0; }
+  .routines-page:not(.routine-time) .st-head { flex-direction: column; align-items: flex-start; }
+  .routines-page .routine-cards { margin-top: 12px; }
+}

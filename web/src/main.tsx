@@ -15,6 +15,7 @@ import { glowOf, hear, useOffice } from './office.tsx';
 import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Removed, Sheet, sheet, SignIn, Split, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
+import { nextRun, parseSchedule } from '../../src/routines.ts';
 import * as K from './kept.ts';
 
 /** The kept week (web/src/kept.ts): what this browser last heard from the computer, shown read-only while it can't be
@@ -42,6 +43,7 @@ function parseRoute(): Route {
   if (a === 'pair' && demo) return { view: 'pair' };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
+  if (a === 'routines' && /^\d+$/.test(b ?? '')) return { view: 'routines', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
   if (a === 'settings' && ['you', 'memory', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
@@ -1304,17 +1306,10 @@ function RoutineList({ state, refresh, bot }: Ctx & { bot?: string }) {
 /** Where a run ended up: the thing it made, else its line in the chat. */
 const runHref = (r: Json, res: Json) => res.thing ? `#/things/t${res.thing}` : r.helper === 'chief' ? `#/chief/m${res.msg}` : `#/h/${r.helper}/m${res.msg}`;
 
-/** One routine: its time line is tappable (the same field Chief's card uses); what it waits for, its last run beside
- *  Do it now, and its recent runs can be seen. Do it now reads "Running…" until the run's result lands on the row. */
+/** One routine (Stack J08): a card in its helper's colour with the time as the big line, its switch, Do it now and
+ *  Change time (its own page). Do it now reads "Running…" until the run's result lands on the row; the last run's words
+ *  and the recent runs stay on the card. */
 function RoutineRow({ r, h, act, refresh }: { r: Json; h: Helper | undefined; act: (fn: () => Promise<unknown>, ok?: string) => Promise<boolean>; refresh: () => void }) {
-  const [when, setWhen] = useState<string | null>(null); // null: the time line; a string: editing it
-  const [preview, setPreview] = useState<Json>(null);
-  useEffect(() => {
-    if (when === null || !when.trim()) { setPreview(null); return; }
-    const t = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
-    return () => clearTimeout(t);
-  }, [when]);
-  const save = async () => { if (await act(() => api.routine(r.id, { schedule: when!.trim() }), 'Time changed')) setWhen(null); };
   // After a press the button reads "Running…" until a run newer than the last one at the press is on the row.
   const [asked, setAsked] = useState<number | null>(null), pressed = useRef(false);
   const last = r.runs[0], running = (asked !== null && (last?.t ?? 0) <= asked) || last?.tone === 'running';
@@ -1324,37 +1319,30 @@ function RoutineRow({ r, h, act, refresh }: { r: Json; h: Helper | undefined; ac
     try { await api.runRoutine(r.id); } catch (e: any) { setAsked(null); if (e?.status === 409) toast(e.message); else await attempt(() => Promise.reject(e)); }
     refresh();
   };
+  const who = h?.kind ?? 'chief';
+  const sub = [r.cadence, r.remind ? '' : r.name, r.watching ? `Keeps an eye on ${r.watching}` : ''].filter(Boolean).join(' · ');
   return (
-    <div className={`card routine ${r.paused ? 'paused' : ''}`}>
+    <div className={`card routine ${r.paused ? 'paused' : ''}`} style={{ background: art.colourOf(who), color: art.inkOn(who) }}>
       <div className="row">
-        <Face who={h ?? 'chief'} size={40} />
-        <div className="grow">
-          <b>{r.name}</b>
-          {when === null ? <button className="link line-when" onClick={() => setWhen(r.remind ? 'in 20 minutes' : r.when || '')}>
-            {[r.on, r.watching ? `Keeps an eye on ${r.watching}` : '', r.when].filter(Boolean).join(' · ')}{r.paused ? ' · paused' : r.next ? ` · ${r.remind ? '' : 'next '}${r.next}` : ''}{r.quiet && !r.watching ? " · stays quiet if there's nothing" : ''}
-          </button> : <div className="mute small">Moving it — save a new time below, or cancel.</div>}
-          {r.looks && <div className="mute small">{r.looks}</div>}
-        </div>
+        <Face who={h ?? 'chief'} size={44} />
+        <b className="grow semi clamp1">{h?.name ?? 'Chief'}</b>
+        <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /></label>
       </div>
-      {when !== null && <form className="row" onSubmit={(e) => { e.preventDefault(); if (when.trim() && preview && !preview.bad) void save(); }}>
-        <input className="input grow" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="When? For example: every Saturday 10am" aria-label="When" autoFocus />
-        <button className="btn go" disabled={!when.trim() || !preview || preview.bad}>Save</button>
-        <button className="btn ghost" type="button" onClick={() => setWhen(null)}>Cancel</button>
-      </form>}
-      {when !== null && preview && !preview.bad && <div className="mute small">{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}.</div>}
-      {when !== null && preview?.bad && <div className="mute small">I didn't catch that time. Try “every Monday 9:00”.</div>}
+      <div className="routine-big wide">{r.big}</div>
+      <p className="routine-sub">{r.paused ? 'Paused · ' : ''}{sub}{sub ? '.' : ''}{r.quiet && !r.watching && !r.digest ? ' Tells you only if something is up.' : ''}
+        <span className="routine-last-wrap" aria-live="polite">{last && <span key={last.at + last.words} className={`routine-last${pressed.current ? ' landed' : ''}`}> Last run {last.at} · {last.words}{last.result && <> · <a className="link" href={runHref(r, last.result)}>See result</a></>}</span>}</span></p>
       <div className="routine-run">
         <button className="btn go" onClick={run} disabled={!!r.reminded || running}>{r.reminded ? 'Already reminded' : running ? 'Running…' : 'Do it now'}</button>
-        <span className="routine-last-wrap" aria-live="polite">{last && <span key={last.at + last.words} className={`small routine-last${pressed.current ? ' landed' : ''}`}>Last run {last.at} · {last.words}{last.result && <> · <a className="link" href={runHref(r, last.result)}>See result</a></>}</span>}</span>
+        <a className="btn" href={`#/routines/${r.id}`}>Change time</a>
       </div>
-      {r.runs.length > 1 && <details className="routine-runs">
-        <summary className="small">Recent runs</summary>
-        <ol>{r.runs.map((x: Json, i: number) => <li key={i} className="small"><span className="mute">{x.at}</span> {x.words}{x.result && <> · <a className="link" href={runHref(r, x.result)}>See result</a></>}</li>)}</ol>
+      {(r.runs.length > 1 || !r.digest) && <details className="routine-runs">
+        <summary>More</summary>
+        {r.runs.length > 1 && <ol>{r.runs.map((x: Json, i: number) => <li key={i}><span>{x.at}</span> {x.words}{x.result && <> · <a className="link" href={runHref(r, x.result)}>See result</a></>}</li>)}</ol>}
+        <div className="btns">
+          {!r.digest && !r.watching && !r.remind && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
+          {!r.digest && <button className="btn" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
+        </div>
       </details>}
-      <div className="btns">
-        <label className="routine-switch"><input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => act(() => api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }))} /><span>{r.paused ? 'Paused' : 'On'}</span></label>        {!r.digest && !r.watching && !r.remind && <button className={`chip ${r.quiet ? 'on' : ''}`} aria-pressed={r.quiet} onClick={() => act(() => api.routine(r.id, { quiet: !r.quiet }), r.quiet ? 'It will always report back' : "It will only speak up when something's up")}>Only tell me if something's up</button>}
-        {!r.digest && <button className="btn ghost" onClick={() => confirm(`Remove “${r.name}”?`) && act(() => api.removeRoutine(r.id))}>Remove</button>}
-      </div>
     </div>
   );
 }
@@ -1362,22 +1350,66 @@ function RoutineRow({ r, h, act, refresh }: { r: Json; h: Helper | undefined; ac
 /** Recurring work starts as a request: say it in your own words, Chief brings back a card to start — no setup form. */
 function RoutineAsk() {
   const [text, setText] = useState('');
-  const send = async () => { const t = text.trim(); if (!t) return; if (await attempt(() => api.post('chief', t), undefined, true)) { setText(''); go('#/chief'); } };
+  const send = async (t = text.trim()) => { if (!t) return; if (await attempt(() => api.post('chief', t), undefined, true)) { setText(''); go('#/chief'); } };
   return (
     <div className="card ask routine-ask">
-      <div className="ask-head">
-        <Face who="chief" size={36} />
-        <div><b>Tell Chief what should happen regularly</b><div className="mute small">In your own words. He brings it back as a card to start.</div></div>
-      </div>
       <form className="row" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <input className="input grow" value={text} onChange={(e) => setText(e.target.value)} placeholder="Plan the week's dinners every Saturday morning" aria-label="Tell Chief what should happen regularly" />
+        <input className="input grow" value={text} onChange={(e) => setText(e.target.value)} placeholder="Every Friday, check…" aria-label="Tell Chief what should happen regularly" />
         <button className="send" aria-label="Send" disabled={!text.trim()}>↑</button>
       </form>
     </div>
   );
 }
-function Routines(ctx: Ctx) {
-  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Routines</h1><p className="lead">What the crew does on a schedule or when something happens, and whether it's on.</p><RoutineList {...ctx} /><p className="mute small routine-footnote">The crew only runs routines you have approved.</p><div className="label">New routine</div><RoutineAsk /></div>;
+
+/** Routines (Stack J08): a card per routine; on a computer "Talk to Chief" beside them, on a phone below. */
+function Routines(ctx: Ctx & { id?: string }) {
+  const { state, refresh } = ctx, crew = A.crew(state);
+  const r = ctx.id ? A.routines(state).find((x: Json) => String(x.id) === ctx.id) : undefined;
+  if (r) return <RoutineTime r={r} h={crew.find((x) => x.id === r.helper)} refresh={refresh} />;
+  const ideas = ['Every Friday, check for refunds', 'Each morning, what is on today'];
+  const say = async (t: string) => { if (await attempt(() => api.post('chief', t), undefined, true)) go('#/chief'); };
+  return <div className="page stack stack-home routines-page">
+    <header className="st-head"><a href="#/" className="back phone-only" aria-label="Home">‹</a>
+      <span className="grow"><h1 className="wide">Routines</h1><p className="st-line">What the crew does on a schedule. Only the ones you said yes to run.</p></span></header>
+    <div className="st-body"><div className="st-pri routine-cards"><RoutineList {...ctx} /></div>
+      <aside className="st-asks routine-talk" aria-label="Talk to Chief">
+        <div className="st-label"><span>Talk to Chief</span></div>
+        <p className="routine-hint">Want something on a schedule? Say it in your words; the helper for it asks you first.</p>
+        <RoutineAsk />
+        {ideas.map((t) => <button key={t} className="st-idea" onClick={() => say(t)}><span className="grow">{t}</span><Icon name="plus" size={20} /></button>)}
+      </aside></div>
+  </div>;
+}
+
+/** Change a routine's time (J08b): the new time in plain words, what it says back, and the next four times it would run. */
+function RoutineTime({ r, h, refresh }: { r: Json; h: Helper | undefined; refresh: () => void }) {
+  const [when, setWhen] = useState(r.remind ? 'in 20 minutes' : r.when || ''), [preview, setPreview] = useState<Json>(null), [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!when.trim()) { setPreview(null); return; }
+    const t = setTimeout(() => api.schedule(when).then(setPreview).catch(() => setPreview({ bad: true })), 250);
+    return () => clearTimeout(t);
+  }, [when]);
+  const ok = !!when.trim() && !!preview && !preview.bad;
+  const save = async () => { setBusy(true); const done = await attempt(async () => { await api.routine(r.id, { schedule: when.trim() }); refresh(); }, 'Time changed'); setBusy(false); if (done) go('#/routines'); };
+  const who = h?.kind ?? 'chief';
+  // ponytail: the next four are stepped on this device's clock from crewd's first; away from home's zone they can sit an hour off.
+  const nexts = useMemo(() => { if (!ok || r.remind || typeof preview.next !== 'number') return [] as number[]; try { const s = parseSchedule(when), out = [preview.next]; while (out.length < 4) out.push(nextRun(s, out[out.length - 1])); return out; } catch { return []; } }, [ok, preview, when]);
+  return <div className="page stack stack-home routines-page routine-time">
+    <header className="st-head"><a href="#/routines" className="back" aria-label="Back to Routines">‹</a><Face who={h ?? 'chief'} size={44} />
+      <span className="grow"><h1 className="wide">{r.name}</h1><p className="st-line">{h?.name ?? 'Chief'} · a routine</p></span></header>
+    <div className="st-body"><form className="st-pri" onSubmit={(e) => { e.preventDefault(); if (ok && !busy) void save(); }}>
+      <div className="routine-banner" style={{ background: art.colourOf(who), color: art.inkOn(who) }}><div className="routine-big wide">{r.big}</div><p className="routine-sub">{[r.cadence, r.name].filter(Boolean).join(' · ')}.</p></div>
+      <label className="st-label routine-when" htmlFor="routine-when"><span>When?</span></label>
+      <input id="routine-when" className="input" value={when} onChange={(e) => setWhen(e.target.value)} placeholder="For example: every Saturday 10am" autoFocus />
+      <p className="routine-say">{ok ? <><Icon name="check" size={20} />{preview.words}.{preview.guessed ? ` Did you mean ${preview.words.split(' at ').pop()}?` : ''} First time {preview.first}.</> : preview?.bad ? <><Icon name="alert" size={20} />I didn't catch that time. Try “every Monday 9:00”.</> : null}</p>
+      <div className="routine-run"><button className="btn go" disabled={!ok || busy}>Save</button><a className="btn" href="#/routines">Keep the time</a></div>
+    </form>
+      <aside className="st-asks routine-next" aria-label="The next four times">
+        {nexts.length > 0 && <><div className="st-label"><span>The next four times</span></div>
+          <ol className="routine-times">{nexts.map((t) => <li key={t}><span className="routine-clock"><Icon name="clock" size={22} /></span><b>{new Date(t).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</b><span>{A.clock(t).replace(/^.*, /, '').replace(/^\w{3} (?=\d)/, '')}</span></li>)}</ol></>}
+        {!r.watching && !r.digest && r.quiet && <p className="routine-hint"><Icon name="lock" size={20} />On a quiet week {h?.name ?? 'Chief'} says nothing, and it costs you nothing.</p>}
+      </aside></div>
+  </div>;
 }
 
 // ---------- settings ----------
@@ -2156,14 +2188,14 @@ function App() {
           {v.view === 'add' && <AddHelper {...ctx} />}
           {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
-          {v.view === 'routines' && <Routines {...ctx} />}
+          {v.view === 'routines' && <Routines {...ctx} id={v.id} />}
           {v.view === 'settings' && <Settings {...ctx} tab={v.tab} look={look} setLook={setLook} />}
           {v.view === 'ai' && v.id && <AiAccount {...ctx} id={v.id} />}
           {v.view === 'computer' && <ChiefComputer />}
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share refresh={ctx.refresh} />}
         </main>
-        <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
+        <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k || (k === 'home' && place === 'routines') ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
           <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'jobs' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
