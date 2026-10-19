@@ -1211,9 +1211,10 @@ function AboutMe({ id, name, page, reload }: { id: string; name: string; page: J
 function Memory({ tick }: { tick: number }) {
   const [notes, setNotes] = useState<string | null>(null);
   const [got, setGot] = useState<{ text: string; cap: number } | null>(null);
+  const [cases, setCases] = useState<{ thread: string; facts: string }[]>([]);
   const load = useCallback(async () => {
-    const [a, p] = await Promise.all([api.about().catch(() => ({ notes: '' })), api.profile().catch(() => ({ text: '', cap: 4000 }))]);
-    setNotes(a.notes ?? ''); setGot({ text: p.text ?? '', cap: p.cap ?? 4000 });
+    const [a, p] = await Promise.all([api.about().catch(() => ({ notes: '', cases: [] })), api.profile().catch(() => ({ text: '', cap: 4000 }))]);
+    setNotes(a.notes ?? ''); setCases(a.cases ?? []); setGot({ text: p.text ?? '', cap: p.cap ?? 4000 });
   }, []);
   useEffect(() => { void load(); }, [load, tick]);
   const [adding, setAdding] = useState('');
@@ -1243,11 +1244,14 @@ function Memory({ tick }: { tick: number }) {
   const crewRows = mine.map((m, i) => <div key={`you-${i}`} className="row-item memory-you"><span className="grow">{m}</span>
     <button className="link" onClick={() => forget('crew', i)}>Forget</button></div>);
   if (undone?.kind === 'crew') crewRows.splice(Math.min(undone.at, crewRows.length), 0, forgotten);
+  const forgetCase = (thread: string) => void attempt(async () => { await api.forgetCase(thread); await load(); });
+  const caseRows = A.caseLines(cases).map((c) => <div key={`case-${c.thread}`} className="row-item memory-case"><span className="grow">{c.text}</span>
+    <button className="link" onClick={() => forgetCase(c.thread)}>Forget</button></div>);
   return (
     <>
       <div className="label" id="memory">Memory</div>
       <p className="mute small">What the crew knows about you and your work. Every helper reads it before a job for you.</p>
-      {(parts.length || mine.length) ? <div className="card list memory-lines">{partRows}{crewRows}</div>
+      {(parts.length || mine.length || cases.length) ? <div className="card list memory-lines">{partRows}{crewRows}{caseRows}</div>
         : <div className="card empty">Nothing yet. Tell Chief about yourself and your work, and the whole crew will know.</div>}
       <div className="row add-row"><input className="input grow profile-add" value={adding} onChange={(e) => setAdding(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && adding.trim() && !over) add(); }}

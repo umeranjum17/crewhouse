@@ -57,7 +57,9 @@ import { join } from 'node:path';
 // reader, Calendar paging, the event trigger words and crewd's once-a-minute check on its own tick. Nothing was packed.
 // Raised 7192 -> 7243 for agent computer use (ch-agent-computer-use, owner exception, +51): OpenClaw's own
 // computer tool and node host per bot desktop, its gate and policy entries, and the bot's Chromium fenced like the shell.
-const BUDGET = 7243;
+// Raised 7243 -> 7261 for Chief's case follow-ups (ch-notice-followup, rebuilt from #471, +18; the captain restored the feature,
+// owner decision on the exception pending, no trim paired): the cases table, the held-facts lookup, the crew_case tool and Memory's Forget.
+const BUDGET = 7261;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
