@@ -32,6 +32,8 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/ask-in-view.sh "$DONE_DONE_EVIDENCE_ROOT"'
   signin-card:
     command: 'timeout -k 10 300 node scripts/verify/signin-card.ts "$PWD" "${B:?owned daemon URL}" "${LAB:?owned lab}/state/person.key" "$DONE_DONE_EVIDENCE_ROOT"'
+  cli-cause:
+    command: 'timeout -k 10 300 bash scripts/verify/cli-cause.sh "$DONE_DONE_EVIDENCE_ROOT"'
   site-signin:
     command: 'timeout -k 10 600 node scripts/verify/site-signin.ts "$PWD" "${B:?owned daemon URL}" "${LAB:?owned lab}/state" "$DONE_DONE_EVIDENCE_ROOT" "${BOT:?helper id}"'
   pwa-pair:
