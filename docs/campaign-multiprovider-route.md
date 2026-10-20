@@ -7,7 +7,7 @@ yet proven: the run-brain default, the stub campaign smoke and the QA slice
 below are open. Campaign behaviour is unchanged.
 
 Gap: a campaign run (Chief + Scout/Scribe/Reel through `crew_assign`,
-`skills/run-a-marketing-campaign/SKILL.md`) needs a signed-in account. Before
+`skills/crewhouse-run-a-marketing-campaign/SKILL.md`) needs a signed-in account. Before
 the OpenCode Go route, no Crewhouse account mapped the kit's `opencode-go`
 sign-in (`PROVIDERS` in `src/accounts.ts`, `PROVIDER_OF` / `AUTH_CHOICE` in
 `src/openclaw/runtime.ts`), so a person whose only plan was OpenCode Go had
@@ -31,7 +31,7 @@ are untouched by this scope.
   cap with the longest channel names; the sign-in card and the Needs-you card
   at 390 px phone width in both themes, nothing clipped or overlapped. Facts
 rule holds throughout: every post word is a person-given or source-given
-fact (`skills/run-a-marketing-campaign/SKILL.md:13,26`); a provider switch
+fact (`skills/crewhouse-run-a-marketing-campaign/SKILL.md:13,26`); a provider switch
 never rewords a claim.
 
 ## (b) What BYOKit already offers, and what Crewhouse must add

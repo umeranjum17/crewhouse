@@ -334,9 +334,9 @@ test('tool grants: a session gets only granted, installed tools; command-line to
     await settled(db, h);
     const card = disk.templateKit(cfg, disk.loadTemplate(cfg, 'scout'));
     assert.match(card.find((k) => k.id === 'browser')!.asks.join(), /payment page/);
-    assert.ok(existsSync(join(disk.botDir(cfg, 'tracer'), 'skills', 'find-leads', 'SKILL.md')), 'library skills copied in');
+    assert.ok(existsSync(join(disk.botDir(cfg, 'tracer'), 'skills', 'crewhouse-find-leads', 'SKILL.md')), 'library skills copied in');
     // No key or token ships with the template.
-    for (const f of ['AGENTS.md', 'bot.json', 'skills/find-leads/SKILL.md']) assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'tracer'), f), 'utf8'), /(sk|tk|tr)_[A-Za-z0-9]{16,}|X-Treg-Token:/);
+    for (const f of ['AGENTS.md', 'bot.json', 'skills/crewhouse-find-leads/SKILL.md']) assert.doesNotMatch(readFileSync(join(disk.botDir(cfg, 'tracer'), f), 'utf8'), /(sk|tk|tr)_[A-Za-z0-9]{16,}|X-Treg-Token:/);
   } finally {
     process.env.PATH = path;
     done();
@@ -990,7 +990,7 @@ test('suggestions wait for their answer across a restart; other questions withou
   const open = db.all("SELECT kind FROM asks WHERE state = 'open'").map((a) => a.kind);
   assert.deepEqual(open, ['propose']);
   again.stop();
-  assert.throws(() => disk.draftSkill(cfg, 'scout', { ...keep, name: 'research-report' }), /already have a skill called research-report/, 'a skill it came with is not overwritten');
+  assert.throws(() => disk.draftSkill(cfg, 'scout', { ...keep, name: 'crewhouse-find-threads' }), /already have a skill called crewhouse-find-threads/, 'a skill it came with is not overwritten');
   assert.throws(() => disk.draftSkill(cfg, 'scout', { ...keep, steps: 'x'.repeat(disk.SKILL_CAP) }), /over 4000/);
   assert.match(disk.draftSkill(cfg, 'scout', { ...keep, description: 'Use: when asked' }).text, /^description: "Use: when asked"$/m, 'a colon cannot break the header');
   done();

@@ -1,6 +1,6 @@
 # site-signin: a helper asks to be signed in to a site, the person signs in on its screen
 
-A helper on a page it needs the person signed in to calls `crew_signin {site}` (skill `sign-in-for-me`). crewd opens a
+A helper on a page it needs the person signed in to calls `crew_signin {site}` (skill `crewhouse-sign-in-for-me`). crewd opens a
 `kind: 'signin'` ask owned by Chief (`askSignin` in `src/crew.ts`), so the card sits in Chief's thread: the site's icon,
 "Sign in to <host>" and one button with the same words (`SignInCard` in `web/src/parts.tsx`). The button opens the
 helper's screen large (`SiteSignIn` in `web/src/screen.tsx`, `#/ask/:id`): it takes the wheel at once, the site name on

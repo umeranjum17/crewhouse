@@ -41,7 +41,7 @@ async function growthJob(crew: any, db: any, { plan = 'Growth plan', notes = NOT
     + call('crew_write', { path: 'files/show-hn.md', content: notes })
     + call('crew_draft', { path: 'files/x-post.md', channel: 'post', to: 'X launch post' })
     + call('crew_write', { path: 'files/x-post.md', content: 'muxr runs your coding agents on your own machine.' })
-    + call('crew_pass', { bot: 'reel', task: 'make-reel: a 30 second demo for muxr from its README screenshots' }))).task);
+    + call('crew_pass', { bot: 'reel', task: 'crewhouse-make-reel: a 30 second demo for muxr from its README screenshots' }))).task);
   const scribe = db.get("SELECT * FROM tasks WHERE bot = 'scribe' AND origin = 'person' ORDER BY id DESC LIMIT 1");
   await settled(db, scribe.id);
   const reel = db.get("SELECT * FROM tasks WHERE bot = 'reel' ORDER BY id DESC LIMIT 1");
@@ -61,7 +61,7 @@ test('the skills are on Scout and Scribe, and the old one is gone', () => {
   const { cfg, done } = setup();
   const scout = disk.loadTemplate(cfg, 'scout'), scribe = disk.loadTemplate(cfg, 'scribe');
   for (const s of scout.skills ?? []) assert.ok(existsSync(join(repo, 'skills', s, 'SKILL.md')), `${s} exists`);
-  assert.deepEqual(scribe.skills?.filter((s) => ['growth-plan', 'market-it'].includes(s)), ['growth-plan']);
+  assert.deepEqual(scribe.skills?.filter((s) => ['crewhouse-growth-plan', 'market-it'].includes(s)), ['crewhouse-growth-plan']);
   assert.equal(existsSync(join(repo, 'skills', 'market-it')), false, 'no shim for the old name');
   assert.equal(skipped(), 0, 'the ranking script checks itself');
   done();
@@ -69,11 +69,11 @@ test('the skills are on Scout and Scribe, and the old one is gone', () => {
 
 /** The script's own self-check: the agreed examples, run by python3. */
 function skipped() {
-  try { return script('skills/find-competitors/score.py test').split('\n').filter((l) => l.startsWith('FAIL')).length; } catch { return 1; }
+  try { return script('skills/crewhouse-find-competitors/score.py test').split('\n').filter((l) => l.startsWith('FAIL')).length; } catch { return 1; }
 }
 
 test('score.py ranks rivals, finds spikes and checks itself on python3', () => {
-  const out = script('skills/find-competitors/score.py test');
+  const out = script('skills/crewhouse-find-competitors/score.py test');
   assert.doesNotMatch(out, /FAIL/, out);
   assert.match(out, /646-star day and the day after are one spike/);
   assert.match(out, /15-star day on a 35-star repo is a spike/);
@@ -95,7 +95,7 @@ test('a finished growth job passes the validator; a long plan and a prose Hacker
   assert.match(ok.find((r: any) => r.what.startsWith('notes for'))!.detail, /all five labels/);
   const reel = crewOf(db, 'crew_pass').find((c: any) => c.input.includes('"reel"'));
   assert.ok(reel, 'one hand-off to Reel for the missing demo');
-  assert.match(JSON.parse(reel.input).task, /make-reel/);
+  assert.match(JSON.parse(reel.input).task, /crewhouse-make-reel/);
   assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', scout)!.state, 'done');
   done();
 });
@@ -163,12 +163,12 @@ test('an untouched existing Scout gets the new skill when the template lands', (
   lab.crew.onboard('Umer');
   lab.crew.recruit('scout', 'Scout', 'person');
   const dir = disk.botDir(lab.cfg, 'scout');
-  rmSync(join(dir, 'skills', 'find-competitors'), { recursive: true, force: true });
-  assert.equal(existsSync(join(dir, 'skills', 'find-competitors')), false, 'an older install does not have it');
+  rmSync(join(dir, 'skills', 'crewhouse-find-competitors'), { recursive: true, force: true });
+  assert.equal(existsSync(join(dir, 'skills', 'crewhouse-find-competitors')), false, 'an older install does not have it');
   disk.upgradeFolder(lab.cfg, 'scout', disk.loadTemplate(lab.cfg, 'scout'), 'Scout');
-  assert.ok(existsSync(join(dir, 'skills', 'find-competitors', 'SKILL.md')), 'the skill is copied in');
-  assert.ok(existsSync(join(dir, 'skills', 'find-competitors', 'score.py')), 'the script comes with it');
-  assert.match(readFileSync(join(dir, 'skills', 'find-threads', 'SKILL.md'), 'utf8'), /Find threads/);
+  assert.ok(existsSync(join(dir, 'skills', 'crewhouse-find-competitors', 'SKILL.md')), 'the skill is copied in');
+  assert.ok(existsSync(join(dir, 'skills', 'crewhouse-find-competitors', 'score.py')), 'the script comes with it');
+  assert.match(readFileSync(join(dir, 'skills', 'crewhouse-find-threads', 'SKILL.md'), 'utf8'), /Find threads/);
   done();
   lab.done();
 });
