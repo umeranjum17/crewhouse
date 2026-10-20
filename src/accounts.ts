@@ -30,7 +30,7 @@ export function provider(key: string) {
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
 
-type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'key'; url?: string; code?: string; error?: string; why?: string; workspaces?: { id: string; name: string }[] };
+type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'key'; url?: string; code?: string; error?: string; why?: string; cliLogin?: { signIn: boolean }; workspaces?: { id: string; name: string }[] };
 
 /** The person-facing half of the engine's sign-in: who is signed in to what, and the one card that drives the
  *  engine's own wizard. The credentials themselves never pass through here. */
@@ -96,7 +96,7 @@ export class Accounts {
     }, handle = this.runtime.signIn(account, via, (step: SignInStep) => {
       if (step.url) view.url = step.url;
       if (step.code) view.code = step.code;
-      if (step.error) { view.error = step.error; delete view.workspaces; }
+      if (step.error) { view.error = step.error; delete view.workspaces; if (step.cliLogin) view.cliLogin = step.cliLogin; }
       if (step.workspaces) { view.workspaces = step.workspaces; delete view.error; }
       if (step.notIncluded) { this.excluded.add(account); done(false); } else if (step.done) done(true);
       else if (step.error && step.waiting === false) done(false);

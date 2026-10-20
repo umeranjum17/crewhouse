@@ -120,7 +120,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Sign in with ${name}`} onClose={close}>
-      {!['offline', 'busy'].includes(phase) && <Progress at={at} steps={phase === 'key' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
+      {!['offline', 'busy'].includes(phase) && !g.cliLogin && <Progress at={at} steps={phase === 'key' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
       <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'key' && <>
@@ -167,7 +167,10 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         <button className="btn go big" onClick={() => again()}>Try again</button>{ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Use a code instead</button>}</>}
       {phase === 'expired' && <><h2>That ran out of time</h2><p className="mute">Sign-ins only wait a few minutes, to keep your account safe. Let's start a fresh one.</p>
         <button className="btn go big" onClick={() => again()}>Start again</button>{notNow}</>}
-      {phase === 'failed' && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
+      {phase === 'failed' && g.cliLogin && (() => { const w = A.cliLoginWords(g.cliLogin, name); return <><h2>{w.head}</h2><p className="mute">{w.body}</p>
+        {w.cmd && <div className="fr-cmds"><code className="fr-cmd chat-code">{w.cmd}</code></div>}
+        <button className="btn go big" onClick={() => again()}>{w.action}</button>{notNow}</>; })()}
+      {phase === 'failed' && !g.cliLogin && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
     </Sheet>

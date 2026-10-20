@@ -371,3 +371,33 @@ test('a Hello goal tap goes straight to Research Rae: hired silently with no Chi
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'research-rae' AND author = 'person'")!.text, 'Help me earn a little on the side');
   done();
 });
+
+test('a Claude sign-in the kit cannot run says so: the sheet gets the run-it-yourself words, and a runnable one offers the sign-in', async () => {
+  const { faked } = await import('./kit-fake.ts');
+  const { crew, done } = setup(), f = faked();
+  crew.runtime.signIn = f.runtime.signIn.bind(f.runtime);
+  try {
+    await f.started;
+    for (const signIn of [false, true]) {
+      // The kit's own answer, faked at its boundary: a failed anthropic-cli view carrying the typed cause.
+      (f.runtime as any).kit.signIn = (_m: unknown, o: { authChoice: string }, on: (v: object) => void) => {
+        assert.equal(o.authChoice, 'anthropic-cli');
+        on({ state: 'failed', via: 'browser', why: 'failed', error: 'Claude Code is not signed in.', cause: { code: 'needs_cli_login', cli: 'claude', home: '/home/you', signIn } });
+        return { paste() {}, cancel() {}, done: Promise.resolve() };
+      };
+      await crew.accounts.login('claude');
+      await crew.accounts.finished('claude');
+      const view = crew.accounts.view('claude')!;
+      assert.equal(view.state, 'failed');
+      assert.deepEqual(view.cliLogin, { signIn }, 'the sheet is told which variant');
+      const g = A.account([{ account: 'claude', signedIn: false, signIn: view }], 'claude');
+      assert.deepEqual(g.cliLogin, { signIn });
+      const w = A.cliLoginWords(g.cliLogin!, 'Claude');
+      assert.equal(w.cmd, signIn ? '' : 'claude', 'only the run-it-yourself variant names the command');
+      assert.match(w.action, signIn ? /^Sign in with Claude$/ : /^Try again$/);
+      assert.match(w.body, signIn ? /Sign in with your Claude plan/ : /isn't signed in\. Open a command window on this computer/);
+      await crew.accounts.cancel('claude'); crew.accounts.stop();
+      (crew.accounts as any).views.delete('claude');
+    }
+  } finally { done(); await f.done(); }
+});
