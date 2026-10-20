@@ -62,8 +62,11 @@ async function browse(external?: string) {
   ws = new WebSocket(page!.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
   let id = 0;
-  const waiting = new Map<number, (m: any) => void>();
-  ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });
+  const waiting = new Map<number, (m: any) => void>(), paused: unknown[] = [];
+  ws.on('message', (d) => {
+    const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id);
+    if (m.method === 'Fetch.requestPaused') paused.push(m.params);
+  });
   const send = (method: string, params: object = {}) => new Promise<any>((r, j) => {
     const n = ++id; waiting.set(n, (m) => (m.error ? j(new Error(`${method}: ${m.error.message}`)) : r(m.result))); ws.send(JSON.stringify({ id: n, method, params }));
   });
@@ -81,7 +84,7 @@ async function browse(external?: string) {
     window.cancelAnimationFrame = (id) => { n.pending.delete(id); drop(id); };
   })()` });
   const open = async (query: string, path = '/') => { await send('Page.navigate', { url: `${base}${path}?${query}` }); };
-  return { send, run, open };
+  return { send, run, open, paused };
 }
 
 
@@ -679,10 +682,19 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
   assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
   await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
-  // Native delegation's standing helper has its real full name, not the shorter template label.
+  // Hold the browser's roster refresh while a real new helper starts: an old snapshot cannot prove it was deleted.
+  await b.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/state', requestStage: 'Request' }] });
   const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });
   const named = (await api('/api/bots/chief/messages', { text: 'Research Rae, check the notebook; ask permission' })).task;
   await holding(lab.crew, rae.id);
+  try {
+    await b.open(`day#/h/${rae.id}`);
+    await until('the held roster refresh', () => b.paused.length > 0);
+    await b.run('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    const page = await b.run('({hash:location.hash,text:document.body.innerText})');
+    assert.equal(page.hash, `#/h/${rae.id}`, 'a stale roster never throws a new helper’s chat back to Home');
+    assert.doesNotMatch(page.text, /This helper has left the crew/, 'absence from a stale roster never claims the helper left');
+  } finally { await b.send('Fetch.disable'); }
   const writing = [];
   for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
