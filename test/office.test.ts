@@ -682,7 +682,23 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   // Native delegation's standing helper has its real full name, not the shorter template label.
   const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });
   const named = (await api('/api/bots/chief/messages', { text: 'Research Rae, check the notebook; ask permission' })).task;
-  await holding(lab.crew, rae.id); await release(lab.crew, rae.id, 'The notebook is checked.'); await settled(lab.db, named);
+  await holding(lab.crew, rae.id);
+  const writing = [];
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`${theme}#/h/${rae.id}`);
+    try { await until('the working helper’s Stop button', () => b.run("!!document.querySelector('.chat-head button')"), 30_000); }
+    catch (e) { console.error('working header diagnostic', { theme, width, task: lab.db.get('SELECT id, bot, state FROM tasks WHERE id = ?', named), page: await b.run('({url:location.href,text:document.body.innerText})') }); throw e; }
+    const wholeWord = await b.run(`(() => { const n=document.querySelector('.chat-head .grow b').firstChild,r=document.createRange();r.setStart(n,0);r.setEnd(n,'Research'.length);return r.getClientRects().length===1; })()`);
+    await b.open(`${theme}#/chief`);
+    await until('Chief’s voice button', () => b.run("!!document.querySelector('.composer > .mic')"), 30_000);
+    await b.run("document.querySelector('.composer textarea').focus();document.querySelector('.composer textarea').select()");
+    await b.send('Input.insertText', { text: 'Ask Research Rae to read facts.txt and tell me who owns the blue folder and its reference.' });
+    const clear = await b.run(`(() => { const t=document.querySelector('.composer textarea'),m=document.querySelector('.composer > .mic');return t.getBoundingClientRect().right-parseFloat(getComputedStyle(t).paddingRight)<=m.getBoundingClientRect().left; })()`);
+    writing.push({ theme, width, wholeWord, clear });
+  }
+  for (const r of writing) assert.deepEqual([r.wholeWord,r.clear], [true,true], `${r.theme} ${r.width}: a working helper’s name stays whole-word and the microphone never covers typed words`);
+  await release(lab.crew, rae.id, 'The notebook is checked.'); await settled(lab.db, named);
   for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
     await b.open(`${theme}#/chief`);
