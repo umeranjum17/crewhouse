@@ -80,11 +80,9 @@ in plain words, `name` the rival. Read each feed twice first and offer only if t
 
 When the person asked for growth, a launch, or more stars — not just "who else does this" — the plan is Scribe's
 half, and it is written **from this document**, so it starts only once the document above is delivered. After that
-call, and only after it, hand it on once with the document attached:
-
-```
-crew_pass { "bot": "scribe", "task": "Write the growth plan from these rivals. Done means: a plan of at most 300 words and the first drafts.", "files": ["files/<the document you just delivered>"] }
-```
+call, and only after it, end your reply with the document's path and one line for Chief: "Next, Scribe writes the growth
+plan from these rivals; done means a plan of at most 300 words and the first drafts." Chief hands it on; you never hand
+work to another helper yourself.
 
 Never tell Scribe to proceed without it, and never ask for the plan before the document exists: a plan written
 first is a plan built on the default playbook instead of the person's own rivals. If Scribe is not on the crew,

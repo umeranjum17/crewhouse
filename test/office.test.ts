@@ -14,7 +14,7 @@ import { taskBrowser } from './browser.ts';
 import WebSocket from 'ws';
 import { browserBin } from '../src/desktop.ts';
 import { temp } from './tmp.ts';
-import { until, setup, settled, release, holding } from './lab.ts';
+import { until, setup, settled, release, holding, delegated } from './lab.ts';
 import { startServer } from '../src/server.ts';
 
 const repo = join(import.meta.dirname, '..');
@@ -603,7 +603,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
     assert.equal(r.status, 200); return r.json();
   };
   await api('/api/recruit', { template: 'scout', name: 'Scout' });
-  const assign = (bot: string, text: string) => { lab.crew.say('chief', 'person', text); return lab.crew.assign(bot, text, 'chief').task; };
+  const assign = (bot: string, text: string) => { lab.crew.say('chief', 'person', text); return delegated(lab.crew, bot, text).task; };
   const job = assign('scout', 'Check my Friday flights; ask permission');
   await holding(lab.crew, 'scout');
   const b = await browse(base);

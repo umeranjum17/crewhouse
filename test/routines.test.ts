@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup as lab, settled, release, holding, until, lastSaid, sleep } from './lab.ts';
+import { setup as lab, settled, release, holding, until, lastSaid, sleep, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import { PROVIDERS } from '../src/accounts.ts';
 import * as A from '../web/src/adapter.ts';
@@ -121,7 +121,7 @@ test('morning digest: at 8:00, says what finished, what needs you, what is comin
   assert.equal(digest.words, 'Every day at 8:00 am');
   assert.throws(() => crew.deleteRoutine(digest.id), /paused, not removed/);
 
-  await settled(db, crew.assign('reel', 'Make the pairing demo', 'chief').task);
+  await settled(db, delegated(crew, 'reel', 'Make the pairing demo').task);
   crew.addRoutine({ bot: 'reel', schedule: 'every hour', task: 'Tidy the screenshots' }, 'person');
   db.run("INSERT INTO asks (bot, kind, title, detail, at) VALUES ('reel', 'permission', 'Reel wants to look through your Pictures folder.', '{}', ?)", Date.now());
   crew.runRoutine(digest.id);

@@ -9,7 +9,7 @@ import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
-import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid } from './lab.ts';
+import { setup, sleep, task, until, prompted, settled, holding, release, lastSaid, delegated } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 import * as art from '../web/src/art.ts';
 
@@ -48,9 +48,9 @@ test('queue: one task at a time per bot, and a global cap across bots', async ()
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   crew.recruit('scout', 'Scout', 'person');
-  const a = crew.assign('reel', 'ask permission first', 'chief').task; // the stub model holds this turn
-  const b = crew.assign('reel', 'second job', 'chief').task;
-  const c = crew.assign('scout', 'look something up', 'chief').task;
+  const a = delegated(crew, 'reel', 'ask permission first').task; // the stub model holds this turn
+  const b = delegated(crew, 'reel', 'second job').task;
+  const c = delegated(crew, 'scout', 'look something up').task;
   await holding(crew, 'reel');
   assert.equal(task(db, a).state, 'working');
   assert.equal(task(db, b).state, 'queued', 'same bot waits its turn');
@@ -70,9 +70,9 @@ test('limited memory is logged once without a chat notice', async () => {
   crew.onboard('sir');
   (crew.runtime as any).memoryLimited = () => true;
   crew.recruit('reel', 'Reel', 'person');
-  const first = crew.assign('reel', 'first request', 'chief').task;
+  const first = delegated(crew, 'reel', 'first request').task;
   await settled(db, first);
-  const second = crew.assign('reel', 'second request', 'chief').task;
+  const second = delegated(crew, 'reel', 'second request').task;
   await settled(db, second);
   const notices = db.all("SELECT text FROM messages WHERE author = 'system' AND text LIKE 'Memory features are limited:%'");
   assert.equal(notices.length, 0);
@@ -90,7 +90,7 @@ test('model control markers never reach the person: stripped before persist and 
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  const t = crew.assign('scout', 'ask permission first, then plan two dinners', 'chief').task;
+  const t = delegated(crew, 'scout', 'ask permission first, then plan two dinners').task;
   await release(crew, 'scout', '[[reply_to_current]] I made the editable dinner plan.');
   await settled(db, t);
   assert.equal(task(db, t).state, 'done');
@@ -112,7 +112,7 @@ test('task titles are cut at a word, never mid-word', async () => {
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  const t = crew.assign('reel', 'Make a 10 second video with three title cards: One, Two, Three, about three seconds each', 'chief').task;
+  const t = delegated(crew, 'reel', 'Make a 10 second video with three title cards: One, Two, Three, about three seconds each').task;
   assert.equal(task(db, t).title, 'Make a 10 second video with three title cards: One, Two, Three, about three…');
   await settled(db, t);
   done();
@@ -185,7 +185,7 @@ test('the shell: its own space is the only writable place, the home folder is em
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const outside = join(root, 'outside.txt');
-  const t = crew.assign('reel', `try it ${call('bash', { command: `echo made > work/in.txt; cat work/in.txt; ls ~ | wc -l; echo x > ${outside}; ls ${homedir()}/.ssh; echo "key:$OPENAI_API_KEY"` })}`, 'chief').task;
+  const t = delegated(crew, 'reel', `try it ${call('bash', { command: `echo made > work/in.txt; cat work/in.txt; ls ~ | wc -l; echo x > ${outside}; ls ${homedir()}/.ssh; echo "key:$OPENAI_API_KEY"` })}`).task;
   await settled(db, t);
   const out = task(db, t).result;
   assert.match(out, /made/, 'works in its own space');
@@ -210,7 +210,7 @@ test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn pa
   crew.onboard("ma'am");
   crew.recruit('reel', 'Reel', 'person');
   const outside = join(root, 'outside', 'x.txt');
-  const t = crew.assign('reel', `save it ${call('crew_write', { path: outside, content: 'hello' })}`, 'chief').task;
+  const t = delegated(crew, 'reel', `save it ${call('crew_write', { path: outside, content: 'hello' })}`).task;
   await until('an ask', () => openAsk(db));
   const ask = openAsk(db);
   assert.equal(ask.title, 'Reel wants to change a file in a folder outside your home: “x.txt”.');
@@ -223,14 +223,14 @@ test('the gate: an ask holds the call; allowed, it runs; unanswered, the turn pa
   assert.equal(readFileSync(outside, 'utf8'), 'hello');
   // A copy of its own work into the person's folders asks, then lands.
   const copy = join(root, 'Documents', 'hello.txt');
-  const c = crew.assign('reel', `copy it ${call('crew_copy', { from: 'soul.md', to: copy })}`, 'chief').task;
+  const c = delegated(crew, 'reel', `copy it ${call('crew_copy', { from: 'soul.md', to: copy })}`).task;
   await until('copy ask', () => openAsk(db));
   await crew.answer(openAsk(db).id, { answer: 'allow' });
   await settled(db, c);
   assert.ok(existsSync(copy));
 
   // Nobody answers within the hold: the turn parks, the task waits on the person, and the answer is the next prompt.
-  const p = crew.assign('reel', `again ${call('crew_write', { path: outside, content: 'second' })}`, 'chief').task;
+  const p = delegated(crew, 'reel', `again ${call('crew_write', { path: outside, content: 'second' })}`).task;
   await until('parked', () => db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   await until('turn over', () => !crew.busy.has('reel'));
   assert.equal(task(db, p).state, 'needs_you', 'parked, not done');
@@ -250,7 +250,7 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   const dir = join(root, 'Outside');
-  const t = crew.assign('reel', 'ask permission while I test the gate', 'chief').task;
+  const t = delegated(crew, 'reel', 'ask permission while I test the gate').task;
   await holding(crew, 'reel');
   const gate = (tool: string, input: object) => (crew as any).gate('reel', tool, input);
   const ask = async (tool: string, input: object) => {
@@ -277,7 +277,7 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   await settled(db, t);
 
   // A new task keeps "always" but not "for this task".
-  const t2 = crew.assign('reel', 'ask permission again', 'chief').task;
+  const t2 = delegated(crew, 'reel', 'ask permission again').task;
   await holding(crew, 'reel');
   a = await ask('read', { path: join(root, 'Elsewhere', 'c.txt') });
   assert.equal(a.open, undefined);
@@ -320,15 +320,15 @@ test('tool grants: a session gets only granted, installed tools; command-line to
     disk.setGrants(cfg, 'tracer', ['files', 'web', 'people-search', 'github']);
     const gh: any = disk.botTools(cfg, 'tracer').find((t) => t.id === 'github');
     assert.deepEqual([gh.granted, 'howto' in gh, 'missing' in gh, 'install' in gh], [true, false, false, false], 'tools are described in words: no commands, paths or binary names');
-    const t = crew.assign('tracer', `price it ${call('people_search', { args: ['catalog', 'search', 'phone'] })}`, 'chief').task;
+    const t = delegated(crew, 'tracer', `price it ${call('people_search', { args: ['catalog', 'search', 'phone'] })}`).task;
     await settled(db, t);
     assert.match(task(db, t).result, /people_search said fake .*treg catalog search phone/, 'free calls run at once, with a fixed argv');
-    const h = crew.assign('tracer', 'ask permission so I can look at the tools', 'chief').task;
+    const h = delegated(crew, 'tracer', 'ask permission so I can look at the tools').task;
     await holding(crew, 'tracer');
     const allowed = (n: string) => crew.toolAllowed('tracer', n);
     for (const n of ['crew_read', 'crew_write', 'crew_edit', 'crew_web_search', 'crew_web_fetch', 'people_search', 'crew_deliver', 'crew_remember', 'crew_report']) assert.ok(allowed(n), n);
     assert.equal(allowed('github'), gh.ready, 'offered only where it is installed');
-    assert.ok(!allowed('crew_assign'), 'only Chief runs the crew');
+    assert.ok(!allowed('crew_assign') && !allowed('crew_pass'), 'the retired hand-off tools are gone: only Chief hands work on, natively');
     assert.ok(!allowed('exec'), 'no host exec, ever');
     await release(crew, 'tracer');
     await settled(db, h);
@@ -467,7 +467,7 @@ test('accounts a bot thinks with: fallback order by name only, the person\'s one
   assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
 
   const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data), specOf = (t: number) => (crew.runtime as any).specOf(`agent:m1:crewhouse:reel`);
-  const a = crew.assign('reel', 'rename 400 files', 'chief').task;
+  const a = delegated(crew, 'reel', 'rename 400 files').task;
   await settled(db, a);
   assert.equal(task(db, a).state, 'done');
   assert.deepEqual([started().account, started().name], ['copilot', 'GitHub Copilot'], 'the bot\'s first account');
@@ -478,7 +478,7 @@ test('accounts a bot thinks with: fallback order by name only, the person\'s one
   assert.deepEqual(disk.botConfig(cfg, 'chief').models, ['chatgpt:strong-1']);
   crew.recruit('scout', 'Scout', 'person');
   assert.deepEqual(disk.botConfig(cfg, 'scout').models, ['chatgpt:strong-1'], 'a recruit sits on the crew\'s picks');
-  const b = crew.assign('reel', 'judge which take is best', 'chief').task;
+  const b = delegated(crew, 'reel', 'judge which take is best').task;
   await settled(db, b);
   assert.deepEqual([started().account, specOf(b).model], ['chatgpt', 'strong-1']);
   done();
@@ -494,7 +494,7 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   assert.equal(classifyText('401 Unauthorized')?.kind, 'signed_out');
   assert.equal(classifyText('context window exceeded by your prompt'), null);
 
-  const t = crew.assign('scout', 'dig deep, then hit the limit', 'chief').task;
+  const t = delegated(crew, 'scout', 'dig deep, then hit the limit').task;
   await until('paused on the limit', () => task(db, t).state === 'paused');
   const until30 = crew.accounts.restingUntil('chatgpt');
   assert.ok(Math.abs((until30 ?? 0) - (Date.now() + 30 * 60_000)) < 5000, 'rests until the time the account said');
@@ -505,7 +505,7 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   const told = db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND text LIKE 'Your ChatGPT reached%'").map((m) => m.text);
   assert.deepEqual(told, [`Your ChatGPT reached its limit and rests until ${clock(until30)}. Work starts again then by itself, or pick another model in Settings › AI accounts.`], 'Chief says it once');
   assert.equal(crew.snapshot().resting.chatgpt, until30, 'standing state while the job waits');
-  const b = crew.assign('scout', 'look it up again', 'chief').task;
+  const b = delegated(crew, 'scout', 'look it up again').task;
   await until('also waiting', () => task(db, b).state === 'paused');
   assert.equal(db.all("SELECT 1 FROM messages WHERE bot = 'chief' AND text LIKE 'Your ChatGPT reached%'").length, 1, 'once per wait');
 
@@ -522,7 +522,7 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   // A bot set to an account the person doesn't have carries on with one they do.
   crew.accounts.rest('chatgpt', 0);
   disk.setBrains(cfg, 'scout', ['grok']);
-  const c = crew.assign('scout', 'one more', 'chief').task;
+  const c = delegated(crew, 'scout', 'one more').task;
   await settled(db, c);
   assert.equal(task(db, c).state, 'done');
   assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
@@ -530,14 +530,14 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   const signedIn = crew.accounts.signedIn;
   crew.accounts.signedIn = async () => false;
   (crew.accounts as any).ready = { get: () => false, set: () => {} };
-  const d = crew.assign('scout', 'and another', 'chief').task;
+  const d = delegated(crew, 'scout', 'and another').task;
   await settled(db, d);
   assert.equal(task(db, d).state, 'paused');
   assert.equal(task(db, d).wake_at, null, 'no time to wake: it waits for the sign-in');
   assert.equal(task(db, d).result, 'Waiting for you to sign in.');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text, 'Scout will start the moment you sign in.');
   // A second job waiting on the same sign-in says the same sentence: the thread says it once, not twice.
-  const e = crew.assign('scout', 'and one more', 'chief').task;
+  const e = delegated(crew, 'scout', 'and one more').task;
   await settled(db, e);
   assert.equal(task(db, e).state, 'paused');
   assert.equal(db.get("SELECT COUNT(*) n FROM messages WHERE bot = 'scout' AND text LIKE '%moment you sign in%'")!.n, 1,
@@ -556,7 +556,7 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   const { db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task;
+  const t = delegated(crew, 'reel', 'ask permission to open the site').task;
   await holding(crew, 'reel');
   assert.equal(await (crew as any).gate('reel', 'bash', { command: 'ls' }), undefined, 'the bot acts freely while it has the controls');
 
@@ -567,7 +567,7 @@ test('take over: the bot pauses while the person drives; give back resumes it wi
   assert.equal(deny.block, true);
   assert.match(deny.reason, /person has the controls/);
   assert.equal(task(db, t).state, 'working', 'a turn cut short by Take over does not end the task');
-  const next = crew.assign('reel', 'second job', 'chief').task;
+  const next = delegated(crew, 'reel', 'second job').task;
   crew.dispatch();
   assert.equal(task(db, next).state, 'queued', 'no new work starts while the person drives');
 
@@ -593,7 +593,7 @@ test('give back keeps the sites the person ticked, and Forget takes one back', a
   (crew.desktops as any).pages = async () => ['shop.example', 'mail.example'];
   (crew.desktops as any).ensure = async () => { throw new Error('no desktop in unit tests'); };
 
-  const t = crew.assign('reel', 'ask permission to open the site', 'chief').task;
+  const t = delegated(crew, 'reel', 'ask permission to open the site').task;
   await holding(crew, 'reel');
   await crew.takeOver('reel');
   // A tick names a host among the tabs, and it is the person's tap that writes the list — one bot's list is its own.
@@ -641,7 +641,7 @@ async function signinAsk() {
   lab.cfg.repoDir = join(lab.cfg.toolsDir, 'repo');
   fakeBin(kit.toolBin(lab.cfg), 'j8-computer');
   disk.setGrants(lab.cfg, 'reel', ['computer']);
-  const t = lab.crew.assign('reel', 'read my orders [tool crew_signin {"site":"http://127.0.0.1:8123/login"}]', 'chief').task;
+  const t = delegated(lab.crew, 'reel', 'read my orders [tool crew_signin {"site":"http://127.0.0.1:8123/login"}]').task;
   await until('the sign-in ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('reel'));
   return { ...lab, t };
 }
@@ -683,7 +683,7 @@ async function unlockAsk(ownerOnly = false, standIn = '') {
   mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'march.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
   const bare = ownerOnly ? '[ -z "$P" ] || ' : '';
   mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n${standIn}${bare}[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
-  const t = lab.crew.assign('scribe', `read my statement ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
+  const t = delegated(lab.crew, 'scribe', `read my statement ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`).task;
   await (ownerOnly ? settled(lab.db, t) : until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe')));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
   /** Every place a password could be kept: every row of every table, the database files on disk, what the model was sent, and the log. */
@@ -729,7 +729,7 @@ test('locked PDF: a file that fails to open for another reason gets no password 
   const inbox = join(disk.botDir(lab.cfg, 'scribe'), 'files', 'inbox'), py = join(lab.cfg.toolsDir, 'documents', 'venv', 'bin', 'python');
   mkdirSync(inbox, { recursive: true }); writeFileSync(join(inbox, 'x.pdf'), '%PDF-1.7\ntrailer << /Encrypt 2 0 R >>\n%%EOF\n');
   mkdirSync(join(py, '..'), { recursive: true }); writeFileSync(py, '#!/bin/bash\nexit 4\n'); chmodSync(py, 0o755);
-  const t = lab.crew.assign('scribe', `read it ${call('crew_unlock', { files: ['files/inbox/x.pdf'] })}`, 'chief').task;
+  const t = delegated(lab.crew, 'scribe', `read it ${call('crew_unlock', { files: ['files/inbox/x.pdf'] })}`).task;
   await settled(lab.db, t);
   assert.equal(openAsk(lab.db)?.kind, undefined, 'no card: a password cannot open a corrupt file');
   assert.match((lab.crew.runtime as any).transcript(`agent:m1:crewhouse:scribe`), /crew_unlock: \{"note":"Not locked, or unlocked already: read files\/inbox\/x\.pdf"\}/);
@@ -769,7 +769,7 @@ test('locked PDF: two locked files with one basename keep separate copies, and a
   for (const d of ['a', 'b']) { mkdirSync(join(bot, 'files', 'inbox', d), { recursive: true }); writeFileSync(join(bot, 'files', 'inbox', d, 'statement.pdf'), enc); }
   mkdirSync(join(py, '..'), { recursive: true });
   writeFileSync(py, `#!/bin/bash\nP="$(cat)"\ncase "$4" in *'/a/'*) [ -z "$P" ] || exit 3 ;; *) [ "$P" = '${PASSWORD}' ] || exit 3 ;; esac\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
-  const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
+  const t = delegated(lab.crew, 'scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`).task;
   await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
   const copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf'), copyB = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fb%2Fstatement.pdf');
@@ -795,7 +795,7 @@ test('locked PDF: a copy opened on a try where the other password was wrong stil
   for (const d of ['a', 'b']) { mkdirSync(join(bot, 'files', 'inbox', d), { recursive: true }); writeFileSync(join(bot, 'files', 'inbox', d, 'statement.pdf'), '%PDF-1.7\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n'); }
   mkdirSync(join(py, '..'), { recursive: true });
   writeFileSync(py, `#!/bin/bash\nP="$(cat)"\ncase "$4" in *'/a/'*) [ "$P" = 'a-pass' ] || exit 3 ;; *) [ "$P" = '${PASSWORD}' ] || exit 3 ;; esac\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
-  const t = lab.crew.assign('scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`, 'chief').task;
+  const t = delegated(lab.crew, 'scribe', `read both ${call('crew_unlock', { files: ['files/inbox/a/statement.pdf', 'files/inbox/b/statement.pdf'] })}`).task;
   await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!, copyA = join(bot, 'files', 'unlocked', 'files%2Finbox%2Fa%2Fstatement.pdf');
   await assert.rejects(lab.crew.answer(c.id, { answer: 'allow', passwords: ['a-pass', `${PASSWORD}x`] }), (e: any) => e.status === 400);
@@ -817,7 +817,7 @@ test('locked PDF: a 200+-char nested accented name unlocks under a short hash na
   writeFileSync(join(bot, rel), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
   mkdirSync(join(py, '..'), { recursive: true });
   writeFileSync(py, `#!/bin/bash\nP="$(cat)"\n[ "$P" = '${PASSWORD}' ] || exit 3\ncp "$4" "$5"\n`); chmodSync(py, 0o755);
-  const t = lab.crew.assign('scribe', `read it ${call('crew_unlock', { files: [rel] })}`, 'chief').task;
+  const t = delegated(lab.crew, 'scribe', `read it ${call('crew_unlock', { files: [rel] })}`).task;
   await until('the unlock ask', () => task(lab.db, t).state === 'needs_you' && !lab.crew.busy.has('scribe'));
   const c = A.cards(lab.crew.snapshot()).find((x) => x.kind === 'unlock')!;
   await lab.crew.answer(c.id, { answer: 'allow', passwords: [PASSWORD] });
@@ -837,7 +837,7 @@ test('locked PDF: replacing the source invalidates the old unlocked copy', { ski
   writeFileSync(join(copy, '..', '..', 'inbox', 'march.pdf'), '%PDF-1.7\ntrailer << /Root 1 0 R /Encrypt 9 0 R >>\n%%EOF\n');
   const past = new Date(Date.now() - 60_000);
   utimesSync(copy, past, past);
-  const t2 = crew.assign('scribe', `read it again ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`, 'chief').task;
+  const t2 = delegated(crew, 'scribe', `read it again ${call('crew_unlock', { files: ['files/inbox/march.pdf'] })}`).task;
   await until('the second unlock ask', () => task(db, t2).state === 'needs_you' && !crew.busy.has('scribe'));
   assert.equal(db.get("SELECT kind FROM asks WHERE state = 'open' AND kind = 'unlock'")?.kind, 'unlock', 'the replaced source asks for its password again, never the stale copy');
   done();
@@ -859,7 +859,7 @@ test('helper files: the one plain rule is on the card in Chief\'s chat, and the 
   assert.ok(crew.fileFor('scribe', 'files/unlocked/files%2Finbox%2Fmarch.pdf'), 'and its card opens: the copy is registered with crewd like any delivered file');
   // A later card for the same helper starts on the standing pick, so one tap on Unlock cannot quietly revert it.
   writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files', 'inbox', 'april.pdf'), '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << /Root 1 0 R /Encrypt 2 0 R >>\n%%EOF\n');
-  const t2 = crew.assign('scribe', `read it too ${call('crew_unlock', { files: ['files/inbox/april.pdf'] })}`, 'chief').task;
+  const t2 = delegated(crew, 'scribe', `read it too ${call('crew_unlock', { files: ['files/inbox/april.pdf'] })}`).task;
   await until('the second unlock ask', () => task(db, t2).state === 'needs_you' && !crew.busy.has('scribe'));
   const c2 = A.cards(crew.snapshot()).find((x) => x.kind === 'unlock')!;
   assert.equal(c2.keep!.rule, 'keep', 'the card opens on the pick the person already made');
@@ -968,7 +968,7 @@ test('steer: a word from the person reaches the bot mid-task without starting ov
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
   assert.throws(() => crew.steer('reel', 'faster'), /isn't working on anything/);
-  const t = crew.assign('reel', 'ask permission to render', 'chief').task;
+  const t = delegated(crew, 'reel', 'ask permission to render').task;
   await holding(crew, 'reel');
   crew.steer('reel', 'make it faster');
   await release(crew, 'reel');
@@ -1047,7 +1047,7 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
   assert.equal(crew.snapshot().ideas.filter((i: any) => !i.needs.length && i.group !== 'goal').length, 0, 'no idea for a tool that is not granted');
 
   disk.remember(cfg, { bot: 'scout' }, 'Prefers short answers');
-  const t = crew.assign('scout', 'ask permission to look', 'chief').task;
+  const t = delegated(crew, 'scout', 'ask permission to look').task;
   await holding(crew, 'scout');
   assert.equal(crew.snapshot().bots.find((b: any) => b.id === 'scout')?.stuck, false);
   db.run('UPDATE events SET at = at - 10000');
@@ -1057,7 +1057,7 @@ test('home facts: ideas only from ready tools, stuck after quiet, memory switch'
   await settled(db, t);
 
   disk.setSettings(cfg, 'scout', { memory: false });
-  const u = crew.assign('scout', 'another look', 'chief').task;
+  const u = delegated(crew, 'scout', 'another look').task;
   await settled(db, u);
   assert.doesNotMatch((crew.runtime as any).specOf(`agent:m1:crewhouse:scout`)?.message ?? '', /Prefers short answers|When you finish/, 'memory off: notes are neither loaded nor asked for');
   assert.throws(() => disk.setSettings(cfg, 'scout', { memory: 'yes' }), /on or off/);
@@ -1148,7 +1148,7 @@ test('restart: a running task continues in its own session, from its session fil
   const s = setup();
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
-  const t = s.crew.assign('reel', `ask permission after ${call('crew_write', { path: 'work/a.txt', content: 'x' })}`, 'chief').task;
+  const t = delegated(s.crew, 'reel', `ask permission after ${call('crew_write', { path: 'work/a.txt', content: 'x' })}`).task;
   await holding(s.crew, 'reel');
   const file = task(s.db, t).session;
   assert.match(file, /^agent:m1:crewhouse:reel$/, 'the run has its session key from the first turn');
@@ -1168,7 +1168,7 @@ test('restart: a parked question stays open, and its answer reaches the resumed 
   s.crew.onboard('sir');
   s.crew.recruit('reel', 'Reel', 'person');
   const outside = join(s.root, 'elsewhere', 'c.txt');
-  const t = s.crew.assign('reel', `copy it ${call('crew_write', { path: outside, content: 'kept' })}`, 'chief').task;
+  const t = delegated(s.crew, 'reel', `copy it ${call('crew_write', { path: outside, content: 'kept' })}`).task;
   await until('parked', () => s.db.get("SELECT 1 FROM events WHERE kind = 'ask.parked'"));
   const crew = await restart(s);
   try {
@@ -1277,29 +1277,6 @@ test('chats: each thread\'s last line and unread count are the person\'s; readin
   assert.ok(found.things.some((x: any) => x.id === t));
   assert.deepEqual(crew.search('b'), { messages: [], things: [] }, 'one letter finds nothing');
   assert.deepEqual(crew.search('100%_').messages, [], 'LIKE wildcards are plain characters');
-  done();
-});
-
-test('passing work on: a helper hands the next step to another for the same person, never to Chief, three hops at most', async () => {
-  const { db, crew, done } = setup();
-  crew.onboard('sir');
-  crew.recruit('reel', 'Reel', 'person');
-  crew.recruit('scout', 'Scout', 'person');
-  const { task: t } = (await crew.post('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"find three songs for the video. Done means: a list"}]'))!;
-  await holding(crew, 'reel');
-  const passed = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
-  assert.deepEqual([passed.origin, passed.member, passed.hops], ['reel', 1, 1]);
-  assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'scout' AND author = 'reel' AND text LIKE 'find three songs%'"), 'the hand-off shows in Scout\'s chat, from Reel');
-  await settled(db, passed.id);
-  assert.equal(task(db, passed.id).state, 'done');
-
-  const pass = (to: string) => (crew as any).pass('reel', to, 'more');
-  assert.throws(() => pass('chief'), /no helper called chief/);
-  assert.throws(() => pass('reel'), /no helper called reel/);
-  db.run('UPDATE tasks SET hops = 3 WHERE id = ?', t);
-  assert.throws(() => pass('scout'), /three times already/);
-  await release(crew, 'reel', 'Passed it on.');
-  await settled(db, t);
   done();
 });
 

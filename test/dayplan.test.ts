@@ -6,7 +6,7 @@ import { signInApp, setUpGoogle } from './connect-fixture.ts';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { setup, until, settled, holding, release, task } = await import('./lab.ts');
+const { setup, until, settled, holding, release, task, delegated } = await import('./lab.ts');
 const { CALENDAR } = await import('../src/calendar.ts');
 const { GMAIL } = await import('../src/calendar.ts');
 const { effectOf } = await import('../src/policy.ts');
@@ -74,7 +74,7 @@ test('the day, planned reads the calendar and the mail for free, answers once wi
   const { crew, cfg, db, done } = hired();
   await house(crew); await connect(crew, 'calendar', 'gmail');
   asked.length = 0;
-  const t = crew.assign('scout', 'give me my day [tool calendar {"args":["today"]}] [tool calendar {"args":["week"]}] [tool mail {"args":["inbox"]}] ask permission', 'chief').task;
+  const t = delegated(crew, 'scout', 'give me my day [tool calendar {"args":["today"]}] [tool calendar {"args":["week"]}] [tool mail {"args":["inbox"]}] ask permission').task;
   await holding(crew, 'scout');
   const seen = (crew.runtime as any).transcript(crew.sessionOf('scout')!.key); // what the helper's tools said
   await release(crew, 'scout', PLAN);
@@ -101,7 +101,7 @@ test('a person who likes the list is offered the weekday mornings, and nothing r
   await house(crew); await connect(crew, 'calendar', 'gmail');
   const offer = `[tool crew_routine ${JSON.stringify({ when: 'weekdays 8am', name: 'The day, planned',
     task: "read today's calendar, what is new in the mail and what is still open, then send me the three things that matter today, in order, with times that fit" })}]`;
-  const t = crew.assign('scout', `I like that, set it going ${offer} ask permission`, 'chief').task;
+  const t = delegated(crew, 'scout', `I like that, set it going ${offer} ask permission`).task;
   await until('the offered routine', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'"));
   const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
   const preview = JSON.parse(card.detail).preview.body as string;
@@ -123,8 +123,8 @@ test('a person who likes the list is offered the weekday mornings, and nothing r
 test('with Google off for the house the day is still planned, and it says what it could not read', async () => {
   const { crew, cfg, db, done } = hired();
   await house(crew); // the household's Google is there; this person has connected nothing, so there is nothing to read
-  const t = crew.assign('scout', 'give me my day. still open with you: the shop return, and the school form'
-    + ' [tool crew_connect {"app":"calendar"}] ask permission', 'chief').task;
+  const t = delegated(crew, 'scout', 'give me my day. still open with you: the shop return, and the school form'
+    + ' [tool crew_connect {"app":"calendar"}] ask permission').task;
   await until('the Connect card', () => db.get("SELECT * FROM asks WHERE state = 'open' AND kind = 'connect'"));
   const card = db.get("SELECT * FROM asks WHERE state = 'open' AND kind = 'connect'")!;
   assert.equal(JSON.parse(card.detail).words, 'Let Scout use your Google Calendar', 'it asks for the one app, in the person’s own words');

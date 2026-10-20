@@ -4,7 +4,7 @@
 // feeds web chat and the phone app. Runs on the real crewd with the stub engine: no account, no network, no quota.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { setup as lab, holding, settled } from './lab.ts';
+import { setup as lab, holding, settled, delegated } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
 /** The live line exactly as the app builds it: this thread's page plus the snapshot's tasks and events. */
@@ -57,7 +57,7 @@ test('an assigned helper job finishing while Chief works keeps Chief\'s working 
   const before = line(crew);
   assert.equal(before?.state, 'working');
   // Chief's explicit assignment runs the helper while his own turn is still held.
-  const routed = crew.assign('penny', 'sort my invoices', 'chief').task;
+  const routed = delegated(crew, 'penny', 'sort my invoices').task;
   assert.ok(routed && routed !== first, 'the assignment is its own helper task');
   const bot = db.get('SELECT bot, origin FROM tasks WHERE id = ?', routed)!;
   assert.equal(bot.bot, 'penny');

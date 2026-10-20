@@ -3,7 +3,7 @@ import { signInApp } from './connect-fixture.ts';
 // a move that keeps the length, and the gate: looking is free, adding and moving ask, cancelling asks as a delete.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, settled, task, until, grantApps, lastSaid } from './lab.ts';
+import { setup, settled, task, until, grantApps, lastSaid, delegated } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
 const { CALENDAR, parseWhen, runCalendar, whenOf } = await import('../src/calendar.ts');
@@ -100,11 +100,11 @@ test('a helper uses the connected calendar through crewd: no Google MCP, the tok
   grantApps(cfg, 'quill', ['calendar']);
   await signInApp(crew.connections, 'calendar');
   store.clear(); asked.length = 0;
-  const t = crew.assign('quill', 'look [tool calendar {"args":["week"]}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'look [tool calendar {"args":["week"]}]').task;
   await settled(db, t);
   assert.match(task(db, t).result, /events\[0\]\{id,when,title,where\}:\ntotal: 0/);
   assert.equal(db.all('SELECT * FROM asks').length, 0, 'looking never asks');
-  const u = crew.assign('quill', 'add it [tool calendar {"args":["add","Parents evening","tomorrow 18:00"]}]', 'chief').task;
+  const u = delegated(crew, 'quill', 'add it [tool calendar {"args":["add","Parents evening","tomorrow 18:00"]}]').task;
   await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
   assert.equal(db.get("SELECT title FROM asks WHERE state = 'open'")!.title, 'Quill wants to add “Parents evening” to your Google Calendar, tomorrow 18:00.');
   assert.equal(store.size, 0, 'nothing is added before the yes');
@@ -143,11 +143,11 @@ test('Chief makes a helper for a calendar job: its card names calendar, the yes 
   await settled(db, (await crew.post('chief', `send [tool crew_create ${JSON.stringify({ name: 'Draft Dan', role: 'Drafts mail', job, apps: ['gmailwrite'] })}]`) as { task: number }).task);
   assert.match(lastSaid(db, 'chief'), /apps must be a list of drive, calendar, gmail, notion, canva/, 'drafts and labels have no tool of their own, so they are never granted');
   // It reaches its one granted app.
-  const look = crew.assign('calendar-cleo', 'look [tool calendar {"args":["week"]}]', 'chief').task;
+  const look = delegated(crew, 'calendar-cleo', 'look [tool calendar {"args":["week"]}]').task;
   await settled(db, look);
   assert.match(task(db, look).result, /total: 0/);
   // Gmail is connected, but this job does not name it: refused, and nothing reaches Gmail.
-  const mail = crew.assign('calendar-cleo', 'read [tool crew_app {"tool":"mail","input":{"args":["search","school"]}}]', 'chief').task;
+  const mail = delegated(crew, 'calendar-cleo', 'read [tool crew_app {"tool":"mail","input":{"args":["search","school"]}}]').task;
   await settled(db, mail);
   assert.match(task(db, mail).result, /Gmail isn't part of this job, so you can't use it\. Tell the person that\./);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", mail)!.n, 0);

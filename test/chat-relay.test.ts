@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
 import { temp } from './tmp.ts';
-import { setup, until, release, holding, settled } from './lab.ts';
+import { setup, until, release, holding, settled, delegated } from './lab.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startServer } from '../src/server.ts';
 
@@ -79,7 +79,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
     const chiefTask = crew.sessionOf('chief')!.task;
     await release(crew, 'chief', 'Scout is on it.');
     await settled(db, chiefTask);
-    crew.assign('scout', `ask permission first, then check my ${slug} invoice list`, 'chief');
+    delegated(crew, 'scout', `ask permission first, then check my ${slug} invoice list`);
     await holding(crew, 'scout');
     const task = crew.sessionOf('scout')!.task;
     await release(crew, 'scout', reply);

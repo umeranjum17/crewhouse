@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { setup, settled, holding, release } from './lab.ts';
+import { setup, settled, holding, release, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import { startServer } from '../src/server.ts';
 import * as A from '../web/src/adapter.ts';
@@ -94,14 +94,15 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     const recruits = await api('/api/bots/chief/messages', { text: ['scout', 'scribe', 'reel'].map((template) => call('crew_recruit', { template, name: { scout: 'Research Rae', scribe: 'Writer Will', reel: 'Video Vic' }[template] })).join(' ') });
     await settled(db, recruits.task);
     const parts = { 'research-rae': 'Research two local bakery campaign ideas with sources.', 'writer-will': 'Write two bakery post drafts only.', 'video-vic': 'Make one bakery poster draft only.' };
-    const assigns = await api('/api/bots/chief/messages', { text: Object.entries(parts).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
+    const assigns = await api('/api/bots/chief/messages', { text: 'Run the bakery campaign.' });
     await settled(db, assigns.task);
+    for (const [bot, task] of Object.entries(parts)) delegated(crew, bot, task, undefined, assigns.task);
     for (const [bot, body] of Object.entries(parts)) {
       const task = db.get('SELECT * FROM tasks WHERE bot = ? AND body = ?', bot, body)!;
       assert.ok(task, `${bot} has its campaign part`);
       await settled(db, task.id);
       assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', task.id)!.state, 'done');
-      assert.match((crew.runtime as any).specOf(task.session).message, /Morning Loaf bakery/, `${bot} reads the shared profile`);
+      assert.match((crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', task.id)!.session).message, /Morning Loaf bakery/, `${bot} reads the shared profile`);
     }
     // The marketing journey uses one existing draft, handed to Chief by the app, after every part finishes.
     const body = 'Facebook\nWarm bread for a family weekend.\nCome say hello at Morning Loaf.\n\n---\n\nInstagram\n#MorningLoaf\nA small bakery welcome for local families.';
@@ -109,8 +110,9 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     for (const answer of ['deny', 'allow']) {
       const path = `files/campaign-${answer}.txt`;
       const bodies = { 'research-rae': 'Research the bakery campaign. ask permission', 'writer-will': call('crew_write', { path, content: body }) + ' ' + call('crew_deliver', { path, note: 'Both campaign posts' }) + ' ' + call('crew_draft', { path, channel: 'post', to: 'Facebook and Instagram' }), 'video-vic': call('crew_deliver', { path: 'files/poster.png', note: 'Morning Loaf poster' }) };
-      const campaign = await api('/api/bots/chief/messages', { text: Object.entries(bodies).map(([bot, task]) => call('crew_assign', { bot, task })).join(' ') });
+      const campaign = await api('/api/bots/chief/messages', { text: 'Run the bakery campaign.' });
       await settled(db, campaign.task);
+      for (const [bot, task] of Object.entries(bodies)) delegated(crew, bot, task, undefined, campaign.task);
       const parts = db.all('SELECT id, bot FROM tasks WHERE parent = ?', campaign.task);
       for (const part of parts.filter((p) => p.bot !== 'research-rae')) await settled(db, part.id);
       await holding(crew, 'research-rae');

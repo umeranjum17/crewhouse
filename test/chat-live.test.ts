@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
 import { temp } from './tmp.ts';
-import { setup, until, release, holding, settled } from './lab.ts';
+import { setup, until, release, holding, settled, delegated } from './lab.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startServer } from '../src/server.ts';
 
@@ -104,7 +104,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       const chiefTask = crew.sessionOf('chief')!.task;
       await release(crew, 'chief', 'Scout is on it.');
       await settled(db, chiefTask);
-      crew.assign('scout', words + ' [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', 'chief');
+      delegated(crew, 'scout', words + ' [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]');
     }
     await holding(crew, bot);
     // A send is never silent on screen: the thread holds its newest line, so nothing may sit below the live line

@@ -36,6 +36,8 @@ export function grantApps(cfg: { crewDir: string }, bot: string, apps: string[])
   const file = join(cfg.crewDir, 'bots', bot, 'bot.json');
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), apps }, null, 2));
 }
+/** A helper's job as Chief's native hand-off creates it (Crew's delegate hook): the same Chief-origin task row, queued for the stub run. */
+export const delegated = (crew: any, bot: string, text: string, title?: string, parent = crew.activeTask('chief')?.id) => crew.addTask(bot, text.trim(), 'chief', undefined, text.trim(), [], { parent, title }) as { task: number };
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const task = (db: any, id: number) => db.get('SELECT * FROM tasks WHERE id = ?', id);
 const prompts = (db: any, t: number) => db.all("SELECT * FROM events WHERE kind = 'run.prompted' AND json_extract(data, '$.task') = ?", t).length;

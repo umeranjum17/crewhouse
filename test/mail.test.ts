@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { DeviceLink, pairWithOffer } from '@byokit/pair';
 import { startServer } from '../src/server.ts';
 import assert from 'node:assert/strict';
-import { setup, settled, task, until, grantApps } from './lab.ts';
+import { setup, settled, task, until, grantApps, delegated } from './lab.ts';
 import { temp } from './tmp.ts';
 const A = await import('../web/src/adapter.ts');
 
@@ -188,7 +188,7 @@ test('a helper drafts and files through crewd: one card per message, the yes wri
   await signInApp(crew.connections, 'gmailwrite');
   assert.equal(A.apps(crew.snapshot()).find((a) => a.id === 'gmailwrite')!.status, 'On · changes ask first');
   asked.length = 0;
-  const t = crew.assign('quill', 'reply [tool mail {"args":["draft","18c0a1f00d2e3b51","## Friday trip\\n\\n**Thanks.**\\n\\n- Form ready"]}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'reply [tool mail {"args":["draft","18c0a1f00d2e3b51","## Friday trip\\n\\n**Thanks.**\\n\\n- Form ready"]}]').task;
   await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
   assert.match(db.get("SELECT title FROM asks WHERE state = 'open'")!.title, /create a reply in your Gmail drafts/, 'one plain card for that message');
   assert.equal(db.all("SELECT * FROM events WHERE kind='mail.drafted'").length, 0, 'nothing lands before the yes');
@@ -200,7 +200,7 @@ test('a helper drafts and files through crewd: one card per message, the yes wri
   const html = Buffer.from(raw.split('\r\n\r\n')[1], 'base64').toString('utf8');
   assert.match(raw, /To: office@school.example/, 'neither own send-as becomes the recipient');
   assert.match(raw, /Content-Type: text\/html/); assert.match(html, /<h2>Friday trip<\/h2>/); assert.match(html, /<strong>Thanks\.<\/strong>/); assert.match(html, /<li>Form ready<\/li>/); assert.match(html, /— Umer/);
-  const u = crew.assign('quill', 'file it [tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  const u = delegated(crew, 'quill', 'file it [tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]').task;
   await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open' AND title LIKE '%file this email%'"));
   await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'allow' });
   await settled(db, u);
@@ -209,10 +209,10 @@ test('a helper drafts and files through crewd: one card per message, the yes wri
   assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 0, 'never sent');
   assert.ok(asked.some((x) => x.startsWith('POST /drafts')) && asked.some((x) => x.includes('/modify')), 'both writes landed');
   for (const args of [['draft', 'bad-id', 'hi'], ['draft', '18c0a1f00d2e3b4a', 'x'.repeat(12001)], ['label', '18c0a1f00d2e3b4a', 'bad/label']]) {
-    const invalid = crew.assign('quill', `[tool mail ${JSON.stringify({ args })}]`, 'chief').task;
+    const invalid = delegated(crew, 'quill', `[tool mail ${JSON.stringify({ args })}]`).task;
     await settled(db, invalid); assert.equal(db.all("SELECT * FROM asks WHERE state='open'").length, 0, 'invalid arguments never ask or write');
   }
-  const before = draftBodies.length, own = crew.assign('quill', '[tool mail {"args":["draft","18c0a1f00d2e3b4b","Hello"]}]', 'chief').task;
+  const before = draftBodies.length, own = delegated(crew, 'quill', '[tool mail {"args":["draft","18c0a1f00d2e3b4b","Hello"]}]').task;
   await until('own-only ask', () => db.get("SELECT * FROM asks WHERE state='open'"));
   const ownAsk = db.get("SELECT * FROM asks WHERE state='open'")!;
   const view = A.cards(crew.snapshot()).find((c) => c.id === ownAsk.id)!;
@@ -220,11 +220,11 @@ test('a helper drafts and files through crewd: one card per message, the yes wri
   await crew.answer(ownAsk.id, { answer: 'allow' }); await settled(db, own);
   assert.equal(draftBodies.length, before, 'an all-own-address thread cannot create a draft');
   assert.ok(db.all("SELECT text FROM messages WHERE task_id=? AND author='bot'", own).some((m) => /only your own messages/.test(m.text)), 'the real refusal reaches the chat');
-  const parked = crew.assign('quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  const parked = delegated(crew, 'quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]').task;
   await until('parked approval', () => db.get("SELECT 1 FROM events WHERE kind='ask.parked' AND json_extract(data,'$.task')=?", parked));
   await crew.answer(db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", parked)!.id, { answer: 'allow' }); await settled(db, parked);
   const writes = asked.filter((x) => x.includes('/modify')).length;
-  const again = crew.assign('quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]', 'chief').task;
+  const again = delegated(crew, 'quill', '[tool mail {"args":["label","18c0a1f00d2e3b4a","School"]}]').task;
   await until('a new job needs its own card', () => db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", again));
   assert.equal(asked.filter((x) => x.includes('/modify')).length, writes, 'a parked grant cannot cross task identity');
   await crew.answer(db.get("SELECT id FROM asks WHERE task_id=? AND state='open'", again)!.id, { answer: 'deny' }); await settled(db, again);
@@ -238,13 +238,13 @@ test('a helper reads the connected Gmail through crewd: no Google MCP, the token
   grantApps(cfg, 'quill', ['gmail']);
   await signInApp(crew.connections, 'gmail');
   asked.length = 0;
-  const t = crew.assign('quill', 'check [tool mail {"args":["search","from:school"]}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'check [tool mail {"args":["search","from:school"]}]').task;
   await settled(db, t);
   assert.match(task(db, t).result, /threads\[1\]\{id,from,subject,age\}:\n {2}18c0a1f00d2e3b4a/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
   // The same helper saves the letter's attachment into its own files folder, with no card and no ask: it reads
   // what it saved with its own file tools.
-  const saved = crew.assign('quill', 'keep [tool mail {"args":["attachments","18c0a1f00d2e3b4a","1"]}]', 'chief').task;
+  const saved = delegated(crew, 'quill', 'keep [tool mail {"args":["attachments","18c0a1f00d2e3b4a","1"]}]').task;
   await settled(db, saved);
   assert.equal(task(db, saved).state, 'done');
   assert.equal(readFileSync(join(cfg.crewDir, 'bots', 'quill', 'files', 'statement.pdf'), 'utf8'), PDF, 'the attachment is a real file in the helper\u2019s own folder');

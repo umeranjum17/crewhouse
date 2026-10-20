@@ -1,182 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, holding, release, settled, until, task } from './lab.ts';
 import * as disk from '../src/bots.ts';
 
-const pass = '[tool crew_pass {"bot":"scout","task":"Find the sources. Done means: three links","files":["files/story.md"]}]';
-
-test('handoff copies only the passer’s files into the crew room', async () => {
-  const { db, cfg, crew, done } = setup();
-  crew.onboard('Sara');
-  crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  const file = join(disk.botDir(cfg, 'reel'), 'files', 'story.md');
-  mkdirSync(join(disk.botDir(cfg, 'reel'), 'files'), { recursive: true }); writeFileSync(file, 'A source');
-  const first = (await crew.post('reel', `ask permission: please hand it on ${pass}`))!.task;
-  await until('pass', () => db.get("SELECT id FROM tasks WHERE bot = 'scout'"));
-  const next = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
-  assert.equal(next.parent, first); assert.equal(next.root, first);
-  assert.ok(existsSync(join(disk.botDir(cfg, 'scout'), 'files/from-reel/story.md')));
-  assert.ok(crew.room().lines.some((l) => l.from === 'reel' && l.files.some((f: any) => f.path === 'files/from-reel/story.md')));
+test('room replies rejoin a job; plain routed work stays out', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
+  const room = (await crew.post('scout', 'First request', undefined, true))!.task;
+  const follow = (await crew.post('scout', 'One more thing', undefined, true))!.task;
+  assert.equal(task(db, room).room, 1); assert.equal(task(db, follow).root, room);
+  const plain = (await crew.post('scout', 'Private errand'))!.task;
+  assert.equal(task(db, plain).room, 0);
+  assert.ok(crew.room().lines.some((l) => l.text === 'One more thing'));
+  assert.ok(!crew.room().lines.some((l) => l.text === 'Private errand'));
   assert.equal(crew.snapshot().room.last?.id, crew.room().lines.at(-1)?.id, 'the snapshot keeps the room preview');
   const before = crew.room().lines.at(-1)!.id;
   assert.ok(crew.room(before).lines.every((l) => l.id < before), 'room paging uses the message cursor');
-  await holding(crew, 'reel');
-  await assert.rejects(async () => (crew as any).pass('reel', 'scout', 'bad', ['../secret']), /outside|ENOENT/);
-  await release(crew, 'reel', 'Passed it on.'); await settled(db, first); await settled(db, next.id);
-  const wraps = db.all("SELECT * FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first);
-  assert.equal(wraps.length, 1);
-  assert.ok(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first));
+  await settled(db, room); await settled(db, follow); await settled(db, plain);
   done();
 });
 
-test('Scout hands recorded file argument forms to Scribe through the engine', async () => {
-  const { db, cfg, crew, done } = setup();
-  // A person's crew directory may itself be a symlink; file authority is the physical bot, not the alias.
-  renameSync(cfg.crewDir, cfg.crewDir + '-actual'); symlinkSync(cfg.crewDir + '-actual', cfg.crewDir);
-  crew.onboard('Umer'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
-  const name = 'who-else-does-this-crewh.docx', path = `files/${name}`;
-  const full = join(disk.botDir(cfg, 'scout'), path);
-  writeFileSync(full, 'Rivals research');
-  // seq 116, 120, 122 of real-attempt1/transcript/23-pass-calls.json; absolute path rebased to this bot.
-  for (const files of [[path], '["files/who-else-does-this-crewh.docx"]', path, full, realpathSync(full)]) {
-    const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Write the growth plan from these rivals. Done means: drafts only.', files })}]`))!.task;
-    await settled(db, first);
-    const next = db.get('SELECT * FROM tasks WHERE parent = ?', first);
-    assert.ok(next, `handoff failed for ${JSON.stringify(files)}`);
-    await settled(db, next.id);
-    assert.match(next.body, /Files handed over:\nfiles\/from-scout\/who-else-does-this-crewh.docx/);
-    assert.equal(readFileSync(join(disk.botDir(cfg, 'scribe'), 'files/from-scout', name), 'utf8'), 'Rivals research');
-    assert.ok(crew.snapshot().tasks.find((t: any) => t.id === next.id)?.files.includes(`files/from-scout/${name}`));
-  }
-  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files/private.md'), 'Not Scout’s');
-  symlinkSync(join(disk.botDir(cfg, 'scribe'), 'files/private.md'), join(disk.botDir(cfg, 'scout'), 'files/escape.md'));
-  for (const files of ['x', 'files/missing.docx', '../secret', 'files/escape.md', Array(21).fill(path)]) {
-    const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Test pass — ignore.', files })}]`))!.task;
-    await settled(db, first);
-    assert.equal(db.get('SELECT id FROM tasks WHERE parent = ?', first), undefined);
-    const call = db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", first);
-    assert.match(JSON.parse(call!.data).head, /error:.*array.*path/i);
-  }
-  // Even replacing the whole files directory must not make another helper's absolute path ours.
-  renameSync(join(disk.botDir(cfg, 'scout'), 'files'), join(disk.botDir(cfg, 'scout'), 'old-files'));
-  symlinkSync(join(disk.botDir(cfg, 'scribe'), 'files'), join(disk.botDir(cfg, 'scout'), 'files'));
-  const first = (await crew.post('scout', `[tool crew_pass ${JSON.stringify({ bot: 'scribe', task: 'Review it', files: join(disk.botDir(cfg, 'scribe'), 'files/private.md') })}]`))!.task;
-  await settled(db, first);
-  assert.equal(db.get('SELECT id FROM tasks WHERE parent = ?', first), undefined);
-  done();
-});
-
-test('two passes settle into exactly one wrap-up without per-task completions', async () => {
+test('room jobs on one thread settle into exactly one wrap-up without per-task completions', async () => {
   const { db, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  const first = (await crew.post('reel', 'ask permission: plan the project'))!.task;
-  await holding(crew, 'reel');
-  (crew as any).pass('reel', 'scout', 'Find links');
-  (crew as any).pass('reel', 'scout', 'Check the facts');
-  await release(crew, 'reel', 'Plan ready.');
-  const parts = db.all("SELECT id FROM tasks WHERE bot = 'scout' ORDER BY id");
-  await settled(db, first); for (const p of parts) await settled(db, p.id);
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
+  const first = (await crew.post('scout', 'ask permission: plan the project', undefined, true))!.task;
+  await holding(crew, 'scout');
+  const second = (await crew.post('scout', 'Check the facts', undefined, true))!.task;
+  await release(crew, 'scout', 'Plan ready.');
+  await settled(db, first); await settled(db, second);
   assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first).length, 1);
   assert.equal(db.all("SELECT id FROM messages WHERE bot = 'chief' AND text LIKE '%has finished%' AND task_id = ?", first).length, 0);
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '', /Scout finished\..*\nScout finished\./);
   done();
 });
 
-test('handoff check waits, survives a restart, and never has a standing answer', async () => {
-  const { db, cfg, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  disk.setSettings(cfg, 'reel', { handoff: 'ask' });
-  writeFileSync(join(disk.botDir(cfg, 'reel'), 'files/story.md'), 'A source');
-  const first = (await crew.post('reel', `ask permission: pass it [tool crew_pass ${JSON.stringify({ bot: 'scout', task: 'Find the sources. Done means: three links', files: JSON.stringify(['files/story.md']) })}]`))!.task;
-  await until('check card', () => db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open' AND json_extract(detail, '$.pass.to') = 'scout'"));
-  const card = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!;
-  assert.equal(db.get("SELECT 1 FROM tasks WHERE bot = 'scout'"), undefined);
-  const shown = crew.snapshot().asks.find((a: any) => a.id === card.id)!;
-  assert.equal(shown.detail.always, undefined); assert.equal(shown.detail.pass.root, first);
-  assert.ok(crew.room().asks.some((a) => a.id === card.id));
-  await release(crew, 'reel', 'Waiting for your check.'); await settled(db, first);
-  // Rebuild on the same database: a proposal is durable even when the passer finished.
-  crew.stop();
-  const { Crew } = await import('../src/crew.ts');
-  const resumed = new Crew(cfg, db); resumed.init();
-  try { await resumed.answer(card.id, { answer: 'allow' });
-  const second = db.get("SELECT * FROM tasks WHERE bot = 'scout'")!;
-  assert.equal(second.root, first);
-  await settled(db, second.id);
-  assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", first).length, 1);
-  } finally { resumed.stop(); done(); }
-});
-
-test('denied handoff creates no task', async () => {
-  const { db, cfg, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  disk.setSettings(cfg, 'reel', { handoff: 'ask' });
-  const first = (await crew.post('reel', 'ask permission [tool crew_pass {"bot":"scout","task":"Review it"}]'))!.task;
-  await until('check', () => db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'"));
-  await crew.answer(db.get("SELECT id FROM asks WHERE state = 'open'")!.id, { answer: 'deny' });
-  assert.equal(db.get("SELECT id FROM tasks WHERE bot = 'scout'"), undefined);
-  await release(crew, 'reel', 'Stopped here.'); await settled(db, first);
-  done();
-});
-
-test('final wrap never repeats an in-progress line after the work finished (D37)', async () => {
-  const { db, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
-  const first = (await crew.post('scout', 'ask permission: research FDIC basics then hand on'))!.task;
-  await holding(crew, 'scout');
-  (crew as any).pass('scout', 'scribe', 'ask permission: write the one-page family checklist from the research');
-  await release(crew, 'scout', 'The FDIC research is complete and sourced; Scribe is preparing the one-page checklist now.');
-  const second = db.get("SELECT id FROM tasks WHERE bot = 'scribe'")!.id;
-  await release(crew, 'scribe', 'Finished the one-page FDIC family checklist with coverage limits and what to do next.');
-  await settled(db, first); await settled(db, second);
-  const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'All done.%'", first)?.text ?? '';
-  assert.match(wrap, /Scout finished\./);
-  assert.match(wrap, /Scribe finished\./);
-  assert.doesNotMatch(wrap, /is preparing/i);
-  done();
-});
-
 test('wrap-up reports an unsure part without saying all done', async () => {
   const { db, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('reel', 'Reel', 'person'); crew.recruit('scout', 'Scout', 'person');
-  const request = 'Review [tool crew_outcome {"worked":false,"seen":"not confirmed"}]';
-  const first = (await crew.post('reel', 'ask permission: hand this on'))!.task;
-  await holding(crew, 'reel');
-  (crew as any).pass('reel', 'scout', request);
-  await release(crew, 'reel', 'Passed on.');
-  await until('scout part', () => db.get("SELECT id FROM tasks WHERE bot = 'scout'"));
-  const next = db.get("SELECT id FROM tasks WHERE bot = 'scout'")!.id;
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
+  const first = (await crew.post('scout', 'ask permission: look it up', undefined, true))!.task;
+  await holding(crew, 'scout');
+  const next = (await crew.post('scout', 'Review [tool crew_outcome {"worked":false,"seen":"not confirmed"}]', undefined, true))!.task;
+  await release(crew, 'scout', 'Looked it up.');
   await settled(db, next); await settled(db, first);
   assert.equal(task(db, next).state, 'unsure');
   const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped.%'", first);
   assert.match(wrap?.text ?? '', /Scout isn't sure it worked/);
-  done();
-});
-
-test('Things foregrounds a task’s own output ahead of handed-over input', async () => {
-  const { db, cfg, crew, done } = setup();
-  crew.onboard('Sara');
-  crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
-  const scoutFiles = join(disk.botDir(cfg, 'scout'), 'files');
-  mkdirSync(scoutFiles, { recursive: true }); writeFileSync(join(scoutFiles, 'fdic-basics.md'), 'research');
-  const first = (await crew.post('scout', 'ask permission: research FDIC insurance'))!.task;
-  await holding(crew, 'scout');
-  (crew as any).deliver('scout', 'files/fdic-basics.md', 'research');
-  // Scribe's run holds on "ask permission", so its own delivery lands on the handoff task, as in production.
-  (crew as any).pass('scout', 'scribe', 'ask permission: write the one-page family checklist. Done means: a checklist', ['files/fdic-basics.md']);
-  await until('scribe task', () => db.get("SELECT id FROM tasks WHERE bot = 'scribe'"));
-  const next = db.get("SELECT id FROM tasks WHERE bot = 'scribe'")!.id;
-  await holding(crew, 'scribe');
-  writeFileSync(join(disk.botDir(cfg, 'scribe'), 'files', 'family-checklist.md'), 'checklist');
-  (crew as any).deliver('scribe', 'files/family-checklist.md', 'checklist');
-  await release(crew, 'scribe', 'Checklist ready.'); await settled(db, next);
-  await release(crew, 'scout', 'Passed it on.'); await settled(db, first);
-  const things = crew.snapshot().tasks.filter((t: any) => t.bot === 'scribe' && t.state === 'done');
-  assert.equal(things.length, 1);
-  assert.equal(things[0].files[0], 'files/family-checklist.md');
-  assert.ok(things[0].files.includes('files/from-scout/fdic-basics.md'));
   done();
 });
 
@@ -220,16 +90,3 @@ test('Things foregrounds own output ahead of an untagged legacy handoff copy', a
   done();
 });
 
-test('room replies rejoin a job; plain routed work stays out', async () => {
-  const { db, crew, done } = setup();
-  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person');
-  const room = (await crew.post('scout', 'First request', undefined, true))!.task;
-  const follow = (await crew.post('scout', 'One more thing', undefined, true))!.task;
-  assert.equal(task(db, room).room, 1); assert.equal(task(db, follow).root, room);
-  const plain = (await crew.post('scout', 'Private errand'))!.task;
-  assert.equal(task(db, plain).room, 0);
-  assert.ok(crew.room().lines.some((l) => l.text === 'One more thing'));
-  assert.ok(!crew.room().lines.some((l) => l.text === 'Private errand'));
-  await settled(db, room); await settled(db, follow); await settled(db, plain);
-  done();
-});

@@ -18,9 +18,8 @@ That stop wins over the job you were handed. A task that says the document is co
 ask for it, and write nothing. A plan written before the person's own rivals is a plan built on the default
 playbook, which is the one thing this skill exists to avoid — delivering it on time is worth nothing.
 
-If the card says there is **no demo clip**, hand Reel one job and carry on without it:
-`crew_pass { "bot": "reel", "task": "make a 30-60 second demo clip for <product> from its README screenshots and site" }`.
-One job, once. If Reel is not on the crew, say that the plan's demo step is waiting and keep writing.
+If the card says there is **no demo clip**, carry on without it and end your reply asking Chief for one job for Reel: a 30-60 second demo clip for <product> from its README screenshots and site.
+One job, once; you never hand work to another helper yourself. Say that the plan's demo step is waiting and keep writing.
 
 ## 1. First run only: the person's voice
 
