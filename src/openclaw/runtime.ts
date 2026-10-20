@@ -60,7 +60,7 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost; private keyChecks = new Set<string>();
-  private runs = new Map<string, RunRef & { account?: string }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
+  private runs = new Map<string, RunRef & { account?: string; keyLane?: boolean }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
   private failed = ''; private nodes = new Map<string, { display: string; child: ChildProcess }>();
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
@@ -189,18 +189,18 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
-    this.runs.set(spec.key, spec);
+    const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider); this.runs.set(spec.key, { ...spec, keyLane }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
     try {
-      const lane = provider === 'opencode-go' ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
+      const lane = keyLane ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
       if (!this.personas.has(lane)) { for (const [name, content] of [['SOUL.md', 'Follow the persona and job supplied for this session.\n'], ['IDENTITY.md', 'Use the identity supplied for this session.\n']]) await this.kit.call('agents.files.set', { agentId: lane, name, content }); this.personas.add(lane); }
       return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(provider === 'opencode-go' ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) },
+        ...(keyLane ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) },
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { this.runs.delete(spec.key); }
   }
-  steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
-  abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.account === 'opencode-go' ? { auth: 'apiKey' as const } : undefined); }
+  steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
+  abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
   /** The workshop's pending and loaded skills on every lane that learns them: the member agent and, once a plan key
    *  made it, its key agent (`byokit-key-<member>`, the kit's README), each with its own proposals and skills root
    *  from the engine's roster. Newest first; a forgotten one has left its skills root, so it is gone here too. */
