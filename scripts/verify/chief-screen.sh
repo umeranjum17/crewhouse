@@ -7,7 +7,7 @@
 #   scripts/verify/chief-screen.sh <out-dir> [<minimax-key-file>]
 #
 # With a key file the model is real: no scripted provider, Chief signs in to MiniMax through the sign-in sheet's key
-# paste (the key is read from the file, never printed or logged), runs on MiniMax-M3.1-Flash-Preview, and is asked in
+# paste (the key is read from the file, never printed or logged), runs on the key lane's own MiniMax-M3, and is asked in
 # plain words; the check is then the form's own saved line. The network and the key's account are used.
 #
 # Exit 0 with chief-screen.mp4, saved.txt (the form's own record), events.json (crewd's gate trail) and crewd.log in
@@ -19,8 +19,8 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-screen.XXXXXX)
-HELPER="" FILM=""
-trap '[ -z "$FILM" ] || kill -INT "$FILM" 2>/dev/null; [ -z "$HELPER" ] || kill "$HELPER" 2>/dev/null; crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+HELPER="" FILM="" APP=""
+trap '[ -z "$APP" ] || { touch "$LAB/stop-film"; wait "$APP" 2>/dev/null; }; [ -z "$FILM" ] || kill -INT "$FILM" 2>/dev/null; [ -z "$HELPER" ] || kill "$HELPER" 2>/dev/null; crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 node "$REPO/scripts/verify/chief-screen-model.ts" "$LAB/env" "$OUT/saved.txt" ${KEYFILE:+real} > "$OUT/model.log" 2>&1 &
 HELPER=$!
@@ -46,17 +46,17 @@ for _ in $(seq 1200); do
 done
 [ -n "$PERSON" ] || { echo "chief-screen: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
-post() { curl -fsS --max-time 10 "${H[@]}" -d "$2" "$B$1" > /dev/null; }
+post() { curl -fsS --max-time 60 "${H[@]}" -d "$2" "$B$1" > /dev/null; }
 post /api/onboard '{"address":"Umer"}'
-if [ -n "$KEYFILE" ]; then # the sign-in sheet's own path: start a key sign-in, paste the key from its file, pick the model
+if [ -n "$KEYFILE" ]; then # the sign-in sheet's own path: start a key sign-in, paste the key from its file (the key lane runs MiniMax-M3, the model that sees the screen)
   post /api/accounts/1/minimax/login '{"via":"key"}'
   node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
     curl -fsS --max-time 120 "${H[@]}" --data-binary @- "$B/api/accounts/1/minimax/paste" > /dev/null
   for _ in $(seq 120); do curl -fsS --max-time 10 "${H[@]}" "$B/api/accounts" | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
   curl -fsS --max-time 10 "${H[@]}" "$B/api/accounts" | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chief-screen: MiniMax did not take the key: $(curl -fsS --max-time 10 "${H[@]}" "$B/api/accounts" | node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8")).find((a) => a.account === "minimax").signIn)')" >&2; exit 1; }
-  # The picker lists the engine's catalog, which has MiniMax-M3 only; the pick is the same bot.json line the picker writes.
-  node -e 'const fs = require("node:fs"), p = process.argv[1], j = JSON.parse(fs.readFileSync(p, "utf8")); j.models = ["minimax:MiniMax-M3.1-Flash-Preview", ...j.models]; fs.writeFileSync(p, JSON.stringify(j, null, 2))' "$LAB/crew/bots/chief/bot.json"
 fi
+# The app as the person sees it, at phone and desktop width, from before the first word to the end.
+if [ -n "$KEYFILE" ]; then bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LAB/stop-film" & APP=$!; sleep 12; fi
 # The scripted model's moves: the address bar, the form, the name, Renew, then the outcome it saw.
 act() { printf '[tool computer {"node": "crewhouse-chief", %s}] ' "$1"; }
 SCRIPT="$(act '"action": "screenshot"')$(act '"action": "key", "text": "ctrl+l"')$(act "\"action\": \"type\", \"text\": \"$SITE\"")$(act '"action": "key", "text": "Return"')"
@@ -84,6 +84,7 @@ post /api/bots/chief/messages "$ASK"
 for _ in $(seq 2400); do [ -s "$OUT/saved.txt" ] && break; sleep 0.25; done
 sleep 3 # the thank-you page on film
 kill -INT "$FILM"; wait "$FILM" || true; FILM=""
+if [ -n "$APP" ]; then sleep 20; touch "$LAB/stop-film"; wait "$APP"; APP=""; fi # the app shows Chief's words and the job's state
 # Another bot's screen is never Chief's: crewd's gate refuses a call that names any node but its own.
 if [ -z "$KEYFILE" ]; then
 post /api/bots/chief/messages '{"text":"[tool computer {\"node\": \"crewhouse-scout\", \"action\": \"screenshot\"}]"}'
