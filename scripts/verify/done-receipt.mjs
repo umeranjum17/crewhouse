@@ -43,7 +43,8 @@ const task='Place the building sets order, then ask permission '+[
  call('crew_deliver',{path:'files/photos/order-result.png',note:'The shop’s order-placed page'}),
  call('crew_outcome',{worked:true,seen:facts})
 ].join(' ');
-await api('POST','/api/bots/chief/messages',{text:'Ask Scout to '+task,said:'Order the five building sets'});
+crew.say('chief','person','Order the five building sets');
+crew.assign('scout',task,'chief');
 await until('approval',()=>db.get("SELECT id FROM asks WHERE kind='permission' AND state='open'"));
 const approval=db.get("SELECT * FROM asks WHERE kind='permission' AND state='open'");
 writeFileSync(join(ev,'approval-before.json'),JSON.stringify(await api('GET','/api/state'),null,2));

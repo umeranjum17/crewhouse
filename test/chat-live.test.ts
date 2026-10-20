@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
 import { temp } from './tmp.ts';
-import { setup, until, release, holding } from './lab.ts';
+import { setup, until, release, holding, settled } from './lab.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startServer } from '../src/server.ts';
 
@@ -98,6 +98,14 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       document.querySelector('.chat .dock textarea').addEventListener('keydown', () => { window.__sent ??= performance.now(); }, { capture: true }); true }`);
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    if (bot === 'scout') {
+      // The stub no longer routes. Finish Chief's turn, then stage the helper's job explicitly.
+      await holding(crew, 'chief');
+      const chiefTask = crew.sessionOf('chief')!.task;
+      await release(crew, 'chief', 'Scout is on it.');
+      await settled(db, chiefTask);
+      crew.assign('scout', words + ' [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', 'chief');
+    }
     await holding(crew, bot);
     // A send is never silent on screen: the thread holds its newest line, so nothing may sit below the live line
     // (Add your phone at the thread's foot once filled a phone screen after every send; ch-chat-silent-gap).
@@ -164,7 +172,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
     await journey(width, 'chief', 'Please ask permission before you plan my week', /At work[\s\S]*Chief ·[\s\S]*Started on/);
     // On a phone there is no side column: the job passed to Scout is followed in Chief's thread itself. Scout's own
     // progress note is the doing line; its small steps stay behind the expand.
-    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower [tool crew_report {"text":"Looked up the tower"}] [tool bash {"command":"echo tower"}]', /At work[\s\S]*Scout ·[\s\S]*Passed to Scout/);
+    await journey(width, 'scout', 'Ask Scout to ask permission first, then look up the tower', /At work[\s\S]*Scout ·[\s\S]*Passed to Scout/);
     // A turn that ends at once with a reply the thread does not show (the stub's own) keeps its end line, so the
     // send still says it finished; a quick Chief reply in the thread lets "Done · 0 s" go.
     const quick = `What did you finish at ${width}?`;

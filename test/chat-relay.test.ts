@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
 import { temp } from './tmp.ts';
-import { setup, until, release, holding } from './lab.ts';
+import { setup, until, release, holding, settled } from './lab.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startServer } from '../src/server.ts';
 
@@ -74,6 +74,12 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
     await send('Input.insertText', { text: `Ask Scout to ask permission first, then check my ${slug} invoice list` });
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    // Stage the helper explicitly after Chief's turn; the retired router is not part of this relay proof.
+    await holding(crew, 'chief');
+    const chiefTask = crew.sessionOf('chief')!.task;
+    await release(crew, 'chief', 'Scout is on it.');
+    await settled(db, chiefTask);
+    crew.assign('scout', `ask permission first, then check my ${slug} invoice list`, 'chief');
     await holding(crew, 'scout');
     const task = crew.sessionOf('scout')!.task;
     await release(crew, 'scout', reply);

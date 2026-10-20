@@ -43,9 +43,7 @@ async function until<T>(fn: () => Promise<T | undefined | false>, ms = 10_000): 
 }
 /** A message the stub model answers with one tool call, then a reply saying what the tool returned. */
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
-// The person talks only to Chief: a helper's words go through him, opened with the helper's name (the routing rule that hands them on).
-const names: Record<string, string> = { quill: 'Quill', scribe: 'Scribe', reel: 'Reel', 'video-reel': 'Video Reel', 'writer-quill': 'Writer Quill' };
-const say = (bot: string, text: string) => api('POST', '/api/bots/chief/messages', { text: bot === 'chief' ? text : `${names[bot]}, ${text}` });
+const say = (bot: string, text: string) => api('POST', `/api/bots/${bot}/messages`, { text });
 const done = (bot: string, task: number) => until(async () => (await api('GET', `/api/bots/${bot}`)).body.tasks.find((x: any) => x.id === task && ['done', 'failed'].includes(x.state)));
 const ready = () => until(async () => (await api('GET', '/api/state').catch(() => null))?.body.person);
 
@@ -204,7 +202,7 @@ test('parked peer reads: both approvals resume one turn and the person gets the 
     for (const mode of ['one ask', 'spaced answers', 'close answers', 'answer before settlement']) {
       const selected = (mode === 'one ask' ? paths.slice(0, 1) : paths).map((path) => path.replace('.md', `-${mode}.md`));
       selected.forEach((path) => writeFileSync(path, 'A writing brief'));
-      const { task: id } = await request('POST', '/api/bots/chief/messages', { text: 'Quill, ' + selected.map((path) => call('crew_read', { path })).join(' ') });
+      const { task: id } = await request('POST', '/api/bots/quill/messages', { text: 'Quill, ' + selected.map((path) => call('crew_read', { path })).join(' ') });
       await until(async () => s.db.all("SELECT * FROM events WHERE kind = 'ask.parked' AND json_extract(data, '$.task') = ?", id).length === selected.length);
       if (mode !== 'answer before settlement') {
         await release(s.crew, 'quill'); // fixture control: release the initial hold after its parked-call abort
@@ -233,7 +231,7 @@ test('parked peer reads: both approvals resume one turn and the person gets the 
     }
     console.log('approval counterfactuals', results);
     assert.deepEqual(results.map((r) => r.prompts), [2, 2, 2, 2], 'one initial turn and one resume after all parked reads are answered');
-    const missing = await request('POST', '/api/bots/chief/messages', { text: 'Quill, ' + call('crew_app', { tool: 'write', input: { args: ['platforms'] } }) });
+    const missing = await request('POST', '/api/bots/quill/messages', { text: 'Quill, ' + call('crew_app', { tool: 'write', input: { args: ['platforms'] } }) });
     await until(async () => task(s.db, missing.task).state === 'done');
     const page = await request('GET', '/api/bots/quill');
     const reply = page.messages.find((m: any) => m.task_id === missing.task && m.author === 'bot');
@@ -714,10 +712,9 @@ test('a built ask reaches the helper while the thread keeps the person’s own w
   await api('POST', '/api/recruit', { template: 'scribe', name: 'Scribe' });
   const want = 'agree and say why apprentices matter';
   const box = { app: 'materialistic', text: 'Apprentices are the real gap', picked: '' };
-  const task = (await api('POST', '/api/bots/chief/messages', { text: `Scribe, ${A.writeAsk(want, box)}`, said: A.writeSaid(want, box) })).body.task;
+  const task = (await api('POST', '/api/bots/scribe/messages', { text: `Scribe, ${A.writeAsk(want, box)}`, said: A.writeSaid(want, box) })).body.task;
   const mine = (await until(async () => { const p = (await api('GET', '/api/bots/scribe')).body; return p.tasks.find((t: any) => t.id === task && ['done', 'failed'].includes(t.state)) && p; }));
-  const thread = (await api('GET', '/api/bots/chief')).body;
-  assert.ok(thread.messages.some((m: any) => m.author === 'person' && m.text.startsWith(`${want}\nApprentices are the real gap`)), 'Chief’s thread shows their own words, never our ask');
+  assert.ok(mine.messages.some((m: any) => m.author === 'person' && m.text.startsWith(`${want}\nApprentices are the real gap`)), 'the helper’s thread shows their own words, never our ask');
   assert.match(mine.tasks.find((t: any) => t.id === task).body, /short labelled notes/, 'the helper still reads the whole ask');
   // The stub's echo is not an answer, so the thread, Made in this chat and the rail cannot disagree about a job with none.
   assert.deepEqual(A.lines(mine, 'scribe').filter((l) => l.from === 'them'), [], 'no reply to read');
@@ -729,9 +726,9 @@ test('a built ask reaches the helper while the thread keeps the person’s own w
 
 test('room API: a message starts and rejoins the person’s room job', async () => {
   await ready();
-  const first = (await api('POST', '/api/bots/chief/messages', { text: 'Video Reel, A room job', room: true })).body.task;
+  const first = (await api('POST', '/api/bots/video-reel/messages', { text: 'Video Reel, A room job', room: true })).body.task;
   await done('video-reel', first);
-  const second = (await api('POST', '/api/bots/chief/messages', { text: 'Video Reel, More on that room job', room: true })).body.task;
+  const second = (await api('POST', '/api/bots/video-reel/messages', { text: 'Video Reel, More on that room job', room: true })).body.task;
   await done('video-reel', second);
   const room = (await api('GET', '/api/room')).body;
   assert.ok(room.lines.some((l: any) => l.text === 'Video Reel, More on that room job'));
@@ -753,6 +750,11 @@ test('the person talks directly to a helper: the helper owns the task and Chief 
   assert.ok(!(await api('GET', '/api/bots/chief')).body.messages.some((m: any) => m.author === 'person' && m.text.includes(text)), 'Chief gets no synthetic request');
   const again = (await api('POST', '/api/bots/reel/messages', { text, move: 'direct-chat-test' })).body.task;
   assert.equal(again, posted, 'reconnect retry returns the original task');
+  const batch = (await say('reel', call('crew_batch', { question: 'prices', items: ['A', 'B'] }))).body.task;
+  const refused = await done('reel', batch);
+  assert.match(refused.result, /This run does not have that tool\./, 'the retired batch tool fails closed');
+  assert.ok(!(await api('GET', '/api/events')).body.some((e: any) => e.kind === 'run.call' && e.data.tool === 'crew_batch'));
+
 });
 
 test('the person’s bot page, events and live activity keep their delivered work', async () => {
@@ -797,7 +799,7 @@ test('Forget this file: the person takes a document back out of the helper\'s fo
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   const pdf = { type: 'application/pdf', data: Buffer.from('%PDF-1.4 a receipt').toString('base64'), name: 'statement.pdf' };
-  const task = (await api('POST', '/api/bots/chief/messages', { text: 'Reel, here is a file.', files: [pdf] })).body.task;
+  const task = (await api('POST', '/api/bots/reel/messages', { text: 'Reel, here is a file.', files: [pdf] })).body.task;
   await done('reel', task);
   const rel = `files/inbox/${task}-1.pdf`, full = join(root, 'crew', 'bots', 'reel', rel);
   assert.ok(existsSync(full), 'the document the person sent is in the helper\'s folder');
@@ -853,46 +855,6 @@ test('raw /files/ only opens delivered files, and only for the person', async ()
     assert.ok(!(await res.text()).includes('raw take'), `${sneak} leaks nothing`);
   }
 });
-
-test('one chat end to end on the stub: excel request, one question, bookings, then the xlsx card and its roles', async () => {
-  const { db, crew, done } = lab();
-  crew.onboard('sir');
-  const chiefSays = () => db.all("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' ORDER BY id").map((m: any) => m.text);
-  // A small but real workbook spec: the follow-up run builds it for the card.
-  const sheets = [{ name: 'Bookings', columns: [{ header: 'Guest' }, { header: 'Status', options: ['Booked', 'Checked in'] }], rows: [['Amina Khan', 'Booked']] }];
-  const marker = call('crew_workbook', { name: 'Reception log', sheets });
-
-  // The request names a workbook, so it goes straight to the silently hired Writer Will; "ask permission" holds the turn.
-  const first = (await crew.post('chief', 'make me an Excel for reception, ask permission before you build anything'))!.task;
-  assert.equal(task(db, first).bot, 'writer-will');
-  assert.equal(task(db, first).origin, 'chief');
-  await release(crew, 'writer-will', `${marker} Visitor log, bookings, or something else?`);
-  await settled(db, first);
-
-  // The question reaches Chief's thread word for word, ending in "?", carrying its task but no card.
-  const question = chiefSays().at(-1)!;
-  assert.ok(question.endsWith(' Visitor log, bookings, or something else?') && !question.includes('asks:'), 'in the helper\'s own words, no "asks:" prefix');
-  assert.ok(question.endsWith('?'));
-  assert.equal((await crew.botPage('chief')).messages.find((m: any) => m.text === question)?.helper, 'writer-will', 'the app shows Writer Will said it');
-
-  // Posting the answer builds the workbook, and its card lands in Chief's thread.
-  const second = (await crew.post('chief', 'bookings'))!.task;
-  assert.equal(task(db, second).bot, 'writer-will');
-  await release(crew, 'writer-will', 'The reception workbook is ready.');
-  await settled(db, second);
-  const page = await crew.botPage('chief');
-  const card = page.messages.find((m: any) => m.task_id === second)?.files.find((f: any) => f.path.endsWith('.xlsx'));
-  assert.ok(card, "the finished spreadsheet's card is in Chief's thread");
-
-  // The preview behind the card carries row numbers and cell roles, in plain words.
-  const view = await crew.workbookView('writer-will', card.path) as any;
-  assert.deepEqual(view.sheets.map((s: any) => s.name), ['Bookings']);
-  assert.ok(view.sheets[0].roles.flat().includes('head'), 'header cells read as headers');
-  assert.ok(view.sheets[0].roles.flat().includes('in'), 'dropdown cells read as inputs');
-  assert.equal(view.sheets[0].nums.length, view.sheets[0].rows.length, 'every row has a number');
-  done();
-});
-
 // ch-ux-memory-one-section: Chief remembering with crew_profile records the facts it added on the trail, so the
 // chat can announce them once as "Saved: …" with an Undo, and the next job reads the saved record.
 test('chief remembers with crew_profile: the save lands on the trail and in the record', async () => {

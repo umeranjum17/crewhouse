@@ -116,13 +116,13 @@ test("the owner's own Pi is never read or written, and never run", async () => {
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   // A task with the engine's own file tools and a skill folder, a task with its shell, a sign-in, then a restart mid-task.
-  await finished((await api('POST', '/api/bots/chief/messages', { text: 'Reel, save [tool crew_write {"path":"files/a.txt","content":"x"}]' })).task);
-  await finished((await api('POST', '/api/bots/chief/messages', { text: 'Reel, look [tool bash {"command":"ls ~ ~/.pi; echo $OPENAI_API_KEY; pi --version"}]' })).task);
-  const browsed = (await api('POST', '/api/bots/chief/messages', { text: 'Reel, browse [tool browser {"args":["goto","https://example.test/"]}]' })).task;
+  await finished((await api('POST', '/api/bots/reel/messages', { text: 'Reel, save [tool crew_write {"path":"files/a.txt","content":"x"}]' })).task);
+  await finished((await api('POST', '/api/bots/reel/messages', { text: 'Reel, look [tool bash {"command":"ls ~ ~/.pi; echo $OPENAI_API_KEY; pi --version"}]' })).task);
+  const browsed = (await api('POST', '/api/bots/reel/messages', { text: 'Reel, browse [tool browser {"args":["goto","https://example.test/"]}]' })).task;
   await finished(browsed);
   await api('POST', '/api/accounts/1/grok/login', { via: 'code' });
   await until(async () => (await api('GET', '/api/accounts')).find((a: any) => a.account === 'grok').signedIn);
-  const { task } = await api('POST', '/api/bots/chief/messages', { text: 'Reel, ask permission while [tool crew_read {"path":"files/a.txt"}]' });
+  const { task } = await api('POST', '/api/bots/reel/messages', { text: 'Reel, ask permission while [tool crew_read {"path":"files/a.txt"}]' });
   await until(async () => (await api('GET', '/api/bots/reel')).trail.find((e: any) => e.kind === 'run.tool' && e.data.task === task));
   daemon.kill('SIGKILL');
   await new Promise((r) => daemon.once('exit', r));

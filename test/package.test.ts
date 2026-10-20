@@ -73,7 +73,7 @@ test("the downloaded app fetches a helper's tools on its first job, not at start
 
   // Scribe's first job is the first use of its browser, its document reader and its writer.
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
-  const job = (await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task;
+  const job = (await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task;
   for (let i = 0; i < 100 && !s?.installing?.length; i++) if (!(s = await get())?.installing?.length) await sleep(100);
   assert.ok(s?.installing?.length, 'an install is under way');
   assert.deepEqual([...s.installing].sort(), ['browser', 'documents', 'write'], "the job fetches exactly the tools Scribe was given and doesn't have");
@@ -116,7 +116,7 @@ test('a stalled install stops at its bound: its job fails in one line, no instal
   for (let i = 0; i < 100 && !(await fetch(`${at}/api/state`, { headers: authOf(state3) }).catch(() => null))?.ok; i++) await sleep(100);
 
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
-  const job = (await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task;
+  const job = (await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task;
   const chief = (await post('/api/bots/chief/messages', { text: 'Hello' })).task;
   let c: any;
   for (let i = 0; i < 300 && (c = await taskOf('chief', chief))?.state !== 'done'; i++) await sleep(100);
@@ -130,7 +130,7 @@ test('a stalled install stops at its bound: its job fails in one line, no instal
   await fails(job);
   // A cold node can spend the whole bound loading src/tools.ts, so the stop lands before any npm, pip or curl starts and
   // no pid is written. The job fails the same way; the next one tries again, warm, until an installer was there to stop.
-  for (let n = 0; n < 4 && !existsSync(pids); n++) await fails((await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task);
+  for (let n = 0; n < 4 && !existsSync(pids); n++) await fails((await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task);
   const installers = readFileSync(pids, 'utf8').trim().split('\n').map(Number);
   assert.ok(installers.length >= 1);
   for (const pid of installers) {
@@ -164,7 +164,7 @@ async function brokenKit(tool: string) {
 test('an unreadable tool manifest fails a job that needs it in plain words, and crewd keeps answering', async () => {
   const { at, post, events, auth } = await brokenKit('write');
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
-  const job = (await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task;
+  const job = (await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task;
   let t: any;
   for (let i = 0; i < 300 && !(t = (await events()).find((e) => e.kind === 'task.failed' && e.data?.task === job)); i++) await sleep(100);
   assert.equal(t?.data.result, 'Its tools could not be checked, so this one stopped. Try again in a moment.');
@@ -205,7 +205,7 @@ test("the terminal path fetches a helper's tools on its first job, not at start"
   const state = async () => (await fetch(`${at}/api/state`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null)) as any;
   assert.deepEqual((await state())?.installing, [], 'nothing installs at start');
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
-  const job = (await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task;
+  const job = (await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task;
   let installing: string[] = [];
   for (let i = 0; i < 100 && !(installing = (await events()).filter((e) => e.kind === 'tool.installing').map((e) => e.data?.tool)).length; i++) await sleep(100);
   assert.deepEqual([...installing].sort(), ['browser', 'documents', 'write'], "the first job fetches exactly Scribe's missing tools");
@@ -220,7 +220,7 @@ test("the terminal path fetches a helper's tools on its first job, not at start"
 test('without the terminal path marker, an unpackaged crewd installs nothing by itself', async () => {
   const { at, post, events, auth } = await terminalPath(false);
   await post('/api/recruit', { template: 'scribe', name: 'Scribe' });
-  const job = (await post('/api/bots/chief/messages', { text: 'Scribe, Write me a short note' })).task;
+  const job = (await post('/api/bots/scribe/messages', { text: 'Scribe, Write me a short note' })).task;
   const taskOf = async () => (await fetch(`${at}/api/bots/scribe`, { headers: auth(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.tasks?.find((x: any) => x.id === job);
   let t: any;
   for (let i = 0; i < 300 && (t = await taskOf())?.state !== 'done'; i++) await sleep(100);

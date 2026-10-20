@@ -1,5 +1,5 @@
 // The live line follows the running turn, not the newest task (chat quality map, row #1): a second send while Chief
-// works must not steal the line or restart its clock — it shows as a short "Next: …" row — and a routed helper request
+// works must not steal the line or restart its clock — it shows as a short "Next: …" row — and an assigned helper job
 // finishing while Chief still works must not replace Chief's working line with the helper's "done". One adapter change
 // feeds web chat and the phone app. Runs on the real crewd with the stub engine: no account, no network, no quota.
 import assert from 'node:assert/strict';
@@ -48,7 +48,7 @@ test('a second send while Chief works keeps the running turn and its clock, and 
   assert.notEqual(queued.since, admitted, 'the next job has its own clock');
 });
 
-test('a routed helper request finishing while Chief works keeps Chief\'s working line', { timeout: 60_000 }, async () => {
+test('an assigned helper job finishing while Chief works keeps Chief\'s working line', { timeout: 60_000 }, async () => {
   const { db, crew } = lab();
   crew.onboard('Umer');
   crew.recruit('scout', 'Penny', 'person');
@@ -56,9 +56,9 @@ test('a routed helper request finishing while Chief works keeps Chief\'s working
   await holding(crew, 'chief');
   const before = line(crew);
   assert.equal(before?.state, 'working');
-  // "Penny, …" routes to the helper with Chief as its origin; the helper runs while Chief is still held.
-  const routed = (await crew.post('chief', 'Penny, sort my invoices'))!.task;
-  assert.ok(routed && routed !== first, 'the routed request is its own helper task');
+  // Chief's explicit assignment runs the helper while his own turn is still held.
+  const routed = crew.assign('penny', 'sort my invoices', 'chief').task;
+  assert.ok(routed && routed !== first, 'the assignment is its own helper task');
   const bot = db.get('SELECT bot, origin FROM tasks WHERE id = ?', routed)!;
   assert.equal(bot.bot, 'penny');
   assert.equal(bot.origin, 'chief');
