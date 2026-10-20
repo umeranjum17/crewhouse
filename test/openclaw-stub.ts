@@ -21,7 +21,9 @@ export const holding = (key: string) => holds.has(key);
 /** The tool calls in the script, each with its arguments. Braces are balanced, so a spec may nest (crew_workbook does). */
 export function toolCalls(text: string) {
   const out: { name: string; input: any }[] = [];
+  let consumed = 0;
   for (const m of text.matchAll(/\[tool (\w+) \{/g)) {
+    if (m.index! < consumed) continue; // a nested call in a send's message belongs to its target, not this turn
     const from = m.index! + m[0].length - 1;
     let depth = 0, i = from, quote = false, esc = false;
     for (; i < text.length; i++) {
@@ -34,6 +36,7 @@ export function toolCalls(text: string) {
       else if (c === '}' && !--depth) break;
     }
     out.push({ name: m[1], input: JSON.parse(text.slice(from, i + 1)) });
+    consumed = i + 1;
   }
   return out;
 }
@@ -41,7 +44,7 @@ export function toolCalls(text: string) {
 const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map((c: any) => c.text ?? '').join('') : '';
 
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
-export function startModelStub(promptTokens?: number) {
+export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string }) {
   const calls: { authorization: string; path: string; body: any }[] = [];
   const server: Server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -59,11 +62,12 @@ export function startModelStub(promptTokens?: number) {
     // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"): not the person's.
     const asked = (m: any) => m.role === 'user' && !words(m).startsWith('Attached image(s) from tool result');
     const lastUser = [...messages].reverse().find(asked);
-    const said = words(lastUser);
+    const planned = script?.(body, words(lastUser)), said = planned?.text ?? words(lastUser);
     const results = messages.slice(messages.findLastIndex(asked) + 1).filter((m: any) => m.role === 'tool');
     const scripted = toolCalls(said);
     const lastResult = results.at(-1);
     const done = () => {
+      if (planned?.reply !== undefined) return planned.reply;
       if (results.length && lastResult) {
         if (/\[two-fare-backtest\]/.test(said))
           return 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';

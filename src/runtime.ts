@@ -6,17 +6,22 @@ export interface ToolHost {
   tools(run: RunRef): ToolSpec[];
   gate(run: RunRef, tool: string, input: Record<string, unknown>): Promise<GateResult>;
   call(run: RunRef, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<string>;
+  delegate?(parent: RunRef, bot: string, key: string): Promise<RunRef>;
+  event?(run: RunRef, event: RunEvent): void;
+  end?(run: RunRef, end: RunEnd): void;
 }
 export interface RunSpec extends RunRef {
   cwd: string; system: string; message: string; account: string; model?: string;
   images?: { data: string; mimeType: string }[];
   thinking?: 'low'; builtins: string[];
+  team?: { bot: string; system: string; tools: string[] }[];
 }
 export type RunEvent =
   | { type: 'started' | 'thinking' }
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; phase: 'start' | 'end' }
-  | { type: 'usage'; tokens: number };
+  | { type: 'usage'; tokens: number }
+  | { type: 'delegated'; id: string; parent: string; root: string };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; cliLogin?: { signIn: boolean }; workspaces?: { id: string; name: string }[] };

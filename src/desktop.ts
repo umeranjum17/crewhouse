@@ -130,15 +130,15 @@ export class Desktops {
     // It never offers to keep a password (a sign-in lives in cookies only), nor to restore pages after any unclean end.
     const prefs = join(botDir, 'browser', 'Default', 'Preferences'), was = (() => { try { return JSON.parse(readFileSync(prefs, 'utf8')); } catch { return {}; } })();
     mkdirSync(join(prefs, '..'), { recursive: true }); writeFileSync(prefs, JSON.stringify({ ...was, credentials_enable_service: false, profile: { ...was.profile, exit_type: 'Normal', exited_cleanly: true } }));
-    // Fenced like the shell: the person's home, /tmp and session sockets are not there, so no page, file picker or
+    // Fenced like the shell: the person's home, /tmp, private state and session sockets are not there, so no page, file picker or
     // `file://` address the bot's hands reach on screen can see their files. Only its own folder and display are.
-    const [cmd, ...fence] = sandboxReady() ? ['bwrap', '--dev-bind', '/', '/', '--tmpfs', '/home', '--tmpfs', '/tmp', '--tmpfs', '/run/user', '--bind-try', '/tmp/.X11-unix', '/tmp/.X11-unix', '--bind', botDir, botDir, '--ro-bind', d.xauth, d.xauth, '--die-with-parent', '--', bin] : [bin];
+    const [cmd, ...fence] = sandboxReady() ? ['bwrap', '--dev-bind', '/', '/', '--tmpfs', '/home', '--tmpfs', '/tmp', '--tmpfs', '/run/user', '--tmpfs', this.stateDir, '--bind-try', '/tmp/.X11-unix', '/tmp/.X11-unix', '--bind', botDir, botDir, '--ro-bind', d.xauth, d.xauth, '--die-with-parent', '--', bin] : [bin];
     const child = spawn(cmd, [...fence,
       // Last flag wins, so these beat a distro wrapper's own flags (for example a Wayland default).
       '--ozone-platform=x11', `--user-data-dir=${join(botDir, 'browser')}`, '--remote-debugging-pipe',
       '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--force-device-scale-factor=1', '--start-maximized',
       '--window-position=0,0', `--window-size=${WIDTH},${HEIGHT}`, 'about:blank',
-    ], { env: this.env(d), stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
+    ], { env: { ...this.env(d), ...(fence.length ? { TMPDIR: '/tmp' } : {}) }, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
     let said = '', buf = '', client: WebSocket | undefined, answered: ((bad?: string) => void) | undefined;
     child.stderr!.on('data', (c) => { said = (said + c).slice(-400); });
     child.on('error', (e) => { said = `${said}\n${e.message}`.slice(-400); });

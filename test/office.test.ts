@@ -301,6 +301,14 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
     counts.jobs = await b.run("document.querySelectorAll('.jobs-page .needs-row').length") + num(await b.run("document.querySelector('.jobs-quiet b')?.textContent"));
     assert.equal(new Set(Object.values(counts)).size, 1, `${demo}: one count everywhere (${JSON.stringify(counts)})`);
   }
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`demo=finished&${theme}#/jobs`);
+    await until('the finished-jobs link', () => b.run("!!document.querySelector('.st-room')"), 30_000);
+    const link = await b.run(`(() => { const a=document.querySelector('.st-room'), title=a.querySelector('b').getBoundingClientRect(), detail=a.querySelector('.grow > span').getBoundingClientRect(), box=a.getBoundingClientRect();
+      return { separate: title.bottom <= detail.top, tappable: box.height >= 48, inside: box.left >= 0 && box.right <= innerWidth }; })()`);
+    assert.deepEqual(link, { separate: true, tappable: true, inside: true }, `${theme} ${width}: the finished-jobs title and description are separate, readable rows`);
+  }
 });
 
 test('the side menu never stacks rows: the crew list scrolls inside it, Settings and the person stay whole and tappable', { skip: !bin && 'no Chromium here' }, async () => {
@@ -671,6 +679,21 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
   assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
   await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
+  // Native delegation's standing helper has its real full name, not the shorter template label.
+  const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });
+  const named = (await api('/api/bots/chief/messages', { text: 'Research Rae, check the notebook; ask permission' })).task;
+  await holding(lab.crew, rae.id); await release(lab.crew, rae.id, 'The notebook is checked.'); await settled(lab.db, named);
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`${theme}#/chief`);
+    await until('the named helper’s finished chip', () => b.run(`[...document.querySelectorAll('.hand')].some(h => h.textContent.includes('Research Rae') && /done/.test(h.textContent))`), 30_000);
+    const fit = await b.run(`(() => { const h = [...document.querySelectorAll('.hand')].find(h => h.textContent.includes('Research Rae')),
+      word = h.querySelector('.hand-word'), label = h.querySelector('b').parentElement, r = document.createRange(); r.selectNodeContents(label);
+      const w = word.getBoundingClientRect(), box = h.getBoundingClientRect(); return { clipped: word.scrollWidth > word.clientWidth + 1,
+        overlap: [...r.getClientRects()].some(x => Math.min(x.right,w.right)-Math.max(x.left,w.left)>1 && Math.min(x.bottom,w.bottom)-Math.max(x.top,w.top)>1),
+        inside: box.left >= 0 && box.right <= innerWidth }; })()`);
+    assert.deepEqual(fit, { clipped: false, overlap: false, inside: true }, `${theme} ${width}: the helper’s full name and finished status stay readable`);
+  }
 });
 
 // The demo banner (main.tsx PairRow) at the hardest size a phone gets: 360 wide with the largest text. Its Pair

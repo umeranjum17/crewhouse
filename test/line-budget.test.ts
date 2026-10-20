@@ -59,7 +59,10 @@ import { join } from 'node:path';
 // computer tool and node host per bot desktop, its gate and policy entries, and the bot's Chromium fenced like the shell.
 // Raised 7243 -> 7261 for Chief's case follow-ups (ch-notice-followup, rebuilt from #471, +18; the captain restored the feature,
 // owner decision on the exception pending, no trim paired): the cases table, the held-facts lookup, the crew_case tool and Memory's Forget.
-const BUDGET = 7261;
+// Raised 7261 -> 7361 for native standing-helper delegation (ch-teams-f4-native-delegation, owner exception,
+// firstmate inbox 005, 20 Oct): at most +100 net src for this first slice. Legacy deletion is tracked as
+// ch-teams-f4-legacy-delegation-delete; no silent ceiling increase or relocated implementation.
+const BUDGET = 7361;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
