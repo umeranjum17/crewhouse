@@ -3,7 +3,6 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
-import { provider as kitProvider } from '@byokit/accounts';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
@@ -167,10 +166,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
     const provider = await this.routeOf(account), codexSigned = provider === 'openai-codex' && await this.kit.signedIn(ME, provider), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 }); // 'all' is the kit's account read (default lists nothing); the Codex CLI owns its login, so its models read missing-auth until signed in
-    const listed = (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
-    // A key-entry plan the engine lists nothing for yet: the kit's catalogue names its models (strong, then fast), so none is invented.
-    if (!listed.length && account === 'minimax') return [...new Set(Object.values(kitProvider('minimax')?.models ?? {}))].map((id) => ({ id, name: id }));
-    return listed;
+    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
