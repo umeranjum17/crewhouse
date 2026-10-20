@@ -2671,6 +2671,9 @@ function ThingsList({ list, state, empty }: { list: A.Thing[]; state: Json; empt
 function PhoneAccounts() {
   const t = useLook();
   const [more, setMore] = useState(false);
+  const [held, setHeld] = useState(false); // the phone that set up a cloud computer keeps its boat.dev key
+  const [pasting, setPasting] = useState<(typeof A.AIS)[number] | null>(null);
+  useEffect(() => { void keptKey().then((k) => setHeld(!!k)); }, []);
   const row = (ai: (typeof A.AIS)[number]) => <View key={ai.key} style={[s.row, { gap: 12, paddingVertical: 10 }]}>
     <AiMark ai={ai} />
     <View style={{ flex: 1 }}><T style={s.b}>{ai.name}</T>{!!ai.cli && <T tone="mute" style={s.small}>Needs {ai.cli} first.</T>}</View>
@@ -2687,8 +2690,52 @@ function PhoneAccounts() {
       <T tone="mute">{more ? '⌄' : '›'}</T>
     </Pressable>
     {more && <Card style={{ gap: 0, paddingVertical: 6 }}>{A.AIS.slice(1).map(row)}</Card>}
+    {held && A.AIS.filter((ai) => 'keyEntry' in ai && ai.keyEntry).map((ai) => <Btn key={ai.key} soft tall label={`Paste your ${ai.name} key`} onPress={() => setPasting(ai)} />)}
+    {pasting && <PhoneKeySheet ai={pasting} onClose={() => setPasting(null)} />}
     <T tone="mute" style={[s.small, { marginTop: 6, marginHorizontal: 4 }]}>{A.AI_ROUTES}</T>
   </>;
+}
+
+/** A cloud computer has no screen of its own, so its owner phone pastes the key: the two calls the web sign-in sheet makes
+ *  (web/src/flows.tsx SignIn), then the wait until the computer says it is signed in. The key goes to that computer only. */
+function PhoneKeySheet({ ai, onClose }: { ai: (typeof A.AIS)[number]; onClose: () => void }) {
+  const t = useLook();
+  const reduce = motion.useReduceMotion();
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState('');
+  const send = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.signIn(ai.key, { via: 'key' });
+      await api.signInPaste(ai.key, key.trim()); setKey('');
+      for (let i = 0; i < 40; i++) {
+        const g = A.account(await api.accounts(), ai.key);
+        if (g.state === 'ready') { setDone(true); break; }
+        if (g.key?.error) { setErr(g.key.error); break; }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    } catch (e) { setErr(FRIENDLY[trouble(e)]); }
+    setBusy(false);
+  };
+  return <Modal visible transparent animationType={motion.sheet(reduce)} onRequestClose={onClose}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <Pressable style={s.scrim} onPress={onClose}>
+        <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
+          <T style={s.h2}>{done ? `You're signed in with ${ai.name}` : `Paste your ${ai.name} key`}</T>
+          {done ? <T tone="ink2">The crew thinks with your own {ai.name} now. The key stays on your cloud computer.</T> : <>
+            <T tone="ink2">Paste the key from your {ai.name} account. It uses your own {ai.name} plan and stays on your cloud computer.</T>
+            <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={key} onChangeText={setKey} editable={!busy}
+              placeholder={`${ai.name} key`} placeholderTextColor={t.mute} accessibilityLabel={`${ai.name} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+            {!!err && <T tone="pinkInk">{err}</T>}
+          </>}
+          {busy ? <ActivityIndicator color={t.pink} style={{ margin: 12 }} /> : done ? <Btn go big label="Done" onPress={onClose} />
+            : <><Btn go big label={`Sign in with ${ai.name}`} disabled={!key.trim()} onPress={() => void send()} /><Btn ghost label="Cancel" onPress={onClose} /></>}
+        </Pressable>
+      </Pressable>
+    </KeyboardAvoidingView>
+  </Modal>;
 }
 
 // ---------- this phone ----------

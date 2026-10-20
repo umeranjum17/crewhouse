@@ -28,7 +28,7 @@ export function relayOrigin(value: string | null): string | null {
 }
 
 // Unmarked lab/proof scripts are isolated even when they select the stub only after loadConfig.
-export const isolatedRun = (engine = process.env.CREWHOUSE_ENGINE) => !!process.env.NODE_TEST_CONTEXT || process.env.CREWHOUSE_ENGINE === 'stub' || engine === 'stub' || (process.env.CREWHOUSE_RUN_MODE !== 'product' && !(process.env.CREWHOUSE_RUN_MODE === undefined && process.platform === 'linux' && /\/crewhouse(?:-headless)?\.service(?:\/|$)/m.test(readFileSync('/proc/self/cgroup', 'utf8'))));
+export const isolatedRun = (engine = process.env.CREWHOUSE_ENGINE) => !!process.env.NODE_TEST_CONTEXT || process.env.CREWHOUSE_ENGINE === 'stub' || engine === 'stub' || (process.env.CREWHOUSE_RUN_MODE !== 'product' && !(process.env.CREWHOUSE_RUN_MODE === undefined && process.platform === 'linux' && /\/(?:byokit-)?crewhouse(?:-headless)?\.service(?:\/|$)/m.test(readFileSync('/proc/self/cgroup', 'utf8'))));
 const physical = (p: string): string => lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ? physical(resolve(dirname(p), readlinkSync(p))) : existsSync(p) ? realpathSync(p) : join(physical(dirname(p)), basename(p));
 export function assertSafeConfig(cfg: Config) {
   if ([cfg.stateDir, cfg.crewDir].some(p => (physical(resolve(p)) + '/').startsWith(physical(cfg.repoDir) + '/'))) throw new Error('crewd: data must live outside the repo; set CREWHOUSE_STATE_DIR / CREWHOUSE_CREW_DIR elsewhere');
