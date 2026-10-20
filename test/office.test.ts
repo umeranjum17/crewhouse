@@ -603,7 +603,8 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
     assert.equal(r.status, 200); return r.json();
   };
   await api('/api/recruit', { template: 'scout', name: 'Scout' });
-  const job = (await api('/api/bots/chief/messages', { text: 'Scout, Check my Friday flights; ask permission' })).task;
+  const assign = (bot: string, text: string) => { lab.crew.say('chief', 'person', text); return lab.crew.assign(bot, text, 'chief').task; };
+  const job = assign('scout', 'Check my Friday flights; ask permission');
   await holding(lab.crew, 'scout');
   const b = await browse(base);
   await b.send('Page.enable'); await b.send('Runtime.enable');
@@ -662,8 +663,8 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('opened the read thread', () => b.run("!!document.querySelector('.chat-page .line.them')"));
   assert.equal(await b.run("!!document.querySelector('.new-divider')"), false, 'a read thread has no NEW on the next visit');
 
-  // A request routed to Scout through Chief is one hand-off chip after Chief's reply, under the limit from crewd's grants.
-  const next = (await api('/api/bots/chief/messages', { text: 'Scout, check the Monday trains; ask permission' })).task;
+  // A Chief-assigned job is one hand-off chip, under the limit from crewd's grants.
+  const next = assign('scout', 'check the Monday trains; ask permission');
   await holding(lab.crew, 'scout');
   await b.run('location.hash = "#/chief"');
   await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
@@ -677,7 +678,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('the first chip reads done', () => b.run(`/done/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
   assert.deepEqual(await b.run(`[...document.querySelectorAll('.toast')].map((t) => t.textContent).filter((t) => /Monday trains/.test(t))`), [], 'no toast repeats the finished job in the open thread');
   // A second hand-off to the same helper says the job alone: the limit sentence rides only its first hand-off (gap 13).
-  const again = (await api('/api/bots/chief/messages', { text: 'Scout, check the Friday flights; ask permission' })).task;
+  const again = assign('scout', 'check the Friday flights; ask permission');
   await holding(lab.crew, 'scout');
   await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
   assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
@@ -685,7 +686,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   // Hold the browser's roster refresh while a real new helper starts: an old snapshot cannot prove it was deleted.
   await b.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/state', requestStage: 'Request' }] });
   const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });
-  const named = (await api('/api/bots/chief/messages', { text: 'Research Rae, check the notebook; ask permission' })).task;
+  const named = assign(rae.id, 'check the notebook; ask permission');
   await holding(lab.crew, rae.id);
   try {
     await b.open(`day#/h/${rae.id}`);

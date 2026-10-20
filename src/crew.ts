@@ -20,10 +20,8 @@ import { mailChanges, mailTool, newThreads } from './mail.ts';
 import { events } from './calendar.ts';
 import { MailSend } from './mail-send.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
-import { MAX_ITEMS, MAX_PARALLEL, subMessage, type BatchAnswer } from './batch.ts';
 import { buildDocument, readDocument } from './documents.ts';
 import { STYLES, buildDeck, readDeck } from './slides.ts';
-import { route, chiefWork, type Helper } from './route.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { OpenClawRuntime } from './openclaw/runtime.ts';
@@ -84,9 +82,7 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
 const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n), fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } }; // a file's own name, as the person knows it
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
 const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; }, hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
-/** What each batch item hears: its one item and the shared question. The parent's own prompt stays out of it,
- *  so eight parallel items don't each pay for the whole conversation. */
-const BATCH_SYSTEM = 'You research one item on the web and report back briefly. Read the web; never sign in, post, buy or submit forms. Every claim that matters gets its source.', fail = (message: string, status = 400) => Object.assign(new Error(message), { status }), friendlyName = (name: string) => { if (name.trim().split(/\s+/).length < 2) throw fail('give the helper a job word and a first name, like "Invoice Ivy"'); return name.trim(); }; // a made-up helper's name is job word + first name: never a bare "Helper"
+const fail = (message: string, status = 400) => Object.assign(new Error(message), { status }), friendlyName = (name: string) => { if (name.trim().split(/\s+/).length < 2) throw fail('give the helper a job word and a first name, like "Invoice Ivy"'); return name.trim(); }; // a made-up helper's name is job word + first name: never a bare "Helper"
 /** Opens one locked PDF with the Documents tool's pinned pypdfium2: the password on stdin, a copy without the lock out; exit 3 is a wrong password. */
 const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => { const n = encodeURIComponent(f); return join('files', 'unlocked', n.length > 200 ? `${sha(f).slice(0, 32)}.pdf` : n); }, unlockedCurrent = (space: string, f: string) => { try { return statSync(join(space, unlockedAs(f))).mtimeMs >= statSync(join(space, f)).mtimeMs; } catch { return false; } }, lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
@@ -1060,7 +1056,7 @@ export class Crew {
     return id;
   }
 
-  /** A person's message in a bot's thread is a task for that bot; in Chief's thread it goes where `route` says, except a chat `moved` from Chief on the phone, which stays with Chief whole. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
+  /** A person's message in a bot's thread is a task for that bot; in Chief's thread Chief coordinates the work through native delegation. `photos` ride along with the words, as do `files` (PDFs and documents, saved to the helper's inbox); `said` is what the thread shows when the ask the helper reads is ours, not the person's own words (the bubble builds those). */
   async post(botId: string, text: string, photos?: unknown, room = false, key?: string, said?: string, moved = false, files?: unknown) {
     const bot = this.needBot(botId), pics = [...checkPhotos(photos), ...checkPhotos(files)];
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
@@ -1075,7 +1071,6 @@ export class Crew {
       if (!this.connections.connected(app)) this.openAsk(CHIEF, undefined, `Connect ${this.connections.apps[app].name}`, { app, words: `Connect your ${this.connections.apps[app].name}` }, 'connect');
       return;
     }
-    if (botId === CHIEF) return moved ? this.addTask(CHIEF, words, 'person', undefined, words, pics, { key }) : this.route(words, pics, room, key, said);
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
     return this.addTask(botId, words, 'person', undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
   }
@@ -1098,36 +1093,11 @@ export class Crew {
     return offer;
   }
 
-  /** A targeted request that must stay with Chief rather than pass through helper routing. */
+  /** A targeted request for Chief. */
   requestChief(text: string, said?: string) {
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
     // The thread shows the person's own words (`said`), never crewd's instruction to the model.
     return this.addTask(CHIEF, text.trim(), 'person', undefined, said?.trim() ? said.trim() : text.trim());
-  }
-
-  /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
-   *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
-  private async route(text: string, pics: Photo[] = [], room = false, key?: string, said?: string) {
-    if (this.cfg.engine !== 'stub') return this.addTask(CHIEF, text, 'person', undefined, said?.trim() || text, pics, { room, key });
-    const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[], lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF), replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
-      ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
-    if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', undefined, own, pics, { room, key });
-    // An answer to a helper's question skips routing and Chief: a fresh task carrying the question and its answer.
-    if (replyTo && lastBot && replyTo.bot !== CHIEF && this.bot(replyTo.bot)) {
-      const r = this.addTask(replyTo.bot, `${replyTo.body}\nAsked: ${lastBot.text}\nAnswer: ${text}`, CHIEF, undefined, own, pics, { room, key });
-      this.say(CHIEF, 'person', own + r.shown, null);
-      return { task: r.task };
-    }
-    const previous = this.db.get("SELECT text FROM messages WHERE bot = ? AND author = 'person' ORDER BY id DESC LIMIT 1", CHIEF)?.text as string | undefined, earlier: string | undefined = /^https?:\/\/\S+$/i.test(text) && previous && /\b(market|marketing|promote|launch)\b/i.test(previous) ? previous : undefined, body = earlier ? `${earlier}\n${text}` : text, to = await route({ text, earlier }, helpers);
-    // A spreadsheet the rules miss goes straight to Scribe, hired silently when the person's account can run helpers.
-    const helper = (!to.abstained && helpers.find((b) => b.id === to.answer))
-      || (/\b(excel|spreadsheet|xlsx|workbook|tracker)\b/i.test(body) && !chiefWork.test(body)
-        && await this.usable(this.choices({ bot: 'scribe' } as Row)) && (this.bots().find((b) => b.template === 'scribe') ?? this.recruit('scribe', undefined, 'person')));
-    if (!helper) return this.addTask(CHIEF, body, 'person', undefined, own, pics, { room, key });
-    const r = this.addTask(helper.id, body, CHIEF, undefined, own, pics, { room, key, title: own, root: room ?this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', helper.id)?.root : undefined });
-    this.say(CHIEF, 'person', own + r.shown, null);
-    this.say(CHIEF, 'bot', `${helper.display} is on it.`, null);
-    return { task: r.task };
   }
 
   /** Every task runs on the person's own pick (Settings › AI accounts): Chief never picks another model or account. */
@@ -1410,7 +1380,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (l.node ? `\nYour own screen is the computer tool's node "${l.node}": name it on every computer call.\n` : '') + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
-      ...(botId === CHIEF && this.cfg.engine !== 'stub' ? { team: this.bots().filter((b) => b.id !== CHIEF && !this.activeTask(b.id) && !this.held.has(b.id) && this.choices({ bot: b.id })[0]?.provider === l.account).map((b) => ({ bot: b.id, system: disk.systemPrompt(this.cfg, b.id, false) + this.memory(b.id) + '\nReport finished work in your final reply; native delivery brings it to Chief. Only Chief hands work to other helpers. Never call crew_assign, crew_pass or crew_batch.', tools: Object.keys(PARAMETERS).filter((n) => !['crew_assign', 'crew_pass', 'crew_batch'].includes(n)) })) } : {}) };
+      ...(botId === CHIEF && this.cfg.engine !== 'stub' ? { team: this.bots().filter((b) => b.id !== CHIEF && !this.activeTask(b.id) && !this.held.has(b.id) && this.choices({ bot: b.id })[0]?.provider === l.account).map((b) => ({ bot: b.id, system: disk.systemPrompt(this.cfg, b.id, false) + this.memory(b.id) + '\nReport finished work in your final reply; native delivery brings it to Chief. Only Chief hands work to other helpers. Never call crew_assign or crew_pass.', tools: Object.keys(PARAMETERS).filter((n) => !['crew_assign', 'crew_pass'].includes(n)) })) } : {}) };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
       (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
@@ -1663,7 +1633,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Whether this run may even consider the tool: grants first, then the policy decides what a call means. */
   toolAllowed(botId: string, name: string) {
     const l = this.live.get(botId);
-    if (!l || (this.cfg.engine !== 'stub' && ['crew_assign', 'crew_pass', 'crew_batch'].includes(name))) return false;
+    if (!l || (this.cfg.engine !== 'stub' && ['crew_assign', 'crew_pass'].includes(name))) return false;
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
@@ -1960,11 +1930,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         + 'least one example row that shows the person how to fill it in. When a chart explains the numbers better than the table, add `charts`: '
         + '[{ type: "bar"|"line"|"pie", title, sheet, categories: "A2:A13", series: [{ name, values: "B2:B13" }], at? }], ranges on that sheet.',
         (p) => this.workbook(botId, String(p.name ?? ''), p.sheets, p.charts)),
-      tool('crew_batch', 'Research several items at once (up to 24) against the one `question`: `items` is the list, each a short name. ' +
-        'Each item is researched in parallel and you get back one JSON array of {item, ok, text}. Put every answer — with a source column — into a single crew_workbook, delivered once. ' +
-        'A batch item answers its own item only; it cannot start another batch.',
-        (p) =>
-          this.batch(botId, String(p.question ?? ''), Array.isArray(p.items) ? p.items.map(String) : [])),
       tool('crew_document', 'Write a real document the person can open and edit (.docx), in your files/, and deliver it. `name` is the title; '
         + '`blocks` is the document in order: {heading}, {text, bold?, italic?}, {bullets: […]} or {table: {head: […], rows: [[cell, …], …]}}. '
         + 'crewd writes the file, so never make the binary yourself. Make it finished: a title, short paragraphs and a table where rows help. '
@@ -2035,7 +2000,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
     }
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
-    return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify', 'crew_batch'].includes(t.name)),
+    return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name)),
       tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
         const was = disk.readProfile(this.cfg), text = String(p.text ?? '').trim();
         if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
@@ -2339,58 +2304,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       if (/\.(patch|diff)$/.test(path) && !(existsSync(full) && ok.has(sha(readFileSync(full, 'utf8'))))) return path;
     }
     return null;
-  }
-
-  /** Tasks with a batch running now: a batch item answers its own item only, never starts another batch. */
-  private batching = new Set<number>();
-
-  /** crew_batch: one question fanned out over many items, each its own engine session on this task
-   *  (same gate and subscription). At most MAX_PARALLEL sessions
-   *  run at once; the model merges the returned answers into one crew_workbook. A resting account stops new waves
-   *  early with plain words, exactly as a normal turn would rest it. */
-  private async batch(botId: string, question: string, items: string[]) {
-    const task = this.activeTask(botId), l = this.live.get(botId);
-    if (!task || !l) throw new Error('no task running');
-    if (this.batching.has(task.id)) throw new Error('a batch item researches its one item itself; it cannot start another batch');
-    const q = clean(question, 500), list = items.map((s) => String(s).trim().slice(0, 200)).filter(Boolean);
-    if (!q) throw new Error('say the one question every item should answer');
-    if (!list.length) throw new Error('list the items to research, each a short name');
-    const trimmed = list.slice(0, MAX_ITEMS), answers: BatchAnswer[] = new Array(trimmed.length);
-    let at = 0, tired = 0;
-    this.batching.add(task.id);
-    try {
-      // Waves of at most MAX_PARALLEL: a resting account stops the later waves before they start.
-      while (at < trimmed.length && tired < 2) {
-        const wave = trimmed.slice(at, at + MAX_PARALLEL).map((item, k) => (async () => {
-          const i = at + k, end = await this.runtime.run({
-            key: `agent:m1:crewhouse:${botId}:${task.id}:batch:${i}`, bot: botId, task: task.id,
-            account: l.account, cwd: disk.botDir(this.cfg, botId), system: BATCH_SYSTEM,
-            message: subMessage(q, item), builtins: [],
-          }, () => { l.news = Date.now(); });
-          if (!end.ok && 'aborted' in end) {
-            answers[i] = { item, ok: false, text: 'this item was stopped before it answered.' };
-          } else if (!end.ok && (end.kind === 'resting' || end.kind === 'plan')) {
-            tired++;
-            if (end.kind === 'resting') this.accounts.rest(l.account, end.until ?? Date.now() + 60 * 60_000);
-            else this.accounts.notIncluded(l.account, true);
-            answers[i] = { item, ok: false, text: `${disk.brainName({ provider: l.account })} is resting; this item was not researched.` };
-          } else if (!end.ok) {
-            answers[i] = { item, ok: false, text: `this item could not be researched (${end.message.slice(0, 120)}).` };
-          } else {
-            answers[i] = { item, ok: true, text: end.text.slice(0, 2000) };
-          }
-        })());
-        at += wave.length;
-        await Promise.all(wave);
-      }
-    } finally {
-      this.batching.delete(task.id);
-    }
-    const notes = [
-      list.length > trimmed.length ? `only the first ${MAX_ITEMS} of ${list.length} items were researched` : '',
-      tired >= 2 ? `${disk.brainName({ provider: l.account })} started resting, so the remaining items were left out — try them again later` : '',
-    ].filter(Boolean);
-    return { answers, ...(notes.length ? { note: notes.join('; ') } : {}) };
   }
 
   /** A made file keeps its own name; a later job's file of the same name is "-2", "-3"…: never a task id a person reads. */

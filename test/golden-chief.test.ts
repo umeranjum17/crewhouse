@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { setup, settled } from './lab.ts';
 import { taskTitle, relayResult } from '../src/crew.ts';
-import { route } from '../src/route.ts';
 import { TOOLS } from '../src/openclaw/runtime.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
 import * as A from '../web/src/adapter.ts';
@@ -31,8 +30,8 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   const chiefTasks = db.all("SELECT * FROM tasks WHERE bot = 'chief' ORDER BY id");
   assert.equal(chiefTasks.length, 3, 'pairing needs no model task; marketing intent stays with Chief even with Scout in the roster');
   assert.equal(crew.botPage('chief').phoneOffer?.typed, '23456-789AB');
-  assert.equal(chiefTasks.at(-1)!.title, 'i want to market my app');
-  assert.match(chiefTasks.at(-1)!.body, /i want to market my app\nhttps:\/\/trymuxr.com\//);
+  assert.equal(chiefTasks.at(-1)!.title, 'Work on trymuxr.com');
+  assert.equal(chiefTasks.at(-1)!.body, 'https://trymuxr.com/');
   const first = (crew as any).prompt(chiefTasks.at(-1));
   assert.match(first, /Earlier in this chat:[\s\S]*market my app/);
   assert.match(first, /The person's name is "Umer"/, 'the first greeting carries her chosen name: the model saw it');
@@ -102,6 +101,11 @@ test('title, relay and markdown trust boundary', () => {
   assert.equal(relayResult('Start with this pitch: “' + 'a'.repeat(175) + '.” The two-week launch plan and first drafts are ready.'), 'The two-week launch plan and first drafts are ready.');
   assert.equal(relayResult('A very long unfinished headline ' + 'words '.repeat(40)), 'A very long unfinished headline ' + 'words '.repeat(21).trim() + '…');
   assert.doesNotMatch(relayResult('A long ' + 'word '.repeat(40) + '. The plan is ready.'), /…|\.\.\./);
+  assert.equal(relayResult('I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can wait until next month without an extra charge.'), 'I found that your three overdue invoices need attention before Friday because the water bill and dentist bill both carry late fees, while the phone bill can…');
+  assert.equal(relayResult('- Water bill due Friday\n- Dentist bill due Friday\n- Phone bill due next month'), 'Water bill due Friday…');
+  assert.equal(relayResult('Scout is preparing the report;\n- Water bill due Friday'), 'Water bill due Friday…');
+  assert.equal(relayResult('*** — …'), 'The result is ready.');
+  assert.equal(relayResult(''), 'The result is ready.');
   assert.equal(safeLink('javascript:alert(1)'), '');
   assert.equal(safeLink('https://trymuxr.com/'), 'https://trymuxr.com/');
   for (const mark of ['”', '’', ')', ']', '.', ',', ';', ':']) assert.equal(safeLink(`https://trymuxr.com/quickstart${mark}`), 'https://trymuxr.com/quickstart');
@@ -155,9 +159,4 @@ test('template refresh updates untouched copies but preserves a person-edited so
   disk.upgradeFolder(cfg, 'scout', tpl, 'Scout');
   assert.match(disk.readSoul(cfg, 'scout'), /Personal voice/);
   done();
-});
-
-test('marketing intent wins over a literal URL and an available scout', async () => {
-  const helpers = [{ id: 'scout', display: 'Scout', role: 'research' }];
-  assert.equal((await route({ text: 'https://trymuxr.com/', earlier: 'i want to market my app' }, helpers)).answer, 'chief');
 });

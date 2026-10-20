@@ -30,7 +30,7 @@ test('crewd killed mid-run: the task resumes in the same conversation and finish
   await api('POST', '/api/bots/chief/messages', { text: 'Sir' });
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });
   // The stub model reports progress, then holds the turn ("ask permission") as a long render would.
-  const { task } = await api('POST', '/api/bots/chief/messages', { text: 'Reel, ask permission to render [tool crew_report {"text":"Rendered the intro"}]' });
+  const { task } = await api('POST', '/api/bots/reel/messages', { text: 'Reel, ask permission to render [tool crew_report {"text":"Rendered the intro"}]' });
   await until(async () => (await api('GET', '/api/bots/reel')).trail.find((e: any) => e.kind === 'task.progress'));
 
   daemon.kill('SIGKILL');
