@@ -1451,7 +1451,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!words) {
       console.error(`${botId}: ${end.message}`);
       this.close(botId);
-      this.setTask(task, 'failed', end.message || `${name} couldn't finish this one. Try again.`);
+      this.setTask(task, 'failed', end.kind === 'handoff' ? end.message : `${name} couldn't finish this one. Try again.`);
       return this.dispatch();
     }
     if (end.kind === 'resting') {

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
@@ -17,7 +17,7 @@ test('Chief delegates natively, the helper keeps its grants, and the native resu
   const closed = new Promise<number | null>(resolve => child.once('exit', resolve));
   try {
     await until('isolated native household ready', () => { if (child.exitCode !== null) throw Error(output); return existsSync(ready); }, 240_000);
-    const { base, authorityFile, helper: helperId } = JSON.parse(readFileSync(ready, 'utf8'));
+    const { base, authorityFile, crewDir, helper: helperId } = JSON.parse(readFileSync(ready, 'utf8'));
     const api = async (method: string, path: string, body?: unknown) => {
       const response = await fetch(base + path, { method, headers: { authorization: `Bearer ${readFileSync(authorityFile, 'utf8')}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const value = await response.json(); assert.equal(response.status, 200, JSON.stringify(value)); return value;
@@ -41,6 +41,12 @@ test('Chief delegates natively, the helper keeps its grants, and the native resu
     assert.equal(chief.tasks.find((t: any) => t.id === next.task).state, 'unsure', JSON.stringify(chief.tasks));
     const again = await api('GET', `/api/bots/${helperId}`);
     assert.equal(again.tasks.find((t: any) => t.id !== helper.tasks[0].id).state, 'unsure', JSON.stringify(again.tasks));
+    // A Crewhouse-authored refusal stays specific; arbitrary engine diagnostics stay out of the person's chat.
+    writeFileSync(join(crewDir, 'bots', helperId, 'AGENTS.md'), 'Instructions. '.repeat(1000));
+    const tooLong = await api('POST', '/api/bots/chief/messages', { text: 'Ask Research Rae to read the facts file once more.' });
+    await until('the overlong helper refusal reaches Chief', async () => { chief = await api('GET', '/api/bots/chief'); return chief.tasks.some((t: any) => t.id === tooLong.task && t.state === 'failed'); }, 90_000);
+    assert.match(chief.tasks.find((t: any) => t.id === tooLong.task).result, /instructions and notes are too long.*Shorten them/);
+    assert.equal((await api('GET', `/api/bots/${helperId}`)).tasks.length, 2, 'a refused setup never starts another helper job');
   } catch (error) { console.error(`Native household output:\n${output}`); throw error; }
   finally {
     child.kill('SIGTERM');

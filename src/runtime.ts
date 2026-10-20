@@ -23,7 +23,7 @@ export type RunEvent =
   | { type: 'usage'; tokens: number }
   | { type: 'delegated'; id: string; parent: string; root: string };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
-  { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
+  { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output' | 'handoff'; until?: number; message: string }; // handoff messages are Crewhouse-authored, never raw engine diagnostics
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; cliLogin?: { signIn: boolean }; workspaces?: { id: string; name: string }[] };
 export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;

@@ -218,7 +218,7 @@ export class OpenClawRuntime implements AgentRuntime {
     const accounts = await this.kit.accounts(ME), provider = await this.routeOf(spec.account), account = accounts.find((a) => a.id === `${provider}${lane.startsWith('byokit-key-') ? '.key' : ''}`)?.id;
     if (!account) return this.kit.run(request, (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     for (const member of spec.team!) {
-      if (member.system.length > 8192) throw new Error('A helper’s instructions and notes are too long for this engine. Shorten them before handing it this job.');
+      if (member.system.length > 8192) return { ok: false, kind: 'handoff', message: 'A helper’s instructions and notes are too long. Shorten them before handing it this job.' };
       const helper = `b${createHash('sha256').update(member.bot).digest('hex').slice(0, 15)}`, key = `agent:${lane}:h-${helper}:crewhouse:${member.bot}`;
       await this.kit.ensureHelper(ME, helper, { account, persona: member.system });
       const adopted = await this.kit.adoptHelperSession({ member: ME, sessionKey: `agent:${ME}:crewhouse:${member.bot}` }, helper);
@@ -241,7 +241,7 @@ export class OpenClawRuntime implements AgentRuntime {
         this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: texts.get(e.run.runId) ?? '' } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' });
         this.runs.delete(e.run.sessionKey); target.run = undefined;
         if (e.reason !== 'terminal') finish({ ok: false, kind: 'other', message: e.message || 'The helper stopped before reporting back. Check its job before trying again.' });
-        else if (!admitted.size) timer = setTimeout(() => finish({ ok: false, kind: 'other', message: 'The helper finished, but Chief did not get its report. Check the helper’s chat.' }), 120_000);
+        else if (!admitted.size) timer = setTimeout(() => finish({ ok: false, kind: 'handoff', message: 'The helper finished, but Chief did not get its report. Check the helper’s chat.' }), 120_000);
       }
     });
     const offReturn = this.kit.onEvent('agent', (e) => {
@@ -255,12 +255,12 @@ export class OpenClawRuntime implements AgentRuntime {
     try {
       const end = await this.kit.run({ ...request, idempotencyKey: id, helperDelegates: helpers, system: `${spec.system}\nNative hand-off: use sessions_send with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. Never crew_assign, crew_pass or crew_batch. Admission is not completion. Your helper reports back natively; do not invent its result.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` }, (e) => {
         if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
-        if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'other', message: 'The engine could not hand this job to the helper.' }); this.runs.delete(key); t.run = undefined; }
+        if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; }
       });
       return end.ok && dispatched ? await returned : end;
     } finally {
       clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key);
-      for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'other', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }
+      for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }
     }
   }
   steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
