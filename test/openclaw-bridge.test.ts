@@ -262,6 +262,10 @@ process.exit(spawnSync('npm', args, { stdio: 'inherit' }).status ?? 1);
     rmSync(npm);
     await runtime.kit.prepare(); // An unavailable npm proves the matching installed engine is reused.
     assert.ok(existsSync(runtime.kit.doctorContext().entry));
+  } catch (error) {
+    const diagnosis = join(state, 'logs/engine-install-drift.json');
+    if (existsSync(diagnosis)) console.error('Retained installer diagnosis:', readFileSync(diagnosis, 'utf8'));
+    throw error;
   } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
 });
 

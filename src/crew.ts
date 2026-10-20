@@ -369,6 +369,10 @@ export class Crew {
   private recover() {
     const tasks = this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')");
     for (const t of tasks) {
+      if (this.db.get("SELECT 1 FROM tasks WHERE root = ? AND session LIKE 'agent:%:h-%:%'", t.root ?? t.id)) {
+        if (this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", t.id)) continue;
+        this.setTask(t, 'unsure', 'Crewhouse restarted during a hand-off. Check the helper’s chat before trying again.'); continue;
+      }
       this.handoffs.set(t.id, 'Crewhouse restarted');
       // An acted call may have landed out in the world: the resumed job asks again, even under always.
       if (t.acted) this.db.run('UPDATE tasks SET reask = 1 WHERE id = ?', t.id);
@@ -520,7 +524,7 @@ export class Crew {
 
   private wrap(root: number) {
     const tasks = this.db.all('SELECT * FROM tasks WHERE root = ? ORDER BY id', root);
-    if (tasks.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) ||
+    if (tasks.some((t) => /^agent:[^:]+:h-/.test(t.session ?? '')) || tasks.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) ||
       this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
@@ -1104,6 +1108,7 @@ export class Crew {
   /** Plainly addressed helper requests go straight there; unresolved requests become Chief tasks immediately.
    *  Chief can ask or hand off in his task, without a separate model turn delaying the person's first words. */
   private async route(text: string, pics: Photo[] = [], room = false, key?: string, said?: string) {
+    if (this.cfg.engine !== 'stub') return this.addTask(CHIEF, text, 'person', undefined, said?.trim() || text, pics, { room, key });
     const own = said?.trim() || text, helpers = this.bots().filter((b) => b.id !== CHIEF) as Helper[], lastBot = this.db.get("SELECT text, task_id, at FROM messages WHERE bot = ? AND author = 'bot' ORDER BY id DESC LIMIT 1", CHIEF), replyTo = text.length < 120 && !/\[tool\b/.test(text) && lastBot && lastBot.task_id && lastBot.at > Date.now() - 30 * 60_000 && /\?\s*$/.test(lastBot.text)
       ? this.db.get('SELECT bot, body FROM tasks WHERE id = ?', lastBot.task_id) : undefined;
     if (replyTo?.bot === CHIEF) return this.addTask(CHIEF, text, 'person', undefined, own, pics, { room, key });
@@ -1308,7 +1313,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       }
       const handoff = this.handoffs.get(task.id);
       this.handoffs.delete(task.id);
-      const resumes = !!task.session && task.session.startsWith('agent:m1:'), l = await this.open(bot, task, brain);
+      const resumes = !!task.session && /^agent:(?:m1|byokit-key-m1):/.test(task.session), l = await this.open(bot, task, brain);
       this.db.run("UPDATE bots SET state = 'on' WHERE id = ?", bot.id);
       this.db.event('run.started', bot.id, { task: task.id, account: brain.provider, name: disk.brainName(brain) });
       if (handoff && resumes) this.db.event('run.resumed', bot.id, { task: task.id, why: handoff });
@@ -1341,7 +1346,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
   private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
-    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : `agent:m1:crewhouse:${bot.id}`, task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
+    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: task.session ?? (bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : this.db.get("SELECT session FROM tasks WHERE bot = ? AND session LIKE 'agent:%:h-%:%' ORDER BY id DESC LIMIT 1", bot.id)?.session ?? `agent:m1:crewhouse:${bot.id}`), task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
     if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
     // The person's connected apps (their Notion, their Google…): Chief reaches every one; a helper only the ones its bot.json grants (src/bots.ts). Through the gate either way.
@@ -1404,7 +1409,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (l.node ? `\nYour own screen is the computer tool's node "${l.node}": name it on every computer call.\n` : '') + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
-      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [] };
+      ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
+      ...(botId === CHIEF && this.cfg.engine !== 'stub' ? { team: this.bots().filter((b) => b.id !== CHIEF && !this.activeTask(b.id) && !this.held.has(b.id) && this.choices({ bot: b.id })[0]?.provider === l.account).map((b) => ({ bot: b.id, system: disk.systemPrompt(this.cfg, b.id, false) + this.memory(b.id) + '\nReport finished work in your final reply; native delivery brings it to Chief. Only Chief hands work to other helpers. Never call crew_assign, crew_pass or crew_batch.', tools: Object.keys(PARAMETERS).filter((n) => !['crew_assign', 'crew_pass', 'crew_batch'].includes(n)) })) } : {}) };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
       (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
@@ -1412,7 +1418,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return; else l.news = Date.now(); // any word from the engine, even a streamed one, is news
-    if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
+    if (e.type === 'delegated') this.db.event('run.delegated', botId, { task: l.task, run: e.id, parent: e.parent, root: e.root });
+    else if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
     else if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
       this.db.live('reply.partial', botId, { task: l.task, text: cleanReply(e.text) });
@@ -1444,7 +1451,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!words) {
       console.error(`${botId}: ${end.message}`);
       this.close(botId);
-      this.setTask(task, 'failed', `${name} couldn't finish this one. Try again.`);
+      this.setTask(task, 'failed', end.kind === 'handoff' ? end.message : `${name} couldn't finish this one. Try again.`);
       return this.dispatch();
     }
     if (end.kind === 'resting') {
@@ -1534,11 +1541,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
       // A turn with no words and no calls is never silent: it failed. An action ends done only with crew_outcome; no confirmation means unsure.
-      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task);
+      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       if (!text && !this.db.get("SELECT 1 FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", task.id)) return this.setTask(task, 'failed', botId === CHIEF ? "I couldn't finish this one." : `${b.display} couldn't finish this one. Try again.`);
-      if (unchecked || (said ? !said.worked : task.acted)) {
-        this.setTask(task, 'unsure', unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
+      if (uncertain || unchecked || (said ? !said.worked : task.acted)) {
+        this.setTask(task, 'unsure', uncertain ? 'The helper has not confirmed this worked. Check its chat before trying again.' : unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
           : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
@@ -1562,6 +1569,30 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       return task;
     };
     return {
+      delegate: async (parent, bot, key) => {
+        const root = own(parent), brain = this.live.get(parent.bot)!;
+        if (parent.bot !== CHIEF || bot === CHIEF || !this.bot(bot) || this.activeTask(bot) || this.starting.has(bot) || this.held.has(bot) || this.live.size + this.starting.size >= this.cfg.maxConcurrent) throw new Error('That helper is busy or unavailable. Choose another helper or wait.');
+        const id = this.addTask(bot, root.body, CHIEF, undefined, root.body, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
+        this.db.run('UPDATE tasks SET session = ? WHERE id = ?', key, id); task.session = key; this.setTask(task, 'working');
+        this.starting.add(bot);
+        try {
+          const stalled = await this.fetchTools?.(disk.botConfig(this.cfg, bot).tools ?? []);
+          if (stalled) throw new Error(stalled);
+          const l = await this.open(this.bot(bot)!, task, { provider: brain.account, model: brain.model });
+          own(parent); this.busy.add(bot); l.news = Date.now();
+          this.db.event('run.started', bot, { task: id, account: brain.account, name: disk.brainName({ provider: brain.account }) });
+          return { key, bot, task: id };
+        } catch (e) { this.close(bot); this.setTask(task, 'failed', (e as Error).message); throw e; } finally { this.starting.delete(bot); this.dispatch(); }
+      },
+      event: (run, event) => { const l = this.live.get(run.bot); if (l?.task === run.task) this.onEvent(run.bot, l, event); },
+      end: (run, end) => {
+        const task = this.db.get('SELECT * FROM tasks WHERE id = ?', run.task);
+        if (this.live.get(run.bot)?.task !== run.task || !task) return;
+        this.busy.delete(run.bot);
+        if (this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", task.id)) { this.setTask(task, 'needs_you'); this.close(run.bot); return; }
+        if (end.ok) this.finish(run.bot, end.text);
+        else { this.close(run.bot); this.setTask(task, 'unsure', 'message' in end ? end.message : 'The hand-off was stopped before its result was confirmed.'); }
+      },
       tools: (run) => { own(run); return this.crewTools(run.bot).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })); },
       gate: async (run, tool, rawInput) => {
         try {
@@ -1632,7 +1663,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Whether this run may even consider the tool: grants first, then the policy decides what a call means. */
   toolAllowed(botId: string, name: string) {
     const l = this.live.get(botId);
-    if (!l) return false;
+    if (!l || (this.cfg.engine !== 'stub' && ['crew_assign', 'crew_pass', 'crew_batch'].includes(name))) return false;
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.

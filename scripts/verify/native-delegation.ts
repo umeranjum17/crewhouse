@@ -1,0 +1,77 @@
+// Owned real-product lab: node native-delegation.ts <scratch> <ready.json> --key-file <dedicated key>
+// CI uses --scripted explicitly: real Gateway and real app host, synthetic retained auth + loopback HTTP provider.
+// Live mode never loads the scripted provider or an installed CLI login. TERM stops this lab's server and engine.
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import type { OpenClawRuntime } from '../../src/openclaw/runtime.ts';
+import { join } from 'node:path';
+const [scratch, ready, mode, keyFile] = process.argv.slice(2);
+if (!scratch || !ready || !['--scripted', '--key-file'].includes(mode)) throw Error('Choose --scripted or --key-file <dedicated key path>');
+for (const p of ['home', 'tmp', 'state', 'crew', 'tools']) mkdirSync(join(scratch, p), { recursive: true });
+Object.assign(process.env, { HOME: join(scratch, 'home'), TMPDIR: join(scratch, 'tmp'), CREWHOUSE_RUN_MODE: 'test', CREWHOUSE_RUN_HOME: join(scratch, 'home'), CREWHOUSE_STATE_DIR: join(scratch, 'state'), CREWHOUSE_CREW_DIR: join(scratch, 'crew'), CREWHOUSE_TOOLS_DIR: join(scratch, 'tools'), CREWHOUSE_GOOGLE_CLIENT: join(scratch, 'absent-google.json'), CREWHOUSE_PORT: mode === '--key-file' ? process.argv[6] || '0' : '0', CREWHOUSE_LINK_PORT: '0', XDG_STATE_HOME: join(scratch, 'home/state'), XDG_CONFIG_HOME: join(scratch, 'home/config'), XDG_CACHE_HOME: join(scratch, 'home/cache'), XDG_DATA_HOME: join(scratch, 'home/data'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${scratch}/no-bus` });
+for (const key of ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[key];
+let helperId = '', helperName = '';
+let stub: Awaited<ReturnType<typeof import('../../test/openclaw-stub.ts')['startModelStub']>> | undefined;
+if (mode === '--scripted') {
+  const { startModelStub } = await import('../../test/openclaw-stub.ts');
+  stub = await startModelStub(undefined, (body, text) => {
+    const system = body.messages.filter((m: any) => m.role === 'system').map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
+    if (!system.includes('Your id in Crewhouse is chief.')) return { text };
+    const report = body.messages.findLast((m: any) => m.role !== 'system' && JSON.stringify(m.content).includes(`stub ${helperId}:`) && JSON.stringify(m.content).includes('BLUE-42'));
+    if (report) return { reply: `${helperName} checked the file. Umer owns the blue folder. Reference BLUE-42.` };
+    const key = new RegExp(`${helperId}: (agent:[^\\s]+)`).exec(system)?.[1];
+    if (!key) return { reply: 'No helper session was offered.' };
+    const outcome = text.includes('uncertain proof') ? '[tool crew_outcome {"worked":false,"seen":"The requested result could not be confirmed."}] ' : '';
+    return { text: `[tool sessions_send ${JSON.stringify({ sessionKey: 'agent:m1:not-a-helper', message: 'Do not admit this target', timeoutSeconds: 0 })}] ` +
+      `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}]` };
+  });
+  process.env.CREWHOUSE_ENGINE_BASE_URL = stub.url; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';
+  const legacy = join(scratch, 'state/people/1/engine/auth.json'); mkdirSync(join(legacy, '..'), { recursive: true });
+  const { legacyAuth } = await import('../../test/migrate-house.ts'); writeFileSync(legacy, legacyAuth());
+}
+if (mode === '--key-file') {
+  const { createServer } = await import('node:net');
+  const reserve = createServer(); await new Promise<void>(resolve => reserve.listen(0, '127.0.0.1', resolve));
+  process.env.CREWHOUSE_LINK_PORT = String((reserve.address() as { port: number }).port); process.env.CREWHOUSE_LINK_HOST = '127.0.0.1';
+  await new Promise<void>(resolve => reserve.close(() => resolve()));
+}
+const { Crew } = await import('../../src/crew.ts'), { Store } = await import('../../src/db.ts'), { loadConfig } = await import('../../src/config.ts'), disk = await import('../../src/bots.ts'), { startServer } = await import('../../src/server.ts');
+const cfg = loadConfig(), db = new Store(cfg.stateDir), crew = new Crew(cfg, db);
+db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('learning', 'off')");
+const until = async (label: string, condition: () => unknown | Promise<unknown>, ms = 300_000) => { const end = Date.now() + ms; while (!await condition()) { if (Date.now() > end) throw Error(`Timed out: ${label}`); await new Promise(r => setTimeout(r, 50)); } };
+let server: Awaited<ReturnType<typeof startServer>> | undefined;
+let stopLab!: () => void, turnUpperBound = 0;
+const stop = new Promise<void>(resolve => { stopLab = resolve; process.once('SIGTERM', () => resolve()); process.once('SIGINT', () => resolve()); });
+const countTurn = () => { if (++turnUpperBound >= 60) { console.error('Live proof stopped at its conservative lifecycle/host-tool activity ceiling.'); stopLab(); } };
+if (mode === '--key-file') db.onEvent(e => { if (e.kind === 'run.call') countTurn(); });
+if (mode === '--key-file') (crew.runtime as OpenClawRuntime).kit.onEvent('agent', e => {
+  if (e.stream === 'lifecycle' || e.stream === 'tool') appendFileSync(`${ready}.native.jsonl`, JSON.stringify({ at: Date.now(), ...e }) + '\n');
+  if ((e.stream === 'lifecycle' && e.data?.phase === 'start') || (e.stream === 'tool' && e.data?.phase === 'result')) {
+    countTurn();
+  }
+});
+try {
+  crew.init(); await until('engine ready', () => crew.runtime.engine?.().phase === 'ready');
+  if (stub) await until('Crew has configured its scripted provider and learning mode', () => {
+    const file = join(cfg.stateDir, 'openclaw/openclaw.json'); if (!existsSync(file)) return false;
+    const active = JSON.parse(readFileSync(file, 'utf8'));
+    return crew.runtime.engine?.().phase === 'ready' && active.models?.providers?.['crewhouse-stub'] && active.skills?.workshop?.autonomous?.mode === 'off';
+  });
+  else {
+    if (!await crew.accounts.signedIn('minimax')) { await crew.accounts.login('minimax', 'key'); await crew.accounts.paste('minimax', readFileSync(keyFile, 'utf8').trim()); await crew.accounts.finished('minimax'); }
+    if (!await crew.accounts.signedIn('minimax')) throw Error(`MiniMax sign-in failed: ${crew.accounts.view('minimax')?.error ?? 'not ready'}`);
+    crew.pickModel('minimax', 'MiniMax-M3');
+  }
+  if (!crew.person().onboarded) crew.onboard('Umer'); crew.updatePerson({ name: 'Umer', share: 'full' });
+  const helper = crew.bots().find(b => b.template === 'scout') ?? crew.recruit('scout', undefined, 'person'); helperId = helper.id; helperName = helper.display; disk.setGrants(cfg, helper.id, ['files']);
+  const facts = join(disk.botDir(cfg, helper.id), 'facts.txt'); if (!existsSync(facts)) writeFileSync(facts, 'Umer owns the blue folder. Reference BLUE-42.\n');
+  server = await startServer(cfg, db, crew);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  writeFileSync(ready, JSON.stringify({ pid: process.pid, base, authorityFile: join(cfg.stateDir, 'person.key'), stateDir: cfg.stateDir, crewDir: cfg.crewDir, mode, helper: helper.id, link: crew.phoneLink?.status() }));
+  console.log(`READY ${base} ${mode === '--scripted' ? 'scripted HTTP model' : 'live MiniMax M3'}`);
+  await stop;
+} finally {
+  server?.closeAllConnections(); server?.close(); await crew.phoneLink?.close(); await crew.stop();
+  writeFileSync(`${ready}.events.json`, JSON.stringify(db.all('SELECT * FROM events ORDER BY seq')));
+  if (stub) writeFileSync(`${ready}.provider.json`, JSON.stringify(stub.calls.map(c => ({ path: c.path, body: c.body }))));
+  db.close(); await stub?.close(); console.log('STOPPED');
+}

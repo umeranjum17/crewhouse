@@ -387,10 +387,11 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .hand { display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 8px; margin-top: 8px; padding: 5px 12px 5px 5px; border-radius: 999px; border: 1px solid var(--line2); background: var(--solid); color: var(--ink); font: 400 13px/18px var(--ui); text-decoration: none; }
 .hand.done { border-color: var(--line); }
 .hand > span { white-space: nowrap; }
+.hand > span:has(> b) { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .hand b { font-weight: 600; }
 .hand-ok { color: var(--ok); }
 .hand-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
-.hand .hand-word { color: var(--mute); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hand .hand-word { flex: none; color: var(--mute); }
 .hand .chev { color: var(--mute); font-size: 16px; line-height: 1; }
 .composer { position: relative; display: flex; gap: 8px; align-items: flex-end; background: var(--solid); border: 1px solid var(--line); border-radius: 999px; padding: 7px 7px 7px 20px; min-height: 52px; transition: border-color 120ms var(--ease); }
 .composer:focus-within { border-color: var(--line2); }
@@ -1472,6 +1473,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 /* Helpers (Stack J05): the shared transcript, file cards and helper-specific composer. */
 .st-helper-chat.page, .st-profile.page { padding: 0; max-width: none; width: 100%; }
 .st-helper-chat .chat-head, .st-profile-head { padding: 16px 20px; min-height: 80px; border-bottom: 1px solid var(--line); }
+.st-helper-chat .chat-head { gap: 8px; }
 .st-helper-chat .chat-head b { font: 800 22px/1.1 var(--ui); font-stretch: 112%; overflow-wrap: anywhere; }
 .st-helper-chat .st-reading { display: block; color: var(--mute); font-size: 16px; }
 .st-helper-chat .st-gear, .st-profile .st-gear { display: inline-flex; align-items: center; justify-content: center; flex: none; }
@@ -1649,7 +1651,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-ideas { display: grid; gap: 8px; }
 .st-idea { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 16px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: inherit; font: 600 16px/1.3 Archivo, var(--ui); text-align: left; text-decoration: none; }
 .st-idea .grow { display: grid; gap: 2px; min-width: 0; }
-.st-room { margin-top: 16px; }
+.st-room { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-top: 16px; }
+.st-room .grow { display: grid; gap: 4px; }
 .st-idea b { font-weight: 600; overflow-wrap: anywhere; }
 @media (min-width: 900px) {
   .page.stack-home { max-width: none; width: 100%; padding: 0; }
@@ -1723,6 +1726,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .home-chat .chat .dock .composer, .home-chat .chat .dock .composer.has-bar { flex-wrap: nowrap; align-items: center; gap: 6px; min-height: 54px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--solid); }
 .home-chat .chat .dock .composer textarea { flex: 1 1 0; min-width: 0; order: 0; min-height: 0; padding: 9px 0; border-radius: 0; background: none; font: 400 16px/24px Archivo, var(--ui); }
 .home-chat .chat .dock .c-bar { flex: none; order: -1; }
+.home-chat .chat .dock .mic { margin: 0; }
 .home-chat .chat .dock .send-away { bottom: calc(100% + 1px); } /* the box's border is its own: the held line sits wholly above it */
 .home-chat .chat .dock .send { width: 42px; height: 42px; border-radius: 13px; background: var(--ink); color: var(--bg); }
 .home-chat .working-on .label { margin: 0 4px 12px; font-size: 14px; line-height: 1.2; font-weight: 800; letter-spacing: .08em; color: var(--mute); }

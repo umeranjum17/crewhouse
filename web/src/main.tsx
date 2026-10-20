@@ -2107,7 +2107,7 @@ function App() {
     setOffline(true);
   };
   const refresh = useCallback(() => {
-    api.state().then((s) => { answered.current = true; setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); })
+    const pending = api.state().then((s) => { answered.current = true; setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); return s; })
       .catch((e) => {
         // No authority is the plain screen, never a kept copy served as if it were live.
         if (trouble(e) === 'noauth') { answered.current = true; setState(null); setNoauth(true); setOffline(false); return; }
@@ -2115,6 +2115,7 @@ function App() {
         setOffline(true);
       });
     setTick((t) => t + 1);
+    return pending;
   }, []);
   useEffect(() => {
     const onHash = () => { moved = true; setRoute(parseRoute()); remember(); };
@@ -2153,7 +2154,14 @@ function App() {
   const here = under.current;
   const stranded = !!ctx && here.view === 'helper' && !!here.id && here.id !== 'chief'
     && !A.crew(ctx.state).some((h) => h.id === here.id) && !ctx.state.bots.some((b: Json) => b.id === here.id);
-  useEffect(() => { if (stranded) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [stranded]);
+  useEffect(() => {
+    let current = true;
+    // A link can reach a newly hired helper before its roster event: confirm removal with a fresh read.
+    if (stranded) void refresh().then((s) => {
+      if (current && s && !s.bots.some((b: Json) => b.id === here.id)) { history.replaceState(null, '', '/#/'); dispatchEvent(new HashChangeEvent('hashchange')); }
+    });
+    return () => { current = false; };
+  }, [stranded, here.id, refresh]);
   useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
   // Install before pairing/startup returns too: every face obeys Reduce Motion from its first paint.
   setFaceMoods(ctx ? A.chief(ctx.state, chiefLocal(ctx)).mood : 'idle', ctx?.live.crew ?? [], ctx?.live.talking, reduced);
@@ -2193,7 +2201,7 @@ function App() {
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}
-          {v.view === 'helper' && v.id && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
+          {v.view === 'helper' && v.id && !stranded && <HelperPage {...ctx} id={v.id} tab={v.tab!} />}
           {v.view === 'things' && <Things {...ctx} id={v.id} />}
           {v.view === 'routines' && <Routines {...ctx} id={v.id} />}
           {v.view === 'settings' && <Settings {...ctx} tab={v.tab} look={look} setLook={setLook} />}

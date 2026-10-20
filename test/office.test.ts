@@ -62,8 +62,11 @@ async function browse(external?: string) {
   ws = new WebSocket(page!.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.once('open', r); ws.once('error', j); });
   let id = 0;
-  const waiting = new Map<number, (m: any) => void>();
-  ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });
+  const waiting = new Map<number, (m: any) => void>(), paused: unknown[] = [];
+  ws.on('message', (d) => {
+    const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id);
+    if (m.method === 'Fetch.requestPaused') paused.push(m.params);
+  });
   const send = (method: string, params: object = {}) => new Promise<any>((r, j) => {
     const n = ++id; waiting.set(n, (m) => (m.error ? j(new Error(`${method}: ${m.error.message}`)) : r(m.result))); ws.send(JSON.stringify({ id: n, method, params }));
   });
@@ -81,7 +84,7 @@ async function browse(external?: string) {
     window.cancelAnimationFrame = (id) => { n.pending.delete(id); drop(id); };
   })()` });
   const open = async (query: string, path = '/') => { await send('Page.navigate', { url: `${base}${path}?${query}` }); };
-  return { send, run, open };
+  return { send, run, open, paused };
 }
 
 
@@ -300,6 +303,14 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
     await until('the Jobs page', () => b.run("!!document.querySelector('.jobs-page')"), 30_000);
     counts.jobs = await b.run("document.querySelectorAll('.jobs-page .needs-row').length") + num(await b.run("document.querySelector('.jobs-quiet b')?.textContent"));
     assert.equal(new Set(Object.values(counts)).size, 1, `${demo}: one count everywhere (${JSON.stringify(counts)})`);
+  }
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`demo=finished&${theme}#/jobs`);
+    await until('the finished-jobs link', () => b.run("!!document.querySelector('.st-room')"), 30_000);
+    const link = await b.run(`(() => { const a=document.querySelector('.st-room'), title=a.querySelector('b').getBoundingClientRect(), detail=a.querySelector('.grow > span').getBoundingClientRect(), box=a.getBoundingClientRect();
+      return { separate: title.bottom <= detail.top, tappable: box.height >= 48, inside: box.left >= 0 && box.right <= innerWidth }; })()`);
+    assert.deepEqual(link, { separate: true, tappable: true, inside: true }, `${theme} ${width}: the finished-jobs title and description are separate, readable rows`);
   }
 });
 
@@ -671,6 +682,46 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
   assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
   await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
+  // Hold the browser's roster refresh while a real new helper starts: an old snapshot cannot prove it was deleted.
+  await b.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/state', requestStage: 'Request' }] });
+  const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });
+  const named = (await api('/api/bots/chief/messages', { text: 'Research Rae, check the notebook; ask permission' })).task;
+  await holding(lab.crew, rae.id);
+  try {
+    await b.open(`day#/h/${rae.id}`);
+    await until('the held roster refresh', () => b.paused.length > 0);
+    await b.run('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    const page = await b.run('({hash:location.hash,text:document.body.innerText})');
+    assert.equal(page.hash, `#/h/${rae.id}`, 'a stale roster never throws a new helper’s chat back to Home');
+    assert.doesNotMatch(page.text, /This helper has left the crew/, 'absence from a stale roster never claims the helper left');
+  } finally { await b.send('Fetch.disable'); }
+  const writing = [];
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`${theme}#/h/${rae.id}`);
+    try { await until('the working helper’s Stop button', () => b.run("!!document.querySelector('.chat-head button')"), 30_000); }
+    catch (e) { console.error('working header diagnostic', { theme, width, task: lab.db.get('SELECT id, bot, state FROM tasks WHERE id = ?', named), page: await b.run('({url:location.href,text:document.body.innerText})') }); throw e; }
+    const wholeWord = await b.run(`(() => { const n=document.querySelector('.chat-head .grow b').firstChild,r=document.createRange();r.setStart(n,0);r.setEnd(n,'Research'.length);return r.getClientRects().length===1; })()`);
+    await b.open(`${theme}#/chief`);
+    await until('Chief’s voice button', () => b.run("!!document.querySelector('.composer > .mic')"), 30_000);
+    await b.run("document.querySelector('.composer textarea').focus();document.querySelector('.composer textarea').select()");
+    await b.send('Input.insertText', { text: 'Ask Research Rae to read facts.txt and tell me who owns the blue folder and its reference.' });
+    const clear = await b.run(`(() => { const t=document.querySelector('.composer textarea'),m=document.querySelector('.composer > .mic');return t.getBoundingClientRect().right-parseFloat(getComputedStyle(t).paddingRight)<=m.getBoundingClientRect().left; })()`);
+    writing.push({ theme, width, wholeWord, clear });
+  }
+  for (const r of writing) assert.deepEqual([r.wholeWord,r.clear], [true,true], `${r.theme} ${r.width}: a working helper’s name stays whole-word and the microphone never covers typed words`);
+  await release(lab.crew, rae.id, 'The notebook is checked.'); await settled(lab.db, named);
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`${theme}#/chief`);
+    await until('the named helper’s finished chip', () => b.run(`[...document.querySelectorAll('.hand')].some(h => h.textContent.includes('Research Rae') && /done/.test(h.textContent))`), 30_000);
+    const fit = await b.run(`(() => { const h = [...document.querySelectorAll('.hand')].find(h => h.textContent.includes('Research Rae')),
+      word = h.querySelector('.hand-word'), label = h.querySelector('b').parentElement, r = document.createRange(); r.selectNodeContents(label);
+      const w = word.getBoundingClientRect(), box = h.getBoundingClientRect(); return { clipped: word.scrollWidth > word.clientWidth + 1,
+        overlap: [...r.getClientRects()].some(x => Math.min(x.right,w.right)-Math.max(x.left,w.left)>1 && Math.min(x.bottom,w.bottom)-Math.max(x.top,w.top)>1),
+        inside: box.left >= 0 && box.right <= innerWidth }; })()`);
+    assert.deepEqual(fit, { clipped: false, overlap: false, inside: true }, `${theme} ${width}: the helper’s full name and finished status stay readable`);
+  }
 });
 
 // The demo banner (main.tsx PairRow) at the hardest size a phone gets: 360 wide with the largest text. Its Pair

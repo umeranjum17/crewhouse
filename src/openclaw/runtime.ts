@@ -1,8 +1,9 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec } from '@byokit/openclaw';
+import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
@@ -38,15 +39,14 @@ const ABOUT: Record<string, string> = {
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
-  crew_batch: 'Research several items at once against one question, then merge the answers into your spreadsheet.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
-export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
+export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).filter(([name]) => !['crew_assign', 'crew_pass', 'crew_batch'].includes(name)).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
 
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
   agents: { defaults: { sandbox: { mode: 'off' }, modelPolicy: { allow: [] }, compaction: { memoryFlush: { enabled: false } }, heartbeat: { every: '0m' } } },
-  tools: { profile: 'coding', alsoAllow: [...TOOLS.map((t) => t.name), 'computer'], deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'nodes', 'group:ui', 'sessions_send', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
+  tools: { profile: 'coding', alsoAllow: [...TOOLS.map((t) => t.name), 'computer', 'sessions_send'], deny: ['group:fs', 'group:runtime', 'group:automation', 'group:messaging', 'nodes', 'group:ui', 'sessions_spawn', 'conversations_send', 'conversations_turn', 'subagents', 'code_execution', 'gateway', 'openclaw', 'plugins', 'cron', 'ask_user', 'suggest_task'], fs: { workspaceOnly: true }, exec: { security: 'deny', ask: 'always' }, elevated: { enabled: false }, agentToAgent: { enabled: false }, sessions: { visibility: 'agent' } },
   // A bot's computer is OpenClaw's own node host on its display (`computer`); of a node host's commands only the screen's two pass.
   gateway: { nodes: { pluginTools: { enabled: false }, allowSkills: false, commands: { deny: ['browser.proxy', 'browser.proxy.upload.v1', 'fs.listDir', 'mcp.tools.call.v1', 'ollama.chat', 'ollama.models', 'system.execApprovals.get', 'system.execApprovals.set', 'system.notify', 'system.run', 'system.run.prepare', 'system.which', 'terminal.upload'] } } },
   plugins: { load: { paths: [] }, allow: ['crewhouse', 'memory-core', 'openai', 'opencode-go', 'cua-computer'], entries: {
@@ -61,6 +61,7 @@ export class OpenClawRuntime implements AgentRuntime {
   readonly stateDir: string;
   private host?: ToolHost; private keyChecks = new Set<string>();
   private runs = new Map<string, RunRef & { account?: string; keyLane?: boolean }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
+  private targets = new Map<string, Map<string, { bot: string; run?: RunRef }>>();
   private failed = ''; private nodes = new Map<string, { display: string; child: ChildProcess }>();
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
@@ -74,8 +75,17 @@ export class OpenClawRuntime implements AgentRuntime {
         // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
         gate: async (ref, tool, input) => {
           const run = this.runOf(ref.sessionKey);
-          if (!run) return { allow: true };
+          if (!run) return ref.parent || ref.helper ? { allow: false, reason: 'This helper’s task is no longer active.' } : { allow: true };
           if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
+          if (tool === 'sessions_send') {
+            const target = this.targets.get(run.key)?.get(String(input.sessionKey));
+            if (!target || input.timeoutSeconds !== 0 || input.label !== undefined || !this.host.delegate) return { allow: false, reason: 'Use an available helper session from this job, with timeoutSeconds 0.' };
+            try {
+              target.run = await this.host.delegate(run, target.bot, String(input.sessionKey));
+              this.runs.set(String(input.sessionKey), target.run);
+              return { allow: true };
+            } catch (e) { return { allow: false, reason: (e as Error).message }; }
+          }
           const decision = await this.host.gate(run, crewName(tool), input);
           return decision.allow ? decision : { allow: false, reason: decision.reason };
         },
@@ -189,15 +199,69 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
-    const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider); this.runs.set(spec.key, { ...spec, keyLane }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
+    const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider); this.runs.set(spec.key, { ...spec, keyLane: keyLane && !spec.key.startsWith('agent:byokit-key-') }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
     try {
       const lane = keyLane ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
       if (!this.personas.has(lane)) { for (const [name, content] of [['SOUL.md', 'Follow the persona and job supplied for this session.\n'], ['IDENTITY.md', 'Use the identity supplied for this session.\n']]) await this.kit.call('agents.files.set', { agentId: lane, name, content }); this.personas.add(lane); }
-      return await this.kit.run({ sessionKey: spec.key, member: ME, message: spec.message, system: spec.system,
-        ...(keyLane ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) },
+      const helper = /^agent:(?:m1|byokit-key-m1):h-([^:]+):/.exec(spec.key)?.[1];
+      if (helper) await this.kit.ensureHelper(ME, helper, { account: `${provider}${keyLane ? '.key' : ''}`, persona: spec.system });
+      const request: KitRunSpec = { sessionKey: helper ? spec.key.replace(/^agent:byokit-key-m1:/, 'agent:m1:') : spec.key, member: ME, message: spec.message, ...(helper ? { helper, account: `${provider}${keyLane ? '.key' : ''}` } : { system: spec.system }),
+        ...(keyLane && !helper ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) };
+      return spec.team?.length ? await this.nativeRun(spec, request, lane, on) : await this.kit.run(request,
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { this.runs.delete(spec.key); }
+  }
+  /** Native dispatch owns execution; this adapter only prepares the target's host context and projects its events. */
+  private async nativeRun(spec: RunSpec, request: KitRunSpec, lane: string, on: (event: RunEvent) => void): Promise<RunEnd> {
+    const targets = new Map<string, { bot: string; run?: RunRef }>(), helpers: Record<string, string[]> = {}, texts = new Map<string, string>(), admitted = new Set<string>();
+    const accounts = await this.kit.accounts(ME), provider = await this.routeOf(spec.account), account = accounts.find((a) => a.id === `${provider}${lane.startsWith('byokit-key-') ? '.key' : ''}`)?.id;
+    if (!account) return this.kit.run(request, (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
+    for (const member of spec.team!) {
+      if (member.system.length > 8192) return { ok: false, kind: 'handoff', message: 'A helper’s instructions and notes are too long. Shorten them before handing it this job.' };
+      const helper = `b${createHash('sha256').update(member.bot).digest('hex').slice(0, 15)}`, key = `agent:${lane}:h-${helper}:crewhouse:${member.bot}`;
+      await this.kit.ensureHelper(ME, helper, { account, persona: member.system });
+      const adopted = await this.kit.adoptHelperSession({ member: ME, sessionKey: `agent:${ME}:crewhouse:${member.bot}` }, helper);
+      if (!adopted.ok && adopted.code !== 'unsupported') throw new Error(`A helper's earlier conversation could not move: ${adopted.message}`);
+      await this.kit.call('sessions.create', { agentId: lane, key, ...(request.model ? { model: request.model } : {}) });
+      helpers[helper] = member.tools.map((t) => t === 'bash' ? 'shell' : t).filter((t) => TOOLS.some((spec) => spec.name === t));
+      targets.set(key, { bot: member.bot });
+    }
+    this.targets.set(spec.key, targets);
+    let finish!: (end: RunEnd) => void, timer: NodeJS.Timeout | undefined, dispatched = false;
+    const returned = new Promise<RunEnd>((resolve) => { finish = resolve; }), id = randomUUID(), rootKey = spec.key.replace(`agent:${ME}:`, `agent:${lane}:`);
+    const offChild = this.kit.onEvent('byokit.delegated', (e) => {
+      if (e.run.root.sessionKey !== rootKey || e.run.root.runId !== id) return;
+      const target = targets.get(e.run.sessionKey), run = target?.run;
+      if (!run) return;
+      if (e.type === 'admitted') { dispatched = true; admitted.add(e.run.runId); this.host?.event?.(run, { type: 'delegated', id: e.run.runId, parent: e.run.parent.runId, root: id }); }
+      if (e.event?.stream === 'assistant' && typeof e.event.data?.text === 'string') { texts.set(e.run.runId, e.event.data.text); this.host?.event?.(run, { type: 'text', text: e.event.data.text }); }
+      if (e.type === 'ended') {
+        admitted.delete(e.run.runId);
+        this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: texts.get(e.run.runId) ?? '' } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' });
+        this.runs.delete(e.run.sessionKey); target.run = undefined;
+        if (e.reason !== 'terminal') finish({ ok: false, kind: 'other', message: e.message || 'The helper stopped before reporting back. Check its job before trying again.' });
+        else if (!admitted.size) timer = setTimeout(() => finish({ ok: false, kind: 'handoff', message: 'The helper finished, but Chief did not get its report. Check the helper’s chat.' }), 120_000);
+      }
+    });
+    const offReturn = this.kit.onEvent('agent', (e) => {
+      if (!dispatched || !('sessionKey' in e) || e.sessionKey !== rootKey || e.runId === id) return; // display only; the kit admits every tool call by exact run identity
+      if (e.stream === 'assistant' && typeof e.data?.text === 'string') on({ type: 'text', text: e.data.text });
+      if (e.stream === 'lifecycle' && e.data?.phase === 'end' && !admitted.size) {
+        const reply = e.data.terminalReply as { disposition?: string; text?: string } | undefined;
+        finish(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
+      }
+    });
+    try {
+      const end = await this.kit.run({ ...request, idempotencyKey: id, helperDelegates: helpers, system: `${spec.system}\nNative hand-off: use sessions_send with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. Never crew_assign, crew_pass or crew_batch. Admission is not completion. Your helper reports back natively; do not invent its result.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` }, (e) => {
+        if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
+        if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; }
+      });
+      return end.ok && dispatched ? await returned : end;
+    } finally {
+      clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key);
+      for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }
+    }
   }
   steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
   abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
