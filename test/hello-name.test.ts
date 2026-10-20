@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import WebSocket from 'ws';
 import { taskBrowser } from './browser.ts';
 import { temp } from './tmp.ts';
-import { setup, until } from './lab.ts';
+import { setup, until, delegated } from './lab.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startServer } from '../src/server.ts';
 

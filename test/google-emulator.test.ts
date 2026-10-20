@@ -15,7 +15,7 @@ process.env.CREWHOUSE_PORT = String(await free());
 const { server: google, url: EMU } = await startGoogleEmulator(Number(process.env.CREWHOUSE_PORT));
 after(() => google.close());
 process.env.CREWHOUSE_GOOGLE_EMULATOR = EMU;
-const { setup, settled, task, until, grantApps } = await import('./lab.ts');
+const { setup, settled, task, until, grantApps, delegated } = await import('./lab.ts');
 const { startServer } = await import('../src/server.ts');
 const { GMAIL } = await import('../src/calendar.ts');
 
@@ -58,7 +58,7 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
   }
 
   // The helper reads the inbox: free, no card.
-  const read = crew.assign('quill', 'what is new [tool mail {"args":[]}]', 'chief').task;
+  const read = delegated(crew, 'quill', 'what is new [tool mail {"args":[]}]').task;
   await settled(db, read);
   assert.match(task(db, read).result, new RegExp(`${THREAD},Ada <ada@example\\.com>,Friday plan`), 'the seeded thread, through crewd');
   assert.equal(db.all('SELECT * FROM asks').length, 0, 'reading never asks');
@@ -66,7 +66,7 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
   // A reply as a draft, then a label: one card each, and the yes writes.
   const steps = [['draft', THREAD, 'Yes, Friday still works. See you then.'], ['label', THREAD, 'Plans']];
   for (const args of steps) {
-    const job = crew.assign('quill', `[tool mail ${JSON.stringify({ args })}]`, 'chief').task;
+    const job = delegated(crew, 'quill', `[tool mail ${JSON.stringify({ args })}]`).task;
     await until(`${args[0]} card`, () => db.get("SELECT id FROM asks WHERE task_id = ? AND state = 'open'", job));
     await crew.answer(db.get("SELECT id FROM asks WHERE task_id = ? AND state = 'open'", job)!.id, { answer: 'allow' });
     await settled(db, job);

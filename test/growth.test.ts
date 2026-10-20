@@ -16,8 +16,6 @@ const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(in
 const script = (rel: string) => execFileSync('python3', rel.split(' '), { cwd: repo, encoding: 'utf8' });
 const rows = (db: any, crewDir: string, id: number) => validate({ db, crewDir }, id);
 const fails = (r: any[]) => r.filter((x) => x.verdict === 'FAIL').map((x) => x.what);
-const crewOf = (db: any, tool: string) => db.all("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.tool') = ?", tool)
-  .map((e: any) => JSON.parse(e.data));
 
 const NOTES = `Thread: Show HN: muxr, coding agents from your phone
 They asked: how do I keep an eye on my coding agents while I am out
@@ -26,26 +24,20 @@ Say you made it: I build muxr, and this is how it works for me
 Their rule: don't post generated or AI-edited text (news.ycombinator.com/newsguidelines.html)`;
 const PROSE = 'Hi! I built muxr and I think you would love it. It lets you manage coding agents from your phone, which is something I have wanted for a long time. Happy to answer questions!';
 
-/** A whole growth job, scripted the way the stub engine runs one: Scout's rivals, handed to Scribe, who plans.
+/** A whole growth job, scripted the way the stub engine runs one: Scout's rivals, then Scribe's plan.
  *  The stub only runs the tool calls written in the turn it is given, so each helper's turn is its own post. */
 async function growthJob(crew: any, db: any, { plan = 'Growth plan', notes = NOTES } = {}) {
   const rivals = call('crew_document', { name: 'Who else does this', blocks: [{ heading: 'Who else does this' }, { text: 'Two rivals, one from a README, one from a listicle.' }] });
-  await settled(db, (await crew.post('scout', 'This is my website: https://trymuxr.com/. Who else does this? ' + rivals
-    + call('crew_pass', { bot: 'scribe', task: 'Write the growth plan from these rivals and the threads. Done means: a plan under 300 words and the first drafts.' }))).task);
+  await settled(db, (await crew.post('scout', 'This is my website: https://trymuxr.com/. Who else does this? ' + rivals)).task);
   const scout = db.get("SELECT * FROM tasks WHERE bot = 'scout' ORDER BY id DESC LIMIT 1");
-  const handed = db.get("SELECT * FROM tasks WHERE bot = 'scribe' AND origin = 'scout' ORDER BY id DESC LIMIT 1");
-  if (handed) await settled(db, handed.id);
   await settled(db, (await crew.post('scribe', 'Now the plan. ' + call('crew_write', { path: 'files/growth-plan.md', content: plan })
     + call('crew_deliver', { path: 'files/growth-plan.md', note: 'the plan' })
     + call('crew_draft', { path: 'files/show-hn.md', channel: 'post', to: 'Show HN notes' })
     + call('crew_write', { path: 'files/show-hn.md', content: notes })
     + call('crew_draft', { path: 'files/x-post.md', channel: 'post', to: 'X launch post' })
-    + call('crew_write', { path: 'files/x-post.md', content: 'muxr runs your coding agents on your own machine.' })
-    + call('crew_pass', { bot: 'reel', task: 'crewhouse-make-reel: a 30 second demo for muxr from its README screenshots' }))).task);
+    + call('crew_write', { path: 'files/x-post.md', content: 'muxr runs your coding agents on your own machine.' }))).task);
   const scribe = db.get("SELECT * FROM tasks WHERE bot = 'scribe' AND origin = 'person' ORDER BY id DESC LIMIT 1");
   await settled(db, scribe.id);
-  const reel = db.get("SELECT * FROM tasks WHERE bot = 'reel' ORDER BY id DESC LIMIT 1");
-  if (reel) await settled(db, reel.id);
   return { scout: scout.id, scribe: scribe.id };
 }
 
@@ -93,9 +85,6 @@ test('a finished growth job passes the validator; a long plan and a prose Hacker
     'Scout delivered the rivals document before Scribe wrote the plan');
   assert.equal(ok.find((r: any) => r.what === '1-3 draft cards')!.detail, '2 crew_draft call(s)');
   assert.match(ok.find((r: any) => r.what.startsWith('notes for'))!.detail, /all five labels/);
-  const reel = crewOf(db, 'crew_pass').find((c: any) => c.input.includes('"reel"'));
-  assert.ok(reel, 'one hand-off to Reel for the missing demo');
-  assert.match(JSON.parse(reel.input).task, /crewhouse-make-reel/);
   assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', scout)!.state, 'done');
   done();
 });
@@ -113,25 +102,6 @@ test('a 400-word plan fails, and so does prose where labelled notes belong', asy
   const bad = fails(rows(prose.db, prose.cfg.crewDir, second.scribe));
   assert.ok(bad.some((w: string) => w.startsWith('notes for')), `the prose card is caught, got ${JSON.stringify(bad)}`);
   prose.done();
-});
-
-test('growth in Chief’s thread reaches Scout as a hand-off, with and without an earlier request', async () => {
-  for (const earlier of ['', 'what did I buy last week ']) {
-    const { crew, db, done } = crewWith(() => {});
-    if (earlier) await settled(db, (await crew.post('chief', earlier))!.task);
-    const ask = call('crew_assign', { bot: 'scout', task: 'Find the rivals for muxr and write down where their attention came from', title: 'Who else does muxr' });
-    await settled(db, (await crew.post('chief', 'This is my website: https://trymuxr.com/. Get me more stars. ' + ask))!.task);
-    const jobs = db.all("SELECT * FROM tasks WHERE bot = 'scout'");
-    assert.equal(jobs.length, 1, `one Scout job (earlier: ${earlier || 'none'})`);
-    assert.equal(jobs[0].origin, 'chief');
-    assert.match(db.get("SELECT * FROM tasks WHERE bot = 'chief' ORDER BY id DESC LIMIT 1")!.body, /Get me more stars/,
-      'the person\'s own words reach Chief');
-    assert.equal(db.get("SELECT * FROM asks WHERE kind = 'propose' AND json_extract(detail, '$.plan') IS NOT NULL"), undefined,
-      'one step is an ordinary hand-off: no plan card, no Go to wait for');
-    const rec = crewOf(db, 'crew_assign')[0];
-    assert.equal(JSON.parse(rec.input).steps, undefined, 'no steps');
-    done();
-  }
 });
 
 /** Issue 329's shape, the other way round: the plan is delivered first and the rivals document only afterwards,

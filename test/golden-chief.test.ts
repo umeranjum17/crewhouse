@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { setup, settled } from './lab.ts';
+import { setup, settled, delegated } from './lab.ts';
 import { taskTitle, relayResult } from '../src/crew.ts';
 import { TOOLS } from '../src/openclaw/runtime.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -38,7 +38,7 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   assert.doesNotMatch(first, /, Sir\b|"Sir"|Madam|at your service|glad to be back at work/i, 'no butler words reach the model');
   assert.doesNotMatch(first, /Templates:/, 'roster and templates ride crew_roster on demand, not every prompt');
   assert.match(first, /Crew: Scout \(id scout\)\./, 'the crew line names who is on, nothing stale');
-  const helper = crew.assign('scout', 'https://trymuxr.com/\n[tool crew_document {"name":"muxr launch plan","blocks":[{"heading":"Audience"},{"text":"Developers with coding agents"},{"heading":"Three channels"},{"heading":"First week of posts"}]}]', 'chief').task;
+  const helper = delegated(crew, 'scout', 'https://trymuxr.com/\n[tool crew_document {"name":"muxr launch plan","blocks":[{"heading":"Audience"},{"text":"Developers with coding agents"},{"heading":"Three channels"},{"heading":"First week of posts"}]}]').task;
   assert.equal(db.get('SELECT title FROM tasks WHERE id = ?', helper)!.title, 'Work on trymuxr.com');
   await settled(db, helper);
   const words = crew.botPage('chief').messages.filter((m) => m.author === 'bot').map((m) => m.text);

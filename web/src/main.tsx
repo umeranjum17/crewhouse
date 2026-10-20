@@ -982,9 +982,6 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
               {page && <Remembers id={id} name={name} page={page} reload={load} />}
               <button className="btn st-change" onClick={() => { keepDraft('chief', `I'd like to change ${name}'s job: `); go('#/chief'); }}>Ask Chief to change {short}'s job</button>
               <details className="st-profile-more"><summary>More about {name}</summary>
-                <h2 className="st-label">How {name} works</h2>
-                {page && <label className="card toggle"><span className="grow"><b>Check with me before {name} hands work on</b></span>
-                  <input type="checkbox" role="switch" checked={page.handoff === 'ask'} onChange={(e) => attempt(async () => { await api.settings(id, { handoff: e.target.checked ? 'ask' : 'go' }); void load(); })} /></label>}
                 <LearnedRows name={name} />
                 <h2 className="st-label">Routines</h2><RoutineList {...ctx} bot={id} />
                 <h2 className="st-label">About {name}</h2>{page && <AboutMe id={id} name={name} page={page} reload={load} />}

@@ -95,9 +95,8 @@ curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chi
 ```
 
 The stub answers any plain message with `stub <bot>: done with "<your text>"`, and executes
-tool calls written into the message: `[tool crew_recruit {"template":"reel","name":"Reel"}]`,
-`[tool crew_assign {"bot":"reel","task":"Make a 10 second demo"}]` (Chief then wraps up with
-one `All done.` line; see `recruit-assign.md`). SQLite truth lives at
+tool calls written into the message: `[tool crew_recruit {"template":"reel","name":"Reel"}]`.
+A job is a message in the helper's own thread, `POST /api/bots/reel/messages {"text":"Make a 10 second demo"}` (see `recruit-assign.md`). SQLite truth lives at
 `$LAB/state/crew.db` (read-only probe: `node -e 'new (require("node:sqlite").DatabaseSync)(process.argv[1],{readOnly:true})…'`).
 
 **UI (browser).** Bootstrap only your owned browser with the private launcher URL

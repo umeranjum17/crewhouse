@@ -2,7 +2,7 @@
 // stand-in sign-in finishes at once; the failed path is forced by the test. Nothing here proves a connected app works.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, until } from './lab.ts';
+import { setup, until, delegated } from './lab.ts';
 import { effectOf } from '../src/policy.ts';
 
 test('Connect apps: the person signs in once and the state turns on; a failed callback says so in plain words', async () => {

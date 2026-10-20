@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { setup, settled, task, until } = await import('./lab.ts');
+const { setup, settled, task, until, delegated } = await import('./lab.ts');
 const { classify: classifyText } = await import('@byokit/accounts');
 const { PROVIDERS } = await import('../src/accounts.ts');
 const disk = await import('../src/bots.ts');
@@ -297,7 +297,7 @@ test('a sign-in that stopped working (a password change): signed out for real, s
   await crew.accounts.finished('grok');
   disk.setBrains(cfg, 'scout', ['grok']);
   only(crew, ['grok']);
-  const t = crew.assign('scout', 'sign me out', 'chief').task;
+  const t = delegated(crew, 'scout', 'sign me out').task;
   await until('waiting for a new sign-in', () => task(db, t).state === 'paused');
   assert.equal(await crew.accounts.signedIn('grok'), false, 'its sign-in is gone, so nothing loops on it');
   assert.equal(db.get("SELECT text FROM messages WHERE bot = 'scout' ORDER BY id DESC")!.text,

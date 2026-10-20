@@ -112,7 +112,7 @@ export const api = {
   addSkill: (id: string, link: string, token: string) => call('POST', `/api/bots/${id}/skills/add`, { link, token }),
   /** Put away a skill a helper learned or you added (it is kept, just no longer used). */
   removeSkill: (id: string, name: string) => call('DELETE', `/api/bots/${id}/skills/${name}`),
-  settings: (id: string, body: { allow?: string[]; memory?: boolean; handoff?: 'ask' | 'go' }) => call('PUT', `/api/bots/${id}/settings`, body),
+  settings: (id: string, body: { allow?: string[]; memory?: boolean }) => call('PUT', `/api/bots/${id}/settings`, body),
   reset: (id: string) => call('POST', `/api/bots/${id}/reset`),
   /** A review card's Start again: the same job and the same session, its findings still in hand. */
   again: (id: string, task: number) => call('POST', `/api/bots/${id}/task/${task}/again`),

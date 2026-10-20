@@ -42,16 +42,15 @@ post /api/onboard '{"address":"Umer"}'
 if [ "$STATE" != first ]; then
   post /api/recruit '{"template":"scout","name":"Research Rae"}'
   post /api/recruit '{"template":"scribe","name":"Writer Will"}'
-  # Chief hands Will the heating letter, which the stub writes as a document at once (\u005b keeps the inner call
-  # out of Chief's own turn), and Rae the phone plan: her run holds on "ask permission" (at work), or her account
-  # hits its limit (resting). \u006e keeps "permission" whole only once it reaches Rae, so Chief's run never holds.
-  post /api/bots/chief/messages '{"text": "[tool crew_assign {\"bot\": \"writer-will\", \"title\": \"Heating letter\", \"task\": \"Write to the landlord about the heating \\u005btool crew_document {\\\"name\\\": \\\"Heating letter\\\", \\\"blocks\\\": [{\\\"heading\\\": \\\"Dear landlord\\\"}, {\\\"text\\\": \\\"The heating has been off since Monday. Please send someone this week.\\\"}]}]\"}]"}'
+  # Will gets the heating letter, which the stub writes as a document at once, and Rae the phone plan: her run holds
+  # on "ask permission" (at work), or her account hits its limit (resting). Each is posted in the helper's own thread.
+  post /api/bots/writer-will/messages '{"text": "Write to the landlord about the heating [tool crew_document {\"name\": \"Heating letter\", \"blocks\": [{\"heading\": \"Dear landlord\"}, {\"text\": \"The heating has been off since Monday. Please send someone this week.\"}]}]"}'
   # Chief asks to bring Invoice Ivy on: the one card that needs Umer.
   post /api/bots/chief/messages '{"text":"I need someone to sort out my invoices [tool crew_create {\"name\": \"Invoice Ivy\", \"role\": \"Keeps your invoices in order\", \"job\": {\"does\": \"Sorts your invoices.\", \"aim\": \"Nothing you owe slips past its due date.\", \"gets\": \"Invoices you share.\", \"how\": \"One sheet by due date.\", \"great\": \"Two due this week, flagged first.\"}, \"personality\": \"Tidy and calm.\", \"first\": \"Sort out my invoices\"}]"}'
   until_state '"kind":"propose"'
   # Rae last: a resting account would hold Chief's next turn too.
-  if [ "$STATE" = resting ]; then post /api/bots/chief/messages '{"text":"[tool crew_assign {\"bot\": \"research-rae\", \"title\": \"Phone plan\", \"task\": \"Compare phone plans; you hit the limit\"}]"}'
-  else post /api/bots/chief/messages '{"text":"[tool crew_assign {\"bot\": \"research-rae\", \"title\": \"Phone plan\", \"task\": \"Compare six phone plans that keep my number, and ask permissio\\u006e before you pick\"}]"}'; fi
+  if [ "$STATE" = resting ]; then post /api/bots/research-rae/messages '{"text":"Compare phone plans; you hit the limit"}'
+  else post /api/bots/research-rae/messages '{"text":"Compare six phone plans that keep my number, and ask permission before you pick"}'; fi
   until_state '"state":"done"'
 fi
 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT" "$STATE"

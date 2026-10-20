@@ -458,7 +458,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}'), covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)), rule: this.fileRule(d.bot) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, give ${d.create.name} the job` : `Yes, bring ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.pass ? { pass: { root: d.pass.root, files: d.pass.files.map((f: string) => basename(f)) } } : {}), ...(d.routine ? { routine: d.routine } : {}), ...(d.plan ? { plan: { bot: d.plan.bot, steps: d.plan.steps } } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.create ? { yes: d.create.bot ? `Yes, give ${d.create.name} the job` : `Yes, bring ${d.create.name} on`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -509,19 +509,18 @@ export class Crew {
 
   /** Only jobs started in the room or involving a helper-to-helper pass belong here. */
   room(before?: number) {
-    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0 OR EXISTS (SELECT 1 FROM asks a WHERE a.state = 'open' AND json_extract(a.detail, '$.pass.root') = tasks.root)`, lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
+    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0`, lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
       WHERE t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
       from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
       files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path })) : [] })),
       busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`).map((r) => r.bot),
-      asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND (json_extract(detail, '$.pass.root') IN (${roots}) OR task_id IN (SELECT id FROM tasks WHERE root IN (${roots})))`).map((a) => this.askView(a)) };
+      asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND task_id IN (SELECT id FROM tasks WHERE root IN (${roots}))`).map((a) => this.askView(a)) };
   }
 
   private wrap(root: number) {
     const tasks = this.db.all('SELECT * FROM tasks WHERE root = ? ORDER BY id', root);
     if (tasks.some((t) => /^agent:[^:]+:h-/.test(t.session ?? '')) || tasks.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) ||
-      this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root) ||
       this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
     const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
       ? `${t.acted ? '' : `${this.bot(t.bot)?.display ?? t.bot} finished. `}${relayResult(t.result || 'Done', '', !!t.acted)}`
@@ -960,7 +959,6 @@ export class Crew {
       // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
       memory: disk.botConfig(this.cfg, id).memory !== false,
-      handoff: disk.botConfig(this.cfg, id).handoff ?? 'go',
       // The sites the person signed it in to (bare hosts), shown in Details, each with Forget.
       signedIn: disk.botConfig(this.cfg, id).signedIn ?? [],
     };
@@ -1100,28 +1098,8 @@ export class Crew {
     return this.addTask(CHIEF, text.trim(), 'person', undefined, said?.trim() ? said.trim() : text.trim());
   }
 
-  /** Every task runs on the person's own pick (Settings › AI accounts): Chief never picks another model or account. */
-  assign(botId: string, text: string, by: string, title?: string) {
-    if (!this.bot(botId)) throw Object.assign(new Error(`no bot called ${botId}; see crew roster`), { status: 404 });
-    if (botId === CHIEF) throw Object.assign(new Error('Chief cannot assign to himself'), { status: 400 });
-    // Chief's hand-offs run on the person's accounts.
-    return this.addTask(botId, text.trim(), by, undefined, text.trim(), [], { parent: by === CHIEF ? this.activeTask(CHIEF)?.id : undefined, title });
-  }
-
-  /** Chief's job of several `steps` goes on a plan card first and starts on Go; the gate still asks every send, spend or change. */
-  private plan(botId: string, text: string, title?: string, steps?: unknown) {
-    const plan = (Array.isArray(steps) ? steps : typeof steps === 'string' ? steps.split('\n') : [])
-      .map((x) => String(x).replace(/^\s*(\d+[.)]|[-*•])\s*/, '').trim()).filter(Boolean);
-    if (plan.length < 2 || !this.bot(botId) || botId === CHIEF) return this.assign(botId, text, CHIEF, title);
-    if (plan.length > 10 || plan.some((x) => x.length > 300)) throw fail('keep the plan to ten short steps');
-    const what = taskTitle(title || text);
-    this.propose(CHIEF, `Here’s the plan for “${what}”. ${this.bot(botId)!.display} starts when you say Go.`,
-      { plan: { bot: botId, text: text.trim(), title: what, steps: plan }, preview: { body: plan.map((x, i) => `${i + 1}. ${x}`).join('\n') } });
-    return { asked: true, note: 'The person sees your plan on a card. Nothing starts until they say Go; do not assign it again.' };
-  }
-
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; hops?: number; title?: string; key?: string } = {}) {
+  private addTask(bot: string, body: string, origin: string, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; title?: string; key?: string } = {}) {
     const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
     // A replayed phone request answers with its first result (the claim below lands in the same transaction as the task).
@@ -1129,7 +1107,7 @@ export class Crew {
     const id = this.db.tx(() => {
       const now = Date.now(), r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         bot, title, body, origin, 'queued', now, now, routine?.id ?? null), id = Number(r.lastInsertRowid), parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
-      this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ?, hops = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), link.hops ?? 0, id);
+      this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), id);
       // Uploads are kept in the helper's files — photos where they were, documents in its inbox for the documents tool — under crewd's own `<task>-<n>.<ext>` names, and shown in the chat by that path.
       const kept = pics.map((p, i) => {
         const photo = p.photo !== false, rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
@@ -1380,7 +1358,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (l.node ? `\nYour own screen is the computer tool's node "${l.node}": name it on every computer call.\n` : '') + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
-      ...(botId === CHIEF && this.cfg.engine !== 'stub' ? { team: this.bots().filter((b) => b.id !== CHIEF && !this.activeTask(b.id) && !this.held.has(b.id) && this.choices({ bot: b.id })[0]?.provider === l.account).map((b) => ({ bot: b.id, system: disk.systemPrompt(this.cfg, b.id, false) + this.memory(b.id) + '\nReport finished work in your final reply; native delivery brings it to Chief. Only Chief hands work to other helpers. Never call crew_assign or crew_pass.', tools: Object.keys(PARAMETERS).filter((n) => !['crew_assign', 'crew_pass'].includes(n)) })) } : {}) };
+      ...(botId === CHIEF && this.cfg.engine !== 'stub' ? { team: this.bots().filter((b) => b.id !== CHIEF && !this.activeTask(b.id) && !this.held.has(b.id) && this.choices({ bot: b.id })[0]?.provider === l.account).map((b) => ({ bot: b.id, system: disk.systemPrompt(this.cfg, b.id, false) + this.memory(b.id) + '\nReport finished work in your final reply; native delivery brings it to Chief. Only Chief hands work to other helpers.', tools: Object.keys(PARAMETERS) })) } : {}) };
     void this.runtime.run(spec, (e) => this.onEvent(botId, l, e)).then(
       (end) => this.settled(botId, task, l, end),
       (e) => { console.error(`${botId}:`, e); this.settled(botId, task, l, { ok: false, kind: 'other', message: String(e) }); });
@@ -1485,8 +1463,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
 
   private teamJob(task: Row) {
     const root = task.root ?? task.id;
-    return !!this.db.get('SELECT 1 FROM tasks WHERE root = ? AND id != ?', root, task.id) ||
-      !!this.db.get("SELECT 1 FROM asks WHERE state = 'open' AND json_extract(detail, '$.pass.root') = ?", root);
+    return !!this.db.get('SELECT 1 FROM tasks WHERE root = ? AND id != ?', root, task.id);
   }
 
   /** Record automatic learning after a run; the person's learned list supplies its Forget action. */
@@ -1633,7 +1610,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** Whether this run may even consider the tool: grants first, then the policy decides what a call means. */
   toolAllowed(botId: string, name: string) {
     const l = this.live.get(botId);
-    if (!l || (this.cfg.engine !== 'stub' && ['crew_assign', 'crew_pass'].includes(name))) return false;
+    if (!l) return false;
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
@@ -1850,7 +1827,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const change = ask.kind === 'propose' && detail.plan && body.answer === 'deny' ? String(body.change ?? '').trim().slice(0, 2000) : '', kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (change ? 'change it' : body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
@@ -1862,14 +1839,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
       if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style')", task.id)) this.setTask(task, 'working');
-      if (detail.pass) this.wrap(detail.pass.root);
-      if (body.answer === 'deny' && body.remind === true && !change) this.defer(ask);
+      if (body.answer === 'deny' && body.remind === true) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
     });
     if (held) { held(body.answer!); this.holds.delete(askId); return; }
-    // Change it: the person's own words go back to Chief with the plan they are about, for a new card.
-    if (change) this.requestChief(`[Crewhouse] ${this.called()} wants a change to your plan for ${detail.plan.bot}: ${detail.plan.text}\nSteps:\n` +
-      `${detail.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n')}\nThey say: ${change}\nOffer the changed plan with crew_assign and steps.`, change);
     if (ask.kind === 'propose') return;
     if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(task.bot)?.task === task.id) {
       // Connected: the app's tools arrive with a fresh session; the task's own bot resumes here even when Chief asked.
@@ -1993,11 +1966,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
         'changed; use it when the page draws what matters with JavaScript, so only your own browser can read it. Say in `task` what you are looking for.',
         (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch })));
-      const others = this.bots().filter((b) => b.id !== CHIEF && b.id !== botId).map((b) => `${b.id} (${b.role})`).join('; ');
-      if (!others) return own;
-      return [...own, tool('crew_pass', `Hand the next step to another helper, for the same person: ${others}. Write what they should do and what "done" means. ` +
-        'Pass finished files from your files/ with `files`; the person can watch the work in The crew.',
-        (p) => this.pass(botId, String(p.bot ?? '').toLowerCase(), String(p.task ?? ''), p.files ?? []))];
+      return own;
     }
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name)),
@@ -2027,9 +1996,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         (p) => { const n = this.recruit(p.template, p.name && friendlyName(p.name), CHIEF); return { recruited: { id: n.id, name: n.display } }; }),
       tool('crew_import', 'List categories with counts and three plain-title examples with `list: true`; `category` lists only that category in full (no hire); for a goal propose one fit with a reason, import on one yes. Otherwise bring a template onto the crew: `slug` a Grok Bot page ("pg") or address, `skill` a Claude skill ("algorithmic-art" or "owner/repo:skills/name"). The public recipe becomes the helper\'s own folder, for this person\'s own use; importing again pulls the latest. Say what it does, what needs connecting, offer routines, start nothing.',
         (p) => { if (typeof p.input === 'string') p = JSON.parse(p.input); if (!p || typeof p !== 'object' || Array.isArray(p)) throw fail('use list: true, or a template slug or skill name'); return this.importGrok(String(p.slug ?? p.handle ?? p.bot ?? p.id ?? p.template ?? p.url ?? p.address ?? p.query ?? p.grok ?? (p.skill ? '' : p.name ?? '')), p.name ? String(p.name) : undefined, p.skill ? String(p.skill) : undefined, String(p.source ?? ''), p.list === true || p.list === 'true', p.category ? String(p.category) : undefined); }),
-      tool('crew_assign', 'Hand a bot a task. Give it a short descriptive title, never a URL. ' +
-        'A job of several steps: list them in `steps`, in plain words; the person sees the plan and it starts when they say Go.',
-        (p) => this.plan(String(p.bot).toLowerCase(), p.task ?? '', p.title, p.steps)),
       tool('crew_routine', 'Offer the person a routine: the same task on a schedule, for them to say yes or no. `when` is plain words in local time: "every Monday 9:00", "weekdays 8am", "the 1st of every month 9:00", "every 2 hours". ' +
         'Set `once` for a one-off reminder they asked for ("remind me Friday 9am to pack the sports kit"): `when` is then the moment in their words ("Friday 9:00", "tomorrow 8am", "in 20 minutes"), `task` is what to remind them about, and it goes to them once, in your chat, without a helper. ' +
         '`on` starts it on an event instead of a time: "when an email from the bank with subject statement arrives" (sender and subject are optional, matched as written), "10 minutes before each meeting", "when a meeting starts" (Gmail or Calendar connected first), "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). ' +
@@ -2071,47 +2037,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     ];
   }
 
-  private handFiles(from: string, files: unknown) {
-    const expected = 'use files: an array, JSON-string array or one path from your files/ (relative or your own absolute path), at most twenty existing files';
-    if (typeof files === 'string') { try { files = JSON.parse(files); } catch { files = [files]; } }
-    if (!Array.isArray(files) || files.length > 20 || files.some((f) => typeof f !== 'string')) throw fail(expected);
-    const dir = disk.botDir(this.cfg, from), base = join(realpathSync(dir), 'files');
-    return files.map((f: string) => {
-      let full = resolve(dir, f);
-      if (!full.startsWith(join(dir, 'files') + '/') && !full.startsWith(base + '/')) throw fail(`outside your files/: ${f}; ${expected}`);
-      try { full = realpathSync(full); } catch { throw fail(`missing file: ${f}; ${expected}`); }
-      if (!full.startsWith(base + '/') || !statSync(full).isFile()) throw fail(`outside your files/ or not a file: ${f}; ${expected}`);
-      return { full, name: relative(base, full) };
-    });
-  }
-  private pass(from: string, to: string, text: string, files: unknown = []) {
-    const task = this.activeTask(from), b = this.bot(to);
-    if (!task) throw fail('pass work on while you are working on a task');
-    if (!b || to === CHIEF || to === from) throw fail(`no helper called ${to} to hand this to`, 404);
-    if (!text.trim()) throw fail('say what they should do');
-    const hops = (task.hops ?? 0) + 1;
-    if (hops > 3) throw fail('this job has been handed on three times already; finish it yourself, or tell the person what is left');
-    const checked = this.handFiles(from, files), paths = checked.map((f) => `files/${f.name}`), detail = { to, text: text.trim(), files: paths, root: task.root ?? task.id, parent: task.id, hops };
-    if (disk.botConfig(this.cfg, from).handoff === 'ask') return this.propose(from,
-      `${this.bot(from)!.display} wants to hand this to ${b.display}: ${short(text, 160)}${paths.length ? `, with ${paths.map((f) => basename(f)).join(', ')}` : ''}`,
-      { pass: detail, preview: { head: `${this.bot(from)!.display} → ${b.display}`, body: text.trim() } });
-    return this.handOn(from, detail, checked);
-  }
-
-  private handOn(from: string, d: Row, checked?: { full: string; name: string }[]) {
-    const files = checked ?? this.handFiles(from, d.files as string[]), dest = join(disk.botDir(this.cfg, d.to), 'files', `from-${from}`), paths = files.map((f) => `files/from-${from}/${f.name}`);
-    for (let i = 0; i < files.length; i++) {
-      const target = join(dest, files[i].name);
-      mkdirSync(dirname(target), { recursive: true });
-      const root = realpathSync(join(disk.botDir(this.cfg, d.to), 'files'));
-      if (!realpathSync(dirname(target)).startsWith(root + '/') || (existsSync(target) && !realpathSync(target).startsWith(root + '/'))) throw fail('receiver file is outside its files/');
-      copyFileSync(files[i].full, target);
-    }
-    const { task: id } = this.addTask(d.to, `${d.text}${paths.length ? `\n\nFiles handed over:\n${paths.join('\n')}` : ''}`, from, undefined, d.text, [], { parent: d.parent, root: d.root, hops: d.hops });
-    for (const path of paths) this.db.event('file.delivered', d.to, { task: id, path, note: `from ${this.bot(from)!.display}`, input: true, size: statSync(join(disk.botDir(this.cfg, d.to), path)).size });
-    return { passed: { to: this.bot(d.to)!.display, task: id }, note: `${this.bot(d.to)!.display} has it. The person can follow along in The crew.` };
-  }
-
   /** A suggestion card: nothing changes until the person says yes, and the bot carries on meanwhile. */
   private propose(botId: string, title: string, detail: Row) {
     const t = this.activeTask(botId);
@@ -2142,8 +2067,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (d.skill) {
       disk.saveSkill(this.cfg, botId, disk.draftSkill(this.cfg, botId, d.skill));
       this.db.event('skill.learned', botId, { name: disk.slug(d.skill.name), says: d.skill.says });
-    } else if (d.pass) this.handOn(botId, d.pass);
-    else if (d.job) {
+    } else if (d.job) {
       disk.writeJob(this.cfg, d.job.bot, d.job);
       this.db.event('job.changed', d.job.bot, { by: CHIEF });
     } else if (d.soul) {
@@ -2153,12 +2077,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     } else if (d.routine) this.addRoutine(d.routine, CHIEF);
     else if (d.create) this.create(d.create);
     else if (d.draft) this.db.event('draft.approved', botId, { ...receipt(d.draft, d.preview), task: d.task });
-    else if (d.plan) {
-      if (!this.bot(d.plan.bot)) throw fail('that helper has left the crew', 409);
-      const steps = d.plan.steps.map((x: string, i: number) => `${i + 1}. ${x}`).join('\n');
-      this.addTask(d.plan.bot, `${d.plan.text}\n\n[Crewhouse] The plan ${this.called()} said Go to:\n${steps}\nIt approves no send, purchase or change by itself: those still ask.`,
-        CHIEF, undefined, d.plan.text, [], { parent: d.task, title: d.plan.title });
-    }
   }
 
   /** On the person's yes, a helper Chief made up (base template and tools minus each won't-do grant) or adapted (job and role widened); the request is its first task. */

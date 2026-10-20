@@ -4,7 +4,7 @@
 // The record is on demand through the tool: the per-turn prompt must not grow.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, settled, task } from './lab.ts';
+import { setup, settled, task, delegated } from './lab.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 const doc = (name: string) => ({ name, blocks: [{ heading: name }, { text: 'Finished work.' }] });
@@ -13,8 +13,8 @@ test("Chief's recap reads the person's delivered work through crew_status", asyn
   const { crew, db, done } = setup();
   crew.onboard('Umer');
   crew.recruit('scout', 'Scout', 'person');
-  const dinner = crew.assign('scout', `two weeknight dinners ${call('crew_document', doc('Two simple weeknight dinners'))}`, 'chief').task;
-  const papers = crew.assign('scout', `sort the paperwork ${call('crew_document', doc('Paperwork triage'))}`, 'chief').task;
+  const dinner = delegated(crew, 'scout', `two weeknight dinners ${call('crew_document', doc('Two simple weeknight dinners'))}`).task;
+  const papers = delegated(crew, 'scout', `sort the paperwork ${call('crew_document', doc('Paperwork triage'))}`).task;
   await settled(db, dinner);
   await settled(db, papers);
   assert.equal(task(db, dinner).state, 'done');

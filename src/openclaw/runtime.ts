@@ -41,7 +41,7 @@ const ABOUT: Record<string, string> = {
   crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
-export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).filter(([name]) => !['crew_assign', 'crew_pass'].includes(name)).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
+export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
 
 const CONFIG = {
   // An empty allow list: the engine otherwise narrows to its model map, and the person's other providers vanish.
@@ -253,7 +253,7 @@ export class OpenClawRuntime implements AgentRuntime {
       }
     });
     try {
-      const end = await this.kit.run({ ...request, idempotencyKey: id, helperDelegates: helpers, system: `${spec.system}\nNative hand-off: use sessions_send with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. Never crew_assign or crew_pass. Admission is not completion. Your helper reports back natively; do not invent its result.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` }, (e) => {
+      const end = await this.kit.run({ ...request, idempotencyKey: id, helperDelegates: helpers, system: `${spec.system}\nNative hand-off: use sessions_send with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. Admission is not completion. Your helper reports back natively; do not invent its result.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` }, (e) => {
         if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
         if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; }
       });

@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { setup, until } from './lab.ts';
+import { setup, until, delegated } from './lab.ts';
 import { Store } from '../src/db.ts';
 
 function seed() {

@@ -6,7 +6,7 @@ saved model; see `docs/supported-subscriptions.md`). The campaign on it is not
 yet proven: the run-brain default, the stub campaign smoke and the QA slice
 below are open. Campaign behaviour is unchanged.
 
-Gap: a campaign run (Chief + Scout/Scribe/Reel through `crew_assign`,
+Gap: a campaign run (Chief + Scout/Scribe/Reel through native hand-offs,
 `skills/crewhouse-run-a-marketing-campaign/SKILL.md`) needs a signed-in account. Before
 the OpenCode Go route, no Crewhouse account mapped the kit's `opencode-go`
 sign-in (`PROVIDERS` in `src/accounts.ts`, `PROVIDER_OF` / `AUTH_CHOICE` in

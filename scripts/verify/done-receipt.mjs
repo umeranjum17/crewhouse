@@ -44,7 +44,7 @@ const task='Place the building sets order, then ask permission '+[
  call('crew_outcome',{worked:true,seen:facts})
 ].join(' ');
 crew.say('chief','person','Order the five building sets');
-crew.assign('scout',task,'chief');
+await api('POST','/api/bots/scout/messages',{text:task});
 await until('approval',()=>db.get("SELECT id FROM asks WHERE kind='permission' AND state='open'"));
 const approval=db.get("SELECT * FROM asks WHERE kind='permission' AND state='open'");
 writeFileSync(join(ev,'approval-before.json'),JSON.stringify(await api('GET','/api/state'),null,2));

@@ -17,7 +17,7 @@ import { taskBrowser } from './browser.ts';
 import { browserBin } from '../src/desktop.ts';
 import { startRelay } from '../relay/main.ts';
 import { temp } from './tmp.ts';
-import { until } from './lab.ts';
+import { until, delegated } from './lab.ts';
 import { LinkError } from '@byokit/pair';
 import { pair } from '../web/src/link.ts';
 import { pairWords } from '../mobile/src/pair-words.ts';

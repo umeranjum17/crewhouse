@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled } from './lab.ts';
+import { setup, settled, delegated } from './lab.ts';
 import { asksForPhone, inlineHowTo } from '../src/crew.ts';
 import { botDir, systemPrompt } from '../src/bots.ts';
 import { phoneOffer, lines } from '../web/src/adapter.ts';
@@ -42,7 +42,7 @@ test('a Chief hand-off in a helper chat carries its task title, for the collapse
   const { crew, db } = setup();
   crew.onboard('Owner');
   crew.recruit('scribe', 'Scribe', 'system');
-  const r = crew.assign('scribe', 'The person says: plan dinners for four.\nDone means: a plan document with the full cooking steps.', 'chief', 'Plan the dinners');
+  const r = delegated(crew, 'scribe', 'The person says: plan dinners for four.\nDone means: a plan document with the full cooking steps.', 'Plan the dinners');
   await settled(db, r.task);
   const m = crew.botPage('scribe').messages.find((x: any) => x.author === 'chief')!;
   assert.equal(m.title, 'Plan the dinners');
@@ -55,7 +55,7 @@ test('a delivered video comes over in slices, and undelivered files stay closed'
   const { crew, db, cfg } = setup();
   crew.onboard('Owner');
   crew.recruit('reel', 'Reel', 'system');
-  const r = crew.assign('reel', 'make a short demo', 'chief');
+  const r = delegated(crew, 'reel', 'make a short demo');
   await settled(db, r.task);
   mkdirSync(join(botDir(cfg, 'reel'), 'files'), { recursive: true });
   writeFileSync(join(botDir(cfg, 'reel'), 'files', 'demo.mp4'), Buffer.alloc(700_000, 7));

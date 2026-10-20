@@ -28,7 +28,7 @@ Select affected recipes from the full maintained map in `docs/verification/READM
 Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS_AXI_SESSION for the browser UI; a shell for the lab and teardown. Drive through the repo's real handles that each feature file names:
 
 - [Onboard and chat with Chief](features/onboard-and-chat-with-chief.md): Open the app's first screen (Hello), or call the API directly after a fresh lab starts (`docs/verification/runbook.md`)
-- [Recruit a helper and assign it a job](features/recruit-a-helper-and-assign-it-a-job.md): Send a message to Chief that carries a crew_recruit tool call, then one carrying crew_assign (`docs/verification/recruit-assign.md`)
+- [Recruit a helper and assign it a job](features/recruit-a-helper-and-assign-it-a-job.md): Send a message to Chief that carries a crew_recruit tool call, then post a job in the new helper's own thread (`docs/verification/recruit-assign.md`)
 - [Chief's thread on a desktop and a phone](features/chief-s-thread-on-a-desktop-and-a-phone.md): Open the app's private launcher URL for the lab, then the Chief thread (#/chief) (`docs/verification/runbook.md`)
 - [Onboarding from Hello into Chief's thread](features/onboarding-from-hello-into-chief-s-threa.md): First run in a fresh browser session shows the Hello screen with three ideas (`docs/verification/onboard-chief-chat.md`)
 

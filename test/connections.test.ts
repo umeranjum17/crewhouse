@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled, task, until, release, grantApps } from './lab.ts';
+import { setup, settled, task, until, release, grantApps, delegated } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
 const { Connections, connectError } = await import('../src/connections.ts');
@@ -212,11 +212,11 @@ test('a connected app\'s tools: reading runs silently, changing something asks i
   grantApps(cfg, 'quill', ['mocknote']);
   const v = await crew.connections.connect('mocknote');
   await back(crew, v.url!, { code: 'good' });
-  const t = crew.assign('quill', 'find it [tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'find it [tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]').task;
   await settled(db, t);
   assert.match(task(db, t).result, /did search/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
-  const u = crew.assign('quill', 'write it up [tool crew_app {"tool":"mocknote_create_page","input":{"title":"Trip"}}]', 'chief').task;
+  const u = delegated(crew, 'quill', 'write it up [tool crew_app {"tool":"mocknote_create_page","input":{"title":"Trip"}}]').task;
   await until('ask', () => db.get("SELECT * FROM asks WHERE state = 'open'"));
   const ask = db.get("SELECT * FROM asks WHERE state = 'open'")!;
   assert.equal(ask.title, 'Quill wants to use your Mocknote: create a page.');
@@ -237,18 +237,18 @@ test('a helper reaches only the apps its job grants, even a connected one; Chief
   await back(crew, await start(crew), { code: 'good' });
   const search = '[tool crew_app {"tool":"mocknote_search","input":{"q":"school trip"}}]';
   // Writer Will's job grants Drive and Notion: Mocknote is refused, and nothing reaches the app.
-  const refused = crew.assign('quill', `find it ${search}`, 'chief').task;
+  const refused = delegated(crew, 'quill', `find it ${search}`).task;
   await settled(db, refused);
   assert.match(task(db, refused).result, /Mocknote isn't part of this job, so you can't use it/);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", refused)!.n, 0);
   // Not even asking for it, connected or not.
-  const connect = crew.assign('quill', 'and [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  const connect = delegated(crew, 'quill', 'and [tool crew_connect {"app":"mocknote"}]').task;
   await settled(db, connect);
   assert.match(task(db, connect).result, /Mocknote isn't part of this job, so you can't connect it/);
   assert.equal(db.all('SELECT * FROM asks').length, 0);
   // The person grants it to this job: the same call reaches the app.
   grantApps(cfg, 'quill', ['drive', 'notion', 'mocknote']);
-  const granted = crew.assign('quill', `find it ${search}`, 'chief').task;
+  const granted = delegated(crew, 'quill', `find it ${search}`).task;
   await settled(db, granted);
   assert.match(task(db, granted).result, /did search/);
   // Chief reaches every connected app without a grant.
@@ -398,7 +398,7 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   crew.onboard('sir');
   crew.recruit('scribe', 'Quill', 'person');
   grantApps(cfg, 'quill', ['mocknote', 'canva']);
-  const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'what is on this week [tool crew_connect {"app":"mocknote"}]').task;
   await until('asked', () => task(db, t).state === 'needs_you');
   const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
   assert.deepEqual(ask.detail, { app: 'mocknote', words: 'Let Quill use your Mocknote' });
@@ -409,12 +409,12 @@ test('in chat: a helper asks for an app, the person connects it from the card, a
   assert.equal(task(db, t).state, 'done');
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'quill' AND text = 'Mocknote is connected now. Quill carries on.'"));
   // Asked again while connected: nothing to ask.
-  const u = crew.assign('quill', 'again [tool crew_connect {"app":"mocknote"}]', 'chief').task;
+  const u = delegated(crew, 'quill', 'again [tool crew_connect {"app":"mocknote"}]').task;
   await settled(db, u);
   assert.equal(task(db, u).state, 'done');
   assert.match(task(db, u).result, /already connected/);
   // Not now: it carries on without.
-  const w = crew.assign('quill', 'and [tool crew_connect {"app":"canva"}]', 'chief').task;
+  const w = delegated(crew, 'quill', 'and [tool crew_connect {"app":"canva"}]').task;
   await until('asked again', () => task(db, w).state === 'needs_you');
   await crew.answer(crew.snapshot().asks.find((a: any) => a.kind === 'connect')!.id, { answer: 'deny' });
   await settled(db, w);
@@ -428,7 +428,7 @@ test("a Google app a helper needs is Chief who asks, and the helper's own task c
   crew.recruit('scribe', 'Quill', 'person');
   grantApps(cfg, 'quill', ['calendar']);
   await house(crew);
-  const t = crew.assign('quill', 'what is on this week [tool crew_connect {"app":"calendar"}]', 'chief').task;
+  const t = delegated(crew, 'quill', 'what is on this week [tool crew_connect {"app":"calendar"}]').task;
   await until('asked', () => task(db, t).state === 'needs_you');
   const ask = crew.snapshot().asks.find((a: any) => a.kind === 'connect')!;
   assert.equal(ask.bot, 'chief', 'Chief asks, never the helper that needs it');
@@ -486,7 +486,7 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   // A confirmed action reaches Chief with the complete produced facts, not just its opening.
   const facts = 'Your Dentist page is created, Umer. It is titled Dentist in your Mocknote. The app returned did create-page with that title, so the page creation is confirmed; nothing was emailed or paid for.';
   const permittedBefore = A.answeredReceipts(crew.snapshot()).filter((r) => r.id < 0).length;
-  const receiptJob = crew.assign('quill', `Create Dentist ${book} ${outcome(true, facts)} ask permission`, 'chief').task;
+  const receiptJob = delegated(crew, 'quill', `Create Dentist ${book} ${outcome(true, facts)} ask permission`).task;
   await release(crew, 'quill', facts);
   await settled(db, receiptJob);
   const chief = A.lines(crew.botPage('chief'), 'chief', crew.snapshot());

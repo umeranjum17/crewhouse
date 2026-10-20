@@ -14,7 +14,7 @@ import { DeviceLink, hostId, keyPair, unb64url, type DeviceGrant } from '@byokit
 import { linkUrl } from '@byokit/relay/device';
 import { startFakeSandboxServer, memoryStore } from '@byokit/cloud/testing';
 import { checkKey, connect, cost, progress, provider, said } from '../web/src/cloud.ts';
-import { until } from './lab.ts';
+import { until, delegated } from './lab.ts';
 import { temp } from './tmp.ts';
 
 const all = async <S>(g: AsyncGenerator<S>) => { const out: S[] = []; for await (const s of g) out.push(s); return out; };

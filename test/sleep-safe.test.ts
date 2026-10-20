@@ -2,7 +2,7 @@
 // test per fix, each failing before its fix. Bounded waits only (lab.ts `until`), no clock mocking.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup as lab, settled, prompted, until } from './lab.ts';
+import { setup as lab, settled, prompted, until, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import { Link } from '../src/link.ts';
 import { Store } from '../src/db.ts';

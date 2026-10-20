@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, settled, task, until } from './lab.ts';
+import { setup, settled, task, until, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
 import type { StubRuntime } from '../src/stub-runtime.ts';
 import { effectOf } from '../src/policy.ts';
@@ -60,7 +60,7 @@ test('granted run tools work through crew_app, with grant and command checks int
   process.env.PATH = `${bin}:${originalPath}`;
   try {
     const call = async (tool: string, args: string[]) => {
-      const id = crew.assign('tracer', `[tool crew_app ${JSON.stringify({ tool, input: { args } })}]`, 'chief').task;
+      const id = delegated(crew, 'tracer', `[tool crew_app ${JSON.stringify({ tool, input: { args } })}]`).task;
       await settled(db, id);
       return { id, result: task(db, id).result };
     };
@@ -96,21 +96,21 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
   process.env.PATH = `${bin}:${originalPath}`;
   try {
     // Read-only lists ask once: the card says what it looks at, and Always covers later looks.
-    const first = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['pane', 'list'] } })}]`, 'chief').task;
+    const first = delegated(crew, 'cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['pane', 'list'] } })}]`).task;
     await until('the look asks', () => openAsk(db));
     assert.equal(openAsk(db).title, 'CTO wants to look at the coding helpers on your computer.');
     assert.equal(crew.snapshot().asks[0].detail.always, 'the coding helpers on your computer');
     await crew.answer(openAsk(db).id, { answer: 'allow', scope: 'always' });
     await settled(db, first);
     assert.match(task(db, first).result, /herdr said: pane list/);
-    const second = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'read', 'reviewer'] } })}]`, 'chief').task;
+    const second = delegated(crew, 'cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'read', 'reviewer'] } })}]`).task;
     await settled(db, second);
     assert.match(task(db, second).result, /herdr said: agent read reviewer/, 'a standing answer covers later looks');
     assert.equal(db.all("SELECT * FROM asks WHERE state = 'answered'").length, 1);
     // Driving names its pane or agent and the command, asks every time, and is never money.
     const payload = 'echo harmless; '.repeat(12) + 'rm -rf /tmp/example; `codex`\n\t\u202e';
     const driveArgs = ['agent', 'prompt', 'reviewer', payload];
-    const drive = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: driveArgs } })}]`, 'chief').task;
+    const drive = delegated(crew, 'cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: driveArgs } })}]`).task;
     await until('the drive asks', () => openAsk(db));
     assert.match(openAsk(db).title, /prompt.*reviewer/);
     assert.deepEqual(JSON.parse(card(crew.snapshot().asks[0], crew.snapshot()).preview!.body), driveArgs);
@@ -144,7 +144,7 @@ test('the CTO sees terminal agents read-only and every drive asks, naming its pa
     }
     assert.equal(effectOf('herdr', { args: ['agent', 'start', 'new'] }, seen).kind, 'refuse');
     assert.equal(effectOf('herdr', { args: ['pane run', 'reviewer', payload] }, seen).kind, 'refuse');
-    const again = crew.assign('cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'prompt', 'reviewer', 'ship it'] } })}]`, 'chief').task;
+    const again = delegated(crew, 'cto', `[tool crew_app ${JSON.stringify({ tool: 'herdr', input: { args: ['agent', 'prompt', 'reviewer', 'ship it'] } })}]`).task;
     await until('the drive asks again', () => openAsk(db));
     await crew.answer(openAsk(db).id, { answer: 'deny' });
     await settled(db, again);

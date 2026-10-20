@@ -53,8 +53,8 @@ Half-life 72 hours: a thread from last week beats one from last month at the sam
 ## 5. Hand them on
 
 For each: write `growth/<product>/threads/<key>.md` with the URL, the venue, the person's exact words, your
-three answers to the rubric and the date. Then one `crew_pass` to Scribe: the file list, and "done means: each
-thread as one labelled card the person writes themselves".
+three answers to the rubric and the date. Then end your reply with the file list for Scribe and "done means: each
+thread as one labelled card the person writes themselves"; Chief hands it on.
 
 ## 6. What you say back
 
