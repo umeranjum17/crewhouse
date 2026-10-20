@@ -952,10 +952,12 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
 function PhoneOnly({ onExit }: { onExit: () => void }) {
   const t = useLook();
   const [ready, setReady] = useState<boolean | null>(null);
+  // Why the person is back at the connect card (a key refused, or a sign-in that lapsed): the words stay on the card.
+  const [why, setWhy] = useState('');
   useEffect(() => { void phoneSignedIn().then(setReady).catch(() => setReady(false)); }, []);
   if (ready === null) return <Center><ActivityIndicator color={t.ink} /></Center>;
-  if (!ready) return <PhoneSignIn onExit={onExit} onDone={() => setReady(true)} />;
-  return <PhoneChat onExit={onExit} onSignedOut={() => setReady(false)} />;
+  if (!ready) return <PhoneSignIn why={why} onExit={onExit} onDone={() => setReady(true)} />;
+  return <PhoneChat onExit={onExit} onSignedOut={(words) => { setWhy(words); setReady(false); }} />;
 }
 
 function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: () => void; onSignOut: () => void }) {
@@ -977,11 +979,11 @@ function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: 
 }
 
 /** Connect the person's own account with an API key: one paste, agreed per use, nothing else leaves the phone. */
-function PhoneSignIn({ onDone, onExit }: { onDone: () => void; onExit: () => void }) {
+function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () => void; why: string }) {
   const t = useLook();
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(why);
   const connect = async () => {
     if (!key.trim() || busy) return;
     setBusy(true); setErr('');
@@ -1046,7 +1048,7 @@ function PhoneDocSheet({ doc, onClose, disabled }: { doc: PhoneDocument; onClose
  *  app storage, so it is still there after the app is killed; a turn with no end comes back stopped, a
  *  document effect the phone was killed inside comes back "Interrupted. Retry?", and a message written with
  *  no connection waits as "Queued, not sent yet" until the phone hears the model again. */
-function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: () => void }) {
+function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (why: string) => void }) {
   const t = useLook();
   const [lines, setLines] = useState<PhoneLine[]>(loadChat);
   const [partial, setPartial] = useState('');
@@ -1100,7 +1102,7 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
         setLines((ls) => failOffOf(ls, rid, text));
         return false;
       }
-      if (phoneExpired(e)) { onSignedOut(); return false; }
+      if (phoneExpired(e)) { onSignedOut(phoneWords(e)); return false; }
       const line = phoneWords(e);
       rememberChief(line, doc, rid);
       setLines((ls) => [...ls.map(clearQueued), { who: 'chief', text: line, doc }]);
