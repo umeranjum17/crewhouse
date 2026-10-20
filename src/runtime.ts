@@ -19,7 +19,7 @@ export type RunEvent =
   | { type: 'usage'; tokens: number };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output'; until?: number; message: string };
-export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; workspaces?: { id: string; name: string }[] };
+export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; cliLogin?: { signIn: boolean }; workspaces?: { id: string; name: string }[] };
 export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;

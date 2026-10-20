@@ -84,3 +84,12 @@ Every account the kit marks `keyEntry` (`A.AIS` `keyEntry`) shows "Paste your <n
 test/onboard.test.ts` (MiniMax's invalid key waits with "That key didn't work" through the kit's `addKey`).
 Drive: `scripts/verify/go-plan.ts` fixture, then `node scripts/verify/look-check.mjs web` on the page, with
 `--then` clicking `.ai-page .btn` for the sheet. Use only fake keys.
+
+## Claude cannot sign in from here (kit `needs_cli_login`)
+
+A failed `anthropic-cli` sign-in carries the kit's typed cause; the sheet shows it instead of "That didn't go through":
+`signIn: false` says to run `claude` on this computer and sign in there (Try again re-checks); `signIn: true` offers
+"Sign in with Claude". Gate: `node --test --test-name-pattern="Claude sign-in the kit cannot run" test/onboard.test.ts`.
+Drive: `scripts/verify/cli-cause.ts <repo> <scratch> <ready.json>` under the isolated env (real crewd and built UI, only the
+kit's sign-in faked; `<scratch>/cause.json` `{"signIn": true|false}` picks the variant). Open Chief's card, Use another
+account, Claude. Capture both variants, day/night at 390/1440. Close the browser before TERM, or the server waits on it.

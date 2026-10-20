@@ -1919,7 +1919,7 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
  *  busy, expired, failed); a plan without helpers. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
+  const none = { cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -1930,16 +1930,23 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   // A pasted key acting for several workspaces: the card asks which one to use (row ids, never secrets).
   const pick = pasting && Array.isArray(s?.workspaces) ? s.workspaces as { id: string; name: string }[] : null;
   // Expiry stays an independent screen flag, based on the error words even when the reason also says busy or declined.
-  const expired = s?.state === 'failed' && phaseOf({ signIn: { ...s, why: undefined } }) === 'expired';
+  const expired = s?.state === 'failed' && !s.cliLogin && phaseOf({ signIn: { ...s, why: undefined } }) === 'expired';
   const declined = phase === 'cancelled';
   const busy = phase === 'busy';
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
+    cliLogin: s?.state === 'failed' && s.cliLogin ? { signIn: !!s.cliLogin.signIn } : null,
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
 }
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
+
+/** Why Claude can't sign in from here, in the sheet's own words: the kit either runs the Claude Code sign-in itself, or
+ *  the person runs `claude` on this computer and signs in there. `cmd` is the one thing to type. */
+export const cliLoginWords = (c: { signIn: boolean }, name: string) => c.signIn
+  ? { head: 'Claude Code isn\'t signed in', body: `Sign in with your ${name} plan and the crew can think with it. You'll say yes once on ${name}'s page.`, cmd: '', action: `Sign in with ${name}` }
+  : { head: 'Sign in to Claude Code on this computer', body: `Crewhouse uses the Claude Code already on this computer, and it isn't signed in. Open a command window on this computer, run this, and sign in there. Then tap Try again.`, cmd: 'claude', action: 'Try again' };
 
 /** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
  *  while none is), every other route under "More ways to sign in". The sign-in card's one recommended account is the

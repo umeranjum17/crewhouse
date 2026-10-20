@@ -144,7 +144,7 @@ export class OpenClawRuntime implements AgentRuntime {
       else if (v.state === 'done') on({ waiting: false, done: true });
       else if (v.why === 'busy') on({ waiting: false, error: 'Another sign-in is already in progress. Finish or cancel it, then try again.' });
       else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
-      else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed' });
+      else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed', ...(v.cause ? { cliLogin: { signIn: v.cause.signIn } } : {}) });
     });
   }
 
