@@ -2,13 +2,13 @@
 // $BOAT_KEY_FILE (mode 600). With no file yet, it makes the one claim (the kit's claim(): a link and code a person
 // approves, for $BOAT_EMAIL) and saves the key there. The key is never printed, never revoked; each run deletes the
 // computer it made. Driver control uses <out>/ctrl.sock (mode 600):
-//   GET /list, /make, /deliver, /upload, /model, /logs, /cost, /cleanup, /me, /stop
+//   GET /list, /make, /deliver, /ai, /upload, /model, /logs, /cost, /cleanup, /me, /stop
 //   /upload puts $CANDIDATE (a download built from the branch under test) at /tmp/crewhouse-candidate.tar.gz on this
 //   run's own computer, for a lab phone build whose EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD names that file; /logs reads
 //   the Crewhouse service's journal there
 //   /stop cleans up and exits (also on SIGTERM/SIGINT)
 //   curl --unix-socket <out>/ctrl.sock http://x/<action>
-//   BOAT_KEY_FILE=… [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <adb server port> <serial> <out dir>
+//   BOAT_KEY_FILE=… [AI_KEY_FILE=…] [BOAT_EMAIL=…] node scripts/verify/boat-run.mjs <adb server port> <serial> <out dir>
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, createReadStream, existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -33,6 +33,13 @@ if (!key) {
     if (s.step === 'failed') process.exit(1);
   }
 }
+const aiFile = process.env.AI_KEY_FILE; delete process.env.AI_KEY_FILE;
+const type = (secret) => {
+  if (!/^[A-Za-z0-9_.-]+$/.test(secret)) return { delivered: false, why: 'the key has characters adb input cannot carry', length: secret.length };
+  try { execFileSync('adb', ['-P', adbPort, '-s', serial, 'shell', `input text '${secret}'`], { stdio: 'ignore' }); }
+  catch { return { delivered: false, why: 'adb input failed' }; } // its message would carry the command line
+  return { delivered: true, length: secret.length };
+};
 const p = provider(async () => key);
 const raw = (method, path) => fetch(`${BOAT.api}${path}`, { method, headers: { authorization: `Bearer ${key}`, accept: 'application/json' } });
 const acts = {
@@ -44,12 +51,9 @@ const acts = {
     return { id: mine.id };
   },
   // adb shell re-parses its arguments on the device: deliver only a key of plain characters, quoted.
-  deliver: async () => {
-    if (!/^[A-Za-z0-9_.-]+$/.test(key)) return { delivered: false, why: 'the key has characters adb input cannot carry', length: key.length };
-    try { execFileSync('adb', ['-P', adbPort, '-s', serial, 'shell', `input text '${key}'`], { stdio: 'ignore' }); }
-    catch { return { delivered: false, why: 'adb input failed' }; } // its message would carry the command line
-    return { delivered: true, length: key.length };
-  },
+  deliver: async () => type(key),
+  // The AI account key ($AI_KEY_FILE, a MiniMax key for the real-model run) goes into the focused sign-in field the same way.
+  ai: async () => aiFile ? type(readFileSync(aiFile, 'utf8').trim()) : { delivered: false, why: 'AI_KEY_FILE unset' },
   upload: async () => {
     if (!mine || !process.env.CANDIDATE) return { uploaded: false, why: mine ? 'CANDIDATE unset' : 'no computer of this run' };
     const asked = await fetch(`${BOAT.api}/sandboxes/${encodeURIComponent(mine.id)}/files/upload-url`, { method: 'POST',

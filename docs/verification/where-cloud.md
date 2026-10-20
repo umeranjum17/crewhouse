@@ -64,7 +64,7 @@ A real boat.dev run spends money. Every Boat run, from Crewhouse or BYOKit, uses
 never revoke it. Each run deletes the computers it made. Start
 `BOAT_KEY_FILE=~/firstmate/config/boat-api-key node scripts/verify/boat-run.mjs <adb port> <serial> <out dir>`
 from the repo root. All driver actions use the mode-600 Unix socket `<out>/ctrl.sock`, never a TCP port; for example:
-`curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/upload`, `/model`, `/logs`, `/cost`, `/cleanup`, `/me`, `/stop`).
+`curl --unix-socket <out>/ctrl.sock http://x/list` (also `/make`, `/deliver`, `/ai`, `/upload`, `/model`, `/logs`, `/cost`, `/cleanup`, `/me`, `/stop`).
 It keeps the key in memory, `/deliver` types it into the focused field, and `/stop` deletes its own computer (kit `remove`).
 For a run before the release carries the change, build the candidate download from the branch under test
 (`npm run build:web && node scripts/package.mjs <out>`), start the driver with `CANDIDATE=<out>/crewhouse-<version>-linux-x64.tar.gz`,
@@ -76,6 +76,14 @@ first, or Gradle keeps the old bundle). After `/make`, `/upload` puts the downlo
 kit refuses a run env name holding KEY, TOKEN, SECRET or PASSWORD), so OpenClaw runs Chief for real on fixed words
 (the app drops the stub engine's lines from the chat, so `CREWHOUSE_ENGINE=stub` never shows a reply); `/logs` reads
 the service journal. Then paste, Use this computer, Talk to Chief and send a message.
+
+**Real model (no fixed words).** Skip `/model` and the lab model env. Start the driver with `AI_KEY_FILE=~/firstmate/config/minimax-api-key`.
+After Talk to Chief, send the question; with no AI account Chief waits ("Sign in on your computer"). Open Settings › Your AI
+accounts › Paste your MiniMax key (shown only on the phone that set up the computer), tap the box, `curl … /ai` (types the
+key, masked; check the bullets, never dump the screen), then Sign in. Chief starts the waiting question by itself. The kit's key
+lane runs `MiniMax-M3`; `/logs` shows `provider=minimax … model=MiniMax-M3 status=200` in the engine events and the service in
+product mode (state under `/home/user/.local/state/crewhouse`). Pair a desktop browser with the box's relay code
+(`POST /api/phones/code` and `/api/phones/approve` with the `person.key`, since the download has no `web/src` for the CLI).
 Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`) and save the key there. Boat
 documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
 
