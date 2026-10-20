@@ -12,8 +12,8 @@
     "web"
   ],
   "skills": [
-    "triage-issue",
-    "sandbox-patch"
+    "crewhouse-triage-issue",
+    "crewhouse-sandbox-patch"
   ],
   "net": [
     "api.github.com",

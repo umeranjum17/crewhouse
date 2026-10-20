@@ -73,11 +73,11 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
     const request = await api('/api/bots/chief/messages', { text: 'help me market my bakery' });
     await settled(db, request.task);
     const spec = (crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', request.task)!.session);
-    assert.match(spec.system, /run-a-marketing-campaign/, 'a plain request presents the campaign skill to Chief');
-    assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'skills/run-a-marketing-campaign/SKILL.md'), 'utf8'), /crew_recruit/);
+    assert.match(spec.system, /crewhouse-run-a-marketing-campaign/, 'a plain request presents the campaign skill to Chief');
+    assert.match(readFileSync(join(disk.botDir(cfg, 'chief'), 'skills/crewhouse-run-a-marketing-campaign/SKILL.md'), 'utf8'), /crew_recruit/);
     // Script the model decisions, but exercise real HTTP, recruitment, queueing and profile injection.
     const call = (name: string, input: object) => `[tool ${name} ${JSON.stringify(input).replace(/\[tool/g, '[t\\u006fol').replace(/ask permission/g, 'ask\\u0020permission')}]`; // nested helper scripts are JSON, not Chief calls
-    const read = await api('/api/bots/chief/messages', { text: call('crew_read', { path: 'skills/run-a-marketing-campaign/SKILL.md' }) });
+    const read = await api('/api/bots/chief/messages', { text: call('crew_read', { path: 'skills/crewhouse-run-a-marketing-campaign/SKILL.md' }) });
     await settled(db, read.task);
     assert.equal(db.all('SELECT * FROM asks WHERE task_id = ?', read.task).length, 0, 'Chief reads its own skill without asking');
     const readCall = db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", read.task)!;

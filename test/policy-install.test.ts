@@ -19,7 +19,7 @@ test('install policy: crewhouse content passes, everything else is blocked by na
   const crew = join(dir, 'crew');
   try {
     // A skill staged from a bot's own folder is crewhouse's own content.
-    const own = ask({ protocolVersion: 1, targetType: 'skill', targetName: 'find-leads', sourcePath: join(crew, 'bots', 'desk', 'skills', 'find-leads'), sourcePathKind: 'directory', request: { kind: 'skill-install' } }, [crew]);
+    const own = ask({ protocolVersion: 1, targetType: 'skill', targetName: 'crewhouse-find-leads', sourcePath: join(crew, 'bots', 'desk', 'skills', 'crewhouse-find-leads'), sourcePathKind: 'directory', request: { kind: 'skill-install' } }, [crew]);
     assert.equal(own.decision, 'allow');
     // A ClawHub skill with no entry: blocked, with the reason a person would say.
     mkdirSync(join(dir, 'staged', 'weather'), { recursive: true });

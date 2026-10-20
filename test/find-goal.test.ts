@@ -9,16 +9,16 @@ import * as disk from '../src/bots.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 
-test('find-a-goal is wired into Scout', async () => {
+test('crewhouse-find-a-goal is wired into Scout', async () => {
   const { cfg, crew, done } = setup();
   const tpl = disk.listTemplates(cfg).find((t) => t.id === 'scout')!;
-  assert.ok(tpl.skills?.includes('find-a-goal'), 'the template lists the skill');
+  assert.ok(tpl.skills?.includes('crewhouse-find-a-goal'), 'the template lists the skill');
   assert.match(readFileSync(join(cfg.repoDir, 'templates', 'scout', 'AGENTS.md'), 'utf8'),
-    /Asked for help earning on the side or starting something, follow `find-a-goal`/, 'the job file points at it');
+    /Asked for help earning on the side or starting something, follow `crewhouse-find-a-goal`/, 'the job file points at it');
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
-  assert.ok(existsSync(join(disk.botDir(cfg, 'scout'), 'skills', 'find-a-goal', 'SKILL.md')), 'recruiting Scout copies the skill in');
-  const skill = disk.listSkills(cfg, 'scout').find((k) => k.name === 'find-a-goal');
+  assert.ok(existsSync(join(disk.botDir(cfg, 'scout'), 'skills', 'crewhouse-find-a-goal', 'SKILL.md')), 'recruiting Scout copies the skill in');
+  const skill = disk.listSkills(cfg, 'scout').find((k) => k.name === 'crewhouse-find-a-goal');
   assert.ok(skill?.description && skill?.says, 'the skill carries a description and the person-facing line');
   done();
 });

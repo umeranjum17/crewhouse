@@ -68,13 +68,13 @@ function setup() {
 const calls = (db: any, bot: string) => db.all("SELECT data FROM events WHERE kind = 'run.call' AND bot = ?", bot).map((e: any) => JSON.parse(e.data));
 const spent = (root: string, log: string) => (existsSync(log) ? readFileSync(log, 'utf8') : '');
 
-test('find-clients is wired into Tracer, and Home offers the job once the lookup tool is granted', async () => {
+test('crewhouse-find-clients is wired into Tracer, and Home offers the job once the lookup tool is granted', async () => {
   const { crew, cfg, done } = setup();
   const file = join(cfg.repoDir, 'templates', 'tracer', 'bot.json');
   const conf = JSON.parse(readFileSync(file, 'utf8'));
-  assert.ok(conf.skills.includes('find-clients'), 'the template lists the skill');
-  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'tracer', 'skills', 'find-clients', 'SKILL.md')), 'recruiting Tracer copies the skill in');
-  const mine = disk.listSkills(cfg, 'tracer').find((k) => k.name === 'find-clients');
+  assert.ok(conf.skills.includes('crewhouse-find-clients'), 'the template lists the skill');
+  assert.ok(existsSync(join(cfg.crewDir, 'bots', 'tracer', 'skills', 'crewhouse-find-clients', 'SKILL.md')), 'recruiting Tracer copies the skill in');
+  const mine = disk.listSkills(cfg, 'tracer').find((k) => k.name === 'crewhouse-find-clients');
   assert.ok(mine?.description && mine?.says, 'the model gets a description and the person a line in their own words');
   // <5,250: re-frozen from 5,000 for the plain-words rule (docs/plain-words.md) Tracer's soul and AGENTS now point at.
   assert.ok(disk.systemPrompt(cfg, 'tracer', false).length < 5_250, 'Tracer keeps his own words stay inside the frozen prompt budget');

@@ -85,7 +85,7 @@ test('chief onboarding, recruit, assign, grants', async () => {
   const rec = (await say('chief', `get me a video maker ${call('crew_recruit', { template: 'reel', name: 'Video Reel' })}`)).body.task;
   await done('chief', rec);
   const dir = join(root, 'crew', 'bots', 'video-reel');
-  for (const f of ['AGENTS.md', 'soul.md', 'skills/make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
+  for (const f of ['AGENTS.md', 'soul.md', 'skills/crewhouse-make-reel/SKILL.md']) assert.ok(existsSync(join(dir, f)), f);
   const tried = (await say('video-reel', `get a friend to help ${call('crew_recruit', { template: 'scout' })}`)).body.task;
   await done('video-reel', tried);
   assert.ok(!(await api('GET', '/api/state')).body.bots.some((b: any) => b.id === 'scout'), 'only Chief recruits');
@@ -691,7 +691,7 @@ test('suggestions: a helper keeps a skill, and Chief changes a personality, only
   assert.match((await done('video-reel', command)).result, /no commands/);
 
   // Remove puts it away, never deletes it; a skill it came with stays.
-  assert.equal((await api('DELETE', '/api/bots/video-reel/skills/make-reel')).status, 400);
+  assert.equal((await api('DELETE', '/api/bots/video-reel/skills/crewhouse-make-reel')).status, 400);
   assert.equal((await api('DELETE', '/api/bots/video-reel/skills/birthday-video', undefined, {})).status, 403, 'cross-site pages cannot remove');
   assert.equal((await api('DELETE', '/api/bots/video-reel/skills/birthday-video')).status, 200);
   assert.ok(!(await skills()).some((k: any) => k.name === 'birthday-video'));

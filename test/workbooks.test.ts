@@ -210,10 +210,10 @@ test('repeated requests for the same title get separate delivered files that bot
   assert.ok(await crew.workbookView('quill', a));
 });
 
-test('the make-spreadsheet skill carries the question, the spec shape and a buildable reception outline', async () => {
-  const md = readFileSync(new URL('../skills/make-spreadsheet/SKILL.md', import.meta.url), 'utf8');
+test('the crewhouse-make-spreadsheet skill carries the question, the spec shape and a buildable reception outline', async () => {
+  const md = readFileSync(new URL('../skills/crewhouse-make-spreadsheet/SKILL.md', import.meta.url), 'utf8');
   // The frontmatter parses: the skill keeps its name and its two descriptions.
-  assert.equal(/^name:\s*(.+)$/m.exec(md)?.[1]?.trim(), 'make-spreadsheet');
+  assert.equal(/^name:\s*(.+)$/m.exec(md)?.[1]?.trim(), 'crewhouse-make-spreadsheet');
   assert.ok(/^description:\s*(.+)$/m.test(md), 'the model description is there');
   assert.ok(/^says:\s*(.+)$/m.test(md), 'the person-facing line is there');
   // Step 1: one question with kinds plus "something else", then stop.

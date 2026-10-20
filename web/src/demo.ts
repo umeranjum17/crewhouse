@@ -287,7 +287,7 @@ const pages: Record<string, Json> = {
     { id: 4, author: 'system', text: "Delivered files/happy-birthday-mum.mp4: Here's a first look 💐" },
   ], notes: '- Umer likes soft piano music for his videos\n- Mum is "Ammi" in titles', tasks: [],
   soul: '# Reel\n\n## How you come across\n- Upbeat and practical: one sentence on what was made, then let the video speak.\n- Loves a tidy thirty seconds: clean cuts, steady pacing, nothing that shouts.\n- Makes a sensible call when something is missing, and says what was assumed.',
-  skills: [{ name: 'make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from your photos', learned: true }] },
+  skills: [{ name: 'crewhouse-make-reel', says: 'Turn photos and screenshots into a short video' }, { name: 'birthday-video', says: 'Make a birthday video from your photos', learned: true }] },
 };
 if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person', text: 'find me a good standing desk under $400, compare the best five' },
   { id: 72, author: 'chief', text: 'Happy to, Umer. Scout will take it; here is how, before anything starts.' });
