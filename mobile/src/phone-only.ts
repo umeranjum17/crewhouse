@@ -70,8 +70,15 @@ export const shareDocument = (doc: PhoneDocument) => shareAsync(doc.uri, {
 
 /** True when a failure means the sign-in has lapsed, so the app sends the person back to sign in. */
 export const phoneExpired = (error: unknown) =>
-  error instanceof KeyRouteError && error.code === 'request' ? false
+  error instanceof KeyRouteError ? error.code === 'key_refused'
     : error instanceof ResponseError && error.kind === 'signed_out';
+
+/** The kit's typed key refusals, each with the one next step: the words the person reads, never a code or status. */
+const KEY_WORDS: Partial<Record<string, string>> = {
+  out_of_credit: `Your ${phoneProviderName} account is out of credit. Add credit on ${phoneProviderName}, then send it again.`,
+  key_refused: `${phoneProviderName} refused this key. Connect a key that works to keep chatting.`,
+  rate_limited: `${phoneProviderName} is busy with this key right now. Wait a minute, then send it again.`,
+};
 
 /** One plain sentence for any failure a person may meet here, never a code, path or raw error. */
 export function phoneWords(error: unknown) {
@@ -79,7 +86,7 @@ export function phoneWords(error: unknown) {
   if (error instanceof KeyRouteError) {
     if (error.code === 'aborted') return 'Stopped.';
     if (error.code === 'needs_keys') return 'This phone cannot run key accounts yet.';
-    return 'Could not finish on this phone. Check your internet connection and try again.';
+    return KEY_WORDS[error.code] ?? 'Could not finish on this phone. Check your internet connection and try again.';
   }
   if (error instanceof ResponseError) {
     if (error.kind === 'network') return 'No internet connection. Reconnect, then try again.';
