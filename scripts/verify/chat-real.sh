@@ -10,7 +10,7 @@
 # an engine install to reuse (CREWHOUSE_ENGINE_DIR), so a run can time the steps after the one-off install.
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
-# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and crewd.log in <out-dir>; non-zero when no reply
+# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words), model-calls.log (the engine's model calls) in <out-dir>, and crewd.log only on a failure; non-zero when no reply
 # arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
@@ -19,14 +19,14 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-chat-real.XXXXXX)
-trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+trap 'crewd_stop || exit 1; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 TL="$OUT/timeline.txt"; : > "$TL"
 mark() { printf '%s %s\n' "$(date +%s.%N)" "$1" >> "$TL"; }
 mark start
-crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" ${ENGINE_DIR:+CREWHOUSE_ENGINE_DIR="$ENGINE_DIR"} \
+crewd_start "$REPO" "$LAB/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" ${ENGINE_DIR:+CREWHOUSE_ENGINE_DIR="$ENGINE_DIR"} \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -83,7 +83,7 @@ cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
 grep -q "\[model-fetch\] response provider=minimax .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "chat-real: the reply did not come from $MODEL" >&2; exit 1; }
 grep "\[model-fetch\]" "$OUT/openclaw-events.log" > "$OUT/model-calls.log"; rm -f "$OUT/openclaw-events.log" # the judge reads 64 KB at most: keep only the model calls
 echo "chat-real: model $MODEL"
-printf '%s\n' "$R" > "$OUT/reply.txt"
+printf 'Chief replied, on %s (named in the engine log), to a first request typed with no name, after a MiniMax key sign-in:\n%s\n' "$MODEL" "$R" > "$OUT/reply.txt"; mark "model $MODEL answered (engine log)"; rm -f "$OUT/openclaw.log" "$OUT/thread.json"; OK=1
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
