@@ -48,13 +48,13 @@ H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-signed_in() { api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true'; }
+key_state() { api /api/accounts | node -e 'const a = JSON.parse(require("node:fs").readFileSync(0)).find((x) => x.account === "minimax"); process.stdout.write(a?.signedIn ? "in" : a?.signIn?.state ?? "none")'; }
 signin() { api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
   node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
     api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null || return 1
-  for _ in $(seq 60); do signed_in && return 0; sleep 1; done; return 1; }
-for _ in 1 2 3; do signed_in || signin || true; signed_in && break; done # a loaded host can lose the engine's first wizard turn: ask again
-signed_in || fail "MiniMax did not take the key"
+  for _ in $(seq 45); do case "$(key_state)" in in) return 0;; failed) return 1;; esac; sleep 2; done; return 1; }
+for _ in 1 2 3 4; do signin && break; sleep 10; done # a loaded host can lose the engine's first sign-in turn: ask again
+[ "$(key_state)" = in ] || fail "MiniMax did not take the key"
 api /api/recruit -d '{"template":"scout","name":"Research Rae"}' > /dev/null
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 for b in chief research-rae; do # the picker cannot choose Flash (chat-real.sh): name it in each bot's own bot.json
