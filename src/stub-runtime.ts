@@ -38,14 +38,14 @@ const GOLDEN: Record<string, string> = {
  *  All state is per instance: tests run several crews side by side with the same session keys. */
 export class StubRuntime implements AgentRuntime {
   private host?: ToolHost;
-  private holds = new Map<string, (reply: string) => void>();
+  private holds = new Map<string, (reply?: string) => void>();
   private cancelled = new Set<string>();
   private tired = new Map<string, Set<string>>(); // "hit every limit": each account rests once on that key, two minutes
   private transcripts = new Map<string, string>();
   private specs = new Map<string, RunSpec>();
   private steered = new Map<string, string>();
   holding(key: string) { return this.holds.has(key); }
-  release(key: string, reply = '') { this.holds.get(key)?.(reply); this.holds.delete(key); }
+  release(key: string, reply?: string) { this.holds.get(key)?.(reply); this.holds.delete(key); }
   /** What the run's tools said, in order: the run's own view of its work (tests read it; no session file exists). */
   transcript(key: string) { return this.transcripts.get(key) ?? ''; }
   /** The last RunSpec a key ran with: what the model actually saw (tests read it; no session file exists). */
@@ -94,7 +94,7 @@ export class StubRuntime implements AgentRuntime {
       text = 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';
     text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? (process.env.CREWHOUSE_STUB_GOLDEN && !result ? '' : text); // golden: unscripted gets no reply
     if (/ask permission/i.test(said)) {
-      text = await new Promise<string>((resolve) => { on({ type: 'thinking' }); this.holds.set(spec.key, (reply) => resolve(reply || text)); });
+      text = await new Promise<string>((resolve) => { on({ type: 'thinking' }); this.holds.set(spec.key, (reply) => resolve(reply ?? text)); });
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished
     }
     on({ type: 'usage', tokens: Math.max(1, Math.round((said.length + text.length) / 4)) });

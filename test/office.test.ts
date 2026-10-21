@@ -629,6 +629,10 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   await until("Scout's own thread", () => b.run(`!!document.querySelector('.line') && !document.querySelector('.stuck')`), 30_000);
   assert.equal(await b.run(`document.querySelectorAll('.stuck').length`), 0, 'Scout\'s own thread asks nothing: the Stop card is Chief\'s alone');
   assert.deepEqual(await b.run(`[!!document.querySelector('.read-along'), document.querySelectorAll('.chat-page textarea').length]`), [false, 1], 'a helper\'s own thread has a composer');
+  // The helper's own controls ride under its head while it works: its word, Stop, and Take control when it has a computer, all inside the phone.
+  const bar = await b.run(`(() => { const e = document.querySelector('.live-ctl'), r = e?.getBoundingClientRect(); return e && { words: [...e.children].map((c) => c.textContent), inside: r.left >= 0 && r.right <= innerWidth }; })()`);
+  assert.equal(bar.words[0], 'At work'); assert.equal(bar.words.at(-1), 'Stop'); assert.equal(bar.inside, true, 'the bar fits the phone');
+  assert.equal(bar.words.includes('Take control'), (await api('/api/state')).bots.find((x: { id: string }) => x.id === 'scout').computer, 'Take control is there exactly when the helper has a computer');
   // Use crewd's real ephemeral fan-out, the same path the scripted runtime's text callback uses.
   lab.db.live('reply.partial', 'scout', { task: job, text: 'Umer, three Friday flights are ready.' });
   await until('the header and streamed reply nod together', () => b.run(`document.querySelector('.chat-head .face')?.dataset.motion === 'talk' && document.querySelector('.streaming .face')?.dataset.motion === 'talk'`));
@@ -700,7 +704,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
     await b.open(`${theme}#/h/${rae.id}`);
-    try { await until('the working helper’s Stop button', () => b.run("!!document.querySelector('.chat-head button')"), 30_000); }
+    try { await until('the working helper’s Stop button', () => b.run("!!document.querySelector('.live-ctl button')"), 30_000); }
     catch (e) { console.error('working header diagnostic', { theme, width, task: lab.db.get('SELECT id, bot, state FROM tasks WHERE id = ?', named), page: await b.run('({url:location.href,text:document.body.innerText})') }); throw e; }
     const wholeWord = await b.run(`(() => { const n=document.querySelector('.chat-head .grow b').firstChild,r=document.createRange();r.setStart(n,0);r.setEnd(n,'Research'.length);return r.getClientRects().length===1; })()`);
     await b.open(`${theme}#/chief`);

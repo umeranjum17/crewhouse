@@ -4,9 +4,13 @@ The stub engine's `stub <bot>:` lines are hidden by the app on purpose (`STUB` i
 
 ## Drive and witness
 
-`PATH=/usr/bin:$PATH CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/chat-real.sh <out-dir> <minimax-key-file>` (done-done journey `chat-real`, which spends a few model calls on that key). It boots an isolated crewd on the real engine, signs in to MiniMax through the sign-in sheet's key paste (the key is read from the file into that request, never printed or kept), puts `MiniMax-M3.1-Flash` in Chief's own `bot.json` (the picker cannot choose it: the engine's catalog lists a key sign-in's models as unavailable; `CHAT_MODEL` overrides it), sends one message and waits, bounded by `REPLY_SECONDS` (default 180), for Chief's job to end `done` with his words in the thread. A job that ends `failed` or `unsure` fails the journey at once and keeps the engine logs and `thread.json` beside it.
+`PATH=/usr/bin:$PATH CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/chat-real.sh <out-dir> <minimax-key-file>` (done-done journey `chat-real`, which spends a few model calls on that key). It boots an isolated crewd on the real engine and walks the first-day path: no name, the first request sent from Hello, then the sign-in sheet's key paste (the key is read from the file into that request, never printed or kept). The journey fails unless Chief's own accounts now lead with `MiniMax-M3.1-Flash` with nothing picked by hand (`CHAT_MODEL` overrides it), then waits, bounded by `REPLY_SECONDS` (default 180), for the request, which started by itself at sign-in, to end `done` with Chief's words in the thread. A job that ends `failed` or `unsure` fails the journey at once and keeps the engine logs and `thread.json` beside it. `timeline.txt` stamps each step (engine ready, request sent, key pasted, signed in, first reply); `ENGINE_DIR=<dir>` reuses an engine install, so the steps after the one-off install can be timed on their own.
 
 Needs a MiniMax key file already on the machine. Never put a key in the repo or CI.
+
+## A helper's job (`HELPER=scout`)
+
+`HELPER=scout HELPER_NAME="Research Rae" ASK='Ask Research Rae to …' REPLY_SECONDS=1200` hires that template on the same model, asks Chief to hand it the job, and waits on the helper's own task. It must end `done` with the helper's words (a job that closes with no answer is `unsure` and fails the journey). A web-research job takes about 10 minutes on Flash. It also captures the helper's page at 390 (`helper/<id>-{day,night}-390.png`).
 
 ## Capture
 

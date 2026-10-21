@@ -6,7 +6,7 @@
 // Boots one isolated crewd (throwaway HOME/XDG/TMPDIR, dead D-Bus path, loopback,
 // OS-assigned port — never the owner's install, never port 7711), runs the canonical
 // journey (state → onboard → Chief message → bot reply), writes api-transcript.jsonl,
-// summary.json and crewd.log to --out, then tears the instance down. The person's
+// summary.json and steps.json to --out (crewd.log too, on a failure), then tears the instance down. The person's
 // capability is never written to evidence or stdout: transcripts scrub it.
 // Exit 0 on a full pass, 1 on any failure, 2 on usage error, 128+n on signal n.
 //
@@ -15,8 +15,8 @@
 // group, KILL after a bounded grace, then wait until no member is left. Only an
 // empty group lets the lab go; a group that outlives KILL keeps it and fails the
 // run. If this script is SIGKILLed, setpriv's parent-death signal takes crewd too.
-import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import net from 'node:net';
@@ -41,6 +41,7 @@ const end = (code, line) => ending ??= (async () => {
     console.error(`stub-drive: crewd's process group ${group} outlived SIGTERM; sending SIGKILL`);
     if (!(await drain('SIGKILL'))) { console.error(`stub-drive: crewd's process group ${group} outlived SIGKILL; keeping ${lab}`); process.exit(1); }
   }
+  if (code) try { copyFileSync(logPath, join(out, 'crewd.log')); } catch {}
   try { rmSync(lab, { recursive: true, force: true }); } catch (e) { console.error(`stub-drive: cleanup of ${lab} failed: ${e.message}`); }
   if (!code) console.log(`stub-drive: ${line}`);
   process.exit(code);
@@ -51,7 +52,7 @@ for (const [signal, n] of [['SIGHUP', 1], ['SIGINT', 2], ['SIGTERM', 15]]) proce
 for (const d of ['home', 'state', 'crew', 'tools', 'run']) mkdirSync(join(lab, d), { recursive: true });
 const port = await new Promise((res, rej) => { const s = net.createServer(); s.once('error', rej); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 const base = `http://127.0.0.1:${port}`;
-const logPath = join(out, 'crewd.log');
+const logPath = join(lab, 'crewd.log'); // copied to --out only on a failure: a startup log is no proof of the claim
 const logFd = (await import('node:fs')).openSync(logPath, 'w');
 
 const child = spawn('setpriv', ['--pdeathsig', 'KILL', '--', process.execPath, join(repo, 'src', 'main.ts')], {
@@ -113,9 +114,8 @@ try {
   }, 30_000);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ person: 'Owner', address: 'Sir', chief: true, reply }, null, 2) + '\n');
-  // The step record done-done reads beside the evidence: what a person did and what they can see at the end.
-  const version = `${JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version}+${execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()}`;
-  writeFileSync(join(out, 'steps.json'), JSON.stringify({ target: { version }, start: 'a fresh Crewhouse on the stub engine, no model', steps: ['Open Crewhouse and tell it who you are', 'Send Chief a message'], result: 'Chief answers the message in his thread' }, null, 2) + '\n');
+  writeFileSync(join(out, 'steps.json'), JSON.stringify({ target: { version: JSON.parse(readFileSync('package.json', 'utf8')).version }, start: 'first launch of Crewhouse on the stub engine, a new person, nothing sent yet',
+    steps: ['Start Crewhouse and read the state: the person and Chief are there', 'Say hello from Hello (onboard)', 'Send Chief the first request', 'Wait for Chief to answer'], result: `Chief answers the first request: ${reply}` }, null, 2) + '\n');
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
 await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);

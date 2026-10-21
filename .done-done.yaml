@@ -40,12 +40,19 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/pwa-pair.sh "$DONE_DONE_EVIDENCE_ROOT"'
   pwa-plan:
     command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
+  quiet-nudge:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  quiet-nudge-pwa:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge-pwa.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chat-real:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
   crew-room:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE, or on OPENROUTER_API_KEY with CREW_ACCOUNT=openrouter'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:-}"'
+  phone-live-control:
+    spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
   phone-web-pair:
     spends: 'a few live model calls on the key file named by KEY_FILE (MiniMax, or OpenRouter with AI=openrouter)'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/phone-web-pair.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'

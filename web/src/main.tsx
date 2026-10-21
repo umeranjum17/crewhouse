@@ -111,14 +111,13 @@ function Hello({ state, refresh, night }: Ctx) {
   // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
   const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   const pick = (ask: string, bot?: string) => {
-    if (!address.trim()) { setOther(true); input.current?.focus(); return KEPT; }
     return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
     <Split className="fr-hello" mark={<Face who="chief" size={88} />} title={`${A.greeting()}${address.trim() ? `, ${address.trim()}` : ''}.`}
       lead="I'm Chief. I run a small crew of helpers that live on this computer and work for you.">
       {other
-        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
+        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name, if you like" /></label>
         : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
       <h2 className="st-label plate"><span>What can I take off your plate?</span></h2>
       <div className="ideas">
@@ -202,6 +201,17 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
         {h.computer && <button className="btn" onClick={() => attempt(async () => { await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>Take control</button>}
         <button className="btn ghost" onClick={() => { leftAlone.set(h.id, h.quietSince); redraw((n) => n + 1); }}>Leave it</button>
       </div>
+    </div>
+  );
+}
+
+/** A running helper's own controls, in its chat: Stop, Take control (a helper with a computer), and the way back to its screen once you hold it. */
+function LiveControl({ h, word, refresh }: { h: A.Helper; word: string; refresh: () => void }) {
+  return (
+    <div className="live-ctl" role="group" aria-label={`Control ${h.name}`}>
+      <span className="grow"><i className={h.driving ? 'dot you' : 'dot'} aria-hidden />{h.driving ? 'You have control' : word}</span>
+      {h.computer && <button className="btn go" onClick={() => attempt(async () => { if (!h.driving) await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>{h.driving ? 'Open screen' : 'Take control'}</button>}
+      <button className="btn" onClick={() => attempt(async () => { await api.reset(h.id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>
     </div>
   );
 }
@@ -560,7 +570,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const sentTo = waiting && pending ? pending.at : undefined;
   useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
   // Out of reach, the chat reads as it was kept: no live line, since nothing it shows is still running (A.officeAway).
-  const ln = page && !offline ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
+  const ln = page && !offline && state.bots?.find((x: { id: string }) => x.id === id)?.controls !== 'person' ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
@@ -828,9 +838,9 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
 const QUIET_MS = 4000;
 function LiveRow({ ln, quiet, chipped, replied, asked, who }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean; asked: boolean; who?: A.Helper }) {
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
-  const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
+  const word = ln.stopped ? 'Stopped' : ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there; a failed one waits for its reply, so the line never shows alone before it.
-  if (ln.took !== undefined) return chipped || (!ln.helper && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
+  if (ln.took !== undefined) return chipped || (!ln.helper && !ln.stopped && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>}</div>;
   const at = ln.todos.findIndex((s) => s.state === 'doing');
   return <div className={`line them live-line ${ln.state}`}><div className="line-by" aria-hidden><Face who="chief" size={36} /></div>
@@ -956,9 +966,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={44} />
             <div className="grow"><b>{h.name}</b><span className="st-reading">Reading along</span></div>
-            {b?.task?.state === 'working' && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <a className="st-gear" href={`#/h/${id}/details`} aria-label={`${name}'s profile`}><Icon name="crew" /></a>
           </header>
+          {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
       </>}
