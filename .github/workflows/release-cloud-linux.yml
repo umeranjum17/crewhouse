@@ -19,7 +19,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node scripts/prepare-engine.mjs "$RUNNER_TEMP/engine-prepare"
       - run: npm run build:web
       - run: node scripts/package.mjs
       - run: cp dist/crewhouse-*-linux-x64.tar.gz dist/crewhouse-linux-x64.tar.gz
