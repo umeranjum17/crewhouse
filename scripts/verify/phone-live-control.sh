@@ -111,7 +111,7 @@ api /api/bots/research-rae | grep -q '"words":"Read lab-note.txt"' || fail "the 
 note "approve: job $J3 done after $taps tap(s) on Yes, go ahead: $(field result)"
 both approved "$CHAT" '.chat'
 # ---- 2. A live run, then Stop ----
-send "Please fetch https://example.com, then https://example.org, then https://www.iana.org/help/example-domains, one at a time. For each page tell me its title and one sentence about it. Then write a 150-word summary of all three."
+send "Please fetch https://example.com, then https://example.org, then https://www.iana.org/help/example-domains, then https://www.iana.org/domains/reserved, then https://www.iana.org/numbers, then https://www.iana.org/protocols, one at a time. For each page tell me its title and one sentence about it. Then write a 300-word summary of all six."
 J1=$(field id); [ "$J1" != "$J3" ] || fail "no live job"; wait_for "the first job to start" 30 state_is working
 wait_for "three engine steps" 150 steps_since "$J1" 3
 both live "$CHAT" '.live-ctl'
@@ -130,7 +130,7 @@ S=$(field steps); sleep 8; [ "$(field steps)" = "$S" ] || fail "a step arrived a
 note "stop: job $J1 ended 'Stopped by you.' with $S steps and none after"
 
 # ---- 3. Take control, then hand it back ----
-send "Please fetch https://example.com, then https://example.org, then https://www.iana.org/help/example-domains, one at a time. For each page give me its title and two sentences about it. Then write a 200-word comparison of all three."
+send "Please fetch https://example.com, then https://example.org, then https://www.iana.org/help/example-domains, then https://www.iana.org/domains/reserved, then https://www.iana.org/numbers, then https://www.iana.org/protocols, one at a time. For each page give me its title and two sentences about it. Then write a 400-word comparison of all six."
 J2=$(field id); [ "$J2" != "$J1" ] || fail "no second job"
 wait_for "two engine steps" 150 steps_since "$J2" 2
 open day "$CHAT" '.live-ctl'
