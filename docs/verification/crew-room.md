@@ -6,7 +6,7 @@
 
 `PATH=/usr/bin:$PATH CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir> <minimax-key-file>` (done-done journey `crew-room`, which spends a few model calls on that key). It boots an isolated crewd on the real engine, signs in to MiniMax through the key paste (the file is read into that request only), puts `MiniMax-M3.1-Flash` in Chief's `bot.json` (`CHAT_MODEL` overrides it), recruits Scout and Scribe, asks Chief for a job needing both and waits, bounded by `REPLY_SECONDS` (default 420), for his job to end `done`. It then reads `GET /api/room` into `room.json` and fails unless two `chief` to helper hand-off lines are there and the last line is Chief's standup. A job that ends `failed` or `unsure` fails the journey at once and keeps `thread.json` and the engine logs. `CREW_ASK` replaces the ask.
 
-Needs a MiniMax key file already on the machine, or with `CREW_ACCOUNT=openrouter` an `OPENROUTER_API_KEY` in the environment (no key-file argument; the model is OpenRouter's `auto`, since Flash's `:free` id is not a valid model in a bot's list). Never put a key in the repo or CI.
+Needs a MiniMax key file already on the machine, or with `CREW_ACCOUNT=openrouter` an `OPENROUTER_API_KEY` in the environment (no key-file argument; the model is OpenRouter's `minimax/minimax-m3.1-flash:free`). Never put a key in the repo or CI.
 
 ## Capture
 
