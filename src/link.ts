@@ -1,7 +1,6 @@
 // @byokit/pair owns encrypted pairing and grants. Crewhouse owns bind policy and person authority:
 // loopback and Tailscale, with temporary LAN access for desktop pairing only.
-import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process'; import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -45,10 +44,7 @@ export function phoneAddresses(hosts: string[], ifaces: Ifaces = networkInterfac
  *  signed out or its key ran out), `home` (none: phones reach it only on the home Wi-Fi). Direct `ws://` to the tailnet
  *  address, never Serve or Funnel: the link does its own encryption, and a shared computer is reachable the same way. */
 export type Anywhere = 'home' | 'anywhere' | 'signin';
-export async function tailscaleState(bound: boolean, bin = 'tailscale'): Promise<Anywhere> {
-  return anywhereOf(await kitTailscaleState({ bin, timeoutMs: 5000 }), bound);
-}
-const anywhereOf = (s: TailscaleState, bound: boolean): Anywhere =>
+export const anywhereOf = (s: TailscaleState, bound: boolean): Anywhere =>
   s.needsSignin || s.backendState === 'NeedsMachineAuth' || (s.backendState === 'Running' && s.keyExpiry && Date.parse(s.keyExpiry) < Date.now()) ? 'signin' : bound ? 'anywhere' : 'home';
 
 /** Peer membership is a discovery hint; undefined means Tailscale could not provide its peer map. */
@@ -84,11 +80,9 @@ export class Link {
   ifaces: () => Ifaces = networkInterfaces;
   bonjour?: Bonjour;
   tailscaleBin = 'tailscale';
-  private tailnetIPs: string[] = [];
-  private dns = ''; // this computer's Tailscale name
+  private tailnetIPs: string[] = []; private dns = ''; private anywhere: Anywhere = 'home'; // this computer's Tailscale addresses and name, and how far it reaches
   /** Expo's push service: it holds the app's Android push credential, so crewd sends with no secret of its own. */
   pushUrl = process.env.CREWHOUSE_PUSH_URL || 'https://exp.host/--/api/v2/push/send';
-  private anywhere: Anywhere = 'home';
   /** Whether the person is in their quiet hours now: their phones get no notification then. Set by the server. */
   quiet: () => boolean = () => false;
 
@@ -143,11 +137,8 @@ export class Link {
       for (const g of grants) if (!before.has(g.id)) {
         if (this.first?.claimed && (g.meta as any)?.first === this.first.token) this.put('link.owner', g.id);
         this.db.event('device.paired', null, { id: g.id, name: g.name, role: g.role });
-        const value = this.db.get("SELECT value FROM settings WHERE key = 'phone.offer.1'")?.value;
-        if (value && (g.meta as any)?.offer) {
-          const card = JSON.parse(value);
-          if (card.token === (g.meta as any).offer) this.db.run("UPDATE settings SET value = ? WHERE key = 'phone.offer.1'", JSON.stringify({ ...card, joined: g.name }));
-        }
+        const card = JSON.parse(this.setting('phone.offer.1') ?? 'null');
+        if (card && card.token === (g.meta as any)?.offer) this.put('phone.offer.1', JSON.stringify({ ...card, joined: g.name }));
       }
       for (const [id, g] of before) if (!grants.some((x) => x.id === id)) {
         this.db.run("DELETE FROM settings WHERE key IN (?, ?)", `phone.push.${id}`, `phone.reach.${id}`);
@@ -224,14 +215,14 @@ export class Link {
   /** A phone paired before Tailscale was installed, or before the home address moved, learns the new address while any
    *  route is up; the ones offline ask `GET /api/reach` when they reconnect. A wrong host there only fails its handshake. */
   private follow() {
-    const urls = this.urls();
-    if (!this.host || JSON.stringify(urls) === this.told) return;
-    this.told = JSON.stringify(urls);
+    const urls = this.urls(), json = JSON.stringify(urls);
+    if (!this.host || json === this.told) return;
+    this.told = json;
     this.host.broadcast({ kind: 'link.urls', data: { urls } });
   }
 
   async setLan(on: boolean) {
-    this.db.run("INSERT INTO settings (key, value) VALUES ('link.lan', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", on ? '1' : '0');
+    this.put('link.lan', on ? '1' : '0');
     this.db.event('link.lan', null, { on });
     await this.bind();
   }
@@ -241,8 +232,7 @@ export class Link {
   get relayPublic(): string { return this.cfg.relayPublic || this.relay; }
   setRelay(url: string | null, enrol?: string) {
     const next = relayOrigin(url);
-    if (next === null) this.db.run("DELETE FROM settings WHERE key = 'link.relay'");
-    else this.put('link.relay', next);
+    next === null ? this.db.run("DELETE FROM settings WHERE key = 'link.relay'") : this.put('link.relay', next);
     if (enrol?.trim()) this.put('link.relay.enrol', enrol.trim()); // spent after registration
     this.db.event('link.relay', null, { on: !!this.relay });
     this.dial();
@@ -252,8 +242,7 @@ export class Link {
   /** The https address of this computer's own web app (served on the link port): the QR links to it, as an https page can dial nothing else. Tailscale's (`serve` on link port + 1, as `./crewhouse phones web`) or the person's own server's. */
   get web(): string { return this.setting('link.web') ?? ''; }
   async setWeb(on: boolean, address?: string) {
-    const port = this.cfg.linkPort + 1, own = this.dns && `https://${this.dns}:${port}`, fail = (m: string) => Object.assign(new Error(m), { status: 409 });
-    const serve = (...a: string[]) => promisify(execFile)(this.tailscaleBin, ['serve', `--https=${port}`, ...a], { timeout: 15_000 });
+    const port = this.cfg.linkPort + 1, own = this.dns && `https://${this.dns}:${port}`, fail = (m: string) => Object.assign(new Error(m), { status: 409 }), serve = (...a: string[]) => promisify(execFile)(this.tailscaleBin, ['serve', `--https=${port}`, ...a], { timeout: 15_000 });
     if (own && this.web === own && (!on || address)) await serve('off').catch(() => {});
     if (address && !/^https?:\/\/[^/\s]+/.test(address)) throw fail('a web address starts with https://');
     if (on && !address && !own) throw fail('Tailscale is not signed in on this computer. Open Tailscale here and sign in first.');
@@ -262,7 +251,6 @@ export class Link {
     if (to) this.put('link.web', to); else this.db.run("DELETE FROM settings WHERE key = 'link.web'");
     this.db.event('link.web', null, { on: !!to });
   }
-
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
   private dial() {
     this.client?.stop(); this.client = undefined; this.relayStatus = 'off';
@@ -306,10 +294,8 @@ export class Link {
     s.onData = async (chunk) => {
       buf += new TextDecoder().decode(chunk);
       if (buf.length > 1 << 20) return s.end('too-large');
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i);
-        buf = buf.slice(i + 1);
+      const lines = buf.split('\n'); buf = lines.pop()!;
+      for (const line of lines) {
         let msg: any;
         try { msg = JSON.parse(line); } catch { continue; }
         try { send({ id: msg.id, result: await desk.signal(bot, watcher, String(msg.method), msg.params ?? {}, g.role === 'control') }); }
