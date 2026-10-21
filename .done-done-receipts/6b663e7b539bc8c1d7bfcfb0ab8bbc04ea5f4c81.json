@@ -1,0 +1,68 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "6b663e7b539bc8c1d7bfcfb0ab8bbc04ea5f4c81",
+  "tree": "b28b7f7516f160d55b047742fb603df7da507f7e",
+  "claim": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+  "result": "pass",
+  "at": "2026-10-21T07:57:31.485Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/chat-real/chief-day-390.png",
+      "sha256": "cec0b18508425ba1724ad73371cbbe9a454db1e4dba09b88de7e6858fe4e3b65"
+    },
+    {
+      "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/chat-real/chief-night-390.png",
+      "sha256": "87ee79e6dc57f04f93348b00c8a94a96732c74480ad17849008e607781760057"
+    },
+    {
+      "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/reply.txt",
+      "sha256": "41de99dbd193c7caa6f50f2cda595f151d33a1aaa05042b6afb9445f995552c4"
+    },
+    {
+      "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/timeline.txt",
+      "sha256": "ea7daaa2546f7139320baf88db15b26c1f82012744ed0eb1ee72fb693fad81ca"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T075537Z-6b663e7b-931cc1",
+      "journey": "chat-real",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/chat-real.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\""
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/chat-real/chief-day-390.png",
+        "sha256": "cec0b18508425ba1724ad73371cbbe9a454db1e4dba09b88de7e6858fe4e3b65",
+        "verdict": "pass",
+        "seen": "The newest message is at the bottom of Chief's thread: 'Good morning, Captain.' It follows 'You're signed in. I'll start now.' and the earlier 'Sign in when you're ready' prompt. The user's unnamed request ('Good morning Chief. Please say hello back...') sat through sign-in and then got a real reply in the same thread, which matches the outcome. Minor doubt: the reply is a greeting rather than the requested one-sentence hello, but it is still a genuine reply."
+      },
+      {
+        "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/chat-real/chief-night-390.png",
+        "sha256": "87ee79e6dc57f04f93348b00c8a94a96732c74480ad17849008e607781760057",
+        "verdict": "pass",
+        "seen": "The newest messages at the bottom of Chief's thread read \"The crew uses your AI account. Sign in when you're ready and I'll start.\", then \"You're signed in. I'll start now.\", then \"Good morning, Captain.\" This shows the wait for AI sign-in followed by a real reply from Chief. The outcome's no-name detail is not clearly visible, since the sent message says \"Good morning Chief\", so some doubt remains."
+      },
+      {
+        "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/reply.txt",
+        "sha256": "41de99dbd193c7caa6f50f2cda595f151d33a1aaa05042b6afb9445f995552c4",
+        "verdict": "pass"
+      },
+      {
+        "path": "<evidence root>/20261021T075537Z-6b663e7b-931cc1/timeline.txt",
+        "sha256": "ea7daaa2546f7139320baf88db15b26c1f82012744ed0eb1ee72fb693fad81ca",
+        "verdict": "pass",
+        "seen": "I read all 8 entries. The first request was sent at 1792569362.209939872, the key sheet opened at 1792569362.219776577, the key was pasted at 1792569389.306283550, and sign-in completed at 1792569389.357215877. The first Chief reply arrived at 1792569415.149620729, and the engine log shows model minimax/minimax-m3.1-flash:free answered at 1792569415.161169025. That matches the outcome: the request waited for AI sign-in, then got a real reply from Chief. The capture does not show the no-name condition or the thread directly, so I leave some room for unclear."
+      }
+    ]
+  }
+}
