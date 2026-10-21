@@ -118,8 +118,7 @@ export class OpenClawRuntime implements AgentRuntime {
     if (had?.display === screen.DISPLAY && had.child.exitCode === null) return name;
     had?.child.kill();
     const { entry, env } = this.kit.doctorContext(), dir = join(this.stateDir, 'nodes', bot), port = readFileSync(join(this.stateDir, 'openclaw', 'port'), 'utf8').trim();
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'openclaw.json'), JSON.stringify({ plugins: { entries: { 'cua-computer': { enabled: true } } } }));
+    mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'openclaw.json'), JSON.stringify({ plugins: { entries: { 'cua-computer': { enabled: true } } } }));
     const child = spawn(process.execPath, [entry, 'node', 'run', '--host', '127.0.0.1', '--port', port, '--no-tls', '--display-name', name], { cwd: dir, stdio: 'ignore', env: {
       PATH: env.PATH, LANG: env.LANG, HOME: dir, TMPDIR: dir, OPENCLAW_STATE_DIR: dir, OPENCLAW_CONFIG_PATH: join(dir, 'openclaw.json'), OPENCLAW_GATEWAY_TOKEN: env.OPENCLAW_GATEWAY_TOKEN,
       OPENCLAW_NO_RESPAWN: '1', OPENCLAW_DISABLE_BONJOUR: '1', XDG_SESSION_TYPE: 'x11', ...screen } });
@@ -180,15 +179,8 @@ export class OpenClawRuntime implements AgentRuntime {
 
   async signOut(account: string) { this.listed = undefined; const provider = await this.routeOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
 
-  /** The engine's model catalog, read once for the picker, a MiniMax key's default and each run's thinking check (the read is slow under load); a sign-in or sign-out reads it again, because availability changes. */
-  private listed?: { at: number; read: Promise<{ models?: any[] }> };
-  private catalog() {
-    if (!this.listed || Date.now() - this.listed.at > 300_000) {
-      const read = this.kit.ensureMember(ME).then(({ agentId }) => this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 })); // 'all' is the kit's account read (default lists nothing)
-      read.catch(() => { this.listed = undefined; }); this.listed = { at: Date.now(), read };
-    }
-    return this.listed.read;
-  }
+  private listed?: Promise<{ models?: any[] }>; // the catalog, read once for the picker, a MiniMax key's default and each run's thinking check (slow under load); a sign-in or sign-out reads it again
+  private catalog() { return this.listed ??= this.kit.ensureMember(ME).then(({ agentId }) => this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 })).catch((e) => { this.listed = undefined; throw e; }); } // 'all' is the kit's account read (default lists nothing)
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
     const provider = await this.routeOf(account), signed = ['openai-codex', 'minimax'].includes(provider) && await this.kit.signedIn(ME, provider), r = await this.catalog(); // the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in

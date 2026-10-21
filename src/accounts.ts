@@ -59,8 +59,7 @@ export class Accounts {
     if (this.expired.has(account) || this.excluded.has(account)) return false;
     const r = this.ready.get(account);
     if (r !== undefined) return r;
-    const hit = this.fresh.get(account);
-    if (hit && hit.until > Date.now()) return hit.yes;
+    const hit = this.fresh.get(account); if (hit && hit.until > Date.now()) return hit.yes;
     const yes = await this.runtime.signedIn(account).catch(() => undefined); // a failed probe says nothing and is asked again
     if (yes !== undefined) this.fresh.set(account, { until: Date.now() + (yes ? 60_000 : 10_000), yes });
     return !!yes;
