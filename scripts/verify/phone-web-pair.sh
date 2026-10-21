@@ -41,13 +41,14 @@ done
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
+AI=${AI:-minimax}; AINAME=MiniMax; [ "$AI" = openrouter ] && AINAME=OpenRouter # AI=openrouter: the same journey on an OpenRouter key when the MiniMax plan rests
+api /api/accounts/1/$AI/login -d '{"via":"key"}' > /dev/null
 node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
-  api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "phone-web-pair: MiniMax did not take the key" >&2; exit 1; }
-MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$MODEL"
+  api /api/accounts/1/$AI/paste --max-time 120 --data-binary @- > /dev/null
+for _ in $(seq 120); do api /api/accounts | grep -q "\"account\":\"$AI\",\"name\":\"$AINAME\",\"signedIn\":true" && break; sleep 0.5; done
+api /api/accounts | grep -q "\"account\":\"$AI\",\"name\":\"$AINAME\",\"signedIn\":true" || { echo "phone-web-pair: $AINAME did not take the key" >&2; exit 1; }
+MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}; [ "$AI" = openrouter ] && MODEL=${CHAT_MODEL:-minimax/minimax-m3}
+node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$MODEL" "$AI"
 echo "phone-web-pair: model $MODEL"
 
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
