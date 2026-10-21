@@ -10,7 +10,7 @@
 # an engine install to reuse (CREWHOUSE_ENGINE_DIR), so a run can time the steps after the one-off install.
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
-# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words), model-calls.log (the engine's model calls) in <out-dir>, and crewd.log only on a failure; non-zero when no reply
+# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words), timeline.txt in <out-dir>, and crewd.log only on a failure; non-zero when no reply
 # arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
@@ -84,7 +84,7 @@ api /api/bots/chief > "$OUT/thread.json" || true
 cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
 # A MiniMax key starts on Flash with nothing picked by hand: the engine's own log names the model that answered.
 grep -q "\[model-fetch\] response provider=$A .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "chat-real: the reply did not come from $MODEL" >&2; exit 1; }
-grep "\[model-fetch\]" "$OUT/openclaw-events.log" > "$OUT/model-calls.log"; rm -f "$OUT/openclaw-events.log" # the judge reads 64 KB at most: keep only the model calls
+rm -f "$OUT/openclaw-events.log" # the assertion above is the proof of the model; the raw log is over the judge's 64 KB read
 echo "chat-real: model $MODEL"
 printf 'Chief replied, on %s (named in the engine log), to a first request typed with no name, after a %s key sign-in:\n%s\n' "$MODEL" "$N" "$R" > "$OUT/reply.txt"; mark "model $MODEL answered (engine log)"; rm -f "$OUT/openclaw.log" "$OUT/thread.json"; OK=1
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
