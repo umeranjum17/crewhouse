@@ -3,7 +3,7 @@
 import { boat, errorKey, machine, MachineError, pairEnrol, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
 import { b64url, hostId, unb64url, type DeviceGrant, type KeyPair } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
-import { LINUX_DOWNLOAD } from './adapter.ts';
+import { CLOUD, LINUX_DOWNLOAD } from './adapter.ts';
 
 export const BOAT = { label: 'boat.dev', api: 'https://boat.dev/api/v1' };
 const vars = { app: 'Chief', label: BOAT.label };
@@ -17,19 +17,34 @@ export const cost = () => `$${PRICES[0].perHour}/hour · about $${(PRICES[0].per
  *  admits only this computer, so no Crewhouse server sits in the middle and Tailscale is never needed. A lab build names
  *  its own download and extra run settings (`lab`). */
 export const RELAY_PORT = 7300;
-export const recipe = (relay: string, lab: { download?: string; env?: Record<string, string> } = {}) => ({
-  name: 'crewhouse', workDir: '/home/user/crewhouse',
+/** Where the app's own files live on the computer; the kit's folder (.byokit, with this phone's key and the receipt)
+ *  is a sibling of it, and the download unpacks into `crewhouse` inside it. */
+export const WORK_DIR = '/home/user/crewhouse';
+export const recipe = (relay: string, lab: { download?: string; env?: Record<string, string> } = {}, workDir = WORK_DIR) => ({
+  name: 'crewhouse', workDir,
   node: { version: '24.21.0', sha256: { 'linux-x64': 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6', 'linux-arm64': '6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2' } },
   install: [['curl', '-fsSLo', 'crewhouse.tar.gz', lab.download || LINUX_DOWNLOAD],
-    ['tar', '-xzf', 'crewhouse.tar.gz'], ['env', `CREWHOUSE_RELAY_PUBLIC=${relay}`, 'crewhouse/app/crewhouse', 'setup', '--headless', '--install-only']],
-  run: { argv: ['node', 'crewhouse/app/scripts/headless.mjs', 'serve'], env: { CREWHOUSE_RELAY_PUBLIC: relay, CREWHOUSE_CLOUD_DIR: '/home/user/crewhouse/.byokit', ...lab.env } },
+    // The download unpacks read-only files (the engine set is locked), so unpacking it over an earlier install
+    // fails with "File exists" and the retry can never work. The old tree is made writable and removed first,
+    // so a second run installs exactly like the first one did. Only the app's own folder goes: the kit's folder
+    // (.byokit, with this phone's key and the receipt) is its sibling and stays.
+    ['sh', '-c', `chmod -R u+w ${workDir}/crewhouse 2>/dev/null; rm -rf ${workDir}/crewhouse`],
+    ['tar', '-xzf', 'crewhouse.tar.gz'],
+    ['env', `CREWHOUSE_RELAY_PUBLIC=${relay}`, 'crewhouse/app/crewhouse', 'setup', '--headless', '--install-only']],
+  run: { argv: ['node', 'crewhouse/app/scripts/headless.mjs', 'serve'], env: { CREWHOUSE_RELAY_PUBLIC: relay, CREWHOUSE_CLOUD_DIR: `${workDir}/.byokit`, ...lab.env } },
 });
 
 /** The person's boat.dev; a lab build passes its fixture's address. */
 export const provider = (key: () => Promise<string>, api = BOAT.api): Provider => boat({ baseUrl: api, label: BOAT.label, prices: PRICES, key });
 
-/** Chief's words for a kit failure. */
-export const said = (e: unknown) => words(e instanceof MachineError ? errorKey(e) : 'error.app', vars);
+/** The app's own refusal carries its own code, so its words can name what went wrong. */
+const refuse = (code: string, message: string) => Object.assign(new Error(message), { code });
+
+/** Chief's words for a kit failure, and for the app's own refusals. */
+export const said = (e: unknown) => {
+  const code = typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : '';
+  return CLOUD.problem[code] ?? words(e instanceof MachineError ? errorKey(e) : 'error.app', vars);
+};
 
 /** Paste: boat.dev reads the account and lists its computers; only a key it accepted is kept. */
 export async function checkKey(p: Provider, store: MachineStore, key: string): Promise<MachineRef[]> {
@@ -40,16 +55,39 @@ export async function checkKey(p: Provider, store: MachineStore, key: string): P
   return listed;
 }
 
+/** One setup at a time per store: a retry must not race the run it retries. */
+const running = new WeakSet<MachineStore>();
+
 /** Use this computer: the computer's public relay address, then the kit's setup steps for the one the person picked,
  *  ending with this phone's key on it. The kit's `pairing` receipt comes back as this phone's link grant (`grant`). */
 export async function* connect(p: Provider, store: MachineStore, picked: MachineRef, phone: KeyPair, lab?: Parameters<typeof recipe>[1]): AsyncGenerator<SetupStep & { grant?: DeviceGrant }> {
-  const pick = (listed: MachineRef[]) => listed.find((r) => r.id === picked.id) ?? (() => { throw new MachineError('no-machine', 'the picked computer is gone'); })();
-  const hosted = await p.url!(picked, RELAY_PORT);
-  if (!hosted) throw new MachineError('provider', 'boat.dev gave the computer no public address');
-  const relay = new URL(hosted).origin, r = recipe(relay, lab);
-  for await (const s of setup({ provider: p, store, recipe: r, pick, confirmId: picked.id, pair: pairEnrol(machine({ provider: p, store }), r, phone.publicKey) })) {
-    yield s.step === 'pairing' && s.receipt
-      ? { ...s, grant: { v: 1, secretKey: b64url(phone.secretKey), hostName: 'Your cloud computer', host: s.receipt.host, device: s.receipt.device, urls: [linkUrl(relay, hostId(unb64url(s.receipt.host)))] } } : s;
+  if (running.has(store)) throw refuse('setup-running', 'a setup is already running on this phone');
+  running.add(store);
+  try {
+    const pick = (listed: MachineRef[]) => listed.find((r) => r.id === picked.id) ?? (() => { throw new MachineError('no-machine', 'the picked computer is gone'); })();
+    const hosted = await p.url!(picked, RELAY_PORT);
+    if (!hosted) {
+      // No address: the computer is gone from the account, or boat.dev gave it none. The person needs
+      // to know which one it is, so the app asks before it says anything.
+      const gone = (await p.status(picked)) === 'gone';
+      throw refuse(gone ? 'computer-gone' : 'no-address', gone ? 'the picked computer is gone' : 'boat.dev gave the computer no public address');
+    }
+    const kept = await store.load();
+    // The kit adopts one computer per store. The computer this phone already has is set up again (the kit
+    // reuses it, so a retry installs on it and carries on); any other one replaces it in the store, so the
+    // kit can adopt that one instead. The computers themselves are never touched: they stay in the
+    // person's boat.dev account, rented and billed there.
+    if (kept?.ref && kept.ref.id !== picked.id) await store.save({ ...kept, ref: null });
+    const relay = new URL(hosted).origin, r = recipe(relay, lab);
+    // The kit's machine keeps the record it read, so it reads the store through this view: it sees the
+    // computer this run released, not the one an earlier run held.
+    const s: MachineStore = { load: () => store.load(), save: (record) => store.save(record) };
+    for await (const step of setup({ provider: p, store: s, recipe: r, pick, confirmId: picked.id, pair: pairEnrol(machine({ provider: p, store: s }), r, phone.publicKey) })) {
+      yield step.step === 'pairing' && step.receipt
+        ? { ...step, grant: { v: 1, secretKey: b64url(phone.secretKey), hostName: 'Your cloud computer', host: step.receipt.host, device: step.receipt.device, urls: [linkUrl(relay, hostId(unb64url(step.receipt.host)))] } } : step;
+    }
+  } finally {
+    running.delete(store);
   }
 }
 
@@ -58,11 +96,15 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
  *  receipt finishes the last two (its tailnet `securing` step isn't used). */
 const DONE: Partial<Record<SetupStep['step'], number>> = { 'checking-access': 1, inspecting: 2, installing: 3, pairing: 5, ready: 5 };
 const AT = { 'checking-access': 0, listing: 1, inspecting: 1, installing: 2, securing: 3, pairing: 3 };
+/** The kit's words for a failed step. The one failure the app itself causes is the picked computer being
+ *  gone: the kit lists the account's computers and the app's pick cannot find it, which the kit words as a
+ *  plain problem. The app knows what happened, so it says that. */
+const whyOf = (s: Extract<SetupStep, { step: 'failed' }>) => (s.at === 'listing' && s.cause === 'error.app' ? CLOUD.problem['computer-gone'] : words(s.cause, vars));
 export const progress = (steps: SetupStep[], thrown = '') => {
   const last = steps.at(-1);
   const done = Math.max(0, ...steps.map((s) => DONE[s.step] ?? 0));
   // A step fails only after every row before it passed: adopt() installs before the kit says inspecting.
-  if (last?.step === 'failed') return { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: words(last.cause, vars), retry: last.retryable };
+  if (last?.step === 'failed') return { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: whyOf(last), retry: last.retryable };
   // A throw, not a kit step: the kit names each step once it finishes, so setup was on the next row (none before the first).
   return thrown ? { done, failed: last && done < 5 ? done : -1, why: thrown, retry: true } : { done, failed: -1, why: '', retry: false };
 };

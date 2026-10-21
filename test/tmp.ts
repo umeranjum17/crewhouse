@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +8,8 @@ const parent = mkdtempSync(join(tmpdir(), 'crewhouse-test-'));
 // test root, unless a test drives the house-client path itself and sets its own.
 process.env.CREWHOUSE_GOOGLE_CLIENT ??= join(parent, 'google-oauth-client.json');
 // A browser a test stopped can still be writing its profile for a moment on a slow disk: retry briefly.
-const clean = () => rmSync(parent, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+// The kit's engine files are read-only, so the tree is made writable first (as the run home does).
+const clean = () => { spawnSync('chmod', ['-R', 'u+w', parent]); rmSync(parent, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); };
 process.once('exit', clean);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { clean(); process.kill(process.pid, signal); });
 export const temp = (name: string) => {

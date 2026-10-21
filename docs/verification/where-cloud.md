@@ -28,6 +28,15 @@ completed-step display. A setup exception marks the row
   grant: Ready says Chief knows this phone, and Talk to Chief opens the app on that computer, where Chief answers.
   Other ways lists the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
   hardware back, return one step. A kept key skips the paste on the next visit.
+- The setup is repeatable, not a once-per-phone thing. Try again on the same computer sets it up again: the
+  install runs again over the computer that already has Chief (the download unpacks read-only files, so the
+  recipe makes the old tree writable and clears it first, and the kit's own folder with this phone's key stays),
+  the phone pairs again, and the card reaches "Chief is on your cloud computer." Picking another computer in the
+  same account replaces the one the phone had (the computer itself stays in the person's boat.dev account), and
+  the phone's computer is the one the person picked.
+- The app's own refusals are named, not one generic line: a computer that is gone from the account ("That
+  computer is not in your boat.dev account any more. Pick another one."), a computer boat.dev gave no public
+  address, and a setup already running on this phone.
 - Web: On my computer opens the Pair sheet ([pwa-pair.md](pwa-pair.md)); the cloud and phone rows open "Use the
   phone app to set this up" with the app's download code.
 
@@ -36,7 +45,14 @@ completed-step display. A setup exception marks the row
 Journey test (fake boat.dev plus a real headless runner on the stub engine, the provider's public port stood in by
 the runner's published relay): `node --test test/cloud-connect.test.ts`. It walks key, pick, a failed install,
 setup to ready, the receipt's grant reaching Chief, owner authority, a phone refused at `/api/phones/enrol`, and a
-restart that keeps the binding (a second phone's key is refused).
+restart that keeps the binding (a second phone's key is refused). It also walks the retry: the same computer set
+up a second time (the install runs again, the phone pairs again, the card reaches ready), another computer in the
+same account replacing the one the phone had, and the app's own refusals (a computer that is gone, a setup already
+running).
+
+The install on a real disk, with the download the person really gets (read-only files, so unpacking it over an
+earlier install failed with "File exists"): `node --test test/cloud-install.test.ts`. It runs the recipe's own
+install steps twice in one work directory and reads the tree back; the kit's own folder survives the second run.
 
 Web, from the repo root:
 
@@ -52,6 +68,12 @@ one seeded computer. Script the install's `curl` to fail, then pass, with `serve
 the flagged APK with `EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:<port>/api/v1`, and `adb reverse` that port.
 Changing an `EXPO_PUBLIC_*` value needs Metro's cache (`$TMPDIR/metro-cache`) cleared, or the bundle keeps the old
 value: grep `assets/index.android.bundle` in the APK for the address before you use it.
+
+The retry (the phone's own Try again) needs the fake's computer to have a real host behind it, or the pairing step
+waits for a receipt that never comes: run the repo's own headless host (`scripts/headless.mjs`) with
+`CREWHOUSE_CLOUD_DIR` set, and bridge the fake's inbox to the host's inbox and the host's receipt back to the fake's
+outbox (the journey test does the same). Script the install's `curl` to fail, tap Use this computer, then let the
+`curl` pass and tap Try again: the card reaches "Chief is on your cloud computer." with Talk to Chief.
 
 The emulator has no shell clipboard, and the key box only reads it. So type the key into the pairing-code
 field (On my computer › Type the code), then `input keycombination 113 29` (select all), `113 31` (copy) and
@@ -91,6 +113,9 @@ documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /
 
 Each screen (day and night) beside its mock, the web screen at 390 and 1440, and one recording of Use this computer
 through the progress list (`adb shell screenrecord`).
+
+The retry adds one recording of the failed install through Try again to "Chief is on your cloud computer.", with a
+still of each step: the row that failed with its "!", and the card after the retry.
 
 The real run adds one phone-side recording from Paste key to Chief's reply in the chat, with stills of each step and of
 the reply by day and night, and the service journal from the computer (`/logs`): the owner phone enrolled, the engine

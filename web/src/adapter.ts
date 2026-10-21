@@ -160,6 +160,12 @@ export const CLOUD = {
     foot: 'boat.dev first. Hetzner setup comes later. Every computer and cloud account stays yours.',
   },
   trust: ['Your chats travel encrypted between this phone and Chief’s computer. Your cloud company can access files on that computer.', 'Your cloud bill. No Crewhouse server in the middle.'],
+  /** The app's own refusals, in plain words, each under its own code. The kit's own failures keep the kit's words. */
+  problem: {
+    'computer-gone': 'That computer is not in your boat.dev account any more. Pick another one.',
+    'no-address': 'boat.dev gave that computer no public address. Try another computer.',
+    'setup-running': 'Setup is already running on this phone. Wait for it to finish.',
+  } as Record<string, string>,
 };
 
 // ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer) ----------
