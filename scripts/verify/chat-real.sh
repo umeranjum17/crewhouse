@@ -11,8 +11,10 @@
 # with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and crewd.log in <out-dir>; non-zero when no reply
 # arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
 set -euo pipefail
-[ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
-KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "chat-real: no key in the key file" >&2; exit 2; }
+[ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <key-file | ->  (CHAT_ACCOUNT, CHAT_KEY_ENV, CHAT_MODEL)" >&2; exit 2; }
+ACCOUNT=${CHAT_ACCOUNT:-minimax}; KEYFILE=$2
+if [ -n "${CHAT_KEY_ENV:-}" ]; then [ -n "${!CHAT_KEY_ENV:-}" ] || { echo "chat-real: \$$CHAT_KEY_ENV is empty" >&2; exit 2; }; # the key stays in that variable, by name only
+else [ -s "$KEYFILE" ] || { echo "chat-real: no key in the key file" >&2; exit 2; }; fi
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
@@ -52,15 +54,16 @@ echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s a
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
-node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
-  api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chat-real: MiniMax did not take the key" >&2; exit 1; }
+api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
+node -e 'const e = process.env.CHAT_KEY_ENV; process.stdout.write(JSON.stringify({ text: (e ? process.env[e] : require("node:fs").readFileSync(process.argv[1], "utf8")).trim() }))' "$KEYFILE" |
+  api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
+for _ in $(seq 120); do api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
+api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "chat-real: $ACCOUNT did not take the key" >&2; exit 1; }
 # Flash is the model under test. The picker (PUT .../minimax/model) cannot choose it: the engine's catalog lists a key
 # sign-in's models as unavailable, so the lab names it in Chief's own bot.json, which every turn reads.
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL"
+[ "$ACCOUNT" = minimax ] || api "/api/accounts/1/$ACCOUNT/model" | node -e 'console.log("chat-real: minimax models on " + process.argv[1] + ": " + (JSON.parse(require("node:fs").readFileSync(0, "utf8")).models ?? []).map((m) => m.id).filter((id) => /minimax/i.test(id)).join(" "))' "$ACCOUNT" | tee "$OUT/models.txt"
+node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL" "$ACCOUNT"
 echo "chat-real: model $MODEL"
 ASK='Good morning Chief. Please say hello back in one short sentence.'
 api /api/bots/chief/messages -d "{\"text\":\"$ASK\"}" > /dev/null
