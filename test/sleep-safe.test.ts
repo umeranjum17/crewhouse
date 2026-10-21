@@ -10,19 +10,19 @@ import { Crew } from '../src/crew.ts';
 
 const HOUR = 3_600_000;
 
-test('the hourly cap counts running time, not age since the job was made', async () => {
+test('the hourly cap counts time waiting on the person, not age since the job was made', async () => {
   const { db, crew, done } = lab();
   try {
     crew.recruit('reel', 'Reel', 'person');
     const old = Date.now() - 2 * HOUR;
-    // Made long ago (a resume keeps its creation time) but (re)started just now.
-    const id = Number(db.run("INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, member) VALUES ('reel', 't', 'b', 'person', 'working', ?, ?, 1)", old, Date.now()).lastInsertRowid);
+    // Made long ago (a resume keeps its creation time) but waiting only just now.
+    const id = Number(db.run("INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, member) VALUES ('reel', 't', 'b', 'person', 'needs_you', ?, ?, 1)", old, Date.now()).lastInsertRowid);
     (crew as any).tick();
-    assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'working', 'a freshly running job survives the cap');
-    // A job actually running over an hour still stops.
+    assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'needs_you', 'a freshly waiting job survives the cap');
+    // A job left waiting over an hour still stops.
     db.run('UPDATE tasks SET updated_at = ? WHERE id = ?', old, id);
     (crew as any).tick();
-    assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'failed', 'a runaway job still stops');
+    assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', id)!.state, 'failed', 'a job left waiting still stops');
   } finally { done(); }
 });
 
