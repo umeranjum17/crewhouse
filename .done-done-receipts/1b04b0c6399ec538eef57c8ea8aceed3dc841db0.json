@@ -1,0 +1,123 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "1b04b0c6399ec538eef57c8ea8aceed3dc841db0",
+  "tree": "d4d391b7e909f8c5fc714fd080076796c2c5ef08",
+  "claim": "Chief's chat shows his message that a helper's job has been quiet for a while",
+  "result": "pass",
+  "at": "2026-10-21T09:44:22.291Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-night-390.png",
+      "sha256": "fc30c14de675ba9860e83962d418a0731b40a91b1371af849255769a9362d502"
+    },
+    {
+      "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-night-1280.png",
+      "sha256": "4de00430a19ceaae4c8a088034114fbe02f7532a88836a000d89c165ca0eedd7"
+    },
+    {
+      "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-day-390.png",
+      "sha256": "507905a9cee5e588eeb43ec42ee19f920ef0828aa9053d5e1ec32d8706ee92d9"
+    },
+    {
+      "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-day-1280.png",
+      "sha256": "509758d3ba087519c1d8419ce60049752ef06626b1acb27d8f7fc75e8a885e8c"
+    },
+    {
+      "path": "<evidence root>/20261021T094316Z-1b04b0c6-70b021/quiet-nudge-pwa/chief-night-390.png",
+      "sha256": "13319c6040436bafacbf7421357d33e87107541f270cd681b16b7eaf3a59bb12"
+    },
+    {
+      "path": "<evidence root>/20261021T094316Z-1b04b0c6-70b021/quiet-nudge-pwa/chief-day-390.png",
+      "sha256": "74d12e352751fb7263d3bac191e6e3ab04d0dd955a9ff18a127dfa0e3b628fcb"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T094301Z-1b04b0c6-0e80b3",
+      "journey": "quiet-nudge",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh \"$DONE_DONE_EVIDENCE_ROOT\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "0.1.1"
+        },
+        "start": "a fresh stub-engine crewd with one helper",
+        "steps": [
+          "A helper job is held mid-run",
+          "Its recorded activity is five hours old, so crewd tick finds it quiet",
+          "Chief thread shows one line that the job has been quiet",
+          "Later ticks add no second line",
+          "Chief thread is captured at 390 and 1280, day and night",
+          "The job activity is 25 hours old and crewd stops it"
+        ],
+        "result": "Chief thread holds one plain line about the quiet job, and the job ended unsure"
+      }
+    },
+    {
+      "run_id": "20261021T094316Z-1b04b0c6-70b021",
+      "journey": "quiet-nudge-pwa",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 600 bash scripts/verify/quiet-nudge-pwa.sh \"$DONE_DONE_EVIDENCE_ROOT\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "0.1.1"
+        },
+        "start": "a fresh stub-engine crewd with one helper",
+        "steps": [
+          "A 390-wide browser app pairs with the computer by a relay code and the two words",
+          "A helper job is held mid-run and its recorded activity moved back five hours",
+          "crewd tick finds it quiet",
+          "The paired app Chief thread shows one line that the job has been quiet"
+        ],
+        "result": "The paired phone-sized app shows Chief one quiet-job line, day and night"
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-night-390.png",
+        "sha256": "fc30c14de675ba9860e83962d418a0731b40a91b1371af849255769a9362d502",
+        "verdict": "pass",
+        "seen": "The newest Chief message at the bottom of the thread reads: \"'Compare six phone plans that keep my number, and ask...' has been quiet for a while. I'll let you know if it doesn't pick up.\" That matches the outcome, which says Chief's chat shows his message that a helper's job has been quiet for a while. The outcome names one part, so parts and covers are empty."
+      },
+      {
+        "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-night-1280.png",
+        "sha256": "4de00430a19ceaae4c8a088034114fbe02f7532a88836a000d89c165ca0eedd7",
+        "verdict": "pass",
+        "seen": "The newest message in Chief's thread reads: \"'Compare six phone plans that keep my number, and ask...' has been quiet for a while. I'll let you know if it doesn't pick up.\" That matches the outcome, which names Chief's message that a helper's job has been quiet. The outcome names only one part, so parts and covers are empty."
+      },
+      {
+        "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-day-390.png",
+        "sha256": "507905a9cee5e588eeb43ec42ee19f920ef0828aa9053d5e1ec32d8706ee92d9",
+        "verdict": "pass"
+      },
+      {
+        "path": "<evidence root>/20261021T094301Z-1b04b0c6-0e80b3/quiet-nudge/chief-day-1280.png",
+        "sha256": "509758d3ba087519c1d8419ce60049752ef06626b1acb27d8f7fc75e8a885e8c",
+        "verdict": "pass",
+        "seen": "The newest message in Chief's thread reads: \"Compare six phone plans that keep my number, and ask… has been quiet for a while. I'll let you know if it doesn't pick up.\" This matches the outcome. The screenshot is the Chief chat view, with no error or overlay hiding it. The outcome names only one part, so parts is empty."
+      },
+      {
+        "path": "<evidence root>/20261021T094316Z-1b04b0c6-70b021/quiet-nudge-pwa/chief-night-390.png",
+        "sha256": "13319c6040436bafacbf7421357d33e87107541f270cd681b16b7eaf3a59bb12",
+        "verdict": "pass",
+        "seen": "The newest message in Chief's thread reads: \"'Compare six phone plans that keep my number, and ask...' has been quiet for a while. I'll let you know if it doesn't pick up.\" This matches the outcome. A follow-up card below asks whether to stop Research Rae, which is consistent with the quiet-job message. The outcome names one part, so parts is empty."
+      },
+      {
+        "path": "<evidence root>/20261021T094316Z-1b04b0c6-70b021/quiet-nudge-pwa/chief-day-390.png",
+        "sha256": "74d12e352751fb7263d3bac191e6e3ab04d0dd955a9ff18a127dfa0e3b628fcb",
+        "verdict": "pass",
+        "seen": "The newest message at the bottom of the Chief thread reads: \"'Compare six phone plans that keep my number, and ask...' has been quiet for a while. I'll let you know if it doesn't pick up.\" This matches the outcome's described Chief message about a helper's job being quiet. The screen is the Chief chat, with no error or overlay hiding it."
+      }
+    ]
+  }
+}

@@ -49,7 +49,7 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
 export interface Brain { provider: string; model?: string }
 
 export function parseBrain(s: string): Brain {
-  const [provider, ...rest] = String(s).trim().split(':'), model = rest.length ? rest.join(':') : undefined; // a model id may carry its own ":free"
+  const [provider, ...rest] = String(s).trim().split(':'), model = rest.join(':') || undefined; // an OpenRouter id may carry a tag after a colon (`minimax/minimax-m3.1-flash:free`)
   if (!PROVIDERS[provider] || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]:]{0,63}$/.test(model))) {
     throw Object.assign(new Error(`not an AI account: "${s}" (try ${Object.keys(PROVIDERS).slice(0, 3).join(', ')})`), { status: 400 });
   }
@@ -229,7 +229,6 @@ const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).repl
 
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
-
 
 /** Capped memory: rewrite, don't append. `replaces` names words of the old note a correction replaces. Over the cap is refused, so the bot must consolidate. */
 export function remember(cfg: Config, m: Memory, line: string, replaces = ''): Learned {

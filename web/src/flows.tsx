@@ -7,6 +7,7 @@ import { api, demo, paired, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
+import { appLink } from './typed.ts';
 
 type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
@@ -111,7 +112,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const phase = pinned ?? live;
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
   // Signed in: the sheet says so, then gets out of the way; the waiting request is already under way.
-  useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 1600); return () => clearTimeout(t); } }, [phase]);
+  useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 700); return () => clearTimeout(t); } }, [phase]);
   const cancel = () => { void api.signInCancel(ai.key).catch(() => {}); setCancelled(true); };
   const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code' || phase === 'key') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
@@ -155,8 +156,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         {ai.key === 'chatgpt' && <a className="link" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
-      {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
-        <button className="btn go big" onClick={onReady}>Let's go</button></>}
+      {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p></>}
       {phase === 'work' && <><h2>That looks like your work {name}</h2>
         <p className="mute">Signed in as <b>{g.work || 'a work account'}</b>. Your work's rules would apply to your helpers. Use your personal {name} instead?</p>
         <button className="btn go big" onClick={() => attempt(async () => { await api.signOut(ai.key); setKeepWork(false); again({ fresh: true }); })}>Use my personal account</button>
@@ -193,6 +193,8 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   const [signKey, setSignKey] = useState<string | null>(null);
   const list = A.aiList(accounts);
   const [{ ai, g }, ...others] = [...list.mine, ...list.more];
+  // Nobody signed in yet: MiniMax's key sheet is a tap on the card itself, not behind "Use another account".
+  const upfront = list.mine.some((r) => r.g.state === 'ready') ? [] : others.filter((r) => r.ai.key === 'minimax'), tucked = others.filter((r) => !upfront.includes(r));
   const pick = (r: typeof ai, cls: string) => <button key={r.key} className={cls} onClick={() => { setSignKey(r.key); setSigning('keyEntry' in r && r.keyEntry === true ? null : openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>;
   const signAi = others.find((r) => r.ai.key === signKey)?.ai ?? ai;
   // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
@@ -212,10 +214,10 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
     <div className="card ask">
       <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{A.NEEDS_SIGNIN}</div></div></div>
       <p className="ask-words">{g.recovery || ('keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
-      <div className="ai-picks">{pick(ai, 'btn go')}</div>
+      <div className="ai-picks">{pick(ai, 'btn go')}{upfront.map(({ ai: r }) => pick(r, 'btn'))}</div>
       <details className="more-ways">
-        <summary><span className="grow">Use another account</span><span className="ai-stack">{others.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>
-        <div className="ai-picks">{others.map(({ ai: r }) => pick(r, 'btn'))}</div>
+        <summary><span className="grow">Use another account</span><span className="ai-stack">{tucked.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>
+        <div className="ai-picks">{tucked.map(({ ai: r }) => pick(r, 'btn'))}</div>
       </details>
       {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onClose={() => setSigning(false)} />}
     </div>
@@ -359,7 +361,6 @@ export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helpe
 }
 
 // ---------- pairing the public app with the person's own computer ----------
-/** What to run on the computer: Crewhouse itself, then the one-use code (`./crewhouse phones code`). */
 /** The first-run layout (Stack J01, J13): a face and a wide headline on the left, what to do on the right; on a phone one
  *  column. `top` is the step chips (above the headline on a phone, in the right column on a computer); `mid` centres a
  *  phone's column. Text meant for one size alone takes `on-phone` or `on-desk`. */
@@ -387,8 +388,6 @@ function FullPage({ label, onClose, children }: { label: string; onClose: () => 
 const Steps3 = ({ at }: { at: number }) => <ol className="fr-steps" aria-label={`Step ${at + 1} of 3`}>
   {['Computer', 'Words', 'Done'].map((w, i) => <li key={w} className={i === at ? 'now' : i < at ? 'did' : ''}>{i < at ? <Icon name="check" size={18} /> : i === at ? `${i + 1} ` : ''}{w}</li>)}
 </ol>;
-
-const PAIR_CMDS = 'git clone https://github.com/umeranjum17/crewhouse\ncd crewhouse && ./crewhouse setup\n./crewhouse start\n./crewhouse phones code';
 
 // Chrome on Android has BarcodeDetector; iOS Safari has none, so there only the typed code shows.
 const canScan = () => 'BarcodeDetector' in window;
@@ -424,9 +423,10 @@ function Scanner({ onCode, onBack, onRefused }: { onCode: (qr: string) => void; 
   </>;
 }
 
-/** The demo's way to the person's own crew: the few commands for their computer, one box for the code it prints (a relay
- *  code or the 12-letter one, web/src/link.ts), then the two words to check there. Paired, the same installed app
- *  opens again on their real crew. ?demo&phase=waiting|done pins a step, for review. */
+/** The demo's way to the person's own crew: the computer shows a code (Settings, Phones, Add a phone) whose QR is a link to
+ *  its own web app, so the phone's camera opens that app and it pairs on its own (`offerHere`). Here, a code can also be
+ *  scanned or pasted (a relay code, or the computer's 12-letter one); a link to the computer's app opens it. Then the two
+ *  words to check there. Paired, the same installed app opens again on their real crew. ?demo&phase=waiting|done pins a step. */
 export function PairSheet({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [words, setWords] = useState<string | null>(null);
@@ -441,36 +441,42 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
     setDone(true);
     setTimeout(() => void link.leave(), 1200);
   })().catch((e: Error) => { setProblem(e.message); setWords(null); setBusy(false); }); };
-  const pair = () => join((link) => link.pair(text, setWords));
-  const scanned = (qr: string) => { setScan(false); join((link) => link.scanned(qr, setWords)); };
+  /** What was scanned, pasted or opened: the computer's app link goes to that app; anything else pairs from here. */
+  const open = (code: string, how: (link: typeof import('./link.ts'), code: string) => Promise<void>) => { const to = appLink(code); if (to) location.assign(to); else join((link) => how(link, code)); };
+  const pair = () => open(text, (link, c) => link.pair(c, setWords));
+  const scanned = (qr: string) => { setScan(false); open(qr, (link, c) => link.scanned(c, setWords)); };
+  // Opened by the computer's QR: the offer is in the address, so pair now, and take it out of the history.
+  useEffect(() => { if (pinned) return; void import('./link.ts').then((link) => { const offer = link.offerHere(); if (offer) { history.replaceState(null, '', '/#/pair'); join((l) => l.scanned(offer, setWords)); } }); }, []);
   const phase = pinned === 'waiting' || pinned === 'done' ? pinned : done ? 'done' : words ? 'waiting' : 'code';
   const said = words ?? 'maple lantern';
-  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
   // The pairing already started can't be taken back from here, so Cancel starts this page over.
   const cancel = () => { history.replaceState(null, '', '/#/'); location.reload(); };
   const top = <Steps3 at={phase === 'done' ? 2 : phase === 'waiting' ? 1 : 0} />;
   return (
     <FullPage label="Pair with your computer" onClose={onClose}>
       {phase === 'code' && <Split top={top} mark={<span className="on-desk"><Face who="chief" size={96} /></span>} title="Pair with your computer"
-        lead={<>Your crew lives on your own computer. <span className="on-phone">In its crewhouse folder, run these once:</span><span className="on-desk">Pair once and this screen answers for it.</span></>}>
+        lead="Your crew lives on your own computer. This phone opens it from there.">
         {scan ? <Scanner onCode={scanned} onRefused={() => { setScan(false); setCamOff(true); }} onBack={() => setScan(false)} /> : <>
-          <p className="fr-say on-desk">In its crewhouse folder, run these once:</p>
-          <div className="fr-cmds">{PAIR_CMDS.split('\n').map((c) => <code key={c} className="chat-code">{c}</code>)}</div>
-          <button className="btn soft fr-copy" onClick={() => copy(PAIR_CMDS)}><Icon name="copy" size={20} />Copy these</button>
-          {canScan() && <button className="btn soft" disabled={busy} onClick={() => { setCamOff(false); setScan(true); }}>Scan the code on your computer</button>}
-          <label className="fr-label">Paste the code it prints
+          <ol className="fr-how">
+            <li>On your computer, open Crewhouse.</li>
+            <li>Go to <b>Settings</b>, then <b>Phones</b>, then <b>Add a phone</b>.</li>
+            <li>Scan the code with this phone's camera. It opens Crewhouse right here.</li>
+          </ol>
+          {busy && <span className="fr-wait" role="status"><i className="fr-spin" />Connecting…</span>}
+          {canScan() && <button className="btn soft" disabled={busy} onClick={() => { setCamOff(false); setScan(true); }}>Scan the code here instead</button>}
+          <label className="fr-label">Or paste the code the computer shows
             <textarea className="input pair-code" rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (text.trim() && !busy) pair(); } }}
               placeholder="For example VDXK-G97P-AQDB" autoCapitalize="off" autoCorrect="off" spellCheck={false} /></label>
-          {camOff && <p className="fr-note">Camera is off for this page. Type the code instead.</p>}
+          {camOff && <p className="fr-note">Camera is off for this page. Paste the code instead.</p>}
           {problem && <p className="pair-problem" role="alert">{problem}</p>}
+          <details className="fr-note"><summary>The computer shows no web address, or you're away from home</summary>
+            <p>A phone's browser needs a secure web address for your computer. In <b>Settings</b>, <b>Phones</b> on the computer, tap <b>Turn on</b> under the web app. It uses the free connector app: install it on the computer and on this phone, signed in to the same account. Or paste the address of your own server there instead.</p></details>
           <div className="fr-acts"><button className="btn go big" disabled={busy || !text.trim()} onClick={pair}>{busy ? 'Connecting…' : 'Pair'}</button>
             <button className="btn soft big" onClick={onClose}>Not now</button></div>
         </>}
       </Split>}
-      {phase === 'waiting' && <Split mid top={top} mark={<Face who="chief" size={96} />} title="Check these two words" lead="Your computer shows two words too. If they match, say yes there.">
+      {phase === 'waiting' && <Split mid top={top} mark={<Face who="chief" size={96} />} title="Check these two words" lead="Your computer shows two words too. If they match, tap Yes there.">
         <b className="pair-words">{said}</b>
-        <p className="fr-say">Or type this on the computer:</p>
-        <code className="fr-cmd chat-code">./crewhouse phones approve '{said}'</code>
         <span className="fr-wait" role="status"><i className="fr-spin" />Waiting for your computer…</span>
         <button className="btn soft big" onClick={cancel}>Cancel</button>
       </Split>}
