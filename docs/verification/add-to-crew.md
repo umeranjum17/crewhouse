@@ -6,7 +6,7 @@ skill and plugin. Approved mock: `add-to-crew` (market-a) in `scripts/verify/moc
 
 ## What it proves
 
-- Sections by purpose from crewd's reviewed list (`purposes` in `src/openclaw/starter-skills.json`): Mail, calendar
+- Sections by purpose from crewd's reviewed list (`purposes` in `src/starter-skills.json`): Mail, calendar
   and files first (Gmail, Google Calendar first in it), then Home, Code, Design; four rows, then "See all N".
 - A filter chip per section that has rows, and the "N added" chip with the added rows' marks.
 - Search filters the list as you type ("gmail" → Gmail, Gmail drafts & labels, Gmail sending); no local match shows

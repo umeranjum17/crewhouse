@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const policy = fileURLToPath(import.meta.resolve('@byokit/openclaw').replace(/dist\/index\.js$/, 'policy/policy.mjs'));
 const trusted = JSON.parse(readFileSync(fileURLToPath(new URL('../src/openclaw/trusted-skills.json', import.meta.url)), 'utf8'));
-const record = JSON.parse(readFileSync(fileURLToPath(new URL('../src/openclaw/starter-skills.json', import.meta.url)), 'utf8'));
+const record = JSON.parse(readFileSync(fileURLToPath(new URL('../src/starter-skills.json', import.meta.url)), 'utf8'));
 
 test('every reviewed starter skill carries a live pin, and the record matches it', () => {
   assert.ok(record.approved.length > 0 && record.approved.length <= 10, 'up to ten, none unreviewed');

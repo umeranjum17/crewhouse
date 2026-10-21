@@ -24,8 +24,7 @@ import { buildDocument, readDocument } from './documents.ts';
 import { STYLES, buildDeck, readDeck } from './slides.ts';
 import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
-import { OpenClawRuntime } from './openclaw/runtime.ts';
-import { StubRuntime } from './stub-runtime.ts';
+import { pickRuntime } from './engines.ts';
 import { fileTool } from './files.ts';
 
 /** The four marks a first run is timed by, in crewd.log: the service, the engine, the sign-in, the first words. */
@@ -181,7 +180,7 @@ interface Live { key: string; task: number; account: string; model?: string; gra
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[];
-  /** Its own computer: the OpenClaw node on its display that every `computer` call must name. */
+  /** Its own computer: the engine's node on its display that every `computer` call must name. */
   node?: string }
 
 /** The deterministic half: people, bots, tasks, the per-bot queue, asks. Models only ever see prompts. */
@@ -242,7 +241,7 @@ export class Crew {
     assertSafeConfig(cfg); this.cfg = cfg; this.db = db;
     this.desktops = new Desktops(cfg.stateDir);
     this.keepAwake = cfg.engine === 'stub' ? () => {} : inhibitor();
-    this.runtime = cfg.engine === 'stub' ? new StubRuntime() : new OpenClawRuntime(cfg.stateDir, cfg.crewDir);
+    this.runtime = pickRuntime(cfg);
     this.accounts = new Accounts(this.runtime);
     this.composio = new Composio(this.runtime, db);
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
@@ -306,7 +305,7 @@ export class Crew {
 
   /** Stage the person's old sign-in offline; retire it only after the gateway witnesses the import. */
   private async eachLegacy(method: 'migrate' | 'confirm') {
-    const fn = (this.runtime as { migrate?: (path: string) => Promise<boolean>; confirm?: (path: string) => Promise<boolean> })[method], legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
+    const fn = this.runtime[method], legacy = join(this.cfg.stateDir, 'people', '1', 'engine', 'auth.json');
     if (!fn || (!existsSync(legacy) && !existsSync(`${legacy}.moved-to-engine`) && !existsSync(`${legacy}.moved-to-engine.sealed`))) return;
     try { await fn.call(this.runtime, legacy); }
     catch (e) { console.error('engine migration:', e); }
@@ -320,25 +319,21 @@ export class Crew {
     await this.runtime.setLearning?.(on);
   }
 
-  /** The reviewed starter skill set for the app's Add to your crew screen, with on/off as the engine sees it, and each
-   *  reviewed row's purpose (skills, apps and plugins alike), which puts it in a section there. Switching and searching
-   *  run on the real engine; the stand-in answers the list, all off, and says the rest needs it. */
+  /** The reviewed starter set for Add to your crew, with on/off as the engine sees it and each row's purpose (its section there);
+   *  the stand-in answers the list, all off. */
   starterSkills() {
-    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; maturity: string; summary: string; why: string; needs: string[]; on: boolean }[] }, { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
+    const runtime = this.runtime, { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'starter-skills.json'), 'utf8'));
     return { live: !!runtime.starterSkills, purposes, starter: runtime.starterSkills?.() ?? approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
       version: String(s.version), maturity: String(s.maturity), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
   }
   async setStarter(slug: string, on: boolean) {
     if (!this.starterSkills().starter.some((s: { slug: string }) => s.slug === slug)) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
-    const runtime = this.runtime as { setStarter?: (slug: string, on: boolean) => Promise<unknown> };
-    if (!runtime.setStarter) throw new Error('The crew is starting up; skills switch once it is ready');
-    await runtime.setStarter(slug, on);
+    if (!this.runtime.setStarter) throw new Error('The crew is starting up; skills switch once it is ready');
+    await this.runtime.setStarter(slug, on);
     this.db.event('skill.switched', null, { slug, on });
   }
   async searchSkills(query: string) {
-    const runtime = this.runtime as { searchSkills?: (query: string) => Promise<unknown[]> };
-    if (!runtime.searchSkills) return [];
-    return runtime.searchSkills(query).catch(() => []);
+    return this.runtime.searchSkills?.(query).catch(() => []) ?? [];
   }
 
   /** The weekly tidy of what was learned, on crewhouse's own boundary: capture first — refusing the whole review if
@@ -346,10 +341,9 @@ export class Crew {
    *  Every review goes through this one pre-change step. */
   private async weeklyCuration() {
     this.curationAt = Date.now() + 7 * 86_400_000;
-    const runtime = this.runtime as { runCollectionReview?: () => Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }> };
-    if (!runtime.runCollectionReview) return;
+    if (!this.runtime.runCollectionReview) return;
     try {
-      const outcome = await runtime.runCollectionReview();
+      const outcome = await this.runtime.runCollectionReview();
       this.db.event('learn.curated', CHIEF, { capture: outcome.capture, kept: outcome.kept, written: outcome.written, dropped: outcome.dropped });
     } catch (e) {
       console.error(`curation skipped: ${(e as Error)?.message ?? e}`);
@@ -1614,7 +1608,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const l = this.live.get(botId);
     if (!l) return false;
     const grants = l.grants ?? [];
-    // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
     if (BUILTINS.has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
