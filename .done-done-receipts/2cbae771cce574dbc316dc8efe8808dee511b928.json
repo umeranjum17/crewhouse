@@ -1,0 +1,67 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "2cbae771cce574dbc316dc8efe8808dee511b928",
+  "tree": "c5542feb9f58ffa3c965a07dea47f9755a2d6d87",
+  "claim": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+  "result": "pass",
+  "at": "2026-10-21T08:50:06.488Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/chat-real/chief-day-390.png",
+      "sha256": "23e7b21f5ebe6934b18f49d772f91447e6747abadb7e7df49d4eab0aafe72005"
+    },
+    {
+      "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/chat-real/chief-night-390.png",
+      "sha256": "9bdadf387b5d63500f395c125fb6c8305d254147c048a56ac60666ccd16b60d7"
+    },
+    {
+      "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/reply.txt",
+      "sha256": "7ecebdfed07578d9a63558357577bb742085dbaba28650d58710505ca29921cc"
+    },
+    {
+      "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/timeline.txt",
+      "sha256": "3a54f6edf780d25ae7903d0abacf6d0298129e96d2d9f37e93d18f4ee645122f"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T084816Z-2cbae771-e7079c",
+      "journey": "chat-real",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/chat-real.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\""
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/chat-real/chief-day-390.png",
+        "sha256": "23e7b21f5ebe6934b18f49d772f91447e6747abadb7e7df49d4eab0aafe72005",
+        "verdict": "pass",
+        "seen": "The outcome names a sent request with no name given, a wait for AI sign-in, and a real reply from Chief in his thread. The thread shows the user's message \"Good morning Chief. Please say hello back in one short sentence.\" followed by Chief's sign-in prompt, \"You're signed in. I'll start now.\", and the reply \"Good morning, Captain.\" The sign-in wait and the reply both appear in the thread. The outcome names only one part, so parts and covers are empty. The message does name Chief and the reply is not a one-sentence hello, so I'm not fully certain it matches."
+      },
+      {
+        "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/chat-real/chief-night-390.png",
+        "sha256": "9bdadf387b5d63500f395c125fb6c8305d254147c048a56ac60666ccd16b60d7",
+        "verdict": "pass",
+        "seen": "The newest message at the bottom of Chief's thread reads \"Good morning, Captain.\" after a \"NEW\" divider. Above it, the crew asks the user to sign in (\"The crew uses your AI account. Sign in when you're ready and I'll start.\"), then \"You're signed in. I'll start now.\" This matches the waiting-for-sign-in step. The user's request is visible as \"Good morning Chief. Please say hello back in one short sentence.\" The outcome's 'real reply' is only partly shown: the reply is a greeting and does not clearly answer the one-short-sentence hello, and the capture doesn't show that the request was sent with no name given. So it is likely correct, not certain."
+      },
+      {
+        "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/reply.txt",
+        "sha256": "7ecebdfed07578d9a63558357577bb742085dbaba28650d58710505ca29921cc",
+        "verdict": "pass"
+      },
+      {
+        "path": "<evidence root>/20261021T084816Z-2cbae771-e7079c/timeline.txt",
+        "sha256": "3a54f6edf780d25ae7903d0abacf6d0298129e96d2d9f37e93d18f4ee645122f",
+        "verdict": "pass"
+      }
+    ]
+  }
+}

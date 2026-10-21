@@ -340,6 +340,21 @@ test('Claude-only sign-in, nothing chosen for work: Chief names Claude, never Ch
   done();
 });
 
+test('a first request needs no name: it waits for the sign-in and starts by itself', async () => {
+  const { db, crew, done } = setup();
+  only(crew, []);
+  const { task: t } = crew.onboard('', 'Say hello') as { task: number };
+  assert.equal(crew.person().address, '', 'no name was asked for');
+  assert.equal(crew.person().onboarded, 1);
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'paused', 'the request waits for a sign-in');
+  await crew.accounts.login('chatgpt');
+  await crew.accounts.finished('chatgpt');
+  await settled(db, t);
+  assert.equal(task(db, t).state, 'done');
+  done();
+});
+
 test('typed-name onboarding ends on ideas, not an open question', async () => {
   const { crew, done } = setup();
   crew.onboard('sir');
