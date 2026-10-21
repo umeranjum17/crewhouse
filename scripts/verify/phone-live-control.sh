@@ -10,7 +10,7 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-live-control.sh <out-dir> <minimax-key-file>
 #
 # The key is read from the file into the sign-in request only: never printed, logged or kept. Exit 0 with
-# live-/stopped-/takeover-/approved-{night,day}-390.png and report.txt in <out-dir> (ask-/handed-back-/held- ones in $EXTRA_DIR when set); non-zero
+# live-/stopped-/takeover-/ask-/approved-{night,day}-390.png and report.txt in <out-dir> (handed-back-/held- ones in $EXTRA_DIR when set); non-zero
 # when any step does not happen within its bound. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: phone-live-control.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
@@ -81,7 +81,7 @@ open() { SEQ=$((SEQ + 1)); CUR=("$1" "$2" "$3"); page; axi emulate --viewport "3
     axi eval "(async () => { await new Promise((r) => setTimeout(r, 1500)); location.hash = '$2'; for (let i = 0; i < 80 && !document.querySelector('$3'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('$3'); })()" | grep -q true && return 0
   done
   axi screenshot "$OUT/failed-$1.png" > /dev/null || true; axi console > "$OUT/failed-$1.console" 2>&1 || true; fail "$2 never showed $3 ($1)"; }
-shot() { local d=$OUT; case "$1" in live|stopped|takeover|approved) ;; *) d=${EXTRA_DIR:-}; esac; [ -z "$d" ] || axi screenshot "$d/$1-$2-390.png" > /dev/null; } # the four proof captures go to the evidence; the in-between ones only when EXTRA_DIR is set
+shot() { local d=$OUT; [ "$1" != ask ] || axi eval "document.querySelector('.btns .btn')?.scrollIntoView({block: 'center'})" > /dev/null; case "$1" in live|stopped|takeover|ask|approved) ;; *) d=${EXTRA_DIR:-}; esac; [ -z "$d" ] || axi screenshot "$d/$1-$2-390.png" > /dev/null; } # the five proof captures go to the evidence; the in-between ones only when EXTRA_DIR is set
 # both <name> <route> <selector>: the same state, night then day.
 both() { for theme in night day; do open "$theme" "$2" "$3"; shot "$1" "$theme" || { open "$theme" "$2" "$3"; shot "$1" "$theme"; }; done; } # a tab that died under the shot is opened again once
 text() { axi eval "document.querySelector('$1')?.innerText ?? ''" | sed -n 's/^result: //p' | node -e 'process.stdout.write(JSON.parse(JSON.parse(require("node:fs").readFileSync(0, "utf8"))).replace(/\s+/g, " ").trim())'; }
@@ -94,7 +94,7 @@ CHAT='#/h/research-rae/chat'
 send "Read exactly the file $NOTE with your file tool, without listing any folder, and tell me, in one sentence, what it says."
 J3=$(field id); [ "$J3" != 0 ] || fail "no approval job"
 wait_for "the file ask" 150 ask_open
-both ask "$CHAT" '.live-ctl'
+both ask "$CHAT" '.btns .btn' # the ask card with its Yes, go ahead button, in the evidence
 case "$(text '.live-ctl')" in *Waiting*) ;; *) fail "the bar does not say Waiting while the ask is open: $(text '.live-ctl')";; esac
 ask_ids() { api /api/state | node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0)).asks.map((a) => a.id).join(","))'; }
 changed() { state_is done || { ask_open && [ "$(ask_ids)" != "$1" ]; }; }

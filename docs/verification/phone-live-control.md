@@ -14,4 +14,4 @@ Every bounded wait fails the journey and keeps `thread.json` and `crewd.log`. `t
 
 ## Capture
 
-`{live,stopped,takeover,approved}-{night,day}-390.png` , `report.txt` and `steps.json` (done-done's step record) in the evidence folder (a check judges at most ten files); `EXTRA_DIR=<dir>` also keeps the ask, held and handed-back shots. `crewd.log`, `thread.json` and a `failed-*` shot are written only when the run fails.
+`{live,stopped,takeover,ask,approved}-{night,day}-390.png` , `report.txt` and `steps.json` (done-done's step record) in the evidence folder (a check judges at most ten files); `EXTRA_DIR=<dir>` also keeps the held and handed-back shots. `crewd.log`, `thread.json` and a `failed-*` shot are written only when the run fails.
