@@ -51,7 +51,7 @@ for _ in $(seq 2400); do # the first start installs the engine
   sleep 0.25
 done
 [ -n "$PERSON" ] || { echo "chat-real: crewd never became ready" >&2; exit 1; }
-echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s after start" | tee "$OUT/ready.txt"
+echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s after start" | tee ${PACKAGE_DIR:+"$OUT/ready.txt"}
 [ -z "${PACKAGE_DIR:-}" ] || ! ls "$LAB/home/.local/share/crewhouse/engine"* >/dev/null 2>&1 || { echo "chat-real: the release installed an engine of its own at first run" >&2; exit 1; }
 [ -z "${PACKAGE_DIR:-}" ] || { echo "engine: the release's own, $(ls "$PACKAGE_DIR/app/runtime" | tr '\n' ' ')under its app folder; installed under the person's home: none"; } | tee -a "$OUT/ready.txt"
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
