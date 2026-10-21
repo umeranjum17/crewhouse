@@ -120,7 +120,7 @@ case "$bar" in *"At work"*"Take control"*Stop*) ;; *) fail "the live bar is not 
 click '.live-ctl .btn' '^Stop$'
 wait_for "Stop to end the job" 60 state_is failed
 [ "$(field result)" = "Stopped by you." ] || fail "Stop left the result: $(field result)"
-stopped_line() { case "$(text '.live-end')" in *stopped*) return 0;; esac; return 1; }
+stopped_line() { case "$(text '.live-end')" in *[Ss]topped*) return 0;; esac; return 1; }
 wait_for "the thread to say it stopped" 30 stopped_line
 [ -z "$(text '.live-ctl')" ] || fail "the live bar is still up after Stop"
 note "stop line: $(text '.live-end')"
