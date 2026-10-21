@@ -8,6 +8,38 @@
       "about": "verify-crewhouse is deleted. Its checks are done-done journeys in .done-done.yaml: stub-drive, static-checks, screens and the feature journeys (delivered files, workbook chart, slides deck, unlock and sign-in cards, ask in view, site sign-in, installed-app pairing and plans, phone pairing; the two spending phone journeys ask first through done-done verify). CI runs stub-drive and static-checks on every code change and records a receipt. Each verification daemon runs in its own process group, ended and waited for before its test data is removed; test/verify-tools.test.ts fails if any child outlives it. learn-from-mistakes runs with both agents on the OpenCode Go plan, never Claude. No retro skill or Lavish use existed. The receipt for the merge head is in the PR's Checks block.",
       "recommend_value": "yes",
       "filer": "ch-tool-migration-v2"
+    },
+    {
+      "contract": 1,
+      "kind": "evidence",
+      "schema": 1,
+      "key": "dd-evidence-20261021T075537Z-6b663e7b-931cc1",
+      "filer": "done-done",
+      "title": "crewhouse chat-real: verify pass",
+      "about": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+      "type": "evidence",
+      "number": 1,
+      "media": [
+        {
+          "path": "evidence/1/1.png",
+          "sha256": "cec0b18508425ba1724ad73371cbbe9a454db1e4dba09b88de7e6858fe4e3b65",
+          "bytes": 232028
+        },
+        {
+          "path": "evidence/1/2.png",
+          "sha256": "87ee79e6dc57f04f93348b00c8a94a96732c74480ad17849008e607781760057",
+          "bytes": 230324
+        }
+      ],
+      "evidence": {
+        "run_id": "20261021T075537Z-6b663e7b-931cc1",
+        "commit": "6b663e7b539bc8c1d7bfcfb0ab8bbc04ea5f4c81",
+        "outcome": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+        "repro": "done-done verify chat-real --outcome \"On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread\" at 6b663e7b539bc8c1d7bfcfb0ab8bbc04ea5f4c81",
+        "proof": "done-done-verify-crewhouse: done-done verify chat-real, run 20261021T075537Z-6b663e7b-931cc1: pass",
+        "evidence": "chat-real/chief-day-390.png, chat-real/chief-night-390.png, reply.txt, timeline.txt"
+      },
+      "filed": "2026-10-21T07:58:15.802Z"
     }
   ]
 }
