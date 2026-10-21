@@ -117,13 +117,10 @@ export function relayResult(reply: string, note = '', acted = false) {
 }
 
 const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 18 ? 'afternoon' : 'evening'; };
-/** Chief's first words before the person opens Hello or sends a task. */
-export const chiefGreeting = () =>
-  `Good ${partOfDay()}. I am Chief, of the Crewhouse. I help get things done with your crew.\n\n` +
-  '- The crew works on this computer and pauses when it sleeps.\n' +
-  '- We stop and ask you first before sending anything, spending money or touching your own files.\n' +
-  '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
-  'What would you like help with?';
+/** Chief's first words, before the person has said who they are: the name is the first thing he asks, in his own thread. */
+export const chiefGreeting = () => `Good ${partOfDay()}. I am Chief, of the Crewhouse. I run a small crew of helpers on this computer. What shall I call you?`;
+/** His short pitch once he has the name: what the crew will and won't do on its own; the app puts tap-to-try ideas beneath it. */
+const chiefPitch = (name: string) => `Nice to meet you, ${name}. My crew pauses when this computer sleeps, and we stop and ask you first before sending anything, spending money or touching your own files. What can I take off your plate?`;
 
 /** What changed between two readings of a page: the differing middle, with a little of what surrounds it, capped. */
 export function changed(before: string, now: string, cap = 1500) {
@@ -964,7 +961,8 @@ export class Crew {
   }
 
   // ---- people ----
-  onboard(address: string, ask?: string, bot?: string): { task: number } | void {
+  onboard(address: string, ask?: string, bot?: string, chat = false): { task: number } | void {
+    if (chat) { const a = clean(address, 40); this.setAddress(a); this.say(CHIEF, 'person', a, null); return void this.say(CHIEF, 'bot', chiefPitch(a), null); } // the name answered in Chief's own thread
     const a = clean(address, 40), hello = ask?.trim(); let to = CHIEF; // no name is fine: Chief uses none until the person gives one
     if (hello) { // Hello goal taps hire their helper when the person's account supports it.
       try {

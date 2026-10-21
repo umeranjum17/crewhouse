@@ -1382,7 +1382,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
   if (shared) return <ShareIn state={state} shared={shared} go={go} onDone={() => resetShareIntent()} />;
   if (picked !== null && canAct && state.person.onboarded) return <ShareIn state={state} shared={{ text: picked, files: [] }} go={go} onDone={() => setPicked(null)} />;
-  if (!state.person.onboarded && canAct) return <Hello {...ctx} />;
+  if (!state.person.onboarded && canAct && route.view === 'home') return <Land {...ctx} />;
   const live = sheet && A.cards(state).find((c) => c.id === sheet.id);
   const toHome: [string, () => void] = ['Home', () => go({ view: 'home' }, true)];
   return (
@@ -1472,48 +1472,10 @@ function Tabs({ place, go, state, offline }: { place: Route['view']; go: (r: Rou
 }
 
 // ---------- first run ----------
-function Hello({ state, refresh, go }: Ctx) {
-  const me = state.person;
-  const [address, setAddress] = useState<string>(me.address || '');
-  const [own, setOwn] = useState(false);
-  const [words, setWords] = useState('');
-  const t = useLook();
-  // Ask for the name first when it has not been set yet.
-  const name = <>
-    <Label>What shall I call you?</Label>
-    <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={address} onChangeText={setAddress} placeholder="What shall I call you?" placeholderTextColor={t.mute} accessibilityLabel="What shall I call you?" />
-  </>;
-  const pick = (ask?: string, bot?: string) => {
-    if (!address.trim()) return say('First, what shall I call you?');
-    void attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go({ view: 'chief' }, true); });
-  };
-  const reduce = motion.useReduceMotion();
-  return (
-    <Page>
-      <ContinueOffer canAct onMoved={refresh} />
-      <motion.Rise reduce={reduce}><View style={{ alignItems: 'center', paddingTop: 8 }}><ChiefArt mood="hello" size={96} whole /></View></motion.Rise>
-      <motion.Rise reduce={reduce} delay={80}><View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line }]}>
-        <View style={[s.speechTail, { backgroundColor: t.solid, borderColor: t.line }]} />
-        <T style={[s.h1, s.serif, s.centerText, { fontSize: 34, lineHeight: 38, marginVertical: 0 }]}>{A.greeting()}{address.trim() ? `, ${address.trim()}` : ''}</T>
-        <T tone="ink2" style={s.centerText}>I'm Chief, your personal assistant. I run your crew of helpers.</T>
-      </View></motion.Rise>
-      <motion.Rise reduce={reduce} delay={160}><Card style={{ gap: 10 }}>
-        {[...A.atHome('the home computer'), "I'll ask before sending messages, deleting things or spending money."].map((l) =>
-          <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, ...fw('700') }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}
-      </Card></motion.Rise>
-      {name}
-      <Label>What can I take off your plate?</Label>
-      {A.firstIdeas(state).map((i) => <Pressable key={i.label} onPress={() => pick(i.label, i.bot)} accessibilityRole="button" accessibilityLabel={i.label}
-        style={({ pressed }) => [s.idea, { backgroundColor: t.card, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
-        <View style={[s.ideaIcon, { backgroundColor: t.soft }]}><Text style={{ fontSize: 18 }}>{i.icon}</Text></View>
-        <T style={{ flex: 1, ...fw('500') }}>{i.label}</T><T tone="mute">›</T>
-      </Pressable>)}
-      {own ? <>
-        <TextInput style={[s.input, { color: useLook().ink, borderColor: useLook().line }]} value={words} onChangeText={setWords} placeholder="Ask for anything…" placeholderTextColor={useLook().mute} accessibilityLabel="Your first ask" />
-        <Btn go big label="Send" disabled={!words.trim()} onPress={() => pick(words.trim())} />
-      </> : <Btn ghost label="Or ask in your own words" onPress={() => setOwn(true)} />}
-    </Page>
-  );
+/** First run has no screen of its own: Chief's chat opens, asks the name there and pitches (ChiefPage's `FirstTry`). */
+function Land({ go }: Ctx) {
+  useEffect(() => { go({ view: 'chief' }, true); }, []);
+  return null;
 }
 
 // ---------- asks ----------
@@ -2067,6 +2029,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const newestAnswer = [...lines].reverse().find((l) => (l.from === 'them' || l.from === 'chief') && (l.text || l.detail))?.id;
   const answered = newestAnswer !== undefined || !!partial;
   const name = h?.name ?? 'Chief';
+  const [how, setHow] = useState(false); // the first-run "How does this work?" chip
   // A fresh chat shows starters: nothing yet, or only the hidden "X joined the crew" note from recruiting.
   const fresh = !lines.length || (lines.length === 1 && lines[0].from === 'note' && lines[0].text.startsWith(`${name} joined the crew`));
   // A helper's starters are its own ready rows only, never another helper's; Chief keeps every row.
@@ -2079,7 +2042,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     pinned.current = true;
     setPending({ text: x || d.map((f) => f.name).join(', '), files: d.length > 0, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
-    const ok = await attempt(() => api.post(id, x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
+    // The first words of a new install, if short, answer Chief's "What shall I call you?"; anything longer is already the first job.
+    const named = id === 'chief' && !state.person.onboarded && !p.length && !d.length && A.asName(x);
+    const ok = await attempt(() => named ? api.onboard(x, undefined, undefined, true) : api.post(id, x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
     return ok;
   };
@@ -2179,6 +2144,12 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {ln && <LiveCard ln={ln} who={crewNames.find((x) => x.id === ln.helper) ?? h} chief={bubble} quiet={quiet} chipped={chipped} replied={replied}
           stuck={ln.took === undefined ? stuck.find((x) => x.id === ln.helper) : undefined} {...stuckProps} />}
         {stuck.filter((x) => !ln || ln.took !== undefined || x.id !== ln.helper).map((x) => <JobCard key={`q${x.id}`} who={x} title={x.name} word={A.WORDS.needs} chief><Stuck h={x} ink={INK} {...stuckProps} /></JobCard>)}
+        {canAct && id === 'chief' && A.firstChips(lines, state) && <View style={[s.chips, { justifyContent: 'center' }]}>
+          {A.firstIdeas(state).map((i) => <Btn key={i.label} label={`${i.icon} ${i.label}`} onPress={() => send(i.label)} />)}
+          <Btn label="How does this work?" onPress={() => setHow(!how)} />
+          {how && <Card style={{ gap: 10 }}>{[...A.atHome('the home computer'), "I'll ask before sending messages, deleting things or spending money."].map((l) =>
+            <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, ...fw('700') }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}</Card>}
+        </View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
         {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}

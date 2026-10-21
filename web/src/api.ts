@@ -90,7 +90,7 @@ export const api = {
   steer: (id: string, text: string) => call('POST', `/api/bots/${id}/steer`, { text }),
   /** First run: how Chief addresses the person, and (from an idea card) their first request, in one tap.
    *  A goal card also names its helper, so the request starts there instead of with Chief. */
-  onboard: (address: string, ask?: string, bot?: string) => call('POST', '/api/onboard', { address, ask, bot }),
+  onboard: (address: string, ask?: string, bot?: string, chat?: boolean) => call('POST', '/api/onboard', { address, ask, bot, chat }),
   /** The AI engine's install or start failed: start it again (Hello's Try again). */
   retryEngine: () => call('POST', '/api/engine/retry'),
   recruit: (template: string, name: string) => call('POST', '/api/recruit', { template, name }),

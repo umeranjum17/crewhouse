@@ -107,14 +107,14 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   const away = await http('POST', '/api/phones/code', { role: 'control' });
   await pair(`${away.short}-${away.code}@${away.relay}`);
   assert.equal(await devices(), 1, 'the computer lists this browser');
-  // A change goes over the link too: the first-run name and idea land in crewd.
-  await until('the first run', () => run(`!!document.querySelector('.fr-hello .idea')`));
-  await run(`(() => { document.querySelector('button.name-ask')?.click(); })()`);
-  await until('the name box', () => run(`!!document.querySelector('.name-ask input')`));
-  await run(`(() => { const i = document.querySelector('.name-ask input');
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'Umer'); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  await run(`document.querySelector('.fr-hello .idea').click()`);
+  // A change goes over the link too: the first run opens on Chief's chat, and the name answered there lands in crewd.
+  await until('Chief asks the name', () => run(`location.hash === '#/chief' && /What shall I call you/.test(document.body.innerText)`));
+  await run(`document.querySelector('.dock textarea').focus()`);
+  await send('Input.insertText', { text: 'Umer' });
+  await until('the send button ready', () => run(`!document.querySelector('.dock button.send').disabled`));
+  await run(`document.querySelector('.dock button.send').click()`);
   await until('onboarded over the link', async () => (await http('GET', '/api/state')).person.onboarded === 1, 20_000);
+  await until('his pitch with the ideas to try', () => run(`document.querySelectorAll('.chips.center .chip').length >= 3`));
   assert.equal((await http('GET', '/api/state')).person.address, 'Umer');
 
   // A cold start keeps the grant: the installed app opens paired, never on the demo.

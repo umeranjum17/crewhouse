@@ -35,7 +35,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [Phone live control](features/phone-live-control.md): Open a working helper's chat on the phone layout; its control bar has Stop and Take control, and an ask shows Yes, go ahead (`docs/verification/phone-live-control.md`)
 - [Quiet-job nudge](features/quiet-job-nudge.md): Run `scripts/verify/quiet-nudge.sh <out>`; Chief says a job is quiet once, a day later it ends unsure (`docs/verification/quiet-nudge.md`)
 - [Pair the PWA and get a real Chief reply](features/pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — run the `core` journey (the `upgrade` journey proves the release path) (`docs/verification/pair-chat.md`)
-- [Onboarding from Hello into Chief's thread](features/onboarding-from-hello-into-chief-s-threa.md): First run in a fresh browser session shows the Hello screen with three ideas (`docs/verification/onboard-chief-chat.md`)
+- [Onboarding in Chief's chat](features/onboarding-from-hello-into-chief-s-threa.md): First run opens Chief's chat asking the name, then his pitch with ideas to try; run `onboard-chat` (`docs/verification/onboard-chief-chat.md`)
 
 ## Evidence
 

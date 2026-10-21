@@ -26,7 +26,7 @@ const today = new Date(now).setHours(0, 0, 0, 0);
 const min = 60_000;
 const signin = ['signin', 'hello', 'first', 'work', 'longthread'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
-const fresh = variant === 'fresh';
+const fresh = variant === 'fresh' || variant === 'hello' || variant === 'named';
 // Google setup: what crewd's ideas[] says a job waits on (docs/ui-contract.md).
 const houseGoogle = variant !== 'nogoogle' && !new URLSearchParams(location.search).has('nohouse');
 // The day, planned waits on the person's own calendar and mail (?demo=day has both on, ?demo=nogoogle neither).
@@ -294,6 +294,11 @@ if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person'
 // A helper's finished sheet ends Chief's thread: its Done card (Stack J16a).
 if (variant === 'done') pages.chief.messages.push({ id: 73, author: 'bot', text: 'Your monthly budget is ready: what is planned and spent, the bills by due date, and the savings goals.', files: [{ bot: 'scribe', path: 'files/monthly-budget.xlsx' }] });
 if (fresh) pages.chief = { messages: [] };
+// ?demo=hello (first run: Chief asks the name in his chat) and ?demo=named (the name given, his pitch and the ideas to try).
+if (variant === 'hello' || variant === 'named') pages.chief = { messages: [
+  { id: 1, author: 'bot', text: 'Good evening. I am Chief, of the Crewhouse. I run a small crew of helpers on this computer. What shall I call you?' },
+  ...(variant === 'named' ? [{ id: 2, author: 'person', text: 'Umer' }, { id: 3, author: 'bot', text: 'Nice to meet you, Umer. My crew pauses when this computer sleeps, and we stop and ask you first before sending anything, spending money or touching your own files. What can I take off your plate?' }] : []),
+] };
 if (variant === 'ask-hire') {
   Object.assign(state.person, { name: 'Umer', address: 'Umer' });
   for (const b of bots) Object.assign(b, { task: null, step: undefined });
