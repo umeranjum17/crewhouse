@@ -53,18 +53,18 @@ echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s a
 [ -z "${PACKAGE_DIR:-}" ] || { echo "engine: the release's own, $(ls "$PACKAGE_DIR/app/runtime" | tr '\n' ' ')under its app folder; installed under the person's home: none"; } | tee -a "$OUT/ready.txt"
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
+# Flash is the model under test. It is named in Chief's own bot.json BEFORE the sign-in: the engine's catalog lists a key
+# sign-in's models as unavailable (the picker cannot choose it), and the kit registers the model the bot already names.
+MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
+[ "$ACCOUNT" = minimax ] || MODEL=${CHAT_MODEL:-minimax/minimax-m3.1-flash:free}
+node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL" "$ACCOUNT"
+echo "chat-real: model $MODEL"
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
 api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
 node -e 'const e = process.env.CHAT_KEY_ENV; process.stdout.write(JSON.stringify({ text: (e ? process.env[e] : require("node:fs").readFileSync(process.argv[1], "utf8")).trim() }))' "$KEYFILE" |
   api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
 for _ in $(seq 120); do api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "chat-real: $ACCOUNT did not take the key" >&2; exit 1; }
-# Flash is the model under test. The picker (PUT .../minimax/model) cannot choose it: the engine's catalog lists a key
-# sign-in's models as unavailable, so the lab names it in Chief's own bot.json, which every turn reads.
-MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-[ "$ACCOUNT" = minimax ] || api "/api/accounts/1/$ACCOUNT/model" | node -e 'console.log("chat-real: minimax models on " + process.argv[1] + ": " + (JSON.parse(require("node:fs").readFileSync(0, "utf8")).models ?? []).map((m) => m.id).filter((id) => /minimax/i.test(id)).join(" "))' "$ACCOUNT" | tee "$OUT/models.txt"
-node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL" "$ACCOUNT"
-echo "chat-real: model $MODEL"
 ASK='Good morning Chief. Please say hello back in one short sentence.'
 api /api/bots/chief/messages -d "{\"text\":\"$ASK\"}" > /dev/null
 # Chief's reply: his words in the thread once the job is done. A job that failed is no reply, even though crewd writes
