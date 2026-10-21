@@ -113,6 +113,8 @@ try {
   }, 30_000);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ person: 'Owner', address: 'Sir', chief: true, reply }, null, 2) + '\n');
+  writeFileSync(join(out, 'steps.json'), JSON.stringify({ target: { version: JSON.parse(readFileSync('package.json', 'utf8')).version }, start: 'first launch of Crewhouse on the stub engine, a new person, nothing sent yet',
+    steps: ['Start Crewhouse and read the state: the person and Chief are there', 'Say hello from Hello (onboard)', 'Send Chief the first request', 'Wait for Chief to answer'], result: `Chief answers the first request: ${reply}` }, null, 2) + '\n');
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
 await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);
