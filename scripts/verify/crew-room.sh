@@ -83,4 +83,7 @@ export THEN WIDTHS="${WIDTHS:-390x844}"
 bash "$REPO/scripts/verify/screens.sh" "$OUT/crew-room" room "$B/#person=$PERSON"
 AFTER="(() => { const l = document.querySelector('.room-page .lines'); if (l) l.scrollTop = l.scrollHeight; document.querySelector('.room-page .line.standup')?.scrollIntoView({ block: 'end' }); return true; })()" \
   bash "$REPO/scripts/verify/screens.sh" "$OUT/crew-room" standup "$B/#person=$PERSON"
+# The step record done-done reads beside the captures: what a person did and what they can see at the end.
+node -e 'const v = require(process.argv[1] + "/package.json").version + "+" + process.argv[2], m = process.argv[3];
+  require("node:fs").writeFileSync(process.argv[4] + "/steps.json", JSON.stringify({ target: { version: v }, start: "a fresh Crewhouse with Scout and Scribe on the crew, signed in to " + m, steps: ["Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back", "Wait for Chief to hand the work on and close the job", "Open the crew room at 390 wide, day and night", "Scroll the room to its end"], result: "The crew room shows Chief’s brief to Scout, Scout’s answer, Chief’s brief to Scribe, Scribe’s answer, and Chief’s standup as the last line" }, null, 2) + "\n")' "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "$ACCOUNT $MODEL" "$OUT"
 echo "crew-room: Chief's standup is in the room; captures in $OUT/crew-room"
