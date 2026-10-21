@@ -2147,8 +2147,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         {canAct && id === 'chief' && A.firstChips(lines, state) && <View style={[s.chips, { justifyContent: 'center' }]}>
           {A.firstIdeas(state).map((i) => <Btn key={i.label} label={`${i.icon} ${i.label}`} onPress={() => send(i.label)} />)}
           <Btn label="How does this work?" onPress={() => setHow(!how)} />
-          {how && <Card style={{ gap: 10 }}>{[...A.atHome('the home computer'), "I'll ask before sending messages, deleting things or spending money."].map((l) =>
-            <View key={l} style={[s.row, { alignItems: 'flex-start' }]}><T style={{ color: t.ok, ...fw('700') }}>✓</T><T tone="ink2" style={{ flex: 1 }}>{l}</T></View>)}</Card>}
+          {how && <View style={[s.speech, { backgroundColor: t.solid, borderColor: t.line, alignSelf: 'stretch' }]}><ChatText text={A.howItWorks.map((l) => `- ${l}`).join('\n')} /></View>}
         </View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}

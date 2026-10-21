@@ -297,7 +297,7 @@ if (fresh) pages.chief = { messages: [] };
 // ?demo=hello (first run: Chief asks the name in his chat) and ?demo=named (the name given, his pitch and the ideas to try).
 if (variant === 'hello' || variant === 'named') pages.chief = { messages: [
   { id: 1, author: 'bot', text: 'Good evening. I am Chief, of the Crewhouse. I run a small crew of helpers on this computer. What shall I call you?' },
-  ...(variant === 'named' ? [{ id: 2, author: 'person', text: 'Umer' }, { id: 3, author: 'bot', text: 'Nice to meet you, Umer. My crew pauses when this computer sleeps, and we stop and ask you first before sending anything, spending money or touching your own files. What can I take off your plate?' }] : []),
+  ...(variant === 'named' ? [{ id: 2, author: 'person', text: 'Umer' }, { id: 3, author: 'bot', text: 'Nice to meet you, Umer. My crew researches and compares things, plans and writes, handles your email and calendar, watches the web for you and runs jobs while you\'re away. What can I take off your plate?' }] : []),
 ] };
 if (variant === 'ask-hire') {
   Object.assign(state.person, { name: 'Umer', address: 'Umer' });

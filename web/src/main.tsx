@@ -415,11 +415,7 @@ function FirstTry({ state, send }: { state: Json; send: (t: string) => Promise<u
       {A.firstIdeas(state).map((i) => <button key={i.label} className="chip" onClick={() => void send(i.label)}>{i.icon} {i.label}</button>)}
       <button className="chip" aria-expanded={how} onClick={() => setHow(!how)}>How does this work?</button>
     </div>
-    {how && <div className="line them"><div className="bubble-text"><ul className="promises">
-      <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
-      <li>{A.atHome()[1]}</li><li>{A.atHome()[2]}</li><li>{A.keptWhere}</li>
-      <li>I'll ask before sending messages, deleting things or spending money.</li>
-    </ul></div></div>}
+    {how && <div className="line them"><div className="line-by"><span className="who">Chief</span></div><div className="bubble-text"><ChatText text={A.howItWorks.map((l) => `- ${l}`).join('\n')} latest /></div></div>}
   </>;
 }
 

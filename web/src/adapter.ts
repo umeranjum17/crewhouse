@@ -1349,6 +1349,9 @@ export const FIRST_IDEAS: { icon: string; label: string; bot?: string; sub: stri
   { icon: '📅', label: "What's on this week?", sub: 'From your calendar', face: 'chief', who: 'Chief' },
 ];
 
+/** Chief's "How does this work?" answer on the first run: where the crew lives, what leaves, what stays, and when he asks. */
+export const howItWorks = ['Your helpers live on this computer, and think with an AI account you already pay for.', atHome()[1], atHome()[2], keptWhere,
+  "I'll ask before sending messages, deleting things or spending money."];
 /** Whether a first message is short enough to be a name, answering Chief's "What shall I call you?". */
 export const asName = (t: string) => t.trim().length <= 40 && t.trim().split(/\s+/).length <= 4;
 /** Chief's pitch is the newest line of a thread where the person has only given their name: then he offers the first ideas. */

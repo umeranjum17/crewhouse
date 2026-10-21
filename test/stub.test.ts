@@ -61,11 +61,11 @@ test('chief onboarding, recruit, assign, grants', async () => {
   assert.equal((await api('GET', '/api/state')).body.person.name, 'Owner');
   await api('POST', '/api/onboard', { address: 'Sir' });
   assert.equal((await api('GET', '/api/state')).body.person.address, 'Sir');
-  // In chat the name answers his question in the same thread (no screen between): saved as the address, then his pitch with the stop-and-ask rules.
+  // In chat the name answers his question in the same thread (no screen between): saved as the address, then his pitch of what the crew does.
   assert.equal((await api('POST', '/api/onboard', { address: 'Umer', chat: true })).status, 200);
   page = (await api('GET', '/api/bots/chief')).body;
   assert.deepEqual(page.messages.slice(-2).map((m: any) => [m.author, m.text.slice(0, 18)]), [['person', 'Umer'], ['bot', 'Nice to meet you, ']]);
-  assert.match(page.messages.at(-1).text, /stop and ask you first before sending anything, spending money/);
+  assert.match(page.messages.at(-1).text, /researches and compares.*What can I take off your plate\?/);
   assert.equal((await api('GET', '/api/state')).body.person.address, 'Umer');
 
   // Cross-site writes are refused.

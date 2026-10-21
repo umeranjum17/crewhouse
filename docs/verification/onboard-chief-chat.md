@@ -25,7 +25,7 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in runbook.md.
 
 - **State before.** `curl -fsS "${H[@]}" "$B/api/state"` → `person.address` is null, `person.name` "Owner".
 - **Onboard.** `curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"` → `/api/state` now shows `"address":"Sir"`.
-- **Chief's page.** `curl -fsS "${H[@]}" "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
+- **Chief's page.** `curl -fsS "${H[@]}" "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and asks "What shall I call you?".
 - **Chat.** `curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
 - **UI.** Run `scripts/verify/onboard-chat.sh <out>` (journey `onboard-chat`, stub engine): captures `ask-name`, `pitch`, `how` at 390 and 1280, day and night, then taps an idea. The pre-change Hello screen is captured by running it with `REPO_DIR=<older checkout>`.
 

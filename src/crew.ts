@@ -120,7 +120,7 @@ const partOfDay = () => { const h = new Date().getHours(); return h >= 5 && h < 
 /** Chief's first words, before the person has said who they are: the name is the first thing he asks, in his own thread. */
 export const chiefGreeting = () => `Good ${partOfDay()}. I am Chief, of the Crewhouse. I run a small crew of helpers on this computer. What shall I call you?`;
 /** His short pitch once he has the name: what the crew will and won't do on its own; the app puts tap-to-try ideas beneath it. */
-const chiefPitch = (name: string) => `Nice to meet you, ${name}. My crew pauses when this computer sleeps, and we stop and ask you first before sending anything, spending money or touching your own files. What can I take off your plate?`;
+const chiefPitch = (name: string) => `Nice to meet you, ${name}. My crew researches and compares things, plans and writes, handles your email and calendar, watches the web for you and runs jobs while you're away. What can I take off your plate?`;
 
 /** What changed between two readings of a page: the differing middle, with a little of what surrounds it, capped. */
 export function changed(before: string, now: string, cap = 1500) {
