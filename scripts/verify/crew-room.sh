@@ -74,6 +74,7 @@ api /api/room > "$OUT/room.json"
 node -e 'const r = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")), hands = r.lines.filter((l) => l.from === "chief" && l.to), last = r.lines.at(-1);
   if (hands.length < 2) { console.error("crew-room: " + hands.length + " hand-off(s) in the room; the job needs two"); process.exit(1); }
   if (!last?.standup || last.bot !== "chief") { console.error("crew-room: the room does not end on Chief’s standup"); process.exit(1); }
+  if (!/\s/.test(last.text.trim())) { console.error("crew-room: Chief’s standup is one bare token (" + last.text.trim().slice(0, 40) + "), not words"); process.exit(1); }
   console.log("crew-room: " + hands.map((l) => "chief to " + l.to).join(", ") + "; standup: " + last.text.slice(0, 120).replace(/\n/g, " "))' "$OUT/room.json"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # The room, opened the way the app routes to it; the thread is its own scroller, so the second shot scrolls it to the standup.
