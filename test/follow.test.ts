@@ -140,7 +140,8 @@ test('the home network opens for a pairing code, a phone types the code and find
 });
 
 test('Tailscale in three plain states, from its own status: signed in, signed out or expired, or none', async () => {
-  const { tailscaleState } = await import('../src/link.ts');
+  const { anywhereOf } = await import('../src/link.ts'), { tailscaleState: kit } = await import('@byokit/discover');
+  const tailscaleState = async (bound: boolean, bin: string) => anywhereOf(await kit({ bin, timeoutMs: 5000 }), bound);
   const { writeFileSync } = await import('node:fs');
   const cli = (name: string, status: object | null) => {
     const bin = join(root, name);

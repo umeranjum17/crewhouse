@@ -98,11 +98,11 @@ Crewhouse gives you a crew that does the work and one calm place to say yes. It 
 
 On **Ubuntu or Debian** (64-bit), with nothing to type:
 
-1. Download **[crewhouse_0.1.0_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.0/crewhouse_0.1.0_amd64.deb)** (about 200 MB). It carries everything, the AI engine included.
+1. Download **[crewhouse_0.1.1_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.1/crewhouse_0.1.1_amd64.deb)** (about 200 MB). It carries everything, the AI engine included, so the first start is ready at once. Any other 64-bit Linux: the same release has `crewhouse-0.1.1-linux-x64.tar.gz`; extract it and run `crewhouse/launch.mjs` with its own Node (`crewhouse/node/bin/node crewhouse/launch.mjs`).
 2. Open it and press **Install** in your software centre.
 3. Open **Crewhouse** from your app menu.
 
-Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No terminal logins. You never copy an API key; the one exception is OpenCode Go, which asks you to paste your plan key on the card. A helper fetches its own tools, such as its web browser, the first time it needs them.
+Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No terminal logins. You never copy an API key, except where an account is a key: OpenCode Go and MiniMax ask you to paste your key on the card. A helper fetches its own tools, such as its web browser, the first time it needs them.
 
 **From the code** (any Linux, for developers): you need **[Node.js](https://nodejs.org) 22.22.3 or later**.
 
