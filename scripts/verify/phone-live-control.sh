@@ -150,3 +150,6 @@ both handed-back "$CHAT" '.live-ctl'
 if state_is working; then click '.live-ctl .btn' '^Stop$'; wait_for "the second Stop" 60 state_is failed; fi
 
 note "phone-live-control: all three controls worked on $MODEL; captures in $OUT"
+node -e 'require("node:fs").writeFileSync(process.argv[1] + "/steps.json", JSON.stringify({ target: { version: process.argv[2] }, start: "a fresh Crewhouse on the real engine, signed in to a MiniMax Flash key, with a helper (Research Rae) on the phone layout at 390 wide",
+  steps: ["Ask the helper to read a file and tap Yes, go ahead on its ask", "Give the helper a long job and open its chat: the control bar reads At work, Take control, Stop", "Tap Stop: the job ends Stopped by you and the thread says Stopped", "Give it another long job, tap Take control and see You have control, then Hand it back"],
+  result: "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back" }, null, 2))' "$OUT" "$(git -C "$REPO" rev-parse --short HEAD)"
