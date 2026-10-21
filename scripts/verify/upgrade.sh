@@ -2,7 +2,7 @@
 # done-done journey `upgrade`: the release path a person takes — the previous shipped version, installed, then
 # upgraded over in place, and the core journey driven on the upgraded app.
 #
-#   CHAT_KEY_ENV=OPENROUTER_API_KEY scripts/verify/upgrade.sh <out-dir>
+#   scripts/verify/upgrade.sh <out-dir>
 #
 # The previous shipped version is the one before this checkout's on npm (the app ships as an npm package with a
 # bin). It is installed into a throwaway prefix, then this checkout's own build is packed and installed over it in
@@ -12,7 +12,7 @@
 # The key is read from the environment by name only: never printed, logged, copied or kept. The model is the
 # account's own (OpenRouter's free MiniMax M3.1 Flash). Spends a few model calls on that key.
 set -euo pipefail
-[ $# -ge 1 ] || { echo "usage: upgrade.sh <out-dir>   (CHAT_ACCOUNT, CHAT_KEY_ENV, CHAT_MODEL)" >&2; exit 2; }
+[ $# -ge 1 ] || { echo "usage: upgrade.sh <out-dir>   (CHAT_ACCOUNT, CHAT_KEY_FILE, CHAT_MODEL)" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d -t crewhouse-upgrade.XXXXXX)

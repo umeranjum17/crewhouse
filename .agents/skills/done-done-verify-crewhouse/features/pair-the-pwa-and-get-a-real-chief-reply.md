@@ -10,8 +10,10 @@ the real route shows a reply.
 
 ## Driving it
 
-1. Needs a key in the environment, named: `CHAT_KEY_ENV=OPENROUTER_API_KEY` (the key is read by name, never
-   printed, logged or kept) and a network for the sign-in, the model call and the engine set.
+1. Needs the person's own key file (the repo's usual place, `~/.config/openrouter/api_key`; `CHAT_KEY_FILE` names
+   another): the key comes by path, is read into the sign-in request and nowhere else — never printed, logged,
+   copied or kept — and is never taken from an environment variable. It also needs a network for the sign-in, the
+   model call and the engine set.
 2. Run `done-done verify core --outcome "<what a user can now do>"`; the run parks at the spend gate (a few live
    model calls on the free MiniMax M3.1 Flash) until the person answers, then `done-done respond --action approve
    --reason "<who approved>"` runs it. Or drive it directly: `scripts/verify/pair-chat.sh <out-dir>`.

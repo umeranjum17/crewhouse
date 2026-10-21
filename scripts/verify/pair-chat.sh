@@ -2,19 +2,19 @@
 # done-done journey `core`: the core user journey, end to end on the real product — a person pairs the PWA to
 # their own crew and gets a real Chief reply. One run, one person, one crew.
 #
-#   CHAT_KEY_ENV=OPENROUTER_API_KEY scripts/verify/pair-chat.sh <out-dir>
+#   scripts/verify/pair-chat.sh <out-dir>
 #
 # The lab: the real engine (OpenClaw through the BYOKit kit) on the account the key signs in, the repo's own
 # relay (the PWA's way in), the built web shell on a public-style origin, and one Chromium under Xvfb that pairs,
-# says hello and waits for Chief's words. The key is read from the environment by name only: never printed,
-# logged, copied or kept. The model is the account's own (OpenRouter's free MiniMax M3.1 Flash).
-# Spends a few model calls on that key.
+# says hello and waits for Chief's words. The key comes by path (`CHAT_KEY_FILE`, the repo's usual place), is
+# read into the sign-in request and nowhere else: never printed, logged, copied or kept. The model is the
+# account's own (OpenRouter's free MiniMax M3.1 Flash). Spends a few model calls on that key.
 #
 # Evidence in <out-dir>: chief-reply-{day,night}-{390,1440}.png (the real answer in the paired app),
 # two-words-390.png (the pairing in the person's hands), reply.txt (Chief's words), run.json (every step),
 # crewd.log, steps.json (the run's step record) and ready.txt.
 set -euo pipefail
-[ $# -ge 1 ] || { echo "usage: pair-chat.sh <out-dir>   (CHAT_ACCOUNT, CHAT_KEY_ENV, CHAT_MODEL)" >&2; exit 2; }
+[ $# -ge 1 ] || { echo "usage: pair-chat.sh <out-dir>   (CHAT_ACCOUNT, CHAT_KEY_FILE, CHAT_MODEL)" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 # The app under test: this checkout by default, an installed release by the upgrade journey (APP_DIR).
@@ -47,10 +47,12 @@ PORT=$(free); LINK_PORT=$(free); RPORT=$(free); WPORT=$(free)
 B="http://127.0.0.1:$PORT"; RELAY="http://127.0.0.1:$RPORT"; WEB="http://crewhouse.localhost:$WPORT"
 ACCOUNT=${CHAT_ACCOUNT:-openrouter}
 MODEL=${CHAT_MODEL:-minimax/minimax-m3.1-flash:free}
-KEY_ENV=${CHAT_KEY_ENV:-OPENROUTER_API_KEY}
+# The key comes by path (the person's own key file, the repo's usual place), never from an environment
+# variable: it is read into the sign-in request and nowhere else.
+KEY_FILE=${CHAT_KEY_FILE:-$HOME/.config/openrouter/api_key}
 ASK=${CHAT_ASK:-Good morning Chief. Please say hello back in one short sentence.}
 export ASK
-[ -n "${!KEY_ENV:-}" ] || { echo "pair-chat: \$$KEY_ENV is empty" >&2; exit 2; }
+[ -s "$KEY_FILE" ] || { echo "pair-chat: no key in $KEY_FILE" >&2; exit 2; }
 # The engine's own set (the patched engine the kit builds) is heavy; keep it in one place a later run reuses.
 ENGINE_DIR=${CREWHOUSE_ENGINE_DIR:-$REPO/runtime/openclaw}
 mkdir -p "$ENGINE_DIR"
@@ -98,7 +100,7 @@ echo "pair-chat: the crew is ready in $((SECONDS - START))s" | tee "$OUT/ready.t
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 120 "${H[@]}" "$@"; }
 api -X POST "$B/api/accounts/1/$ACCOUNT/login" -d '{"via":"key"}' >/dev/null
-node -e 'process.stdout.write(JSON.stringify({ text: (process.env[process.argv[1]] ?? "").trim() }))' "$KEY_ENV" |
+node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEY_FILE" |
   api -X POST --data-binary @- "$B/api/accounts/1/$ACCOUNT/paste" >/dev/null
 for _ in $(seq 240); do api "$B/api/accounts" | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api "$B/api/accounts" | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "pair-chat: $ACCOUNT did not take the key" >&2; exit 1; }

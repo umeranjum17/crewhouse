@@ -10,13 +10,14 @@ evidence:
 journeys:
   # The core user journey: a person pairs the PWA to their own crew and gets a real Chief reply. The real engine
   # (OpenClaw through the BYOKit kit) on the account the key signs in, the repo's own relay, the built shell on a
-  # public-style origin, one Chromium that pairs, says hello and reads the answer. The key is read from the
-  # environment by name, never printed: OPENROUTER_API_KEY, the lead's own key, on the free MiniMax M3.1 Flash, so
-  # the run spends model calls but no money (no spend gate: the run would park for an approval nobody gives).
+  # public-style origin, one Chromium that pairs, says hello and reads the answer. The key comes by path (the
+  # person's own key file, the repo's usual place) and is read into the sign-in request and nowhere else, never
+  # printed, logged, copied or kept, and never taken from an environment variable. The model is the free MiniMax
+  # M3.1 Flash, so a run spends model calls but no money. The spend gate stays: the person answers it.
   core:
     core: true
     timeout: 45m
-    spends: 'a few live model calls on the free MiniMax M3.1 Flash, on the key the environment names (OPENROUTER_API_KEY)'
+    spends: 'a few live model calls on the free MiniMax M3.1 Flash, on the key the key file names'
     command: 'bash scripts/verify/pair-chat.sh "$DONE_DONE_EVIDENCE_ROOT"'
   # The release path: the previous shipped version (the app ships as an npm package with a bin), installed and
   # then upgraded over in place, and the core journey driven on the upgraded app.
