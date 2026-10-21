@@ -230,7 +230,6 @@ const noteLines = (cfg: Config, m: Memory) => { const t = readNotes(cfg, m).repl
 /** A memory change, enough to undo it: the line added and the one it replaced. */
 export interface Learned { added: string; removed: string | null; commit: string | null }
 
-
 /** Capped memory: rewrite, don't append. `replaces` names words of the old note a correction replaces. Over the cap is refused, so the bot must consolidate. */
 export function remember(cfg: Config, m: Memory, line: string, replaces = ''): Learned {
   const clean = line.replace(/\s+/g, ' ').trim();

@@ -3,7 +3,7 @@
 // (web/src/api.ts `setLink`); with no grant the public shell runs its demo. Loaded only on the public shell.
 import { DeviceLink, LinkError, browserDeviceStore, pairWithCode, pairWithOffer, type DeviceGrant } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
-import { NO_COMPUTER, NO_RELAY, readTyped } from './typed.ts';
+import { NO_HERE, NO_RELAY, readTyped } from './typed.ts';
 import { lineSignaling, setLink, type Json } from './api.ts';
 import { setBadge, turnOffNotifications } from './pwa.ts';
 import { clearKept } from './kept.ts';
@@ -32,16 +32,20 @@ export async function pair(text: string, onWords: (w: string) => void) {
   // an https page may dial only wss. Off the computer's network that gets through only with the relay's code; a wrong
   // host fails the handshake, so any other page loses nothing.
   else grant = await pairWithCode(`${location.origin.replace(/^http/, 'ws')}/link`, t.code, o).catch((e) => {
-    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(NO_COMPUTER) : e;
+    throw e instanceof LinkError && e.code === 'unreachable' ? new Error(NO_HERE) : e;
   });
   await store.save(grant);
 }
 
-/** The computer's QR (src/link.ts `offer()`) through the kit's own scan path. Its ws:// addresses are the computer's
+/** The computer's QR (src/link.ts `offer()`), or the link it opened this page by: the page's address with the offer after `#`
+ *  (`offerHere`), through the kit's own scan path. Its ws:// addresses are the computer's
  *  LAN ones, which an https page cannot dial, so they dial this page's address the way the typed code does (`dialHere`). */
 export async function scanned(qr: string, onWords: (w: string) => void) {
   await store.save(await pairWithOffer(qr, { name: deviceName(), onWords, resolve: dialHere }));
 }
+
+/** The pairing offer this page was opened with, or ''. */
+export const offerHere = () => (location.hash.includes('byokit-link:') ? location.hash.slice(1) : '');
 
 /** Back to the demo: tell the computer (briefly; it may be off), forget the grant, clear the icon's count. */
 let unpairing = false; // a deliberate Unpair is not "this device was removed"

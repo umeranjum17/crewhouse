@@ -43,7 +43,6 @@ const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a 
 const TASK_TIMEOUT_MS = 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // the engine silent this long: the run has hung
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
 
-
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
 
@@ -125,7 +124,6 @@ export const chiefGreeting = () =>
   '- We stop and ask you first before sending anything, spending money or touching your own files.\n' +
   '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
   'What would you like help with?';
-
 
 /** What changed between two readings of a page: the differing middle, with a little of what surrounds it, capped. */
 export function changed(before: string, now: string, cap = 1500) {
