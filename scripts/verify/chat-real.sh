@@ -25,7 +25,7 @@ if [ -n "${PACKAGE_DIR:-}" ]; then # a release as a person gets it: its own Node
   mkdir -p "$LAB/home/.local/state" "$LAB/home/.config" "$LAB/home/.cache"
   ST="$LAB/home/.local/state/crewhouse"; CR="$LAB/home/Crewhouse"; LINK=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
   START=$SECONDS
-  crewd_start "$PACKAGE_DIR/app" "$OUT/crewd.log" env -i PATH="$PACKAGE_DIR/node/bin:/usr/bin:/bin" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+  crewd_start "$PACKAGE_DIR/app" "$LAB/crewd.log" env -i PATH="$PACKAGE_DIR/node/bin:/usr/bin:/bin" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
     XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" CREWHOUSE_PACKAGED=1 CREWHOUSE_RUN_MODE=product CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK" \
     "$PACKAGE_DIR/node/bin/node" src/main.ts
 else
@@ -72,11 +72,12 @@ R=""
 DEADLINE=$((SECONDS + ${REPLY_SECONDS:-180}))
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=$(look)
-  case "$R" in done\ *) R=${R#done }; break;; end\ *) api /api/bots/chief > "$OUT/thread.json" || true; cp "$ST"/logs/openclaw*.log "$OUT"/ 2>/dev/null || true; echo "chat-real: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
+  case "$R" in done\ *) R=${R#done }; break;; end\ *) api /api/bots/chief > "$OUT/thread.json" || true; cp "$ST"/logs/openclaw*.log "$LAB/crewd.log" "$OUT"/ 2>/dev/null || true; echo "chat-real: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
   R=""; sleep 1
 done
 [ -n "$R" ] || { api /api/bots/chief > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
 printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R" > "$OUT/reply.txt"
+[ -z "${PACKAGE_DIR:-}" ] || { cat "$OUT/reply.txt"; grep -E "engine ready|first words|signed in" "$LAB/crewd.log" | cut -c1-120; } >> "$OUT/ready.txt" # the release run's one self-contained record
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
