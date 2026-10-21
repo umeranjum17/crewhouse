@@ -114,7 +114,7 @@ The ordinary draft card's **Edit** lets the person change the words first: `POST
 
 ## First run (today)
 
-`POST /api/onboard` `{address, ask, bot?}`: how Chief addresses the person and, from an idea card, their first request, in one tap. Only this explicit choice, Settings, or a request to change how they are addressed supplies the name; an ordinary first chat message starts a task with no name.
+`POST /api/onboard` `{address, ask, bot?}`: how Chief addresses the person (may be empty: Hello never asks for a name before the first job) and, from an idea card, their first request, in one tap. Only this explicit choice, Settings, or a request to change how they are addressed supplies the name; an ordinary first chat message starts a task with no name.
 Her Chief thread then starts with that request. From the goal starter it also carries `bot: 'scout'`: crewd hires Scout when missing and the person's account runs helpers, and the request starts as her own Scout task instead. On a plan without helpers it starts with Chief. With no AI account yet it waits (a `paused` task with no wake time) and Chief says one line ("Before we start: the crew thinks with your own ChatGPT, the same one you already use."); the app shows the sign-in right under it. Signing in starts it by itself, and Chief says "You're signed in. Thank you, Sara. On it now."
 
 ## Sign in with ChatGPT (today)

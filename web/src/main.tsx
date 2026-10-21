@@ -110,14 +110,13 @@ function Hello({ state, refresh, night }: Ctx) {
   // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
   const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   const pick = (ask: string, bot?: string) => {
-    if (!address.trim()) { setOther(true); input.current?.focus(); return KEPT; }
     return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
     <Split className="fr-hello" mark={<Face who="chief" size={88} />} title={`${A.greeting()}${address.trim() ? `, ${address.trim()}` : ''}.`}
       lead="I'm Chief. I run a small crew of helpers that live on this computer and work for you.">
       {other
-        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
+        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name, if you like" /></label>
         : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
       <h2 className="st-label plate"><span>What can I take off your plate?</span></h2>
       <div className="ideas">

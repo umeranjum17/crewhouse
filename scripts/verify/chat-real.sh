@@ -6,6 +6,9 @@
 #
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/chat-real.sh <out-dir> <minimax-key-file>
 #
+# Every step is stamped in <out-dir>/timeline.txt (seconds from crewd's start to the first Chief reply). ENGINE_DIR names
+# an engine install to reuse (CREWHOUSE_ENGINE_DIR), so a run can time the steps after the one-off install.
+#
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
 # with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and crewd.log in <out-dir>; non-zero when no reply
 # arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
@@ -20,7 +23,10 @@ trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
-crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+TL="$OUT/timeline.txt"; : > "$TL"
+mark() { printf '%s %s\n' "$(date +%s.%N)" "$1" >> "$TL"; }
+mark start
+crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" ${ENGINE_DIR:+CREWHOUSE_ENGINE_DIR="$ENGINE_DIR"} \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -35,21 +41,29 @@ for _ in $(seq 2400); do # the first start installs the engine
   sleep 0.25
 done
 [ -n "$PERSON" ] || { echo "chat-real: crewd never became ready" >&2; exit 1; }
+mark "engine ready"
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
-api /api/onboard -d '{"address":"Umer"}' > /dev/null
+# SHOTS=1 captures the first-day screens at 390 wide, day and night, before the sign-in (slower: time a run without it).
+export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
+shot() { [ "${SHOTS:-0}" = 1 ] || return 0; WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/first-run" "$@"; }
+OPEN_CHIEF="for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100));"
+shot hello "$B/#person=$PERSON"
+# The first-day path: no name, the first request typed on Hello, then the key. The request waits for the sign-in and starts by itself.
+ASK='Good morning Chief. Please say hello back in one short sentence.'
+api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null
+mark "first request sent"
+THEN="(async () => { $OPEN_CHIEF return !!document.querySelector('.ask'); })()" shot card "$B/#person=$PERSON"
+THEN="(async () => { $OPEN_CHIEF for (const b of document.querySelectorAll('.ai-picks button')) if (/MiniMax/.test(b.textContent)) { b.click(); break; } for (let i = 0; i < 50 && !document.querySelector('input[type=password]'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('input[type=password]'); })()" shot key-sheet "$B/#person=$PERSON"
 api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
+mark "key sheet open"
 node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
   api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
+mark "key pasted"
 for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
 api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chat-real: MiniMax did not take the key" >&2; exit 1; }
-# Flash is the model under test. The picker (PUT .../minimax/model) cannot choose it: the engine's catalog lists a key
-# sign-in's models as unavailable, so the lab names it in Chief's own bot.json, which every turn reads.
+mark "signed in"
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$MODEL"
-echo "chat-real: model $MODEL"
-ASK='Good morning Chief. Please say hello back in one short sentence.'
-api /api/bots/chief/messages -d "{\"text\":\"$ASK\"}" > /dev/null
 # Chief's reply: his words in the thread once the job is done. A job that failed is no reply, even though crewd writes
 # a line for it, so a model that rejects Chief's request fails here at once with that state.
 look() { api /api/bots/chief | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = t.tasks?.[0]?.state, m = (t.messages ?? []).filter((x) => x.author === "bot" && String(x.text ?? "").trim() && !/\bstub [\w-]+:/.test(x.text));
@@ -62,9 +76,15 @@ while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=""; sleep 1
 done
 [ -n "$R" ] || { api /api/bots/chief > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
+mark "first Chief reply"
+api /api/bots/chief > "$OUT/thread.json" || true
+cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
+# A MiniMax key starts on Flash with nothing picked by hand: the engine's own log names the model that answered.
+grep -q "\[model-fetch\] response provider=minimax .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "chat-real: the reply did not come from $MODEL" >&2; exit 1; }
+echo "chat-real: model $MODEL"
 printf '%s\n' "$R" > "$OUT/reply.txt"
-export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
+node -e 'const rows = require("node:fs").readFileSync(process.argv[1], "utf8").trim().split("\n").map((l) => [parseFloat(l), l.slice(l.indexOf(" ") + 1)]); for (const [t, w] of rows) console.log((t - rows[0][0]).toFixed(1).padStart(7), "s ", w)' "$TL"
 echo "chat-real: Chief replied; thread captured in $OUT/chat-real"

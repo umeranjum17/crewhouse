@@ -966,7 +966,7 @@ export class Crew {
 
   // ---- people ----
   onboard(address: string, ask?: string, bot?: string): { task: number } | void {
-    const a = needText(address, 40, 'say how Chief should address you'), hello = ask?.trim();
+    const a = clean(address, 40), hello = ask?.trim(); // no name is fine: Chief uses none until the person gives one
     let to = CHIEF;
     if (hello) {
       // Hello goal taps hire their helper when the person's account supports it.

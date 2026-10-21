@@ -141,7 +141,8 @@ export class OpenClawRuntime implements AgentRuntime {
   private async routeOf(account: string) { if (account !== 'chatgpt') return PROVIDER_OF[account]; if (process.env.CREWHOUSE_CODEX_CLI_ONLY === '1') return 'openai-codex'; const signed = await this.kit.providerStatus(ME).catch(() => undefined) ?? []; return signed.includes('openai-codex') && !signed.includes('openai') ? 'openai-codex' : 'openai'; }
   async signedIn(account: string) { const provider = await this.routeOf(account); return provider ? await this.kit.signedIn(ME, provider) : false; }
 
-  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> } {
+  signIn(account: string, via: 'browser' | 'code' | 'key', told: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> } {
+    const on = (step: SignInStep) => { if (step.done) { this.listed = undefined; void this.catalog().catch(() => {}); } told(step); }; // read the new catalog while the first run is being set up
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
@@ -177,16 +178,25 @@ export class OpenClawRuntime implements AgentRuntime {
     };
   }
 
-  async signOut(account: string) { const provider = await this.routeOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
+  async signOut(account: string) { this.listed = undefined; const provider = await this.routeOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
 
+  /** The engine's model catalog, read once for the picker, a MiniMax key's default and each run's thinking check (the read is slow under load); a sign-in or sign-out reads it again, because availability changes. */
+  private listed?: { at: number; read: Promise<{ models?: any[] }> };
+  private catalog() {
+    if (!this.listed || Date.now() - this.listed.at > 300_000) {
+      const read = this.kit.ensureMember(ME).then(({ agentId }) => this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 })); // 'all' is the kit's account read (default lists nothing)
+      read.catch(() => { this.listed = undefined; }); this.listed = { at: Date.now(), read };
+    }
+    return this.listed.read;
+  }
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
-    const provider = await this.routeOf(account), codexSigned = provider === 'openai-codex' && await this.kit.signedIn(ME, provider), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 }); // 'all' is the kit's account read (default lists nothing); the Codex CLI owns its login, so its models read missing-auth until signed in
-    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
+    const provider = await this.routeOf(account), signed = ['openai-codex', 'minimax'].includes(provider) && await this.kit.signedIn(ME, provider), r = await this.catalog(); // the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
+    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
   private async thinks(provider: string, model: string | undefined, level: string) {
-    const r = await this.kit.call('models.list', { agentId: (await this.kit.ensureMember(ME)).agentId, view: 'all' }, { timeoutMs: 20_000 }).catch(() => undefined), levels = r?.models?.find((m) => m.provider === provider && (model ? m.id.replace(`${provider}/`, '') === model : m.tags?.includes('default')))?.thinkingLevels;
+    const levels = (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && (model ? m.id.replace(`${provider}/`, '') === model : m.tags?.includes('default')))?.thinkingLevels;
     return !levels || levels.some((l: { id: string }) => l.id === level);
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
@@ -209,7 +219,7 @@ export class OpenClawRuntime implements AgentRuntime {
   async setLearning(on: boolean) { await this.kit.patchConfig({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }); }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
+    const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : provider === 'minimax' ? (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && /flash/i.test(m.id))?.id.replace(`${provider}/`, '') : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
     const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider); this.runs.set(spec.key, { ...spec, keyLane: keyLane && !spec.key.startsWith('agent:byokit-key-') }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
     try {
       const lane = keyLane ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
