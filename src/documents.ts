@@ -41,7 +41,6 @@ export async function buildDocument(file: string, spec: DocumentSpec) {
   return { parts: blocks.length };
 }
 
-
 /** One plain part of the preview: a heading, a paragraph, a bullet, or a table. */
 export type Part = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
 

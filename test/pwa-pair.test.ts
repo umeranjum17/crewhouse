@@ -21,7 +21,7 @@ import { until, delegated } from './lab.ts';
 import { LinkError } from '@byokit/pair';
 import { pair } from '../web/src/link.ts';
 import { pairWords } from '../mobile/src/pair-words.ts';
-import { NO_COMPUTER } from '../web/src/typed.ts';
+import { NO_COMPUTER, NO_HERE } from '../web/src/typed.ts';
 
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
@@ -91,7 +91,8 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await send('Page.navigate', { url: shell });
   await until('the first question', async () => (await mode()) === 'where', 30_000);
   // A release build keeps the cloud row off until BYOKit's cloud kit is published (CREWHOUSE_CLOUD unset).
-  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['On my computer', 'Just on this phone']);
+  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['On my computer']);
+  // The web app has no phone-only mode to offer, so there is no row that dead-ends.
 
   // A share that lands before the person has paired is kept, not dropped: the Share view asks to connect first (J14).
   await send('Page.navigate', { url: `${shell}share?text=Dinner%20at%20Luigi` });
@@ -153,6 +154,23 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await run(`location.hash = '#/settings'`);
   await until('the plain no-mailbox words', () => run(`/no mailbox for notifications yet/.test(document.body.innerText)`));
   assert.equal(await run(`[...document.querySelectorAll('.notify-on,.notify-off')].length`), 0, 'nothing to tap that cannot work');
+
+  // The computer's QR is a link to its own web app once it has a web address (Tailscale's, or the person's own server's;
+  // here the page's own origin): the phone's camera opens that app, which pairs from the address with no typing.
+  await run(`(() => { window.confirm = () => true; [...document.querySelectorAll('button')].find((b) => b.textContent === 'Unpair').click(); })()`);
+  await until('back to the first question for the link', async () => (await mode()) === 'where', 20_000);
+  assert.deepEqual(await http('PUT', '/api/phones/web', { address: 'not an address' }).then((r) => r.error), 'a web address starts with https://');
+  assert.equal((await http('PUT', '/api/phones/web', { address: new URL(shell).origin })).web, new URL(shell).origin);
+  const qr = (await http('POST', '/api/phones/pair', { role: 'control' })).qr as string;
+  assert.ok(qr.startsWith(`${new URL(shell).origin}/#byokit-link:`), 'the QR is a link to the computer\'s own app');
+  await send('Page.navigate', { url: qr });
+  let asking: { id: number; words: string } | undefined;
+  await until('the computer to ask', async () => (asking = (await http('GET', '/api/phones/link')).asking[0]), 20_000);
+  await until('the two words on the page', async () => (await run(`document.querySelector('.pair-words')?.textContent ?? ''`)) === asking!.words);
+  assert.equal(await run(`location.hash`), '#/pair', 'the offer is out of the address bar once it is used');
+  await http('POST', '/api/phones/answer', { id: asking!.id, yes: true });
+  await until('the same page on real data from the link', async () => (await mode()) === 'real', 20_000);
+  assert.equal(await devices(), 1, 'the computer lists this browser');
 });
 
 test('a well-formed code whose relay cannot be reached says so in plain words and pairs nothing', async () => {
@@ -163,11 +181,11 @@ test('a mistyped 12-letter code says it has a typo, not that it is cut off', asy
   await assert.rejects(pair('BCDF-GHJK-MNP1', () => {}), { message: 'That code has a typo. Check the 12 letters on your computer and try again.' });
 });
 
-test('a 12-letter code the computer cannot be reached at says to scan the QR, in the words the phone uses too', async () => {
+test('a 12-letter code typed on a page that is not the computer says to scan its QR', async () => {
   // The page's own origin is the computer's link (web/src/link.ts `pair`): nothing listens on this one.
   Object.assign(globalThis, { location: new URL('http://127.0.0.1:1/') });
   try {
-    await assert.rejects(pair('BCDF-GHJK-MNPQ', () => {}), { message: NO_COMPUTER });
+    await assert.rejects(pair('BCDF-GHJK-MNPQ', () => {}), { message: NO_HERE });
   } finally {
     delete (globalThis as { location?: unknown }).location;
   }
@@ -176,13 +194,7 @@ test('a 12-letter code the computer cannot be reached at says to scan the QR, in
 test('the phone words a failure with the same sentences the web app shows, and an approval that timed out with the link\'s own', async () => {
   const failure = (p: Promise<unknown>) => p.then(() => assert.fail('it paired'), (e: Error) => e);
   const relay = await failure(pair('VBF8PJ-G4S7-KC97-H5GM@http://127.0.0.1:1', () => {}));
-  Object.assign(globalThis, { location: new URL('http://127.0.0.1:1/') });
-  let computer: Error;
-  try {
-    computer = await failure(pair('BCDF-GHJK-MNPQ', () => {}));
-  } finally {
-    delete (globalThis as { location?: unknown }).location;
-  }
+  const computer = new Error(NO_COMPUTER); // the phone's own (mobile/src/link.ts): it is on the Wi-Fi
   assert.equal(pairWords(computer), 'Your phone could not find your computer on this Wi-Fi. Scan the QR on your computer instead.');
   assert.equal(pairWords(relay), "Could not reach your computer's relay. Check it is on and try again.");
   assert.equal(pairWords(new LinkError('timeout')), "Your computer didn't answer in time.");
