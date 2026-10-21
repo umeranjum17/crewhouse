@@ -49,8 +49,8 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
 export interface Brain { provider: string; model?: string }
 
 export function parseBrain(s: string): Brain {
-  const [provider, model, extra] = String(s).trim().split(':');
-  if (!PROVIDERS[provider] || extra !== undefined || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]]{0,63}$/.test(model))) {
+  const [provider, ...rest] = String(s).trim().split(':'), model = rest.join(':') || undefined; // an OpenRouter id may carry a tag after a colon (`minimax/minimax-m3.1-flash:free`)
+  if (!PROVIDERS[provider] || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]:]{0,63}$/.test(model))) {
     throw Object.assign(new Error(`not an AI account: "${s}" (try ${Object.keys(PROVIDERS).slice(0, 3).join(', ')})`), { status: 400 });
   }
   return model ? { provider, model } : { provider };

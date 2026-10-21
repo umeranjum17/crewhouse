@@ -965,10 +965,8 @@ export class Crew {
 
   // ---- people ----
   onboard(address: string, ask?: string, bot?: string): { task: number } | void {
-    const a = needText(address, 40, 'say how Chief should address you'), hello = ask?.trim();
-    let to = CHIEF;
-    if (hello) {
-      // Hello goal taps hire their helper when the person's account supports it.
+    const a = clean(address, 40), hello = ask?.trim(); let to = CHIEF; // no name is fine: Chief uses none until the person gives one
+    if (hello) { // Hello goal taps hire their helper when the person's account supports it.
       try {
         const t = disk.loadTemplate(this.cfg, bot ?? ''), hired = this.bots().find((b) => b.template === t.id)?.id, brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
         if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person').id;

@@ -1,0 +1,69 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "809ada2098f091dd109ab4fd0076df8e5a744772",
+  "tree": "13da43e5a8e66f2bab12566edbef6bd00bdf554d",
+  "claim": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+  "result": "pass",
+  "at": "2026-10-21T08:28:46.270Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/chat-real/chief-day-390.png",
+      "sha256": "2911c95206bcb0545ba02e31b3b10697c41e36bb7b2a708807c1c45d666d86b7"
+    },
+    {
+      "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/chat-real/chief-night-390.png",
+      "sha256": "d3de07bfa2e43f54860ed5968c35077eba60ef81e7501d032d6183ba9f6b2808"
+    },
+    {
+      "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/reply.txt",
+      "sha256": "dbf8c6260afa38f1c18368b2e8f24dc9fadfc8b4555b77ed9ccc08a6f90472f4"
+    },
+    {
+      "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/timeline.txt",
+      "sha256": "fef6533120b73606cc98b59546c7171e9cc1430258d58b5c1b61b1368933ab5b"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T082548Z-809ada20-7b89af",
+      "journey": "chat-real",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/chat-real.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\""
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/chat-real/chief-day-390.png",
+        "sha256": "2911c95206bcb0545ba02e31b3b10697c41e36bb7b2a708807c1c45d666d86b7",
+        "verdict": "pass",
+        "seen": "The newest messages at the bottom of the Chief thread read \"You're signed in. I'll start now.\" followed by \"Good morning. I'm here and the deck is clear.\" Earlier, the user's message \"Good morning Chief. Please say hello back in one short sentence.\" was answered first with a sign-in request (\"The crew uses your AI account. Sign in when you're ready and I'll start.\"). This matches the outcome: the request waited for AI sign-in and then got a real reply in Chief's thread. The outcome's \"no name given\" detail is not clearly visible, since the message does address Chief by name, so some uncertainty remains. The outcome names one part, so parts and covers are empty."
+      },
+      {
+        "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/chat-real/chief-night-390.png",
+        "sha256": "d3de07bfa2e43f54860ed5968c35077eba60ef81e7501d032d6183ba9f6b2808",
+        "verdict": "pass",
+        "seen": "The outcome names one flow, so no parts are listed. The screenshot shows the Chief thread with the user's request, \"Good morning Chief. Please say hello back in one short sentence.\" Below a NEW divider, Chief replies \"The crew uses your AI account. Sign in when you're ready and I'll start.\" Then \"You're signed in. I'll start now.\" Then \"Good morning. I'm here and the deck is clear.\" That matches waiting for AI sign-in and then getting a real reply in the same thread. The screenshot does not show the launch itself, so that part is inferred."
+      },
+      {
+        "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/reply.txt",
+        "sha256": "dbf8c6260afa38f1c18368b2e8f24dc9fadfc8b4555b77ed9ccc08a6f90472f4",
+        "verdict": "pass",
+        "seen": "The capture is one entry. It shows Chief replying to a first request typed with no name, after an OpenRouter key sign-in, with the text 'Good morning. I'm here and the deck is clear.' and names minimax/minimax-m3.1-flash:free in the engine log. That matches the outcome: a no-name first request gets a real reply from Chief after AI sign-in. The outcome names only one part, so parts and covers are empty."
+      },
+      {
+        "path": "<evidence root>/20261021T082548Z-809ada20-7b89af/timeline.txt",
+        "sha256": "fef6533120b73606cc98b59546c7171e9cc1430258d58b5c1b61b1368933ab5b",
+        "verdict": "pass",
+        "seen": "I read all 8 capture entries. The request was sent at 1792571254.545 before the key sheet opened at .575. The key was pasted at .725 and sign-in completed at .390, so the request waited for sign-in. The first Chief reply arrived at 1792571297.923, and the engine log shows model minimax/minimax-m3.1-flash:free answered at .934. That matches the outcome: a first-launch request with no name, waiting for sign-in, then a real reply from Chief. The outcome names one part, so parts is empty."
+      }
+    ]
+  }
+}
