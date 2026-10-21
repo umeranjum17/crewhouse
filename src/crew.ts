@@ -1488,7 +1488,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
       // A turn with no words and no calls is never silent: it failed. An action ends done only with crew_outcome; no confirmation means unsure.
-      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), bare = !text && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ?", botId, task.id), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
+      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), bare = !text && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", botId, task.id), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       if (!text && !this.db.get("SELECT 1 FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", task.id)) return this.setTask(task, 'failed', botId === CHIEF ? "I couldn't finish this one." : `${b.display} couldn't finish this one. Try again.`);
       if (uncertain || unchecked || bare || (said ? !said.worked : task.acted)) {

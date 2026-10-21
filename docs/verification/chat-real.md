@@ -8,6 +8,10 @@ The stub engine's `stub <bot>:` lines are hidden by the app on purpose (`STUB` i
 
 Needs a MiniMax key file already on the machine. Never put a key in the repo or CI.
 
+## A helper's job (`HELPER=scout`)
+
+`HELPER=scout HELPER_NAME="Research Rae" ASK='Ask Research Rae to …' REPLY_SECONDS=1200` hires that template on the same model, asks Chief to hand it the job, and waits on the helper's own task. It must end `done` with the helper's words (a job that closes with no answer is `unsure` and fails the journey). A web-research job takes about 10 minutes on Flash. It also captures the helper's page at 390 (`helper/<id>-{day,night}-390.png`).
+
 ## Capture
 
 Chief's thread at 390 wide, day and night (`chat-real/chief-{night,day}-390.png`): the person's message and Chief's reply, no error line. `reply.txt` holds the words.
