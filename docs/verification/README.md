@@ -43,6 +43,15 @@ finding `spend-1`) until the person answers. `done-done respond --action approve
 Without that approval the journey is NOT RUN; never drop `spends:` or wrap its driver in
 `done-done run --` to get past the ask.
 
+Every journey leaves the step record done-done reads beside its captures: what a person
+did, and what they can see at the end. One writer for all of them
+(`scripts/verify/steps.mjs`) and one record per journey in `scripts/verify/steps.json`,
+named after the journey script. A journey adds its record with one call
+(`node scripts/verify/steps.mjs "$OUT" <name>`, or `writeSteps(EV, '<name>')` in a node
+driver); the record's own words come from the registry, and a journey that has words of
+its own passes them on (`"ask=$ASK"`, `"model=$MODEL"`). A journey that leaves no record
+cannot be sealed: `done-done check` refuses the run with "has no step record".
+
 ## Baseline preconditions
 
 - crewd healthy at `http://127.0.0.1:$PORT` (engine: stub), started by this run, per runbook.md.

@@ -26,6 +26,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { writeSteps } from './steps.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => { const i = args.indexOf(`--${name}`); return i < 0 ? fallback : args[i + 1]; };
@@ -118,4 +119,5 @@ for (let run = 1; run <= RUNS; run++) {
   console.log(JSON.stringify(row));
 }
 writeFileSync(join(OUT, 'timings.json'), JSON.stringify(log, null, 2));
+writeSteps(OUT, 'phone-pair');
 if (log.some((r) => !r.paired)) process.exit(1);

@@ -30,3 +30,4 @@ for variant in false true; do
   done; done
 done
 ls "$OUT"/cli-cause-signin-*.png | wc -l | grep -qx 8
+node "$REPO/scripts/verify/steps.mjs" "$OUT" cli-cause

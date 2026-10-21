@@ -1,5 +1,7 @@
 // The home-screen app proof (docs/verification/pwa-shell.md): one isolated Chromium driven over CDP from a plan.
-//   node pwa-shell.mjs <plan.json>     (headed installs: under `xvfb-run -a`, with "headless": false)
+//   node pwa-shell.mjs <plan.json> [--out <evidence-dir>]     (headed installs: under `xvfb-run -a`, with "headless": false)
+// With --out, the run leaves the step record done-done reads beside its captures; a plan's own "record"
+// ({start, steps, result}) is the record then, and the repo's own one for this script is the fallback.
 // plan: { profile, home, headless?, args?, xkey?, recorder?, steps: [{ name, w, h, dpr, mobile, ua, platform, touch,
 //   insets, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant, deny }] }
 // `grant` allows the listed permissions for the page's origin; `deny: true` blocks its notifications, as a person's "Block" does.
@@ -10,7 +12,11 @@
 // entry and icons to XDG_DATA_HOME, so an inherited one lands them in the owner's own menu.
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { writeSteps, writeStepsRecord, version } from './steps.mjs';
 const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+// --out <evidence-dir> leaves the step record done-done reads beside the captures; the plan's own record wins.
+const outAt = process.argv.indexOf('--out');
+const OUT = outAt < 0 ? null : process.argv[outAt + 1];
 mkdirSync(plan.profile, { recursive: true });
 rmSync(plan.profile + '/DevToolsActivePort', { force: true }); // a reused profile keeps the last run's port
 const args = [`--user-data-dir=${plan.profile}`, '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', '--password-store=basic', '--disable-features=Translate', ...(plan.headless === false ? ['--ozone-platform=x11'] : ['--headless=new']), ...(plan.args ?? ['about:blank'])];
@@ -82,4 +88,8 @@ for (const st of plan.steps) {
 if (rec) { rec.kill('SIGTERM'); if (await rec.done !== 0) out.push({ error: 'recorder failed' }); }
 console.log(JSON.stringify(out, null, 1));
 ws.close(); chrome.kill('SIGTERM');
+if (OUT) {
+  if (plan.record) writeStepsRecord(OUT, { target: { version: version() }, ...plan.record });
+  else writeSteps(OUT, 'pwa-shell');
+}
 if (out.some((step) => step.error)) process.exitCode = 1;

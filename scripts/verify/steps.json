@@ -1,0 +1,275 @@
+{
+  "ask-in-view": {
+    "start": "a fresh crew on the stub engine, with one card waiting for the person in Chief's thread",
+    "steps": [
+      "Open Chief's thread on the phone and on the computer",
+      "Read the ask card that needs the person, under Chief's first answer",
+      "Scroll the thread up and back down"
+    ],
+    "result": "The ask card's own top is inside the thread box at 390 and 1440, day and night: the card is never hidden behind the composer"
+  },
+  "chat-real": {
+    "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+    "steps": [
+      "Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked",
+      "Chief says the crew needs an AI account to start; open the key sign-in sheet",
+      "Paste a MiniMax key and sign in",
+      "Wait while Chief starts the request and writes his answer in his thread"
+    ],
+    "result": "Chief replies in his thread on {{model}} to: {{ask}}"
+  },
+  "chat-real-helper": {
+    "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+    "steps": [
+      "Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked",
+      "Open the key sign-in sheet, paste an account key and sign in",
+      "Hire the {{bot}} helper",
+      "Message Chief: {{ask}}",
+      "Open the {{bot}} helper page"
+    ],
+    "result": "The {{bot}} helper's job ends with its own answer and a Document card, not a bare Done, on {{model}}"
+  },
+  "chief-soul": {
+    "start": "a fresh crew on the stub engine, with Chief's personality as it ships",
+    "steps": [
+      "Open Settings and read Chief's personality",
+      "Change it, save it and read it back",
+      "Put Chief's personality back the way it started",
+      "Open Chief's Instructions page"
+    ],
+    "result": "Chief's personality is read, changed, saved and put back, and his Instructions page opens, at 390 and 1440, day and night"
+  },
+  "cli-cause": {
+    "start": "a fresh crewd whose sign-in sheet cannot finish on its own",
+    "steps": [
+      "Open the sign-in sheet and choose the account that needs the command line",
+      "Read what the sheet says when the sign-in cannot happen from here"
+    ],
+    "result": "The sign-in sheet names the command line sign-in and what to do about it, in plain words, at 390 and 1440, day and night"
+  },
+  "crew-room": {
+    "target": { "version": "{{version}}+{{sha}}" },
+    "start": "a fresh Crewhouse with Scout and Scribe on the crew, signed in to {{model}}",
+    "steps": [
+      "Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back",
+      "Wait for Chief to hand the work on and close the job",
+      "Open the crew room at 390 wide, day and night, tall enough to show the whole thread"
+    ],
+    "result": "The crew room shows Chief's brief to Scout, Scout's answer, Chief's brief to Scribe, Scribe's answer, and Chief's standup as the last line"
+  },
+  "event-routines": {
+    "start": "a fresh crew on the stub engine, with no Google account connected",
+    "steps": [
+      "Connect Gmail and Calendar through the app's own sign-in",
+      "Let Chief offer a routine for an email from the bank and one before each meeting",
+      "Say yes to both routine cards",
+      "Wait for crewd's own tick to start the routine when the email and the meeting are there"
+    ],
+    "result": "Both routines are on the crew's list, and the tick starts the job once the email and the meeting are there"
+  },
+  "files-gate": {
+    "start": "a helper's finished files: a picture, a video, a PDF and a spreadsheet, delivered into the crew",
+    "steps": [
+      "Open the delivered picture, the video and the PDF in the app",
+      "Download the finished spreadsheet from the files panel",
+      "Ask for a delivered file without the person's own authority"
+    ],
+    "result": "Only the person's own app opens the delivered files; anything else is refused with 403"
+  },
+  "new-pill": {
+    "start": "a fresh crew on the stub engine, with a Chief turn still running",
+    "steps": [
+      "Read up in the thread while the turn is still running",
+      "Watch a new line land below the place you read to",
+      "Tap the New pill over the composer"
+    ],
+    "result": "The thread keeps its place while you read up, and the New pill jumps to the latest line"
+  },
+  "pair-chat": {
+    "start": "a fresh crew on this computer, with no phone or browser paired yet",
+    "steps": [
+      "open the app in a browser",
+      "pair it to the computer with the code the computer prints",
+      "say the two words are the same at the computer",
+      "say hello to Chief"
+    ],
+    "result": "Chief answers in his thread in the paired app"
+  },
+  "personal-voice": {
+    "start": "the repository's own words, before any check runs",
+    "steps": [
+      "Scan the app's own copy for a household, a family or a team",
+      "Run the negative test: a known-bad string must fail and a known-good one must pass"
+    ],
+    "result": "The copy check passes: no screen, capture, demo seed or Chief prompt speaks about a family, a household or a team"
+  },
+  "phone-chat-keep": {
+    "start": "the phone-only app with a chat that already has turns in it",
+    "steps": [
+      "Open the phone's chat and read the turns",
+      "Force-stop the app and open it again",
+      "Try again on the turn that was interrupted"
+    ],
+    "result": "The chat is still there after a reload, the killed turn comes back as Interrupted with Try again, and the queued message goes when the phone hears the model again"
+  },
+  "phone-continue": {
+    "start": "a phone-only chat with Chief, with no computer paired yet",
+    "steps": [
+      "Send Chief a message on the phone",
+      "Open the same chat on the paired computer",
+      "Send the next message from the computer"
+    ],
+    "result": "The computer holds the chat and the phone's copy goes once the computer stored it"
+  },
+  "phone-live-control": {
+    "target": { "version": "{{sha}}" },
+    "start": "a fresh Crewhouse on the real engine, signed in to a MiniMax Flash key, with a helper (Research Rae) on the phone layout at 390 wide",
+    "steps": [
+      "Ask the helper to read a file and tap Yes, go ahead on its ask",
+      "Give the helper a long job and open its chat: the control bar reads At work, Take control, Stop",
+      "Tap Stop: the job ends Stopped by you and the thread says Stopped",
+      "Give it another long job, tap Take control and see You have control, then Hand it back"
+    ],
+    "result": "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back"
+  },
+  "phone-pair": {
+    "start": "the real app on an emulator, with the camera showing the code the computer prints",
+    "steps": [
+      "Open the app and tap Scan the code",
+      "Point the phone's camera at the code",
+      "Confirm at the computer that the two words match"
+    ],
+    "result": "The phone lands on You're in, and the computer shows the phone as paired"
+  },
+  "phone-pair-timed": {
+    "start": "the real app on a phone, with the computer offering a code",
+    "steps": [
+      "Open the app and choose On my computer",
+      "Type the code at a person's pace",
+      "Say the two words are the same at the computer"
+    ],
+    "result": "The phone shows the two words and lands on You're in"
+  },
+  "phone-web-pair": {
+    "start": "a new person's phone browser, with no computer paired yet",
+    "steps": [
+      "Open the phone's app and scan the computer's code",
+      "Say the two words are the same at the computer",
+      "Open the paired app and chat with Chief"
+    ],
+    "result": "The paired phone shows Chief's reply in his thread at 390 wide"
+  },
+  "pwa-pair": {
+    "start": "a fresh crew on this computer, with no phone paired yet",
+    "steps": [
+      "Open the app on the computer and read the code it prints",
+      "Type the code on the phone",
+      "Say the two words are the same at the computer"
+    ],
+    "result": "The phone is paired and lands on the app's Home"
+  },
+  "pwa-shell": {
+    "start": "the app served as an installed home-screen app on its own origin",
+    "steps": [
+      "Install the app from Settings",
+      "Open it from the home screen and drive the plan's own steps"
+    ],
+    "result": "The installed app opens on its own origin and shows what the plan captured"
+  },
+  "quiet-nudge": {
+    "start": "a fresh stub-engine crewd with one helper",
+    "steps": [
+      "A helper job is held mid-run",
+      "Its recorded activity is five hours old, so crewd tick finds it quiet",
+      "Chief thread shows one line that the job has been quiet",
+      "Later ticks add no second line",
+      "Chief thread is captured at 390 and 1280, day and night",
+      "The job activity is 25 hours old and crewd stops it"
+    ],
+    "result": "Chief thread holds one plain line about the quiet job, and the job ended unsure"
+  },
+  "quiet-nudge-pwa": {
+    "start": "a fresh stub-engine crewd with one helper",
+    "steps": [
+      "A 390-wide browser app pairs with the computer by a relay code and the two words",
+      "A helper job is held mid-run and its recorded activity moved back five hours",
+      "crewd tick finds it quiet",
+      "The paired app Chief thread shows one line that the job has been quiet"
+    ],
+    "result": "The paired phone-sized app shows Chief one quiet-job line, day and night"
+  },
+  "screens-smoke": {
+    "start": "a fresh Crewhouse on the stub engine, a new person, no message sent yet",
+    "steps": [
+      "Open the app and let the person say hello from Hello",
+      "Send Chief a message",
+      "Open Home and read the crew's card",
+      "Open Chief's thread from his card on Home"
+    ],
+    "result": "Home shows the person's crew and Chief's thread shows the message that was sent, at 390 and 1440, day and night"
+  },
+  "signin-card": {
+    "start": "a fresh crewd with no account signed in",
+    "steps": [
+      "Open the app and ask Chief to start",
+      "Read the sign-in card and the account it recommends",
+      "Open Use another account"
+    ],
+    "result": "The sign-in card shows the recommended account and the other accounts, at 1440 and 390, day and night"
+  },
+  "site-signin": {
+    "start": "a fresh crewd with a helper that needs to sign in to a site",
+    "steps": [
+      "Let the helper ask to sign in to its site",
+      "Open Chief's Sign in card and sign in on the large screen",
+      "Tap Done and let the helper carry on"
+    ],
+    "result": "The helper's sign-in becomes Chief's card, Done hands it back, and the helper's own line says it is signed in"
+  },
+  "slides-deck": {
+    "start": "a helper's finished slide deck, delivered as a file",
+    "steps": [
+      "Ask the helper for a slide deck and pick the look on the card",
+      "Open the delivered deck in the app's preview panel",
+      "Read every slide at 1440 and 390, day and night"
+    ],
+    "result": "The preview panel shows the deck's slides one frame at a time, and the file opens as a real presentation"
+  },
+  "stub-drive": {
+    "start": "first launch of Crewhouse on the stub engine, a new person, nothing sent yet",
+    "steps": [
+      "Start Crewhouse and read the state: the person and Chief are there",
+      "Say hello from Hello (onboard)",
+      "Send Chief a message and wait for his reply in the thread",
+      "Read Chief's answer in his thread"
+    ],
+    "result": "Chief answers the first message on the API: {{reply}}"
+  },
+  "unlock-card": {
+    "start": "a helper's locked statement: a PDF only the person's password opens",
+    "steps": [
+      "Send the locked statement to a helper",
+      "Open the locked files card in Chief's thread and type the wrong password",
+      "Type the right password and read the unlocked copy"
+    ],
+    "result": "The wrong password keeps the file with a plain line, the right one opens the unlocked copy, and no store keeps the password"
+  },
+  "upgrade": {
+    "start": "the previous shipped version of Crewhouse, installed as a person installs it",
+    "steps": [
+      "Install the published version of Crewhouse on the computer",
+      "Upgrade it in place with this checkout's own build",
+      "Pair the installed app and say hello to Chief"
+    ],
+    "result": "The upgraded app pairs and Chief answers in the paired app; the version before and after are in upgrade.txt"
+  },
+  "workbook-chart": {
+    "start": "a helper's finished money answer: one spreadsheet with a bar chart and a pie chart",
+    "steps": [
+      "Ask the helper for a money answer with charts",
+      "Open the finished workbook in the app's preview panel",
+      "Read the chart on each sheet at 1440 and 390, day and night"
+    ],
+    "result": "The preview panel draws the bar and pie charts of the finished workbook, and the file's own chart parts are real"
+  }
+}

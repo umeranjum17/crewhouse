@@ -139,4 +139,5 @@ ax screenshot "$SH/demo-sheet-night-390.png" >/dev/null
 ax resize 1440 900 >/dev/null; ax open "$B/?demo&day#/f/scout/files%2Fflights-to-larkspur.xlsx" >/dev/null; ax eval "$PANEL" >/dev/null
 ax screenshot "$SH/demo-sheet-day-1440.png" >/dev/null
 ax stop >/dev/null 2>&1 || true
+node "$REPO/scripts/verify/steps.mjs" "$OUT" files-gate
 ls "$SH"

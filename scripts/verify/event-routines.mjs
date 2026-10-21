@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, 
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { startGoogleEmulator, ME, CLIENT } from '../../test/emulate-google.ts';
+import { writeSteps } from './steps.mjs';
 
 const EV = resolve(process.argv[2] ?? ''), REPO = resolve(import.meta.dirname, '../..');
 if (!process.argv[2]) { console.error('usage: event-routines.mjs <evidence-dir>'); process.exit(2); }
@@ -141,6 +142,7 @@ try {
     if (!seen.some((x) => x.step === 'standalone' && x.value === true) || bad.length) throw new Error(`the installed app: ${JSON.stringify(bad)} (pwa-run.json)`);
     log('captured the installed app: Routines at 390 day and night, 1280 day (pwa-run.json)');
   }
+  writeSteps(EV, 'event-routines');
   log('PASS');
 } catch (e) { failed = true; log(`FAIL: ${e.stack ?? e}`); }
 finally {

@@ -12,7 +12,7 @@
 #
 # Evidence in <out-dir>: chief-reply-{day,night}-{390,1440}.png (the real answer in the paired app),
 # two-words-390.png (the pairing in the person's hands), reply.txt (Chief's words), run.json (every step),
-# crewd.log, steps.json (the run's step record) and ready.txt.
+# crewd.log, the run's step record and ready.txt.
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: pair-chat.sh <out-dir>   (CHAT_ACCOUNT, CHAT_KEY_FILE, CHAT_MODEL)" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
@@ -135,13 +135,5 @@ fs.writeFileSync(process.argv[2], "You asked Chief: " + process.argv[3] + "\nChi
 console.log(reply);
 ' "$OUT/run.json" "$OUT/reply.txt" "$ASK" "$ACCOUNT:$MODEL" || exit 1
 # The step record done-done reads (the run's own steps, in the person's words).
-node -e '
-const fs = require("node:fs"), v = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-fs.writeFileSync(process.argv[2], JSON.stringify({
-  target: { version: v.version },
-  start: "a fresh crew on this computer, with no phone or browser paired yet",
-  steps: ["open the app in a browser", "pair it to the computer with the code the computer prints", "say the two words are the same at the computer", "say hello to Chief"],
-  result: "Chief answers in his thread in the paired app",
-}, null, 2) + "\n");
-' "$REPO/package.json" "$OUT/steps.json"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" pair-chat
 echo "pair-chat: Chief answered; evidence in $OUT"

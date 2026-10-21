@@ -154,4 +154,5 @@ console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/ho
 ' "$B" "$(<"$LAB/state/person.key")" "$LAB" "$OUT" "$REPO/scripts/verify" "$PANEL" "$DECK" > "$LAB/pwa-plan.json"
 mkdir -p "$OUT/pwa"; xvfb-run -a -s "-screen 0 1920x1200x24" "$NODE" "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa-plan.json" > "$OUT/pwa/run.json"
 "$NODE" -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const rows = r.filter((x) => "value" in x || x.error); console.log("pwa", JSON.stringify(rows)); process.exit(r.some((x) => x.error) ? 1 : 0)' "$OUT/pwa/run.json" | tee -a "$OUT/transcript.txt"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" slides-deck
 ls "$OUT/screens" "$OUT/pwa"

@@ -110,8 +110,9 @@ if [ "$BOT" != chief ]; then # the helper's own page, where its answer sits
 fi
 OK=1
 # done-done's step record: what a person did and saw
-node -e 'const [out, ask, model, bot] = process.argv.slice(1), h = bot !== "chief", v = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version;
-  require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: v }, start: "first launch of Crewhouse on a new computer, nobody signed in, no name given",
-  steps: h ? ["Open Crewhouse on a new computer", "Open the key sign-in sheet, paste an account key and sign in", "Hire the " + bot + " helper", "Message Chief: " + ask, "Open the " + bot + " helper page"] : ["Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked", "Chief says the crew needs an AI account to start; open the key sign-in sheet", "Paste a MiniMax key and sign in", "Wait while Chief starts the request"],
-  result: (h ? "The " + bot + " helper\u0027s job ends with its own answer and a Document card, not a bare Done, on " : "Chief replies in his thread on ") + model + " to: " + ask }, null, 2))' "$OUT" "$ASK" "$MODEL" "$BOT"
+if [ "$BOT" != chief ]; then
+  node "$REPO/scripts/verify/steps.mjs" "$OUT" chat-real-helper "bot=$BOT" "ask=$ASK" "model=$MODEL"
+else
+  node "$REPO/scripts/verify/steps.mjs" "$OUT" chat-real "ask=$ASK" "model=$MODEL"
+fi
 echo "chat-real: $BOT replied; thread captured in $OUT/chat-real"

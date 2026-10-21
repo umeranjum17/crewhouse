@@ -95,4 +95,5 @@ done
 [ -n "$R" ] || { echo "phone-web-pair: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
 printf '%s\n' "$R" > "$LAB/context/reply.txt"
 sleep 3; axi screenshot "$SHOTS/phone-chief-reply-day-390.png" > /dev/null
+node "$REPO/scripts/verify/steps.mjs" "$OUT" phone-web-pair
 echo "phone-web-pair: Chief replied on the paired phone; shots in $SHOTS"
