@@ -10,4 +10,4 @@ Needs a MiniMax key file already on the machine, or with `CREW_ACCOUNT=openroute
 
 ## Capture
 
-The room at 390 wide, day and night (`crew-room/room-{night,day}-390.png`: the hand-offs from the top) and the standup at the end of the thread (`crew-room/standup-{night,day}-390.png`). `WIDTHS` overrides the widths. Web captures only: the installed app and the phone are not proved by this journey.
+The whole room at 390 wide, day and night, one tall shot each (`crew-room/room-{night,day}-390.png`, 390x2800): Chief's brief to each helper from the top, each answer, and the standup at the end of the thread. `steps.json` is the step record done-done reads. `WIDTHS` overrides the widths. Web captures only: the installed app and the phone are not proved by this journey.

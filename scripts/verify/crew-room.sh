@@ -3,14 +3,14 @@
 # real engine (OpenClaw through the BYOKit kit) on the MiniMax account's Flash model, with Scout and Scribe on the crew.
 # One message asks Chief for a job that needs both; Chief hands it on natively. The journey waits, bounded, for his
 # closing words, checks the room (`GET /api/room`: Chief's own brief to each helper, one standup) and captures the crew
-# room at 390 wide, day and night: the hand-offs, then the standup at the end.
+# room at 390 wide, day and night, in one tall shot each: the hand-offs from the top to the standup at the end.
 #
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir> <minimax-key-file>
 #   CREW_ACCOUNT=openrouter CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir>   (key in OPENROUTER_API_KEY)
 #
 # The key is read from the file (or the variable) into the sign-in request only: never printed, logged, copied or kept in the repo.
 # On OpenRouter the model is its `minimax/minimax-m3.1-flash:free` entry (the key sign-in's catalog lists none, so the lab names it; CHAT_MODEL overrides). Exit 0
-# with crew-room/{room,standup}-{night,day}-390.png, room.json (the room as the app reads it) and crewd.log in <out-dir>;
+# with crew-room/room-{night,day}-390.png, room.json (the room as the app reads it) and crewd.log in <out-dir>;
 # non-zero when no standup arrives within REPLY_SECONDS (default 420) or fewer than two hand-offs reached the room.
 # WIDTHS overrides the capture widths. Spends a few model calls on that key's account.
 set -euo pipefail
@@ -77,13 +77,11 @@ node -e 'const r = JSON.parse(require("node:fs").readFileSync(process.argv[1], "
   if (!/\s/.test(last.text.trim())) { console.error("crew-room: Chief’s standup is one bare token (" + last.text.trim().slice(0, 40) + "), not words"); process.exit(1); }
   console.log("crew-room: " + hands.map((l) => "chief to " + l.to).join(", ") + "; standup: " + last.text.slice(0, 120).replace(/\n/g, " "))' "$OUT/room.json"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
-# The room, opened the way the app routes to it; the thread is its own scroller, so the second shot scrolls it to the standup.
+# The room, opened the way the app routes to it; the viewport is tall enough (390x2800) to hold the whole thread, so one shot shows the hand-offs and the standup.
 THEN="(async () => { location.hash = '#/room'; for (let i = 0; i < 80 && !document.querySelector('.room-page .line.standup'); i++) await new Promise((r) => setTimeout(r, 100)); const l = document.querySelector('.room-page .lines'); if (l) l.scrollTop = 0; return !!document.querySelector('.room-page .line.standup'); })()"
-export THEN WIDTHS="${WIDTHS:-390x844}"
+export THEN WIDTHS="${WIDTHS:-390x2800}"
 bash "$REPO/scripts/verify/screens.sh" "$OUT/crew-room" room "$B/#person=$PERSON"
-AFTER="(() => { const l = document.querySelector('.room-page .lines'); if (l) l.scrollTop = l.scrollHeight; document.querySelector('.room-page .line.standup')?.scrollIntoView({ block: 'end' }); return true; })()" \
-  bash "$REPO/scripts/verify/screens.sh" "$OUT/crew-room" standup "$B/#person=$PERSON"
 # The step record done-done reads beside the captures: what a person did and what they can see at the end.
 node -e 'const v = require(process.argv[1] + "/package.json").version + "+" + process.argv[2], m = process.argv[3];
-  require("node:fs").writeFileSync(process.argv[4] + "/steps.json", JSON.stringify({ target: { version: v }, start: "a fresh Crewhouse with Scout and Scribe on the crew, signed in to " + m, steps: ["Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back", "Wait for Chief to hand the work on and close the job", "Open the crew room at 390 wide, day and night", "Scroll the room to its end"], result: "The crew room shows Chief’s brief to Scout, Scout’s answer, Chief’s brief to Scribe, Scribe’s answer, and Chief’s standup as the last line" }, null, 2) + "\n")' "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "$ACCOUNT $MODEL" "$OUT"
+  require("node:fs").writeFileSync(process.argv[4] + "/steps.json", JSON.stringify({ target: { version: v }, start: "a fresh Crewhouse with Scout and Scribe on the crew, signed in to " + m, steps: ["Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back", "Wait for Chief to hand the work on and close the job", "Open the crew room at 390 wide, day and night, tall enough to show the whole thread"], result: "The crew room shows Chief’s brief to Scout, Scout’s answer, Chief’s brief to Scribe, Scribe’s answer, and Chief’s standup as the last line" }, null, 2) + "\n")' "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "$ACCOUNT $MODEL" "$OUT"
 echo "crew-room: Chief's standup is in the room; captures in $OUT/crew-room"
