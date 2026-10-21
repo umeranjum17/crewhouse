@@ -6,7 +6,7 @@ the copy Crewhouse now pins, and that an update brings the newer one in. Nothing
 
 ## Drive and witness
 
-`bash <task-owned drive script> <out-dir>` (stub engine). The script boots its own isolated crewd (the runbook's Launch),
+`bash scripts/verify/pinned-tool.sh <out-dir>` (stub engine). The script boots its own isolated crewd (the runbook's Launch),
 puts the pinned `yt-dlp` release the kit used before this change into the lab's tool folder with its own pin, onboards,
 recruits a helper from the `reel` template (it holds `video-download` and `files`), and posts the job that runs the tool on
 a link that never resolves. It waits for the job to settle, then captures the helper's "What happened" screen.

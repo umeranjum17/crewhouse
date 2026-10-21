@@ -10,7 +10,7 @@ not happen, that the copy Crewhouse pins is behind the newer one, and that an up
 ## Driving it
 
 1. Needs a task-named `CHROME_DEVTOOLS_AXI_SESSION` and a built web app (`npm run build:web`).
-2. Run the task-owned drive script (it boots its own stub-engine lab, puts the pinned `yt-dlp` release in the lab's tool
+2. Run `scripts/verify/pinned-tool.sh <out>` (it boots its own stub-engine lab, puts the pinned `yt-dlp` release in the lab's tool
    folder, recruits the `reel` helper and posts the failing job) — the recipe names every command.
 3. Capture: `pinned-tool-{night,day}-{1440,390}.png` and the look check's `look/pinned-tool-{day,night}.png`.
 4. It proves: the trail row is `ok: false` and says "Couldn't download a video", the step names the newer copy, and the
