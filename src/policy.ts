@@ -13,6 +13,8 @@ export type Effect =
 export interface Seen {
   bot: string;
   space: string;
+  /** The crew's own install: every helper's folder and the person's notes. The crew's own work is the crew's. */
+  crew?: string;
   /** The page the bot's browser is on, from its own tool results. */
   page?: string;
   /** Sites the person signed the bot in to (its browser acts there as them). */
@@ -85,6 +87,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     const path = resolve(s.space, String(input.path ?? '.'));
     if (inside(s.space, path)) return { kind: 'safe' };
     if (s.secret.some((d) => inside(d, path))) return { kind: 'refuse', why: 'That folder holds sign-ins and keys; no bot may open it.' };
+    // A look at the crew's own work (a helper's file, the notes) is nobody's business but the crew's.
+    if (!WRITES.has(base) && s.crew && inside(s.crew, path)) return { kind: 'safe' };
+    // Only the person's own files ask. Anything else is neither the crew's nor theirs: refuse it, so a bot's hunt
+    // for a file never parks the person's job on a question about a folder that is not theirs.
+    if (!WRITES.has(base) && !inside(homedir(), path)) return { kind: 'refuse', why: 'That folder is neither the crew\'s nor the person\'s: keep to your own folder.' };
     // A folder to look in (ls, grep, find) is the folder itself; a file is in its parent.
     const folder = base === 'read' || WRITES.has(base) ? folderWords(path) : folderWords(path + '/x'), key = `files:${base === 'read' || WRITES.has(base) ? dirname(path) : path}`, what = WRITES.has(base) ? `change a file in ${folder}: “${basename(path)}”` : base === 'read' ? `look at a file in ${folder}: “${basename(path)}”` : `look through ${folder}`;
     return { kind: 'files', words: `${s.bot} wants to ${what}.`, key, covers: `${folder}` };

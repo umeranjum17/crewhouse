@@ -1627,7 +1627,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private seen(botId: string, tools?: string[]) {
     const conf = disk.botConfig(this.cfg, botId), granted = new Set(tools ?? conf.tools ?? []);
     return {
-      bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
+      bot: this.bot(botId)!.display, space: disk.botDir(this.cfg, botId), crew: this.cfg.crewDir, page: this.live.get(botId)?.page, signedIn: conf.signedIn ?? [], apps: this.live.get(botId)?.apps,
       filledHost: this.live.get(botId)?.fills?.length ? this.hostOf(this.live.get(botId)?.page) : undefined,
       run: Object.fromEntries(registry(this.cfg, [...granted]).filter((t) => t.run && granted.has(t.id)).map((t) => [t.id.replace(/-/g, '_'), { name: t.name, ...t.run! }])),
       // Sign-ins and keys: the person's, former people's, the engine's, and other programs'. Nothing reads them through a bot.

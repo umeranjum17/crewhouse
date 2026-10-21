@@ -16,6 +16,9 @@ import { startServer } from '../src/server.ts';
 import { engineGaps, missing, probeEngine } from '../src/desktop.ts';
 
 const root = temp('crewhouse-test');
+// The gate asks about the person's own files, so the lab's HOME stands in for the person's: the daemon below and
+// this process share it, and the owner's own home is never read or written.
+process.env.HOME = join(root, 'home');
 // A port the OS says is free, not a random guess that another run may hold.
 const port = await new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as AddressInfo; s.close(() => r(port)); }); });
 const base = `http://127.0.0.1:${port}`;
@@ -160,7 +163,7 @@ test('parked peer reads: both approvals resume one turn and the person gets the 
     assert.equal(res.status, 200);
     return res.json();
   };
-  const outside = join(s.root, 'peer', 'files');
+  const outside = join(homedir(), 'peer', 'files');
   mkdirSync(outside, { recursive: true });
   const paths = ['ask permission-one.md', 'ask permission-two.md'].map((name) => join(outside, name));
   paths.forEach((path) => writeFileSync(path, 'A writing brief'));

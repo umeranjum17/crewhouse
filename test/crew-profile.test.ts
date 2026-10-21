@@ -2,8 +2,9 @@
 // in every helper's job context through the single prompt() path. Stub engine, no quota.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { setup, settled, holding, release, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
@@ -135,15 +136,30 @@ test('marketing recruitment and assignments carry the bakery profile and Chiefâ€
       assert.equal(outcome.source.path, path, 'an approved copy comes from the exact reviewed file, not the truncated receipt');
       assert.equal(db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.tool') IN ('crew_copy', 'browser', 'crew_app') AND json_extract(data, '$.task') IN (SELECT id FROM tasks WHERE root = ?)", campaign.task).length, 0, 'neither answer posts, sends or copies');
     }
-    const outside = join(cfg.crewDir, 'outside-chief.txt');
+    // A read of the crew's own work (a helper's file) asks nobody and never parks the job; a file that is neither
+    // the crew's nor the person's is refused, so a bot's hunt for a file cannot stop the job; a read of the
+    // person's own file still asks them, and that question is the only thing that parks a job.
+    const helperFile = join(cfg.crewDir, 'bots', 'research-rae', 'files', 'ideas.md');
+    mkdirSync(dirname(helperFile), { recursive: true });
+    writeFileSync(helperFile, 'The bench that got a name.');
+    const own = await api('/api/bots/chief/messages', { text: call('crew_read', { path: helperFile }) });
+    await settled(db, own.task);
+    assert.equal(db.all('SELECT * FROM asks WHERE task_id = ?', own.task).length, 0, 'the crew\'s own file asks nobody');
+    assert.notEqual(db.get('SELECT state FROM tasks WHERE id = ?', own.task)!.state, 'needs_you', 'the job does not park on it');
+    assert.match(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", own.task)!.data).head, /bench/, 'the read ran');
+    const elsewhere = await api('/api/bots/chief/messages', { text: call('crew_read', { path: '/etc/hostname' }) });
+    await settled(db, elsewhere.task);
+    assert.equal(db.all('SELECT * FROM asks WHERE task_id = ?', elsewhere.task).length, 0, 'a file that is neither the crew\'s nor the person\'s never asks');
+    assert.notEqual(db.get('SELECT state FROM tasks WHERE id = ?', elsewhere.task)!.state, 'needs_you', 'the job does not park on it');
+    const outside = join(homedir(), 'private.txt');
     writeFileSync(outside, 'Private fixture, never read without permission.');
     const parked = await api('/api/bots/chief/messages', { text: call('crew_read', { path: outside }) });
     await settled(db, parked.task);
     const ask = db.get("SELECT * FROM asks WHERE task_id = ? AND state = 'open'", parked.task)!;
-    assert.ok(ask, 'a Chief read outside its folder still asks the person');
+    assert.ok(ask, 'a Chief read of the person\'s own file still asks the person');
     assert.equal(JSON.parse(ask.detail).effect, 'files');
     assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', parked.task)!.state, 'needs_you');
-    assert.equal(db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", parked.task).length, 0, 'the unapproved outside read never executed');
+    assert.equal(db.all("SELECT * FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", parked.task).length, 0, 'the unapproved read never executed');
   } finally {
     await new Promise<void>((r, reject) => server.close((e) => e ? reject(e) : r()));
     done();
