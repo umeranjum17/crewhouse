@@ -4,7 +4,7 @@ A person watching a helper work on the phone layout (the installed PWA at 390 wi
 
 ## Drive and witness
 
-`PATH=/usr/bin:$PATH CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-live-control.sh <out-dir> <minimax-key-file>` (done-done journey `phone-live-control`, which spends a few model calls on that key). It boots an isolated crewd on the real engine, signs in to MiniMax through the key paste (read from the file into that request only), recruits Research Rae on `MiniMax-M3.1-Flash`, then through the app's own buttons:
+`PATH=/usr/bin:$PATH CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-live-control.sh <out-dir> <key-file | env:NAME>` (`LIVE_ACCOUNT=openrouter` signs in an OpenRouter key and pins `minimax/minimax-m3.1-flash:free`) (done-done journey `phone-live-control`, which spends a few model calls on that key). It boots an isolated crewd on the real engine, signs in to MiniMax through the key paste (read from the file into that request only), recruits Research Rae on `MiniMax-M3.1-Flash`, then through the app's own buttons:
 
 1. Approve: a job reading a file outside the helper's space; the bar reads Waiting, one tap on Yes, go ahead lets it through (each further ask is its own tap) and the reply carries the file's words;
 2. a live job: three engine steps, the bar reads At work, Take control, Stop; Stop ends it "Stopped by you.", the thread says "Research Rae · stopped" and no step arrives after;

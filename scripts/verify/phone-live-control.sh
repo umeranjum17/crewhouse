@@ -14,7 +14,9 @@
 # when any step does not happen within its bound. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: phone-live-control.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
-KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "phone-live-control: no key in the key file" >&2; exit 2; }
+KEYFILE=$2 # a path, or env:NAME for a key held in the environment
+ACCT=${LIVE_ACCOUNT:-minimax} # LIVE_ACCOUNT=openrouter: the same journey on MiniMax Flash through an OpenRouter key, when the MiniMax plan is out of quota
+KN=${KEYFILE#env:}; { [ "$KN" != "$KEYFILE" ] && [ -n "${!KN:-}" ] || [ -s "$KEYFILE" ]; } || { echo "phone-live-control: no key in the key file" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
@@ -48,17 +50,17 @@ H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; cp -r "$LAB/state/logs" "$OUT/engine-logs" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-key_state() { api /api/accounts | node -e 'const a = JSON.parse(require("node:fs").readFileSync(0)).find((x) => x.account === "minimax"); process.stdout.write(a?.signedIn ? "in" : a?.signIn?.state ?? "none")'; }
-signin() { api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
-  node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
-    api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null || return 1
+key_state() { api /api/accounts | node -e 'const a = JSON.parse(require("node:fs").readFileSync(0)).find((x) => x.account === process.argv[1]); process.stdout.write(a?.signedIn ? "in" : a?.signIn?.state ?? "none")' "$ACCT"; }
+signin() { api /api/accounts/1/$ACCT/login -d '{"via":"key"}' > /dev/null
+  node -e 'const k = process.argv[1]; process.stdout.write(JSON.stringify({ text: (k.startsWith("env:") ? process.env[k.slice(4)] : require("node:fs").readFileSync(k, "utf8")).trim() }))' "$KEYFILE" |
+    api /api/accounts/1/$ACCT/paste --max-time 120 --data-binary @- > /dev/null || return 1
   for _ in $(seq 45); do case "$(key_state)" in in) return 0;; failed) return 1;; esac; sleep 2; done; return 1; }
 for _ in 1 2 3 4; do signin && break; sleep 10; done # a loaded host can lose the engine's first sign-in turn: ask again
-[ "$(key_state)" = in ] || fail "MiniMax did not take the key"
+[ "$(key_state)" = in ] || fail "$ACCT did not take the key"
 api /api/recruit -d '{"template":"scout","name":"Research Rae"}' > /dev/null
-MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
+MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}; [ "$ACCT" != openrouter ] || MODEL=${CHAT_MODEL:-minimax/minimax-m3.1-flash:free}
 for b in chief research-rae; do # the picker cannot choose Flash (chat-real.sh): name it in each bot's own bot.json
-  node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/$b/bot.json" "$MODEL"
+  node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/$b/bot.json" "$MODEL" "$ACCT"
 done
 echo "phone-live-control: model $MODEL" | tee "$OUT/report.txt"
 

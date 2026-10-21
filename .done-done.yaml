@@ -41,11 +41,11 @@ journeys:
   pwa-plan:
     command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
   chat-real:
-    spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
-    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+    spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
   phone-live-control:
-    spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
-    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+    spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
   phone-pair:
     command: 'timeout -k 10 600 node scripts/verify/phone-pair.mjs --out "$DONE_DONE_EVIDENCE_ROOT" --state "${LAB:?owned lab}/state" --serial "${SERIAL:?owned emulator}" --base "${B:?owned daemon URL}" --apk "${APK:?release apk}" --record'
   phone-chat-keep:
