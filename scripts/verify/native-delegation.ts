@@ -15,7 +15,19 @@ if (mode === '--scripted') {
   const { startModelStub } = await import('../../test/openclaw-stub.ts');
   stub = await startModelStub(undefined, (body, text) => {
     const system = body.messages.filter((m: any) => m.role === 'system').map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
+    // Legwork: a spawned child answers its one item after its tool calls; Chief spawns, then answers when the reports are in.
+    const item = /\bitem=(\w+)/.exec(text)?.[1];
+    if (item) return { text, reply: `LEGWORK-DONE ${item}` };
+    const reports = [...new Set(JSON.stringify(body.messages.filter((m: any) => m.role !== 'system')).match(/LEGWORK-DONE \w+/g) ?? [])];
+    // The reports come back in a turn of the engine's own, without Chief's persona.
+    if (reports.length) return { reply: `Legwork is in: ${reports.map((r) => r.split(' ')[1]).sort().join(', ')}.` };
     if (!system.includes('Your id in Crewhouse is chief.')) return { text };
+    if (/\[legwork(-hold)?\]/.test(text)) {
+      const hold = text.lastIndexOf('[legwork-hold]') > text.lastIndexOf('[legwork]'); // the latest ask, not an earlier job Chief's prompt recalls: one lookup whose report never comes, for the restart proof to kill under
+      const own = /agentId "([a-z0-9-]+)"/.exec(system)?.[1] ?? 'm1', call = (input: object) => `[tool sessions_spawn ${JSON.stringify(input)}]`;
+      const read = (name: string) => `item=${name} [tool crew_profile {"text":"forbidden legwork change"}] [tool web_fetch {"url":"http://example.invalid/${name}"}]${hold ? ' ask permission' : ''}`;
+      return { text: [...hold ? [] : [call({ agentId: own, task: 'cwd is not allowed', cwd: '/' }), call({ agentId: 'not-an-agent', task: 'wrong agent' })], ...(hold ? ['held'] : ['alpha', 'beta', 'gamma']).map((name) => call({ agentId: own, task: read(name), label: name })), '[tool sessions_yield {"message":"Answer in one plain sentence."}]'].join(' ') };
+    }
     const report = body.messages.findLast((m: any) => m.role !== 'system' && JSON.stringify(m.content).includes(`stub ${helperId}:`) && JSON.stringify(m.content).includes('BLUE-42'));
     if (report) return { reply: `${helperName} checked the file. Umer owns the blue folder. Reference BLUE-42.` };
     const key = new RegExp(`${helperId}: (agent:[^\\s]+)`).exec(system)?.[1];
@@ -26,7 +38,7 @@ if (mode === '--scripted') {
   });
   process.env.CREWHOUSE_ENGINE_BASE_URL = stub.url; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';
   const legacy = join(scratch, 'state/people/1/engine/auth.json'); mkdirSync(join(legacy, '..'), { recursive: true });
-  const { legacyAuth } = await import('../../test/migrate-house.ts'); writeFileSync(legacy, legacyAuth());
+  if (!existsSync(join(scratch, 'state/crew.db'))) writeFileSync(legacy, (await import('../../test/migrate-house.ts')).legacyAuth()); // a rebooted lab keeps its household
 }
 if (mode === '--key-file') {
   const { createServer } = await import('node:net');
@@ -43,6 +55,7 @@ let stopLab!: () => void, turnUpperBound = 0;
 const stop = new Promise<void>(resolve => { stopLab = resolve; process.once('SIGTERM', () => resolve()); process.once('SIGINT', () => resolve()); });
 const countTurn = () => { if (++turnUpperBound >= 60) { console.error('Live proof stopped at its conservative lifecycle/host-tool activity ceiling.'); stopLab(); } };
 if (mode === '--key-file') db.onEvent(e => { if (e.kind === 'run.call') countTurn(); });
+(crew.runtime as OpenClawRuntime).kit.onEvent('byokit.delegated', e => appendFileSync(`${ready}.delegated.jsonl`, JSON.stringify({ type: e.type, reason: e.type === 'ended' ? e.reason : undefined, session: e.run.sessionKey, run: e.run.runId, root: e.run.root.runId }) + '\n'));
 if (mode === '--key-file') (crew.runtime as OpenClawRuntime).kit.onEvent('agent', e => {
   if (e.stream === 'lifecycle' || e.stream === 'tool') appendFileSync(`${ready}.native.jsonl`, JSON.stringify({ at: Date.now(), ...e }) + '\n');
   if ((e.stream === 'lifecycle' && e.data?.phase === 'start') || (e.stream === 'tool' && e.data?.phase === 'result')) {
@@ -70,7 +83,9 @@ try {
   console.log(`READY ${base} ${mode === '--scripted' ? 'scripted HTTP model' : 'live MiniMax M3'}`);
   await stop;
 } finally {
-  server?.closeAllConnections(); server?.close(); await crew.phoneLink?.close(); await crew.stop();
+  server?.closeAllConnections(); server?.close(); await crew.phoneLink?.close();
+  writeFileSync(`${ready}.delegated-runs.json`, JSON.stringify([...(crew.runtime as OpenClawRuntime).kit.delegatedRuns()].map(r => r.sessionKey)));
+  await crew.stop();
   writeFileSync(`${ready}.events.json`, JSON.stringify(db.all('SELECT * FROM events ORDER BY seq')));
   if (stub) writeFileSync(`${ready}.provider.json`, JSON.stringify(stub.calls.map(c => ({ path: c.path, body: c.body }))));
   db.close(); await stub?.close(); console.log('STOPPED');

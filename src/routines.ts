@@ -105,8 +105,7 @@ export type Trigger = { file: true } | { wake: true } | { mail: true; from: stri
 const triggerBad = (text: string) => Object.assign(new Error(`I can't start anything on "${text}"; try "when an email from the bank arrives", "10 minutes before each meeting", "when a file arrives in the inbox" or "when this computer wakes up"`), { status: 400 });
 
 export function parseTrigger(text: string): Trigger {
-  const words = String(text).replace(/\s+/g, ' ').trim(), s = words.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim();
-  const meeting = /^(?:when (?:a |each |every )?(?:calendar event|meeting) starts|(\d{1,4}) minutes? before (?:each|every|a) (?:meeting|calendar event))$/i.exec(words);
+  const words = String(text).replace(/\s+/g, ' ').trim(), s = words.toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ').trim(), meeting = /^(?:when (?:a |each |every )?(?:calendar event|meeting) starts|(\d{1,4}) minutes? before (?:each|every|a) (?:meeting|calendar event))$/i.exec(words);
   if (meeting && Number(meeting[1] ?? 0) <= 1440) return { calendar: Number(meeting[1] ?? 0) };
   const mail = /^when (?:a new |an? |new )?(?:email|mail)(?: from (.+?))?(?: (?:with (?:the )?subject|about) (.+?))? arrives?$/i.exec(words);
   if (mail) return { mail: true, from: (mail[1] ?? '').replace(/^the /i, ''), subject: mail[2] ?? '' };

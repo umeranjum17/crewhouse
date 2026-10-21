@@ -365,9 +365,9 @@ export class Crew {
   private recover() {
     const tasks = this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you')");
     for (const t of tasks) {
-      if (this.db.get("SELECT 1 FROM tasks WHERE root = ? AND session LIKE 'agent:%:h-%:%'", t.root ?? t.id)) {
+      if (this.db.get("SELECT 1 FROM tasks WHERE root = ? AND session LIKE 'agent:%:h-%:%' UNION SELECT 1 FROM events WHERE kind = 'run.delegated' AND json_extract(data, '$.task') = ?", t.root ?? t.id, t.id)) {
         if (this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open'", t.id)) continue;
-        this.setTask(t, 'unsure', 'Crewhouse restarted during a hand-off. Check the helper’s chat before trying again.'); continue;
+        this.setTask(t, 'unsure', 'Crewhouse restarted during a hand-off. Check what came back before trying again.'); continue;
       }
       this.handoffs.set(t.id, 'Crewhouse restarted');
       // An acted call may have landed out in the world: the resumed job asks again, even under always.
@@ -1977,9 +1977,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       }),
       tool('crew_add_phone', 'Show an Add a phone card in this chat with a fresh QR and code.', () => this.addPhone()),
       tool('crew_case', 'Keep a mail case for a later follow-up in its thread. `thread`: id from its link; `facts`: id, dates, deadline held, confirmed vs not.', (p) => {
-        const thread = String(p.thread ?? '').trim();
-        const body = this.db.get('SELECT t.body FROM tasks t JOIN routines r ON r.id = t.routine WHERE t.id = ? AND r.mailwatch = 1', task() ?? 0)?.body ?? '';
-        const at = body.indexOf(`⟧ (${mailLink(thread)})`);
+        const thread = String(p.thread ?? '').trim(), body = this.db.get('SELECT t.body FROM tasks t JOIN routines r ON r.id = t.routine WHERE t.id = ? AND r.mailwatch = 1', task() ?? 0)?.body ?? '', at = body.indexOf(`⟧ (${mailLink(thread)})`);
         if (at < 0) throw new Error('crew_case takes only a thread the mail check just showed you');
         const sender = senderKey(body.slice(body.lastIndexOf('⟦', at) + 1, at));
         this.db.tx(() => {
