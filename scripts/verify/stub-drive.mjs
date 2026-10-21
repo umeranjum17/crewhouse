@@ -6,7 +6,7 @@
 // Boots one isolated crewd (throwaway HOME/XDG/TMPDIR, dead D-Bus path, loopback,
 // OS-assigned port — never the owner's install, never port 7711), runs the canonical
 // journey (state → onboard → Chief message → bot reply), writes api-transcript.jsonl,
-// summary.json and crewd.log to --out, then tears the instance down. The person's
+// summary.json and steps.json to --out (crewd.log too, on a failure), then tears the instance down. The person's
 // capability is never written to evidence or stdout: transcripts scrub it.
 // Exit 0 on a full pass, 1 on any failure, 2 on usage error, 128+n on signal n.
 //
@@ -16,7 +16,7 @@
 // empty group lets the lab go; a group that outlives KILL keeps it and fails the
 // run. If this script is SIGKILLed, setpriv's parent-death signal takes crewd too.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import net from 'node:net';
@@ -41,6 +41,7 @@ const end = (code, line) => ending ??= (async () => {
     console.error(`stub-drive: crewd's process group ${group} outlived SIGTERM; sending SIGKILL`);
     if (!(await drain('SIGKILL'))) { console.error(`stub-drive: crewd's process group ${group} outlived SIGKILL; keeping ${lab}`); process.exit(1); }
   }
+  if (code) try { copyFileSync(logPath, join(out, 'crewd.log')); } catch {}
   try { rmSync(lab, { recursive: true, force: true }); } catch (e) { console.error(`stub-drive: cleanup of ${lab} failed: ${e.message}`); }
   if (!code) console.log(`stub-drive: ${line}`);
   process.exit(code);
@@ -51,7 +52,7 @@ for (const [signal, n] of [['SIGHUP', 1], ['SIGINT', 2], ['SIGTERM', 15]]) proce
 for (const d of ['home', 'state', 'crew', 'tools', 'run']) mkdirSync(join(lab, d), { recursive: true });
 const port = await new Promise((res, rej) => { const s = net.createServer(); s.once('error', rej); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 const base = `http://127.0.0.1:${port}`;
-const logPath = join(out, 'crewd.log');
+const logPath = join(lab, 'crewd.log'); // copied to --out only on a failure: a startup log is no proof of the claim
 const logFd = (await import('node:fs')).openSync(logPath, 'w');
 
 const child = spawn('setpriv', ['--pdeathsig', 'KILL', '--', process.execPath, join(repo, 'src', 'main.ts')], {
