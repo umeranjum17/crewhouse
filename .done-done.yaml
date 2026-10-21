@@ -6,7 +6,7 @@ app: "crewhouse"
 # Commits touching only these keep evidence fresh (mirrors CI's docs-only skip):
 # a proof of HEAD still counts until a commit outside this list lands.
 evidence:
-  ignore_paths: ["docs/**", "data/**", "landing/**", "AGENTS.md", "CLAUDE.md", "CONSTRAINTS.md", "README.md", "TRY-IT.md", "VISION.md", "LICENSE", "NOTICE"]
+  ignore_paths: [ "docs/**", "data/**", "landing/**", "AGENTS.md", "CLAUDE.md", "CONSTRAINTS.md", "README.md", "TRY-IT.md", "VISION.md", "LICENSE", "NOTICE" ]
 journeys:
   # The core user journey: a person pairs the PWA to their own crew and gets a real Chief reply. The real engine
   # (OpenClaw through the BYOKit kit) on the account the key signs in, the repo's own relay, the built shell on a
@@ -17,13 +17,13 @@ journeys:
     core: true
     timeout: 45m
     spends: 'a few live model calls on the free MiniMax M3.1 Flash, on the key the environment names (OPENROUTER_API_KEY)'
-    command: 'CHAT_KEY_ENV=${CHAT_KEY_ENV:-OPENROUTER_API_KEY} timeout -k 10 2400 bash scripts/verify/pair-chat.sh "$DONE_DONE_EVIDENCE_ROOT"'
+    command: 'bash scripts/verify/pair-chat.sh "$DONE_DONE_EVIDENCE_ROOT"'
   # The release path: the previous shipped version (the app ships as an npm package with a bin), installed and
   # then upgraded over in place, and the core journey driven on the upgraded app.
   upgrade:
     upgrade: true
     timeout: 60m
-    command: 'CHAT_KEY_ENV=${CHAT_KEY_ENV:-OPENROUTER_API_KEY} timeout -k 10 3000 bash scripts/verify/upgrade.sh "$DONE_DONE_EVIDENCE_ROOT"'
+    command: 'bash scripts/verify/upgrade.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
