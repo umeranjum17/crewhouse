@@ -514,8 +514,8 @@ function DoneCard({ f, who, text, later }: { f: A.FileView; who: A.Helper | 'chi
 }
 function FileRow({ f, plain }: { f: A.FileView; plain?: boolean }) {
   const [open, setOpen] = useState(false);
-  if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
   const t = useLook();
+  if (!plain && f.kind === 'image' && /\/photos\//.test(f.url)) return <PhotoView f={f} />;
   const readable = A.phoneReadable(f);
   const word = f.kind === 'video' ? 'Play' : 'Read';
   const kind = f.kind === 'video' ? 'Video' : f.kind === 'image' ? 'Picture' : f.kind === 'sheet' ? 'Spreadsheet' : 'Document';
@@ -2347,6 +2347,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   const [all, setAll] = useState(false); // Details shows what it is doing now; "What happened" opens the whole trail in place
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
+  const { width, fontScale } = useWindowDimensions();
   if (!h) return <Center><T tone="mute">This helper has left the crew.</T></Center>;
   const b = state.bots.find((x: Json) => x.id === id);
   // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
@@ -2357,7 +2358,6 @@ function HelperPage(ctx: Ctx & { id: string; tab: string; m?: number; setTab: (t
   // When the screen is narrow for its text (a large font) the name's column no longer has room beside the two
   // controls, so the role wrapped to one word a line. The controls drop to their own row below and the name and
   // role keep the full width, the switch the phone's head already makes (`PhoneHead`).
-  const { width, fontScale } = useWindowDimensions();
   const narrow = width / fontScale < 360;
   const screen = h.computer && desktopAvailable && <>
     <T style={s.b}>{`See ${h.name}'s screen`}</T>

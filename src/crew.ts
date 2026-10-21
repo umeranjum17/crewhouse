@@ -1488,12 +1488,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
       // A turn with no words and no calls is never silent: it failed. An action ends done only with crew_outcome; no confirmation means unsure.
-      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
+      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), bare = !text && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ?", botId, task.id), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       if (!text && !this.db.get("SELECT 1 FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", task.id)) return this.setTask(task, 'failed', botId === CHIEF ? "I couldn't finish this one." : `${b.display} couldn't finish this one. Try again.`);
-      if (uncertain || unchecked || (said ? !said.worked : task.acted)) {
+      if (uncertain || unchecked || bare || (said ? !said.worked : task.acted)) {
         this.setTask(task, 'unsure', uncertain ? 'The helper has not confirmed this worked. Check its chat before trying again.' : unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
-          : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
+          : bare ? `${b.display} finished without an answer. Try again.` : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
       }
