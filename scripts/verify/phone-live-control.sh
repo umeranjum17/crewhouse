@@ -48,11 +48,13 @@ H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
-node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
-  api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || fail "MiniMax did not take the key"
+signed_in() { api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true'; }
+signin() { api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
+  node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
+    api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null || return 1
+  for _ in $(seq 60); do signed_in && return 0; sleep 1; done; return 1; }
+for _ in 1 2 3; do signed_in || signin || true; signed_in && break; done # a loaded host can lose the engine's first wizard turn: ask again
+signed_in || fail "MiniMax did not take the key"
 api /api/recruit -d '{"template":"scout","name":"Research Rae"}' > /dev/null
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 for b in chief research-rae; do # the picker cannot choose Flash (chat-real.sh): name it in each bot's own bot.json
