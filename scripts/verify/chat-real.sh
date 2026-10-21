@@ -81,6 +81,7 @@ api /api/bots/chief > "$OUT/thread.json" || true
 cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
 # A MiniMax key starts on Flash with nothing picked by hand: the engine's own log names the model that answered.
 grep -q "\[model-fetch\] response provider=minimax .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "chat-real: the reply did not come from $MODEL" >&2; exit 1; }
+grep "\[model-fetch\]" "$OUT/openclaw-events.log" > "$OUT/model-calls.log"; rm -f "$OUT/openclaw-events.log" # the judge reads 64 KB at most: keep only the model calls
 echo "chat-real: model $MODEL"
 printf '%s\n' "$R" > "$OUT/reply.txt"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
