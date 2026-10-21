@@ -15,7 +15,7 @@
 // group, KILL after a bounded grace, then wait until no member is left. Only an
 // empty group lets the lab go; a group that outlives KILL keeps it and fails the
 // run. If this script is SIGKILLed, setpriv's parent-death signal takes crewd too.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -113,6 +113,9 @@ try {
   }, 30_000);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ person: 'Owner', address: 'Sir', chief: true, reply }, null, 2) + '\n');
+  // The step record done-done reads beside the evidence: what a person did and what they can see at the end.
+  const version = `${JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version}+${execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()}`;
+  writeFileSync(join(out, 'steps.json'), JSON.stringify({ target: { version }, start: 'a fresh Crewhouse on the stub engine, no model', steps: ['Open Crewhouse and tell it who you are', 'Send Chief a message'], result: 'Chief answers the message in his thread' }, null, 2) + '\n');
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
 await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);
