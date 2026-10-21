@@ -1,0 +1,83 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "237daf770f95c5b7fa9db6787a768a987e2b2656",
+  "tree": "7b2efdf46e7066f3914762b396926ffb25d2b397",
+  "claim": "On first launch, a request sent with no name given waits for the AI sign-in and then gets a real reply from Chief in his thread",
+  "result": "pass",
+  "at": "2026-10-21T09:36:39.888Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/chat-real/chief-day-390.png",
+      "sha256": "69a252fd92a5b19eb57ed56e03188655c9d0c4893897dc5bca55986ccc9026bb"
+    },
+    {
+      "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/chat-real/chief-night-390.png",
+      "sha256": "5b41ac2b405f92a2148b8bb6fb9ae857bd03dd8e9144458d180c8fd73f15a4ed"
+    },
+    {
+      "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/reply.txt",
+      "sha256": "4128df01110362e849a0835b849eb640132ab9d78cfc4547e37e8dc15c850a89"
+    },
+    {
+      "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/timeline.txt",
+      "sha256": "1dab9b40cef97265b960f86012d2d67ce4f44b178214151b7b74e5816ba56be6"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T093448Z-237daf77-3f370b",
+      "journey": "chat-real",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/chat-real.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "0.1.1"
+        },
+        "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+        "steps": [
+          "Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked",
+          "Chief says the crew needs an AI account to start; open the key sign-in sheet",
+          "Paste a MiniMax key and sign in",
+          "Wait while Chief starts the request"
+        ],
+        "result": "Chief replies in his thread on MiniMax-M3.1-Flash to: Good morning Chief. Please say hello back in one short sentence."
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/chat-real/chief-day-390.png",
+        "sha256": "69a252fd92a5b19eb57ed56e03188655c9d0c4893897dc5bca55986ccc9026bb",
+        "verdict": "pass",
+        "seen": "The newest message at the bottom of the Chief thread reads \"Good morning, Captain — Chief here, ready when you are.\" It follows \"The crew uses your AI account. Sign in when you're ready and I'll start.\" and \"You're signed in. I'll start now.\" The sent request is \"Good morning Chief. Please say hello back in one short sentence.\" That shows a request waiting for AI sign-in, then a real reply in the same thread. The user's name is not given, and Chief addresses them as Captain. The outcome matches this screen."
+      },
+      {
+        "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/chat-real/chief-night-390.png",
+        "sha256": "5b41ac2b405f92a2148b8bb6fb9ae857bd03dd8e9144458d180c8fd73f15a4ed",
+        "verdict": "pass",
+        "seen": "The newest messages at the bottom of the Chief thread show the sign-in prompt (\"The crew uses your AI account. Sign in when you're ready and I'll start.\"), then \"You're signed in. I'll start now.\", then Chief's real reply \"Good morning, Captain — Chief here, ready when you are.\" This matches the outcome: the request waited for sign-in and then got a reply in Chief's thread. Small doubt: the outcome's \"no name given\" condition is not clearly visible, and the reply is not exactly a one-sentence hello, so some uncertainty remains."
+      },
+      {
+        "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/reply.txt",
+        "sha256": "4128df01110362e849a0835b849eb640132ab9d78cfc4547e37e8dc15c850a89",
+        "verdict": "pass",
+        "seen": "I read one capture entry: the request 'Good morning Chief. Please say hello back in one short sentence.' and the reply 'Good morning, Captain — Chief here, ready when you are.' from model MiniMax-M3.1-Flash. The reply is a real, on-topic answer from Chief in its thread, which is the core of the outcome. The capture does not show the no-name case, the first-launch condition, or the AI sign-in wait, so I left some room for unclear. The outcome names one part, so parts is empty."
+      },
+      {
+        "path": "<evidence root>/20261021T093448Z-237daf77-3f370b/timeline.txt",
+        "sha256": "1dab9b40cef97265b960f86012d2d67ce4f44b178214151b7b74e5816ba56be6",
+        "verdict": "pass",
+        "seen": "I read all 5 capture entries. The first request was sent at .750 and the key sheet opened at .757, then sign-in completed at 346.14 and the first Chief reply arrived at 368.67. That matches the outcome's sequence of a request waiting for AI sign-in and then getting a real reply from Chief. No error or failure fields appear. The capture does not show the no-name condition, so some uncertainty remains. The outcome names only one part, so parts is empty."
+      }
+    ]
+  }
+}
