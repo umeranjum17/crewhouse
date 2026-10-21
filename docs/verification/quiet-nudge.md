@@ -8,4 +8,8 @@ A working job with no run activity for four hours gets one plain line from Chief
 
 ## Capture
 
-`quiet-nudge/chief-{night,day}-{390,1280}.png`: Chief's line, no job ids or internal words. Not covered: the phone's own notice (needs the Android emulator and a push credential).
+`quiet-nudge/chief-{night,day}-{390,1280}.png`: Chief's line, no job ids or internal words. 
+
+`CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/quiet-nudge-pwa.sh <out-dir>` shows it on a phone-sized app: pair-lab's stub crewd, relay and built shell, the browser at 390 paired with a relay code (two words, yes at the computer), the same held and back-dated job, and Chief's line read in the paired app's own thread (`quiet-nudge-pwa/chief-{night,day}-390.png`).
+
+Not covered: Web Push delivery (needs a mailbox and push credential) and the Android app, whose emulator froze under host load (Android system ANR while typing the relay code).
