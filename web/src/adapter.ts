@@ -1458,7 +1458,7 @@ export type LiveTodo = { text: string; state: 'done' | 'doing' | 'todo'; at: num
 export type LiveLine = { who: string; helper?: string; chief?: boolean; todos: LiveTodo[]; detail: LiveStep[]; since: number;
   /** The job's own short title, the live card's heading. */
   title?: string;
-  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number;
+  state: 'reading' | 'working' | 'needs' | 'waiting' | 'done' | 'failed' | 'unsure'; took?: number; count?: number; stopped?: boolean;
   /** The next queued job behind the running one, as a short title ("Next: …"). Never on the waiting/done line. */
   next?: string;
   /** Client time of the run's last event of any kind, streamed words included: a silence counts from here. */
@@ -1550,7 +1550,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
     // An end shows only when it happened while you watched; an old job is just its reply.
     if (!ended?.seen) return null;
     return { who, helper: helper?.id, task: t.id, chief: t.bot === 'chief', todos: [], detail: [], since: began, state, took: at(ended.at) - (admitted ? at(admitted.at) : created ? at(created.at) : at(t.created_at)),
-      count: own.filter((e) => e.kind === 'run.tool').length };
+      count: own.filter((e) => e.kind === 'run.tool').length, stopped: ended.data?.result === 'Stopped by you.' };
   }
   const writing = o.writing.get(t.id);
   if (state === 'working' && writing) push('Writing the answer', writing);

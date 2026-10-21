@@ -116,10 +116,14 @@ case "$bar" in *"At work"*"Take control"*Stop*) ;; *) fail "the live bar is not 
 click '.live-ctl .btn' '^Stop$'
 wait_for "Stop to end the job" 60 state_is failed
 [ "$(field result)" = "Stopped by you." ] || fail "Stop left the result: $(field result)"
+stopped_line() { case "$(text '.live-end')" in *stopped*) return 0;; esac; return 1; }
+wait_for "the thread to say it stopped" 30 stopped_line
+[ -z "$(text '.live-ctl')" ] || fail "the live bar is still up after Stop"
+note "stop line: $(text '.live-end')"
+shot stopped day # the end line shows only on the page that watched it end: the night capture is the same page, switched
+axi eval "document.documentElement.dataset.theme = 'night'" > /dev/null; shot stopped night
 S=$(field steps); sleep 8; [ "$(field steps)" = "$S" ] || fail "a step arrived after Stop"
 note "stop: job $J1 ended 'Stopped by you.' with $S steps and none after"
-both stopped "$CHAT" '.chat'
-[ -z "$(text '.live-ctl')" ] || fail "the live bar is still up after Stop"
 
 # ---- 3. Take control, then hand it back ----
 send "Please fetch https://example.com, then https://example.org, then https://www.iana.org/help/example-domains, one at a time. For each page give me its title and two sentences about it. Then write a 200-word comparison of all three."
