@@ -44,8 +44,8 @@ journeys:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
   crew-room:
-    spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
-    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+    spends: 'a few live model calls on the MiniMax key file named by KEY_FILE, or on OPENROUTER_API_KEY with CREW_ACCOUNT=openrouter'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:-}"'
   phone-pair:
     command: 'timeout -k 10 600 node scripts/verify/phone-pair.mjs --out "$DONE_DONE_EVIDENCE_ROOT" --state "${LAB:?owned lab}/state" --serial "${SERIAL:?owned emulator}" --base "${B:?owned daemon URL}" --apk "${APK:?release apk}" --record'
   phone-chat-keep:

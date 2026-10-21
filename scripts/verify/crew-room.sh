@@ -6,14 +6,17 @@
 # room at 390 wide, day and night: the hand-offs, then the standup at the end.
 #
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir> <minimax-key-file>
+#   CREW_ACCOUNT=openrouter CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir>   (key in OPENROUTER_API_KEY)
 #
-# The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
+# The key is read from the file (or the variable) into the sign-in request only: never printed, logged, copied or kept in the repo.
+# On OpenRouter the model is the catalog's MiniMax Flash entry. Exit 0
 # with crew-room/{room,standup}-{night,day}-390.png, room.json (the room as the app reads it) and crewd.log in <out-dir>;
 # non-zero when no standup arrives within REPLY_SECONDS (default 420) or fewer than two hand-offs reached the room.
 # WIDTHS overrides the capture widths. Spends a few model calls on that key's account.
 set -euo pipefail
-[ $# -ge 2 ] || { echo "usage: crew-room.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
-KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "crew-room: no key in the key file" >&2; exit 2; }
+ACCOUNT=${CREW_ACCOUNT:-minimax}
+[ $# -ge 1 ] || { echo "usage: crew-room.sh <out-dir> [<minimax-key-file>]" >&2; exit 2; }
+KEYFILE=${2:-}; [ "$ACCOUNT" = openrouter ] && [ -n "${OPENROUTER_API_KEY:-}" ] || [ -s "$KEYFILE" ] || { echo "crew-room: no key for $ACCOUNT" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
@@ -41,15 +44,17 @@ done
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
-node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
-  api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "crew-room: MiniMax did not take the key" >&2; exit 1; }
+api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
+node -e 'process.stdout.write(JSON.stringify({ text: (process.argv[1] === "openrouter" ? process.env.OPENROUTER_API_KEY : require("node:fs").readFileSync(process.argv[2], "utf8")).trim() }))' "$ACCOUNT" "$KEYFILE" |
+  api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
+signed() { api /api/accounts | grep -q "\"account\":\"$ACCOUNT\",\"name\":\"[^\"]*\",\"signedIn\":true"; }
+for _ in $(seq 120); do signed && break; sleep 0.5; done
+signed || { echo "crew-room: $ACCOUNT did not take the key" >&2; exit 1; }
 # Flash is the model under test; the picker cannot choose a key sign-in's model, so the lab names it in Chief's own bot.json.
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$MODEL"
-echo "crew-room: model $MODEL"
+if [ "$ACCOUNT" = openrouter ]; then MODEL=$(api /api/accounts/1/openrouter/model | node -e 'const m = JSON.parse(require("node:fs").readFileSync(0, "utf8")).models.filter((x) => /minimax.*flash/i.test(x.id)); if (!m.length) process.exit(1); process.stdout.write(m[0].id)') || { echo "crew-room: no MiniMax Flash in the OpenRouter catalog" >&2; exit 1; }; fi
+node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[2] + ":" + process.argv[3]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$ACCOUNT" "$MODEL"
+echo "crew-room: $ACCOUNT model $MODEL"
 api /api/recruit -d '{"template":"scout","name":"Scout"}' > /dev/null
 api /api/recruit -d '{"template":"scribe","name":"Scribe"}' > /dev/null
 ASK=${CREW_ASK:-'Umer here. I need two things done, in order. First ask Scout to name three story ideas for a newsletter about a neighbourhood park, one short line each. Then, when Scout has answered, ask Scribe to write a two-sentence newsletter note about the first idea. When both have reported back, give me one short summary of what each did.'}
@@ -62,7 +67,7 @@ R=""
 DEADLINE=$((SECONDS + ${REPLY_SECONDS:-420}))
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=$(look)
-  case "$R" in done) break;; end\ *) dump; echo "crew-room: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
+  case "$R" in done) break;; end\ *) dump; echo "crew-room: Chief's job ${R#end } on $ACCOUNT $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
   R=""; sleep 1
 done
 [ -n "$R" ] || { dump; echo "crew-room: Chief did not finish within ${REPLY_SECONDS:-420}s" >&2; exit 1; }
