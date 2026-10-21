@@ -59,4 +59,5 @@ back $((20 * 3600 * 1000))
 for _ in $(seq 40); do [ "$(sql "SELECT state FROM tasks WHERE id = $TASK" | grep -o unsure)" = unsure ] && break; sleep 0.5; done
 sql "SELECT id, state FROM tasks WHERE id = $TASK" > "$OUT/task-after-stop.json"
 grep -q '"state":"unsure"' "$OUT/task-after-stop.json" || { echo "quiet-nudge: the 24-hour stop did not end the job unsure" >&2; exit 1; }
+node -e 'const [out, v, steps, result] = process.argv.slice(1); require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: v }, start: "a fresh stub-engine crewd with one helper", steps: JSON.parse(steps), result }))' "$OUT" "$(node -p 'require("./package.json").version')" '["A helper's job is held mid-run","Its recorded activity is five hours old, so crewd's tick finds it quiet","Chief's thread shows one line that the job has been quiet","Later ticks add no second line","Chief's thread is captured at 390 and 1280, day and night","The job's activity is 25 hours old and crewd stops it"]' "Chief's thread holds one plain line about the quiet job, and the job ended unsure"
 echo "quiet-nudge: one nudge, no repeat, stop ended unsure; captures in $OUT/quiet-nudge"
