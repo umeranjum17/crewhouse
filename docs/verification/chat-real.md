@@ -11,3 +11,7 @@ Needs a MiniMax key file already on the machine. Never put a key in the repo or 
 ## Capture
 
 Chief's thread at 390 wide, day and night (`chat-real/chief-{night,day}-390.png`): the person's message and Chief's reply, no error line. `reply.txt` holds the words.
+
+## A release, not the checkout
+
+`PACKAGE_DIR=<the extracted crewhouse/ folder of crewhouse-<version>-linux-x64.tar.gz>` runs the same journey on a built release (its own Node and engine, product mode, a throwaway HOME) and writes `ready.txt`, the seconds from start to ready. It fails when the release installs an engine of its own under `~/.local/share/crewhouse/engine`: a release carries its engine in `app/runtime/openclaw.sets`, and `Config.engineDir` must find it there (`src/config.ts`).
