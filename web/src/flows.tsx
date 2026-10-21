@@ -9,7 +9,7 @@ import * as art from './art.ts';
 import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
 import { appLink } from './typed.ts';
 
-type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
+type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'model' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
 const pinned = demo ? (new URLSearchParams(location.search).get('phase') as Phase | null) : null;
 /** ?demo&sheet=signin|connect opens that sheet straight away. */
@@ -99,6 +99,10 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const [pasted, setPasted] = useState('');
   const [checking, setChecking] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [cat, setCat] = useState<Json>(null);
+  const [sel, setSel] = useState('');
+  const [find, setFind] = useState('');
+  const [chosen, setChosen] = useState(false);
   const choose = (id: string) => { setPicking(true); toast('Connecting'); void api.signInWorkspace(ai.key, id).catch((e: any) => toast(e.status === 400 ? e.message : 'That didn’t work. Please try again.')).finally(() => setPicking(false)); };
   const tab = useTab(first);
   const start = (body: { fresh?: boolean; via?: 'code' | 'key' } = {}) => { setCancelled(false); void (async () => {
@@ -107,9 +111,13 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   })().catch(() => {}); };
   const again = (body: { fresh?: boolean } = {}) => { if (!keyed) tab.fresh(); start(keyed ? { via: 'key' } : body); };
   useEffect(() => { if (!pinned) start(keyed ? { via: 'key' } : {}); }, []);
-  const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
+  const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : keyed && !chosen && (!cat || cat.models.length > 0) ? 'model' : 'done')
     : g.key ? 'key' : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
+  // A key account lists its own live models once the key is saved; the person picks one (or keeps the account's default).
+  useEffect(() => { if (keyed && g.state === 'ready' && !cat) void api.models(ai.key).then(setCat).catch(() => setCat({ models: [], picked: null })); }, [keyed, g.state]);
+  const shown: Json[] = (cat?.models ?? []).filter((m: Json) => `${m.name} ${m.id}`.toLowerCase().includes(find.trim().toLowerCase()));
+  const useModel = () => attempt(async () => { await api.pickModel(ai.key, sel); setChosen(true); }, undefined);
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
   // Signed in: the sheet says so, then gets out of the way; the waiting request is already under way.
   useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 700); return () => clearTimeout(t); } }, [phase]);
@@ -155,6 +163,19 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         {ai.key === 'chatgpt' && <a className="link" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>}
         <button className="link" onClick={cancel}>Cancel</button>
+      </>}
+      {phase === 'model' && <>
+        <h2>Which model should your crew use?</h2>
+        <p className="mute">The list comes straight from {name}, so it is always current. You can change it later in Settings.</p>
+        {!cat ? <div className="dotdot" aria-hidden><i /><i /><i /></div> : <>
+          {cat.models.length > 8 && <input className="input" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search models" aria-label="Search models" autoComplete="off" />}
+          <div className="model-pick" role="radiogroup" aria-label="Which model your crew uses">
+            {shown.map((m: Json) => <button key={m.id} role="radio" aria-checked={sel === m.id} className={`pick ${sel === m.id ? 'on' : ''}`} onClick={() => setSel(m.id)}>
+              <span className="radio" aria-hidden /><span className="grow">{m.name}</span></button>)}
+            {!shown.length && <p className="mute small">No model matches that.</p>}
+          </div>
+          <button className="btn go big" disabled={!sel} onClick={useModel}>Use this model</button>
+          <button className="link" onClick={() => setChosen(true)}>Use the default for now</button></>}
       </>}
       {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p></>}
       {phase === 'work' && <><h2>That looks like your work {name}</h2>

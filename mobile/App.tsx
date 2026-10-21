@@ -2675,6 +2675,7 @@ function PhoneKeySheet({ ai, onClose }: { ai: (typeof A.AIS)[number]; onClose: (
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
+  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
   const send = async () => {
     setBusy(true); setErr('');
     try {
@@ -2682,7 +2683,7 @@ function PhoneKeySheet({ ai, onClose }: { ai: (typeof A.AIS)[number]; onClose: (
       await api.signInPaste(ai.key, key.trim()); setKey('');
       for (let i = 0; i < 40; i++) {
         const g = A.account(await api.accounts(), ai.key);
-        if (g.state === 'ready') { setDone(true); break; }
+        if (g.state === 'ready') { setDone(true); setModels((await api.models(ai.key).catch(() => ({ models: [] }))).models); break; }
         if (g.key?.error) { setErr(g.key.error); break; }
         await new Promise((r) => setTimeout(r, 1500));
       }
@@ -2694,7 +2695,14 @@ function PhoneKeySheet({ ai, onClose }: { ai: (typeof A.AIS)[number]; onClose: (
       <Pressable style={s.scrim} onPress={onClose}>
         <Pressable style={[s.sheet, { backgroundColor: t.bg }]} onPress={() => {}}>
           <T style={s.h2}>{done ? `You're signed in with ${ai.name}` : `Paste your ${ai.name} key`}</T>
-          {done ? <T tone="ink2">The crew thinks with your own {ai.name} now. The key stays on your cloud computer.</T> : <>
+          {done ? <>
+            <T tone="ink2">The crew thinks with your own {ai.name} now. The key stays on your cloud computer.</T>
+            {models.length > 0 && <>
+              <T style={s.b}>Which model should your crew use?</T>
+              <ScrollView style={{ maxHeight: 260 }}>{models.map((m) => <Btn key={m.id} soft tall label={m.name} onPress={() => void api.pickModel(ai.key, m.id).then(() => onClose()).catch((e) => setErr(FRIENDLY[trouble(e)]))} />)}</ScrollView>
+              {!!err && <T tone="pinkInk">{err}</T>}
+            </>}
+          </> : <>
             <T tone="ink2">Paste the key from your {ai.name} account. It uses your own {ai.name} plan and stays on your cloud computer.</T>
             <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={key} onChangeText={setKey} editable={!busy}
               placeholder={`${ai.name} key`} placeholderTextColor={t.mute} accessibilityLabel={`${ai.name} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />
