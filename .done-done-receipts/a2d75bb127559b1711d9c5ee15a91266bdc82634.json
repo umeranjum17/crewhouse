@@ -1,0 +1,52 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "a2d75bb127559b1711d9c5ee15a91266bdc82634",
+  "tree": "115b4353a725c0a5982485866d06702936ca7952",
+  "claim": "In the night theme at 390 wide, the crew room shows the person's request, Chief's brief to Scout and to Scribe, each helper's answer, and Chief's standup as the last thing in the room",
+  "result": "pass",
+  "at": "2026-10-21T09:44:03.574Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T093657Z-a2d75bb1-c1d8b8/crew-room/room-night-390.png",
+      "sha256": "80a90a134e104374549f7caf45235eb25903a24c999f83d7813ae1565eff07c5"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T093657Z-a2d75bb1-c1d8b8",
+      "journey": "crew-room",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/crew-room.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:-}\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "0.1.1+a2d75bb1"
+        },
+        "start": "a fresh Crewhouse with Scout and Scribe on the crew, signed in to openrouter auto",
+        "steps": [
+          "Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back",
+          "Wait for Chief to hand the work on and close the job",
+          "Open the crew room at 390 wide, day and night, tall enough to show the whole thread"
+        ],
+        "result": "The crew room shows Chief’s brief to Scout, Scout’s answer, Chief’s brief to Scribe, Scribe’s answer, and Chief’s standup as the last line"
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T093657Z-a2d75bb1-c1d8b8/crew-room/room-night-390.png",
+        "sha256": "80a90a134e104374549f7caf45235eb25903a24c999f83d7813ae1565eff07c5",
+        "verdict": "pass",
+        "seen": "The screenshot shows 'The crew' room in dark theme on a phone-width layout. It contains the user's request ('Umer here. I need two things done, in order...'), Chief's brief to Scout ('Name three story ideas...') and to Scribe ('Write a two-sentence newsletter note...'), Scout's three numbered ideas, Scribe's two-sentence note ('In the heart of the village green...'), and 'Chief's standup' as the last message ('Done, Captain. Both came back and both delivered.'). No overlay or error hides the content. The outcome names one part, so parts is empty."
+      }
+    ]
+  }
+}
