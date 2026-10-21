@@ -1,10 +1,12 @@
 // @byokit/pair owns encrypted pairing and grants. Crewhouse owns bind policy and person authority:
 // loopback and Tailscale, with temporary LAN access for desktop pairing only.
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/discover';
@@ -83,6 +85,7 @@ export class Link {
   bonjour?: Bonjour;
   tailscaleBin = 'tailscale';
   private tailnetIPs: string[] = [];
+  private dns = ''; // this computer's Tailscale name
   /** Expo's push service: it holds the app's Android push credential, so crewd sends with no secret of its own. */
   pushUrl = process.env.CREWHOUSE_PUSH_URL || 'https://exp.host/--/api/v2/push/send';
   private anywhere: Anywhere = 'home';
@@ -182,7 +185,7 @@ export class Link {
   async bind() {
     if (!this.cfg.linkPort) return this.follow();
     const state = await kitTailscaleState({ bin: this.tailscaleBin, timeoutMs: 5000 });
-    this.tailnetIPs = state.ips;
+    this.tailnetIPs = state.ips; this.dns = state.dnsName ?? '';
     const want = new Set(this.hosts()), before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
     await Promise.all([...want].filter((h) => !this.servers.has(h)).map((host) => new Promise<void>((resolve) => {
@@ -244,6 +247,20 @@ export class Link {
     this.db.event('link.relay', null, { on: !!this.relay });
     this.dial();
     this.follow();
+  }
+
+  /** The https address of this computer's own web app (served on the link port): the QR links to it, as an https page can dial nothing else. Tailscale's (`serve` on link port + 1, as `./crewhouse phones web`) or the person's own server's. */
+  get web(): string { return this.setting('link.web') ?? ''; }
+  async setWeb(on: boolean, address?: string) {
+    const port = this.cfg.linkPort + 1, own = this.dns && `https://${this.dns}:${port}`, fail = (m: string) => Object.assign(new Error(m), { status: 409 });
+    const serve = (...a: string[]) => promisify(execFile)(this.tailscaleBin, ['serve', `--https=${port}`, ...a], { timeout: 15_000 });
+    if (own && this.web === own && (!on || address)) await serve('off').catch(() => {});
+    if (address && !/^https?:\/\/[^/\s]+/.test(address)) throw fail('a web address starts with https://');
+    if (on && !address && !own) throw fail('Tailscale is not signed in on this computer. Open Tailscale here and sign in first.');
+    if (on && !address) await serve('--bg', `http://127.0.0.1:${this.cfg.linkPort}`).catch((e) => { throw fail(`Tailscale would not share it: ${String(e.stderr || e.message).trim().split('\n')[0]}`); });
+    const to = address ? new URL(address).origin : on ? own : '';
+    if (to) this.put('link.web', to); else this.db.run("DELETE FROM settings WHERE key = 'link.web'");
+    this.db.event('link.web', null, { on: !!to });
   }
 
   /** Dial out to the relay (when one is set), so phones reach this computer from anywhere with no port opened here. */
@@ -345,11 +362,11 @@ export class Link {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
-      relay: this.relay, relayPublic: this.relayPublic, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
+      web: this.web, relay: this.relay, relayPublic: this.relayPublic, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
-  /** QR plus the kit's 12-letter Wi-Fi code; first-owner enrolment instead includes its relay address. */
+  /** QR (a link to the web app, once it has an address) plus the kit's 12-letter Wi-Fi code; first-owner enrolment instead includes its relay address. */
   async offer(role: string, offer?: string, first = false): Promise<{ qr: string; typed: string; expires: number; urls: string[] }> {
     if (role !== 'control' && role !== 'view') throw Object.assign(new Error('role is control or view'), { status: 400 });
     if (first && (process.env.CREWHOUSE_HEADLESS !== '1' || role !== 'control' || this.setting('link.owner') || this.host.devices().length || (this.first?.claimed && this.first.expires > Date.now()))) throw Object.assign(new Error('first-phone pairing is not available'), { status: 409 });
@@ -361,7 +378,7 @@ export class Link {
     const token = first ? randomUUID() : undefined;
     if (first) this.first = { token: token!, expires: Date.now() + PAIR_MS, claimed: false };
     await this.bind();
-    const urls = this.urls(), meta = { offer, ...(first ? { first: token } : {}) }, { text, expires } = this.host.offer({ role, urls, meta }), typed = first ? await this.typed(role, meta) : undefined;
+    const urls = this.urls(), meta = { offer, ...(first ? { first: token } : {}) }, { text, expires } = this.host.offer({ role, urls, meta, base: this.web && !first ? `${this.web}/` : undefined }), typed = first ? await this.typed(role, meta) : undefined;
     if (first && this.first?.token !== token) throw Object.assign(new Error('another first-phone code replaced this one'), { status: 409 });
     if (first) this.first!.expires = expires;
     return { qr: text, typed: typed ? `${typed.short}-${typed.code}@${typed.relay}` : this.host.code({ role, meta }).code, expires, urls };

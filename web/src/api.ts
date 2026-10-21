@@ -170,6 +170,8 @@ export const api = {
   phonesAtHome: (on: boolean) => call('PUT', '/api/phones/lan', { on }),
   /** The relay phones reach this computer through from anywhere ('' off, null back to the default), and a one-use invitation. */
   phoneRelay: (url: string | null, enrol?: string) => call('PUT', '/api/phones/relay', { url, enrol }),
+  /** The web address phones open the app from: Tailscale's (`on`) or the person's own server's (`address`); `{}` turns it off. */
+  phoneWeb: (body: { on?: boolean; address?: string }) => call('PUT', '/api/phones/web', body),
   /** Codes to type on the phone instead of scanning, through the relay. */
   phoneCode: (role: 'control' | 'view' = 'control') => call('POST', '/api/phones/code', { role }),
   /** Web push for the installed app: the mailbox's key to subscribe with, and the address handed back (or `{off}`).
