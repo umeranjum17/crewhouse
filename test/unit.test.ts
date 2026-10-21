@@ -465,6 +465,8 @@ test('accounts a bot thinks with: fallback order by name only, the person\'s one
   assert.throws(() => disk.setBrains(cfg, 'reel', ['chatgpt:$(rm -rf ~)']), /not an AI account/);
   assert.throws(() => disk.setBrains(cfg, 'reel', []), /at least one/);
   assert.deepEqual(disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5', 'copilot']), ['copilot', 'chatgpt:gpt-5.5']);
+  assert.deepEqual(disk.setBrains(cfg, 'reel', ['openrouter:minimax/minimax-m3.1-flash:free']), ['openrouter:minimax/minimax-m3.1-flash:free'], 'a model id may carry its own :free');
+  disk.setBrains(cfg, 'reel', ['copilot', 'chatgpt:gpt-5.5']);
 
   const started = () => JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data), specOf = (t: number) => (crew.runtime as any).specOf(`agent:m1:crewhouse:reel`);
   const a = delegated(crew, 'reel', 'rename 400 files').task;
