@@ -184,6 +184,11 @@ export class OpenClawRuntime implements AgentRuntime {
     const provider = await this.routeOf(account), codexSigned = provider === 'openai-codex' && await this.kit.signedIn(ME, provider), { agentId } = await this.kit.ensureMember(ME), r = await this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 }); // 'all' is the kit's account read (default lists nothing); the Codex CLI owns its login, so its models read missing-auth until signed in
     return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || codexSigned)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
+  /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
+  private async thinks(provider: string, model: string | undefined, level: string) {
+    const r = await this.kit.call('models.list', { agentId: (await this.kit.ensureMember(ME)).agentId, view: 'all' }, { timeoutMs: 20_000 }).catch(() => undefined), levels = r?.models?.find((m) => m.provider === provider && (model ? m.id.replace(`${provider}/`, '') === model : m.tags?.includes('default')))?.thinkingLevels;
+    return !levels || levels.some((l: { id: string }) => l.id === level);
+  }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
@@ -212,7 +217,7 @@ export class OpenClawRuntime implements AgentRuntime {
       const helper = /^agent:(?:m1|byokit-key-m1):h-([^:]+):/.exec(spec.key)?.[1];
       if (helper) await this.kit.ensureHelper(ME, helper, { account: `${provider}${keyLane ? '.key' : ''}`, persona: spec.system });
       const request: KitRunSpec = { sessionKey: helper ? spec.key.replace(/^agent:byokit-key-m1:/, 'agent:m1:') : spec.key, member: ME, message: spec.message, ...(helper ? { helper, account: `${provider}${keyLane ? '.key' : ''}` } : { system: spec.system }),
-        ...(keyLane && !helper ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking ? { thinking: provider === 'minimax' && spec.thinking === 'low' ? 'off' : spec.thinking } : {}) };
+        ...(keyLane && !helper ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && await this.thinks(provider, model, spec.thinking) ? { thinking: spec.thinking } : {}) };
       return spec.team ? await this.nativeRun(spec, request, lane, on) : await this.kit.run(request,
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }

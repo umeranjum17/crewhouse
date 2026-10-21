@@ -48,3 +48,21 @@ test('an OAuth account signed in on the member agent runs without the key lane',
     assert.equal(agent?.auth, undefined);
   } finally { await f.done(); }
 });
+
+test('low thinking is sent only to a model whose catalog lists it; a model that refuses off is never forced to', async () => {
+  const levels = (...ids: string[]) => ids.map((id) => ({ id, label: id }));
+  const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'minimax' }] }), 'models.list': () => ({ models: [
+    { provider: 'minimax', id: 'refuses-off', thinkingLevels: levels('adaptive') },
+    { provider: 'minimax', id: 'has-low', thinkingLevels: levels('off', 'low') },
+  ] }) });
+  try {
+    await f.started;
+    const thinking = async (model: string, n: number) => {
+      const end = await f.runtime.run({ ...runSpec('chatgpt', model, n), account: 'minimax', thinking: 'low' }, () => {});
+      assert.ok(end.ok, JSON.stringify(end));
+      return (f.fake.calls.filter((c) => c.method === 'agent').at(-1)?.params as any)?.thinking;
+    };
+    assert.equal(await thinking('refuses-off', 4), undefined);
+    assert.equal(await thinking('has-low', 5), 'low');
+  } finally { await f.done(); }
+});
