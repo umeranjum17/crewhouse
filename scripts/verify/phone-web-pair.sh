@@ -8,8 +8,7 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-web-pair.sh <out-dir> <minimax-key-file>
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept. Exit 0 with
-# shots/*.png (the Where screen and Pair sheet before pairing, the computer's Phones settings off and on, the two words,
-# the paired Home and Chief's thread with his reply) in <out-dir>/shots; the screens before pairing, reply.txt and crewd.log in <out-dir>/context, so the judge reads only the outcome.
+# shots/*.png (the two words, the paired Home, Chief's thread with his reply: what the judge reads) in <out-dir>; the screens before pairing, reply.txt and crewd.log in <out-dir>/context.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: phone-web-pair.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
 KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "phone-web-pair: no key in the key file" >&2; exit 2; }
