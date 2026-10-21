@@ -8,7 +8,7 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-web-pair.sh <out-dir> <minimax-key-file>
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept. Exit 0 with
-# shots/*.png (the two words, the paired Home, Chief's thread with his reply: all the judge reads) in <out-dir>; the screens before pairing, reply.txt and crewd.log stay in the lab, copied to <out-dir>/context-failed only when the run fails.
+# shots/phone-chief-reply-day-390.png (Chief's answer in the paired phone's thread: all the judge reads) in <out-dir>; the steps before it (screens, the two words, the paired Home), reply.txt and crewd.log stay in the lab, copied to <out-dir>/context-failed only when the run fails.
 [ $# -ge 2 ] || { echo "usage: phone-web-pair.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
 KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "phone-web-pair: no key in the key file" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
@@ -73,11 +73,11 @@ for _ in $(seq 100); do
   [ -n "$ASKED" ] && break; sleep 0.3
 done
 [ -n "$ASKED" ] || { echo "phone-web-pair: the computer was never asked" >&2; exit 1; }
-sleep 1; axi screenshot "$SHOTS/phone-two-words-night-390.png" > /dev/null
+sleep 1; axi screenshot "$LAB/context/phone-two-words-night-390.png" > /dev/null
 echo "phone-web-pair: the computer shows: ${ASKED#* }"
 api /api/phones/answer -d "{\"id\":${ASKED%% *},\"yes\":true}" > /dev/null
 for _ in $(seq 100); do axi eval "!!document.querySelector('.sh-chief a')" 2>/dev/null | grep -q true && break; sleep 0.5; done
-sleep 1; axi screenshot "$SHOTS/phone-paired-home-day-390.png" > /dev/null
+sleep 1; axi screenshot "$LAB/context/phone-paired-home-day-390.png" > /dev/null
 
 # Chief, from the phone: open his card, type through the page's own box, press Send.
 axi eval "() => { document.querySelector('.sh-chief a')?.click(); return true; }" > /dev/null
