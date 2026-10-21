@@ -46,7 +46,7 @@ done
 [ -n "$PERSON" ] || { echo "phone-live-control: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
-fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
+fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; cp -r "$LAB/state/logs" "$OUT/engine-logs" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
 key_state() { api /api/accounts | node -e 'const a = JSON.parse(require("node:fs").readFileSync(0)).find((x) => x.account === "minimax"); process.stdout.write(a?.signedIn ? "in" : a?.signIn?.state ?? "none")'; }
 signin() { api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
