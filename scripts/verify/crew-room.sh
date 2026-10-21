@@ -9,7 +9,7 @@
 #   CREW_ACCOUNT=openrouter CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/crew-room.sh <out-dir>   (key in OPENROUTER_API_KEY)
 #
 # The key is read from the file (or the variable) into the sign-in request only: never printed, logged, copied or kept in the repo.
-# On OpenRouter the model is the catalog's MiniMax Flash entry. Exit 0
+# On OpenRouter the model is its MiniMax Flash entry (the key sign-in's catalog lists none, so it is named here; CHAT_MODEL overrides). Exit 0
 # with crew-room/{room,standup}-{night,day}-390.png, room.json (the room as the app reads it) and crewd.log in <out-dir>;
 # non-zero when no standup arrives within REPLY_SECONDS (default 420) or fewer than two hand-offs reached the room.
 # WIDTHS overrides the capture widths. Spends a few model calls on that key's account.
@@ -51,8 +51,7 @@ signed() { api /api/accounts | grep -q "\"account\":\"$ACCOUNT\",\"name\":\"[^\"
 for _ in $(seq 120); do signed && break; sleep 0.5; done
 signed || { echo "crew-room: $ACCOUNT did not take the key" >&2; exit 1; }
 # Flash is the model under test; the picker cannot choose a key sign-in's model, so the lab names it in Chief's own bot.json.
-MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
-if [ "$ACCOUNT" = openrouter ]; then MODEL=$(api /api/accounts/1/openrouter/model | node -e 'const m = JSON.parse(require("node:fs").readFileSync(0, "utf8")).models.filter((x) => /minimax.*flash/i.test(x.id)); if (!m.length) process.exit(1); process.stdout.write(m[0].id)') || { echo "crew-room: no MiniMax Flash in the OpenRouter catalog" >&2; exit 1; }; fi
+MODEL=${CHAT_MODEL:-$([ "$ACCOUNT" = openrouter ] && echo minimax/minimax-m3.1-flash:free || echo MiniMax-M3.1-Flash)}
 node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[2] + ":" + process.argv[3]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$ACCOUNT" "$MODEL"
 echo "crew-room: $ACCOUNT model $MODEL"
 api /api/recruit -d '{"template":"scout","name":"Scout"}' > /dev/null
