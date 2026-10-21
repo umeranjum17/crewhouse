@@ -67,9 +67,9 @@ ASK='Good morning Chief. Please say hello back in one short sentence.'
 api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null
 mark "first request sent"
 api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
+mark "key sheet open"
 node -e 'const e = process.env.CHAT_KEY_ENV; process.stdout.write(JSON.stringify({ text: (e ? process.env[e] : require("node:fs").readFileSync(process.argv[1], "utf8")).trim() }))' "$KEYFILE" |
-  mark "key sheet open"
-api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
+    api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
 for _ in $(seq 120); do api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "chat-real: $ACCOUNT did not take the key" >&2; exit 1; }
 mark "signed in"
