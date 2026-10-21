@@ -95,10 +95,10 @@ export function taskTitle(body: string) {
   if (!/^https?:\/\/\S+$/i.test(first)) return short(first, 80);
   try { return `Work on ${new URL(first).hostname.replace(/^www\./, '')}`; } catch { return 'Work on the site'; }
 }
-/** The engine's reply-routing control markers (like [[reply_to_current]]) are never person-visible: stripped
- *  before a reply is kept or shown, on write and on read for older rows. Plain prose passes through untouched. */
+/** The engine's reply-routing markers ([[reply_to_current]]) and a reply that is only its silence token (NO_REPLY, REPLY_SKIP, ANNOUNCE_SKIP)
+ *  are never person-visible: stripped on write and on read for older rows. Plain prose passes through untouched. */
 export function cleanReply(text: string) {
-  return String(text ?? '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
+  return String(text ?? '').replace(/^\s*(?:NO_REPLY|REPLY_SKIP|ANNOUNCE_SKIP)\s*$/, '').replace(/\[\[\s*reply[^\[\]]*\]\] ?/gi, '').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]*\n(?:[ \t]*\n)*/g, '\n\n').trim();
 }
 
 /** A relay drops stale progress; a confirmed action keeps its complete receipt. */

@@ -83,6 +83,20 @@ test('when Chief’s job does not end well, crewd stands in with what each helpe
   done();
 });
 
+test('a reply that is only the engine\u2019s silence token is no reply: crewd writes the standup', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const job = (await crew.post('chief', 'ask permission: stories, then a draft'))!.task;
+  await holding(crew, 'chief');
+  const a = delegated(crew, 'scout', 'Find three stories').task, b = delegated(crew, 'scribe', 'Draft a note').task;
+  await settled(db, a); await settled(db, b); await release(crew, 'chief', 'REPLY_SKIP'); await settled(db, job);
+  const last = crew.room().lines.at(-1)!;
+  assert.ok(last.standup && /^The crew has stopped|^Scout/.test(last.text) && !/REPLY_SKIP/.test(last.text), last.text);
+  assert.equal(db.all("SELECT 1 FROM messages WHERE text LIKE '%REPLY_SKIP%'").length, 0, 'the token is never kept as words');
+  assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap'").length, 1);
+  done();
+});
+
 test('a first look delivered mid-job shows on the person\u2019s desk', async () => {
   const { db, cfg, crew, done } = setup();
   for (const t of ['reel', 'scout', 'scribe', 'helper', 'tracer'])
