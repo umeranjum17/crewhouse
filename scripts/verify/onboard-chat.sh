@@ -79,3 +79,8 @@ get /api/bots/chief | node -e 'const p = JSON.parse(require("fs").readFileSync(0
 get /api/state | node -e 'const s = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(JSON.stringify({ person: s.person }))' >> "$OUT/journey.json"
 grep -q '"author": "person"' "$OUT/journey.json" && grep -q 'Nice to meet you, Umer' "$OUT/journey.json" || { echo "onboard-chat: Chief's thread lacks the name or the pitch" >&2; exit 1; }
 echo "onboard-chat: $(ls "$OUT"/screens/*.png | wc -l) captures in $OUT/screens"
+# done-done's step record: what a person did and saw
+node -e 'const v = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version;
+  require("node:fs").writeFileSync(process.argv[1] + "/steps.json", JSON.stringify({ target: { version: v }, start: "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+  steps: ["Open Crewhouse after computer setup: it opens on Chief's chat, and he asks what to call you", "Type a name in the chat", "Read Chief's pitch and the ideas to try", "Tap How does this work? and read the answer in the chat", "Tap an idea: it goes to Chief as the first job"],
+  result: "Chief asks the name in chat and pitches with ideas to tap, with no Hello screen between; the name is saved as the address" }, null, 2))' "$OUT"
