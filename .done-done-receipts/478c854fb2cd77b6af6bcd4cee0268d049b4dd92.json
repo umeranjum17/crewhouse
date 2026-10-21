@@ -1,0 +1,52 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "478c854fb2cd77b6af6bcd4cee0268d049b4dd92",
+  "tree": "0c8dd31649749893e56623168979136302f4bb91",
+  "claim": "In the day theme at 390 wide, the crew room shows the person's request, Chief's brief to Scout and to Scribe, each helper's answer, and Chief's standup as the last thing in the room",
+  "result": "pass",
+  "at": "2026-10-21T10:06:18.580Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T100040Z-478c854f-fbeaeb/crew-room/room-day-390.png",
+      "sha256": "1071434fa36bae5c85d6495a4c18a132c22e2e4e0e3b6cb022adbda02162f202"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T100040Z-478c854f-fbeaeb",
+      "journey": "crew-room",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/crew-room.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:-}\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "0.1.1+478c854f"
+        },
+        "start": "a fresh Crewhouse with Scout and Scribe on the crew, signed in to openrouter anthropic/claude-haiku-5.5",
+        "steps": [
+          "Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back",
+          "Wait for Chief to hand the work on and close the job",
+          "Open the crew room at 390 wide, day and night, tall enough to show the whole thread"
+        ],
+        "result": "The crew room shows Chief’s brief to Scout, Scout’s answer, Chief’s brief to Scribe, Scribe’s answer, and Chief’s standup as the last line"
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T100040Z-478c854f-fbeaeb/crew-room/room-day-390.png",
+        "sha256": "1071434fa36bae5c85d6495a4c18a132c22e2e4e0e3b6cb022adbda02162f202",
+        "verdict": "pass",
+        "seen": "The screenshot shows The crew screen with a light background, which fits the day theme, at a phone-like width. The thread reads top to bottom: 'You to Chief' asks for the two tasks, 'Chief to Scout' briefs the story ideas, 'Scout' replies with three ideas, 'Chief to Scribe' briefs the newsletter note, 'Scribe' replies with 'Beside the old oak by the gate sits a plaque that nobody has read in forty years...', and 'Chief's standup' is the last message, ending 'Say the word and I'll have Scribe do the same for the other two.' No error, overlay or different screen is visible. The outcome is shown."
+      }
+    ]
+  }
+}
