@@ -8,20 +8,19 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-web-pair.sh <out-dir> <minimax-key-file>
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept. Exit 0 with
-# shots/*.png (the two words, the paired Home, Chief's thread with his reply: what the judge reads) in <out-dir>; the screens before pairing, reply.txt and crewd.log in <out-dir>/context.
-set -euo pipefail
+# shots/*.png (the two words, the paired Home, Chief's thread with his reply: all the judge reads) in <out-dir>; the screens before pairing, reply.txt and crewd.log stay in the lab, copied to <out-dir>/context-failed only when the run fails.
 [ $# -ge 2 ] || { echo "usage: phone-web-pair.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
 KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "phone-web-pair: no key in the key file" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-phone-web.XXXXXX)
-trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
-mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run} "$OUT/shots" "$OUT/context"
+trap 'rc=$?; [ $rc -eq 0 ] || cp -r "$LAB/context" "$OUT/context-failed" 2>/dev/null; crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run} "$OUT/shots" "$LAB/context"
 free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})'; }
 PORT=$(free); LP=$(free)
 B="http://127.0.0.1:$PORT"; SHELL_URL="http://crewhouse.localhost:$LP/"
-crewd_start "$REPO" "$OUT/context/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+crewd_start "$REPO" "$LAB/context/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -53,14 +52,14 @@ echo "phone-web-pair: model $MODEL"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 SHOTS="$OUT/shots"
 # Before: what a new person sees on the phone, and on the computer with no web address yet.
-WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/context" phone-where "$SHELL_URL"
-WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/context" phone-pair-sheet "${SHELL_URL}#/pair"
+WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$LAB/context" phone-where "$SHELL_URL"
+WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$LAB/context" phone-pair-sheet "${SHELL_URL}#/pair"
 THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.sh-chief'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
-  bash "$REPO/scripts/verify/screens.sh" "$OUT/context" computer-phones-off "$B/#person=$PERSON"
+  bash "$REPO/scripts/verify/screens.sh" "$LAB/context" computer-phones-off "$B/#person=$PERSON"
 # The web address: the computer's own app on the link port (a secure context standing in for the https address).
 api /api/phones/web -X PUT -d "{\"address\":\"${SHELL_URL%/}\"}" > /dev/null
 THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.sh-chief'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
-  bash "$REPO/scripts/verify/screens.sh" "$OUT/context" computer-phones-on "$B/#person=$PERSON"
+  bash "$REPO/scripts/verify/screens.sh" "$LAB/context" computer-phones-on "$B/#person=$PERSON"
 QR=$(api /api/phones/pair -d '{"role":"control"}' | node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0, "utf8")).qr)')
 case "$QR" in "${SHELL_URL}#byokit-link:"*) ;; *) echo "phone-web-pair: the QR is not a link to the web app" >&2; exit 1;; esac
 
@@ -94,6 +93,6 @@ while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=""; sleep 1
 done
 [ -n "$R" ] || { echo "phone-web-pair: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
-printf '%s\n' "$R" > "$OUT/context/reply.txt"
+printf '%s\n' "$R" > "$LAB/context/reply.txt"
 sleep 3; axi screenshot "$SHOTS/phone-chief-reply-day-390.png" > /dev/null
 echo "phone-web-pair: Chief replied on the paired phone; shots in $SHOTS"
