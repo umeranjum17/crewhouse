@@ -47,6 +47,9 @@ journeys:
   chat-real:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+  phone-live-control:
+    spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
   phone-web-pair:
     spends: 'a few live model calls on the key file named by KEY_FILE (MiniMax, or OpenRouter with AI=openrouter)'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/phone-web-pair.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
