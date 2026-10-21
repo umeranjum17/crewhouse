@@ -48,6 +48,7 @@ done
 [ -n "$PERSON" ] || { echo "chat-real: crewd never became ready" >&2; exit 1; }
 echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s after start" | tee "$OUT/ready.txt"
 [ -z "${PACKAGE_DIR:-}" ] || ! ls "$LAB/home/.local/share/crewhouse/engine"* >/dev/null 2>&1 || { echo "chat-real: the release installed an engine of its own at first run" >&2; exit 1; }
+[ -z "${PACKAGE_DIR:-}" ] || { echo "engine: the release's own, $(ls "$PACKAGE_DIR/app/runtime" | tr '\n' ' ')under its app folder; installed under the person's home: none"; } | tee -a "$OUT/ready.txt"
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
@@ -75,7 +76,7 @@ while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=""; sleep 1
 done
 [ -n "$R" ] || { api /api/bots/chief > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
-printf '%s\n' "$R" > "$OUT/reply.txt"
+printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R" > "$OUT/reply.txt"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
