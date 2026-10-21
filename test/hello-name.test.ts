@@ -1,4 +1,4 @@
-// Hello (the first run) sent with no name: the request goes out at once with an empty name (nothing asks for one first),
+// The first run lands in Chief's chat, where he asks the name: the answer goes out at once as the person's address (no screen first),
 // and when it fails for real that send says Not sent and keeps the words for a Retry. Real crewd (stub engine) and the real built web app in a real Chromium, with the browser's own
 // network paused on the onboard request to fail it. Needs a Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
@@ -18,7 +18,7 @@ import { startServer } from '../src/server.ts';
 const repo = join(import.meta.dirname, '..');
 const bin = browserBin();
 
-test('Hello sends with no name; a real failed send says Not sent and keeps the words', { skip: !bin && 'no Chromium here' }, async () => {
+test('the name answered in Chief\'s first chat; a real failed send says Not sent and keeps the words', { skip: !bin && 'no Chromium here' }, async () => {
   const parent = temp('hello-name');
   cpSync(join(repo, 'web'), join(parent, 'web'), { recursive: true, filter: (s) => !/[/\\]dist([/\\]|$)/.test(s) });
   for (const d of ['src', 'templates', 'tools', 'skills', 'package.json']) symlinkSync(join(repo, d), join(parent, d));
@@ -62,20 +62,21 @@ test('Hello sends with no name; a real failed send says Not sent and keeps the w
 
   await send('Fetch.enable', { patterns: [{ urlPattern: '*api/onboard*', requestStage: 'Request' }] });
   await send('Page.navigate', { url: `${base}/?day#person=${key}` });
-  await until('Hello\'s box', () => run("!!document.querySelector('.hello-ask textarea')"), 30_000);
+  await until('Chief\'s first chat', () => run("!!document.querySelector('.dock textarea') && /What shall I call you/.test(document.body.innerText)"), 30_000);
+  assert.equal(await run("location.hash"), '#/chief', 'the first run opens straight on his chat');
 
-  // No name: the send goes out as it is, with an empty name, and the onboard request is held in the browser. It then fails
+  // The name is sent as it is and the onboard request is held in the browser. It then fails
   // for real: that send says Not sent, and the words stay for a Retry.
-  await run("document.querySelector('.hello-ask textarea').focus()");
-  await send('Input.insertText', { text: 'Book the dentist' });
-  await until('the send button ready', () => run("!document.querySelector('.hello-ask button.send').disabled"), 10_000);
-  await run("document.querySelector('.hello-ask button.send').click()");
+  await run("document.querySelector('.dock textarea').focus()");
+  await send('Input.insertText', { text: 'Umer' });
+  await until('the send button ready', () => run("!document.querySelector('.dock button.send').disabled"), 10_000);
+  await run("document.querySelector('.dock button.send').click()");
   let held: any;
   await until('the onboard request held in the browser', () => (held = paused.shift()), 15_000);
-  assert.equal(JSON.parse(held.request.postData).address, '', 'no name is asked for or sent');
+  assert.deepEqual([JSON.parse(held.request.postData).address, JSON.parse(held.request.postData).chat], ['Umer', true], 'the name goes to Chief\'s own onboarding');
   await send('Fetch.failRequest', { requestId: held.requestId, errorReason: 'ConnectionFailed' });
-  await until('the Not sent line', () => run("!!document.querySelector('.hello-ask .send-failed')"), 10_000);
-  assert.match(await run("document.querySelector('.hello-ask .send-failed').innerText"), /Not sent/, 'a real failed send says so');
-  assert.equal(await run("!!document.querySelector('.hello-ask .send-failed button')"), true, 'the failed send offers a Retry');
-  assert.equal(await run("document.querySelector('.hello-ask textarea').value"), 'Book the dentist', 'the words stay in the box after a real failure');
+  await until('the Not sent line', () => run("!!document.querySelector('.dock .send-failed')"), 10_000);
+  assert.match(await run("document.querySelector('.dock .send-failed').innerText"), /Not sent/, 'a real failed send says so');
+  assert.equal(await run("!!document.querySelector('.dock .send-failed button')"), true, 'the failed send offers a Retry');
+  assert.equal(await run("document.querySelector('.dock textarea').value"), 'Umer', 'the words stay in the box after a real failure');
 });

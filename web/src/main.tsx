@@ -95,51 +95,7 @@ function useAccounts(poll: number, tick = 0) {
   return list;
 }
 
-/**
- * First run, as the onboarding prototype: Chief greets you by your name, two promises, and three things he
- * can take off your plate. One tap on an idea is both "hello" and your first job; the sign-in comes right after, in the
- * chat, when you already want something. Nothing to type.
- */
-function Hello({ state, refresh, night }: Ctx) {
-  const me = state.person;
-  const named = A.displayName(me);
-  const [address, setAddress] = useState<string>(me.address || named);
-  const [other, setOther] = useState(!named);
-  const input = useRef<HTMLInputElement>(null);
-  const [prompt, setPrompt] = useState('Ask Chief anything'); // the open line below the ideas turns the box to the person's own chore
-  const how = useRef<HTMLDetailsElement>(null);
-  // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
-  const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
-  const pick = (ask: string, bot?: string) => {
-    return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
-  };
-  return (
-    <Split className="fr-hello" mark={<Face who="chief" size={88} />} title={`${A.greeting()}${address.trim() ? `, ${address.trim()}` : ''}.`}
-      lead="I'm Chief. I run a small crew of helpers that live on this computer and work for you.">
-      {other
-        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name, if you like" /></label>
-        : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
-      <h2 className="st-label plate"><span>What can I take off your plate?</span></h2>
-      <div className="ideas">
-        {A.firstIdeas(state).map((i) => <button key={i.label} className="idea" style={{ background: art.colourOf(i.face), color: art.inkOn(i.face) }} onClick={() => pick(i.label, i.bot)}>
-          <Face who={i.face === 'chief' ? 'chief' : { kind: i.face, name: i.who }} size={44} /><span className="grow"><b>{i.label}</b><span>{i.sub}</span></span><em>{i.who}</em></button>)}
-      </div>
-      <div className="hello-ask"><Composer placeholder={prompt} onSend={(t) => pick(t)} /></div>
-      <p className="fr-trust"><Icon name="lock" size={22} /><span>{A.trust.hello} <button className="link" onClick={showHow}>How it works</button></span></p>
-      <details className="how" ref={how}><summary className="link">How it works</summary>
-        <ul className="promises">
-          <li>Your helpers live on this computer, and think with an AI account you already pay for.</li>
-          <li>{A.atHome()[1]}</li>
-          <li>{A.atHome()[2]}</li>
-          <li>{A.keptWhere}</li>
-          <li>I'll ask before sending messages, deleting things or spending money.</li>
-        </ul>
-      </details>
-    </Split>
-  );
-}
-
-/** Before Chief's Hello on a first open: the AI engine installing or starting, in the kit's own words, or why it failed,
+/** Before Chief's first chat: the AI engine installing or starting, in the kit's own words, or why it failed,
  *  with Try again. Progress is the kit's phase, never a timer. */
 function GettingReady({ view, refresh }: { view: { failed: boolean; words: string }; refresh: () => void }) {
   return (
@@ -451,6 +407,18 @@ function ChiefIdeas({ state, chat, picked }: { state: Json; chat: string; picked
   ))}</div></>;
 }
 
+/** Chief's pitch, then what to try: a tap sends the idea as the first job; How it works answers right here. */
+function FirstTry({ state, send }: { state: Json; send: (t: string) => Promise<unknown> }) {
+  const [how, setHow] = useState(false);
+  return <>
+    <div className="chips center">
+      {A.firstIdeas(state).map((i) => <button key={i.label} className="chip" onClick={() => void send(i.label)}>{i.icon} {i.label}</button>)}
+      <button className="chip" aria-expanded={how} onClick={() => setHow(!how)}>How does this work?</button>
+    </div>
+    {how && <div className="line them"><div className="line-by"><span className="who">Chief</span></div><div className="bubble-text"><ChatText text={A.howItWorks.map((l) => `- ${l}`).join('\n')} latest /></div></div>}
+  </>;
+}
+
 /** A helper's starters in its own fresh chat: its own ready rows only, never another helper's. A tap fills Chief's box
  *  ("Penny, …", which goes straight to Penny); it never sends. */
 function HelperIdeas({ state, chat, name }: { state: Json; chat: string; name: string }) {
@@ -722,7 +690,9 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     if (el) el.scrollTop = el.scrollHeight;
     setPending({ text: t || (files ?? []).map((f) => f.name).join(', '), files: !!files?.length, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
     setPartial('');
-    const ok = await attempt(() => api.post(id, t, undefined, undefined, files?.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
+    // The first words of a new install, if short, answer Chief's "What shall I call you?"; anything longer is already the first job.
+    const named = id === 'chief' && !state.person.onboarded && !files?.length && A.asName(t);
+    const ok = await attempt(() => named ? api.onboard(t, undefined, undefined, true) : api.post(id, t, undefined, undefined, files?.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
     if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
     return ok;
   };
@@ -786,6 +756,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
         {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} asked={askedAbove} who={A.crew(state).find((x) => x.id === ln.helper) ?? (id === 'chief' ? undefined : h)} />}
         {A.building(lines, live) && <div className="line them" role="status"><div className="line-by"><span className="who">{name}</span></div><div className="building-card" aria-label="Building it"><i aria-hidden /><i aria-hidden /><div className="bubble-text">Building it. I’ll share it here.</div></div></div>}
+        {id === 'chief' && A.firstChips(lines, state) && <FirstTry state={state} send={send} />}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
         {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
@@ -2188,6 +2159,9 @@ function App() {
     });
     return () => { current = false; };
   }, [stranded, here.id, refresh]);
+  // First run lands straight in Chief's chat: he asks the name there, then pitches (no screen between).
+  const firstRun = !!ctx && !ctx.state.person.onboarded;
+  useEffect(() => { if (firstRun && route.view === 'home') go('#/chief'); }, [firstRun, route.view]);
   useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
   // Install before pairing/startup returns too: every face obeys Reduce Motion from its first paint.
   setFaceMoods(ctx ? A.chief(ctx.state, chiefLocal(ctx)).mood : 'idle', ctx?.live.crew ?? [], ctx?.live.talking, reduced);
@@ -2195,7 +2169,7 @@ function App() {
   if (pairable && !paired) return <>{removed ? <Removed onPair={() => { clearRemoved(); go('#/pair'); }} /> : location.pathname === '/share' ? <Share refresh={refresh} connected={false} /> : <Where pairing={false} />}{route.view === 'pair' && <PairSheet onClose={back} />}<Toasts /></>;
   if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
   const engine = A.engineView(ctx.state);
-  if (!ctx.state.person.onboarded) return <>{splash}{engine ? <GettingReady view={engine} refresh={refresh} /> : <Hello {...ctx} />}<Toasts /></>;
+  if (!ctx.state.person.onboarded && engine) return <>{splash}<GettingReady view={engine} refresh={refresh} /><Toasts /></>;
   const v = under.current;
   const crew = A.crew(ctx.state);
   const asks = ctx.live.counts.needs;

@@ -212,7 +212,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/workbook') return preview(/^files\/[\w./-]+\.xlsx$/i, 'not a spreadsheet', (rel) => crew.workbookView(String(q.get('bot') ?? ''), rel));
     if (m === 'GET' && p === '/api/document') return preview(/^files\/[\w./-]+\.(docx|pptx|md|txt)$/i, 'not a document', (rel) => crew.documentView(String(q.get('bot') ?? ''), rel));
     if (m === 'GET' && p === '/api/video') return preview(/^files\/[\w./-]+\.(mp4|webm|mov)$/i, 'not a video', (rel) => crew.videoSlice(String(q.get('bot') ?? ''), rel, Number(q.get('after')) || 0));
-    if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined) ?? { ok: true }; }
+    if (m === 'POST' && p === '/api/onboard') { const b = body; return crew.onboard(b.address ?? '', b.ask, typeof b.bot === 'string' ? b.bot : undefined, b.chat === true) ?? { ok: true }; }
     if (m === 'POST' && p === '/api/recruit') { const b = body; const { token, ...bot } = crew.recruit(b.template, b.name, 'person'); return bot; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)$/)) && m === 'GET') return crew.botPage(r[1], Number(q.get('around')) || undefined);
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }

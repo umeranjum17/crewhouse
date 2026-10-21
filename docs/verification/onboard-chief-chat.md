@@ -1,13 +1,12 @@
 # Onboard and chat with Chief
 
-First contact: the Hello screen takes the person's name, onboarding records it, and Chief
-greets in his own thread. A plain message is a Chief turn; his stop-and-ask rules lead his
+First contact: after computer setup the app opens Chief's own thread; he asks the name there, the
+answer is saved as the address, and he pitches with ideas to try (no Hello screen). Run `scripts/verify/onboard-chat.sh <out>` (journey `onboard-chat`, stub engine) for the 390/1280, day/night captures. A plain message is a Chief turn; his stop-and-ask rules lead his
 first message.
 
 ## Sub-features
 
-- `hello-screen` — first run shows the greeting screen with the person's name and three ideas.
-- `hello-open-line` — under the three ideas, "Or tell Chief something you've been putting off" focuses the ask box with the prompt "What have you been putting off?" and sends nothing; a send from the box onboards with the person's own chore as Chief's first job.
+- `first-run-chat` — first run opens Chief's chat (no Hello screen): his greeting asks "What shall I call you?"; a short first line sent there is saved as the address and Chief's pitch follows with three ideas to try and "How does this work?" (tap an idea to send it as the first job).
 - `onboard` — the person's chosen address lands in `/api/state` (`person.address`).
 - `chief-greeting` — Chief's thread opens with his greeting (`I am Chief, of the Crewhouse…`).
 - `chief-chat` — a message becomes a task that settles with a reply.
@@ -18,8 +17,7 @@ first message.
 
 ## How to get to it (user POV)
 
-- Open the app with no person onboarded yet; the Hello screen is the first thing shown.
-- Type a name, pick one of the three ideas (or send your own ask); the app opens Chat with Chief.
+- Open the app with no person onboarded yet; Chief's chat is the first thing shown. Type a name; tap one of the ideas (or write your own ask).
 
 ## Driving it with the API and browser
 
@@ -27,19 +25,17 @@ Preconditions: fresh lab (no onboarded person); `$B` and `$H` as in runbook.md.
 
 - **State before.** `curl -fsS "${H[@]}" "$B/api/state"` → `person.address` is null, `person.name` "Owner".
 - **Onboard.** `curl -fsS -X POST "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard"` → `/api/state` now shows `"address":"Sir"`.
-- **Chief's page.** `curl -fsS "${H[@]}" "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and names his stop-and-ask rules (`stop and ask you first before sending anything, spending money`).
+- **Chief's page.** `curl -fsS "${H[@]}" "$B/api/bots/chief"` → first `author:"bot"` message matches `I am Chief, of the Crewhouse` and asks "What shall I call you?".
 - **Chat.** `curl -fsS -X POST "${H[@]}" -d '{"text":"I need a demo video"}' "$B/api/bots/chief/messages"`; poll the same page until the reply `stub chief: done with "The person says: I need a demo video"` appears and the task row reaches `done`.
-- **UI.** Bootstrap the browser per [Drive](runbook.md#drive), then visit `/` in that same tab: the Hello screen shows the name field and three ideas (eval their labels and `getBoundingClientRect`); after onboarding the Chief thread shows hero + Needs-you row and the composer. Capture 1440 and 390 screenshots; at 320 record the actual wrap/scroll behavior of the longest idea label.
-- **Open line.** Click the `button "Or tell Chief something you've been putting off"`: eval `document.activeElement` is `.hello-ask textarea` with placeholder `What have you been putting off?`, and `/api/state` still shows `onboarded: 0`. Fill a name, type a chore in that box and send: the app lands on `#/chief` with the chore as the person's first message. Hello re-renders while its helmet settles, so re-snapshot right before each `chrome-devtools-axi` click/fill and treat a `STALE_REF` error as a miss, never a pass.
+- **UI.** Run `scripts/verify/onboard-chat.sh <out>` (journey `onboard-chat`, stub engine): captures `ask-name`, `pitch`, `how` at 390 and 1280, day and night, then taps an idea. The pre-change Hello screen is captured by running it with `REPO_DIR=<older checkout>`.
 
 ## Trust links
 
 Stub engine is enough (no model words). Fresh lab, browser bootstrapped per [Drive](runbook.md#drive).
 
-- **Hello.** Click the trust line (the `.hello > .trust-line`, text `A.trust.hello`); eval `document.querySelector('.hello .how').open === true` and the five `.hello .promises li`, the fourth being `A.keptWhere`. At 390 the last promise must sit above the sticky composer.
 - **Settings.** Onboard and seed `PUT /api/about` / `PUT /api/profile`, open `#/settings`, click `.link.trust`; eval `#memory` top ≈ 16 px (plus the safe-area inset in an installed app) and the seeded rows with Forget (`.profile-part` and `.memory-you`).
 - **Memory (one section, saved line).** Settings shows the one `#memory` section with both stores' lines. In a chat, keep a memory — a helper's `crew_remember` lands `memory.learned`; Chief's `crew_profile` lands `profile.edited {added}` — and eval the chat has one `.saved-undo` row reading `Saved: <the line>`; click it and eval the line is gone from the chat and from the record.
-- **Evidence.** `scripts/verify/screens.sh` for Hello (fresh) and `#/settings` (seeded), `scripts/verify/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
+- **Evidence.** `scripts/verify/screens.sh` for the first-run chat (fresh) and `#/settings` (seeded), `scripts/verify/record.mjs` around each tap; on the iPad installed app (route in `pwa-resume.md`) tap the same links and check nothing lands under the status bar.
 
 ## Shared profile (real-model words)
 
