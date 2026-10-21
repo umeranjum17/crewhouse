@@ -96,4 +96,6 @@ if [ "$BOT" != chief ]; then # the helper's own page, where its answer sits
   THEN="(async () => { location.hash = '#/h/$BOT'; for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
     WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/helper" "$BOT" "$B/#person=$PERSON"
 fi
+# The step record done-done reads beside the captures: what a person did and saw, from this run's own values.
+node -e 'const [out, ver, model, bot, ask, reply] = process.argv.slice(1), h = bot !== "chief"; require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: ver }, start: "a fresh Crewhouse with no helpers, signed out", steps: ["Sign in to the account with a key", "Pick " + model, ...(h ? ["Hire the " + bot + " helper"] : []), "Message Chief: " + ask, ...(h ? ["Open the " + bot + " helper page"] : ["Open Chief\u0027s thread"])], result: (h ? "The " + bot + " helper\u0027s job ends with its own answer and a Document card, not a bare Done." : "Chief replied with real words") + " First words: " + reply.slice(0, 160) }, null, 2))' "$OUT" "$(node -p 'require("./package.json").version' 2>/dev/null || echo dev)" "$MODEL" "$BOT" "$ASK" "$R"
 echo "chat-real: $BOT replied; thread captured in $OUT"
