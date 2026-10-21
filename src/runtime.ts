@@ -6,7 +6,7 @@ export interface ToolHost {
   tools(run: RunRef): ToolSpec[];
   gate(run: RunRef, tool: string, input: Record<string, unknown>): Promise<GateResult>;
   call(run: RunRef, tool: string, input: Record<string, unknown>, signal: AbortSignal): Promise<string>;
-  delegate?(parent: RunRef, bot: string, key: string): Promise<RunRef>;
+  delegate?(parent: RunRef, bot: string, key: string, brief: string): Promise<RunRef>;
   event?(run: RunRef, event: RunEvent): void;
   end?(run: RunRef, end: RunEnd): void;
 }

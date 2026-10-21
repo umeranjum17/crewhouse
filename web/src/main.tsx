@@ -867,8 +867,8 @@ function Room(ctx: Ctx) {
   const helpers = A.crew(state);
   const cards = A.cards(state).filter((c) => (page?.asks ?? []).some((a: Json) => a.id === c.id));
   return <div className="page chat-page room-page st-helper-chat"><header className="chat-head sticky-top"><a href="#/" className="back">‹</a><span className="row">{helpers.slice(0, 3).map((h) => <Face key={h.id} who={h} size={30} />)}</span><div className="grow"><b>The crew</b><div className="mute small">Who asked whom</div></div></header>
-    <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}`} key={l.id}>
-      {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} />}<b>{l.from && l.to ? `${l.from} to ${l.to}` : l.author === 'person' ? 'You to ' + l.who.name : l.who.name}</b></div>}
+    <div className="chat"><div className="lines">{lines.length ? lines.map((l: ReturnType<typeof A.room>[number]) => <div className={`line ${l.author === 'person' ? 'me' : l.author === 'note' ? 'note' : 'them'}${l.standup ? ' standup' : ''}`} key={l.id}>
+      {l.who && l.author !== 'note' && <div className="row">{l.author !== 'person' && <Face who={l.who.id === 'chief' ? 'chief' : l.who} size={30} />}<b>{l.standup ? 'Chief’s standup' : l.from && l.to ? `${l.from} to ${l.to}` : l.author === 'person' ? 'You to ' + l.who.name : l.who.name}</b></div>}
       {l.text && <div className="bubble-text helper-bubble"><ChatText text={l.text} latest={l.id === newestRoom} /></div>}{l.files.map((f: ReturnType<typeof A.room>[number]['files'][number]) => <Media key={f.url} f={f} big forget />)}
     </div>) : <div className="mute center empty">Start a job here and follow along as the crew works together.</div>}
       {cards.map((c) => <AskCard key={c.id} c={c} who={helpers.find((h) => h.id === (c.by ?? c.helper))} onDone={() => { void load(); refresh(); }} />)}</div>

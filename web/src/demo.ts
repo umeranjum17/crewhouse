@@ -148,7 +148,7 @@ const state = {
   person: { id: 1, name: 'Umer', address: 'Umer', quiet: '23:00-07:00', onboarded: variant === 'hello' || variant === 'signin' ? 0 : 1 },
   members: [{ id: 1, name: 'Umer', address: 'Umer', quiet: '23:00-07:00' }],
   bots,
-  room: { last: { text: 'Scout has passed the story list to Scribe.', at: now - min }, busy: ['scout', 'scribe'] },
+  room: { last: { text: 'Scribe is drafting the newsletter piece from Scout’s stories.', at: now - min }, busy: ['scribe'] },
   templates: [
     { id: 'chief', display: 'Chief' },
     { id: 'reel', display: 'Reel', role: 'Makes videos and posters from your photos' },
@@ -183,7 +183,7 @@ const state = {
     words: 'Bring Invoice Ivy onto the crew?', hire: 'Invoice Ivy', hireId: 'invoice-ivy', role: 'Keeps your invoices in order', yes: 'Yes, bring Invoice Ivy on',
     first_job: 'Sort out my invoices', will_do: ['Read the invoices you share', 'Put them in one sheet by due date', 'Ask you before sending or spending'], wont_do: [],
     preview: { body: 'Keeps your invoices in order' } } }]
-    : variant.startsWith('phone') || variant === 'finished' ? [] : variant === 'room' ? [{ id: 90, bot: 'scout', task_id: null, kind: 'propose', at: now - min, title: 'Scout wants to hand this to Scribe: draft the story', detail: { words: 'Scout wants to hand this to Scribe: draft the story, with stories.md', pass: { root: 70, files: ['stories.md'] }, preview: { head: 'Scout → Scribe', body: 'Draft the story for your newsletter.' } } }]
+    : variant.startsWith('phone') || variant === 'finished' || variant === 'room' ? []
     : variant === 'job-card' ? [{ id: 21, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: "Chief wrote Pip's job", detail: { job: { bot: 'pip', does: 'Keep Umer’s calendar in order.', aim: 'Help Umer know what is coming.', gets: 'Events and reminders from the person.', how: 'Check dates, add reminders only when asked, and explain changes.', great: 'A clear, accurate week; for example, the dentist with a reminder the evening before.' }, preview: { head: "Pip's job", body: 'What it does: Keep Umer’s calendar in order.\n\nWhat it’s aiming for: Help Umer know what is coming.\n\nWhat it gets from others: Events and reminders from the person.\n\nHow it goes about it: Check dates, add reminders only when asked, and explain changes.\n\nWhat great looks like: A clear, accurate week; for example, the dentist with a reminder the evening before.' } } }]
     : variant === 'job-plan' ? [{ id: 22, bot: 'chief', task_id: null, kind: 'propose', at: now, member: 1, title: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.', detail: {
         words: 'Here’s the plan for “Find the best five standing desks under $400”. Scout starts when you say Go.',
@@ -293,7 +293,6 @@ if (variant === 'job-plan') pages.chief.messages.push({ id: 71, author: 'person'
   { id: 72, author: 'chief', text: 'Happy to, Umer. Scout will take it; here is how, before anything starts.' });
 // A helper's finished sheet ends Chief's thread: its Done card (Stack J16a).
 if (variant === 'done') pages.chief.messages.push({ id: 73, author: 'bot', text: 'Your monthly budget is ready: what is planned and spent, the bills by due date, and the savings goals.', files: [{ bot: 'scribe', path: 'files/monthly-budget.xlsx' }] });
-if (variant === 'room') pages.chief.messages.push({ id: 70, author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.' });
 if (fresh) pages.chief = { messages: [] };
 if (variant === 'ask-hire') {
   Object.assign(state.person, { name: 'Umer', address: 'Umer' });
@@ -559,11 +558,15 @@ export async function demoCall(method: string, path: string, body?: Json) {
     return { ok: true };
   }
   if (method === 'GET' && path.startsWith('/api/room')) return { lines: [
-    { id: 81, bot: 'scout', author: 'person', text: 'Find three stories about the neighbourhood.', at: now - 5 * min },
-    { id: 82, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a community garden, and a night market.', at: now - 4 * min },
-    { id: 83, bot: 'scribe', author: 'scout', from: 'scout', to: 'scribe', text: 'Draft the story for your newsletter.', at: now - 2 * min, files: [{ bot: 'scribe', path: 'files/from-scout/stories.md' }] },
-    { id: 84, bot: 'chief', author: 'bot', text: 'All done, Umer. Scout: three stories. Scribe: a newsletter draft waiting for your yes.', at: now - min },
-  ], busy: ['scout', 'scribe'], asks: state.asks.filter((a: Json) => a.detail?.pass) };
+    { id: 81, bot: 'chief', author: 'person', text: 'Find three stories about the neighbourhood and draft one for the newsletter.', at: now - 6 * min },
+    { id: 82, bot: 'chief', author: 'bot', text: 'On it, Umer. Scout finds the stories, then Scribe drafts the newsletter piece.', at: now - 6 * min + 5000 },
+    { id: 83, bot: 'scout', author: 'chief', from: 'chief', to: 'scout', text: 'Find three stories worth telling about the neighbourhood this week. Give one line on each and say which is strongest.', at: now - 5 * min },
+    { id: 84, bot: 'scout', author: 'bot', text: 'Three stories worth telling: a new park, a community garden, and a night market. The park is the strongest.', at: now - 4 * min },
+    { id: 85, bot: 'scout', author: 'system', text: 'Delivered files/stories.md: The three stories', at: now - 4 * min + 2000 },
+    { id: 86, bot: 'scribe', author: 'chief', from: 'chief', to: 'scribe', text: 'Draft the newsletter piece on the new park, using Scout’s stories. Keep it under 150 words.', at: now - 3 * min },
+    { id: 87, bot: 'scribe', author: 'bot', text: 'Drafted. It opens with the ribbon-cutting and ends with the garden club’s invitation.', at: now - 2 * min },
+    { id: 88, bot: 'chief', author: 'bot', standup: true, text: 'Standup, Umer. Scout found three stories and the park leads. Scribe drafted the newsletter piece from it; the draft waits for your yes.', at: now - min },
+  ], busy: ['scribe'], asks: [] };
   if (method === 'GET' && path.startsWith('/api/bots/scout')) return { ...pages.scout, bot: bots.find((x) => x.id === 'scout') };
   const b = /^\/api\/bots\/([a-z0-9-]+)(?:\?.*)?$/.exec(path);
   if (method === 'GET' && b) return { ...pages[b[1]], bot: bots.find((x) => x.id === b[1]) };

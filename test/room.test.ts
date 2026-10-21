@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setup, holding, release, settled, until, task } from './lab.ts';
+import { setup, holding, release, settled, until, task, delegated } from './lab.ts';
 import * as disk from '../src/bots.ts';
 
 test('room replies rejoin a job; plain routed work stays out', async () => {
@@ -47,6 +47,53 @@ test('wrap-up reports an unsure part without saying all done', async () => {
   assert.equal(task(db, next).state, 'unsure');
   const wrap = db.get("SELECT text FROM messages WHERE bot = 'chief' AND task_id = ? AND text LIKE 'The crew has stopped.%'", first);
   assert.match(wrap?.text ?? '', /Scout isn't sure it worked/);
+  done();
+});
+
+test('Chief’s hand-offs to two helpers are the crew’s teamwork, and his closing words are the standup', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const errand = (await crew.post('chief', 'ask permission: look one thing up'))!.task;
+  await holding(crew, 'chief');
+  const solo = delegated(crew, 'scout', 'Look up the school run times').task;
+  await settled(db, solo); await release(crew, 'chief', 'Scout has it.'); await settled(db, errand);
+  assert.ok(!crew.room().lines.some((l) => l.text.includes('school run')), 'one hand-off is an errand: it stays in the chats');
+  const job = (await crew.post('chief', 'ask permission: stories, then a draft'))!.task;
+  await holding(crew, 'chief');
+  const a = delegated(crew, 'scout', 'Find three stories about the park').task, b = delegated(crew, 'scribe', 'Draft a note about the first story').task;
+  await settled(db, a); await settled(db, b); await release(crew, 'chief', 'Scout found the stories and Scribe drafted the note.'); await settled(db, job);
+  const { lines } = crew.room();
+  assert.deepEqual(lines.filter((l) => l.from).map((l) => [l.from, l.to, l.text]), [['chief', 'scout', 'Find three stories about the park'], ['chief', 'scribe', 'Draft a note about the first story']], 'each hand-off carries what Chief asked');
+  assert.deepEqual(lines.filter((l) => l.standup).map((l) => l.text), ['Scout found the stories and Scribe drafted the note.'], 'his own closing words are the one standup');
+  assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap'").length, 0, 'crewd writes no second one when his job ended well');
+  done();
+});
+
+test('when Chief’s job does not end well, crewd stands in with what each helper came to', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const job = (await crew.post('chief', 'ask permission: stories, then a draft [tool crew_outcome {"worked":false,"seen":"not confirmed"}]'))!.task;
+  await holding(crew, 'chief');
+  const a = delegated(crew, 'scout', 'Find three stories').task, b = delegated(crew, 'scribe', 'Draft a note [tool crew_outcome {"worked":false,"seen":"not confirmed"}]').task;
+  await settled(db, a); await settled(db, b); await release(crew, 'chief', 'Both are back.'); await settled(db, job);
+  assert.equal(task(db, job).state, 'unsure');
+  const last = crew.room().lines.at(-1)!;
+  assert.ok(last.standup && /^The crew has stopped\./.test(last.text) && /Scribe isn't sure it worked/.test(last.text), last.text);
+  assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap'").length, 1);
+  done();
+});
+
+test('a reply that is only the engine\u2019s silence token is no reply: crewd writes the standup', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Sara'); crew.recruit('scout', 'Scout', 'person'); crew.recruit('scribe', 'Scribe', 'person');
+  const job = (await crew.post('chief', 'ask permission: stories, then a draft'))!.task;
+  await holding(crew, 'chief');
+  const a = delegated(crew, 'scout', 'Find three stories').task, b = delegated(crew, 'scribe', 'Draft a note').task;
+  await settled(db, a); await settled(db, b); await release(crew, 'chief', 'REPLY_SKIP'); await settled(db, job);
+  const last = crew.room().lines.at(-1)!;
+  assert.ok(last.standup && /^The crew has stopped|^Scout/.test(last.text) && !/REPLY_SKIP/.test(last.text), last.text);
+  assert.equal(db.all("SELECT 1 FROM messages WHERE text LIKE '%REPLY_SKIP%'").length, 0, 'the token is never kept as words');
+  assert.equal(db.all("SELECT seq FROM events WHERE kind = 'room.wrap'").length, 1);
   done();
 });
 
