@@ -10,3 +10,4 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [Phone live control](phone-live-control.md): Open a working helper's chat on the phone layout; its control bar has Stop and Take control, and an ask shows Yes, go ahead
 - [Pair the phone's browser by the computer's QR](pair-the-phone-browser-by-qr.md): On the computer turn on the phone's-browser address, scan the QR with the phone camera, check two words, chat with Chief
 - [Pair the PWA and get a real Chief reply](pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — pair the app to the computer, say hello, Chief really answers (the `core` and `upgrade` journeys)
+- [A pinned tool that failed](a-pinned-tool-that-failed.md): A helper's pinned kit tool fails; the step says the work did not happen and names the newer copy an update brings in

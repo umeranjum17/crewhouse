@@ -23,7 +23,7 @@ console.log('\nTool kit (a helper fetches its own the first time it needs it):')
 for (const t of toolStatus(cfg)) {
   if (t.source === 'planned') { line(null, t.name, 'planned'); continue; }
   if (!t.ready) { line(null, t.name, t.installable ? 'arrives on first use' : `missing ${t.missing.join(', ')}`); continue; }
-  line(true, t.name, t.outdated ? 'a newer pin is available' : '');
+  line(true, t.name, t.outdated ? `a newer pin is available — ./crewhouse tools install ${t.id}` : '');
 }
 console.log('\nBot desktops (the Computer tool):');
 const gaps = missing();

@@ -217,11 +217,17 @@ export function pressOf(snapshot: string, target: string): { label: string; body
   return { label, body: [...new Set(here)].join('\n') };
 }
 
-const PROGRAMS: Record<string, string> = { ffmpeg: 'Worked on a video', ffprobe: 'Checked a video', magick: 'Worked on an image', markitdown: 'Read a document',
-  'yt-dlp': 'Downloaded a video', rg: 'Searched its files', jq: 'Read some data', python3: 'Ran a small program', node: 'Ran a small program' }, host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a page'; } catch { return 'a page'; } };
+/** What a program does, in the person's words: the action, so a call that failed can say it could not do it. */
+const PROGRAMS: Record<string, string> = { ffmpeg: 'work on a video', ffprobe: 'check a video', magick: 'work on an image', markitdown: 'read a document',
+  'yt-dlp': 'download a video', rg: 'search its files', jq: 'read some data', python3: 'run a small program', node: 'run a small program' },
+  IRREGULAR: Record<string, string> = { read: 'read', run: 'ran' },
+  /** The same action, said as it happened: "worked on a video", "read a document". */
+  past = (action: string) => { const [verb, ...rest] = action.split(' '), done = IRREGULAR[verb] ?? (verb.endsWith('e') ? `${verb}d` : `${verb}ed`); return [done, ...rest].join(' '); },
+  host = (u: unknown) => { try { return new URL(String(u)).hostname || 'a page'; } catch { return 'a page'; } };
 
-/** A line for the "What I did" trail. No commands, no paths: what a person would say they saw. Empty for the crew's own tools. */
-export function toolWords(tool: string, input: Record<string, any>): string {
+/** A line for the "What I did" trail. No commands, no paths: what a person would say they saw. Empty for the crew's own tools.
+ *  A call that failed says so: it never claims the work was done. */
+export function toolWords(tool: string, input: Record<string, any>, ok = true): string {
   tool = baseName(tool);
   const file = basename(String(input.path ?? ''));
   switch (tool) {
@@ -229,7 +235,10 @@ export function toolWords(tool: string, input: Record<string, any>): string {
     case 'write': return `Saved ${file}`;
     case 'edit': return `Changed ${file}`;
     case 'ls': case 'find': case 'grep': return 'Looked through its files';
-    case 'bash': return PROGRAMS[String(input.command ?? '').trim().split(/\s+/)[0]] ?? 'Worked in its own space';
+    case 'bash': {
+      const action = PROGRAMS[String(input.command ?? '').trim().split(/\s+/)[0]] ?? 'work in its own space', done = past(action);
+      return ok ? done[0].toUpperCase() + done.slice(1) : `Couldn't ${action}`;
+    }
     case 'web_search': return `Searched the web for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';

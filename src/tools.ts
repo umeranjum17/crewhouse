@@ -49,6 +49,21 @@ const pinOf = (cfg: Config, t: Tool) => JSON.stringify({ npm: t.install.npm, pip
   lock: existsSync(lockOf(cfg, t.id)) ? createHash('sha256').update(readFileSync(lockOf(cfg, t.id))).digest('hex') : undefined }), pinFile = (cfg: Config, id: string) => join(cfg.toolsDir, id, '.pin');
 export const toolBin = (cfg: Config) => join(cfg.toolsDir, 'bin');
 
+/** The version a pinned download names (its URL), and the copy installed here (its own pin). */
+const versionOf = (url: string) => /\/download\/([^/]+)\//.exec(url)?.[1] ?? '',
+  installedOf = (cfg: Config, t: Tool) => { try { return String(JSON.parse(readFileSync(pinFile(cfg, t.id), 'utf8')).download?.url ?? ''); } catch { return ''; } };
+
+/** What the kit says about a pinned tool that failed: the copy Crewhouse pins, and the safe way to a newer one (the
+ *  kit's own manifest and its checksum — never a download at run time). Plain words: the app scrubs commands away. */
+export function pinnedNote(cfg: Config, program: string) {
+  const t = registry(cfg).find((x) => x.source === 'pinned' && x.bins.includes(program));
+  if (!t) return '';
+  const pin = versionOf(t.install.download?.url ?? ''), have = versionOf(installedOf(cfg, t)), newer = !!have && !!pin && have !== pin;
+  return `${t.name} is Crewhouse's pinned copy${!newer && pin ? ` (${pin})` : ''}. A changed site is the usual reason a pinned copy stops working; `
+    + (newer ? `Crewhouse has a newer copy (${pin}) than yours (${have}), and an update brings it in.`
+      : 'Crewhouse pins a newer copy when one is needed, and an update brings it in.');
+}
+
 /** Where a binary is: Crewhouse's own copy first, then the person's PATH. */
 export function which(cfg: Config, bin: string) {
   for (const d of [toolBin(cfg), ...(process.env.PATH ?? '').split(':')]) if (d && existsSync(join(d, bin))) return join(d, bin);
@@ -126,6 +141,9 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   if (t.source !== 'pinned') throw new Error(`${t.name} is not installed by Crewhouse${t.install.system ? `: ${t.install.system}` : ''}`);
   const dir = join(cfg.toolsDir, id);
   if (existsSync(pinFile(cfg, id)) && readFileSync(pinFile(cfg, id), 'utf8') === pinOf(cfg, t) && t.bins.every((b) => existsSync(join(toolBin(cfg), b)))) { log(`${t.name}: already installed`); return; }
+  // The copy is fetched and checked before the old one goes: a download that never arrives leaves the person with the
+  // copy they had, not with none.
+  const fetched = t.install.download ? await download(t.install.download.url, t.install.download.sha256) : null;
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   mkdirSync(toolBin(cfg), { recursive: true });
@@ -152,7 +170,7 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   } else if (t.install.download) {
     log(`${t.name}: ${t.install.download.url}`);
     const file = join(dir, t.bins[0]);
-    writeFileSync(file, await download(t.install.download.url, t.install.download.sha256));
+    writeFileSync(file, fetched!);
     chmodSync(file, 0o755);
   }
   const vars = { tools: cfg.toolsDir, 'tool.dir': dir };
