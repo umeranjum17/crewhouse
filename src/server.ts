@@ -171,6 +171,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (p === '/api/phones/pending' && m === 'GET') return link.status().asking;
     if (p === '/api/phones/approve' && m === 'POST') { link.approve(String(body.words ?? '')); return { ok: true }; }
     if (p === '/api/phones/lan' && m === 'PUT') { await link.setLan(!!body.on); return link.status(); }
+    if (p === '/api/phones/web' && m === 'PUT') { await link.setWeb(body.on === true, typeof body.address === 'string' ? body.address.trim() : undefined); return link.status(); }
     if (p === '/api/phones/relay' && m === 'PUT') { link.setRelay(typeof body.url === 'string' ? body.url.trim() : null, typeof body.enrol === 'string' ? body.enrol : undefined); return link.status(); }
     if (p === '/api/phones/code' && m === 'POST') return link.typed(body.role ?? 'control');
     if (p === '/api/phones/enrol' && m === 'POST') { if (phone) throw Object.assign(new Error('a phone is enrolled only through its cloud account'), { status: 403 }); return { receipt: await link.enrol(new Uint8Array(Buffer.from(String(body.key), 'base64'))) }; }

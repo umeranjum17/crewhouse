@@ -40,9 +40,8 @@ export const asksForPhone = (text: string) => /\b(pair|connect|link|add|use|inst
   /\b(every|each|weekday|routine|schedule|when a file arrives|wakes up)\b/i.test(text) ? 'routine' : null;
 
 const HOLD_MS = Number(process.env.CREWHOUSE_HOLD_MS || 180_000); // how long a tool call waits for an answer before the turn parks
-const TASK_TIMEOUT_MS = 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || 10 * 60_000); // the engine silent this long: the run has hung
+const TASK_TIMEOUT_MS = 60 * 60_000, QUIET_NUDGE_MS = 4 * 60 * 60_000, QUIET_STOP_MS = 24 * 60 * 60_000, hungMs = () => Number(process.env.CREWHOUSE_HUNG_MS || QUIET_STOP_MS); // quiet work gets its own 24-hour unsure boundary
 const taskTokenCap = () => Number(process.env.CREWHOUSE_TASK_TOKENS || 500_000); // ponytail: one house number, not per template; per-template bot.json field if Scribe and Reel diverge.
-
 
 /** At most n characters, cut at a word boundary with an ellipsis: titles on cards and in the digest. */
 export const short = (s: string, n: number) => (s = s.trim(), s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s);
@@ -125,7 +124,6 @@ export const chiefGreeting = () =>
   '- We stop and ask you first before sending anything, spending money or touching your own files.\n' +
   '- Your AI account does the thinking; your sign-ins stay yours.\n\n' +
   'What would you like help with?';
-
 
 /** What changed between two readings of a page: the differing middle, with a little of what surrounds it, capped. */
 export function changed(before: string, now: string, cap = 1500) {
@@ -662,9 +660,7 @@ export class Crew {
     });
   }
 
-  /** Chief's offer, in the person's plain words: cadence, what happens, quiet behaviour, first run. The routine is made
-   *  only when the person says yes (`adopt`); `answer` applies a changed time first. A helper offers its own check-ins
-   *  the same way, for the person. */
+  /** Chief offers routines for approval; `adopt` creates them, and helpers can offer check-ins too. */
   private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
     const plan = this.planRoutine(p);
     // A reminder: two lines, in the person's own words, with the one moment it is for.
@@ -704,8 +700,7 @@ export class Crew {
     this.db.tx(() => { this.db.run('DELETE FROM routines WHERE id = ?', id); this.db.event('routine.deleted', r.bot, { routine: id, name: r.name }); });
   }
 
-  /** Fire a routine now, and answer from crewd's own record: the fire or skip event it wrote, and for a digest the
-   *  message row it left in Chief's chat. A run that landed nothing is a failure carrying that reason. */
+  /** Run now and report from crewd's durable fire/skip record. */
   async runRoutine(id: number) {
     const r = this.routine(id), seq = this.db.get('SELECT COALESCE(MAX(seq), 0) AS seq FROM events')!.seq;
     // A reminder speaks in the person's own words, never through a helper's turn.
@@ -720,9 +715,9 @@ export class Crew {
     return d;
   }
 
-  /** Fire every routine that is due, and notice files arriving for event-started chores: one query, no AI until
-   *  something actually starts. A machine that slept through runs catches up once (latest only), then moves on. */
+  /** Fire due routines and notice file triggers; sleeping catches up once, latest only. */
   schedule(now = Date.now()) {
+    this.nudgeQuiet(now);
     // The mail watch: while Gmail is connected Chief keeps one quiet routine; the model reads the new mail named in each run and says only what needs the person.
     if (this.connections.connected('gmail') && !this.db.get('SELECT 1 FROM routines WHERE mailwatch = 1'))
       this.db.run("INSERT INTO routines (bot, name, schedule, body, quiet, mailwatch, next_at, created_at, kind) VALUES (?, 'Mail watch', 'every 2 hours', ?, 1, 1, ?, ?, 'task')",
@@ -739,8 +734,14 @@ export class Crew {
     }
   }
 
-  /** The moment a reminder is due: crewd's own words, in the person's thread, with no AI and no task, so it cannot be
-   *  swallowed or left waiting on an account. It keeps no next run, so it never fires twice — a restart included. */
+  private nudgeQuiet(now: number) {
+    for (const task of this.db.all("SELECT *, COALESCE((SELECT MAX(at) FROM events WHERE bot = tasks.bot AND kind IN ('run.tool', 'task.progress', 'file.delivered') AND json_extract(data, '$.task') = tasks.id), (SELECT MIN(at) FROM events WHERE bot = tasks.bot AND kind = 'task.working' AND json_extract(data, '$.task') = tasks.id), created_at) AS quiet FROM tasks WHERE state = 'working'")) { const quiet = Number(task.quiet), key = `quiet.nudge.${task.id}`;
+      if (now - quiet >= QUIET_STOP_MS) { this.close(task.bot); this.setTask(task, 'unsure', 'I stopped after a long silence. Check in with the helper before continuing.'); this.db.run('DELETE FROM settings WHERE key = ?', key); }
+      else if (now - quiet >= QUIET_NUDGE_MS && Number(this.db.get('SELECT value FROM settings WHERE key = ?', key)?.value) !== quiet) { this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, String(quiet)); this.say(CHIEF, 'bot', `“${short(task.title, 60)}” has been quiet for a while. I’ll let you know if it doesn’t pick up.`, null); }
+    }
+  }
+
+  /** Speak a due reminder once in Chief's thread without AI or a task. */
   private remind(r: Row, why: 'schedule' | 'late' | 'now') {
     this.db.tx(() => {
       this.db.run('UPDATE routines SET next_at = NULL, last_at = ? WHERE id = ?', Date.now(), r.id);
@@ -752,9 +753,7 @@ export class Crew {
   /** The helper's inbox: the one watched folder a file trigger reads. Fixed per helper, so plain words never carry a path. */
   inbox(botId: string) { return join(disk.botDir(this.cfg, botId), 'files', 'inbox'); }
 
-  /** A file trigger's check: names in the helper's inbox that were not there last tick start the chore once, through
-   *  the same fire path as a time — the same task, approvals and share. The first look is the baseline, so files
-   *  already sitting there never start it. */
+  /** New inbox names start the same chore as a time trigger; the first look is the baseline. */
   private checkInbox(r: Row) {
     const dir = this.inbox(r.bot);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -966,10 +965,8 @@ export class Crew {
 
   // ---- people ----
   onboard(address: string, ask?: string, bot?: string): { task: number } | void {
-    const a = needText(address, 40, 'say how Chief should address you'), hello = ask?.trim();
-    let to = CHIEF;
-    if (hello) {
-      // Hello goal taps hire their helper when the person's account supports it.
+    const a = clean(address, 40), hello = ask?.trim(); let to = CHIEF; // no name is fine: Chief uses none until the person gives one
+    if (hello) { // Hello goal taps hire their helper when the person's account supports it.
       try {
         const t = disk.loadTemplate(this.cfg, bot ?? ''), hired = this.bots().find((b) => b.template === t.id)?.id, brains = hired ? disk.brains(this.cfg, hired) : (t.models ?? ['chatgpt']).map(disk.parseBrain);
         if (brains.some((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider))) to = hired ?? this.recruit(t.id, undefined, 'person').id;
@@ -1488,12 +1485,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       // While the person holds the controls the turn was cut short on purpose; Give back resumes it.
       if (!task || parked || this.held.has(botId)) return;
       // A turn with no words and no calls is never silent: it failed. An action ends done only with crew_outcome; no confirmation means unsure.
-      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
+      const said = task.outcome ? JSON.parse(task.outcome) : null, b = this.bot(botId)!, unchecked = this.unchecked(task), bare = !text && !this.db.get("SELECT 1 FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL", botId, task.id), uncertain = this.db.get("SELECT 1 FROM tasks WHERE parent = ? AND session LIKE 'agent:%:h-%:%' AND state != 'done'", task.id);
       // A fix it delivered counts only when crewd saw its check fail without it and pass with it (crew_verify).
       if (!text && !this.db.get("SELECT 1 FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", task.id)) return this.setTask(task, 'failed', botId === CHIEF ? "I couldn't finish this one." : `${b.display} couldn't finish this one. Try again.`);
-      if (uncertain || unchecked || (said ? !said.worked : task.acted)) {
+      if (uncertain || unchecked || bare || (said ? !said.worked : task.acted)) {
         this.setTask(task, 'unsure', uncertain ? 'The helper has not confirmed this worked. Check its chat before trying again.' : unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
-          : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
+          : bare ? `${b.display} finished without an answer. Try again.` : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
       }
@@ -2325,7 +2322,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         this.curationBusy = true;
         void this.weeklyCuration().finally(() => { this.curationBusy = false; });
       }
-      for (const t of this.db.all("SELECT * FROM tasks WHERE state IN ('working', 'needs_you') AND updated_at < ?", now - TASK_TIMEOUT_MS)) { this.close(t.bot); this.setTask(t, 'failed', 'Took longer than an hour, so I stopped it.'); }
+      for (const t of this.db.all("SELECT * FROM tasks WHERE state = 'needs_you' AND updated_at < ?", now - TASK_TIMEOUT_MS)) { this.close(t.bot); this.setTask(t, 'failed', 'Took longer than an hour, so I stopped it.'); }
       for (const [bot, l] of this.live) { // a turn the engine went silent in ends itself, its files kept, and frees the bot
         const t = this.busy.has(bot) && now - l.news! > hungMs() && this.db.get("SELECT * FROM tasks WHERE id = ? AND state = 'working'", l.task);
         if (t) { this.close(bot); this.setTask(t, 'failed', HUNG); }

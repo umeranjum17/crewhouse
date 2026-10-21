@@ -1,0 +1,39 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "b4f269983d97024d554934167379453ae0fc5407",
+  "tree": "7a30477352d01d5a9b8b8ad1870893fa2979409e",
+  "claim": "On a phone-sized browser page, Chief answers a message typed in his chat with a reply",
+  "result": "pass",
+  "at": "2026-10-21T08:46:55.519Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T084432Z-b4f26998-97c118/shots/phone-chief-reply-day-390.png",
+      "sha256": "12203168525149b2b2be4c8bc054d2743b2da626c71c1cea3cec7e92630079ab"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T084432Z-b4f26998-97c118",
+      "journey": "phone-web-pair",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/phone-web-pair.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\""
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T084432Z-b4f26998-97c118/shots/phone-chief-reply-day-390.png",
+        "sha256": "12203168525149b2b2be4c8bc054d2743b2da626c71c1cea3cec7e92630079ab",
+        "verdict": "pass",
+        "seen": "The newest message at the bottom of the thread is Chief's reply: \"Good morning, Umer — ready when you are, Captain.\" It answers the user's typed message just above it, \"Good morning Chief. Please say hello back in one short sentence.\" The footer reads \"Done · 9 s\", and the layout is phone-sized, so the screenshot shows the outcome."
+      }
+    ]
+  }
+}

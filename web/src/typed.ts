@@ -12,6 +12,8 @@ const CODES = 18; // the relay's short code (6) then link's pairing code (12)
 export const MISSING = 'That code is missing a part. Copy the whole code from your computer, then try again.';
 export const TYPO = 'That code has a typo. Check the 12 letters on your computer and try again.';
 export const NO_COMPUTER = 'Your phone could not find your computer on this Wi-Fi. Scan the QR on your computer instead.';
+/** The web app's version: its page can dial only its own address, so the Wi-Fi is no help here. */
+export const NO_HERE = "This page can't reach your computer. On your computer open Settings, Phones, then Add a phone, and scan its code with this phone's camera.";
 export const NO_RELAY = "Could not reach your computer's relay. Check it is on and try again.";
 
 // A dotted host with an optional port: the only bare host readTyped takes back as https://host (the rest keep their scheme).
@@ -23,6 +25,9 @@ export function relayTyped(short: string, code: string, relay: string) {
   const secure = protocol === 'https:' || protocol === 'wss:';
   return `${short}-${code}@${secure && HOST.test(host) ? host : `${secure ? 'https:' : protocol}//${host}`}`;
 }
+
+/** A scanned or pasted pairing link to the computer's own web app, when this page is not that app: the address to open instead. */
+export const appLink = (text: string, here = location.origin) => { try { const u = new URL(text.trim()); return /^https?:$/.test(u.protocol) && u.origin !== here && u.hash.includes('byokit-link:') ? u.href : ''; } catch { return ''; } };
 
 export function readTyped(text: string): Typed {
   const at = text.indexOf('@');

@@ -35,6 +35,7 @@ type Route = { view: View; id?: string; tab?: string; m?: string; file?: string;
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
   if (location.pathname === '/share' && !location.hash.startsWith('#/pair')) return { view: 'share' }; // the phone's Share sheet (web/manifest.webmanifest)
+  if (demo && location.hash.includes('byokit-link:')) return { view: 'pair' }; // the computer's QR opened this page (link.ts `offerHere`)
   const [a, b, c, d] = location.hash.replace(/^#\/?/, '').split('/');
   if (a === 'h' && b) return { view: 'helper', id: b, tab: ANCHOR.test(c) ? 'chat' : c || 'chat', m: ANCHOR.test(c) ? c : undefined };
   // #/f/<helper>/<file>/<title>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
@@ -110,14 +111,13 @@ function Hello({ state, refresh, night }: Ctx) {
   // The trust line opens How it works, where the promises are: Settings isn't there until the first job.
   const showHow = () => { if (how.current) how.current.open = true; how.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   const pick = (ask: string, bot?: string) => {
-    if (!address.trim()) { setOther(true); input.current?.focus(); return KEPT; }
     return attempt(async () => { await api.onboard(address.trim(), ask, bot); refresh(); go('#/chief'); });
   };
   return (
     <Split className="fr-hello" mark={<Face who="chief" size={88} />} title={`${A.greeting()}${address.trim() ? `, ${address.trim()}` : ''}.`}
       lead="I'm Chief. I run a small crew of helpers that live on this computer and work for you.">
       {other
-        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name" /></label>
+        ? <label className="fr-label name-ask">What shall I call you?<input ref={input} className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Your name, if you like" /></label>
         : <button className="link name-ask" onClick={() => setOther(true)}>Call me something else</button>}
       <h2 className="st-label plate"><span>What can I take off your plate?</span></h2>
       <div className="ideas">
@@ -201,6 +201,17 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
         {h.computer && <button className="btn" onClick={() => attempt(async () => { await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>Take control</button>}
         <button className="btn ghost" onClick={() => { leftAlone.set(h.id, h.quietSince); redraw((n) => n + 1); }}>Leave it</button>
       </div>
+    </div>
+  );
+}
+
+/** A running helper's own controls, in its chat: Stop, Take control (a helper with a computer), and the way back to its screen once you hold it. */
+function LiveControl({ h, word, refresh }: { h: A.Helper; word: string; refresh: () => void }) {
+  return (
+    <div className="live-ctl" role="group" aria-label={`Control ${h.name}`}>
+      <span className="grow"><i className={h.driving ? 'dot you' : 'dot'} aria-hidden />{h.driving ? 'You have control' : word}</span>
+      {h.computer && <button className="btn go" onClick={() => attempt(async () => { if (!h.driving) await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>{h.driving ? 'Open screen' : 'Take control'}</button>}
+      <button className="btn" onClick={() => attempt(async () => { await api.reset(h.id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>
     </div>
   );
 }
@@ -459,10 +470,10 @@ function PairQR({ text, label }: { text: string; label?: string }) {
   </svg>;
 }
 /** Where no phone is paired yet: the app download as a QR plus the same link as plain text. Gone once a phone is paired. */
-function AppDownloadQR() {
+function AppDownloadQR({ android }: { android?: boolean }) {
   return <div className="card pair" aria-label="Get the app">
     <div className="qr"><PairQR text={A.APP_DOWNLOAD_URL} label="Scan to get the app" /></div>
-    <div className="grow"><b>Get the app</b><p className="small">Scan with your phone camera to get the app</p>
+    <div className="grow"><b>{android ? 'Android phone? Get the app instead' : 'Get the app'}</b><p className="small">Scan with your phone camera to get the app</p>
       <p className="mute small" style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.APP_DOWNLOAD_URL}</p>
     </div>
   </div>;
@@ -476,7 +487,7 @@ function Where({ pairing }: { pairing: boolean }) {
   return <div className="where">
     <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
     {w.line && <p className="where-line">{w.line}</p>}
-    {w.rows.map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
+    {w.rows.filter((r) => r.key !== 'phone').map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
       <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="mute small">{r.sub}</span></span><i aria-hidden>›</i>
     </button>)}
     <div className="where-note"><Icon name="shield" size={18} /><p>{w.note}</p></div>
@@ -559,7 +570,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const sentTo = waiting && pending ? pending.at : undefined;
   useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
   // Out of reach, the chat reads as it was kept: no live line, since nothing it shows is still running (A.officeAway).
-  const ln = page && !offline ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
+  const ln = page && !offline && state.bots?.find((x: { id: string }) => x.id === id)?.controls !== 'person' ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
@@ -827,9 +838,9 @@ const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, 
 const QUIET_MS = 4000;
 function LiveRow({ ln, quiet, chipped, replied, asked, who }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean; asked: boolean; who?: A.Helper }) {
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
-  const word = ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
+  const word = ln.stopped ? 'Stopped' : ln.state === 'needs' && !ln.chief ? A.WORDS.wait : LIVE_WORD[ln.state];
   // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there; a failed one waits for its reply, so the line never shows alone before it.
-  if (ln.took !== undefined) return chipped || (!ln.helper && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
+  if (ln.took !== undefined) return chipped || (!ln.helper && !ln.stopped && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>}</div>;
   const at = ln.todos.findIndex((s) => s.state === 'doing');
   return <div className={`line them live-line ${ln.state}`}><div className="line-by" aria-hidden><Face who="chief" size={36} /></div>
@@ -955,9 +966,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={44} />
             <div className="grow"><b>{h.name}</b><span className="st-reading">Reading along</span></div>
-            {b?.task?.state === 'working' && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <a className="st-gear" href={`#/h/${id}/details`} aria-label={`${name}'s profile`}><Icon name="crew" /></a>
           </header>
+          {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
       </>}
@@ -1473,7 +1484,7 @@ function PairCodeCard({ offer, left, typed, link, title, sub, onAway, onNew, onC
         {sub}
         <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
         <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
-        {left > 0 && <p className="small">Can't scan? With the phone on this computer's Wi‑Fi, type this code in the phone app: <b className="pair-typed">{offer.typed}</b></p>}
+        {left > 0 && <p className="small">Can’t scan? {link.web ? <>Open <b style={{ overflowWrap: 'anywhere' }}>{new URL(link.web).host}</b> on the phone and type this code: </> : "With the phone on this computer's Wi‑Fi, type this code in the phone app: "}<b className="pair-typed">{offer.typed}</b></p>}
         {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
           : <button className="link inline small" onClick={onAway}>Show a code for a phone away from home</button>)}
         <div className="btns">{left <= 0 && <button className="btn go" onClick={onNew}>New code</button>}<button className="btn ghost" onClick={onClose}>{closeLabel}</button></div>
@@ -1527,11 +1538,11 @@ function AddPhonePrompt({ accounts, tick }: { accounts: Json[] | null; tick: num
       </div>
     ))}
     {!asking.length && (offer ? <PairCodeCard offer={offer} left={left} typed={typed} link={link} title="Add your phone"
-      sub={<><p className="small">Scan this in the phone app or type the code.</p><p className="mute small">This phone will answer the crew and give them jobs, as you.</p></>}
+      sub={<><p className="small">{link.web ? "Scan this with the phone's camera." : 'Scan this in the phone app or type the code.'}</p><p className="mute small">This phone will answer the crew and give them jobs, as you.</p></>}
       onAway={() => attempt(async () => setTyped(await api.phoneCode('control')))} onNew={mint} onClose={skip} closeLabel="Not now" />
       : <div className="card pair" aria-label="Add your phone">
         <div className="grow"><b>Add your phone</b>
-          <p className="small">Scan this in the phone app or type the code.</p>
+          <p className="small">{link.web ? "Scan this with the phone's camera." : 'Scan this in the phone app or type the code.'}</p>
           <div className="btns"><button className="btn go" onClick={mint}>Show the code</button><button className="btn ghost" onClick={skip}>Not now</button></div>
         </div>
       </div>)}
@@ -1546,6 +1557,7 @@ function Phones({ tick }: { tick: number }) {
   const [typed, setTyped] = useState<Json>(null);
   const [relay, setRelay] = useState<string | null>(null);
   const [enrol, setEnrol] = useState('');
+  const [web, setWeb] = useState('');
   const [now, setNow] = useState(Date.now());
   const load = () => Promise.all([api.phones(), api.phoneLink()]).then(([p, l]) => { setPhones(p); setLink(l); }).catch(() => setPhones(null));
   useEffect(() => { void load(); }, [tick]);
@@ -1570,10 +1582,10 @@ function Phones({ tick }: { tick: number }) {
         ))}
         {!!A.pushWords(link) && <p className="mute small">{A.pushWords(link)}</p>}
         {pushPossible() && <p className="mute small">Notifications on this device: <button className="link inline" onClick={() => attempt(async () => { const r = await turnOnNotifications(!!link.relay); toast(r === 'on' ? 'This device shows Crewhouse news.' : r === 'norelay' ? 'Turn on your mailbox below first, then try again.' : r === 'offline' ? "Your mailbox isn't connected right now. Try again in a moment." : 'Notifications were not allowed.'); })}>turn on</button> · <button className="link inline" onClick={() => attempt(async () => { await turnOffNotifications(); toast('Notifications are off on this device.'); })}>turn off</button></p>}
-        {!phones.length && <p className="mute">No phones yet. Install the Crewhouse app, then scan the code it asks for.</p>}
+        {!phones.length && <p className="mute">{link?.web ? 'No phones yet. Tap Add a phone, then scan the code it shows with the phone’s camera.' : 'No phones yet. Install the Crewhouse app, then scan the code it asks for.'}</p>}
         {!offer && <div className="btns"><button className="btn go" onClick={() => show('control')}>Add a phone</button><button className="btn" onClick={() => show('view')}>Add one that only watches</button></div>}
       </div>
-      {!phones.length && !offer && <AppDownloadQR />}
+      {!phones.length && !offer && <AppDownloadQR android={!!link?.web} />}
       {link.asking.map((a: Json) => (
         <div key={a.id} className="card ask">
           <b>{a.name} would like to join</b>
@@ -1587,7 +1599,7 @@ function Phones({ tick }: { tick: number }) {
       ))}
       {offer && !link.asking.length && (<>
         {!phones.length && <AppDownloadQR />}
-        <PairCodeCard offer={offer} left={left} typed={typed} link={link} title="Scan this with the Crewhouse app"
+        <PairCodeCard offer={offer} left={left} typed={typed} link={link} title={link.web ? "Scan this with the phone's camera" : "Scan this with the Crewhouse app"}
           sub={<p className="mute small">{offer.role === 'view' ? 'This phone will watch the crew but not answer or give jobs.' : 'This phone will answer the crew and give them jobs, as you.'}</p>}
           onAway={() => attempt(async () => setTyped(await api.phoneCode(offer.role)))} onNew={() => show(offer.role)} onClose={() => setOffer(null)} closeLabel="Close" />
       </>)}
@@ -1596,6 +1608,23 @@ function Phones({ tick }: { tick: number }) {
           <div className="mute small">Off: the Wi-Fi opens only while a pairing code is showing here, so a phone can join at home. After that it reaches this computer through <a href="https://tailscale.com" target="_blank" rel="noreferrer">the connector app</a>, away from home. Either way everything between them is locked.</div></span>
         <input type="checkbox" role="switch" checked={link.lan} disabled={link.pinned} onChange={(e) => attempt(async () => setLink(await api.phonesAtHome(e.target.checked)))} />
       </label>
+      <div className="card web-app">
+        <b>Crewhouse in a phone's browser</b>
+        {link.web ? <>
+          <p className="mute small">On. A phone opens Crewhouse at <b style={{ overflowWrap: 'anywhere' }}>{new URL(link.web).host}</b>: tap Add a phone, scan the code it shows with the phone’s camera, and it opens right there. Everything between them is locked.</p>
+          <div className="btns"><button className="btn ghost" onClick={() => attempt(async () => setLink(await api.phoneWeb({})), 'Turned off')}>Turn off</button></div>
+        </> : <>
+          <p className="mute small">An iPhone, an iPad or any phone without the Crewhouse app opens Crewhouse in its browser, from a secure web address for this computer. Turn it on, then tap Add a phone.</p>
+          <div className="btns"><button className="btn go" onClick={() => attempt(async () => setLink(await api.phoneWeb({ on: true })), 'Turned on')}>Turn on with the connector app</button></div>
+          <p className="mute small"><a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Get the connector app ↗</a> is free. Install it on this computer and on the phone, signed in to the same account.</p>
+          <details><summary className="small">I run my own server</summary>
+            <form className="form" onSubmit={(e) => { e.preventDefault(); void attempt(async () => { setLink(await api.phoneWeb({ address: web.trim() })); setWeb(''); }, 'Saved'); }}>
+              <p className="mute small">Point a secure (https) address at this computer, passing web sockets through, then paste the address here.</p>
+              <input className="input" value={web} onChange={(e) => setWeb(e.target.value)} placeholder="Web address, like https://crew.example.com" aria-label="Web address" autoComplete="off" />
+              <div className="btns"><button className="btn go" disabled={!web.trim()}>Save</button></div>
+            </form></details>
+        </>}
+      </div>
       <div className="card anywhere">
         <b>Reach it away from home</b>
         <p className="mute small">{A.awake()}</p>

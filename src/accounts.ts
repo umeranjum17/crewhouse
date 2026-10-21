@@ -37,8 +37,8 @@ type View = { state: 'waiting' | 'done' | 'failed'; via: 'browser' | 'code' | 'k
 export class Accounts {
   /** Which accounts are ready. Undefined means ask the engine (its own sign-in state). */
   readonly ready = new Map<string, boolean>();
-  /** An engine yes, trusted for a minute so a run starts at once; the kit checks again as it admits the run. */
-  private fresh = new Map<string, number>();
+  /** The engine's answer, trusted for a minute (a no for ten seconds) so a run starts at once instead of probing every account the person has not signed in to; the kit checks again as it admits the run. */
+  private fresh = new Map<string, { until: number; yes: boolean }>();
   /** States the product words come from: a sign-in that stopped working, a plan without helpers, a cooldown. */
   readonly expired = new Set<string>();
   readonly excluded = new Set<string>();
@@ -59,10 +59,10 @@ export class Accounts {
     if (this.expired.has(account) || this.excluded.has(account)) return false;
     const r = this.ready.get(account);
     if (r !== undefined) return r;
-    if ((this.fresh.get(account) ?? 0) > Date.now()) return true;
-    const yes = await this.runtime.signedIn(account).catch(() => false);
-    if (yes) this.fresh.set(account, Date.now() + 60_000);
-    return yes;
+    const hit = this.fresh.get(account); if (hit && hit.until > Date.now()) return hit.yes;
+    const yes = await this.runtime.signedIn(account).catch(() => undefined); // a failed probe says nothing and is asked again
+    if (yes !== undefined) this.fresh.set(account, { until: Date.now() + (yes ? 60_000 : 10_000), yes });
+    return !!yes;
   }
   restingUntil(account: string) { return this.rests.get(account) ?? 0; }
   /** An account the person doesn't have: never signed in, or a sign-in that stopped working. */

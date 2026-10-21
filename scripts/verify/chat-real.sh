@@ -8,7 +8,7 @@
 # PACKAGE_DIR runs a built release instead of the checkout and records the seconds to ready (ready.txt); it fails if the release installs an engine at first run.
 #
 # The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
-# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and crewd.log in <out-dir>; non-zero when no reply
+# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and timeline.txt in <out-dir> (crewd.log only on a failure); non-zero when no reply
 # arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <key-file | ->  (CHAT_ACCOUNT, CHAT_KEY_ENV, CHAT_MODEL)" >&2; exit 2; }
@@ -19,7 +19,10 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-chat-real.XXXXXX)
-trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+TL="$OUT/timeline.txt"; : > "$TL" # every step stamped: seconds from crewd's start to the first Chief reply
+mark() { printf '%s %s\n' "$(date +%s.%N)" "$1" >> "$TL"; }
+mark start
+trap 'crewd_stop || exit 1; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
@@ -32,7 +35,7 @@ if [ -n "${PACKAGE_DIR:-}" ]; then # a release as a person gets it: its own Node
     "$PACKAGE_DIR/node/bin/node" src/main.ts
 else
   ST="$LAB/state"; CR="$LAB/crew"; START=$SECONDS
-  crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+  crewd_start "$REPO" "$LAB/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
     XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
     XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
     XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -48,7 +51,7 @@ for _ in $(seq 2400); do # the first start installs the engine
   sleep 0.25
 done
 [ -n "$PERSON" ] || { echo "chat-real: crewd never became ready" >&2; exit 1; }
-echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s after start" | tee "$OUT/ready.txt"
+echo "chat-real: ready ${PACKAGE_DIR:+(release folder) }$((SECONDS - START)) s after start" | tee ${PACKAGE_DIR:+"$OUT/ready.txt"}
 [ -z "${PACKAGE_DIR:-}" ] || ! ls "$LAB/home/.local/share/crewhouse/engine"* >/dev/null 2>&1 || { echo "chat-real: the release installed an engine of its own at first run" >&2; exit 1; }
 [ -z "${PACKAGE_DIR:-}" ] || { echo "engine: the release's own, $(ls "$PACKAGE_DIR/app/runtime" | tr '\n' ' ')under its app folder; installed under the person's home: none"; } | tee -a "$OUT/ready.txt"
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
@@ -59,30 +62,56 @@ MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 [ "$ACCOUNT" = minimax ] || MODEL=${CHAT_MODEL:-minimax/minimax-m3.1-flash:free}
 node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL" "$ACCOUNT"
 echo "chat-real: model $MODEL"
-api /api/onboard -d '{"address":"Umer"}' > /dev/null
+# The first-day path: no name, the first request typed on Hello; it waits for the sign-in and starts by itself.
+ASK=${ASK:-'Good morning Chief. Please say hello back in one short sentence.'}
+if [ -n "${HELPER:-}" ]; then api /api/onboard -d '{"address":""}' > /dev/null; else api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null; fi
+mark "first request sent"
 api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
+mark "key sheet open"
 node -e 'const e = process.env.CHAT_KEY_ENV; process.stdout.write(JSON.stringify({ text: (e ? process.env[e] : require("node:fs").readFileSync(process.argv[1], "utf8")).trim() }))' "$KEYFILE" |
-  api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
+    api /api/accounts/1/$ACCOUNT/paste --max-time 120 --data-binary @- > /dev/null
 for _ in $(seq 120); do api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "chat-real: $ACCOUNT did not take the key" >&2; exit 1; }
-ASK='Good morning Chief. Please say hello back in one short sentence.'
-api /api/bots/chief/messages -d "{\"text\":\"$ASK\"}" > /dev/null
+mark "signed in"
+# HELPER=<template id> (HELPER_NAME) makes the journey a helper's: the template is hired on the same model, Chief is asked
+# to hand it ASK, and the wait is on the helper's own job, which must end with its words (a research helper's report).
+BOT=chief
+if [ -n "${HELPER:-}" ]; then
+  BOT=$(api /api/recruit -d "{\"template\":\"$HELPER\",\"name\":\"${HELPER_NAME:-$HELPER}\"}" | node -pe 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id')
+  node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = [process.argv[3] + ":" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/$BOT/bot.json" "$MODEL" "$ACCOUNT"
+fi
+[ -z "${HELPER:-}" ] || { node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null; }
 # Chief's reply: his words in the thread once the job is done. A job that failed is no reply, even though crewd writes
 # a line for it, so a model that rejects Chief's request fails here at once with that state.
-look() { api /api/bots/chief | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = t.tasks?.[0]?.state, m = (t.messages ?? []).filter((x) => x.author === "bot" && String(x.text ?? "").trim() && !/\bstub [\w-]+:/.test(x.text));
+look() { api /api/bots/$BOT | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = t.tasks?.[0]?.state, m = (t.messages ?? []).filter((x) => x.author === "bot" && String(x.text ?? "").trim() && !/\bstub [\w-]+:/.test(x.text));
   if (s === "done" && m.length) process.stdout.write("done " + m.at(-1).text); else if (["failed", "unsure"].includes(s)) process.stdout.write("end " + s)'; }
 R=""
 DEADLINE=$((SECONDS + ${REPLY_SECONDS:-180}))
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
   R=$(look)
-  case "$R" in done\ *) R=${R#done }; break;; end\ *) api /api/bots/chief > "$OUT/thread.json" || true; cp "$ST"/logs/openclaw*.log "$LAB/crewd.log" "$OUT"/ 2>/dev/null || true; echo "chat-real: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
+  case "$R" in done\ *) R=${R#done }; break;; end\ *) api /api/bots/$BOT > "$OUT/thread.json" || true; cp "$ST"/logs/openclaw*.log "$LAB/crewd.log" "$OUT"/ 2>/dev/null || true; echo "chat-real: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
   R=""; sleep 1
 done
-[ -n "$R" ] || { api /api/bots/chief > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
+[ -n "$R" ] || { api /api/bots/$BOT > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
+mark "first Chief reply"
+cp "$ST"/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
+# the engine's own log names the model that answered
+grep -q "\[model-fetch\] response provider=$ACCOUNT .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "chat-real: the reply did not come from $MODEL" >&2; exit 1; }
+rm -f "$OUT"/openclaw*.log # the assertion above is the proof; the raw logs are over the judge's 64 KB read
 printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R" > "$OUT/reply.txt"
 [ -z "${PACKAGE_DIR:-}" ] || { cat "$OUT/reply.txt"; grep -E "engine ready|first words|signed in" "$LAB/crewd.log" | cut -c1-120; } >> "$OUT/ready.txt" # the release run's one self-contained record
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
-echo "chat-real: Chief replied; thread captured in $OUT/chat-real"
+if [ "$BOT" != chief ]; then # the helper's own page, where its answer sits
+  THEN="(async () => { location.hash = '#/h/$BOT'; for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+    WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/helper" "$BOT" "$B/#person=$PERSON"
+fi
+OK=1
+# done-done's step record: what a person did and saw
+node -e 'const [out, ask, model, bot] = process.argv.slice(1), h = bot !== "chief", v = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version;
+  require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: v }, start: "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+  steps: h ? ["Open Crewhouse on a new computer", "Open the key sign-in sheet, paste an account key and sign in", "Hire the " + bot + " helper", "Message Chief: " + ask, "Open the " + bot + " helper page"] : ["Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked", "Chief says the crew needs an AI account to start; open the key sign-in sheet", "Paste a MiniMax key and sign in", "Wait while Chief starts the request"],
+  result: (h ? "The " + bot + " helper\u0027s job ends with its own answer and a Document card, not a bare Done, on " : "Chief replies in his thread on ") + model + " to: " + ask }, null, 2))' "$OUT" "$ASK" "$MODEL" "$BOT"
+echo "chat-real: $BOT replied; thread captured in $OUT/chat-real"
