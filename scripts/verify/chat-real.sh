@@ -97,4 +97,9 @@ export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your t
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
 OK=1
+# done-done's step record: what a person did and saw
+node -e 'const [out, ask, model] = process.argv.slice(1), v = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version;
+  require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: v }, start: "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+  steps: ["Open Crewhouse and tap the first idea on Hello; the request is sent with no name asked", "Chief says the crew needs an AI account to start; open the key sign-in sheet", "Paste a MiniMax key and sign in", "Wait while Chief starts the request"],
+  result: "Chief replies in his thread on " + model + " to: " + ask }, null, 2))' "$OUT" "$ASK" "$MODEL"
 echo "chat-real: Chief replied; thread captured in $OUT/chat-real"
