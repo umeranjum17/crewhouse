@@ -46,7 +46,7 @@ export function loadConfig(): Config {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(xdgData, 'crewhouse', 'tools')),
-    engineDir: envPath('CREWHOUSE_ENGINE_DIR', product && (existsSync(join(repoDir, '.git')) || existsSync(own)) ? own : join(xdgData, 'crewhouse', 'engine')),
+    engineDir: envPath('CREWHOUSE_ENGINE_DIR', product && (existsSync(join(repoDir, '.git')) || existsSync(own) || existsSync(own + '.sets')) ? own : join(xdgData, 'crewhouse', 'engine')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',
     port: Number(process.env.CREWHOUSE_PORT || (product ? 7711 : 0)),
     linkHost: process.env.CREWHOUSE_LINK_HOST?.trim() || '',
