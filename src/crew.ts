@@ -507,24 +507,24 @@ export class Crew {
     };
   }
 
-  /** Only jobs started in the room or involving a helper-to-helper pass belong here. */
+  /** Teamwork only: a job the person started in the room, or one Chief handed to two or more helpers (one hand-off is an errand and stays in the chats). `wrap` is the standup's fallback: Chief's own closing words are the standup when his job ended well. */
   room(before?: number) {
-    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(CASE WHEN parent IS NOT NULL AND origin != '${CHIEF}' THEN 1 ELSE 0 END) > 0`, lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root FROM messages m JOIN tasks t ON t.id = m.task_id
+    const roots = `SELECT root FROM tasks GROUP BY root HAVING MAX(room) = 1 OR SUM(parent IS NOT NULL AND bot != '${CHIEF}') > 1`, lines = this.db.all(`SELECT m.*, t.origin, t.parent, t.root, t.state,
+      (SELECT MAX(id) FROM messages WHERE task_id = m.task_id AND bot = '${CHIEF}' AND author = 'bot') AS closing FROM messages m JOIN tasks t ON t.id = m.task_id
       WHERE t.root IN (${roots}) AND m.id < ? ORDER BY m.id DESC LIMIT 200`, before ?? Number.MAX_SAFE_INTEGER).reverse();
     return { lines: lines.map((m) => ({ id: m.id, bot: m.bot, author: m.author, to: m.parent && m.author === m.origin ? m.bot : undefined,
-      from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at,
-      files: m.parent && m.author === m.origin ? this.taskFiles(m.task_id).map((d) => ({ bot: m.bot, path: d.path })) : [] })),
+      from: m.parent && m.author === m.origin ? m.origin : undefined, text: cleanReply(m.text), at: m.at, standup: m.id === m.closing && m.task_id === m.root && ['done', 'failed', 'unsure'].includes(m.state) })),
       busy: this.db.all(`SELECT DISTINCT bot FROM tasks WHERE root IN (${roots}) AND state IN ('queued','working','needs_you','paused')`).map((r) => r.bot),
       asks: this.db.all(`SELECT * FROM asks WHERE state = 'open' AND task_id IN (SELECT id FROM tasks WHERE root IN (${roots}))`).map((a) => this.askView(a)) };
   }
 
   private wrap(root: number) {
-    const tasks = this.db.all('SELECT * FROM tasks WHERE root = ? ORDER BY id', root);
-    if (tasks.some((t) => /^agent:[^:]+:h-/.test(t.session ?? '')) || tasks.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) ||
-      this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root)) return;
-    const parts = tasks.filter((t) => t.bot !== CHIEF).map((t) => t.state === 'done'
+    const tasks = this.db.all('SELECT * FROM tasks WHERE root = ? ORDER BY id', root), top = tasks.find((t) => t.id === root), parts = tasks.filter((t) => t.bot !== CHIEF);
+    if (parts.length < 2 || tasks.some((t) => !['done', 'failed', 'unsure'].includes(t.state)) || this.db.get("SELECT 1 FROM events WHERE kind = 'room.wrap' AND json_extract(data, '$.root') = ?", root) ||
+      top?.bot === CHIEF && top.state === 'done' && this.db.get("SELECT 1 FROM messages WHERE task_id = ? AND bot = ? AND author = 'bot'", root, CHIEF)) return;
+    const text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.map((t) => t.state === 'done'
       ? `${t.acted ? '' : `${this.bot(t.bot)?.display ?? t.bot} finished. `}${relayResult(t.result || 'Done', '', !!t.acted)}`
-      : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`), text = `${tasks.some((t) => t.state !== 'done') ? 'The crew has stopped.' : 'All done.'}\n${parts.join('\n')}`;
+      : `${this.bot(t.bot)?.display ?? t.bot} ${t.state === 'unsure' ? "isn't sure it worked" : "couldn't finish"}.`).join('\n')}`;
     this.say(CHIEF, 'bot', text, root);
     this.db.event('room.wrap', CHIEF, { root });
   }
@@ -1516,10 +1516,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       return task;
     };
     return {
-      delegate: async (parent, bot, key) => {
+      delegate: async (parent, bot, key, brief) => {
         const root = own(parent), brain = this.live.get(parent.bot)!;
         if (parent.bot !== CHIEF || bot === CHIEF || !this.bot(bot) || this.activeTask(bot) || this.starting.has(bot) || this.held.has(bot) || this.live.size + this.starting.size >= this.cfg.maxConcurrent) throw new Error('That helper is busy or unavailable. Choose another helper or wait.');
-        const id = this.addTask(bot, root.body, CHIEF, undefined, root.body, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
+        const ask = brief.trim() || root.body, id = this.addTask(bot, ask, CHIEF, undefined, ask, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
         this.db.run('UPDATE tasks SET session = ? WHERE id = ?', key, id); task.session = key; this.setTask(task, 'working');
         this.starting.add(bot);
         try {

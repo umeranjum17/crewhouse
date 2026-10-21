@@ -31,6 +31,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [Recruit a helper and assign it a job](features/recruit-a-helper-and-assign-it-a-job.md): Send a message to Chief that carries a crew_recruit tool call, then post a job in the new helper's own thread (`docs/verification/recruit-assign.md`)
 - [Chief's thread on a desktop and a phone](features/chief-s-thread-on-a-desktop-and-a-phone.md): Open the app's private launcher URL for the lab, then the Chief thread (#/chief) (`docs/verification/runbook.md`)
 - [Chief's real reply on MiniMax Flash](features/chief-s-real-reply-on-minimax-flash.md): Run the `chat-real` journey; the stub reply is hidden, so only a real key shows one (`docs/verification/chat-real.md`)
+- [The crew room and Chief's standup](features/the-crew-room-and-chief-s-standup.md): Run the `crew-room` journey; Chief hands one job to two helpers on a real key and the room ends on his standup (`docs/verification/crew-room.md`)
 - [Onboarding from Hello into Chief's thread](features/onboarding-from-hello-into-chief-s-threa.md): First run in a fresh browser session shows the Hello screen with three ideas (`docs/verification/onboard-chief-chat.md`)
 
 ## Evidence

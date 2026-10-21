@@ -87,7 +87,7 @@ export class OpenClawRuntime implements AgentRuntime {
             const target = this.targets.get(run.key)?.get(String(input.sessionKey));
             if (!target || input.timeoutSeconds !== 0 || input.label !== undefined || !this.host.delegate) return { allow: false, reason: 'Use an available helper session from this job, with timeoutSeconds 0.' };
             try {
-              target.run = await this.host.delegate(run, target.bot, String(input.sessionKey));
+              target.run = await this.host.delegate(run, target.bot, String(input.sessionKey), typeof input.message === 'string' ? input.message : '');
               this.runs.set(String(input.sessionKey), target.run);
               return { allow: true };
             } catch (e) { return { allow: false, reason: (e as Error).message }; }
@@ -244,7 +244,7 @@ export class OpenClawRuntime implements AgentRuntime {
       if (e.run.root.sessionKey !== rootKey || e.run.root.runId !== id) return;
       const target = targets.get(e.run.sessionKey), run = target ? target.run : this.runs.get(spec.key); // a spawned lookup has no job of its own: it is Chief's
       if (!run) return;
-      if (e.type === 'admitted') { dispatched = true; admitted.add(e.run.runId); this.host?.event?.(run, { type: 'delegated', id: e.run.runId, parent: e.run.parent.runId, root: id }); }
+      if (e.type === 'admitted') { clearTimeout(timer); dispatched = true; admitted.add(e.run.runId); this.host?.event?.(run, { type: 'delegated', id: e.run.runId, parent: e.run.parent.runId, root: id }); }
       if (target && e.event?.stream === 'assistant' && typeof e.event.data?.text === 'string') { texts.set(e.run.runId, e.event.data.text); this.host?.event?.(run, { type: 'text', text: e.event.data.text }); }
       if (e.type === 'ended') {
         admitted.delete(e.run.runId);

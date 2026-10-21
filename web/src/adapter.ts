@@ -909,9 +909,6 @@ export function card(a: Json, state: Json): Card {
   if (a.kind === 'propose' && d.plan) return { ...base, kind: 'plan', status: 'A plan to start', head: "Chief's plan", words: plain(d.words ?? a.title),
     lines: (d.plan.steps ?? []).map((x: string, i: number) => `${i + 1}. ${plain(x)}`),
     choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
-  if (a.kind === 'propose' && d.pass) return { ...base, kind: 'ok', status: 'Wants to hand work on', head: `${name} wants to hand work on`, words: plain(d.words ?? a.title),
-    lines: (d.pass.files ?? []).map((f: string) => `With “${pretty(f)}”`),
-    choices: [{ label: 'Hand it on', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
     return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
   if (a.kind === 'propose' && d.draft) {
@@ -1583,10 +1580,14 @@ export function room(page: Json, state: Json) {
   const people = new Map((state.bots ?? []).map((b: Json) => [b.id, helper(b, state.events ?? [], state.bots, state.tasks ?? [], state.asks ?? [], gone)]));
   // Crewd's own lines (a delivery, a verdict, a reopen) are notes, here exactly as in a helper's chat: one style for
   // every line the person reads, whoever wrote it. Only a helper's or the person's own words are a bubble.
-  return (page?.lines ?? []).map((m: Json) => ({ id: m.id as number, who: people.get(m.bot) as Helper | undefined,
-    to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
-    from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
-    text: chatWords(m.text ?? ''), files: (m.files ?? []).map((f: Json) => fileView(f.bot, f.path, checks.get(`${f.bot}|${f.path}`))).filter((g: FileView) => !gone.has(g.url)), at: at(m.at), author: m.author === 'system' ? 'note' : m.author }));
+  return (page?.lines ?? []).map((m: Json) => {
+    const text = chatWords(m.text ?? ''), sent = m.author === 'system' ? /^(?:Delivered|Kept) (files\/.+?)(?::\s|$)/.exec(text) : null, file = sent ? fileView(m.bot, sent[1], checks.get(`${m.bot}|${sent[1]}`)) : undefined;
+    // A hand-off line is the sender's; a delivery is its file card, with the helper's note beside it.
+    return { id: m.id as number, who: people.get(m.from ?? m.bot) as Helper | undefined, standup: m.standup === true,
+      to: m.to ? (people.get(m.to) as Helper | undefined)?.name : undefined,
+      from: m.from ? (people.get(m.from) as Helper | undefined)?.name : undefined,
+      text: sent ? plain(text.slice(sent[0].length)) : text, files: file && !gone.has(file.url) ? [file] : [], at: at(m.at), author: m.author === 'system' ? 'note' : m.author };
+  });
 }
 
 /** A chat answer, as written: a helper's answer to the person is never scrubbed, just as the person's own
