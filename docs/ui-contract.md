@@ -155,7 +155,7 @@ on, through the engine's own install with the trust check; a catalog row outside
 
 | Call | Returns |
 |---|---|
-| `GET /api/skills` | `{live, purposes, starter: [{slug, owner, version, summary, why, needs, on}]}` — the reviewed set; `on` as the engine sees it; `purposes` maps each reviewed row id (app, skill or plugin) to its section, in list order. `live: false` on the stand-in engine (all off) |
+| `GET /api/skills` | `{live, purposes, starter: [{slug, owner, version, maturity, summary, why, needs, on}]}` — the reviewed set; `maturity` is `production`, `beta` or `experimental` and shows as a small tag beside the skill's name; `on` as the engine sees it; `purposes` maps each reviewed row id (app, skill or plugin) to its section, in list order. `live: false` on the stand-in engine (all off) |
 | `GET /api/skills/search?q=` | `{results: [{slug, owner?, name?, kind?, summary, version, reviewed, on}]}` — the skill catalog's matches (`skills.search`), then the plugin catalog's (`plugins.search`, `kind: 'plugin'`, never reviewed); empty while the engine starts |
 | `POST /api/skills/:slug/on` | Switches a reviewed skill on through the engine's install (the trust check still applies); 400 in plain words otherwise |
 | `POST /api/skills/:slug/off` | Switches it off again |

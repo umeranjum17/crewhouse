@@ -2026,7 +2026,7 @@ export const herdr = (status: Json | null): HerdrSetup | null => {
 
 /** One row of Add to your crew: a connected app, a reviewed skill or a plugin, in one shape. `purpose` is its section,
  *  from crewd's reviewed list; a catalog row found by search has none and switches on only when it is reviewed. */
-export type CrewRow = { id: string; kind: 'app' | 'skill' | 'plugin'; name: string; logo?: string; line: string; purpose: string; on: boolean; reviewed: boolean; by?: string };
+export type CrewRow = { id: string; kind: 'app' | 'skill' | 'plugin'; name: string; logo?: string; line: string; purpose: string; on: boolean; reviewed: boolean; by?: string; maturity?: string };
 /** The sections, in order: mail and calendar first. */
 export const PURPOSES: [string, string][] = [['mail', 'Mail, calendar and files'], ['home', 'Home'], ['code', 'Code'], ['design', 'Design']];
 const skillName = (s: Json) => String(s.name ?? String(s.slug).split('-').map((w) => w[0]?.toUpperCase() + w.slice(1)).join(' '));
@@ -2035,7 +2035,7 @@ const skillName = (s: Json) => String(s.name ?? String(s.slug).split('-').map((w
 export const crewRows = (state: Json, skills: Json, herdrStatus: Json | null): CrewRow[] => {
   const purposes: Record<string, string> = skills?.purposes ?? {}, order = Object.keys(purposes);
   const rows: Omit<CrewRow, 'purpose'>[] = [...apps(state).map((a) => ({ id: a.id, kind: 'app' as const, name: a.name, logo: a.logo, line: a.line, on: a.on, reviewed: true })),
-    ...((skills?.starter ?? []) as Json[]).map((s) => ({ id: String(s.slug), kind: 'skill' as const, name: skillName(s), line: String(s.summary ?? ''), on: s.on === true, reviewed: true })),
+    ...((skills?.starter ?? []) as Json[]).map((s) => ({ id: String(s.slug), kind: 'skill' as const, name: skillName(s), line: String(s.summary ?? ''), on: s.on === true, reviewed: true, maturity: s.maturity ? String(s.maturity) : undefined })),
     ...(herdrStatus ? [{ id: 'herdr', kind: 'plugin' as const, name: 'Herdr', logo: '/marks/herdr.png', line: 'Runs coding agents side by side', on: herdr(herdrStatus)?.state === 'on', reviewed: true }] : [])];
   return rows.filter((r) => purposes[r.id]).map((r) => ({ ...r, purpose: purposes[r.id] })).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 };

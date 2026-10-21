@@ -1,6 +1,7 @@
 {
   "approved": [
     {
+      "maturity": "production",
       "needs": [
         "the curl tool, already on this computer"
       ],
@@ -16,12 +17,20 @@
         "stars": 429
       },
       "summary": "Current weather and forecasts, no sign-in needed.",
+      "trust": {
+        "triggeredBy": "Only a helper the person has given it to, when its job calls for a forecast; a routine can ask for one too.",
+        "tools": "The curl tool only, on public weather pages.",
+        "runsAt": "In the helper’s own sandbox on this computer, with only the two weather sites reachable.",
+        "credentials": "None. It reads no sign-in, key or file of the person’s.",
+        "stop": "Turn it off in Settings, or stop the helper’s job from its card."
+      },
       "verdict": "Read-only calls to two free public endpoints (wttr.in, open-meteo.com). No keys, no sign-in, no installer, nothing leaves the crew. Fits a morning check-in or a routine.",
       "version": "1.0.0",
       "why": "A personal crew answers “do I need a jacket” every day; this is the smallest honest way.",
       "name": "Weather"
     },
     {
+      "maturity": "production",
       "needs": [
         "the gh tool and your GitHub sign-in"
       ],
@@ -37,12 +46,20 @@
         "stars": 671
       },
       "summary": "Read issues, pull requests and check runs with the gh tool.",
+      "trust": {
+        "triggeredBy": "Only a helper the person has given it to, when its job involves GitHub issues, pull requests or checks.",
+        "tools": "The gh tool, used for reads.",
+        "runsAt": "In the helper’s own sandbox on this computer.",
+        "credentials": "The person’s GitHub sign-in, only once the person has signed gh in; nothing else.",
+        "stop": "Turn it off in Settings, sign gh out, or stop the helper’s job from its card."
+      },
       "verdict": "Read-oriented guidance (issue/pr/run/api reads). Teaches no credential handling and ships no installer. Anything that changes a repo still goes through the crew's own checks; needs gh and the person's sign-in before it can do anything.",
       "version": "1.0.0",
       "why": "Your crew does support-desk and patch work; reading a check run is step one.",
       "name": "GitHub"
     },
     {
+      "maturity": "beta",
       "needs": [
         "the obsidian tool on this computer, and your say-so on which note folder it may read"
       ],
@@ -58,12 +75,20 @@
         "stars": 459
       },
       "summary": "Find and tidy notes in your Obsidian vault.",
+      "trust": {
+        "triggeredBy": "Only a helper the person has given it to, and only after the person names a note folder.",
+        "tools": "The obsidian tool, limited to that one folder.",
+        "runsAt": "In the helper’s own sandbox on this computer.",
+        "credentials": "None. It reads the notes in the one folder the person allowed.",
+        "stop": "Turn it off in Settings, take the folder away, or stop the helper’s job from its card."
+      },
       "verdict": "Only touches the person's own note folder; ships no installer. Off until the person connects a vault: reading or changing their notes needs their say-so first, and the crew's own memory stays the record of what it learned.",
       "version": "1.0.0",
       "why": "People keep their lives in notes; a helper that can look something up there saves retyping.",
       "name": "Obsidian"
     },
     {
+      "maturity": "experimental",
       "needs": [
         "your Home Assistant's address and sign-in, kept locked away"
       ],
@@ -79,6 +104,13 @@
         "stars": 16
       },
       "summary": "Lights, heating and who is home, from your Home Assistant.",
+      "trust": {
+        "triggeredBy": "Only a helper the person has given it to, and only after the person connects their home.",
+        "tools": "Calls to the person’s own Home Assistant; locks, alarms and garage doors always ask first.",
+        "runsAt": "In the helper’s own sandbox on this computer, talking to the person’s Home Assistant.",
+        "credentials": "The Home Assistant sign-in, kept in the crew’s locked store and never shown in chat.",
+        "stop": "Turn it off in Settings, remove the connection, or stop the helper’s job from its card."
+      },
       "verdict": "Well-written with its own safety lines (locks, alarms and garage doors always ask first). Off until the person connects their home: the token lives in the crew's locked store, never in chat, and anything touching locks or alarms asks every time.",
       "version": "2.1.0",
       "why": "“Is anyone home, is the heating on” is a personal-crew question; this answers it where the person already runs Home Assistant.",

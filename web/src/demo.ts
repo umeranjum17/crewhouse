@@ -639,8 +639,8 @@ export async function demoCall(method: string, path: string, body?: Json) {
   // Add to your crew's reviewed set and each row's section, as crewd's reviewed list places them.
   if (method === 'GET' && path === '/api/skills') return { live: true, purposes: { gmail: 'mail', calendar: 'mail', drive: 'mail', notion: 'mail', gmailwrite: 'mail', gmailsend: 'mail',
     weather: 'home', github: 'code', herdr: 'code', canva: 'design' }, starter: [
-    { slug: 'weather', name: 'Weather', owner: 'steipete', version: '1.0.0', summary: 'Current weather and forecasts, no sign-in needed.', why: 'The crew answers “do I need a jacket” every day.', needs: ['the curl tool, already on this computer'], on: true },
-    { slug: 'github', name: 'GitHub', owner: 'steipete', version: '1.0.0', summary: 'Read issues, pull requests and check runs with the gh tool.', why: 'Reading a check run is step one of desk work.', needs: ['the gh tool and your GitHub sign-in'], on: false },
+    { slug: 'weather', name: 'Weather', owner: 'steipete', version: '1.0.0', maturity: 'production', summary: 'Current weather and forecasts, no sign-in needed.', why: 'The crew answers “do I need a jacket” every day.', needs: ['the curl tool, already on this computer'], on: true },
+    { slug: 'github', name: 'GitHub', owner: 'steipete', version: '1.0.0', maturity: 'beta', summary: 'Read issues, pull requests and check runs with the gh tool.', why: 'Reading a check run is step one of desk work.', needs: ['the gh tool and your GitHub sign-in'], on: false },
   ] };
   if (method === 'GET' && path.startsWith('/api/skills/search')) return { results: [
     { slug: 'weather', owner: 'steipete', version: '1.0.0', summary: 'Current weather and forecasts, no sign-in needed.' },
