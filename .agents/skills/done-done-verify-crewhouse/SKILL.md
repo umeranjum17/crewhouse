@@ -35,6 +35,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [A bot's read of a file outside its own folder](features/a-bots-read-of-a-file-outside-its-own-folder.md): Run the `flash-read` journey; the crew reads its own work without a question, on a real key (`docs/verification/flash-read.md`)
 - [Phone live control](features/phone-live-control.md): Open a working helper's chat on the phone layout; its control bar has Stop and Take control, and an ask shows Yes, go ahead (`docs/verification/phone-live-control.md`)
 - [A pinned tool that failed](features/a-pinned-tool-that-failed.md): Run the pinned-tool drive script; the helper's "What happened" shows the failed step and the newer copy an update brings in
+- [Key sign-in sheet](features/key-sign-in-sheet.md): Home's "Sign in with OpenRouter" opens the key sheet; paste a stub key, pick a live model (`docs/verification/key-sheet.md`)
 - [Quiet-job nudge](features/quiet-job-nudge.md): Run `scripts/verify/quiet-nudge.sh <out>`; Chief says a job is quiet once, a day later it ends unsure (`docs/verification/quiet-nudge.md`)
 - [Pair the PWA and get a real Chief reply](features/pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — run the `core` journey (the `upgrade` journey proves the release path) (`docs/verification/pair-chat.md`)
 - [Onboarding in Chief's chat](features/onboarding-from-hello-into-chief-s-threa.md): First run opens Chief's chat asking the name, then his pitch with ideas to try; run `onboard-chat` (`docs/verification/onboard-chief-chat.md`)

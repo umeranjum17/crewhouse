@@ -115,7 +115,9 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
     : g.key ? 'key' : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
   // A key account lists its own live models once the key is saved; the person picks one (or keeps the account's default).
-  useEffect(() => { if (keyed && g.state === 'ready' && !cat) void api.models(ai.key).then(setCat).catch(() => setCat({ models: [], picked: null })); }, [keyed, g.state]);
+  useEffect(() => { if (!keyed || g.state !== 'ready' || cat) return; let live = true; void (async () => {
+    for (let i = 0; i < 4 && live; i++) { const c = await api.models(ai.key).catch(() => null); if (c?.models.length || i === 3) return live && setCat(c ?? { models: [], picked: null }); await new Promise((r) => setTimeout(r, 1000)); } // the engine reads its catalog just after a key is saved; an empty list is asked again before the sheet moves on
+  })(); return () => { live = false; }; }, [keyed, g.state]);
   const shown: Json[] = (cat?.models ?? []).filter((m: Json) => `${m.name} ${m.id}`.toLowerCase().includes(find.trim().toLowerCase()));
   const useModel = () => attempt(async () => { await api.pickModel(ai.key, sel); setChosen(true); }, undefined);
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
@@ -125,12 +127,12 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code' || phase === 'key') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
   const page = g.signing?.url || (ai.key === 'chatgpt' ? 'https://auth.openai.com/codex/device' : '');
-  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' || phase === 'key' ? 1 : 0;
+  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'model' ? 2 : phase === 'waiting' || phase === 'code' || phase === 'key' ? 1 : 0;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Sign in with ${name}`} onClose={close}>
-      {!['offline', 'busy'].includes(phase) && !g.cliLogin && <Progress at={at} steps={phase === 'key' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
-      <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
+      {!['offline', 'busy'].includes(phase) && !g.cliLogin && <Progress at={at} steps={phase === 'key' || phase === 'model' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
+      {phase !== 'model' && <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />}
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'key' && <>
         {g.pick ? <>
@@ -140,7 +142,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         </> : <>
           <h2>Paste your {name} key</h2>
           <p className="mute">Paste the key from your {name} account. It uses your own {name} plan and stays on your computer.</p>
-          <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key').then(() => setChecking(false)); }}>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }).then(() => setChecking(false)); }}>
             <input className="input" value={pasted} disabled={checking} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
             <button className="btn go big" disabled={checking || !pasted.trim()}>{checking ? 'Checking…' : <>Sign in with {name}</>}</button>
           </form>

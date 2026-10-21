@@ -91,7 +91,7 @@ test('an OpenRouter key signs in through the kit and the picker lists the key\'s
   const f = faked({}, { 'models.authStatus': (p: any) => ({ providers: p.agentId === 'byokit-key-m1' ? [{ provider: 'openrouter' }] : [] }), 'byokit.catalog': () => ({ ok: true, models: [
     { id: 'minimax/minimax-m3.1-flash:free', name: 'MiniMax M3.1 Flash (free)', api: 'openai-completions' },
     { id: 'deepseek/deepseek-v4', name: 'DeepSeek V4', api: 'openai-completions' },
-  ] }) });
+  ] }) } as {});
   try {
     await f.started;
     const steps: { done?: boolean; error?: string }[] = [];
