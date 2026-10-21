@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# done-done journey `chat-real` (hand/agent only: needs a browser session and a MiniMax key): one isolated crewd on the
+# real engine (OpenClaw through the BYOKit kit), signed in to MiniMax through the sign-in sheet's own key paste, on
+# the account's Flash model. One message goes to Chief; the journey waits, bounded, for a real reply (the stub engine's
+# words are hidden by the app, so only a real route can show one) and captures Chief's thread at 390 wide, day and night.
+#
+#   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/chat-real.sh <out-dir> <minimax-key-file>
+#
+# The key is read from the file into the sign-in request only: never printed, logged, copied or kept in the repo. Exit 0
+# with chat-real/chief-{night,day}-390.png, reply.txt (Chief's words) and crewd.log in <out-dir>; non-zero when no reply
+# arrives within REPLY_SECONDS (default 180) or the reply is a stub line. Spends a few model calls on that key's account.
+set -euo pipefail
+[ $# -ge 2 ] || { echo "usage: chat-real.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
+KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "chat-real: no key in the key file" >&2; exit 2; }
+OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
+REPO=$(git rev-parse --show-toplevel)
+. "$REPO/scripts/verify/crewd-group.sh"
+LAB=$(mktemp -d -t crewhouse-chat-real.XXXXXX)
+trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
+PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
+B="http://127.0.0.1:$PORT"
+crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+  XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
+  XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
+  XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
+  CREWHOUSE_PORT="$PORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
+  node "$REPO/src/main.ts"
+PERSON=""
+for _ in $(seq 2400); do # the first start installs the engine
+  if [ -f "$LAB/state/person.key" ]; then
+    PERSON=$(cat "$LAB/state/person.key")
+    curl -fsS --max-time 10 -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B/api/state" 2>/dev/null | grep -q '"phase":"ready"' && break
+  fi
+  sleep 0.25
+done
+[ -n "$PERSON" ] || { echo "chat-real: crewd never became ready" >&2; exit 1; }
+H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
+api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
+api /api/onboard -d '{"address":"Umer"}' > /dev/null
+api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
+node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
+  api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
+for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
+api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chat-real: MiniMax did not take the key" >&2; exit 1; }
+# Flash is the model under test. The picker (PUT .../minimax/model) cannot choose it: the engine's catalog lists a key
+# sign-in's models as unavailable, so the lab names it in Chief's own bot.json, which every turn reads.
+MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
+node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$MODEL"
+echo "chat-real: model $MODEL"
+ASK='Good morning Chief. Please say hello back in one short sentence.'
+api /api/bots/chief/messages -d "{\"text\":\"$ASK\"}" > /dev/null
+# Chief's reply: his words in the thread once the job is done. A job that failed is no reply, even though crewd writes
+# a line for it, so a model that rejects Chief's request fails here at once with that state.
+look() { api /api/bots/chief | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = t.tasks?.[0]?.state, m = (t.messages ?? []).filter((x) => x.author === "bot" && String(x.text ?? "").trim() && !/\bstub [\w-]+:/.test(x.text));
+  if (s === "done" && m.length) process.stdout.write("done " + m.at(-1).text); else if (["failed", "unsure"].includes(s)) process.stdout.write("end " + s)'; }
+R=""
+DEADLINE=$((SECONDS + ${REPLY_SECONDS:-180}))
+while [ "$SECONDS" -lt "$DEADLINE" ]; do
+  R=$(look)
+  case "$R" in done\ *) R=${R#done }; break;; end\ *) api /api/bots/chief > "$OUT/thread.json" || true; cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null || true; echo "chat-real: Chief's job ${R#end } on $MODEL; thread in $OUT/thread.json" >&2; exit 1;; esac
+  R=""; sleep 1
+done
+[ -n "$R" ] || { api /api/bots/chief > "$OUT/thread.json" || true; echo "chat-real: no reply from Chief within ${REPLY_SECONDS:-180}s" >&2; exit 1; }
+printf '%s\n' "$R" > "$OUT/reply.txt"
+export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
+# Chief's thread, opened the way a person does: a tap on Chief's card on Home.
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+  WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
+echo "chat-real: Chief replied; thread captured in $OUT/chat-real"
