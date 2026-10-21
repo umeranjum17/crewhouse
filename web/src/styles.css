@@ -1891,7 +1891,9 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .fr-cmds { display: grid; gap: 4px; padding: 14px 16px; border-radius: 16px; background: var(--ink); color: var(--bg); }
 .fr-cmds .chat-code, .fr-cmd.chat-code { font: 500 15px/1.5 var(--art); white-space: pre-wrap; overflow-wrap: anywhere; }
 .fr-cmd { display: block; padding: 14px 16px; border-radius: 16px; background: var(--soft); user-select: all; }
-.fr-copy { align-self: flex-start; }
+.fr-how { margin: 0; padding-left: 24px; display: grid; gap: 8px; font: 400 18px/1.4 var(--ui); color: var(--ink2); }
+.fr-note summary { cursor: pointer; font-weight: 700; color: var(--ink2); }
+.fr-note p { margin: 8px 0 0; }
 .fr-acts { display: grid; gap: 10px; }
 .fr-wait { display: inline-flex; align-items: center; gap: 10px; font: 600 16px var(--ui); color: var(--ink2); }
 .fr-spin { width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--line2); border-top-color: var(--ink); animation: fr-turn 1s linear infinite; }
@@ -1947,7 +1949,6 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .fr-hello .fr-label { justify-self: stretch; }
 .idea em { margin-left: auto; }
 .fr .st-label { margin: 0 0 4px; }
-.fr-r > .fr-copy { width: auto; }
 @media (min-width: 900px) { .fr-h { font-size: clamp(44px, 4.4vw, 64px); } }
 /* watch a helper (J15) */
 .card.screen { border-radius: 28px; }

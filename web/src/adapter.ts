@@ -1366,7 +1366,7 @@ export function homeSetup(state: Json, accounts: Json[] | null, link: Json | nul
   const plan = planName(accounts);
   const rows = [
     { key: 'signin', says: plan === 'AI plan' ? 'An AI plan the crew can think with' : `The crew thinks with your ${plan}`, done: accounts?.some((a) => a.signedIn === true) === true },
-    { key: 'phones', says: 'Phones can reach the crew away from home', done: link?.anywhere === 'anywhere' },
+    { key: 'phones', says: 'Phones can reach the crew away from home', done: !!link?.web || reach(link).online }, // away from home a phone's browser needs the web address (or the mailbox); Tailscale running here proves neither
     { key: 'google', says: 'Google setup', done: state.house?.google !== false },
   ];
   return { rows, left: rows[0].done ? 0 : 1 };

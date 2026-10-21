@@ -1,0 +1,68 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "2294b3221f048f7ed3c0628f9718f73ec22ffc00",
+  "tree": "cd42947b2c91335a5b6e187777567d839542cf9e",
+  "claim": "A person's hello to Chief gets his reply in his chat thread",
+  "result": "pass",
+  "at": "2026-10-21T07:56:56.211Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/chat-real/chief-day-390.png",
+      "sha256": "d95ae9d8d848172ee50e2d668eaa50e31edbae9136b1bb2819883411bd5d0613"
+    },
+    {
+      "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/chat-real/chief-night-390.png",
+      "sha256": "9c25b5fc6042c3103e23ea49f0faf768623e43e6148713faa16f431ade139f9d"
+    },
+    {
+      "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/ready.txt",
+      "sha256": "f277a92f0abe0f68d47680fd9813608f21c5dd673e80381a0f330af1141d0375"
+    },
+    {
+      "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/reply.txt",
+      "sha256": "17b6ff910924207d96a3b86c8618b1ddd97efa5ae4453d91aafb651ef7dbdaa5"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T075520Z-2294b322-4209b1",
+      "journey": "chat-real",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 900 bash scripts/verify/chat-real.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized MiniMax key file}\""
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/chat-real/chief-day-390.png",
+        "sha256": "d95ae9d8d848172ee50e2d668eaa50e31edbae9136b1bb2819883411bd5d0613",
+        "verdict": "pass",
+        "seen": "The outcome names Chief's reply in the chat thread. The newest message at the bottom reads 'Good morning, Umer. Ready when you are.' beside Chief's avatar, under the user's 'Good morning Chief. Please say hello back in one short sentence.' The Chief tab is active and no overlay hides the thread."
+      },
+      {
+        "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/chat-real/chief-night-390.png",
+        "sha256": "9c25b5fc6042c3103e23ea49f0faf768623e43e6148713faa16f431ade139f9d",
+        "verdict": "pass",
+        "seen": "The outcome says a person's hello to Chief gets his reply in his chat thread. The Chief screen is shown. The user's message reads 'Good morning Chief. Please say hello back in one short sentence.' The newest message at the bottom is Chief's reply: 'Good morning, Umer. Ready when you are.' The outcome names one part, so parts and covers are empty."
+      },
+      {
+        "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/ready.txt",
+        "sha256": "f277a92f0abe0f68d47680fd9813608f21c5dd673e80381a0f330af1141d0375",
+        "verdict": "pass",
+        "seen": "I read 4 entries: the prompt line 'You asked Chief: Good morning Chief...', the reply line 'Chief replied (model openrouter/auto): Good morning, Umer. Ready when you are.', and three log records ('crewd engine ready', 'crewd account signed in', 'crewd first words'). The capture shows the person's hello sent to Chief and Chief's reply recorded, matching the outcome. The outcome names one part, so parts and covers are empty. No error or contradicting values appear."
+      },
+      {
+        "path": "<evidence root>/20261021T075520Z-2294b322-4209b1/reply.txt",
+        "sha256": "17b6ff910924207d96a3b86c8618b1ddd97efa5ae4453d91aafb651ef7dbdaa5",
+        "verdict": "pass"
+      }
+    ]
+  }
+}
