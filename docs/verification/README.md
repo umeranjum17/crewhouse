@@ -22,6 +22,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | thread-hygiene | `done-done run ask-in-view` and `done-done run -- bash scripts/verify/new-pill.sh "$DONE_DONE_EVIDENCE_ROOT"` plus the recipe's other cases |
 | site-signin | `done-done run site-signin` |
 | pwa-pair | `done-done run pwa-pair` plus typed-code and push legs |
+| pair-chat (the core journey) | `done-done verify core --outcome "<claim>"` once the person approves the spend (below); `done-done verify upgrade --outcome "<claim>"` for the release path |
 | pwa-shell / pwa-offline / pwa-resume / chief-computer | `done-done run pwa-plan` with the recipe's task-owned `PLAN` |
 | phone-pairing | `done-done run phone-pair` plus typed/timed-code drivers |
 | phone-chat-keep | `done-done verify phone-chat-keep --outcome "<claim>"` once the person approves the spend (below), plus approval-sheet driver |
@@ -96,6 +97,7 @@ Without that approval the journey is NOT RUN; never drop `spends:` or wrap its d
 | pwa-shell | [pwa-shell.md](pwa-shell.md) | The home-screen app: status bar and browser bar in the look's colour, safe-area insets, iOS launch screens, the rich install sheet and Settings' quiet install row, installed for real in an isolated Chromium |
 | pwa-offline | [pwa-offline.md](pwa-offline.md) | The service worker: a cold offline reload served from cache, a real push event showing a content-free notification, and the home-screen badge mirroring Needs you |
 | pwa-pair | [pwa-pair.md](pwa-pair.md) | The demo's Pair card: a relay code or the 12-letter code pairs the installed app through @byokit/pair, the two words match the computer's, the same app reloads on real data over the link, and Unpair goes back to the demo |
+| pair-chat | [pair-chat.md](pair-chat.md) | The core journey on the real engine: the app pairs to the computer (code, two words, yes there), says hello, and Chief really answers in his thread; the upgrade leg installs the previous published version and upgrades over it in place |
 | ipad-tailscale | [ipad-tailscale.md](ipad-tailscale.md) | The README's iPad route: `./crewhouse phones web` serves the link at the computer's Tailscale https name, the iPad installs from it, pairs with the 12-letter code, then sends to Chief, approves a card and stops a job from the installed app |
 | pwa-resume | [pwa-resume.md](pwa-resume.md) | The installed app's cold relaunch returns to the last place (thread or screen), per mode; a named link/shortcut wins; a deleted thread falls back to Home; the offline shell still opens; proven on the iPad simulator's real Safari home-screen app |
 | find-clients-send | [find-clients-send.md](find-clients-send.md) | Paired-phone-only corporate attestation, suppression and one exact Gmail review; local/helper approvals refused; stop before Send |
