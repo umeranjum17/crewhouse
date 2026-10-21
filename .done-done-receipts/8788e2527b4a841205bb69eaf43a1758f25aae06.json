@@ -1,0 +1,63 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "8788e2527b4a841205bb69eaf43a1758f25aae06",
+  "tree": "f1a5809610f288dc41bb5e704980f1488bb231a9",
+  "claim": "At 390 px wide, the helper's chat shows its answer after the approved file read.",
+  "result": "pass",
+  "at": "2026-10-21T10:13:00.546Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261021T100708Z-8788e252-d482fc/approved-day-390.png",
+      "sha256": "9661db21639300eba16f28ae1e06eef2e69069ac89eaeb2e6aee797cfe392625"
+    },
+    {
+      "path": "<evidence root>/20261021T100708Z-8788e252-d482fc/approved-night-390.png",
+      "sha256": "6e8343dc6e6bb32c4bf0eb3046f8b3ba790adaf539b66fd400347350e53221fd"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261021T100708Z-8788e252-d482fc",
+      "journey": "phone-live-control",
+      "command": "CHROME_DEVTOOLS_AXI_SESSION=\"${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}\" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh \"$DONE_DONE_EVIDENCE_ROOT\" \"${KEY_FILE:?authorized key file}\"",
+      "tool": "0.6.0",
+      "steps": {
+        "target": {
+          "version": "8788e252"
+        },
+        "start": "a fresh Crewhouse on the real engine, signed in to a MiniMax Flash key, with a helper (Research Rae) on the phone layout at 390 wide",
+        "steps": [
+          "Ask the helper to read a file and tap Yes, go ahead on its ask",
+          "Give the helper a long job and open its chat: the control bar reads At work, Take control, Stop",
+          "Tap Stop: the job ends Stopped by you and the thread says Stopped",
+          "Give it another long job, tap Take control and see You have control, then Hand it back"
+        ],
+        "result": "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back"
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261021T100708Z-8788e252-d482fc/approved-day-390.png",
+        "sha256": "9661db21639300eba16f28ae1e06eef2e69069ac89eaeb2e6aee797cfe392625",
+        "verdict": "pass",
+        "seen": "The newest message at the bottom of the thread is from Research Rae and begins \"Hi Umer — the note says the garden gate code is\", followed by the answer and two bullets about the file and profile. This is the chat answer the outcome describes, shown after the approved read. The outcome names one width (390 px), so parts is empty. The capture does not show a width indicator, so it cannot confirm the 390 px width itself, which keeps the probability of correct high but not total."
+      },
+      {
+        "path": "<evidence root>/20261021T100708Z-8788e252-d482fc/approved-night-390.png",
+        "sha256": "6e8343dc6e6bb32c4bf0eb3046f8b3ba790adaf539b66fd400347350e53221fd",
+        "verdict": "pass",
+        "seen": "The outcome names one state: the helper's chat showing its answer after the file read, at 390 px wide. The screenshot shows the Research Rae chat with the user's read request and the reply beginning \"Hi Umer\", followed by bullets such as \"That's the whole file, one line, nothing else.\" The layout is phone-width and no dialog, error, or keyboard hides the content. The answer is visible, so the capture supports the outcome."
+      }
+    ]
+  }
+}
