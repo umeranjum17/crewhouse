@@ -10,7 +10,7 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/phone-live-control.sh <out-dir> <minimax-key-file>
 #
 # The key is read from the file into the sign-in request only: never printed, logged or kept. Exit 0 with
-# live-/stopped-/takeover-/handed-back-/ask-/approved-{night,day}-390.png, report.txt and crewd.log in <out-dir>; non-zero
+# live-/stopped-/takeover-/approved-{night,day}-390.png and report.txt in <out-dir> (ask-/handed-back-/held- ones in $EXTRA_DIR when set); non-zero
 # when any step does not happen within its bound. Spends a few model calls on that key's account.
 set -euo pipefail
 [ $# -ge 2 ] || { echo "usage: phone-live-control.sh <out-dir> <minimax-key-file>" >&2; exit 2; }
@@ -29,7 +29,7 @@ NOTE="$LAB/home/Documents/lab-note.txt"
 echo "The lab note says the garden gate code is 4417." > "$NOTE"
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
-crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+crewd_start "$REPO" "$LAB/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
@@ -46,7 +46,7 @@ done
 [ -n "$PERSON" ] || { echo "phone-live-control: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
-fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; exit 1; }
+fail() { echo "phone-live-control: $*" >&2; api /api/bots/research-rae > "$OUT/thread.json" 2>/dev/null || true; cp "$LAB/crewd.log" "$OUT/crewd.log" 2>/dev/null || true; exit 1; } # the engine log and thread are kept only when the run fails
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
 api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
 node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" |
@@ -77,7 +77,7 @@ open() { SEQ=$((SEQ + 1)); CUR=("$1" "$2" "$3"); page; axi emulate --viewport "3
     axi eval "(async () => { await new Promise((r) => setTimeout(r, 1500)); location.hash = '$2'; for (let i = 0; i < 80 && !document.querySelector('$3'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('$3'); })()" | grep -q true && return 0
   done
   axi screenshot "$OUT/failed-$1.png" > /dev/null || true; axi console > "$OUT/failed-$1.console" 2>&1 || true; fail "$2 never showed $3 ($1)"; }
-shot() { axi screenshot "$OUT/$1-$2-390.png" > /dev/null; }
+shot() { local d=$OUT; case "$1" in live|stopped|takeover|approved) ;; *) d=${EXTRA_DIR:-}; esac; [ -z "$d" ] || axi screenshot "$d/$1-$2-390.png" > /dev/null; } # the four proof captures go to the evidence; the in-between ones only when EXTRA_DIR is set
 # both <name> <route> <selector>: the same state, night then day.
 both() { for theme in night day; do open "$theme" "$2" "$3"; shot "$1" "$theme" || { open "$theme" "$2" "$3"; shot "$1" "$theme"; }; done; } # a tab that died under the shot is opened again once
 text() { axi eval "document.querySelector('$1')?.innerText ?? ''" | sed -n 's/^result: //p' | node -e 'process.stdout.write(JSON.parse(JSON.parse(require("node:fs").readFileSync(0, "utf8"))).replace(/\s+/g, " ").trim())'; }
