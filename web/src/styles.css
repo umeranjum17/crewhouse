@@ -1476,6 +1476,11 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-helper-chat .chat-head { gap: 8px; }
 .st-helper-chat .chat-head b { font: 800 22px/1.1 var(--ui); font-stretch: 112%; overflow-wrap: anywhere; }
 .st-helper-chat .st-reading { display: block; color: var(--mute); font-size: 16px; }
+.live-ctl { display: flex; gap: 8px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--line); font-size: 16px; }
+.live-ctl .grow { display: flex; gap: 8px; align-items: center; min-width: 0; font-weight: 600; }
+.live-ctl .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+.live-ctl .dot.you { background: var(--amber); }
+.live-ctl .btn { min-height: 44px; font-size: 16px; padding: 8px 14px; }
 .st-helper-chat .st-gear, .st-profile .st-gear { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .st-helper-chat .back { margin: 0; border-radius: 50%; background: var(--soft); width: 44px; height: 44px; }
 .st-helper-chat .sticky-top { margin: 0; padding: 0; }

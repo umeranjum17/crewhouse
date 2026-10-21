@@ -205,6 +205,17 @@ function Stuck({ h, refresh }: { h: A.Helper; refresh: () => void }) {
   );
 }
 
+/** A running helper's own controls, in its chat: Stop, Take control (a helper with a computer), and the way back to its screen once you hold it. */
+function LiveControl({ h, word, refresh }: { h: A.Helper; word: string; refresh: () => void }) {
+  return (
+    <div className="live-ctl" role="group" aria-label={`Control ${h.name}`}>
+      <span className="grow"><i className={h.driving ? 'dot you' : 'dot'} aria-hidden />{h.driving ? 'You have control' : word}</span>
+      {h.computer && <button className="btn go" onClick={() => attempt(async () => { if (!h.driving) await api.takeOver(h.id); refresh(); go(`#/h/${h.id}/screen`); })}>{h.driving ? 'Open screen' : 'Take control'}</button>}
+      <button className="btn" onClick={() => attempt(async () => { await api.reset(h.id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>
+    </div>
+  );
+}
+
 /** The phone's chats, with Chief and the crew pinned before the recent helpers. */
 /** The owner's row until the house is fully set up: how many of the three jobs are left. None of them is this
  *  device's to do once paired — their calls are refused over the link — so the row waits for the computer. */
@@ -559,7 +570,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const sentTo = waiting && pending ? pending.at : undefined;
   useEffect(() => { if (id !== 'chief') return; A.setChiefSend(sentTo); return () => A.setChiefSend(undefined); }, [id, sentTo]);
   // Out of reach, the chat reads as it was kept: no live line, since nothing it shows is still running (A.officeAway).
-  const ln = page && !offline ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
+  const ln = page && !offline && state.bots?.find((x: { id: string }) => x.id === id)?.controls !== 'person' ? A.liveLine({ id, name: crewNames.find((x) => x.id === id)?.name ?? 'Chief', crew: crewNames, writing, heard, last: stirred.current,
     tasks: [...(page.tasks ?? []), ...(id === 'chief' ? state.tasks ?? [] : [])], events: [...(page.trail ?? []), ...(state.events ?? [])],
     sent: sentTo, signedOut }) : null;
   const ticking = !!ln && ln.took === undefined && ln.state !== 'waiting';
@@ -955,9 +966,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
             <Face who={h} size={44} />
             <div className="grow"><b>{h.name}</b><span className="st-reading">Reading along</span></div>
-            {b?.task?.state === 'working' && <button className="btn" onClick={() => confirm(`Stop ${h.name}'s job?`) && attempt(async () => { await api.reset(id); refresh(); }, `Stopped ${h.name}`)}>Stop</button>}
             <a className="st-gear" href={`#/h/${id}/details`} aria-label={`${name}'s profile`}><Icon name="crew" /></a>
           </header>
+          {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
       </>}
