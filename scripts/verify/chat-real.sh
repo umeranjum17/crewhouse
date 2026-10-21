@@ -61,7 +61,7 @@ node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFile
   api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
 mark "key pasted"
 for _ in $(seq 120); do api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chat-real: MiniMax did not take the key" >&2; exit 1; }
+api /api/accounts | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { cp "$LAB"/state/logs/openclaw*.log "$OUT"/ 2>/dev/null; echo "chat-real: MiniMax did not take the key" >&2; exit 1; }
 mark "signed in"
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 # Chief's reply: his words in the thread once the job is done. A job that failed is no reply, even though crewd writes
