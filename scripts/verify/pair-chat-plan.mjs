@@ -16,8 +16,8 @@ const put = (sel) => `(() => { const t = document.querySelector(${JSON.stringify
 const mode = `(document.querySelector('.demo-tag') ? 'demo' : document.querySelector('.fr-hello') || document.querySelector('.name-ask') ? 'real' : document.querySelector('.where') ? 'where' : document.querySelector('main') ? 'app' : 'none')`;
 // The pair sheet is gone: the app has left it and is the person's own crew.
 const unpaired = `!document.querySelector('.pair-words') && !document.querySelector('.pair-code')`;
-// Chief's words in the thread, as the app shows them.
-const answer = `(() => { const l = [...document.querySelectorAll('.line.them .bubble-text')].map((e) => e.textContent.trim()).filter(Boolean); return l.length ? l[l.length - 1] : ''; })()`;
+// Chief's words in the thread after the person's last line, as the app shows them (his name question and pitch come first).
+const answer = `(() => { const all = [...document.querySelectorAll('.lines .line')]; const me = all.map((e) => e.classList.contains('me')).lastIndexOf(true); const l = all.slice(me + 1).filter((e) => e.classList.contains('them')).map((e) => e.querySelector('.bubble-text')?.textContent.trim()).filter(Boolean); return me < 0 || !l.length ? '' : l[l.length - 1]; })()`;
 
 const steps = [
   { name: 'open', w: 390, h: 844, dpr: 2, mobile: true, url: WEB, settle: 5000 },
@@ -30,10 +30,13 @@ const steps = [
   { name: 'words', wait: `!!document.querySelector('.pair-words')`, timeout: 30000, eval: `document.querySelector('.pair-words').textContent`, out: `${EV}/two-words-390.png` },
   { name: 'approve', run: `${cli} phones approve "$(${cli} phones pending | tail -1 | sed 's/.*: //')"` },
   { name: 'paired', wait: unpaired, timeout: 120000, eval: mode },
-  { name: 'hello', wait: `!!document.querySelector('.name-ask input')`, timeout: 60000 },
-  { name: 'name', run: 'echo Umer', eval: put('.name-ask input') },
-  { name: 'ask', run: `printf '%s' ${JSON.stringify(ASK)}`, eval: put('.hello-ask .composer textarea') },
-  { name: 'send', click: '.hello-ask .composer .send', settle: 3000 },
+  // The first run opens on Chief's chat: he asks the name, the person answers in the chat's own box, his pitch follows.
+  { name: 'hello', wait: `location.hash === '#/chief' && !!document.querySelector('.dock textarea') && /What shall I call you/.test(document.body.innerText)`, timeout: 60000 },
+  { name: 'name', run: 'echo Umer', eval: put('.dock textarea') },
+  { name: 'name-send', click: '.dock button.send', settle: 3000 },
+  { name: 'pitch', wait: `document.querySelectorAll('.chips.center .chip').length >= 3`, timeout: 120000 },
+  { name: 'ask', run: `printf '%s' ${JSON.stringify(ASK)}`, eval: put('.dock textarea') },
+  { name: 'send', click: '.dock button.send', settle: 3000 },
   { name: 'answer', wait: `!!(${answer})`, timeout: 300000 },
   { name: 'reply', eval: answer },
 ];
