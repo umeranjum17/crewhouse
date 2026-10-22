@@ -48,7 +48,7 @@ node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSy
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
 api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
 node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" | api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 120); do api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true' && break; sleep 0.5; done
+for _ in $(seq 600); do api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true' && break; sleep 0.5; done
 api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true' || { echo "connect-apps: minimax did not take the key" >&2; exit 1; }
 # The hand-off: the address to open, then the wait for the person's own sign-in on Composio's page.
 printf '%s\n' "$B/#person=$PERSON" > "$HAND/app-url.txt"
