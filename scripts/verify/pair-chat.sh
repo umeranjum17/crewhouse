@@ -126,6 +126,7 @@ const r = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
 const bad = r.filter((s) => s.error);
 if (bad.length) { console.error("pair-chat: failed steps: " + bad.map((s) => s.step).join(", ")); process.exit(1); }
 ' "$OUT/run.json" || { tail -20 "$OUT/run.err" >&2; exit 1; }
+[ -s "$OUT/run.err" ] || rm -f "$OUT/run.err" # an empty log is no evidence
 # Chief's words, out of the app's own thread.
 node -e '
 const fs = require("node:fs"), r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
