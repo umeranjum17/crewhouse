@@ -156,6 +156,7 @@ test('from send to reply the thread never sits still: a held Chief turn and a jo
       assert.ok((await place()).max > 0, `${width}: the thread is long enough to read up`);
     }
     await release(crew, bot, `All set for Umer from ${bot}.`);
+    if (bot === 'scout') await release(crew, 'verifier-vera'); // the check's brief repeats the ask, so the stub holds it too
     if (up) {
       await until('the New pill over the newest line', async () => (await place()).pill, 15_000);
       assert.equal((await place()).st, 0, `${width}: the reply landed without moving the place being read`);

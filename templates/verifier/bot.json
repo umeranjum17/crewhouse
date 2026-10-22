@@ -1,0 +1,16 @@
+{
+  "display": "Verifier Vera",
+  "role": "Checks another helper's answer against its sources before you see it",
+  "hidden": true,
+  "models": [
+    "chatgpt"
+  ],
+  "color": "#0F766E",
+  "apps": [],
+  "tools": [
+    "crew",
+    "files",
+    "web"
+  ],
+  "skills": []
+}

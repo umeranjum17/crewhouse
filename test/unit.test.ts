@@ -534,7 +534,7 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   const c = delegated(crew, 'scout', 'one more').task;
   await settled(db, c);
   assert.equal(task(db, c).state, 'done');
-  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND bot = 'scout' ORDER BY seq DESC")!.data).account, 'chatgpt');
   // Signed in to nothing at all: the task waits for the person's own sign-in (nobody else's), and says so plainly.
   const signedIn = crew.accounts.signedIn;
   crew.accounts.signedIn = async () => false;
