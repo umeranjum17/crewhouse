@@ -35,8 +35,8 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.equal((await store.load())!.providerKey, 'good-key');
   assert.equal(cost(), '$0.018/hour · about $13.14 for 730 hours. boat.dev plans start at $20 a month with compute credit included; this computer uses that credit. List price checked 13 Oct.');
 
-  server.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
-  server.machine.script('curl', { code: 1, stdout: '', stderr: 'no route', timedOut: false });
+  server.machine.script('systemd-run', { code: 0, stdout: '', stderr: '', timedOut: false });
+  server.machine.script('bash', { code: 1, stdout: '', stderr: 'no route', timedOut: false });
   const phone = keyPair();
   const failed = await all(connect(p, store, listed[0], phone));
   assert.deepEqual(progress(failed), { done: 2, failed: 2, why: 'Installing Chief stopped partway. boat.dev reports a problem with your cloud computer.', retry: true, move: false });
@@ -69,7 +69,7 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   boot();
   await until('the runner is ready', () => log.includes('headless host ready'), 60_000).catch((e) => { throw new Error(`${e.message}\n${log}`); });
 
-  server.machine.script('curl', { code: 0, stdout: '', stderr: '', timedOut: false });
+  server.machine.script('bash', { code: 0, stdout: '', stderr: '', timedOut: false });
   const steps = await all(connect(p, store, listed[0], phone));
   assert.deepEqual(steps.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
   assert.deepEqual(progress(steps), { done: 5, failed: -1, why: '', retry: false, move: false });
@@ -109,7 +109,7 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   const other = await startFakeSandboxServer({ key: 'good-key' });
   t.after(() => other.close());
   machines.push(other.machine);
-  other.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
+  other.machine.script('systemd-run', { code: 0, stdout: '', stderr: '', timedOut: false });
   const otherProvider = provider(async () => 'good-key', other.url);
   // A new account has no computer: Make a new computer rents one there, one rental per press.
   assert.deepEqual(await checkKey(otherProvider, memoryStore(), 'good-key'), []);
