@@ -46,10 +46,15 @@ api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL"
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
-node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" | api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null
-for _ in $(seq 600); do api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true' && break; sleep 0.5; done
-api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true' || { echo "connect-apps: minimax did not take the key" >&2; exit 1; }
+# The provider may answer the key's check with a rate limit when the key is shared and busy: try again a few times.
+signed() { api /api/accounts | grep -Eq '"account":"minimax",[^}]*"signedIn":true'; }
+for try in 1 2 3 4 5 6; do
+  api /api/accounts/1/minimax/login -d '{"via":"key"}' > /dev/null
+  node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFileSync(process.argv[1], "utf8").trim() }))' "$KEYFILE" | api /api/accounts/1/minimax/paste --max-time 120 --data-binary @- > /dev/null || true
+  for _ in $(seq 240); do signed && break 2; api /api/accounts | grep -q '"state":"failed"' && break; sleep 0.5; done
+  echo "connect-apps: the key sign-in did not go through (try $try); waiting before the next" >&2; sleep 60
+done
+signed || { echo "connect-apps: minimax did not take the key" >&2; exit 1; }
 # The hand-off: the address to open, then the wait for the person's own sign-in on Composio's page.
 printf '%s\n' "$B/#person=$PERSON" > "$HAND/app-url.txt"
 echo "connect-apps: app address in $HAND/app-url.txt; waiting for Connect apps to turn on"
