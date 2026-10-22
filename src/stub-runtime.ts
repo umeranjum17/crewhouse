@@ -25,6 +25,8 @@ const GOLDEN: Record<string, string> = {
   'i want to market my app': 'I can help market it. Send the site so I can see the product and audience before drafting a plan.',
   'https://trymuxr.com/': 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Research Rae and Writer Will for first drafts. Nothing will be posted.',
   'I need someone to sort out my invoices': `I'll take on someone to keep your invoices in order. [tool crew_create {"name": "Invoice Ivy", "role": "Keeps your invoices in order", "job": {"does": "Sorts your invoices: who sent each, how much, when it is due, and whether it is paid.", "aim": "Nothing you owe slips past its due date.", "gets": "Invoices you share or point to.", "how": "Reads each invoice, puts it in one sheet by due date and flags what is due soon.", "great": "One sheet you can trust at a glance; for example, two due this week, flagged first."}, "personality": "You are Invoice Ivy. Tidy, calm and quick with numbers.", "first": "Sort out my invoices"}]`,
+  'Save this video for me: https://www.youtube.com/watch?v=aqz-KE-bpKQ': `[tool sessions_send {"sessionKey": "agent:m1:crewhouse:video-vic", "message": "Save this video for the person, in the quality they pick: https://www.youtube.com/watch?v=aqz-KE-bpKQ", "timeoutSeconds": 0}]`,
+  'Save this video for the person, in the quality they pick: https://www.youtube.com/watch?v=aqz-KE-bpKQ': `It's saved in the quality you picked. It came from https://www.youtube.com/watch?v=aqz-KE-bpKQ [tool crew_video {"url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ"}]`,
   'Sort out my invoices': `Your invoices are in one sheet by due date: two are due this week. [tool crew_workbook {"name": "Your invoices", "sheets": [{"name": "Invoices", "columns": [{"header": "From"}, {"header": "Amount"}, {"header": "Due"}, {"header": "Paid?", "options": ["Yes", "No"]}], "rows": [["Water board", 42.5, "Oct 8", "No"], ["Dentist", 120, "Oct 10", "No"], ["Phone", 35, "Oct 21", "Yes"]]}]}]`,
   'I need someone to keep track of my subscriptions': `Invoice Ivy already keeps your invoices in order, so I'll ask Invoice Ivy to take this on too. [tool crew_create {"bot": "invoice-ivy", "role": "Keeps your invoices and subscriptions in order", "job": {"does": "Sorts your invoices and subscriptions: who charges you, how much, when it is due or renews, and whether it is paid.", "aim": "Nothing you owe or renew slips past you.", "gets": "Invoices and subscription emails you share or point to.", "how": "Reads each one, keeps them in one sheet by date and flags what is due or renewing soon.", "great": "One sheet you can trust at a glance; for example, a renewal next week, flagged first."}, "first": "Keep track of my subscriptions"}]`,
   'Keep track of my subscriptions': `Your subscriptions are in one sheet by renewal date: one renews next week. [tool crew_workbook {"name": "Your subscriptions", "sheets": [{"name": "Subscriptions", "columns": [{"header": "Service"}, {"header": "Price"}, {"header": "Renews"}, {"header": "Every", "options": ["Month", "Year"]}], "rows": [["Music", 10.99, "Oct 12", "Month"], ["Cloud storage", 2.99, "Oct 30", "Month"], ["News", 79, "Feb 3", "Year"]]}]}]`,
@@ -70,12 +72,19 @@ export class StubRuntime implements AgentRuntime {
   async models(account: string) { return ['grok', 'opencode-go'].includes(account) ? [] : [{ id: 'strong-1', name: 'Strong 1' }, { id: 'quick-1', name: 'Quick 1' }]; }
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     if (!this.host) throw new Error('Stub not started');
-    this.specs.set(spec.key, spec); on({ type: 'started' });
-    const said = spec.message;
-    let result = '';
+    // A turn resumed with the person's answer to its parked card takes up the session's last ask again, as a model would.
+    const said = (/^\[Crewhouse\] .* answered: .*\. Continue task #\d+ where you left off/.test(spec.message) && this.specs.get(spec.key)?.message) || spec.message;
+    this.specs.set(spec.key, { ...spec, message: said }); on({ type: 'started' });
+    let result = '', report = '';
     const last = said.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('[Crewhouse')).at(-1) ?? '', scripted = process.env.CREWHOUSE_STUB_GOLDEN ? GOLDEN[last.replace(/^The person says: /, '')] : undefined, seen = calls(said + (scripted ?? ''));
     if (spec.bot === 'chief' && /\[first words\]/.test(said)) on({ type: 'text', text: 'I’ll start by checking the next step.' });
     for (const { name, input } of seen) {
+      // Chief's native hand-off, as the engine makes it: the helper's turn runs on that session key through the host's
+      // own delegate while Chief waits, and Chief answers the person from its report.
+      if (name === 'sessions_send' && this.host.delegate) {
+        const key = String(input.sessionKey), brief = String(input.message ?? ''), ref = await this.host.delegate(spec, key.split(':').pop()!, key, brief), end = await this.run({ ...spec, ...ref, message: brief }, (e) => this.host?.event?.(ref, e));
+        this.host.end?.(ref, end); report = end.ok ? end.text : ''; continue;
+      }
       on({ type: 'tool', name, phase: 'start' });
       const gate = await this.host.gate(spec, name, input);
       if (!gate.allow) { result = gate.reason; continue; }
@@ -94,7 +103,7 @@ export class StubRuntime implements AgentRuntime {
     if (/\[two-fare-backtest\]/.test(said))
       text = 'I recommend the lower fare from Fareboard. I checked Fareboard and Narrowfare; I didn\'t check baggage fees or live inventory.';
     if (/Challenge this answer/.test(said)) text = /\[bad-figure\]/.test(said) ? 'Does not hold: one figure is not in the source the answer names.' : 'Holds: the sources the answer names say what it says.';
-    text = scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? (process.env.CREWHOUSE_STUB_GOLDEN && !result ? '' : text); // golden: unscripted gets no reply
+    text = report || (scripted?.replace(/\s*\[tool [\s\S]*$/, '') ?? (process.env.CREWHOUSE_STUB_GOLDEN && !result ? '' : text)); // golden: unscripted gets no reply
     if (/ask permission/i.test(said)) {
       text = await new Promise<string>((resolve) => { on({ type: 'thinking' }); this.holds.set(spec.key, (reply) => resolve(reply ?? text)); });
       if (this.cancelled.delete(spec.key)) return { ok: false, aborted: true }; // stopped on purpose, not finished

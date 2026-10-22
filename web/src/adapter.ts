@@ -15,11 +15,13 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style'; head: string; words: string;
+  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style' | 'video'; head: string; words: string;
   /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
   pick?: { deck: string; title: string; lines: string[]; styles: { id: string; label: string }[] };
+  /** A video link's quality pick: where it is from, each quality (or the sound alone) with its size (`pick` in the answer). */
+  video?: { from: string; choices: { id: string; label: string; size: string }[] };
   /** The one plain rule for the copies an unlock leaves, picked on the same card: how long they stay in the folder. */
   keep?: { line: string; rule: string; options: { label: string; rule: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
@@ -900,6 +902,15 @@ export function card(a: Json, state: Json): Card {
         lines: (Array.isArray(d.pick.lines) ? d.pick.lines : []).map((l: Json) => plain(String(l ?? '')).slice(0, 220)).filter(Boolean).slice(0, 4), styles },
       choices: [...styles.map((s: { id: string; label: string }, i: number) => ({ label: s.label, body: { answer: 'allow', style: s.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'video' && d.pick) {
+    // A video link a helper will save: the qualities yt-dlp found, each with its size, and the sound alone. The tap names
+    // the pick (`pick` in the answer); nothing downloads before it.
+    const choices = (Array.isArray(d.pick.choices) ? d.pick.choices : []).slice(0, 4)
+      .map((c: Json) => ({ id: plain(String(c?.id ?? '')), label: plain(String(c?.label ?? '')), size: plain(String(c?.size ?? '')) })).filter((c: { id: string; label: string }) => c.id && c.label);
+    if (choices.length) return { ...base, kind: 'video', status: 'Pick a quality', head: plain(a.title), words: 'Nothing downloads until you pick. Sizes are estimates.',
+      video: { from: plain(String(d.pick.from ?? '')), choices },
+      choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -1001,7 +1012,7 @@ export function card(a: Json, state: Json): Card {
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
-const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked' };
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked', video: 'Picked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
  *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {
@@ -1036,7 +1047,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
-    const named = c.evidence === 'draft' ? receiptWhat(c) : '';
+    const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
     return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });

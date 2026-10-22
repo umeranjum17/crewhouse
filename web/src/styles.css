@@ -1777,6 +1777,11 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .card.ask.stack-ask .more-dots { display: grid; width: 44px; flex: none; padding: 0; }
 .card.ask.stack-ask .btns:not(:has(.more-act ~ .more-act)) .more-dots { display: none; }
 .card.ask.stack-ask .ask-words { font: 700 24px/1.1 Archivo, var(--ui); font-stretch: 112%; color: inherit; }
+/* A video's quality pick: the radio rows of the model picker, in the card's own colour. */
+.stack-ask .pick { border: 0; background: rgba(0,0,0,.1); color: inherit; font: 700 16px/1.3 Archivo, var(--ui); }
+.stack-ask .pick.on { box-shadow: 0 0 0 2px currentColor inset; }
+.stack-ask .pick .radio, .stack-ask .pick.on .radio { border-color: currentColor; }
+.pick-size { flex: none; font-weight: 400; }
 .card.ask.stack-ask .ask-note, .card.ask.stack-ask .small { font: 400 16px/1.4 Archivo, var(--ui); color: inherit; text-align: left; }
 .card.answered { font: 400 16px/1.4 Archivo, var(--ui); max-width: 640px; overflow-wrap: anywhere; }
 .card.answered.receipt .receipt-what { overflow: visible; white-space: normal; }

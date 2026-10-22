@@ -342,5 +342,15 @@
       "Chief's thread is captured at 390, day and night"
     ],
     "result": "Chief's thread says Research Rae's answer was checked by Verifier Vera and that it does not hold, with no unchecked answer shown before it"
+  },
+  "video-job": {
+    "start": "a crew on the stub engine with Video Vic hired and its pinned video tool in place, nothing in Vic's files",
+    "steps": [
+      "Paste a video link in Chief's chat: Save this video for me: https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      "Chief hands it to Video Vic, whose pinned tool reads the link; Chief's chat shows a card with each quality and audio only, each with its size",
+      "In the installed app at phone width, tap 720p, then Save in 720p",
+      "Wait while Video Vic downloads the pick on the computer and Chief answers"
+    ],
+    "result": "Nothing downloads before the pick; then only the 720p video is in Video Vic's files, delivered with the link it came from, and Chief's chat says it is saved"
   }
 }
