@@ -21,10 +21,14 @@ The cloud row is behind a build flag (`@byokit/cloud` 0.2.1 from npm):
   press) and sets it up like a picked one. Use this computer walks the kit's setup steps on the five-row progress
   list: a failure marks its row "!" and says which step stopped, then the kit's cause ("Installing Chief stopped
   partway. boat.dev reports a problem…"); when it is retryable, "Trying again is safe…" and Try again follow, and
-  retry reruns the kit setup sequence while retaining the completed-step display. A second phone on a computer
-  another phone set up is told to talk to Chief from that phone or pick or make another computer: the host does not
-  take the kit's owner-replacement delivery, so no move is offered. The recipe's one root step installs Xvfb, so
-  Chief's own screen has a display there. A setup exception marks the row
+  retry reruns the kit setup sequence while retaining the completed-step display. Once set up, the title reads
+  "Your cloud computer." A second phone on a computer another phone set up gets the kit's words ("…You can move it
+  to this phone instead. The other phone then loses access.") with Move Chief to this phone and Back. The move asks
+  first ("The phone that set up this computer loses access to Chief at once…"), then Yes, move Chief reruns setup
+  with the kit's `replaceOwner`: the kit delivers the new key as its owner file, `scripts/headless.mjs` hands it to
+  crewd as a replacement (`POST /api/phones/enrol {replace: true}`, kit `replacePhoneKey`), the old phone's grant is
+  revoked and the new phone reaches Chief. The recipe's one root step installs Xvfb, so Chief's own screen has a
+  display there. A setup exception marks the row
   setup was on (no row before the kit's first step), with the error and Try again. Before setup the phone asks
   boat.dev for the computer's own public address on port 7300 (`url()`); the recipe runs the headless host with its
   relay published there (`CREWHOUSE_RELAY_PUBLIC`), so no Crewhouse server and no Tailscale sit in the middle. The kit
@@ -118,7 +122,7 @@ The cloud screen's states on an emulator, at 390 wide by day and night (Make, a 
 again, a second phone): build the flagged lab APK (`EXPO_PUBLIC_CREWHOUSE_CLOUD=1`,
 `EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1`), start an emulator, then
 `SERIAL=<serial> bash scripts/verify/cloud-screen.sh <out> <apk>`. It runs `boat-fake-lab.mjs` with `LAB_EMPTY=1`
-(an account with no computer), writes `cloud-{make,failed,ready,second-phone}-{day,night}-390.png` and the
+(an account with no computer), writes `cloud-{make,failed,ready,second-phone,move-confirm,moved}-{day,night}-390.png` and the
 `cloud-screen` step record, and stops the lab.
 
 ## Evidence

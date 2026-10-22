@@ -175,7 +175,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (p === '/api/phones/web' && m === 'PUT') { await link.setWeb(body.on === true, typeof body.address === 'string' ? body.address.trim() : undefined); return link.status(); }
     if (p === '/api/phones/relay' && m === 'PUT') { link.setRelay(typeof body.url === 'string' ? body.url.trim() : null, typeof body.enrol === 'string' ? body.enrol : undefined); return link.status(); }
     if (p === '/api/phones/code' && m === 'POST') return link.typed(body.role ?? 'control');
-    if (p === '/api/phones/enrol' && m === 'POST') { if (phone) throw Object.assign(new Error('a phone is enrolled only through its cloud account'), { status: 403 }); return { receipt: await link.enrol(new Uint8Array(Buffer.from(String(body.key), 'base64'))) }; }
+    if (p === '/api/phones/enrol' && m === 'POST') { if (phone) throw Object.assign(new Error('a phone is enrolled only through its cloud account'), { status: 403 }); return { receipt: await link.enrol(new Uint8Array(Buffer.from(String(body.key), 'base64')), body.replace === true) }; }
     if (p === '/api/phones/answer' && m === 'POST') {
       if (body.offer !== undefined && !link.status().asking.some((a) => a.id === Number(body.id) && a.offer === body.offer)) throw Object.assign(new Error('that phone is not waiting for you'), { status: 403 });
       if (body.offer !== undefined && crew.botPage('chief').phoneOffer?.token !== body.offer) throw Object.assign(new Error('that code is no longer showing'), { status: 409 });

@@ -868,6 +868,7 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const [picked, setPicked] = useState('');
   const [steps, setSteps] = useState<SetupStep[]>([]);
   const [setupError, setSetupError] = useState('');
+  const [moving, setMoving] = useState(false); // the move's confirm is on the card
   const [way, setWay] = useState(-1);
   const held = useRef(''); // the checked key, never on screen
   const press = useRef(''); // one rental per press: a repeated Make after a lost answer is the same request
@@ -880,13 +881,13 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   };
   // One action with a key already kept: straight to the computers.
   useEffect(() => { void keptKey().then((k) => { if (k) void check(k); }); }, []);
-  const run = async (ref: MachineRef, retry = false) => {
-    setPicked(ref.id);
+  const run = async (ref: MachineRef, retry = false, move = false) => {
+    setPicked(ref.id); setMoving(false);
     if (!retry) setSteps([]);
     else setSteps((x) => x.filter((step) => step.step !== 'failed'));
     setSetupError(''); setView('steps');
     try {
-      for await (const step of setUpCloud(boatOn(held.current), cloudStore, ref, await phoneKeys(), lab)) {
+      for await (const step of setUpCloud(boatOn(held.current), cloudStore, ref, await phoneKeys(), lab, move)) {
         if (step.grant) setGrant(await keepGrant(step.grant));
         setSteps((x) => [...x.filter((current) => current.step !== step.step && current.step !== 'failed'), step]);
       }
@@ -923,7 +924,9 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
     <View style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}><T style={s.b}>{c.make.size}</T><T tone="ink2" style={s.small}>{cost()}</T><T tone="mute" style={s.small}>{c.make.check}</T></View>
     {problem}
     <Btn go big disabled={busy} label={busy ? c.make.making : c.make.create} onPress={() => void create()} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
-  const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}
+  const pickedRef = () => listed.find((r) => r.id === picked)!;
+  const progressList = moving ? <>{pill(c.steps.pill)}<T style={s.title}>{c.move.title}</T>{c.move.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}
+    <Btn go big label={c.move.yes} onPress={() => void run(pickedRef(), false, true)} /><Btn ghost label={c.move.back} onPress={() => setMoving(false)} /></> : ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}
     {grant && <Btn go big label={c.ready.talk} onPress={() => onPaired(grant)} />}</> : <>
     {pill(c.steps.pill)}<T style={s.title}>{c.steps.title}</T>
     <View style={[s.row, { justifyContent: 'space-between' }]}><T tone="mute" style={[s.small, { flex: 1 }]}>{c.pick.name(listed.findIndex((r) => r.id === picked), listed.length)}</T><T style={[s.small, s.b]}>{p.why ? c.steps.help : c.steps.count(p.done)}</T></View>
@@ -931,20 +934,21 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
     {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T>
-      {p.retry && <><T tone="mute" style={s.small}>{c.steps.again}</T><Btn go big label={c.steps.retry} onPress={() => void run(listed.find((r) => r.id === picked)!, true)} /></>}</View>}</>;
+      {p.retry && <><T tone="mute" style={s.small}>{c.steps.again}</T><Btn go big label={c.steps.retry} onPress={() => void run(pickedRef(), true)} /></>}
+      {p.move && <><Btn go big label={c.move.go} onPress={() => setMoving(true)} /><Btn ghost label={c.move.back} onPress={() => setView('pick')} /></>}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
       <View style={s.row}><T style={[s.b, { flex: 1 }]}>{title}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{sub}</T>
       {way === i && <T tone="ink2" style={s.small}>{more}</T>}</Pressable>)}
     <T tone="mute" style={s.small}>{c.other.foot}</T></>;
-  const back = view === 'key' ? onBack : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : 'key'); };
+  const back = view === 'key' ? onBack : moving ? () => setMoving(false) : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : 'key'); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]} keyboardShouldPersistTaps="handled">
         <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}>
           <T tone="ink2" style={{ fontSize: 22, width: 24 }}>‹</T><T tone="ink2" style={{ flex: 1 }}>{c.top[0]}</T><T tone="mute" style={s.small}>{c.top[1]}</T></Pressable>
-        <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{c.title}</T>
+        <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{view === 'steps' && ready ? c.ready.top : c.title}</T>
           <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
         <T tone="ink2">{c.lede}</T>
         {box(view !== 'make' && view !== 'other', { key, pick, make, steps: progressList, other }[view])}

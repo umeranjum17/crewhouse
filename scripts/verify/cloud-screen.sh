@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The phone's cloud screen on the kit's fake boat.dev (boat-fake-lab.mjs, no computer in the account): Make a new
-# computer, a failed install and its Try again, ready, then a second phone on that computer. Each state is captured
+# computer, a failed install and its Try again, ready, then a second phone on that computer moving Chief to itself
+# (offered, confirmed, moved). Each state is captured
 # at 390 wide, day and night. No real boat.dev, no money, no model (docs/verification/cloud-screen.md).
 #
 #   SERIAL=emulator-5580 bash scripts/verify/cloud-screen.sh <out-dir> <lab APK>
@@ -66,11 +67,16 @@ shot failed 'Installing Chief stopped partway'
 rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
 shot ready 'Chief is on your cloud computer'
-# 4. A second phone (this app cleared: a new phone key) on that same computer: no move offered.
+# 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
+#    Chief moves here: the computer's own host revokes the first phone.
 open_app; paste_key
 see 'Use this computer'
 ui tap '^Use this computer$'
-shot second-phone 'set up with another phone'
+shot second-phone 'Move Chief to this phone'
+ui tap '^Move Chief to this phone$'
+shot move-confirm 'loses access to Chief at once'
+ui tap '^Yes, move Chief$'
+shot moved 'Your cloud computer'
 
 node "$VERIFY_DIR/steps.mjs" "$OUT" cloud-screen
 ls "$OUT"/*.png

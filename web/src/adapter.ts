@@ -155,7 +155,10 @@ export const CLOUD = {
       ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
       ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
   },
-  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
+  /** A computer another phone set up: Chief moves here only once the person confirms the other phone loses access. */
+  move: { go: 'Move Chief to this phone', back: 'Back', title: 'Move Chief to this phone?', yes: 'Yes, move Chief',
+    lines: ['The phone that set up this computer loses access to Chief at once. It can’t send Chief anything after this.', 'Your chats and your crew stay on the computer. I set Chief up again here, then this phone takes over.'] },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
     link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],
@@ -169,7 +172,6 @@ export const CLOUD = {
     'computer-gone': 'That computer is not in your boat.dev account any more. Pick another one.',
     'no-address': 'boat.dev gave that computer no public address. Try another computer.',
     'setup-running': 'Setup is already running on this phone. Wait for it to finish.',
-    'owner-enrolled': 'Chief is already on this computer, set up with another phone. Talk to Chief from that phone, or go back and pick or make another computer.',
   } as Record<string, string>,
 };
 

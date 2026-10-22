@@ -44,6 +44,7 @@ host.stdout.on('data', (b) => log += b); host.stderr.on('data', (b) => log += b)
 
 // The bridge: the fake's inbox to the host's inbox, and the host's receipt back to the fake's outbox.
 let failing = null;
+const owners = new Set();
 const bridge = setInterval(() => {
   const wantFail = existsSync(flag);
   if (wantFail !== failing) {
@@ -53,6 +54,9 @@ const bridge = setInterval(() => {
   }
   const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);
   if (delivered && !existsSync(join(cloud, 'inbox/phone.bin'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
+  // Move Chief to this phone: the new owner's key, handed over once.
+  const owner = server.machine.files.get(`${remote}/inbox/owner.bin`);
+  if (owner && !owners.has(owner.bytes.toString())) { owners.add(owner.bytes.toString()); mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/owner.bin'), owner.bytes); }
   if (existsSync(join(cloud, 'outbox/receipt.json'))) server.machine.writeFile(`${remote}/outbox/receipt.json`, readFileSync(join(cloud, 'outbox/receipt.json')), 0o600);
   if (log.includes('headless host ready')) { console.log('the host is ready'); log = ''; }
 }, 50);
