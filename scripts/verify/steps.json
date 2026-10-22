@@ -332,5 +332,15 @@
       "Open Chief's thread at 390 and 1440 wide, day and night"
     ],
     "result": "Chief's job ends failed in seconds with the hand-off's own words, \"The helper stopped before reporting back\", and no question reaches the person"
+  },
+  "answer-check": {
+    "start": "a fresh stub-engine crewd with Research Rae on the crew",
+    "steps": [
+      "Chief offers Research Rae the job on a card and the person says yes",
+      "Rae answers; her answer is held while Verifier Vera challenges it",
+      "Chief's thread shows one line naming Rae's answer, who checked it and what the check found",
+      "Chief's thread is captured at 390, day and night"
+    ],
+    "result": "Chief's thread says Research Rae's answer was checked by Verifier Vera and that it does not hold, with no unchecked answer shown before it"
   }
 }

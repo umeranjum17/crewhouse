@@ -1133,7 +1133,35 @@ export class Crew {
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
     if (state === 'failed' && result) this.failedLine(task, result);
     if (state === 'unsure') this.failedLine(task, result!, true);
-    if (['done', 'failed', 'unsure'].includes(state)) this.wrap(task.root ?? task.id);
+    if (['done', 'failed', 'unsure'].includes(state)) { this.wrap(task.root ?? task.id); this.settleCheck(task, state, result); }
+  }
+
+  /** Chief's words for a helper's finished job: its answer in one line, or the delivery's own note. */
+  private relayLine(task: Row, text: string) {
+    const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", task.bot, task.id);
+    return !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean), !!task.acted);
+  }
+
+  /** The job this task was started to check, if it is a check. */
+  private checkOf(task: Row) { return this.db.get("SELECT json_extract(data, '$.task') AS t FROM events WHERE kind = 'check.started' AND json_extract(data, '$.check') = ?", task.id)?.t as number | undefined; }
+
+  /** A scout's answer waits for a second helper to challenge it; the card names the checked answer and what the check found. */
+  private startCheck(task: Row, answer: string) {
+    try {
+      const checker = this.bots().find((b) => b.template === 'verifier') ?? this.recruit('verifier', undefined, CHIEF);
+      const id = this.addTask(checker.id, `Challenge this answer and cite what you checked.\n\nThe question: ${task.body}\n\nThe answer from ${this.bot(task.bot)!.display}:\n${answer}`, CHIEF, undefined, 'Check this answer', [], { title: task.title }).task;
+      this.db.event('check.started', checker.id, { task: task.id, check: id });
+      return true;
+    } catch (e) { this.say(CHIEF, 'bot', `Nobody checked ${this.bot(task.bot)!.display}'s answer: ${(e as Error).message}.`, task.id); return false; }
+  }
+
+  private settleCheck(task: Row, state: string, result?: string) {
+    const t = this.checkOf(task), first = t && this.db.get('SELECT * FROM tasks WHERE id = ?', t);
+    if (!first) return;
+    const by = this.bot(task.bot)!.display, found = state === 'done' ? short(cleanReply(result ?? '').split('\n')[0], 200) : `${by} couldn't finish the check, so this answer is unchecked.`, line = `${this.bot(first.bot)!.display}'s answer was checked by ${by}. ${found}`;
+    this.db.run('UPDATE tasks SET result = result || ? WHERE id = ?', `\n\n${line}`, first.id);
+    this.db.event('check.result', task.bot, { task: first.id, check: task.id, state, found });
+    this.say(CHIEF, 'bot', `${this.relayLine(first, first.result)}\n${line}`, first.id);
   }
 
   /** The photos sent with a task, for its first prompt: the helper sees them. */
@@ -1472,6 +1500,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   /** A turn finished with a reply. */
   finish(botId: string, reply: string) {
     const task = this.activeTask(botId), text = cleanReply(reply.trim());
+    let wants = false;
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
     const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
@@ -1490,12 +1519,14 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      if ((task.origin === CHIEF && !this.teamJob(task)) || (botId !== CHIEF && task.routine && !clear)) {
-        const files = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') IS NULL AND json_extract(data, '$.path') NOT LIKE 'files/from-%'", botId, task.id);
-        this.say(CHIEF, 'bot', !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean), !!task.acted), task.id);
+      const mine = task.origin === CHIEF && !this.teamJob(task);
+      wants = mine && b.template === 'scout' && !clear && !!text;
+      if (!wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear))) {
+        this.say(CHIEF, 'bot', this.relayLine(task, text), task.id);
       }
     });
     if (task && !parked && !this.held.has(botId)) this.close(botId);
+    if (wants && !this.startCheck(task!, text)) this.say(CHIEF, 'bot', this.relayLine(task!, text), task!.id);
     this.dispatch();
   }
 

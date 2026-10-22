@@ -83,9 +83,10 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
     await holding(crew, 'scout');
     const task = crew.sessionOf('scout')!.task;
     await release(crew, 'scout', reply);
+    await release(crew, 'verifier-vera'); // the check's brief repeats the ask, so the stub holds it too
     await until('Scout finishes and relays to Chief', () => db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ?", task), 15_000);
     assert.equal(db.get('SELECT state FROM tasks WHERE id = ?', task)!.state, 'done');
-    const relay = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ?", task)!.text as string;
+    const relay = db.get("SELECT text FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ?", task)!.text.split('\n')[0] as string; // the answer's line; the check's line follows it
     relays.push(relay);
     await until('the relay painted in Chief', async () => (await screen()).includes(relay), 15_000);
     if (recorder) { const exited = new Promise<number | null>((r) => recorder!.once('close', r)); recorder.kill('SIGTERM'); assert.equal(await exited, 0, 'the relay recording has multiple real frames'); recorder = undefined; }
@@ -96,7 +97,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
         await send('Page.navigate', { url: `${base}/?${theme}#/chief` });
         await until('relay after theme change and opening overlay gone', async () => (await screen()).includes(relay) && await run("!document.querySelector('.splash')"), 15_000);
         await run('document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))');
-        const geometry = await run(`(() => { const e = [...document.querySelectorAll('.chat .lines p')].find(e => e.innerText === ${JSON.stringify(relay)}); const box = e?.closest('.lines'); if (box) box.scrollTop = box.scrollHeight; window.scrollTo(0,0); const r = e?.getBoundingClientRect(); return { text:e?.innerText, rect:r?.toJSON(), width:innerWidth, height:innerHeight }; })()`);
+        const geometry = await run(`(() => { const e = [...document.querySelectorAll('.chat .lines p')].find(e => e.innerText.startsWith(${JSON.stringify(relay)})); const box = e?.closest('.lines'); if (box) box.scrollTop = box.scrollHeight; window.scrollTo(0,0); const r = e?.getBoundingClientRect(); return { text:e?.innerText, rect:r?.toJSON(), width:innerWidth, height:innerHeight }; })()`);
         assert.ok(geometry.rect && geometry.rect.left >= 0 && geometry.rect.right <= width && geometry.rect.top >= 0 && geometry.rect.bottom <= geometry.height, 'the complete relay fits the viewport');
         writeFileSync(join(evidence, `${slug}-${theme}-${width}.json`), JSON.stringify(geometry));
         const shot = await send('Page.captureScreenshot', { format: 'png' });

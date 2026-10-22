@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { setup, settled, delegated } from './lab.ts';
+import { setup, settled, delegated, until } from './lab.ts';
 import { taskTitle, relayResult } from '../src/crew.ts';
 import { TOOLS } from '../src/openclaw/runtime.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -41,6 +41,7 @@ test('Chief: the four turns stay in Chief, URLs are context not task names, rela
   const helper = delegated(crew, 'scout', 'https://trymuxr.com/\n[tool crew_document {"name":"muxr launch plan","blocks":[{"heading":"Audience"},{"text":"Developers with coding agents"},{"heading":"Three channels"},{"heading":"First week of posts"}]}]').task;
   assert.equal(db.get('SELECT title FROM tasks WHERE id = ?', helper)!.title, 'Work on trymuxr.com');
   await settled(db, helper);
+  await until('the check settles', () => db.get("SELECT 1 FROM events WHERE kind = 'check.result'")); // Rae's answer waits for Vera; the closing line follows
   const words = crew.botPage('chief').messages.filter((m) => m.author === 'bot').map((m) => m.text);
   words.forEach(bad);
   assert.match(words.at(-1)!, /^The muxr launch plan is ready: audience, three channels, first week of posts\./);

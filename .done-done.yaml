@@ -61,6 +61,8 @@ journeys:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/key-sheet.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  answer-check:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/answer-check.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge-pwa:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge-pwa.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chat-real:
