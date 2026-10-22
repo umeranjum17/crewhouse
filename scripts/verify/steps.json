@@ -276,6 +276,16 @@
     ],
     "result": "The preview panel shows the deck's slides one frame at a time, and the file opens as a real presentation"
   },
+  "desktop-first-launch": {
+    "start": "the desktop app on a new computer with nothing installed, on the stub engine",
+    "steps": [
+      "Open the Crewhouse desktop app for the first time",
+      "Wait for the crew to be ready; no engine is downloaded",
+      "Say hello from Hello (onboard)",
+      "Send Chief a message and wait for his reply in the thread"
+    ],
+    "result": "Chief's first reply arrived {{seconds}} s after the app opened, with the AI engine carried inside the app: {{reply}}"
+  },
   "stub-drive": {
     "start": "first launch of Crewhouse on the stub engine, a new person, nothing sent yet",
     "steps": [
