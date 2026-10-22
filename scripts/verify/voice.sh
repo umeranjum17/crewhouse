@@ -62,7 +62,7 @@ const steps = [
     eval: "[...document.querySelectorAll(\".toast\")].map((t) => t.textContent)", out: `${OUT}/pwa/voice-host-mic-day-390.png` },
   // The stand-in device from here on.
   { name: "device", inject: device, url: `${B}/?r=1#/chief`, wait: "!!document.querySelector(\".chat .dock .mic:not(.off)\") && !!window.ctl", timeout: 20000 },
-  { name: "mic", click: ".chat .dock .mic", settle: 500, wait: "!!document.querySelector(\".chat .dock .mic.on\")", timeout: 10000 },
+  { name: "mic", click: ".chat .dock .mic", settle: 500, wait: "!!document.querySelector(\".chat .dock .mic.on\")", timeout: 10000, eval: `${box}.placeholder` },
   ...shots("voice-mic-listening"),
   { name: "speak", eval: "ctl.heard(\"hi\", true)" },
   { name: "heard", wait: `${box}.value === "hi" && !document.querySelector(".mic.on")`, timeout: 10000 },
@@ -97,6 +97,7 @@ for (const x of r.filter((x) => "value" in x || x.error)) console.log(x.step, JS
 const said = v("read-aloud") ?? [], fail = [];
 if (r.some((x) => x.error)) fail.push("a step failed");
 if (!/^2px solid/.test(v("reading") ?? "")) fail.push("the line being read is not marked: " + v("reading"));
+if (v("mic") !== "Listening…") fail.push("the box does not say it is listening: " + v("mic"));
 if (v("sent-only-on-tap") !== false) fail.push("the heard words reached crewd before send");
 if (r.some((x) => /-(day|night)-\d+$/.test(x.step ?? "") && x.value === false)) fail.push("a shot outside the installed app");
 if (JSON.stringify(said) !== JSON.stringify(["I can help market it. @Daniel x1", "Send the site so I can see the product and audience before drafting a plan. @Daniel x1"])) fail.push("read aloud: " + JSON.stringify(said));

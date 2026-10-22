@@ -579,7 +579,7 @@ const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, 
 
 /** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
  *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
- *  read and send; nothing is sent by speaking. */
+ *  read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
 function useVoice(on: boolean, text: string, put: (t: string) => void) {
   const [route, setRoute] = useState<Ears | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
@@ -587,7 +587,7 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
   now.current = text;
   useEffect(() => { if (on) void ears().then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
-  if (!route) return null;
+  if (!route) return { mic: null, on: false };
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = hear(route);
@@ -598,9 +598,9 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
       .finally(() => { setEar(null); setListen('chief', false); });
   };
   const off = route === 'none';
-  return <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
+  return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
     onClick={() => (off ? toast(VOICE_WORDS.none) : ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
+      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button> };
 }
 
 /** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
@@ -788,7 +788,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
       {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file"><b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
-      <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
+      <textarea rows={1} value={text} placeholder={voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       {chips && <div className="c-bar">
@@ -796,7 +796,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
         <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
-      {voice}
+      {voice.mic}
       {stop && !text.trim() && !picked.length
         ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
         : call.can && !text.trim() && !picked.length && !busy
