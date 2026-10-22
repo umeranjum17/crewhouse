@@ -22,6 +22,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeSteps } from './steps.mjs';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
@@ -272,5 +273,6 @@ const run = async () => {
   A('uninstall', PKG);
   say('erased the key, the chat and the app from the emulator');
   writeFileSync(join(EV, 'phone-chat-keep.log'), log.join('\n') + '\n');
+  writeSteps(EV, 'phone-chat-keep');
 };
 run().catch((e) => { console.error('FAILED:', e.message); writeFileSync(join(EV, 'phone-chat-keep.log'), log.join('\n') + `\nFAILED: ${e.message}\n`); process.exit(1); });

@@ -10,3 +10,4 @@ mkdir -p "$OUT/shots" "$OUT/motion"
 node scripts/verify/pair-plan.mjs "$LAB" "$OUT" > "$LAB/plan.json"
 xvfb-run -a -s '-screen 0 1920x1200x24' node scripts/verify/pwa-shell.mjs "$LAB/plan.json" > "$OUT/run.json"
 node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1])); if(r.some(x=>x.error))process.exit(1)' "$OUT/run.json"
+node scripts/verify/steps.mjs "$OUT" pwa-pair

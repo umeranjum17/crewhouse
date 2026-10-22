@@ -60,3 +60,4 @@ for look in day night; do for w in 390 1440; do
   { soul_has Captain && ! soul_has Skipper; } || { log "$look $w: put back did not restore the template"; exit 1; }; log "$look $w: put back, soul says Captain again"
 done; done
 ax eval "JSON.stringify({sw: document.documentElement.scrollWidth, iw: innerWidth})" | tee -a "$EV/transcript.txt"
+node "$REPO/scripts/verify/steps.mjs" "$EV" chief-soul

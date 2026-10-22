@@ -99,3 +99,4 @@ xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "$LAB/
 node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log("pwa", JSON.stringify(r.filter((x) => "value" in x || "error" in x)))' "$EV/pwa/run.json" | tee -a "$EV/transcript.txt"
 
 log "evidence: $EV"
+node "$REPO/scripts/verify/steps.mjs" "$EV" new-pill

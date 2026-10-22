@@ -20,6 +20,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeSteps } from './steps.mjs';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
@@ -199,3 +200,4 @@ const leftOver = moved(); say(`after sign out: hidden archive ${leftOver.length 
 A('shell', 'pm', 'clear', PKG); // the key and the chats go with the app's data
 say('erased the key and the app data from the emulator');
 writeFileSync(join(EV, 'phone-continue.log'), log.join('\n') + '\n');
+writeSteps(EV, 'phone-continue');

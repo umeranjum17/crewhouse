@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlink
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { writeSteps } from './steps.mjs';
 
 const [repo, base, stateDir, out, bot = 'penny', tags = 'day-1440,night-1440,day-390,night-390'] = process.argv.slice(2);
 const site = process.env.SITE_URL!, host = new URL(site).hostname;
@@ -205,6 +206,7 @@ for (const tag of tags.split(',')) {
   report.push({ tag, step: 'after', unread: after.bots.find((b: any) => b.id === bot)?.unread, waiting: after.asks.length, file: await shot(`after-${tag}`) });
 }
 writeFileSync(reportFile, JSON.stringify(report, null, 2));
+writeSteps(out, 'site-signin');
 console.log(JSON.stringify(report.map(({ text: _t, ...r }) => r)));
 ws.close();
 await browser.close().catch(async (e: Error) => { // a loaded host can take longer than the close bound: wait for our own browser to go

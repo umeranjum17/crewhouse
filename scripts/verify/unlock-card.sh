@@ -142,3 +142,4 @@ for s in "March's:$PW1" "April's:$PW2" "the wrong one:CitySav 2025"; do
   log "password search, $who: $hits files hold it"
 done
 cp "$LAB/pdf/northbank-march.pdf" "$LAB/pdf/citysavings-april.pdf" "$LAB/pdf/citysavings-may.pdf" "$EV/" && log "evidence: $EV"
+node "$REPO/scripts/verify/steps.mjs" "$EV" unlock-card

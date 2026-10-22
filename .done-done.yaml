@@ -30,7 +30,7 @@ journeys:
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
-    command: "node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1"
+    command: 'node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/steps.mjs "$DONE_DONE_EVIDENCE_ROOT" personal-voice'
   screens:
     command: 'scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"'
   delivered-files:
@@ -56,7 +56,7 @@ journeys:
   pwa-pair:
     command: 'timeout -k 10 600 bash scripts/verify/pwa-pair.sh "$DONE_DONE_EVIDENCE_ROOT"'
   pwa-plan:
-    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
+    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" --out "$DONE_DONE_EVIDENCE_ROOT" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
   quiet-nudge:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge-pwa:

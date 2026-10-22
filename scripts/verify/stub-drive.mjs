@@ -6,7 +6,7 @@
 // Boots one isolated crewd (throwaway HOME/XDG/TMPDIR, dead D-Bus path, loopback,
 // OS-assigned port — never the owner's install, never port 7711), runs the canonical
 // journey (state → onboard → Chief message → bot reply), writes api-transcript.jsonl,
-// summary.json and steps.json to --out (crewd.log too, on a failure), then tears the instance down. The person's
+// summary.json and the run's step record to --out (crewd.log too, on a failure), then tears the instance down. The person's
 // capability is never written to evidence or stdout: transcripts scrub it.
 // Exit 0 on a full pass, 1 on any failure, 2 on usage error, 128+n on signal n.
 //
@@ -20,6 +20,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import net from 'node:net';
+import { writeSteps } from './steps.mjs';
 
 const out = ((i) => i < 0 ? null : process.argv[i + 1])(process.argv.indexOf('--out'));
 if (!out) { console.error('usage: stub-drive.mjs --out <evidence-dir>'); process.exit(2); }
@@ -114,8 +115,7 @@ try {
   }, 30_000);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ person: 'Owner', address: 'Sir', chief: true, reply }, null, 2) + '\n');
-  writeFileSync(join(out, 'steps.json'), JSON.stringify({ target: { version: JSON.parse(readFileSync('package.json', 'utf8')).version }, start: 'first launch of Crewhouse on the stub engine, a new person, nothing sent yet',
-    steps: ['Start Crewhouse and read the state: the person and Chief are there', 'Say hello from Hello (onboard)', 'Send Chief the first request', 'Wait for Chief to answer'], result: `Chief answers the first request: ${reply}` }, null, 2) + '\n');
+  writeSteps(out, 'stub-drive', { reply });
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
 await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);

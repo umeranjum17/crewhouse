@@ -48,5 +48,5 @@ echo "upgrade: $BEFORE upgraded in place to $AFTER"
 
 # --- the core journey, on the upgraded app ---
 APP_DIR="$PREFIX/node_modules/crewhouse" bash "$REPO/scripts/verify/pair-chat.sh" "$OUT/core"
-cp "$OUT/core/steps.json" "$OUT/steps.json"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" upgrade
 echo "upgrade: the upgraded app paired and answered; evidence in $OUT"

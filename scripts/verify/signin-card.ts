@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { writeSteps } from './steps.mjs';
 
 const [repo, base, keyFile, out, slug = 'signin-card'] = process.argv.slice(2);
 const { taskBrowser } = await import(join(repo, 'test/browser.ts'));
@@ -100,6 +101,7 @@ for (const [theme, w] of [['night', 390], ['day', 1440]] as const) {
   report.push({ recording: file, frames: frames.length, span: frames.length ? +(frames.at(-1)!.t - frames[0].t).toFixed(2) : 0 });
 }
 writeFileSync(join(out, `${slug}-geometry.json`), JSON.stringify(report, null, 2));
+writeSteps(out, 'signin-card');
 console.log(JSON.stringify(report.map((r) => r.recording ? r : { theme: r.theme, w: r.w, primary: r.primary, n: r.buttons.length, clippedOrUnder: r.clippedOrUnder, sideways: r.sideways })));
 ws.close();
 await browser.close();

@@ -118,4 +118,5 @@ if [ "${PWA:-}" = 1 ]; then
   sed -i "s#$OUT/../pwa-#$LAB/pwa-#g" "$LAB/pwa-plan.json"
   xvfb-run -a -s "-screen 0 1920x1200x24" node "$S/pwa-shell.mjs" "$LAB/pwa-plan.json" | tee "$OUT/pwa/run.json"
 fi
+node "$REPO/scripts/verify/steps.mjs" "$OUT" workbook-chart
 ls "$OUT/screens"
