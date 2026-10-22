@@ -422,5 +422,14 @@
       "On the computer, sign MiniMax out too, then open the phone app again"
     ],
     "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows a plain key, no account's mark, and says You sign in on the home computer, in Settings"
+  },
+  "phone-mic-fallback": {
+    "start": "the release app on an Android emulator paired to a stub-engine crewd, Home open, no on-device speech pack for the phone's language",
+    "steps": [
+      "Tap the mic (Speak to Chief) in Chief's box on Home",
+      "Wait while the phone's speech service opens the microphone",
+      "Read the box: the mic is a stop button and nothing was sent"
+    ],
+    "result": "With no on-device voice pack the mic opens a listener (a stop button in the box) instead of the 'not ready' toast; words would land in the box unsent"
   }
 }
