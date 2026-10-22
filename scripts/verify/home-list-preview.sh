@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # done-done journey `home-list-preview`: Chief's last line is a markdown list; Home's Chief card must show it without a
 # raw dash. A web_search that cannot run must end on the trail as "The web search did not go through".
-#   scripts/verify/home-list-preview.sh <out-dir>     writes home-390-day.png and steps.json
+#   scripts/verify/home-list-preview.sh <out-dir>     writes home-390-day.png and its step record
 set -euo pipefail
 OUT=${1:?usage: home-list-preview.sh <out-dir>}; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
