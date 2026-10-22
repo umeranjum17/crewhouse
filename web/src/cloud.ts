@@ -22,16 +22,19 @@ export const RELAY_PORT = 7300;
 export const WORK_DIR = '/home/user/crewhouse';
 export const recipe = (relay: string, lab: { download?: string; env?: Record<string, string> } = {}, workDir = WORK_DIR) => ({
   name: 'crewhouse', workDir,
-  // Chief's own screen runs on a virtual display; boat.dev's computer has none until this one root step adds it.
-  installRoot: [['apt-get', 'install', '-y', 'xvfb']],
+  // Chief's own screen runs on a virtual display; boat.dev's computer has none until this one root step adds it. It installs in
+  // the background, retried until it takes (apt waits for any install already running): its packages come from a mirror that
+  // has taken 53 s for 3 MB, and nothing before Chief answers needs a display.
+  installRoot: [['systemd-run', '--quiet', '--no-block', '--collect', '--property=Restart=on-failure', '--property=RestartSec=15', 'env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', 'install', '-y', 'xvfb']],
   node: { version: '24.21.0', sha256: { 'linux-x64': 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6', 'linux-arm64': '6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2' } },
-  install: [['curl', '-fsSLo', 'crewhouse.tar.gz', lab.download || LINUX_DOWNLOAD],
+  install: [
     // The download unpacks read-only files (the engine set is locked), so unpacking it over an earlier install
     // fails with "File exists" and the retry can never work. The old tree is made writable and removed first,
     // so a second run installs exactly like the first one did. Only the app's own folder goes: the kit's folder
     // (.byokit, with this phone's key and the receipt) is its sibling and stays.
     ['sh', '-c', `chmod -R u+w ${workDir}/crewhouse 2>/dev/null; rm -rf ${workDir}/crewhouse`],
-    ['tar', '-xzf', 'crewhouse.tar.gz'],
+    // Unpacked as it arrives: no 347 MB file written and read back (10.3 s against 19.8 s), and pipefail keeps curl's own failure.
+    ['bash', '-c', 'set -o pipefail; curl -fsSL "$0" | tar -xz', lab.download || LINUX_DOWNLOAD],
     ['env', `CREWHOUSE_RELAY_PUBLIC=${relay}`, 'crewhouse/app/crewhouse', 'setup', '--headless', '--install-only']],
   run: { argv: ['node', 'crewhouse/app/scripts/headless.mjs', 'serve'], env: { CREWHOUSE_RELAY_PUBLIC: relay, CREWHOUSE_CLOUD_DIR: `${workDir}/.byokit`, ...lab.env } },
 });

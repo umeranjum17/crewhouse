@@ -26,7 +26,7 @@ const server = await startFakeSandboxServer({ key: KEY });
 const provider = boat({ baseUrl: server.url, label: 'boat.dev', prices: [], key: async () => KEY });
 // LAB_EMPTY=1 is a new account with no computer, so the phone's Make a new computer is the way in.
 const seeded = process.env.LAB_EMPTY === '1' ? { id: 'none' } : await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
-server.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false }); // the recipe's display install
+server.machine.script('systemd-run', { code: 0, stdout: '', stderr: '', timedOut: false }); // the recipe's display install
 const fakePort = Number(new URL(server.url).port);
 netServer((c) => { const u = netConnect(fakePort, '127.0.0.1'); c.pipe(u); u.pipe(c); }).listen(PORT, '127.0.0.1');
 
@@ -49,7 +49,7 @@ const bridge = setInterval(() => {
   const wantFail = existsSync(flag);
   if (wantFail !== failing) {
     failing = wantFail;
-    server.machine.script('curl', wantFail ? { code: 1, stdout: '', stderr: 'no route', timedOut: false } : { code: 0, stdout: '', stderr: '', timedOut: false });
+    server.machine.script('bash', wantFail ? { code: 1, stdout: '', stderr: 'no route', timedOut: false } : { code: 0, stdout: '', stderr: '', timedOut: false });
     console.log('the install fails:', wantFail);
   }
   const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);

@@ -48,4 +48,7 @@ test('the cloud install runs again on a computer that already has Chief', () => 
   install(work, tgz);
   assert.equal(readFileSync(join(work, 'crewhouse', 'app', 'runtime', 'openclaw.sets', 'abc', 'node_modules', 'engine.js'), 'utf8'), 'engine\n');
   assert.equal(existsSync(join(work, '.byokit', 'installed.json')), true, 'the kit’s own folder survives the install');
+
+  // The download streams into tar, so a download that fails must still fail the step (not hand tar an empty stream).
+  assert.throws(() => install(work, join(dir, 'missing.tar.gz')));
 });
