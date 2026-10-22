@@ -6,16 +6,16 @@
 #
 #   SERIAL=emulator-5580 [CLOUD_OTHER=<dir>] bash scripts/verify/cloud-screen.sh <out-dir> <lab APK>
 #
-# A judged run reads every capture in <out-dir> against one claim, so <out-dir> holds the one claimed state, the second
-# phone's offer to move Chief (and the step record); every other state and the lab's log go to CLOUD_OTHER when it is
-# set, else beside it.
+# A judged run reads every capture in <out-dir> against one claim, so <out-dir> holds the one claimed state (and the step
+# record): CLOUD_CLAIM names it (make, failed, ready, second-phone, move-confirm or moved; default second-phone, the
+# offer to move Chief). Every other state and the lab's log go to CLOUD_OTHER when it is set, else beside it.
 #
 # The emulator is the caller's (started and stopped by them); the APK is built with EXPO_PUBLIC_CREWHOUSE_CLOUD=1 and
 # EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1. The emulator has no shell clipboard and the key box
 # only reads it, so the lab key is typed into the pairing-code field and copied from there.
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> cloud-screen.sh <out-dir> <apk>" >&2; exit 2; }
-OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${CLOUD_OTHER:-$OUT}
+OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${CLOUD_OTHER:-$OUT} CLAIM=${CLOUD_CLAIM:-second-phone}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(git -C "$VERIFY_DIR" rev-parse --show-toplevel)
 PKG=dev.crewhouse.app KEY=lab-key-abcdefgh
@@ -24,13 +24,14 @@ adb() { command adb -s "$SERIAL" "$@"; }
 ui() { SERIAL=$SERIAL node "$VERIFY_DIR/phone-ui.mjs" "$@"; }
 # Wait at most $2 seconds for a text on screen.
 see() { for _ in $(seq "${2:-30}"); do ui texts 2>/dev/null | grep -qE -- "$1" && return 0; sleep 1; done; ui texts >&2 || true; echo "cloud-screen: never saw: $1" >&2; return 1; }
-# One state, day and night, at 390 wide, into $3 (default: the run's own folder).
+# One state, day and night, at 390 wide: the claimed one into the run's own folder, the rest into CLOUD_OTHER.
 shot() {
+  local dir; dir=$([ "$1" = "$CLAIM" ] && echo "$OUT" || echo "$OTHER")
   for theme in day night; do
     adb shell cmd uimode night "$([ $theme = night ] && echo yes || echo no)" >/dev/null
     see "$2" 15
     sleep 1
-    ui shot "${3:-$OUT}/cloud-$1-$theme-390.png"
+    ui shot "$dir/cloud-$1-$theme-390.png"
   done
   adb shell cmd uimode night no >/dev/null
 }
@@ -62,15 +63,17 @@ paste_key() {
 open_app; paste_key
 see "didn’t find a computer"
 ui tap 'Make a new computer instead'
-shot make 'Make it and set it up' "$OTHER"
+shot make 'Make it and set it up'
 # 2. Make it, with the install failing: the stopped row says which step and that Try again is safe.
 touch "$LAB/install-fails"; sleep 1
 ui tap 'Make it and set it up'
-shot failed 'Installing Chief stopped partway' "$OTHER"
+shot failed 'Installing Chief stopped partway'
 # 3. Try again once the install can pass: ready.
 rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
-shot ready 'Chief is on your cloud computer' "$OTHER"
+shot ready 'Chief is on your cloud computer'
+# Set up, the title stands alone: the key-first lede is for the steps before it.
+! ui texts | grep -q 'One key lets me' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
 # 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
 #    Chief moves here: the computer's own host revokes the first phone.
 open_app; paste_key
@@ -79,9 +82,9 @@ ui tap '^Use this computer$'
 see 'Move Chief to this phone'; adb shell input swipe 540 1700 540 1250 400; sleep 1 # both buttons above the fold
 shot second-phone 'Move Chief to this phone'
 ui tap '^Move Chief to this phone$'
-shot move-confirm 'loses access to Chief at once' "$OTHER"
+shot move-confirm 'loses access to Chief at once'
 ui tap '^Yes, move Chief$'
-shot moved 'Your cloud computer' "$OTHER"
+shot moved 'Your cloud computer'
 
 node "$VERIFY_DIR/steps.mjs" "$OUT" cloud-screen
 ls "$OUT"/*.png "$OTHER"/*.png | sort -u

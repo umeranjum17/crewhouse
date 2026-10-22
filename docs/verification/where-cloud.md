@@ -22,7 +22,7 @@ The cloud row is behind a build flag (`@byokit/cloud` 0.2.1 from npm):
   list: a failure marks its row "!" and says which step stopped, then the kit's cause ("Installing Chief stopped
   partway. boat.dev reports a problem…"); when it is retryable, "Trying again is safe…" and Try again follow, and
   retry reruns the kit setup sequence while retaining the completed-step display. Once set up, the title reads
-  "Your cloud computer." A second phone on a computer another phone set up gets the kit's words ("…You can move it
+  "Your cloud computer", with no lede under it. A second phone on a computer another phone set up gets the kit's words ("…You can move it
   to this phone instead. The other phone then loses access.") with Move Chief to this phone and Back. The move asks
   first ("The phone that set up this computer loses access to Chief at once…"), then Yes, move Chief reruns setup
   with the kit's `replaceOwner`: the kit delivers the new key as its owner file, `scripts/headless.mjs` hands it to

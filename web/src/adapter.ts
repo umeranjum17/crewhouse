@@ -158,7 +158,7 @@ export const CLOUD = {
   /** A computer another phone set up: Chief moves here only once the person confirms the other phone loses access. */
   move: { go: 'Move Chief to this phone', back: 'Back', title: 'Move Chief to this phone?', yes: 'Yes, move Chief',
     lines: ['The phone that set up this computer loses access to Chief at once. It can’t send Chief anything after this.', 'Your chats and your crew stay on the computer. I set Chief up again here, then this phone takes over.'] },
-  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
     link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],
