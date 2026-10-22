@@ -431,5 +431,15 @@
       "Read the box: the mic is a stop button and nothing was sent"
     ],
     "result": "With no on-device voice pack the mic opens a listener (a stop button in the box) instead of the 'not ready' toast; words would land in the box unsent"
+  },
+  "phone-only-minimax": {
+    "start": "the phone app's lab release APK with no computer paired and no key saved, on the kit's own MiniMax key route, its MiniMax live list a lab fake with the 9 ids MiniMax lists (a lab key, no model call)",
+    "steps": [
+      "Tap Use this phone only; Chief on this phone offers OpenRouter and MiniMax",
+      "Tap MiniMax, paste the key, and tap Connect",
+      "Tap MiniMax M3 among the models listed for the key, then tap Use MiniMax M3",
+      "In Chief's chat, tap Sign out, confirm, and tap Use this phone only again"
+    ],
+    "result": "After Connect the phone asks Which model should Chief use? and lists all 9 models the live list gives, MiniMax M3.1 Flash first and tagged Recommended, then MiniMax M3, M2.7, M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed and M2, under a Search 9 models box, with Use the default for now: MiniMax M3.1 Flash; tapping MiniMax M3 marks it selected and the button reads Use MiniMax M3; confirming opens Chief's chat with MiniMax M3 under his name; after Sign out, Use this phone only asks for a key again"
   }
 }
