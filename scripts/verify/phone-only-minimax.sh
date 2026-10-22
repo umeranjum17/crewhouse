@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Chief on this phone with a MiniMax key: on the release APK, Use this phone only, pick MiniMax beside OpenRouter, paste a
-# lab key, pick the model (MiniMax's own list, which refuses a lab key, so the kit's catalogue), confirm it, and Chief's chat
-# names it. Sign out then leaves no key. Each state is
-# captured at 390 wide, day and night. No provider call: saving a key and picking a model never reach MiniMax, and
-# nothing is sent (docs/verification/phone-only-minimax.md).
+# Chief on this phone with a MiniMax key: on a lab release APK, Use this phone only, pick MiniMax beside OpenRouter, paste a
+# lab key, see every model the live list gives, pick one, confirm it, and Chief's chat names it. Sign out then leaves no
+# key. Each state is captured at 390 wide, day and night. The live list is a lab fake of MiniMax's /anthropic/v1/models
+# with the 9 ids MiniMax listed on 2026-10-22, served here and reached through adb reverse; the APK is built with
+# EXPO_PUBLIC_CREWHOUSE_MINIMAX_API=http://127.0.0.1:$FAKE_PORT/anthropic. No model is called and nothing is sent
+# (docs/verification/phone-only-minimax.md).
 #
-#   SERIAL=emulator-5580 [PHONE_OTHER=<dir>] bash scripts/verify/phone-only-minimax.sh <out-dir> <release APK>
+#   SERIAL=emulator-5580 [PHONE_OTHER=<dir>] [FAKE_PORT=7412] bash scripts/verify/phone-only-minimax.sh <out-dir> <lab APK>
 #
 # A judged run reads every capture in <out-dir> against one claim, so <out-dir> holds the one claimed state (and the step
-# record): PHONE_CLAIM names it (choice, model, picked or chat; default picked, MiniMax M3 selected before it is confirmed). Every
+# record): PHONE_CLAIM names it (choice, model, picked or chat; default model, the full list). Every
 # other state goes to PHONE_OTHER when it is set, else beside it. The emulator is the caller's (started and stopped by them).
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> phone-only-minimax.sh <out-dir> <apk>" >&2; exit 2; }
-OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${PHONE_OTHER:-$OUT} CLAIM=${PHONE_CLAIM:-picked}
+OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${PHONE_OTHER:-$OUT} CLAIM=${PHONE_CLAIM:-model} FAKE_PORT=${FAKE_PORT:-7412}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PKG=dev.crewhouse.app KEY=lab-minimax-key-0000
 mkdir -p "$OUT" "$OTHER"
@@ -33,7 +34,16 @@ shot() {
   done
   adb shell cmd uimode night no >/dev/null
 }
-trap 'adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; adb shell cmd uimode night no >/dev/null 2>&1 || true' EXIT
+# The lab fake of MiniMax's live list (any other path is refused, as a lab key would be).
+node -e '
+const ids = ["MiniMax-M3.1-Flash","MiniMax-M3","MiniMax-M2.7","MiniMax-M2.7-highspeed","MiniMax-M2.5","MiniMax-M2.5-highspeed","MiniMax-M2.1","MiniMax-M2.1-highspeed","MiniMax-M2"];
+require("node:http").createServer((q, r) => q.url === "/anthropic/v1/models"
+  ? r.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ data: ids.map((id) => ({ id, type: "model", display_name: id.replace("highspeed", "Highspeed") })) }))
+  : r.writeHead(401).end()).listen(+process.argv[1], "127.0.0.1");' "$FAKE_PORT" &
+FAKE=$!
+trap 'kill $FAKE 2>/dev/null || true; adb reverse --remove tcp:$FAKE_PORT >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; adb shell cmd uimode night no >/dev/null 2>&1 || true' EXIT
+for _ in $(seq 20); do curl -sf "http://127.0.0.1:$FAKE_PORT/anthropic/v1/models" >/dev/null && break; sleep 0.5; done
+adb reverse tcp:$FAKE_PORT tcp:$FAKE_PORT >/dev/null
 
 adb install -r "$APK" >/dev/null
 # 390 wide: 1080 px at density 443.
@@ -53,14 +63,14 @@ for part in $(echo "$KEY" | fold -w 3); do adb shell input text "$part"; sleep 0
 hide_keys
 shot choice 'Billed per use by MiniMax'
 
-# 2. Connect saves the key on the phone and offers MiniMax's models, each with a hint, the recommended one first and the
-# default named; nothing is picked yet.
+# 2. Connect saves the key on the phone and offers every model the live list gives, unfiltered, the recommended one first
+# and tagged, with a search box for the long list and the default named; nothing is picked yet.
 ui tap '^Connect$'
 see 'Which model should Chief use'
-see 'Fast and cheap, recommended'
-see 'The strongest, for harder jobs'
-see 'Use the default for now: MiniMax M3.1 Flash'
-shot model 'Pick a model'
+see 'Search 9 models'
+see '^.*Recommended$'
+for m in 'M3.1 Flash' 'M3' 'M2.7' 'M2.7 Highspeed' 'M2.5' 'M2.5 Highspeed' 'M2.1' 'M2.1 Highspeed' 'M2'; do see "(\\] |\\{)MiniMax $m\\}?\$" 5; done
+shot model 'MiniMax M2.1 Highspeed'
 
 # 3. Tapping MiniMax M3 selects it (the row is marked and the button names it); confirming keeps it: Chief's chat opens and
 # its header names the model.

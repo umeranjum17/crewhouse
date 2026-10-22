@@ -1033,12 +1033,14 @@ function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () =
   const pick = (id: string) => { setBusy(true); void phonePick(id).then(onDone, () => { setErr('That model could not be kept. Try again.'); setBusy(false); }); };
   // The default is the recommended model (MiniMax's fast one), named on its button.
   const fallback = models?.find((m) => m.recommended) ?? models?.[0];
+  // A long list keeps the room for itself: no portrait, a search box over it.
+  const long = !!models && models.length > 6;
   if (models) return (
     <ScrollView contentContainerStyle={s.centerScroll}>
-      <ChiefArt mood="hello" size={104} whole />
+      {!long && <ChiefArt mood="hello" size={104} whole />}
       <T style={s.display}>Which model should Chief use?</T>
       <T tone="ink2" style={s.centerText}>Your {name} key is saved on this phone. Pick the model Chief thinks with.</T>
-      {models.length > 6 && <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={find} onChangeText={setFind}
+      {long && <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={find} onChangeText={setFind}
         placeholder={`Search ${models.length} models`} placeholderTextColor={t.mute} accessibilityLabel="Search models" autoCapitalize="none" autoCorrect={false} />}
       <View style={{ alignSelf: 'stretch', gap: 8 }} accessibilityRole="radiogroup">
         {models.filter((m) => m.name.toLowerCase().includes(find.trim().toLowerCase())).map((m) => { const on = m === chosen;

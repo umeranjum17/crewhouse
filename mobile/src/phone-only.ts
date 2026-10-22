@@ -77,7 +77,7 @@ export async function phoneConnect(account: PhoneKey, key: string) {
 }
 export type PhoneModel = { id: string; name: string; recommended: boolean };
 /** MiniMax's own live list for the saved key (its Anthropic-shaped `/v1/models`, the base Chief already calls), newest
- *  first. The key goes only to MiniMax, through the kit's host-side hand-off, and is never kept or logged here. */
+ *  first. Kit gap: the kit's `Accounts.models`/`modelsOf` returns only its catalogue pair, so the list is read here. The key goes only to MiniMax, through the kit's host-side hand-off, and is never kept or logged here. */
 async function liveModels(): Promise<{ id: string; name?: string }[]> {
   const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 8_000);
   try {
@@ -335,7 +335,8 @@ const MODEL: Model<'openai-completions'> = {
 /** A MiniMax key's model: the person's pick, else the kit's fast one, on MiniMax's Anthropic-shaped API (Pi's pinned shape). */
 const minimaxModel = (): Model<'anthropic-messages'> => ({
   id: picked ?? PROVIDERS.minimax.models.fast ?? PROVIDERS.minimax.models.strong, name: 'MiniMax', api: 'anthropic-messages', provider: 'minimax',
-  baseUrl: 'https://api.minimax.io/anthropic', reasoning: true, input: ['text'],
+  // A lab build names its fake MiniMax in EXPO_PUBLIC_CREWHOUSE_MINIMAX_API (scripts/verify/phone-only-minimax.sh).
+  baseUrl: process.env.EXPO_PUBLIC_CREWHOUSE_MINIMAX_API || 'https://api.minimax.io/anthropic', reasoning: true, input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 204_800, maxTokens: 8_192,
 });
 
