@@ -5,7 +5,7 @@
 #   bash scripts/verify/phone-mic-fallback.sh <out-dir> [release-x86_64.apk]
 # Needs the Android SDK, a built web/dist and the APK (cd mobile/android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64,
 # through fm-mem-gate). No audio goes in: the proof is that the listener opens after the on-device recogniser reports no pack.
-# Writes mic-listening-no-pack-phone-390.png, logcat.txt and the step record in <out-dir>.
+# Writes mic-listening-no-pack-phone-390.png and the step record in <out-dir>; the log it checks stays in its scratch.
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$(realpath -m "${1:?out dir}") APK=$(realpath "${2:-$REPO/mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk}")
@@ -37,6 +37,6 @@ for _ in $(seq 30); do adb -s $SER logcat -d | grep -q 'RecognitionService#onSta
 $P texts | grep -q 'Stop listening' || { echo "the mic did not open a listener" >&2; exit 1; }
 $P texts | grep -qi "can't hear yet" && { echo "the not-ready toast showed" >&2; exit 1; }
 $P shot "$OUT/mic-listening-no-pack-phone-390.png"
-adb -s $SER logcat -d | grep -i 'SodaSpeechRecognizer\|onStartOfSpeech' | cut -c1-200 >"$OUT/logcat.txt"
-grep -q 'error 13' "$OUT/logcat.txt" || { echo "this emulator had a pack: the no-pack case was not exercised" >&2; exit 1; }
+adb -s $SER logcat -d | grep -i 'SodaSpeechRecognizer\|onStartOfSpeech' | cut -c1-200 >"$S/logcat.txt"
+grep -q 'error 13' "$S/logcat.txt" || { echo "this emulator had a pack: the no-pack case was not exercised" >&2; exit 1; }
 node "$REPO/scripts/verify/steps.mjs" "$OUT" phone-mic-fallback
