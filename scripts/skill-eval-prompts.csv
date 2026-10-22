@@ -1,0 +1,9 @@
+id,prompt,should_trigger
+plans,"Compare three phone plans that keep my number",yes
+laptop,"Find out which second-hand laptop is the better buy for video editing",yes
+kyoto,"What is the best time of year to visit Kyoto?",yes
+raise,"Research what raises are legal for a first home",yes
+competitors,"Write me a short report on what our competitors charge",yes
+bike,"What is the cheapest way to get a bike to the airport?",yes
+invoices,Sort my invoices by due date,no
+dinner,Plan my dinners for the week,no

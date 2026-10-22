@@ -1,0 +1,70 @@
+{
+  "plans": {
+    "title": "Phone plans that keep your number",
+    "pages": [
+      { "title": "Carrier price sheet", "path": "/plans/carrier", "fact": "Three plans keep the number: Lite at 5 pounds a month, Standard at 12, Pro at 20." },
+      { "title": "Price tracker", "path": "/plans/tracker", "popular": true, "fact": "Lite is 5 pounds a month with unlimited texts; Standard and Pro cost 12 and 20." },
+      { "title": "Reader forum", "path": "/plans/forum", "fact": "Readers say Lite slows video after 10 GB a month." }
+    ],
+    "open": ["Whether the 5 pound plan keeps the number after the first year"]
+  },
+  "laptop": {
+    "title": "Second-hand laptops for video editing",
+    "pages": [
+      { "title": "Refurbisher stock list", "path": "/laptop/stock", "fact": "A 2021 14-inch laptop with 16 GB of memory is 480 pounds; a 2019 model is 300." },
+      { "title": "Benchmark site", "path": "/laptop/benchmark", "fact": "The 2021 model cuts a 4K export in 6 minutes; the 2019 model takes 11." },
+      { "title": "Buyer forum", "path": "/laptop/forum", "fact": "Buyers say the 2019 battery lasts about 90 minutes under load." }
+    ],
+    "open": ["Whether either seller can supply the original charger"]
+  },
+  "kyoto": {
+    "title": "When to visit Kyoto",
+    "pages": [
+      { "title": "Travel guide", "path": "/kyoto/guide", "fact": "March and November are the calmest months; July and August are hot and busy." },
+      { "title": "Weather site", "path": "/kyoto/weather", "fact": "Kyoto's average high is 8 degrees in March and 33 in August." },
+      { "title": "Crowd calendar", "path": "/kyoto/crowds", "fact": "Weekends in November are the busiest of the quiet season." }
+    ]
+  },
+  "raise": {
+    "title": "What raises are legal for a first home",
+    "pages": [
+      { "title": "Government guidance", "path": "/raise/government", "fact": "A first-home buyer can add 20 per cent of the mortgage limit to their income for a larger loan." },
+      { "title": "Lender guide", "path": "/raise/lender", "fact": "Most lenders cap the extra amount at 20 per cent of the base limit." },
+      { "title": "Buyer forum summary", "path": "/raise/forum", "fact": "Self-employed buyers are usually asked for two years of accounts." }
+    ],
+    "open": ["How a lender counts a bonus in the income"]
+  },
+  "competitors": {
+    "title": "What the competitors charge",
+    "pages": [
+      { "title": "Public price list", "path": "/competitors/prices", "fact": "The three rivals charge 19, 24 and 31 pounds a month for the same plan." },
+      { "title": "Plan comparison page", "path": "/competitors/plans", "popular": true, "fact": "One rival includes 40 GB, the others 20 GB." },
+      { "title": "Review site", "path": "/competitors/reviews", "fact": "Readers rate the cheapest plan lowest for support." }
+    ]
+  },
+  "bike": {
+    "title": "Getting a bike to the airport",
+    "pages": [
+      { "title": "Airport guide", "path": "/bike/guide", "fact": "The airport runs a bike bus for 3 pounds each way." },
+      { "title": "Rail company policy", "path": "/bike/rail", "popular": true, "fact": "Bikes travel free on off-peak trains with a folding-bike booking." },
+      { "title": "Taxi site", "path": "/bike/taxi", "fact": "A taxi with a bike roof costs 45 pounds." }
+    ],
+    "open": ["Whether the bike bus takes a folding bike"]
+  },
+  "invoices": {
+    "title": "Your invoices by due date",
+    "pages": [
+      { "title": "Bank statement page", "path": "/invoices/bank", "fact": "Statements show four payments due this month." },
+      { "title": "Receipt archive", "path": "/invoices/receipts", "fact": "Receipts for water, electricity and the phone." },
+      { "title": "Tax site", "path": "/invoices/tax", "fact": "Deadlines for the self-assessment payment are in January." }
+    ]
+  },
+  "dinner": {
+    "title": "Dinners for the week",
+    "pages": [
+      { "title": "Recipe site", "path": "/dinners/recipes", "fact": "A week of dinners needs about 20 ingredients." },
+      { "title": "Market list", "path": "/dinners/market", "fact": "The market on Saturdays sells cheap greens and tomatoes." },
+      { "title": "Store guide", "path": "/dinners/store", "fact": "The big store is cheaper on pasta and rice." }
+    ]
+  }
+}
