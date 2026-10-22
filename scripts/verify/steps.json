@@ -413,5 +413,14 @@
       "A web search that cannot run ends on Chief's trail as one plain line"
     ],
     "result": "Home's Chief card shows his last answer as plain sentences with no dash marker in front of the list items"
+  },
+  "phone-accounts": {
+    "start": "the phone app paired to a fresh crew on the stub engine, where the computer has MiniMax signed in and every other AI account signed out",
+    "steps": [
+      "Open the phone app on Home",
+      "Read the Your AI accounts row under the crew, in day and in night",
+      "On the computer, sign MiniMax out too, then open the phone app again"
+    ],
+    "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows the ChatGPT mark and says You sign in on the home computer, in Settings"
   }
 }
