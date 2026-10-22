@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
 
-test('Chief delegates natively, the helper keeps its grants, and the native result reaches both chats once', { timeout: 280_000 }, async () => {
+test('Chief delegates natively, waits for the helper\'s report, and the native result reaches both chats once', { timeout: 280_000 }, async () => {
   const root = temp('native'), ready = join(root, 'ready.json');
   const child = spawn(process.execPath, ['scripts/verify/native-delegation.ts', root, ready, '--scripted'], { stdio: ['ignore', 'pipe', 'pipe'], env: process.env });
   let output = '';
@@ -36,6 +36,9 @@ test('Chief delegates natively, the helper keeps its grants, and the native resu
     assert.equal(native.length, 1); assert.equal(native[0].bot, helperId);
     assert.ok(!events.some((e: any) => e.kind === 'room.wrap'));
     assert.equal(events.filter((e: any) => e.kind === 'run.call' && e.data.tool === 'crew_read').length, 1);
+    // Chief waits for the helper's report: it does no work of its own while the helper has the job. A model that
+    // does not wait goes after the helper's file instead, and the job drifts off the report.
+    assert.equal(events.filter((e: any) => e.kind === 'run.call' && e.bot === 'chief').length, 0, 'Chief waits for the helper instead of working past the hand-off');
     const next = await api('POST', '/api/bots/chief/messages', { text: 'Ask Research Rae to read the file again: uncertain proof.' });
     await until('an unconfirmed native result stays unsure', async () => { chief = await api('GET', '/api/bots/chief'); return chief.tasks.some((t: any) => t.id === next.task && !['queued', 'working'].includes(t.state)); }, 90_000);
     assert.equal(chief.tasks.find((t: any) => t.id === next.task).state, 'unsure', JSON.stringify(chief.tasks));
