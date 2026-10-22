@@ -7,15 +7,16 @@ import { fakeGateway, type FakeScript } from '@byokit/openclaw/testing';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import type { RunRef } from '../src/runtime.ts';
 
-export function faked(host: { gate?: (run: RunRef, tool: string) => any; call?: (run: RunRef, tool: string, input: any) => any } = {}, script?: FakeScript) {
+export function faked(host: { gate?: (run: RunRef, tool: string) => any; call?: (run: RunRef, tool: string, input: any) => any; delegate?: (parent: RunRef, bot: string, key: string, brief: string) => RunRef | Promise<RunRef> } = {}, script?: FakeScript) {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-kit-'));
   const fake = fakeGateway(script);
   const runtime = new OpenClawRuntime(state, '', { transport: fake.factory, spawnEngine: false });
-  const seen = { gated: [] as [RunRef, string][], called: [] as [RunRef, string, any][] };
+  const seen = { gated: [] as [RunRef, string][], called: [] as [RunRef, string, any][], delegated: [] as [RunRef, string, string, string][] };
   const started = runtime.start({
     tools: () => [],
     gate: async (run, tool) => { seen.gated.push([run, tool]); return host.gate?.(run, tool) ?? { allow: true }; },
     call: async (run, tool, input) => { seen.called.push([run, tool, input]); return host.call?.(run, tool, input) ?? 'done'; },
+    ...(host.delegate ? { delegate: async (parent, bot, key, brief) => { seen.delegated.push([parent, bot, key, brief]); return host.delegate!(parent, bot, key, brief); } } : {}),
   });
   const ask = (frame: object): Promise<any> => new Promise((resolve, reject) => {
     const socket = connect(join(state, 'openclaw', 'bridge.sock'));

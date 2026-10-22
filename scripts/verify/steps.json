@@ -322,5 +322,15 @@
       "Open Chief's thread at 390 and 1440 wide, day and night"
     ],
     "result": "Chief's thread shows one answer, the words the helper's report brought, with no question and no work of Chief's own while the helper worked"
+  },
+  "handoff-lane-reset": {
+    "target": { "version": "{{version}}+{{sha}}" },
+    "start": "a fresh Crewhouse with one helper on the crew, on {{model}}",
+    "steps": [
+      "Ask Chief to get a helper to read a file and bring back its reference, and to say so plainly if it cannot",
+      "The helper's own job fails, and Chief's job settles",
+      "Open Chief's thread at 390 and 1440 wide, day and night"
+    ],
+    "result": "Chief's job ends failed in seconds with the hand-off's own words, \"The helper stopped before reporting back\", and no question reaches the person"
   }
 }

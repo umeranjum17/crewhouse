@@ -22,7 +22,7 @@ const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-api', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
 }, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
-const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool, MAX_LEGS = 24, LEGWORK = new Set(['web_search', 'web_fetch']); // Chief's spawned lookups: at most MAX_LEGS a job, web reads only
+const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool, MAX_LEGS = 24, LEGWORK = new Set(['web_search', 'web_fetch']), HANDOFF_MS = () => Number(process.env.CREWHOUSE_HANDOFF_MS || 120_000); // Chief's spawned lookups: at most MAX_LEGS a job, web reads only; a hand-off waits this long for a helper's report
 /** Why the engine failed, in the person's words: the kit's typed refusal and, for an install, its retained diagnosis (README: engine-install-drift.json). */
 function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) {
   const cause = (e as { cause?: string })?.cause, d = cause === 'write' && existsSync(diagnosis) ? JSON.parse(readFileSync(diagnosis, 'utf8')) : null, fresh = d && Date.parse(d.at) >= since;
@@ -246,8 +246,8 @@ export class OpenClawRuntime implements AgentRuntime {
       targets.set(key, { bot: member.bot });
     }
     this.targets.set(spec.key, targets); this.legs.set(spec.key, 0);
-    let finish!: (end: RunEnd) => void, timer: NodeJS.Timeout | undefined, dispatched = false;
-    const returned = new Promise<RunEnd>((resolve) => { finish = resolve; }), id = randomUUID(), rootKey = spec.key.replace(`agent:${ME}:`, `agent:${lane}:`);
+    let finish!: (end: RunEnd) => void, timer: NodeJS.Timeout | undefined, dispatched = false, running = true, decided: RunEnd | undefined, reported = '';
+    const returned = new Promise<RunEnd>((resolve) => { finish = resolve; }), id = randomUUID(), rootKey = spec.key.replace(`agent:${ME}:`, `agent:${lane}:`), decide = (end: RunEnd, release = false) => { if (decided) return; decided = end; finish(end); if (release && running) void this.abort(spec.key).catch(() => {}); }; // one outcome for the hand-off: the first one wins, and a hand-off that ends on its own lets Chief's lane go, so a report that never comes cannot hold it
     const offChild = this.kit.onEvent('byokit.delegated', (e) => {
       if (e.run.root.sessionKey !== rootKey || e.run.root.runId !== id) return;
       const target = targets.get(e.run.sessionKey), run = target ? target.run : this.runs.get(spec.key); // a spawned lookup has no job of its own: it is Chief's
@@ -256,8 +256,8 @@ export class OpenClawRuntime implements AgentRuntime {
       if (target && e.event?.stream === 'assistant' && typeof e.event.data?.text === 'string') { texts.set(e.run.runId, e.event.data.text); this.host?.event?.(run, { type: 'text', text: e.event.data.text }); }
       if (e.type === 'ended') {
         admitted.delete(e.run.runId);
-        if (target) { this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: texts.get(e.run.runId) ?? '' } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' }); this.runs.delete(e.run.sessionKey); target.run = undefined; if (e.reason !== 'terminal') return finish({ ok: false, kind: 'other', message: e.message || 'The helper stopped before reporting back. Check its job before trying again.' }); }
-        if (!admitted.size) timer = setTimeout(() => finish({ ok: false, kind: 'handoff', message: target ? 'The helper finished, but Chief did not get its report. Check the helper’s chat.' : 'The lookups finished, but Chief did not get their reports. Try again.' }), 120_000);
+        if (target) { const said = texts.get(e.run.runId) ?? ''; this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: said } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' }); this.runs.delete(e.run.sessionKey); target.run = undefined; if (e.reason !== 'terminal') return decide({ ok: false, kind: 'handoff', message: 'The helper stopped before reporting back. Check its job before trying again.' }, true); reported = said; }
+        if (!admitted.size) timer = setTimeout(() => decide(reported ? { ok: true, text: reported } : { ok: false, kind: 'handoff', message: target ? 'The helper finished, but Chief did not get its report. Check the helper’s chat.' : 'The lookups finished, but Chief did not get their reports. Try again.' }, true), HANDOFF_MS());
       }
     });
     const offReturn = this.kit.onEvent('agent', (e) => {
@@ -268,7 +268,7 @@ export class OpenClawRuntime implements AgentRuntime {
       if (e.stream === 'assistant' && typeof e.data?.text === 'string') on({ type: 'text', text: e.data.text });
       if (e.stream === 'lifecycle' && e.data?.phase === 'end' && !admitted.size && ![...targets.values()].some((t) => t.run)) {
         const reply = e.data.terminalReply as { disposition?: string; text?: string } | undefined;
-        finish(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
+        decide(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
       }
     });
     try {
@@ -276,7 +276,7 @@ export class OpenClawRuntime implements AgentRuntime {
         if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
         if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; this.waits.delete(spec.key); }
       });
-      return end.ok && dispatched ? await returned : end;
+      running = false; if (decided) return decided; return end.ok && dispatched ? await returned : end;
     } finally {
       clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key); this.legs.delete(spec.key); this.waits.delete(spec.key); if (admitted.size) await this.abort(spec.key).catch(() => {});
       for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }

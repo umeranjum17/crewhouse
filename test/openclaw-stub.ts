@@ -4,6 +4,7 @@
 // Script (read from the latest user message):
 //   [tool NAME {json}]   call that tool once, then reply with what it returned; several are called in turn, the reply
 //                        saying what the last one returned (the json may nest: braces are matched, not guessed)
+//   fail this turn       answer with the provider's own error, so the run ends as it failed (a helper's own job)
 //   hit the limit        answer with the account's own usage-limit error (rests it)
 //   no helpers in plan   answer as a plan without helpers does
 //   sign me out          answer as an account whose sign-in stopped working does
@@ -44,7 +45,7 @@ export function toolCalls(text: string) {
 const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map((c: any) => c.text ?? '').join('') : '';
 
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
-export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string }) {
+export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string; fail?: string }) {
   const calls: { authorization: string; path: string; body: any }[] = [];
   const server: Server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -89,6 +90,10 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     if (/sign me out/i.test(said)) {
       res.writeHead(401, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ error: { message: '401 Unauthorized: your sign-in has expired' } }));
+    }
+    if (planned?.fail) { // this turn's own failure, as the provider's error (a helper's job that could not be done)
+      res.writeHead(400, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ error: { message: planned.fail } }));
     }
     if (/hit the limit/i.test(said)) {
       res.writeHead(429, { 'content-type': 'application/json' });
