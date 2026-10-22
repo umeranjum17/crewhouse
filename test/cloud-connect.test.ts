@@ -52,10 +52,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   let log = '', host: ReturnType<typeof spawn> | undefined, link: DeviceLink | undefined;
   const boot = () => { log = ''; host = spawn(process.execPath, ['scripts/headless.mjs'], { cwd: repo, env }); host.stdout!.on('data', (b) => log += b); host.stderr!.on('data', (b) => log += b); };
   const stop = async () => { if (host?.exitCode === null) { host.kill('SIGTERM'); await new Promise((r) => host!.once('exit', r)); } };
+  const machines = [server.machine];
   const bridge = setInterval(() => {
-    const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);
-    if (delivered && !existsSync(join(cloud, 'inbox/phone.bin')) && !existsSync(join(cloud, 'outbox/receipt.json'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
-    if (existsSync(join(cloud, 'outbox/receipt.json'))) server.machine.writeFile(`${remote}/outbox/receipt.json`, readFileSync(join(cloud, 'outbox/receipt.json')), 0o600);
+    for (const m of machines) {
+      const delivered = m.files.get(`${remote}/inbox/phone.bin`);
+      if (delivered && !existsSync(join(cloud, 'inbox/phone.bin')) && !existsSync(join(cloud, 'outbox/receipt.json'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
+      if (existsSync(join(cloud, 'outbox/receipt.json'))) m.writeFile(`${remote}/outbox/receipt.json`, readFileSync(join(cloud, 'outbox/receipt.json')), 0o600);
+    }
   }, 50);
   t.after(async () => { clearInterval(bridge); link?.stop(); await stop(); });
   boot();
@@ -70,6 +73,37 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.deepEqual(progress([], 'lost'), { done: 0, failed: -1, why: 'lost', retry: true });
   assert.equal(server.requests.filter((r) => r.method === 'POST' && r.path === '/sandboxes').length, 1, 'only the seeded computer was ever rented');
   assert.match(log, /owner phone is enrolled/);
+
+  // The phone's own "Try again": the same computer, set up a second time. The install runs again and the
+  // phone pairs again, so the setup is not a once-per-phone thing.
+  const again = await all(connect(p, store, listed[0], phone));
+  assert.deepEqual(again.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
+  assert.deepEqual(progress(again), { done: 5, failed: -1, why: '', retry: false });
+  assert.equal((await store.load())!.ref!.id, seeded.id, 'the computer the phone already has stays the one it has');
+
+  // The app's own refusals are named, not one generic line: a computer that is gone, and a setup that is
+  // already running on this phone.
+  const gone = await all(connect(p, store, { ...listed[0], id: 'sbx-gone' }, phone)).catch((e) => e);
+  assert.equal(said(gone), 'That computer is not in your boat.dev account any more. Pick another one.');
+  const busyStore = memoryStore();
+  const held = connect(p, busyStore, listed[0], phone);
+  await held.next();
+  const busy = await connect(p, busyStore, listed[0], phone).next().catch((e) => e);
+  assert.equal(said(busy), 'Setup is already running on this phone. Wait for it to finish.');
+  await held.return(undefined);
+
+  // Another computer in the same account replaces the one the phone had: the person picks it, so it is the
+  // one Chief is set up on. The fake numbers its sandboxes per server, so the other computer is the second
+  // one there and has an id the first account's computer does not have.
+  const other = await startFakeSandboxServer({ key: 'good-key' });
+  t.after(() => other.close());
+  machines.push(other.machine);
+  const otherProvider = provider(async () => 'good-key', other.url);
+  await otherProvider.create!({ name: 'other-one', size: 'small', keepCopies: true, idempotencyKey: 'seed-2' });
+  const second = await otherProvider.create!({ name: 'other-two', size: 'small', keepCopies: true, idempotencyKey: 'seed-3' });
+  const moved = await all(connect(otherProvider, store, second, phone));
+  assert.deepEqual(moved.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
+  assert.equal((await store.load())!.ref!.id, second.id, 'the phone’s computer is the one the person picked');
 
   // The grant dials the computer's own public relay address. The fake's address can't carry bytes, so the phone dials
   // the runner's published relay for the same host instead: that one hop is the live boat.dev run's to prove.
