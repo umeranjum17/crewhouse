@@ -8,6 +8,16 @@
     ],
     "result": "The ask card's own top is inside the thread box at 390 and 1440, day and night: the card is never hidden behind the composer"
   },
+  "cloud-screen": {
+    "start": "the phone app with the cloud on, a boat.dev account with no computer (the kit's fake boat.dev, Chief's own host behind it on the stub engine)",
+    "steps": [
+      "Tap In my cloud and paste the boat.dev key; the account has no computer",
+      "Tap Make a new computer instead, then Make it and set it up, while the install on the computer fails",
+      "Read why setup stopped, then tap Try again once the install can pass",
+      "On a second phone, paste the same key and tap Use this computer on the computer the first phone set up"
+    ],
+    "result": "Make it and set it up rents a computer and sets it up; the failed install says Installing Chief stopped partway and that trying again is safe; Try again reaches Chief is on your cloud computer; the second phone is told to talk to Chief from the first phone or pick or make another computer, with no move offered"
+  },
   "chat-real": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
     "steps": [

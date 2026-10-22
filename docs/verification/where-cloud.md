@@ -16,10 +16,15 @@ The cloud row is behind a build flag (`@byokit/cloud` 0.2.1 from npm):
 - Phone, key first (mocks `cloud-key`, `cloud-pick`, `cloud-make`, `cloud-steps`, `cloud-other`): In my cloud opens
   the boat.dev key card. The box is a Paste key button: it reads the clipboard, nothing can be typed, and the key never shows. A
   refused key says "boat.dev didn't accept your key…" and nothing is kept. An accepted key lists the account's
-  computers ("I didn't find a computer…" when there are none). Make a new computer shows the cost line, and its
-  Create button stays off. Use this computer walks the kit's setup steps on the five-row progress list: a failure
-  marks its row "!" with Chief's words and Try again; retry reruns the kit setup sequence while retaining the
-completed-step display. A setup exception marks the row
+  computers ("I didn't find a computer…" when there are none). Make a new computer shows the cost line, and Make it
+  and set it up rents a small computer in the person's own account (`make()`, the kit's `create`; one rental per
+  press) and sets it up like a picked one. Use this computer walks the kit's setup steps on the five-row progress
+  list: a failure marks its row "!" and says which step stopped, then the kit's cause ("Installing Chief stopped
+  partway. boat.dev reports a problem…"); when it is retryable, "Trying again is safe…" and Try again follow, and
+  retry reruns the kit setup sequence while retaining the completed-step display. A second phone on a computer
+  another phone set up is told to talk to Chief from that phone or pick or make another computer: the host does not
+  take the kit's owner-replacement delivery, so no move is offered. The recipe's one root step installs Xvfb, so
+  Chief's own screen has a display there. A setup exception marks the row
   setup was on (no row before the kit's first step), with the error and Try again. Before setup the phone asks
   boat.dev for the computer's own public address on port 7300 (`url()`); the recipe runs the headless host with its
   relay published there (`CREWHOUSE_RELAY_PUBLIC`), so no Crewhouse server and no Tailscale sit in the middle. The kit
@@ -108,6 +113,13 @@ product mode (state under `/home/user/.local/state/crewhouse`). Pair a desktop b
 (`POST /api/phones/code` and `/api/phones/approve` with the `person.key`, since the download has no `web/src` for the CLI).
 Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMAIL`) and save the key there. Boat
 documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
+
+The cloud screen's states on an emulator, at 390 wide by day and night (Make, a failed install, ready after Try
+again, a second phone): build the flagged lab APK (`EXPO_PUBLIC_CREWHOUSE_CLOUD=1`,
+`EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1`), start an emulator, then
+`SERIAL=<serial> bash scripts/verify/cloud-screen.sh <out> <apk>`. It runs `boat-fake-lab.mjs` with `LAB_EMPTY=1`
+(an account with no computer), writes `cloud-{make,failed,ready,second-phone}-{day,night}-390.png` and the
+`cloud-screen` step record, and stops the lab.
 
 ## Evidence
 
