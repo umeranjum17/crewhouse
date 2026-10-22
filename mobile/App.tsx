@@ -942,15 +942,16 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
       <View style={s.row}><T style={[s.b, { flex: 1 }]}>{title}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{sub}</T>
       {way === i && <T tone="ink2" style={s.small}>{more}</T>}</Pressable>)}
     <T tone="mute" style={s.small}>{c.other.foot}</T></>;
+  const set = view === 'steps' && ready;
   const back = view === 'key' ? onBack : moving ? () => setMoving(false) : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : 'key'); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]} keyboardShouldPersistTaps="handled">
         <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}>
           <T tone="ink2" style={{ fontSize: 22, width: 24 }}>‹</T><T tone="ink2" style={{ flex: 1 }}>{c.top[0]}</T><T tone="mute" style={s.small}>{c.top[1]}</T></Pressable>
-        <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{view === 'steps' && ready ? c.ready.top : c.title}</T>
+        <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{set ? c.ready.top : c.title}</T>
           <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
-        <T tone="ink2">{c.lede}</T>
+        {!set && <T tone="ink2">{c.lede}</T>}
         {box(view !== 'make' && view !== 'other', { key, pick, make, steps: progressList, other }[view])}
         {view === 'key' && <Btn ghost label={`${c.other.link} →`} onPress={() => setView('other')} />}
         {view === 'pick' && <Btn ghost label={c.pick.other} onPress={() => { held.current = ''; setView('key'); }} />}
