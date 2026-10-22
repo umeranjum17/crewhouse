@@ -122,7 +122,7 @@ The cloud screen's states on an emulator, at 390 wide by day and night (Make, a 
 again, a second phone): build the flagged lab APK (`EXPO_PUBLIC_CREWHOUSE_CLOUD=1`,
 `EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1`), start an emulator, then
 `SERIAL=<serial> bash scripts/verify/cloud-screen.sh <out> <apk>`. It runs `boat-fake-lab.mjs` with `LAB_EMPTY=1`
-(an account with no computer), writes `cloud-{make,failed,ready,second-phone,move-confirm,moved}-{day,night}-390.png` (with `CLOUD_OTHER` set, every one but the second phone's offer goes there) and the
+(an account with no computer), writes `cloud-{make,failed,ready,second-phone,move-confirm,moved}-{day,night}-390.png` (with `CLOUD_OTHER` set, every one but the claimed state goes there: `CLOUD_CLAIM`, default the second phone's offer) and the
 `cloud-screen` step record, and stops the lab.
 
 ## Evidence
