@@ -187,6 +187,17 @@
     ],
     "result": "The sheet titled Which model should your crew use? lists the account's live models at 390 and 1280, day and night, and the pick is the model the crew uses"
   },
+  "onboard-chat": {
+    "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+    "steps": [
+      "Open Crewhouse after computer setup: it opens on Chief's chat, and he asks what to call you",
+      "Type a name in the chat",
+      "Read Chief's pitch and the ideas to try",
+      "Tap How does this work? and read the answer in the chat",
+      "Tap an idea: it goes to Chief as the first job"
+    ],
+    "result": "Chief asks the name in chat and pitches with ideas to tap, with no Hello screen between; the name is saved as the address"
+  },
   "quiet-nudge": {
     "start": "a fresh stub-engine crewd with one helper",
     "steps": [
