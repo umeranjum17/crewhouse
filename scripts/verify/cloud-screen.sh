@@ -4,36 +4,39 @@
 # (offered, confirmed, moved). Each state is captured
 # at 390 wide, day and night. No real boat.dev, no money, no model (docs/verification/cloud-screen.md).
 #
-#   SERIAL=emulator-5580 bash scripts/verify/cloud-screen.sh <out-dir> <lab APK>
+#   SERIAL=emulator-5580 [CLOUD_EARLIER=<dir>] bash scripts/verify/cloud-screen.sh <out-dir> <lab APK>
+#
+# The journey ends on the second phone's move, so <out-dir> holds that (and the step record): the earlier states and the
+# lab's log go to CLOUD_EARLIER when it is set (a judged run's folder holds only the resulting state), else beside them.
 #
 # The emulator is the caller's (started and stopped by them); the APK is built with EXPO_PUBLIC_CREWHOUSE_CLOUD=1 and
 # EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1. The emulator has no shell clipboard and the key box
 # only reads it, so the lab key is typed into the pairing-code field and copied from there.
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> cloud-screen.sh <out-dir> <apk>" >&2; exit 2; }
-OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"
+OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; EARLIER=${CLOUD_EARLIER:-$OUT}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(git -C "$VERIFY_DIR" rev-parse --show-toplevel)
 PKG=dev.crewhouse.app KEY=lab-key-abcdefgh
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$EARLIER"
 adb() { command adb -s "$SERIAL" "$@"; }
 ui() { SERIAL=$SERIAL node "$VERIFY_DIR/phone-ui.mjs" "$@"; }
 # Wait at most $2 seconds for a text on screen.
 see() { for _ in $(seq "${2:-30}"); do ui texts 2>/dev/null | grep -qE -- "$1" && return 0; sleep 1; done; ui texts >&2 || true; echo "cloud-screen: never saw: $1" >&2; return 1; }
-# One state, day and night, at 390 wide.
+# One state, day and night, at 390 wide, into $3 (default: the run's own folder).
 shot() {
   for theme in day night; do
     adb shell cmd uimode night "$([ $theme = night ] && echo yes || echo no)" >/dev/null
     see "$2" 15
     sleep 1
-    ui shot "$OUT/cloud-$1-$theme-390.png"
+    ui shot "${3:-$OUT}/cloud-$1-$theme-390.png"
   done
   adb shell cmd uimode night no >/dev/null
 }
 
 LAB=$(mktemp -d -t cloud-screen.XXXXXX)
 (cd "$REPO" && exec env LAB_EMPTY=1 LAB_PORT=7411 LAB_DIR="$LAB" HOME="$LAB" node "$VERIFY_DIR/boat-fake-lab.mjs") > "$LAB/lab.log" 2>&1 & LABPID=$!
-trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OUT/lab.log" 2>/dev/null || true; chmod -R u+w "$LAB" 2>/dev/null; rm -rf -- "$LAB"' EXIT
+trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$EARLIER/lab.log" 2>/dev/null || true; chmod -R u+w "$LAB" 2>/dev/null; rm -rf -- "$LAB"' EXIT
 for _ in $(seq 120); do grep -q 'the host is ready' "$LAB/lab.log" && break; kill -0 "$LABPID" 2>/dev/null || { cat "$LAB/lab.log" >&2; exit 1; }; sleep 1; done
 grep -q 'the host is ready' "$LAB/lab.log" || { cat "$LAB/lab.log" >&2; echo "cloud-screen: the lab's host never got ready" >&2; exit 1; }
 
@@ -58,15 +61,15 @@ paste_key() {
 open_app; paste_key
 see "didn’t find a computer"
 ui tap 'Make a new computer instead'
-shot make 'Make it and set it up'
+shot make 'Make it and set it up' "$EARLIER"
 # 2. Make it, with the install failing: the stopped row says which step and that Try again is safe.
 touch "$LAB/install-fails"; sleep 1
 ui tap 'Make it and set it up'
-shot failed 'Installing Chief stopped partway'
+shot failed 'Installing Chief stopped partway' "$EARLIER"
 # 3. Try again once the install can pass: ready.
 rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
-shot ready 'Chief is on your cloud computer'
+shot ready 'Chief is on your cloud computer' "$EARLIER"
 # 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
 #    Chief moves here: the computer's own host revokes the first phone.
 open_app; paste_key
@@ -79,4 +82,4 @@ ui tap '^Yes, move Chief$'
 shot moved 'Your cloud computer'
 
 node "$VERIFY_DIR/steps.mjs" "$OUT" cloud-screen
-ls "$OUT"/*.png
+ls "$OUT"/*.png "$EARLIER"/*.png | sort -u

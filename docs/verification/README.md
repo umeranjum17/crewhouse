@@ -28,7 +28,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | phone-chat-keep | `done-done verify phone-chat-keep --outcome "<claim>"` once the person approves the spend (below), plus approval-sheet driver |
 | phone-continue | `done-done verify phone-continue --outcome "<claim>"` once the person approves the spend (below) |
 | image | `done-done run image` (includes installed PWA) |
-| where-cloud (the phone's cloud screen) | `done-done run cloud-screen` with `SERIAL` and `CLOUD_APK` set (an emulator and the flagged lab APK; [where-cloud.md](where-cloud.md)) |
+| where-cloud (the phone's cloud screen) | `done-done run cloud-screen` with `SERIAL`, `CLOUD_APK` and `CLOUD_EARLIER` (a folder for the states before the move) set (an emulator and the flagged lab APK; [where-cloud.md](where-cloud.md)) |
 | binary-inspect | `done-done run binary-inspect` — Byte looks inside a binary in its own folder: the note holds the inspector's own words, and a file from outside that folder is refused |
 | skill-eval | `done-done run skill-eval` — the paired skill eval on the stub engine: the same prompts with and without a bundled skill, every run's document checked, the raw runs in a JSONL file and the two arms diffed on one page |
 | All other rows | Drive the recipe through `done-done run -- <command>`; use its existing tests and `scripts/verify/` drivers, retaining every manual leg |

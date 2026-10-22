@@ -31,7 +31,7 @@ journeys:
     command: 'timeout -k 10 900 node scripts/verify/desktop-first-launch.mjs --out "$DONE_DONE_EVIDENCE_ROOT"'
   # The phone's cloud screen on the kit's fake boat.dev: the caller's emulator and flagged lab APK (where-cloud.md).
   cloud-screen:
-    command: 'SERIAL="${SERIAL:?the emulator serial}" timeout -k 10 900 bash scripts/verify/cloud-screen.sh "$DONE_DONE_EVIDENCE_ROOT" "${CLOUD_APK:?the flagged lab APK}"'
+    command: 'SERIAL="${SERIAL:?the emulator serial}" CLOUD_EARLIER="${CLOUD_EARLIER:?a folder for the states before the move}" timeout -k 10 900 bash scripts/verify/cloud-screen.sh "$DONE_DONE_EVIDENCE_ROOT" "${CLOUD_APK:?the flagged lab APK}"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
