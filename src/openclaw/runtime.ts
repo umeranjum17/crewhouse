@@ -345,7 +345,7 @@ export class OpenClawRuntime implements AgentRuntime {
   /** The reviewed ClawHub starter set (starter-skills.json): what each one does, what it needs, and whether
    *  the engine already holds it in the workspace. Listing only — installs go through the engine's own gate. */
   starterSkills() {
-    return (JSON.parse(readFileSync(join(appDir, 'src/openclaw/starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version),
+    return (JSON.parse(readFileSync(join(appDir, 'src/openclaw/starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version), maturity: String(s.maturity),
       summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String),
       on: existsSync(join(this.workspaceOf(), String(s.slug))) }));
   }

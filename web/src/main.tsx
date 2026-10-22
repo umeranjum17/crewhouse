@@ -1963,7 +1963,7 @@ function Apps({ state, refresh }: Ctx) {
   const mark = (r: A.CrewRow, cls = 'app-ic') => <span key={r.id} className={cls} aria-hidden>{r.logo ? <img className="app-logo" src={r.logo} alt="" /> : <b>{r.name[0]}</b>}</span>;
   const row = (r: A.CrewRow, i?: number) => (
     <div key={`${r.kind}-${r.id}-${i ?? ''}`} className="row-item app-row-item">{mark(r)}
-      <div className="grow"><b>{r.name}</b><div className="mute small add-line">{r.line}</div>
+      <div className="grow"><b>{r.name}</b>{r.maturity && <span className={`maturity ${r.maturity}`}>{r.maturity[0].toUpperCase() + r.maturity.slice(1)}</span>}<div className="mute small add-line">{r.line}</div>
         {r.id === 'herdr' && plugin && plugin.state !== 'on' && <div className="mute small">{plugin.state === 'missing' && plugin.howto ? plugin.howto : plugin.says}</div>}
         {!r.reviewed && <div className="mute small">{r.by ? `By ${r.by}. ` : ''}Not reviewed yet, so the crew leaves it alone.</div>}</div>
       {r.on ? <button className="mini added" disabled={r.kind === 'plugin'} aria-label={`${r.name} is added${r.kind === 'plugin' ? '' : '. Turn it off'}`} onClick={() => remove(r)}>Added ✓</button>

@@ -13,6 +13,8 @@ skill and plugin. Approved mock: `add-to-crew` (market-a) in `scripts/verify/moc
   "Nothing here by that name." with Look in the catalog, and a catalog miss says "Nothing found for “…”. Ask Chief
   instead." Search asks the skill and plugin catalogs: rows outside the reviewed set say "By <publisher>. Not reviewed
   yet" and have no Add; another publisher's skill of a reviewed name is not reviewed.
+- Each starter skill wears its `maturity` tag (Production, Beta or Experimental) on its own line under the name, never
+  over the Add button at 390 wide with 1.3x text (`Home` chip: Weather, Home Assistant).
 - Add on a reviewed skill installs it through the engine's trust gate and the row becomes "Added ✓" with the count
   chip up by one; Add on an app opens its connect card; Herdr's row keeps its three setup states
   ([herdr-setup.md](herdr-setup.md)).

@@ -251,6 +251,7 @@ textarea.input { resize: vertical; }
 .add-head .link { color: var(--go); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .add-crew .card.list { margin-top: 8px; }
 .add-line { overflow-wrap: anywhere; }
+.maturity { display: block; width: fit-content; margin: 2px 0 4px; font: 600 13px/18px var(--ui); color: var(--mute); border: 1px solid var(--line2); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 .mini { font: 600 13px/18px var(--ui); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line2); background: var(--bg); color: var(--ink); flex: none; min-height: 32px; }
 .mini.added { border-color: transparent; background: none; color: var(--mute); padding: 6px 2px; }
 .mini.added:disabled { opacity: 1; cursor: default; }

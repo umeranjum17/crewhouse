@@ -18,6 +18,8 @@ test('every reviewed starter skill carries a live pin, and the record matches it
   for (const s of record.approved) {
     for (const f of ['owner', 'slug', 'name', 'version', 'sha256', 'summary', 'why', 'needs', 'reviewedBy', 'reviewedAt'])
       assert.ok(s[f] !== undefined && s[f] !== '', `${s.slug} records ${f}`);
+    assert.match(s.maturity, /^(production|beta|experimental)$/, `${s.slug} carries a maturity tag`);
+    for (const q of ['triggeredBy', 'tools', 'runsAt', 'credentials', 'stop']) assert.ok(s.trust?.[q]?.length > 10, `${s.slug} answers the trust question ${q}`);
     const pin = trusted.find((t: any) => t.source === 'clawhub' && t.id === s.slug);
     assert.ok(pin, `${s.slug} has a clawhub pin in trusted-skills.json`);
     assert.equal(pin.version, s.version, `${s.slug} pin version matches the review`);

@@ -322,9 +322,9 @@ export class Crew {
    *  reviewed row's purpose (skills, apps and plugins alike), which puts it in a section there. Switching and searching
    *  run on the real engine; the stand-in answers the list, all off, and says the rest needs it. */
   starterSkills() {
-    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; summary: string; why: string; needs: string[]; on: boolean }[] }, { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
+    const runtime = this.runtime as { starterSkills?: () => { slug: string; owner: string; version: string; maturity: string; summary: string; why: string; needs: string[]; on: boolean }[] }, { approved, purposes } = JSON.parse(readFileSync(join(appDir, 'src', 'openclaw', 'starter-skills.json'), 'utf8'));
     return { live: !!runtime.starterSkills, purposes, starter: runtime.starterSkills?.() ?? approved.map((s: any) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner),
-      version: String(s.version), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
+      version: String(s.version), maturity: String(s.maturity), summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String), on: false })) };
   }
   async setStarter(slug: string, on: boolean) {
     if (!this.starterSkills().starter.some((s: { slug: string }) => s.slug === slug)) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
