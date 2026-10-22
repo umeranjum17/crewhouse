@@ -42,10 +42,10 @@ shot() { # $1 file stem, $2 dir, $3 the row's words
   done
   adb shell cmd uimode night no >/dev/null
 }
-shot accounts-minimax "$OUT" '^MiniMax is signed in on the home computer\.$'
+shot accounts-minimax "$OUT" ' MiniMax is signed in on the home computer\.$'
 api POST /api/accounts/1/minimax/logout '{}' >/dev/null
 adb shell am force-stop dev.crewhouse.app; adb shell am start -n dev.crewhouse.app/.MainActivity >/dev/null
-see '^Settings$' 30
-shot accounts-none "$OTHER" '^You sign in on the home computer, in Settings\.$'
+see ' Your AI accounts$' 30
+shot accounts-none "$OTHER" ' You sign in on the home computer, in Settings\.$'
 node "$VERIFY_DIR/steps.mjs" "$OUT" phone-accounts
 echo "phone-accounts: MiniMax named on Home, then the sign-in sentence once nothing is signed in"

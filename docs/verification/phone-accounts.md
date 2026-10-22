@@ -4,7 +4,7 @@ Home on the phone app has a "Your AI accounts" row under the crew. It reads the 
 
 ## Driving it
 
-Needs an emulator of the task's own (memory gate, stopped after), a release APK built from the head, and a built web app (`npm run build:web`, the pairing lab serves it).
+Needs an emulator of the task's own (memory gate, stopped after), a release APK built from the head after `npx expo prebuild -p android` (an android folder from an older prebuild lacks the `automatic` interface style, and the app then stays in day colours at night), and a built web app (`npm run build:web`, the pairing lab serves it).
 
 ```bash
 SERIAL=emulator-5612 ACCOUNTS_OTHER=<dir> bash scripts/verify/phone-accounts.sh <out> <apk>
