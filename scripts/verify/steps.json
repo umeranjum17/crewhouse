@@ -397,10 +397,10 @@
   "home-list-preview": {
     "start": "a fresh stub-engine crewd, onboarded as Umer",
     "steps": [
-      "Chief's last line in his thread is a list answer",
+      "Chief's last line in his thread is a list answer, two dash items",
       "Home opens at 390 and 1280, day and night",
       "A web search that cannot run ends on Chief's trail as one plain line"
     ],
-    "result": "Home's Chief card shows the list answer as plain sentences without a raw dash, and the failed search never reads as a search that happened"
+    "result": "Home's Chief card shows his last answer as plain sentences with no dash marker in front of the list items"
   }
 }
