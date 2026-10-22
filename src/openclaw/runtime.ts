@@ -3,7 +3,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
+import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
@@ -12,7 +12,7 @@ import { appDir, loadConfig } from '../config.ts';
 import { PARAMETERS } from '../engine.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
-export { ENGINE_VERSION } from '@byokit/openclaw';
+export { ENGINE_VERSION };
 
 const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
@@ -57,6 +57,7 @@ const CONFIG = {
 };
 
 export class OpenClawRuntime implements AgentRuntime {
+  readonly identity = { name: 'OpenClaw', version: ENGINE_VERSION };
   readonly kit: OpenClawKit;
   readonly stateDir: string;
   private host?: ToolHost; private keyChecks = new Set<string>();
@@ -301,11 +302,8 @@ export class OpenClawRuntime implements AgentRuntime {
     if (!hash) throw new Error('the learned-skills capture failed; nothing was changed');
     return hash;
   }
-  /** Bring one learned skill back from the capture history, even after later edits or reviews. The target is the
-   *  real workspace layout the engine reads: workspaceOf() is the skills root itself, so the skill sits directly
-   *  inside it (`<name>/SKILL.md`, never `skills/<name>/SKILL.md`). The capture is read before anything is written —
-   *  a restore that cannot be verified throws and leaves the workspace untouched. The blob is written as raw bytes,
-   *  so the restore is byte-for-byte: leading and trailing whitespace and the final newline all survive. */
+  /** Bring one learned skill back from the capture history, byte for byte (`<name>/SKILL.md` directly under the skills root).
+   *  The capture is read before anything is written: a restore that cannot be verified throws and leaves the workspace untouched. */
   restoreLearned(name: string, hash?: string, dir = this.workspaceOf()) {
     const git = (argv: string[]) => execFileSync('git', ['-c', 'user.name=Crewhouse', '-c', 'user.email=crewhouse@localhost', ...argv], { cwd: dir, stdio: 'pipe' }), at = (hash ?? git(['rev-parse', '--short', 'HEAD'])).toString().trim();
     let body: Buffer;
@@ -342,15 +340,13 @@ export class OpenClawRuntime implements AgentRuntime {
     } finally { this.kit.disallowOnce(); }
   }
 
-  /** The reviewed ClawHub starter set (starter-skills.json): what each one does, what it needs, and whether
-   *  the engine already holds it in the workspace. Listing only — installs go through the engine's own gate. */
+  /** The reviewed ClawHub starter set (starter-skills.json), with whether the engine already holds each; installs go through its own gate. */
   starterSkills() {
-    return (JSON.parse(readFileSync(join(appDir, 'src/openclaw/starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version), maturity: String(s.maturity),
+    return (JSON.parse(readFileSync(join(appDir, 'src/starter-skills.json'), 'utf8')).approved as any[]).map((s) => ({ slug: String(s.slug), name: String(s.name ?? s.slug), owner: String(s.owner), version: String(s.version), maturity: String(s.maturity),
       summary: String(s.summary), why: String(s.why), needs: (s.needs ?? []).map(String),
       on: existsSync(join(this.workspaceOf(), String(s.slug))) }));
   }
-  /** Switch one starter skill on or off the engine's own way: turning on installs it through the trust gate,
-   *  turning off disables it. Anything outside the reviewed set is refused in plain words. */
+  /** Switch one starter skill the engine's own way (install through the trust gate, or disable); anything outside the reviewed set is refused. */
   async setStarter(slug: string, on: boolean) {
     const found = this.starterSkills().find((s) => s.slug === slug);
     if (!found) throw new Error(`“${slug}” is not one of the reviewed starter skills, so the crew leaves it alone.`);
@@ -358,8 +354,7 @@ export class OpenClawRuntime implements AgentRuntime {
     if (on) await this.kit.call('skills.install', { agentId, source: 'clawhub', slug: `@${found.owner}/${found.slug}`, version: found.version }, { timeoutMs: 120_000 });
     else await this.kit.call('skills.update', { skillKey: found.slug, enabled: false }, { timeoutMs: 60_000 });
   }
-  /** Search the public skill and plugin catalogs the engine's own way; while the engine is still starting this answers
-   *  empty. A plugin is never one of the reviewed rows, so it only ever shows as not reviewed. */
+  /** Search the public skill and plugin catalogs the engine's own way (empty while it starts); a plugin only ever shows as not reviewed. */
   async searchSkills(query: string) {
     const [r, p] = await Promise.all([this.kit.call('skills.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined) as any, this.kit.call('plugins.search', { query, limit: 10 }, { timeoutMs: 30_000 }).catch(() => undefined)]), items = Array.isArray(r?.items) ? r.items : Array.isArray(r?.results) ? r.results : [], starter = this.starterSkills();
     // Reviewed means this publisher's skill: another owner's skill of the same name is not the one that was read.
@@ -367,10 +362,8 @@ export class OpenClawRuntime implements AgentRuntime {
       .map((i: any) => ({ ...i, reviewed: starter.some((s) => s.slug === i.slug && s.owner === i.owner), on: starter.some((s) => s.on && s.slug === i.slug && s.owner === i.owner) })),
     ...(p?.results ?? []).map((i) => ({ slug: i.package.name, name: i.package.displayName, kind: 'plugin', summary: i.package.summary ?? '', version: i.package.latestVersion ?? '', reviewed: false, on: false }))].filter((i: any) => i.slug);
   }
-  /** Forget one learned skill on every lane that holds it. A pending proposal is rejected in its own agent; a loaded
-   *  one is captured, then put away in its lane's skills/.archive (the engine skips dot folders and its watcher drops
-   *  it), so restoreLearned brings it back byte for byte and nothing is deleted. The engine has no single-skill
-   *  removal of an applied skill; this stands in until it does. */
+  /** Forget one learned skill on every lane that holds it: a pending proposal is rejected, a loaded one is captured then archived
+   *  (restoreLearned brings it back; nothing is deleted). The engine has no single-skill removal of an applied skill yet. */
   async forget(id: string, skill = '') {
     const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name));
     if (!copies.length) throw Object.assign(new Error(`"${skill || id}" is no longer a learned skill; nothing was forgotten`), { status: 404 });

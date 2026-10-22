@@ -45,7 +45,7 @@ const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : to
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
 // (attaching elsewhere, running page scripts, reading or setting cookies and storage, the session's own lifecycle).
 const BROWSER_LOOKS = new Set(['goto', 'snapshot', 'find', 'go-back', 'go-forward', 'reload', 'tab-list', 'tab-new', 'tab-select', 'tab-close', 'console', 'requests', 'request', 'request-headers', 'hover', 'mousemove', 'mousewheel', 'resize', 'dialog-dismiss', 'screenshot', 'pdf']), BROWSER_ACTS = new Set(['click', 'dblclick', 'fill', 'type', 'press', 'keydown', 'keyup', 'select', 'check', 'uncheck', 'drag', 'drop', 'upload', 'dialog-accept', 'mousedown', 'mouseup']);
-/** OpenClaw's `computer` on the bot's own screen: these look, these act (by the browser's asks on the visible page). */
+/** The engine's `computer` on the bot's own screen: these look, these act (by the browser's asks on the visible page). */
 export const COMPUTER_LOOKS = new Set(['screenshot', 'zoom', 'wait', 'get_cursor_position', 'mouse_move', 'scroll']), COMPUTER_HANDS = new Set(['left_click', 'double_click', 'triple_click', 'left_click_drag', 'left_mouse_down', 'left_mouse_up', 'type', 'key', 'hold_key']);
 /** Flags that would pick another browser, profile or session: crewd picks those, never the model. */
 const BROWSER_OWN = /^(-s|--(session|config|browser|profile|persistent|cdp|endpoint|extension|headed|device|mobile))(=|$)/, PAYMENT = /checkout|payment|billing|purchase|\/cart\b|\/pay\b|paypal\.|pay\.google/i;

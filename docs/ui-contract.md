@@ -149,7 +149,7 @@ On Add to your crew (`#/apps`), the Code section has one Herdr row. `GET /api/he
 One screen (`#/apps`; the old `#/skills` lands there) lists every reviewed row, apps (the connections above), starter skills and
 the Herdr plugin, in sections by purpose: Mail, calendar and files first, then Home, Code and Design, each with Add/Added, a
 "See all N" past four, a filter chip per section and an "N added" chip. Each row's section and its order come from crewd's
-reviewed list (`purposes` in `src/openclaw/starter-skills.json`); a row it does not place is not shown. Search filters the list
+reviewed list (`purposes` in `src/starter-skills.json`); a row it does not place is not shown. Search filters the list
 as you type and, on Search, asks the public skill and plugin catalogs. Nothing installs by itself: only reviewed skills switch
 on, through the engine's own install with the trust check; a catalog row outside the reviewed set says so and has no Add.
 

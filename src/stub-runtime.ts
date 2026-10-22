@@ -37,6 +37,7 @@ const GOLDEN: Record<string, string> = {
 /** Fast product-rule fixture. Security/engine acceptance runs the actual pinned Gateway on the HTTP stub (src/stub.ts).
  *  All state is per instance: tests run several crews side by side with the same session keys. */
 export class StubRuntime implements AgentRuntime {
+  readonly identity = { name: 'Stub', version: 'scripted' };
   private host?: ToolHost;
   private holds = new Map<string, (reply?: string) => void>();
   private cancelled = new Set<string>();

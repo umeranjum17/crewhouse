@@ -1,6 +1,6 @@
 // Composio's hosted tools: one sign-in through the engine's own MCP OAuth. The kit owns the browser hand-off, the callback
 // and the sealed tokens; this file only keeps the person's state and the words for it. The engine projects a connected
-// server's tools into runs as composio__<tool> (openclaw docs/cli/mcp.md: "<server>__<tool>"); the gate in crew.ts asks each call.
+// server's tools into runs as composio__<tool> (the engine's mcp docs: "<server>__<tool>"); the gate in crew.ts asks each call.
 import type { AgentRuntime } from './runtime.ts';
 import type { Store } from './db.ts';
 

@@ -25,7 +25,9 @@ export type RunEvent =
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output' | 'handoff'; until?: number; message: string }; // handoff messages are Crewhouse-authored, never raw engine diagnostics
 export type SignInStep = { url?: string; code?: string; waiting: boolean; done?: boolean; notIncluded?: boolean; error?: string; cliLogin?: { signIn: boolean }; workspaces?: { id: string; name: string }[] };
+export interface StarterSkill { slug: string; name: string; owner: string; version: string; maturity: string; summary: string; why: string; needs: string[]; on: boolean }
 export interface AgentRuntime {
+  readonly identity: { name: string; version: string };
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
   signInRecovery?(): string;
@@ -42,6 +44,11 @@ export interface AgentRuntime {
   forget(id: string, skill?: string): Promise<void>;
   /** The "Learn from how I work" switch: the engine's learning mode, auto or off. Optional: the stub may ignore it. */
   setLearning?(on: boolean): Promise<void>;
+  /** Learned-skills safety (a capture that cannot be verified throws; a restore is byte for byte), the engine's native skills, and the legacy sign-in staging. */
+  captureLearned?(dir?: string, why?: string): string; restoreLearned?(name: string, hash?: string, dir?: string): string;
+  starterSkills?(): StarterSkill[]; setStarter?(slug: string, on: boolean): Promise<unknown>; searchSkills?(query: string): Promise<unknown[]>;
+  runCollectionReview?(): Promise<{ capture: string; kept: string[]; written: string[]; dropped: string[] }>;
+  migrate?(path: string): Promise<boolean>; confirm?(path: string): Promise<boolean>;
   /** Hands on the bot's own screen through the engine's `computer` tool; resolves to the node name its calls must use. */
   computer?(bot: string, screen: { DISPLAY: string; XAUTHORITY: string }): Promise<string>;
   /** Whether this engine has only keyword memory search available. */

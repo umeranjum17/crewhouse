@@ -3,9 +3,9 @@ import { loadConfig } from './config.ts';
 import { toolStatus } from './tools.ts';
 import { browserBin, missing, probeEngine } from './desktop.ts';
 import { sandboxReady } from './engine.ts';
-import { ENGINE_VERSION } from './openclaw/runtime.ts';
+import { pickRuntime } from './engines.ts';
 
-const cfg = loadConfig();
+const cfg = loadConfig(), { name, version } = pickRuntime(cfg).identity;
 let problems = 0;
 const line = (ok: boolean | null, what: string, detail = '') => {
   if (ok === false) problems++;
@@ -14,7 +14,7 @@ const line = (ok: boolean | null, what: string, detail = '') => {
 
 const [maj, min, patch] = process.versions.node.split('.').map(Number);
 line(maj > 22 || (maj === 22 && (min > 22 || (min === 22 && patch >= 3))), `Node ${process.versions.node}`, 'needs 22.22.3 or later');
-line(true, `Engine: OpenClaw ${ENGINE_VERSION}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/openclaw; your own OpenClaw and ~/.openclaw are never used`);
+line(true, `Engine: ${name} ${version}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/${name.toLowerCase()}; your own ${name} and ~/.${name.toLowerCase()} are never used`);
 line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
 console.log('AI accounts: sign in from the app, under Settings, AI accounts.');
