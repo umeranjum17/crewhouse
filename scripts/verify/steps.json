@@ -404,5 +404,14 @@
       "Send it, and wait while Chief hands the job to Video Vic"
     ],
     "result": "Chief's chat shows the photo above the words sent with it, then Video Vic's finished picture of the lamp; the photo is kept on the computer under crewd's own name and Chief's model was given it"
+  },
+  "home-list-preview": {
+    "start": "a fresh stub-engine crewd, onboarded as Umer",
+    "steps": [
+      "Chief's last line in his thread is a list answer, two dash items",
+      "Home opens at 390 and 1280, day and night",
+      "A web search that cannot run ends on Chief's trail as one plain line"
+    ],
+    "result": "Home's Chief card shows his last answer as plain sentences with no dash marker in front of the list items"
   }
 }

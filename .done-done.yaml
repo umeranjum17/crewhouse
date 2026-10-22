@@ -70,6 +70,8 @@ journeys:
     command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" --out "$DONE_DONE_EVIDENCE_ROOT" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
   key-sheet:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/key-sheet.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  home-list-preview:
+    command: 'timeout -k 10 600 bash scripts/verify/home-list-preview.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh "$DONE_DONE_EVIDENCE_ROOT"'
   answer-check:

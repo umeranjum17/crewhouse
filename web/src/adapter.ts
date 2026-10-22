@@ -448,7 +448,7 @@ export function plain(text = '') {
     .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
-export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
+export const teaser = (text: string) => plain(text.replace(/(^|\n)[ \t]*(?:[-*•]|\d+[.)])[ \t]+/g, '$1')).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
@@ -783,7 +783,7 @@ export function preview(last: Json | null | undefined, status = '') {
   const text = bare ? (u && !n ? (u === 1 ? 'File' : `${u} files`) : n ? (n === 1 ? 'Photo' : `${n} photos`) : said) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
-  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
+  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text).replace(/\s+/g, ' ');
 }
 /** A hero line is a real sentence: bare fragments ("4."), list markers and empty lines never reach it. */
 const realSentence = (text: string): string => String(text ?? '').split(/(?<=[.!?…])\s+/)

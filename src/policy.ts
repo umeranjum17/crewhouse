@@ -247,7 +247,7 @@ export function toolWords(tool: string, input: Record<string, any>, ok = true): 
       const action = PROGRAMS[String(input.command ?? '').trim().split(/\s+/)[0]] ?? 'work in its own space', done = past(action);
       return ok ? done[0].toUpperCase() + done.slice(1) : `Couldn't ${action}`;
     }
-    case 'web_search': return `Searched the web for “${String(input.query ?? '').slice(0, 80)}”`;
+    case 'web_search': return `Tried a web search for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return ({ search: `Searched the email for “${String(input.args?.[1] ?? '').slice(0, 60)}”`, read: 'Read an email', attachments: Number(input.args?.[2]) ? 'Saved an attachment from an email' : 'Looked at an email’s attachments', draft: 'Drafted a reply to an email', label: 'Filed an email under a label' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the email';

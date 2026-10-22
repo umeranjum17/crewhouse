@@ -830,6 +830,15 @@ test('raw /files/ only opens delivered files, and only for the person', async ()
     assert.ok(!(await res.text()).includes('raw take'), `${sneak} leaks nothing`);
   }
 });
+// ch-chief-quiet-profile: a search the engine could not run is not reported as a search.
+test('a failed web search says so on the trail', async () => {
+  await ready();
+  const t = (await say('chief', `look it up ${call('web_search', { query: 'node lts' })}`)).body.task;
+  await done('chief', t);
+  const steps = (await api('GET', '/api/bots/chief')).body.trail.filter((e: any) => e.kind === 'run.tool' && e.data?.task === t).map((e: any) => e.data.words);
+  assert.ok(!steps.some((w: string) => /^Searched the web/.test(w)), `no claim of a search that failed: ${steps}`);
+  assert.ok(steps.includes('The web search did not go through'), `the failure is on the trail: ${steps}`);
+});
 // ch-ux-memory-one-section: Chief remembering with crew_profile records the facts it added on the trail, so the
 // chat can announce them once as "Saved: …" with an Undo, and the next job reads the saved record.
 test('chief remembers with crew_profile: the save lands on the trail and in the record', async () => {

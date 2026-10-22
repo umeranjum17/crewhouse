@@ -89,7 +89,7 @@ export class StubRuntime implements AgentRuntime {
       const gate = await this.host.gate(spec, name, input);
       if (!gate.allow) { result = gate.reason; continue; }
       result = await this.host.call(spec, name, input, new AbortController().signal);
-      on({ type: 'tool', name, phase: 'end' });
+      on({ type: 'tool', name, phase: 'end', error: result.startsWith('error:') });
       this.transcripts.set(spec.key, `${this.transcript(spec.key)}${name}: ${result}\n`);
     }
     if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
