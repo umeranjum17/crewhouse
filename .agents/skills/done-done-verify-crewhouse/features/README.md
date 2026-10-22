@@ -14,3 +14,4 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [Pair the PWA and get a real Chief reply](pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — pair the app to the computer, say hello, Chief really answers (the `core` and `upgrade` journeys)
 - [A pinned tool that failed](a-pinned-tool-that-failed.md): A helper's pinned kit tool fails; the step says the work did not happen and names the newer copy an update brings in
 - [A hand-off that fails: Chief's lane is reset](handoff-lane-reset.md): A helper's own job fails; Chief's job settles at once in plain words and his lane is let go
+- [Voice with Chief](voice.md): Tap the mic in Chief's box and speak, the words wait in the box; tap Talk, Chief's reply is read aloud with its line marked

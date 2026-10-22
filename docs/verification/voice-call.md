@@ -24,5 +24,5 @@ never listening while it reads. Voice and speed sit under Voice, kept per device
 - Linux Chromium has device voices only with `--enable-speech-dispatcher`, so Talk is usually hidden there. Its
   on-device recognizer could not hear (151: `start()` gives `audio-capture`; with a track SODA logs "No voiced
   samples"), and its voice may report a sentence's end only once another is queued; `speak()` moves on after a
-  deadline so the call doesn't hang. iPad Safari has no on-device recognizer, so no Talk (by design).
+  deadline so the call doesn't hang. Safari (every iPad and iPhone browser) has no availability check, so it listens as the online recognizer, with its line.
 - A live-model call belongs to the release readiness check; the stub's golden replies cover the loop.

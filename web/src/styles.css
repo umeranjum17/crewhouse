@@ -1708,6 +1708,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .home-chat .chat .line.me { display: flex; flex-direction: column; align-items: flex-end; max-width: none; align-self: stretch; }
 .home-chat .chat .line:is(.them, .chief, .me) > .bubble-text { width: fit-content; max-width: 100%; padding: 12px 15px; border: 1px solid var(--line); border-radius: 20px 20px 20px 6px; background: var(--solid); color: var(--ink); font: 400 16px/1.4 Archivo, var(--ui); }
 .home-chat .chat .line.me > .bubble-text { max-width: 82%; border-color: transparent; border-radius: 20px 20px 6px 20px; background: var(--ink); color: var(--bg); }
+.home-chat .chat .line.reading > .bubble-text { border-left: 2px solid var(--ok); } /* the line a call reads aloud (.line.reading above, under the bubble's own border) */
 .home-chat .chat .hand-off .hand { gap: 12px; margin: 0; padding: 6px 18px 6px 6px; border: 0; background: var(--soft); font: 700 18px/1.2 Archivo, var(--ui); font-stretch: 108%; }
 .home-chat .chat .hand b { font-weight: inherit; }
 .home-chat .chat .hand .hand-word { font-size: 16px; font-weight: 600; }
