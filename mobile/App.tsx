@@ -1019,6 +1019,7 @@ function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () =
   const [err, setErr] = useState(why);
   const [models, setModels] = useState<PhoneModel[] | null>(null);
   const [chosen, setChosen] = useState<PhoneModel | null>(null);
+  const [find, setFind] = useState('');
   const name = account.name;
   const connect = async () => {
     if (!key.trim() || busy) return;
@@ -1037,11 +1038,13 @@ function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () =
       <ChiefArt mood="hello" size={104} whole />
       <T style={s.display}>Which model should Chief use?</T>
       <T tone="ink2" style={s.centerText}>Your {name} key is saved on this phone. Pick the model Chief thinks with.</T>
+      {models.length > 6 && <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={find} onChangeText={setFind}
+        placeholder={`Search ${models.length} models`} placeholderTextColor={t.mute} accessibilityLabel="Search models" autoCapitalize="none" autoCorrect={false} />}
       <View style={{ alignSelf: 'stretch', gap: 8 }} accessibilityRole="radiogroup">
-        {models.map((m) => { const on = m === chosen;
+        {models.filter((m) => m.name.toLowerCase().includes(find.trim().toLowerCase())).map((m) => { const on = m === chosen;
           return <Pressable key={m.id} onPress={() => { setChosen(m); setErr(''); }} disabled={busy} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={m.name}
             style={[s.row, { gap: 12, padding: 12, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? t.ink : t.line }]}>
-            <View style={{ flex: 1, gap: 2 }}><T style={s.b}>{m.name}</T><T tone="ink2" style={s.small}>{m.hint}</T></View><T tone={on ? 'ink' : 'mute'}>{on ? '●' : '○'}</T>
+            <View style={{ flex: 1, gap: 2 }}><T style={s.b}>{m.name}</T>{m.recommended && <T tone="ink2" style={s.small}>Recommended</T>}</View><T tone={on ? 'ink' : 'mute'}>{on ? '●' : '○'}</T>
           </Pressable>; })}
       </View>
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}

@@ -65,24 +65,20 @@ test('a key the provider is rate limiting says to wait a minute, then send again
 
 test('a MiniMax key runs Chief on the MiniMax model the person picked, its refusals name MiniMax, and Sign out leaves no key', async () => {
   await phoneConnect(PHONE_KEYS[1], 'sk-mm-test-key');
-  // MiniMax's live list, newest first, read with the saved key; the kit's tiers mark the recommended and strongest.
+  // MiniMax's live list for the key, as MiniMax answered it on 2026-10-22: the picker shows every one of them, unfiltered
+  // and undescribed, with one Recommended tag on the kit's fast model, which goes first.
+  const live = ['MiniMax-M3.1-Flash', 'MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5',
+    'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed', 'MiniMax-M2'];
   let asked: { url: string; key: string | null } | undefined;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     asked = { url: String(url), key: new Headers(init?.headers).get('x-api-key') };
-    return Response.json({ data: [
-      { id: 'MiniMax-M3.1-Flash', display_name: 'MiniMax-M3.1-Flash', created_at: '2026-09-16T10:55:18Z' },
-      { id: 'MiniMax-M3', display_name: 'MiniMax-M3', created_at: '2026-06-01T00:00:00Z' },
-      { id: 'MiniMax-M2.7-highspeed', display_name: 'MiniMax-M2.7-Highspeed', created_at: '2026-03-18T02:00:00Z' },
-      { id: 'MiniMax-M2.7', display_name: 'MiniMax-M2.7', created_at: '2026-03-18T02:00:00Z' }] });
+    return Response.json({ data: live.map((id) => ({ id, display_name: id })) });
   }) as typeof fetch;
   const models = await phoneModels();
   assert.deepEqual(asked, { url: 'https://api.minimax.io/anthropic/v1/models', key: 'sk-mm-test-key' });
-  assert.deepEqual(models.map((m) => [m.name, m.hint, m.recommended]), [
-    ['MiniMax M3.1 Flash', 'Fast and cheap, recommended', true],
-    ['MiniMax M3', 'The strongest, for harder jobs', false],
-    ['MiniMax M2.7 Highspeed', 'A quicker version, out since March 2026', false],
-    ['MiniMax M2.7', 'Out since March 2026', false]]);
-  // A list MiniMax will not give falls back to the kit's catalogue.
+  assert.deepEqual(models.map((m) => m.id), live, 'every model MiniMax lists, in its order, none dropped');
+  assert.deepEqual(models.filter((m) => m.recommended).map((m) => m.name), ['MiniMax M3.1 Flash']);
+  // A list MiniMax will not give falls back to the kit's catalogue, also unfiltered.
   globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
   assert.deepEqual((await phoneModels()).map((m) => [m.name, m.recommended]), [['MiniMax M3.1 Flash Preview', true], ['MiniMax M3', false]]);
   await phonePick(models[1].id);
