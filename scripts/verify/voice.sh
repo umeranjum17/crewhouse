@@ -45,7 +45,7 @@ const LOOKS = [["light", 390, 844], ["dark", 390, 844], ["light", 1440, 900], ["
 const DAY = { light: "day", dark: "night" };
 // Chief`s thread at its newest line, and the box in view.
 const BOTTOM = "(() => { const l = document.querySelector(\".lines\"); if (l) l.scrollTop = l.scrollHeight; window.scrollTo(0, document.body.scrollHeight); return matchMedia(\"(display-mode: standalone)\").matches; })()";
-const shots = (slug) => LOOKS.map(([scheme, w, h]) => ({ name: `${slug}-${DAY[scheme]}-${w}`, scheme, w, h, dpr: w < 500 ? 2 : 1, mobile: w < 500, eval: BOTTOM, out: `${OUT}/pwa/${slug}-${DAY[scheme]}-${w}.png` }));
+const shots = (slug) => LOOKS.map(([scheme, w, h]) => ({ name: `${slug}-${DAY[scheme]}-${w}`, scheme, w, h, dpr: 2, mobile: w < 500, eval: BOTTOM, out: `${OUT}/pwa/${slug}-${DAY[scheme]}-${w}.png` }));
 const box = "document.querySelector(\".chat .dock textarea\")";
 const steps = [
   { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000 },
