@@ -24,7 +24,7 @@ const bin = browserBin();
 
 // The device's recognizers: its own (`device`) and the browser's online one (`online`); either may be missing. Each turn
 // lands in window.turns; "ECHO" would mean the mic opened while Chief was being read.
-const DEVICE = (has: { device: boolean; online: boolean }) => `(() => {
+const DEVICE = (has: { device: boolean; online: boolean; safari?: boolean }) => `(() => {
   const turns = window.turns = []; let speaking = false, heard = 0;
   localStorage.setItem('crewhouse.voice', JSON.stringify({ rate: 1.25 }));
   window.SpeechRecognition = class {
@@ -33,6 +33,7 @@ const DEVICE = (has: { device: boolean; online: boolean }) => `(() => {
     start() { turns.push(this.processLocally ? 'listen' : 'listen online'); if (speaking) turns.push('ECHO'); if (++heard === 1) setTimeout(() => { this.onresult({ results: [[{ transcript: 'hi' }]] }); this.onend(); }, 100); if (heard > 2) setTimeout(() => { this.onerror({ error: 'audio-capture' }); this.onend(); }, 50); }
     stop() { setTimeout(() => this.onend(), 0); }
   };
+  if (${!!has.safari}) { delete window.SpeechRecognition.available; delete window.SpeechRecognition.install; } // Safari's has no check
   const voices = [{ name: 'Online', lang: 'en-US', localService: false }, { name: 'Here', lang: 'en-GB', localService: true }];
   window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   Object.defineProperty(window, 'speechSynthesis', { value: {
@@ -175,4 +176,13 @@ test('with neither recognizer, the mic says why and Talk is not offered', { skip
   assert.equal(await run("!document.querySelector('.send.talk')"), true, 'no Talk without a recognizer');
   await run("document.querySelector('.mic.off').click()");
   await until('the reason in a toast', () => run(`document.querySelector('.toast')?.textContent === ${JSON.stringify(VOICE_WORDS.none)}`), 10_000);
+});
+
+test('a recognizer that cannot say where it hears (Safari, every iPad and iPhone browser) hears as the online one', { skip: !bin && 'no Chromium here' }, async () => {
+  const { run, turns } = await boot(DEVICE({ device: false, online: false, safari: true }));
+  await until('the mic and Talk', () => run("!!document.querySelector('.chat .dock .mic:not(.off)') && !!document.querySelector('.send.talk')"), 30_000);
+  await run("document.querySelector('.chat .dock .mic').click()");
+  await until('the online line before the mic listens', () => run(`[...document.querySelectorAll('.toast')].some((t) => t.textContent === ${JSON.stringify(VOICE_WORDS.online)})`), 10_000);
+  await until('the words heard in the box, not sent', () => run("document.querySelector('.chat .dock textarea').value === 'hi' && !document.querySelector('.mic.on')"), 10_000);
+  assert.deepEqual(await turns(), ['listen online']);
 });

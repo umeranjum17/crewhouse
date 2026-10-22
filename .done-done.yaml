@@ -41,6 +41,8 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/slides-deck.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   video-job:
     command: 'timeout -k 10 900 bash scripts/verify/video-job.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
+  voice:
+    command: 'timeout -k 10 600 bash scripts/verify/voice.sh "$DONE_DONE_EVIDENCE_ROOT"'
   unlock-card:
     command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
   event-routines:

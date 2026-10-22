@@ -11,9 +11,11 @@ const want = (local: boolean) => ({ langs: [lang()], processLocally: local });
 export type Ears = 'device' | 'online' | 'none';
 
 /** Whether the browser can recognize speech this way, perhaps after fetching its voice pack once. An error from the
- *  check (the browser doesn't know this option) counts as no. */
+ *  check (the browser doesn't know this option) counts as no. A recognizer with no check at all (Safari, so every
+ *  iPad and iPhone browser) can't say where it hears, so it counts as the online one. */
 async function offers(local: boolean): Promise<boolean> {
-  try { return !!Heard?.available && (await Heard.available(want(local))) !== 'unavailable'; } catch { return false; }
+  if (Heard && !Heard.available) return !local;
+  try { return !!Heard && (await Heard.available(want(local))) !== 'unavailable'; } catch { return false; }
 }
 
 /** The recognizer this browser should listen with: on this device first, else the online one, else none. */

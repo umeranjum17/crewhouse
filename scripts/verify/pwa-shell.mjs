@@ -3,7 +3,8 @@
 // With --out, the run leaves the step record done-done reads beside its captures; a plan's own "record"
 // ({start, steps, result}) is the record then, and the repo's own one for this script is the fallback.
 // plan: { profile, home, headless?, args?, xkey?, recorder?, steps: [{ name, w, h, dpr, mobile, ua, platform, touch,
-//   insets, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant, deny }] }
+//   insets, scheme, inject, run, url, reload, offline, settle, click, key, xshot, win, wshot, attachApp, record, seconds, recwait, errors, eval, wait, timeout, out, grant, deny }] }
+// `scheme` sets the device's light or dark (the app's Auto look follows it live, no reload).
 // `grant` allows the listed permissions for the page's origin; `deny: true` blocks its notifications, as a person's "Block" does.
 // `win: [w, h]` sizes the real window (and drops any viewport override); `wshot` saves just that window off the X screen.
 // `run` is a shell command (the computer's side, e.g. `./crewhouse phones approve …`); its trimmed stdout replaces
@@ -44,6 +45,7 @@ const evalJs = async (expr) => (await send('Runtime.evaluate', { expression: exp
 for (const st of plan.steps) {
   try {
     if (st.win) { const { windowId } = await send('Browser.getWindowForTarget', { targetId: target.targetId }); await send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal', width: st.win[0], height: st.win[1] } }); await send('Emulation.clearDeviceMetricsOverride', {}, s); await sleep(800); }
+    if (st.scheme) await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: st.scheme }] }, s);
     if (st.w) await send('Emulation.setDeviceMetricsOverride', { width: st.w, height: st.h, deviceScaleFactor: st.dpr ?? 1, mobile: !!st.mobile }, s);
     if (st.inject) await send('Page.addScriptToEvaluateOnNewDocument', { source: st.inject }, s);
     if (st.grant) { const o = new URL(await evalJs('location.origin')); await send('Browser.grantPermissions', { origin: o.origin, permissions: st.grant }); out.push({ granted: st.grant, origin: o.origin }); }
