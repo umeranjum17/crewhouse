@@ -124,6 +124,9 @@ const root = join(import.meta.dirname, '..');
 const screenFiles = readdirSync(join(root, 'web', 'src')).filter((f) => /\.tsx?$/.test(f) && !['adapter.ts', 'demo.ts'].includes(f))
   .map((f) => join(root, 'web', 'src', f)).concat(join(root, 'mobile', 'App.tsx'));
 
+test('a list in a chat preview reads as sentences, with no dash marker', () => {
+  assert.equal(A.preview({ author: 'bot', text: 'Node.js LTS is v24 (patched 20 October 2026).\n- Active LTS: v24.22.1\n- Maintenance: v22.23.4' }), 'Node.js LTS is v24 (patched 20 October 2026). Active LTS: v24.22.1 Maintenance: v22.23.4');
+});
 test('every string the app shows keeps to the plain-words rule', () => {
   const now = Date.now();
   const bot = (id: string, extra: object = {}) => ({ id, display: id[0].toUpperCase() + id.slice(1), role: 'Keeps your invoices in order', template: id, runtime: 'claude', model: 'sonnet',

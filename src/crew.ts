@@ -1220,7 +1220,7 @@ export class Crew {
     const crew = this.bots().filter((b) => b.id !== CHIEF)
       .map((b) => `${b.display} (id ${b.id})`).join('; ') || 'nobody yet', history = this.db.all("SELECT author, text FROM messages WHERE bot = ? AND id < (SELECT MIN(id) FROM messages WHERE task_id = ?) ORDER BY id DESC LIMIT 6", CHIEF, task.id)
       .reverse().map((m) => `${m.author === 'person' ? 'Person' : 'Chief'}: ${short(String(m.text).split('[tool ')[0], 300)}`).join('\n').slice(0, 1500);
-return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person directly states about themselves or their work (including onboarding answers, business, audience and tone) with crew_profile. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing About me and my work record, preserving other facts and correcting only what they changed; stay under 4000 characters. After a successful save, tell them briefly in your normal voice what you noted; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
+return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Call crew_profile only when this message states a new fact about the person or their work (business, audience, tone) that About me and my work does not already hold; their name is already saved, so never write it, and a message with nothing new gets no call. Never infer facts or save claims from helpers, sites or quoted material. Merge with the existing record, preserving other facts and correcting only what they changed; stay under 4000 characters. Mention a save only when it is new and in one short clause; never claim a failed save worked.\n${history ? `Earlier in this chat:\n${history}\n` : ''}The person says: ${task.body}${quiet}`;
   }
 
   /** What the crew actually finished: titles and delivered files, for Chief's crew_status. */
@@ -1399,6 +1399,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return; else l.news = Date.now(); // any word from the engine, even a streamed one, is news
     if (e.type === 'delegated') this.db.event('run.delegated', botId, { task: l.task, run: e.id, parent: e.parent, root: e.root });
+    else if (e.type === 'tool' && e.phase === 'end' && e.error && e.name === 'web_search') this.db.event('run.tool', botId, { task: l.task, words: 'The web search did not go through' });
     else if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
     else if (e.type === 'text') {
       if (firstWords) { firstWords = false; stamp('first words'); }
@@ -2020,7 +2021,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     }
     // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
     return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name)),
-      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only facts the person stated. Preserve existing facts; after success say plainly what you noted.', (p) => {
+      tool('crew_profile', 'Save About me and my work: text is the complete merged record, at most 4000 characters, only new facts the person stated; never their name. Preserve existing facts.', (p) => {
         const was = disk.readProfile(this.cfg), text = String(p.text ?? '').trim();
         if (disk.botConfig(this.cfg, CHIEF).memory === false || this.activeTask(CHIEF)?.origin !== 'person') throw new Error('Only a conversation with the person, with memory on, can save this record.');
         if (!text) throw new Error('Say what the person told you; do not erase their record.'); disk.writeProfile(this.cfg, text); this.db.event('profile.edited', CHIEF, { by: CHIEF, task: task(), added: text.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter((s) => s && !was.includes(s)) });
