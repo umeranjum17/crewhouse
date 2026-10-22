@@ -362,15 +362,17 @@
     "result": "Byte's chat holds the note the inspector wrote for the binary, at 390 and 1440, day and night"
   },
   "voice": {
-    "start": "a fresh crew on the stub engine, in the installed app, on a device whose ears and voices are a script: words go in as text and what is read aloud comes out as text",
+    "start": "a fresh crew on the stub engine, the app installed from Settings, on a device whose ears and voices are a script: what the person says goes in as text and what is read aloud comes out as text",
     "steps": [
-      "Open Chief's chat in the installed app",
-      "Tap the mic in Chief's box and say: hi",
-      "Read the words in the box, then tap send",
-      "Tap Talk, say: i want to market my app, and listen to Chief's answer",
-      "Open Voice to see the voice and speed, then tap Stop",
-      "On a recognizer shaped like Safari's, tap the mic and speak"
+      "Open Chief's chat in the installed app at phone width (390) and desktop width (1440), day and night",
+      "Tap the mic in Chief's box: the empty box says Listening and the mic is a stop button",
+      "Say hi: the words heard sit in the box, unsent, and no new message is in the thread until the person taps send",
+      "Tap send; Chief's reply comes into the thread",
+      "With the box empty tap Talk: the call says Listening; say i want to market my app",
+      "Chief's reply is read aloud a sentence at a time: the call says Chief is speaking with the sentence, and the reply's line in the thread is marked green",
+      "Open Voice for the device's voice and speed, then tap Stop: Call ended",
+      "On a recognizer shaped like Safari's (iPad and iPhone), tap the mic: the online line shows first, and what was said lands in the box"
     ],
-    "result": "The mic listens, what was said waits in the box until send, Talk sends what was said once and reads Chief's reply aloud a sentence at a time with that sentence marked, then listens again until Stop, at 390 and 1440, day and night; Safari's recognizer hears with the online line shown"
+    "result": "At phone and desktop width, day and night: the mic listens with Listening in the box, the words heard wait unsent in the box with no message in the thread until send, Talk sends what was said once and reads Chief's reply aloud with its line marked green, then Stop ends the call; a Safari-shaped recognizer hears with the online line"
   }
 }

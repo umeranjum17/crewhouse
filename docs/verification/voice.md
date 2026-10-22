@@ -4,8 +4,9 @@ What a person can do by voice in Chief's chat, in the web app and the installed 
 
 - **Voice in (the mic).** Tap the mic in Chief's box and speak; while it listens the mic is a stop button and the empty
   box says "Listening…". What was heard lands in the box after what is already there, and nothing is sent until the
-  person taps send. On a device with its own recognizer the words are heard there; otherwise the browser's online one hears, and the app says so first
-  (`VOICE_WORDS.online`). Safari, so every iPad and iPhone browser, can't say where it hears, so it counts as online.
+  person taps send. On a device with its own recognizer the words are heard there; otherwise the browser's online one
+  hears, and the app says so first (`VOICE_WORDS.online`). Safari, so every iPad and iPhone browser, can't say where it
+  hears, so it counts as online.
 - **Voice out (Talk).** With the box empty, Talk (the waveform) starts a call: Listening, then what was said is sent once
   the person stops, Chief's reply is read aloud a sentence at a time with that line marked green in the thread, then
   Listening again (never while reading). Voice holds the device's own voices and the speed. Stop ends it ("Call ended.").
