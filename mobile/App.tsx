@@ -40,7 +40,7 @@ import { glowOf } from '../web/src/office.tsx';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine } from './src/phone-only';
+import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
 import { checkKey, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
 import type { MachineRef, SetupStep } from '@byokit/cloud';
@@ -1010,14 +1010,15 @@ function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: 
 }
 
 /** Connect the person's own account with an API key: pick OpenRouter or MiniMax, one paste, agreed per use, nothing
- *  else leaves the phone. A MiniMax key then picks its model from the kit's list, as the computer's key sheet does. */
+ *  else leaves the phone. A MiniMax key then picks its model from MiniMax's own list (the kit's when that cannot be read), as the computer's key sheet does. */
 function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () => void; why: string }) {
   const t = useLook();
   const [account, setAccount] = useState<PhoneKey>(PHONE_KEYS[0]);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(why);
-  const [models, setModels] = useState<{ id: string; name: string }[] | null>(null);
+  const [models, setModels] = useState<PhoneModel[] | null>(null);
+  const [chosen, setChosen] = useState<PhoneModel | null>(null);
   const name = account.name;
   const connect = async () => {
     if (!key.trim() || busy) return;
@@ -1029,14 +1030,24 @@ function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () =
     } catch (e) { setErr(phoneSignInWords(e)); setBusy(false); }
   };
   const pick = (id: string) => { setBusy(true); void phonePick(id).then(onDone, () => { setErr('That model could not be kept. Try again.'); setBusy(false); }); };
+  // The default is the recommended model (MiniMax's fast one), named on its button.
+  const fallback = models?.find((m) => m.recommended) ?? models?.[0];
   if (models) return (
     <ScrollView contentContainerStyle={s.centerScroll}>
       <ChiefArt mood="hello" size={104} whole />
       <T style={s.display}>Which model should Chief use?</T>
       <T tone="ink2" style={s.centerText}>Your {name} key is saved on this phone. Pick the model Chief thinks with.</T>
-      <View style={{ alignSelf: 'stretch', gap: 8 }}>{models.map((m) => <Btn key={m.id} soft tall label={m.name} disabled={busy} onPress={() => pick(m.id)} />)}</View>
+      <View style={{ alignSelf: 'stretch', gap: 8 }} accessibilityRole="radiogroup">
+        {models.map((m) => { const on = m === chosen;
+          return <Pressable key={m.id} onPress={() => { setChosen(m); setErr(''); }} disabled={busy} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={m.name}
+            style={[s.row, { gap: 12, padding: 12, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? t.ink : t.line }]}>
+            <View style={{ flex: 1, gap: 2 }}><T style={s.b}>{m.name}</T><T tone="ink2" style={s.small}>{m.hint}</T></View><T tone={on ? 'ink' : 'mute'}>{on ? '●' : '○'}</T>
+          </Pressable>; })}
+      </View>
       {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
-      <Btn ghost label="Use the default for now" disabled={busy} onPress={onDone} />
+      {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} />
+        : <Btn go big label={chosen ? `Use ${chosen.name}` : 'Pick a model'} disabled={!chosen} onPress={() => pick(chosen!.id)} />}
+      {!!fallback && <Btn ghost label={`Use the default for now: ${fallback.name}`} disabled={busy} onPress={() => pick(fallback.id)} />}
     </ScrollView>
   );
   return (

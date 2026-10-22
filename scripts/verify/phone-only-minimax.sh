@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Chief on this phone with a MiniMax key: on the release APK, Use this phone only, pick MiniMax beside OpenRouter, paste a
-# lab key, pick the model from the kit's list, and Chief's chat names it. Sign out then leaves no key. Each state is
+# lab key, pick the model (MiniMax's own list, which refuses a lab key, so the kit's catalogue), confirm it, and Chief's chat
+# names it. Sign out then leaves no key. Each state is
 # captured at 390 wide, day and night. No provider call: saving a key and picking a model never reach MiniMax, and
 # nothing is sent (docs/verification/phone-only-minimax.md).
 #
 #   SERIAL=emulator-5580 [PHONE_OTHER=<dir>] bash scripts/verify/phone-only-minimax.sh <out-dir> <release APK>
 #
 # A judged run reads every capture in <out-dir> against one claim, so <out-dir> holds the one claimed state (and the step
-# record): PHONE_CLAIM names it (choice, model or chat; default model, the pick after the MiniMax key is saved). Every
+# record): PHONE_CLAIM names it (choice, model, picked or chat; default picked, MiniMax M3 selected before it is confirmed). Every
 # other state goes to PHONE_OTHER when it is set, else beside it. The emulator is the caller's (started and stopped by them).
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> phone-only-minimax.sh <out-dir> <apk>" >&2; exit 2; }
-OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${PHONE_OTHER:-$OUT} CLAIM=${PHONE_CLAIM:-model}
+OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${PHONE_OTHER:-$OUT} CLAIM=${PHONE_CLAIM:-picked}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PKG=dev.crewhouse.app KEY=lab-minimax-key-0000
 mkdir -p "$OUT" "$OTHER"
@@ -52,14 +53,21 @@ for part in $(echo "$KEY" | fold -w 3); do adb shell input text "$part"; sleep 0
 hide_keys
 shot choice 'Billed per use by MiniMax'
 
-# 2. Connect saves the key on the phone and offers the kit's MiniMax models.
+# 2. Connect saves the key on the phone and offers MiniMax's models, each with a hint, the recommended one first and the
+# default named; nothing is picked yet.
 ui tap '^Connect$'
 see 'Which model should Chief use'
-see '(\] |\{)MiniMax M3\}?$'
-shot model 'MiniMax M3.1 Flash'
+see 'Fast and cheap, recommended'
+see 'The strongest, for harder jobs'
+see 'Use the default for now: MiniMax M3.1 Flash'
+shot model 'Pick a model'
 
-# 3. The pick is kept: Chief's chat opens and its header names the model.
+# 3. Tapping MiniMax M3 selects it (the row is marked and the button names it); confirming keeps it: Chief's chat opens and
+# its header names the model.
 ui tap '^MiniMax M3$'
+see '^.*Use MiniMax M3$'
+shot picked 'Use MiniMax M3'
+ui tap '^Use MiniMax M3$'
 see 'Ask Chief anything' 30
 see '\] MiniMax M3$'
 shot chat 'Ask Chief anything'

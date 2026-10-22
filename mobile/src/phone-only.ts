@@ -75,10 +75,34 @@ export async function phoneConnect(account: PhoneKey, key: string) {
   await phoneAccounts.setDefaults(MEMBER, { account: account.route });
   current = account; picked = undefined;
 }
-/** The models the kit lists for the saved key, in words; OpenRouter's stays the pinned DeepSeek, so it has none. */
-export async function phoneModels(): Promise<{ id: string; name: string }[]> {
+export type PhoneModel = { id: string; name: string; hint: string; recommended: boolean };
+/** MiniMax's own live list for the saved key (its Anthropic-shaped `/v1/models`, the base Chief already calls), newest
+ *  first. The key goes only to MiniMax, through the kit's host-side hand-off, and is never kept or logged here. */
+async function liveModels(): Promise<{ id: string; name?: string; at?: string }[]> {
+  const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 8_000);
+  try {
+    const res = await fetch(`${minimaxModel().baseUrl}/v1/models`, { signal: stop.signal,
+      headers: { 'x-api-key': await phoneAccounts.key(MEMBER, current.route), 'anthropic-version': '2023-06-01' } });
+    const { data } = await res.json() as { data?: { id: string; display_name?: string; created_at?: string }[] };
+    if (!res.ok || !data?.length) throw new Error('no list');
+    return data.map((m) => ({ id: m.id, name: m.display_name, at: m.created_at }));
+  } finally { clearTimeout(timer); }
+}
+/** The models the saved key can use, in words, the recommended one first: MiniMax's live list, else the kit's catalogue
+ *  when that list cannot be read. Hints come from the kit's tiers (MiniMax may list a tier under a newer id: M3.1-Flash for
+ *  the kit's -Preview) and MiniMax's own dates, never a list of ours. OpenRouter's stays the pinned DeepSeek: none. */
+export async function phoneModels(): Promise<PhoneModel[]> {
   if (current.route === PROVIDER) return [];
-  return (await phoneAccounts.models(MEMBER, current.route)).filter((m) => m.available).map((m) => ({ id: m.id, name: modelName(m.id) }));
+  const { strong, fast } = PROVIDERS.minimax.models;
+  const listed = await liveModels().catch(async () =>
+    (await phoneAccounts.models(MEMBER, current.route)).filter((m) => m.available).map((m) => ({ id: m.id, name: undefined, at: undefined })));
+  const is = (tier: string | undefined, id: string) => !!tier && (tier === id || tier.startsWith(`${id}-`));
+  const since = (at?: string) => at ? `out since ${new Date(at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : 'an older model';
+  const hint = (id: string, at?: string) => is(fast, id) ? 'Fast and cheap, recommended' : is(strong, id) ? 'The strongest, for harder jobs'
+    : /highspeed/i.test(id) ? `A quicker version, ${since(at)}` : since(at).replace(/^./, (c) => c.toUpperCase());
+  const rank = (id: string) => is(fast, id) ? 0 : is(strong, id) ? 1 : 2;
+  return listed.map((m) => ({ id: m.id, name: modelName(m.name ?? m.id), hint: hint(m.id, m.at), recommended: is(fast, m.id) }))
+    .sort((a, b) => rank(a.id) - rank(b.id));
 }
 /** Keep the person's model pick with the account, as the kit's own default. */
 export async function phonePick(model: string) {

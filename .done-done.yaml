@@ -35,7 +35,7 @@ journeys:
   # The phone's Home row naming the AI account signed in on the computer: the caller's emulator and lab APK (phone-accounts.md).
   phone-accounts:
     command: 'SERIAL="${SERIAL:?the emulator serial}" ACCOUNTS_OTHER="${ACCOUNTS_OTHER:?a folder for the MiniMax-signed-in state}" timeout -k 10 900 bash scripts/verify/phone-accounts.sh "$DONE_DONE_EVIDENCE_ROOT" "${ACCOUNTS_APK:?the lab APK}"'
-  # Chief on this phone with a MiniMax key: the caller's emulator and release APK, a lab key, no provider call (phone-only-minimax.md).
+  # Chief on this phone with a MiniMax key: the caller's emulator and release APK, a lab key MiniMax refuses, no model call (phone-only-minimax.md).
   phone-only-minimax:
     command: 'SERIAL="${SERIAL:?the emulator serial}" PHONE_OTHER="${PHONE_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 600 bash scripts/verify/phone-only-minimax.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the release APK}"'
   stub-drive:
