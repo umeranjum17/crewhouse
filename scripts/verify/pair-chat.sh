@@ -45,6 +45,10 @@ export PATH="$NODE_BIN:/usr/bin:/bin"
 [ -x "$NODE_BIN/node" ] || { echo "pair-chat: no node at $NODE_BIN" >&2; exit 1; }
 PORT=$(free); LINK_PORT=$(free); RPORT=$(free); WPORT=$(free)
 B="http://127.0.0.1:$PORT"; RELAY="http://127.0.0.1:$RPORT"; WEB="http://crewhouse.localhost:$WPORT"
+# done-done runs the journey with a clean environment, so the same three settings may come from a file of NAME=value
+# lines (the key's path, never its value); the environment still wins.
+CONF=${CHAT_CONFIG:-$HOME/.config/crewhouse/pair-chat.conf}
+[ ! -f "$CONF" ] || while IFS='=' read -r k v; do case $k in CHAT_ACCOUNT|CHAT_MODEL|CHAT_KEY_FILE) [ -n "${!k:-}" ] || export "$k=$v";; esac; done < "$CONF"
 ACCOUNT=${CHAT_ACCOUNT:-openrouter}
 MODEL=${CHAT_MODEL:-minimax/minimax-m3.1-flash:free}
 # The key comes by path (the person's own key file, the repo's usual place), never from an environment
@@ -104,7 +108,7 @@ node -e 'process.stdout.write(JSON.stringify({ text: require("node:fs").readFile
   api -X POST --data-binary @- "$B/api/accounts/1/$ACCOUNT/paste" >/dev/null
 for _ in $(seq 240); do api "$B/api/accounts" | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api "$B/api/accounts" | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "pair-chat: $ACCOUNT did not take the key" >&2; exit 1; }
-echo "pair-chat: signed in to $ACCOUNT"
+echo "pair-chat: signed in to $ACCOUNT with the key at $KEY_FILE"
 # The model under test, named in Chief's own bot.json: the picker cannot choose a key sign-in's models, and the
 # kit registers the model the bot already names.
 node -e 'const f=process.argv[1], c=JSON.parse(require("node:fs").readFileSync(f,"utf8")); c.models=[process.argv[2]+":"+process.argv[3]]; require("node:fs").writeFileSync(f, JSON.stringify(c,null,2))' \
