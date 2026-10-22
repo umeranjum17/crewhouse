@@ -188,6 +188,15 @@ function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: num
   </View>;
 }
 
+/** The AI accounts signed in on the home computer, from Settings' own list there (`GET /api/accounts`); null until the
+ *  computer answers, and on a computer too old to tell a phone. */
+function useSignedIn(tick = 0) {
+  const [mine, setMine] = useState<ReturnType<typeof A.aiList>['mine'] | null>(null);
+  useEffect(() => { api.accounts().then((l) => setMine(A.aiList(l).mine.filter((r) => r.g.state === 'ready')), () => {}); }, [tick]);
+  return mine;
+}
+const andJoin = (names: string[]) => names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+
 // ---------- small pieces ----------
 /** Chief's warm halo, where he greets you: first run, pairing, the words to check. */
 function Halo({ children }: { children: ReactNode }) {
@@ -1815,6 +1824,7 @@ function Home(ctx: Ctx) {
   const [desk, setDesk] = useState<{ c: A.OfficeMember; state: Json } | null>(null);
   const jobs = new Map(A.work(state).map((w) => [w.helper, w]));
   const n = view.counts.needs, chats = A.chats(state);
+  const mine = useSignedIn(ctx.tick), ais = mine?.map((r) => r.ai) ?? [];
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
@@ -1845,9 +1855,9 @@ function Home(ctx: Ctx) {
         {view.crew.length > 0 && <Pressable onPress={() => go({ view: 'room' })} accessibilityRole="button" style={({ pressed }) => [s.stCard, { backgroundColor: t.solid, borderWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <View style={{ flex: 1, gap: 2 }}><T style={s.semi}>The crew</T><T tone="mute" style={s.read}>{chats[chats.length - 1].line}</T></View><T tone="mute">›</T>
         </Pressable>}
-        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Check AI account sign-in on the home computer" style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
-          <AiMark ai={A.AIS[0]} size={30} />
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small}>You sign in on the home computer, in Settings.</T></View><T tone="mute">›</T>
+        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={ais.length ? `Your AI accounts: ${andJoin(ais.map((a) => a.name))}` : 'Check AI account sign-in on the home computer'} style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+          <AiMark ai={ais[0] ?? A.AIS[0]} size={30} />
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small}>{ais.length ? `${andJoin(ais.map((a) => a.name))} ${ais.length > 1 ? 'are' : 'is'} signed in on the home computer.` : 'You sign in on the home computer, in Settings.'}</T></View><T tone="mute">›</T>
         </Pressable>
         <JobList state={state} go={go} refresh={refresh} />
       </ScrollView>
@@ -2657,6 +2667,7 @@ function PhoneAccounts() {
   const [more, setMore] = useState(false);
   const [held, setHeld] = useState(false); // the phone that set up a cloud computer keeps its boat.dev key
   const [pasting, setPasting] = useState<(typeof A.AIS)[number] | null>(null);
+  const mine = useSignedIn(pasting ? 0 : 1), top = mine?.length ? mine.map((r) => r.ai) : [A.AIS[0]], others = A.AIS.filter((ai) => !top.includes(ai));
   useEffect(() => { void keptKey().then((k) => setHeld(!!k)); }, []);
   const row = (ai: (typeof A.AIS)[number]) => <View key={ai.key} style={[s.row, { gap: 12, paddingVertical: 10 }]}>
     <AiMark ai={ai} />
@@ -2664,16 +2675,16 @@ function PhoneAccounts() {
   </View>;
   return <>
     <Card style={{ gap: 0, paddingVertical: 6 }}>
-      {row(A.AIS[0])}
-      <T tone="mute" style={[s.small, { paddingBottom: 10 }]}>Signing in happens on the home computer, in Settings. This phone can't tell whether an account is signed in.</T>
+      {top.map(row)}
+      <T tone="mute" style={[s.small, { paddingBottom: 10 }]}>{mine?.length ? 'Signed in on the home computer. Signing in happens there, in Settings.' : mine ? 'Nothing is signed in yet. Signing in happens on the home computer, in Settings.' : "Signing in happens on the home computer, in Settings. This phone can't tell whether an account is signed in."}</T>
     </Card>
     <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel="More ways to sign in"
       style={[s.row, { minHeight: 48, paddingHorizontal: 4, marginTop: 8 }]}>
       <T tone="ink2" style={{ flex: 1, ...fw('500') }}>More ways to sign in</T>
-      {!more && <View style={[s.row, { gap: 4 }]}>{A.AIS.slice(1).map((ai) => <AiMark key={ai.key} ai={ai} size={22} />)}</View>}
+      {!more && <View style={[s.row, { gap: 4 }]}>{others.map((ai) => <AiMark key={ai.key} ai={ai} size={22} />)}</View>}
       <T tone="mute">{more ? '⌄' : '›'}</T>
     </Pressable>
-    {more && <Card style={{ gap: 0, paddingVertical: 6 }}>{A.AIS.slice(1).map(row)}</Card>}
+    {more && <Card style={{ gap: 0, paddingVertical: 6 }}>{others.map(row)}</Card>}
     {held && A.AIS.filter((ai) => 'keyEntry' in ai && ai.keyEntry).map((ai) => <Btn key={ai.key} soft tall label={`Paste your ${ai.name} key`} onPress={() => setPasting(ai)} />)}
     {pasting && <PhoneKeySheet ai={pasting} onClose={() => setPasting(null)} />}
     <T tone="mute" style={[s.small, { marginTop: 6, marginHorizontal: 4 }]}>{A.AI_ROUTES}</T>

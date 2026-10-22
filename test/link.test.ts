@@ -256,7 +256,10 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.ok(state.body.bots.some((x: any) => x.id === 'chief'));
   assert.equal((await a.req('POST', '/api/phones/pair', { role: 'control' })).status, 403, 'a phone cannot show pairing codes');
   assert.equal((await a.req('GET', '/api/phones')).status, 403, 'or list phones');
-  assert.equal((await a.req('GET', '/api/accounts')).status, 403, 'AI account sign-ins stay on the computer');
+  const accounts = await a.req('GET', '/api/accounts');
+  assert.equal(accounts.status, 200, 'a phone reads which AI accounts are signed in');
+  assert.ok(accounts.body.some((x: any) => x.account === 'chatgpt' && typeof x.signedIn === 'boolean'));
+  assert.equal((await a.req('POST', '/api/accounts/1/grok/login', { via: 'code' })).status, 403, 'AI account sign-ins stay on the computer');
   assert.equal((await a.req('POST', '/api/people', { name: 'Mallory' })).status, 403, 'and so does adding people');
   assert.equal((await a.req('POST', '/api/connections/notion')).status, 403, 'and connecting apps');
   assert.equal((await a.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and the house Google app');
