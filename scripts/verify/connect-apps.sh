@@ -20,6 +20,7 @@ CONF=${CONNECT_CONFIG:-$HOME/.config/crewhouse/connect-apps.conf}
 [ ! -f "$CONF" ] || while IFS='=' read -r k v; do case $k in CONNECT_KEY_FILE|CONNECT_HANDOFF|ASK) [ -n "${!k:-}" ] || export "$k=$v";; esac; done < "$CONF"
 KEYFILE=${CONNECT_KEY_FILE:-}; [ -s "$KEYFILE" ] || { echo "connect-apps: CONNECT_KEY_FILE names no key file" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); HAND=$(mkdir -p "${CONNECT_HANDOFF:?CONNECT_HANDOFF names no folder}" && cd "$CONNECT_HANDOFF" && pwd -P)
+export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean environment, where a version-manager shim fails
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-connect-apps.XXXXXX)
