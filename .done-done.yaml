@@ -34,7 +34,7 @@ journeys:
     command: 'SERIAL="${SERIAL:?the emulator serial}" CLOUD_OTHER="${CLOUD_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 900 bash scripts/verify/cloud-screen.sh "$DONE_DONE_EVIDENCE_ROOT" "${CLOUD_APK:?the flagged lab APK}"'
   # The phone's Home row naming the AI account signed in on the computer: the caller's emulator and lab APK (phone-accounts.md).
   phone-accounts:
-    command: 'SERIAL="${SERIAL:?the emulator serial}" ACCOUNTS_OTHER="${ACCOUNTS_OTHER:?a folder for the nothing-signed-in state}" timeout -k 10 900 bash scripts/verify/phone-accounts.sh "$DONE_DONE_EVIDENCE_ROOT" "${ACCOUNTS_APK:?the lab APK}"'
+    command: 'SERIAL="${SERIAL:?the emulator serial}" ACCOUNTS_OTHER="${ACCOUNTS_OTHER:?a folder for the MiniMax-signed-in state}" timeout -k 10 900 bash scripts/verify/phone-accounts.sh "$DONE_DONE_EVIDENCE_ROOT" "${ACCOUNTS_APK:?the lab APK}"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

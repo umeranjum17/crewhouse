@@ -421,6 +421,6 @@
       "Read the Your AI accounts row under the crew, in day and in night",
       "On the computer, sign MiniMax out too, then open the phone app again"
     ],
-    "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows the ChatGPT mark and says You sign in on the home computer, in Settings"
+    "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows a plain key, no account's mark, and says You sign in on the home computer, in Settings"
   }
 }

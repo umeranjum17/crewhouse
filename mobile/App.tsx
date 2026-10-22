@@ -187,6 +187,14 @@ function AiMark({ ai, size = 32 }: { ai: { key: string; bg: string }; size?: num
     <Image source={MARKS[ai.key]} style={{ width: size * 0.56, height: size * 0.56 }} accessibilityIgnoresInvertColors />
   </View>;
 }
+/** No account's mark: a plain key on a soft tile, for when nothing is signed in. */
+function KeyMark({ size = 32 }: { size?: number }) {
+  const t = useLook(), u = size / 32;
+  return <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: t.soft, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: 10 * u, height: 10 * u, borderRadius: 5 * u, borderWidth: 2.5 * u, borderColor: t.ink2 }} />
+    <View style={{ width: 9 * u, height: 2.5 * u, backgroundColor: t.ink2 }}><View style={{ position: 'absolute', right: 0, top: 0, width: 2.5 * u, height: 5 * u, backgroundColor: t.ink2 }} /></View>
+  </View>;
+}
 
 /** The AI accounts signed in on the home computer, from Settings' own list there (`GET /api/accounts`); null until the
  *  computer answers, and on a computer too old to tell a phone. */
@@ -1856,7 +1864,7 @@ function Home(ctx: Ctx) {
           <View style={{ flex: 1, gap: 2 }}><T style={s.semi}>The crew</T><T tone="mute" style={s.read}>{chats[chats.length - 1].line}</T></View><T tone="mute">›</T>
         </Pressable>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={ais.length ? `Your AI accounts: ${andJoin(ais.map((a) => a.name))}` : 'Check AI account sign-in on the home computer'} style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
-          <AiMark ai={ais[0] ?? A.AIS[0]} size={30} />
+          {ais.length ? <AiMark ai={ais[0]} size={30} /> : <KeyMark size={30} />}
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small}>{ais.length ? `${andJoin(ais.map((a) => a.name))} ${ais.length > 1 ? 'are' : 'is'} signed in on the home computer.` : 'You sign in on the home computer, in Settings.'}</T></View><T tone="mute">›</T>
         </Pressable>
         <JobList state={state} go={go} refresh={refresh} />

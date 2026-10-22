@@ -3,12 +3,12 @@
 # The pairing lab (pair-lab.sh: stub crewd, its own relay) signs every account out but MiniMax through the computer's
 # own Settings call (POST /api/accounts/1/<key>/logout), the emulator pairs by the typed relay code
 # (phone-pair-typed.mjs), and Home's row is captured at 390 wide, day and night. Then MiniMax signs out too and the row
-# is captured again: with nothing signed in it keeps "You sign in on the home computer, in Settings."
+# is captured again: with nothing signed in it shows a plain key and keeps "You sign in on the home computer, in Settings."
 #
 #   SERIAL=emulator-5580 [ACCOUNTS_OTHER=<dir>] bash scripts/verify/phone-accounts.sh <out-dir> <apk>
 #
-# <out-dir> holds the claimed state (MiniMax signed in) and the step record; the nothing-signed-in captures go to
-# ACCOUNTS_OTHER when it is set, else beside them. The emulator is the caller's (started and stopped by them).
+# <out-dir> holds the claimed state (nothing signed in: a plain key, no account's mark) and the step record; the
+# MiniMax captures go to ACCOUNTS_OTHER when it is set, else beside them. The emulator is the caller's (started and stopped by them).
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> phone-accounts.sh <out-dir> <apk>" >&2; exit 2; }
 OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${ACCOUNTS_OTHER:-$OUT}
@@ -42,10 +42,10 @@ shot() { # $1 file stem, $2 dir, $3 the row's words
   done
   adb shell cmd uimode night no >/dev/null
 }
-shot accounts-minimax "$OUT" ' MiniMax is signed in on the home computer\.$'
+shot accounts-minimax "$OTHER" ' MiniMax is signed in on the home computer\.$'
 api POST /api/accounts/1/minimax/logout '{}' >/dev/null
 adb shell am force-stop dev.crewhouse.app; adb shell am start -n dev.crewhouse.app/.MainActivity >/dev/null
 see ' Your AI accounts$' 30
-shot accounts-none "$OTHER" ' You sign in on the home computer, in Settings\.$'
+shot accounts-none "$OUT" ' You sign in on the home computer, in Settings\.$'
 node "$VERIFY_DIR/steps.mjs" "$OUT" phone-accounts
-echo "phone-accounts: MiniMax named on Home, then the sign-in sentence once nothing is signed in"
+echo "phone-accounts: MiniMax named on Home, then a plain key and the sign-in sentence once nothing is signed in"
