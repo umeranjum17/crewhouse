@@ -5,7 +5,7 @@
 #   bash scripts/verify/phone-mic-fallback.sh <out-dir> [release-x86_64.apk]
 # Needs the Android SDK, a built web/dist and the APK (cd mobile/android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64,
 # through fm-mem-gate). No audio goes in: the proof is that the listener opens after the on-device recogniser reports no pack.
-# Writes mic-listening-no-pack-phone-390.png, logcat.txt and steps.json in <out-dir>.
+# Writes mic-listening-no-pack-phone-390.png, logcat.txt and the step record in <out-dir>.
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$(realpath -m "${1:?out dir}") APK=$(realpath "${2:-$REPO/mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk}")
