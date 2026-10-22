@@ -78,3 +78,4 @@ if [ -n "${CHROME_DEVTOOLS_AXI_SESSION:-}" ]; then
   bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" chief "$B/#person=$PERSON" || echo "flash-read: the capture failed" >&2
 fi
 echo "flash-read: Chief read the helper's file and his job ended; thread in $OUT/thread.json"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" flash-read

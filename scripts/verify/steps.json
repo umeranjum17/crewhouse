@@ -187,6 +187,15 @@
     ],
     "result": "The sheet titled Which model should your crew use? lists the account's live models at 390 and 1280, day and night, and the pick is the model the crew uses"
   },
+  "flash-read": {
+    "start": "a fresh Crewhouse signed in to OpenRouter on MiniMax M3.1 Flash, with Scout on the crew who has written a file in its own folder",
+    "steps": [
+      "Ask Chief to read the file Scout wrote in its own folder",
+      "Wait for Chief to read it and close the job",
+      "Open Chief's thread at 390 and 1440 wide, day and night"
+    ],
+    "result": "Chief's thread shows his answer from the helper's file and no question to the person, and his job ended done"
+  },
   "onboard-chat": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
     "steps": [
