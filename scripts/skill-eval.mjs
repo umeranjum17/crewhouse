@@ -240,6 +240,11 @@ console.log(`\nraw runs: ${JSONL}\nreport:   ${HTML}`);
 if (flag('--strict') && !beats) { console.error('skill-eval: the skill does not beat the baseline'); process.exit(1); }
 
 // ---- the report a person reads ----
+function bars(rows) {
+  const W = 480, bar = (n, max) => (max ? Math.round(W * n / max) : 0);
+  return `<svg class="chart" viewBox="0 0 640 ${rows.length * 46 + 4}" role="img" aria-label="${rows.map(([l, n, max]) => `${l}: ${n} of ${max}`).join('; ')}">${rows.map(([label, n, max, fill], i) =>
+    `<text x="0" y="${i * 46 + 30}">${label}</text><rect x="130" y="${i * 46 + 8}" width="${W}" height="30" rx="4" fill="#e3e3e0"/><rect x="130" y="${i * 46 + 8}" width="${bar(n, max)}" height="30" rx="4" fill="${fill}"/><text x="138" y="${i * 46 + 30}" ${bar(n, max) > 90 ? 'style="fill:#fff"' : ''}>${n} of ${max}</text>`).join('')}</svg>`;
+}
 function html(records, triggers, verdict, delta, t) {
   const row = (r) => `<tr><td>${r.id}</td><td>${PROMPTS.find((p) => p.id === r.id)?.prompt ?? ''}</td><td>${r.label ? 'yes' : 'no'}</td><td>${r.fired ? 'yes' : 'no'}</td><td>${r.why}</td></tr>`;
   const check = (id) => `<tr><td>${id}</td><td>${CHECKS.find((c) => c.id === id).name}</td><td>${records.filter((r) => r.arm === 'with' && r.checks[id]).length}/${with_.length}</td><td>${records.filter((r) => r.arm === 'without' && r.checks[id]).length}/${without.length}</td></tr>`;
@@ -251,11 +256,18 @@ function html(records, triggers, verdict, delta, t) {
   table { border-collapse: collapse; margin: 8px 0; font-size: 14px; } th, td { text-align: left; padding: 5px 14px 5px 0; border-bottom: 1px solid #e3e3e0; vertical-align: top; }
   th { color: #6b7078; font-weight: 600; } .yes { color: #1f6f4a; font-weight: 600; } .no { color: #a3341f; font-weight: 600; }
   .verdict { font-size: 18px; font-weight: 600; padding: 12px 14px; border-radius: 8px; background: ${beats ? '#eaf4ee' : '#fbeeea'}; display: inline-block; }
+  .badge { font-size: 44px; font-weight: 800; letter-spacing: .02em; padding: 14px 30px; border-radius: 14px; display: inline-block; color: #fff; background: ${beats ? '#1f6f4a' : '#a3341f'}; }
+  .chart { margin: 10px 0 4px; max-width: 640px; } .chart text { font: 600 15px system-ui, sans-serif; fill: #14161a; } .chart .sub { font-weight: 400; fill: #6b7078; font-size: 13px; }
   code { background: #f0f0ee; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
 </style></head><body>
 <h1>Skill eval: ${NAME}</h1>
 <p>The same ${PROMPTS.length} prompts, run with and without <code>${SLUG}</code> on the stub engine. Every run is deterministic: no account, no network, no model. The pages a run reads are fixture pages on loopback.</p>
+<p><span class="badge">${beats ? 'BEATS THE BASELINE' : 'DOES NOT BEAT THE BASELINE'}</span></p>
 <p class="verdict">${verdict}</p>
+<h2>Checks passed, with the skill and without it</h2>
+${bars([['With the skill', passed(with_), with_.length * CHECKS.length, '#1f6f4a'], ['Without it', passed(without), without.length * CHECKS.length, '#8d929a']])}
+<h2>Trigger: prompts that fired</h2>
+${bars([['Should fire', t.hits, triggers.filter((x) => x.label).length, '#1f6f4a'], ['Should not fire', t.alarms.length, triggers.filter((x) => !x.label).length, '#a3341f']])}
 <h2>Trigger: does the description match the prompt?</h2>
 <table><tr><th>id</th><th>prompt</th><th>should fire</th><th>fired</th><th>why</th></tr>${triggers.map(row).join('')}</table>
 <p>${t.hits} of the prompts that should fire did. ${t.misses.length} missed, ${t.alarms.length} false alarms.</p>
