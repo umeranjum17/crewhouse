@@ -40,7 +40,7 @@ import { glowOf } from '../web/src/office.tsx';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
-import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
+import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
 import { checkKey, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
 import type { MachineRef, SetupStep } from '@byokit/cloud';
@@ -1009,37 +1009,62 @@ function PhoneHead({ subtitle, onExit, onSignOut }: { subtitle: string; onExit: 
   );
 }
 
-/** Connect the person's own account with an API key: one paste, agreed per use, nothing else leaves the phone. */
+/** Connect the person's own account with an API key: pick OpenRouter or MiniMax, one paste, agreed per use, nothing
+ *  else leaves the phone. A MiniMax key then picks its model from the kit's list, as the computer's key sheet does. */
 function PhoneSignIn({ onDone, onExit, why }: { onDone: () => void; onExit: () => void; why: string }) {
   const t = useLook();
+  const [account, setAccount] = useState<PhoneKey>(PHONE_KEYS[0]);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(why);
+  const [models, setModels] = useState<{ id: string; name: string }[] | null>(null);
+  const name = account.name;
   const connect = async () => {
     if (!key.trim() || busy) return;
     setBusy(true); setErr('');
-    try { await phoneConnect(key); onDone(); }
-    catch (e) { setErr(phoneSignInWords(e)); setBusy(false); }
+    try {
+      await phoneConnect(account, key); setKey('');
+      const listed = await phoneModels().catch(() => []);
+      if (listed.length) { setModels(listed); setBusy(false); } else onDone();
+    } catch (e) { setErr(phoneSignInWords(e)); setBusy(false); }
   };
+  const pick = (id: string) => { setBusy(true); void phonePick(id).then(onDone, () => { setErr('That model could not be kept. Try again.'); setBusy(false); }); };
+  if (models) return (
+    <ScrollView contentContainerStyle={s.centerScroll}>
+      <ChiefArt mood="hello" size={104} whole />
+      <T style={s.display}>Which model should Chief use?</T>
+      <T tone="ink2" style={s.centerText}>Your {name} key is saved on this phone. Pick the model Chief thinks with.</T>
+      <View style={{ alignSelf: 'stretch', gap: 8 }}>{models.map((m) => <Btn key={m.id} soft tall label={m.name} disabled={busy} onPress={() => pick(m.id)} />)}</View>
+      {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
+      <Btn ghost label="Use the default for now" disabled={busy} onPress={onDone} />
+    </ScrollView>
+  );
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={s.centerScroll} keyboardShouldPersistTaps="handled">
         <ChiefArt mood="hello" size={104} whole />
         <T style={s.display}>Chief on this phone</T>
-        <T tone="ink2" style={s.centerText}>Connect your own {phoneProviderName} key. Chief runs right here — no computer, and the key never leaves this phone.</T>
+        <T tone="ink2" style={s.centerText}>Connect your own {name} key. Chief runs right here — no computer, and the key never leaves this phone.</T>
+        <View style={{ alignSelf: 'stretch', gap: 8 }} accessibilityRole="radiogroup">
+          {PHONE_KEYS.map((k) => { const ai = A.AIS.find((a) => a.key === k.key)!, on = k === account;
+            return <Pressable key={k.key} onPress={() => { setAccount(k); setErr(''); }} disabled={busy} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={k.name}
+              style={[s.row, { gap: 12, padding: 12, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? t.ink : t.line }]}>
+              <AiMark ai={ai} /><T style={[s.b, { flex: 1 }]}>{k.name}</T><T tone={on ? 'ink' : 'mute'}>{on ? '●' : '○'}</T>
+            </Pressable>; })}
+        </View>
         <View style={{ alignSelf: 'stretch', gap: 4 }}>
-          <Link label="Get a key" onPress={() => void Linking.openURL(phoneKeyUrl)} />
+          <Link label={`Get a ${name} key`} onPress={() => void Linking.openURL(account.url)} />
           <T tone="ink2" style={s.small}>1. Make an account.</T>
           <T tone="ink2" style={s.small}>2. Add a little credit.</T>
           <T tone="ink2" style={s.small}>3. Create a key and copy it here.</T>
         </View>
         <TextInput style={[s.input, { alignSelf: 'stretch', color: t.ink, borderColor: t.line }]} value={key} onChangeText={setKey}
-          placeholder={`Paste your ${phoneProviderName} key`} placeholderTextColor={t.mute}
-          accessibilityLabel={`${phoneProviderName} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+          placeholder={`Paste your ${name} key`} placeholderTextColor={t.mute}
+          accessibilityLabel={`${name} key`} autoCapitalize="none" autoCorrect={false} secureTextEntry />
         {busy ? <ActivityIndicator color={t.pink} style={{ margin: 20 }} /> : <Btn go big label="Connect" disabled={!key.trim()} onPress={connect} />}
         {!!err && <T tone="pinkInk" style={s.centerText}>{err}</T>}
         <Btn ghost label="Use a computer instead" onPress={onExit} />
-        <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>Billed per use by {phoneProviderName}. Your key is kept on this phone.</T>
+        <T tone="mute" style={[s.small, s.centerText, { marginTop: 12 }]}>Billed per use by {name}. Your key is kept on this phone.</T>
       </ScrollView>
     </KeyboardAvoidingView>
   );

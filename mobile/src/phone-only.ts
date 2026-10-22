@@ -2,9 +2,9 @@
 // It moves into BYOKit's kit when the cross-kit phone-first plan defines that surface: no engine,
 // no sessions, no providers, no memory, nothing downloaded at runtime (bundled tools only, App Review 4.7).
 // The system prompt is Chief's real template files, bundled as words by metro (scripts/markdown.cjs).
-// For this proof the account is an API-key route (DeepSeek on OpenRouter, billed per use), which needs no
-// human hand-off; the ChatGPT subscription route is the eventual one and is left as an open item.
-import { Accounts, IncompleteError, KeyRouteError, ResponseError, portable, secureStore,
+// For this proof the account is an API-key route (DeepSeek on OpenRouter, or the picked MiniMax model, billed per
+// use), which needs no human hand-off; the ChatGPT subscription route is the eventual one and is left as an open item.
+import { Accounts, IncompleteError, KeyRouteError, PROVIDERS, ResponseError, portable, secureStore,
   type Context, type Model, type AssistantMessage } from '@byokit/accounts';
 import { withKeys } from '@byokit/accounts/keys';
 import { nativeStore } from '@byokit/secrets/native';
@@ -42,22 +42,56 @@ export type ChatTurn = { who: 'you' | 'chief'; text: string };
 export type PhoneDocument = { name: string; uri: string; parts: DocPart[] };
 
 // ---------- sign-in (the person's own API key, billed per use) ----------
-export const phoneProviderName = 'OpenRouter';
-/** Where a person without a key gets one: the provider's own key page. */
-export const phoneKeyUrl = 'https://openrouter.ai/keys';
+/** The key accounts Chief runs on here, each through the kit's own key route (MiniMax's named exactly: its plain
+ *  name is the subscription sign-in). `key` matches the app's account list (A.AIS), for its name and mark. */
+export const PHONE_KEYS = [
+  { key: 'openrouter', route: PROVIDER, name: 'OpenRouter', url: 'https://openrouter.ai/keys', probe: 'https://openrouter.ai/api/v1/models' },
+  { key: 'minimax', route: 'minimax:key', name: 'MiniMax', url: 'https://platform.minimax.io/user-center/basic-information/interface-key', probe: 'https://api.minimax.io' },
+] as const;
+export type PhoneKey = (typeof PHONE_KEYS)[number];
+// The account the phone runs on is the kit's saved default; a phone signed in before the choice has none: OpenRouter.
+let current: PhoneKey = PHONE_KEYS[0];
+let picked: string | undefined;
+async function readCurrent() {
+  const d = await phoneAccounts.defaults(MEMBER).catch(() => ({ account: undefined, model: undefined }));
+  current = PHONE_KEYS.find((k) => k.route === d.account) ?? PHONE_KEYS[0];
+  picked = d.model;
+  return current;
+}
 /** True once the person's key is saved on this phone. */
 export async function phoneSignedIn(): Promise<boolean> {
-  try { return !!(await phoneAccounts.key(MEMBER, PROVIDER)); } catch { return false; }
+  try { return !!(await phoneAccounts.key(MEMBER, (await readCurrent()).route)); } catch { return false; }
 }
-/** The account line for the header; this provider has no plan, so it names the model. */
-export const phonePlan = async (): Promise<string | null> => 'DeepSeek';
-/** Save the person's key, having agreed to per-use billing; false when the key could not be kept. */
-export async function phoneConnect(key: string) {
-  const { state } = await phoneAccounts.saveKey(MEMBER, PROVIDER, key.trim(), { billedPerUse: true });
+/** A model's catalogue id in words (`MiniMax-M3.1-Flash-Preview` reads "MiniMax M3.1 Flash Preview"). */
+const modelName = (id: string) => id.replace(/-/g, ' ');
+/** The account line for the header; a key has no plan, so it names the model. */
+export const phonePlan = async (): Promise<string | null> => current.route === PROVIDER ? 'DeepSeek' : modelName(minimaxModel().id);
+/** Save the person's key, having agreed to per-use billing, and run Chief on that account from now on. The phone holds
+ *  one key: another account's (one refused before) goes, so Sign out leaves none behind. */
+export async function phoneConnect(account: PhoneKey, key: string) {
+  const { state } = await phoneAccounts.saveKey(MEMBER, account.route, key.trim(), { billedPerUse: true });
   if (state === 'failed') throw new Error('This key could not be saved. Try again.');
+  for (const other of PHONE_KEYS) if (other !== account) await phoneAccounts.logout(MEMBER, other.route);
+  await phoneAccounts.setDefaults(MEMBER, { account: account.route });
+  current = account; picked = undefined;
+}
+/** The models the kit lists for the saved key, in words; OpenRouter's stays the pinned DeepSeek, so it has none. */
+export async function phoneModels(): Promise<{ id: string; name: string }[]> {
+  if (current.route === PROVIDER) return [];
+  return (await phoneAccounts.models(MEMBER, current.route)).filter((m) => m.available).map((m) => ({ id: m.id, name: modelName(m.id) }));
+}
+/** Keep the person's model pick with the account, as the kit's own default. */
+export async function phonePick(model: string) {
+  await phoneAccounts.setDefaults(MEMBER, { account: current.route, model });
+  picked = model;
 }
 /** Sign out on this phone: the kept chat goes with the key, so a signed-out phone keeps none of it. */
-export const phoneSignOut = async () => { clearChat(); return phoneAccounts.logout(MEMBER, PROVIDER); };
+export const phoneSignOut = async () => {
+  clearChat();
+  await phoneAccounts.logout(MEMBER, current.route);
+  await phoneAccounts.setDefaults(MEMBER, {});
+  current = PHONE_KEYS[0]; picked = undefined;
+};
 /** One plain sentence for a sign-in failure, never a code, path or raw error. */
 export function phoneSignInWords(error: unknown) {
   const text = error instanceof Error ? error.message : '';
@@ -74,10 +108,10 @@ export const phoneExpired = (error: unknown) =>
     : error instanceof ResponseError && error.kind === 'signed_out';
 
 /** The kit's typed key refusals, each with the one next step: the words the person reads, never a code or status. */
-const KEY_WORDS: Partial<Record<string, string>> = {
-  out_of_credit: `Your ${phoneProviderName} account is out of credit. Add credit on ${phoneProviderName}, then send it again.`,
-  key_refused: `${phoneProviderName} refused this key. Connect a key that works to keep chatting.`,
-  rate_limited: `${phoneProviderName} is busy with this key right now. Wait a minute, then send it again.`,
+const KEY_WORDS: Partial<Record<string, (name: string) => string>> = {
+  out_of_credit: (name) => `Your ${name} account is out of credit. Add credit on ${name}, then send it again.`,
+  key_refused: (name) => `${name} refused this key. Connect a key that works to keep chatting.`,
+  rate_limited: (name) => `${name} is busy with this key right now. Wait a minute, then send it again.`,
 };
 
 /** One plain sentence for any failure a person may meet here, never a code, path or raw error. */
@@ -86,7 +120,7 @@ export function phoneWords(error: unknown) {
   if (error instanceof KeyRouteError) {
     if (error.code === 'aborted') return 'Stopped.';
     if (error.code === 'needs_keys') return 'This phone cannot run key accounts yet.';
-    return KEY_WORDS[error.code] ?? 'Could not finish on this phone. Check your internet connection and try again.';
+    return KEY_WORDS[error.code]?.(current.name) ?? 'Could not finish on this phone. Check your internet connection and try again.';
   }
   if (error instanceof ResponseError) {
     if (error.kind === 'network') return 'No internet connection. Reconnect, then try again.';
@@ -197,7 +231,7 @@ export async function probeOnline(): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   // Bounded by its own timer too: a fetch with no network can sit in DNS without honouring the abort.
   const late = new Promise<never>((_, no) => { timer = setTimeout(() => { ctrl.abort(); no(new Error('timeout')); }, 4000); });
-  try { await Promise.race([fetch('https://openrouter.ai/api/v1/models', { method: 'HEAD', signal: ctrl.signal }), late]); return true; }
+  try { await Promise.race([fetch(current.probe, { method: 'HEAD', signal: ctrl.signal }), late]); return true; }
   catch { return false; }
   finally { clearTimeout(timer); }
 }
@@ -278,6 +312,12 @@ const MODEL: Model<'openai-completions'> = {
   baseUrl: 'https://openrouter.ai/api/v1', reasoning: false, input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 163_840, maxTokens: 8_192,
 };
+/** A MiniMax key's model: the person's pick, else the kit's fast one, on MiniMax's Anthropic-shaped API (Pi's pinned shape). */
+const minimaxModel = (): Model<'anthropic-messages'> => ({
+  id: picked ?? PROVIDERS.minimax.models.fast ?? PROVIDERS.minimax.models.strong, name: 'MiniMax', api: 'anthropic-messages', provider: 'minimax',
+  baseUrl: 'https://api.minimax.io/anthropic', reasoning: true, input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 204_800, maxTokens: 8_192,
+});
 
 const tool = {
   name: 'crew_document',
@@ -369,17 +409,18 @@ const ZERO_USAGE = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalToke
  *  `rid` is the turn's request id: the key a document effect is journalled and retried under. */
 export async function askPhone(turns: ChatTurn[], io: { onText: (t: string) => void; onDocument: (d: PhoneDocument) => void }, signal: AbortSignal, rid: string): Promise<string> {
   const sig = abortSafe(signal);
+  const model: Model<'openai-completions' | 'anthropic-messages'> = current.route === PROVIDER ? MODEL : minimaxModel();
   const messages: Msg[] = turns.map((turn) => turn.who === 'you'
     ? { role: 'user', content: [{ type: 'text', text: turn.text }], timestamp: Date.now() }
-    : { role: 'assistant', content: [{ type: 'text', text: turn.text }], api: MODEL.api, provider: MODEL.provider,
-        model: MODEL.id, usage: ZERO_USAGE, stopReason: 'stop', timestamp: Date.now() });
+    : { role: 'assistant', content: [{ type: 'text', text: turn.text }], api: model.api, provider: model.provider,
+        model: model.id, usage: ZERO_USAGE, stopReason: 'stop', timestamp: Date.now() });
   const context = { systemPrompt: instructions, tools: [tool], messages } as unknown as Context;
   let answer = '', documents = 0;
   for (let step = 0; step < MAX_STEPS; step++) {
     const head = answer;
     let stepText = '';
     const message = await phoneAccounts.respondKey(MEMBER, {
-      account: PROVIDER, model: MODEL, context, options: { signal: sig, maxTokens: 4096 },
+      account: current.route, model, context, options: { signal: sig, maxTokens: 4096 },
       onText: (delta) => { stepText += delta; io.onText(head ? `${head}\n\n${stepText}` : stepText); },
     } as Parameters<typeof phoneAccounts.respondKey>[1]) as unknown as AssistantMessage;
     const parts = (message.content ?? []) as Part[];
