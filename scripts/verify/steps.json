@@ -374,5 +374,14 @@
       "On a recognizer shaped like Safari's (iPad and iPhone), tap the mic: the online line shows first, and what was said lands in the box"
     ],
     "result": "At phone and desktop width, day and night: the mic listens with Listening in the box, the words heard wait unsent in the box with no message in the thread until send, Talk sends what was said once and reads Chief's reply aloud with its line marked green, then Stop ends the call; a Safari-shaped recognizer hears with the online line"
+  },
+  "image": {
+    "start": "a fresh crew on the stub engine with Video Vic on it, and nothing in Chief's or Vic's files",
+    "steps": [
+      "Open Chief's chat, tap + (the paperclip on a computer) and pick a photo of a desk lamp",
+      "See the photo in the box with its name and size, and type: Make this into a picture for my shop page.",
+      "Send it, and wait while Chief hands the job to Video Vic"
+    ],
+    "result": "Chief's chat shows the photo above the words sent with it, then Video Vic's finished picture of the lamp; the photo is kept on the computer under crewd's own name and Chief's model was given it"
   }
 }
