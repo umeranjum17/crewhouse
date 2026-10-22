@@ -38,6 +38,7 @@ const steps = [
   { name: 'ask', run: `printf '%s' ${JSON.stringify(ASK)}`, eval: put('.dock textarea') },
   { name: 'send', click: '.dock button.send', settle: 3000 },
   { name: 'answer', wait: `!!(${answer})`, timeout: 300000 },
+  { name: 'settle', run: 'sleep 20; true' }, // the first words are a partial line: let the answer finish streaming before it is read
   { name: 'reply', eval: answer },
 ];
 // The same answer, in both looks and both widths: the person's own screen.
