@@ -35,6 +35,7 @@ function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) 
 const ABOUT: Record<string, string> = {
   shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.', crew_signin: 'Ask for a sign-in',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
+  crew_inspect: "Look inside a binary file in your own folder: `what` is type, headers, strings, symbols or sections, `path` is the file. It never runs it and never writes.",
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",

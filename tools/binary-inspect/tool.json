@@ -1,0 +1,25 @@
+{
+  "id": "binary-inspect",
+  "name": "Binary inspector",
+  "provides": "Look inside a binary file the person gave you: what kind of file it is, its headers, its strings, its symbols and its sections",
+  "kind": "cli",
+  "bins": [
+    "file",
+    "strings",
+    "readelf",
+    "nm"
+  ],
+  "license": "GPL-3.0 (binutils); BSD-2-Clause (file)",
+  "source": "system",
+  "install": {
+    "system": "sudo apt install file binutils | sudo pacman -S file binutils | brew install file binutils"
+  },
+  "asks": [
+    "never: it only reads a file in the helper's own folder"
+  ],
+  "grant": {
+    "default": false
+  },
+  "note": "It never runs the file it looks at, never writes and never reaches the network. It needs the sandbox, so it works on Linux only.",
+  "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
+}

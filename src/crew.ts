@@ -26,6 +26,7 @@ import type { Link } from './link.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { pickRuntime } from './engines.ts';
 import { fileTool } from './files.ts';
+import { inspectBinary } from './binary.ts';
 
 /** The four marks a first run is timed by, in crewd.log: the service, the engine, the sign-in, the first words. */
 export const stamp = (what: string) => console.log(`[${new Date().toISOString()}] crewd ${what}`);
@@ -1654,6 +1655,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (BUILTINS.has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
     if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
+    if (name === 'crew_inspect') return grants.includes('binary-inspect');
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
     if (name === 'browser') return !!l.browserTool;
     if (name === 'computer') return !!l.node;
@@ -1996,6 +1998,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
             { skill: { name: d.slug, description: String(p.description), says: d.says, steps: d.steps }, preview: { head: `How ${b.display} would do it`, body: d.steps } });
         }),
     ];
+    // The binary inspector, for a helper the person granted it to: it looks inside a file in the helper's own folder
+    // and never runs it. The grant is the person's, so the tool is only offered where they gave it.
+    if (this.live.get(botId)?.grants.includes('binary-inspect')) own.push(tool('crew_inspect',
+      'Look inside a binary file in your own folder without ever running it: `what` is type, headers, strings, symbols or sections, and `path` is the file (for example files/app.bin). '
+      + 'It only reads: the file is never run, nothing is written and the network is never reached.',
+      (p) => inspectBinary(disk.botDir(this.cfg, botId), String(p.path ?? ''), String(p.what ?? 'type'))));
     if (botId !== CHIEF) {
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
