@@ -12,6 +12,12 @@ settles with the helper's own result, and a failure after Chief's turn ended set
 Fails on the old code: the first two hold Chief's lane (the job never settles) and the last one answers with a generic
 failure instead of the hand-off's own line.
 
+## Journey
+
+`CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/handoff-lane-reset.sh <out-dir>` (the done-done journey `handoff-lane-reset`, with
+`CREWHOUSE_ENGINE_DIR="$PWD/runtime/openclaw"`) runs the drive below, fails unless Chief's job ends `failed` with the
+hand-off's words, the helper's task is `unsure` and no question reached the person, and captures the app.
+
 ## Drive (real crewd, the pinned Gateway, a scripted provider)
 
 1. `CREWHOUSE_ENGINE_DIR="$PWD/runtime/openclaw" node scripts/verify/native-delegation.ts <scratch> <scratch>/ready.json --scripted`

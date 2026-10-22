@@ -17,5 +17,5 @@ and the helper's job keeps its own failure — no turn of the engine may hold th
    (the marker rides in the brief, so Scout's own job fails), then poll `GET /api/bots/chief` until the task is neither
    queued nor working: it reads `failed` with "The helper stopped before reporting back. Check its job before trying
    again.", in seconds.
-4. Capture: `scripts/verify/screens.sh "$EV/screens" chief-hand-off-failed "<base>#/chief"` — the app at 1440 and 390,
+4. Capture (the journey `handoff-lane-reset` does 2-4): `scripts/verify/screens.sh "$EV/screens" chief-hand-off-failed "<base>#/chief"` — the app at 1440 and 390,
    day and night. The gate is `node --test test/openclaw-handoff.test.ts` (the kit's fake Gateway).
