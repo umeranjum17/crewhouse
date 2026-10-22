@@ -268,9 +268,9 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   assert.equal(await a.held, undefined);
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'run.allowed'"));
 
-  a = await ask('read', { path: join(root, 'Elsewhere', 'b.txt') });
+  a = await ask('read', { path: join(homedir(), 'Documents', 'b.txt') });
   await crew.answer(a.open!.id, { answer: 'allow', scope: 'always' });
-  assert.deepEqual(crew.botPage('reel').allow, ['a folder outside your home'], 'the page shows what it covers in words');
+  assert.deepEqual(crew.botPage('reel').allow, ['your Documents folder'], 'the page shows what it covers in words');
   const trail = crew.botPage('reel').trail.map((e: any) => e.kind);
   assert.ok(trail.includes('bot.allowed') && trail.includes('ask.answered'));
   await release(crew, 'reel', 'ok');
@@ -279,7 +279,7 @@ test('approval scopes: once, for this task, always for the bot; spending asks ev
   // A new task keeps "always" but not "for this task".
   const t2 = delegated(crew, 'reel', 'ask permission again').task;
   await holding(crew, 'reel');
-  a = await ask('read', { path: join(root, 'Elsewhere', 'c.txt') });
+  a = await ask('read', { path: join(homedir(), 'Documents', 'c.txt') });
   assert.equal(a.open, undefined);
   await a.held;
   a = await ask('write', { path: join(dir, 'three.txt') });

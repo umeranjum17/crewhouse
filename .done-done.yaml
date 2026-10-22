@@ -67,6 +67,9 @@ journeys:
   crew-room:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE, or on OPENROUTER_API_KEY with CREW_ACCOUNT=openrouter'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:-}"'
+  flash-read:
+    spends: 'a few live model calls on the OpenRouter key named by OPENROUTER_API_KEY'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/flash-read.sh "$DONE_DONE_EVIDENCE_ROOT"'
   phone-live-control:
     spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
