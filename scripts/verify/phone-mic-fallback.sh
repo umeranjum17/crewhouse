@@ -24,7 +24,9 @@ echo no | "${ANDROID_HOME:-$HOME/Android/Sdk}/cmdline-tools/latest/bin/avdmanage
 GATE=${FM_MEM_GATE:-}
 $GATE emulator -avd mic1 -port 5586 -no-window -gpu swiftshader_indirect -memory 2048 -cores 2 -no-audio -no-boot-anim -no-snapshot-save >"$S/emu.log" 2>&1 &
 EMU=$!
-for _ in $(seq 120); do [ "$(adb -s $SER shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break; sleep 3; done
+# The memory gate may hold the emulator back while the host is busy, so the wait is long and then fails loudly.
+for _ in $(seq 400); do [ "$(adb -s $SER shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break; sleep 3; done
+[ "$(adb -s $SER shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] || { echo "the emulator never booted" >&2; tail -5 "$S/emu.log" >&2; exit 1; }
 bash "$REPO/scripts/verify/pair-lab.sh" up "$REPO" >/dev/null
 node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK"
 adb -s $SER shell pm grant dev.crewhouse.app android.permission.RECORD_AUDIO
