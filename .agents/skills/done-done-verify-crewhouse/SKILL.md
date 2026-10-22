@@ -37,6 +37,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [Phone live control](features/phone-live-control.md): Open a working helper's chat on the phone layout; its control bar has Stop and Take control, and an ask shows Yes, go ahead (`docs/verification/phone-live-control.md`)
 - [A pinned tool that failed](features/a-pinned-tool-that-failed.md): Run the pinned-tool drive script; the helper's "What happened" shows the failed step and the newer copy an update brings in
 - [The video job](features/the-video-job.md): Run `scripts/verify/video-job.sh <repo> <out>`; a pasted link gets Chief's quality card, the pick downloads only that, with its link (`docs/verification/video-job.md`)
+- [A helper looks inside a binary](features/binary-inspect.md): Run the `binary-inspect` journey; the helper's thread holds what the inspector found, and a file from outside its own folder is refused
 - [Key sign-in sheet](features/key-sign-in-sheet.md): Home's "Sign in with OpenRouter" opens the key sheet; paste a stub key, pick a live model (`docs/verification/key-sheet.md`)
 - [Quiet-job nudge](features/quiet-job-nudge.md): Run `scripts/verify/quiet-nudge.sh <out>`; Chief says a job is quiet once, a day later it ends unsure (`docs/verification/quiet-nudge.md`)
 - [Pair the PWA and get a real Chief reply](features/pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — run the `core` journey (the `upgrade` journey proves the release path) (`docs/verification/pair-chat.md`)

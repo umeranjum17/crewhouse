@@ -352,5 +352,14 @@
       "Wait while Video Vic downloads the pick on the computer and Chief answers"
     ],
     "result": "Nothing downloads before the pick; then only the 720p video is in Video Vic's files, delivered with the link it came from, and Chief's chat says it is saved"
+  },
+  "binary-inspect": {
+    "start": "a fresh crew on the stub engine, with Byte on the crew and a small binary in Byte's own folder",
+    "steps": [
+      "Open Byte's chat on the phone and on the computer",
+      "Read the note Byte left after looking inside the file",
+      "Ask Byte to look at a file from outside its own folder, and read what came back"
+    ],
+    "result": "Byte's note holds what the inspector found in the file, and the file from outside its own folder was refused, at 390 and 1440, day and night"
   }
 }
