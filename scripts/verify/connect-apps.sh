@@ -3,18 +3,23 @@
 # Composio's own sign-in page): one isolated crewd on the real engine, signed in to MiniMax, then Connect apps -> Composio's
 # sign-in -> Chief uses ONE connected app for a read-only request, with the person saying yes on the ask card.
 #
-#   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/connect-apps.sh <out-dir> <minimax-key-file> <handoff-dir>
+#   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/connect-apps.sh <out-dir>   (CONNECT_CONFIG, ASK, REPLY_SECONDS, SIGNIN_SECONDS)
 #
-# The run opens no browser for the sign-in: it writes the app's address to <handoff-dir>/app-url.txt and waits, bounded by
+# done-done runs a journey with a clean environment, so the settings come from a file of NAME=value lines (default
+# ~/.config/crewhouse/connect-apps.conf; the environment still wins): CONNECT_KEY_FILE is the path of the MiniMax key (never its
+# value) and CONNECT_HANDOFF a folder for the app's address.
+# The run opens no browser for the sign-in: it writes the app's address to $CONNECT_HANDOFF/app-url.txt and waits, bounded by
 # SIGNIN_SECONDS (default 1500), for Connect apps to turn on. The person (or the agent driving the person's own browser) opens
 # that address, taps Connect apps and finishes Composio's page. Then Chief gets ASK (read-only); the one ask card, which must name
 # a Composio app, is answered "yes, once" through the API, as the card's own button would; any other ask fails the run.
 # The key is read from the file into the sign-in request only. Exit 0 with connected-apps/*.png (Chief's thread, the Apps screen,
 # 390 and 1440 wide, day and night), reply.txt, ask.txt and app.mp4 (the app at both widths while Chief works).
 set -euo pipefail
-[ $# -ge 3 ] || { echo "usage: connect-apps.sh <out-dir> <minimax-key-file> <handoff-dir>  (ASK, REPLY_SECONDS, SIGNIN_SECONDS)" >&2; exit 2; }
-KEYFILE=$2; [ -s "$KEYFILE" ] || { echo "connect-apps: no key in the key file" >&2; exit 2; }
-OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); HAND=$(mkdir -p "$3" && cd "$3" && pwd -P)
+[ $# -ge 1 ] || { echo "usage: connect-apps.sh <out-dir>" >&2; exit 2; }
+CONF=${CONNECT_CONFIG:-$HOME/.config/crewhouse/connect-apps.conf}
+[ ! -f "$CONF" ] || while IFS='=' read -r k v; do case $k in CONNECT_KEY_FILE|CONNECT_HANDOFF|ASK) [ -n "${!k:-}" ] || export "$k=$v";; esac; done < "$CONF"
+KEYFILE=${CONNECT_KEY_FILE:-}; [ -s "$KEYFILE" ] || { echo "connect-apps: CONNECT_KEY_FILE names no key file" >&2; exit 2; }
+OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); HAND=$(mkdir -p "${CONNECT_HANDOFF:?CONNECT_HANDOFF names no folder}" && cd "$CONNECT_HANDOFF" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-connect-apps.XXXXXX)
