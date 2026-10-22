@@ -490,5 +490,14 @@
       "Install Crewhouse from Settings and open Chief's profile in the installed window"
     ],
     "result": "With no computer the profile's Computer section says No computer yet in plain words; tapping Chief's name opens his profile: the blue portrait card, Routines with Morning digest and Add a routine, and Computer with Chief's live screen and Take control; Take control opens Chief's screen saying You have control, the screen outlined, with Hand it back, and the controls are the person's; Hand it back gives them to Chief again and the screen offers Take control; the installed window shows the same profile, standalone"
+  },
+  "chief-reply-engine": {
+    "start": "a crew on this checkout's pinned OpenClaw engine ({{engine}}), its model a scripted local provider, Umer signed in and onboarded",
+    "steps": [
+      "Send Chief a message: {{ask}}",
+      "Wait while Chief's job runs on the engine and ends done",
+      "Open Chief's thread from his card on Home, at 390 wide, day and night"
+    ],
+    "result": "Chief's thread shows the reply under the person's message: {{reply}}"
   }
 }

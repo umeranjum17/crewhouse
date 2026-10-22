@@ -6,6 +6,7 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [Recruit a helper and assign it a job](recruit-a-helper-and-assign-it-a-job.md): Send a message to Chief that carries a crew_recruit tool call, then post a job in the new helper's own thread
 - [Chief's thread on a desktop and a phone](chief-s-thread-on-a-desktop-and-a-phone.md): Open the app's private launcher URL for the lab, then the Chief thread (#/chief)
 - [Onboarding in Chief's chat](onboarding-from-hello-into-chief-s-threa.md): First run in a fresh browser session opens Chief's chat asking the name, then his pitch with ideas to try
+- [Chief replies on the pinned engine](chief-replies-on-the-pinned-engine.md): Send Chief a message on the pinned engine with a scripted model; his reply shows in his thread, no account or spend
 - [Chief's real reply on MiniMax Flash](chief-s-real-reply-on-minimax-flash.md): Send Chief a message on a computer signed in to MiniMax; his reply shows in his thread
 - [A bot's read of a file outside its own folder](a-bots-read-of-a-file-outside-its-own-folder.md): Ask Chief to read a helper's file; the crew reads its own work without a question, on a real key
 - [Chief waits for the helper's report](chief-waits-for-the-helpers-report.md): Ask Chief to get something from a helper; he waits for the report and answers you from it, with no question in between

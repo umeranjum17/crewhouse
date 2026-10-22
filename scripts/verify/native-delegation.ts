@@ -21,6 +21,7 @@ if (mode === '--scripted') {
     const reports = [...new Set(JSON.stringify(body.messages.filter((m: any) => m.role !== 'system')).match(/LEGWORK-DONE \w+/g) ?? [])];
     // The reports come back in a turn of the engine's own, without Chief's persona.
     if (reports.length) return { reply: `Legwork is in: ${reports.map((r) => r.split(' ')[1]).sort().join(', ')}.` };
+    if (system.includes('Your id in Crewhouse is chief.') && /say hello back/i.test(text)) return { reply: 'Good morning, Umer. The crew is ready when you are.' }; // chief-reply-engine.sh
     if (!system.includes('Your id in Crewhouse is chief.')) return text.includes('cannot do it') ? { fail: 'The helper’s own job could not be done.' } : { text };
     if (/\[legwork(-hold)?\]/.test(text)) {
       const hold = text.lastIndexOf('[legwork-hold]') > text.lastIndexOf('[legwork]'); // the latest ask, not an earlier job Chief's prompt recalls: one lookup whose report never comes, for the restart proof to kill under
