@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import java.util.Locale
+import java.util.Locale
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Queues
@@ -35,14 +37,23 @@ class CrewhouseVoiceModule : Module() {
       val context = appContext.reactContext
       if (context == null) return@AsyncFunction promise.resolve("")
       ear?.destroy()
-      listen(context, onDevice(context), promise)
+      listen(context, tries(context), promise)
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stop") { ear?.stopListening() }.runOnQueue(Queues.MAIN)
   }
 
-  // One listen on the on-device recognizer when it can, else the system one. A missing pack on-device falls back once.
-  private fun listen(context: Context, local: Boolean, promise: Promise) {
+  // What to try, in order: each recognizer (on-device, then the system one) in the phone's own language, then in en-US
+  // when that language is English: a phone set to en-AE has no pack for it, and the speech service fails before it listens.
+  private fun tries(context: Context): List<Pair<Boolean, String>> {
+    val mine = Locale.getDefault()
+    val tags = listOf(mine.toLanguageTag()) + if (mine.language == "en" && mine.toLanguageTag() != "en-US") listOf("en-US") else emptyList()
+    return listOf(true, false).filter { !it || onDevice(context) }.flatMap { local -> tags.map { local to it } }
+  }
+
+  // One listen with the first of `left`; a failure to hear (no pack) moves on to the next.
+  private fun listen(context: Context, left: List<Pair<Boolean, String>>, promise: Promise) {
+    val (local, tag) = left.first()
     val r = if (local) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
     ear = r
     var settled = false
@@ -56,7 +67,7 @@ class CrewhouseVoiceModule : Module() {
         // Nothing was said: "didn't catch that" is right. Any other failure is the phone not being set up to hear.
         null, SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> promise.resolve(words.orEmpty())
         else ->
-          if (local && SpeechRecognizer.isRecognitionAvailable(context)) listen(context, false, promise)
+          if (left.size > 1) listen(context, left.drop(1), promise)
           else promise.reject(CodedException("unready", "unready", null))
       }
     }
@@ -71,6 +82,7 @@ class CrewhouseVoiceModule : Module() {
       override fun onPartialResults(b: Bundle?) {}
       override fun onEvent(type: Int, b: Bundle?) {}
     })
-    r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM))
+    r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+      .putExtra(RecognizerIntent.EXTRA_LANGUAGE, tag).putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, tag))
   }
 }
