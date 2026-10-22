@@ -22,6 +22,8 @@ export const RELAY_PORT = 7300;
 export const WORK_DIR = '/home/user/crewhouse';
 export const recipe = (relay: string, lab: { download?: string; env?: Record<string, string> } = {}, workDir = WORK_DIR) => ({
   name: 'crewhouse', workDir,
+  // Chief's own screen runs on a virtual display; boat.dev's computer has none until this one root step adds it.
+  installRoot: [['apt-get', 'install', '-y', 'xvfb']],
   node: { version: '24.21.0', sha256: { 'linux-x64': 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6', 'linux-arm64': '6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2' } },
   install: [['curl', '-fsSLo', 'crewhouse.tar.gz', lab.download || LINUX_DOWNLOAD],
     // The download unpacks read-only files (the engine set is locked), so unpacking it over an earlier install
@@ -55,12 +57,17 @@ export async function checkKey(p: Provider, store: MachineStore, key: string): P
   return listed;
 }
 
+/** Make a new computer: boat.dev rents it in the person's own account, then it is set up like a picked one. The
+ *  press's own key makes a repeated call the same rental, never a second one. */
+export const make = (p: Provider, press: string) => p.create!({ name: 'computer', size: PRICES[0].size, keepCopies: true, idempotencyKey: press });
+
 /** One setup at a time per store: a retry must not race the run it retries. */
 const running = new WeakSet<MachineStore>();
 
 /** Use this computer: the computer's public relay address, then the kit's setup steps for the one the person picked,
- *  ending with this phone's key on it. The kit's `pairing` receipt comes back as this phone's link grant (`grant`). */
-export async function* connect(p: Provider, store: MachineStore, picked: MachineRef, phone: KeyPair, lab?: Parameters<typeof recipe>[1]): AsyncGenerator<SetupStep & { grant?: DeviceGrant }> {
+ *  ending with this phone's key on it. The kit's `pairing` receipt comes back as this phone's link grant (`grant`).
+ *  `move`: the person confirmed moving Chief here from the phone that set this computer up, which then loses access. */
+export async function* connect(p: Provider, store: MachineStore, picked: MachineRef, phone: KeyPair, lab?: Parameters<typeof recipe>[1], move = false): AsyncGenerator<SetupStep & { grant?: DeviceGrant }> {
   if (running.has(store)) throw refuse('setup-running', 'a setup is already running on this phone');
   running.add(store);
   try {
@@ -82,7 +89,7 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
     // The kit's machine keeps the record it read, so it reads the store through this view: it sees the
     // computer this run released, not the one an earlier run held.
     const s: MachineStore = { load: () => store.load(), save: (record) => store.save(record) };
-    for await (const step of setup({ provider: p, store: s, recipe: r, pick, confirmId: picked.id, pair: pairEnrol(machine({ provider: p, store: s }), r, phone.publicKey) })) {
+    for await (const step of setup({ provider: p, store: s, recipe: r, pick, confirmId: picked.id, replaceOwner: move, pair: pairEnrol(machine({ provider: p, store: s }), r, phone.publicKey) })) {
       yield step.step === 'pairing' && step.receipt
         ? { ...step, grant: { v: 1, secretKey: b64url(phone.secretKey), hostName: 'Your cloud computer', host: step.receipt.host, device: step.receipt.device, urls: [linkUrl(relay, hostId(unb64url(step.receipt.host)))] } } : step;
     }
@@ -96,15 +103,17 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
  *  receipt finishes the last two (its tailnet `securing` step isn't used). */
 const DONE: Partial<Record<SetupStep['step'], number>> = { 'checking-access': 1, inspecting: 2, installing: 3, pairing: 5, ready: 5 };
 const AT = { 'checking-access': 0, listing: 1, inspecting: 1, installing: 2, securing: 3, pairing: 3 };
-/** The kit's words for a failed step. The one failure the app itself causes is the picked computer being
- *  gone: the kit lists the account's computers and the app's pick cannot find it, which the kit words as a
- *  plain problem. The app knows what happened, so it says that. */
-const whyOf = (s: Extract<SetupStep, { step: 'failed' }>) => (s.at === 'listing' && s.cause === 'error.app' ? CLOUD.problem['computer-gone'] : words(s.cause, vars));
+/** A failed step's words: which step stopped, then the kit's cause. The one failure the app itself causes is the
+ *  picked computer being gone: the kit lists the account's computers and the app's pick cannot find it, which the kit
+ *  words as a plain problem. The app knows what happened, so it says that. */
+const whyOf = (s: Extract<SetupStep, { step: 'failed' }>) => s.at === 'listing' && s.cause === 'error.app' ? CLOUD.problem['computer-gone']
+  : `${CLOUD.steps.stopped[AT[s.at]]} ${words(s.cause, vars)}`;
 export const progress = (steps: SetupStep[], thrown = '') => {
   const last = steps.at(-1);
   const done = Math.max(0, ...steps.map((s) => DONE[s.step] ?? 0));
   // A step fails only after every row before it passed: adopt() installs before the kit says inspecting.
-  if (last?.step === 'failed') return { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: whyOf(last), retry: last.retryable };
+  // A computer another phone set up offers the move to this phone (`move`), which connect() then makes.
+  if (last?.step === 'failed') return { done: Math.max(done, AT[last.at]), failed: AT[last.at], why: whyOf(last), retry: last.retryable, move: last.cause === 'error.ownerEnrolled' };
   // A throw, not a kit step: the kit names each step once it finishes, so setup was on the next row (none before the first).
-  return thrown ? { done, failed: last && done < 5 ? done : -1, why: thrown, retry: true } : { done, failed: -1, why: '', retry: false };
+  return { ...(thrown ? { done, failed: last && done < 5 ? done : -1, why: thrown, retry: true } : { done, failed: -1, why: '', retry: false }), move: false };
 };

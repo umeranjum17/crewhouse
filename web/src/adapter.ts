@@ -144,16 +144,21 @@ export const CLOUD = {
   },
   make: {
     pill: 'New rental', title: 'Make a cloud computer?', lead: 'It will be in your own boat.dev account. boat.dev bills you, not Crewhouse.', size: 'Standard · 2 CPU / 4 GB',
-    check: 'Your account’s balance and trial limit must be checked before I make one.', create: 'Check cost before creating', back: 'Use my existing computer instead',
+    check: 'boat.dev checks your balance and trial limit when I make it.', create: 'Make it and set it up', making: 'Making your computer…', back: 'Use my existing computer instead',
   },
   steps: {
     pill: 'Setting up', title: 'I’m setting up your computer.', count: (n: number) => `${n} of 5 steps done`, help: 'Setup needs your help',
-    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again picks up where this stopped. Don’t make another computer.',
+    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again is safe: it picks up on this same computer, and nothing new is rented. Don’t make another computer.',
+    /** The first words when a row stops, so the person knows which step it was. */
+    stopped: ['Checking your access stopped.', 'Checking the computer stopped.', 'Installing Chief stopped partway.', 'Opening the secure connection stopped.', 'Connecting this phone stopped.'],
     rows: [['Checked your access', 'Only your chosen computer.'], ['Checked the computer', 'Files and services checked before installing.'],
       ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
       ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
   },
-  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
+  /** A computer another phone set up: Chief moves here only once the person confirms the other phone loses access. */
+  move: { go: 'Move Chief to this phone', back: 'Back', title: 'Move Chief to this phone?', yes: 'Yes, move Chief',
+    lines: ['The phone that set up this computer loses access to Chief at once. It can’t send Chief anything after this.', 'Your chats and your crew stay on the computer. I set Chief up again here, then this phone takes over.'] },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
     link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],

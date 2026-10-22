@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/discover';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
-import { bindPhoneKey, phoneReceipt } from '@byokit/cloud';
+import { bindPhoneKey, phoneReceipt, replacePhoneKey } from '@byokit/cloud';
 import { relayOrigin, type Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -161,8 +161,8 @@ export class Link {
       setTimeout(() => done(false), PAIR_MS).unref();
     });
   }
-  /** A cloud computer's owner phone, delivered by the person's cloud account (scripts/headless.mjs), never by a phone. */
-  async enrol(key: Uint8Array) { this.put('link.owner', (await bindPhoneKey(this.host, key)).id); return phoneReceipt(this.host, key); }
+  /** A cloud computer's owner phone, delivered by the person's cloud account (scripts/headless.mjs), never by a phone; `replace` revokes the old one. */
+  async enrol(key: Uint8Array, replace = false) { this.put('link.owner', (await (replace ? replacePhoneKey : bindPhoneKey)(this.host, key)).id); return phoneReceipt(this.host, key); }
   answer(id: number, yes: boolean) { (this.asking.get(id) ?? fail404('that phone stopped waiting')).answer(yes); }
   approve(words: string) { ([...this.asking.values()].find((a) => a.words === words.trim()) ?? fail404('those words do not match a waiting phone')).answer(true); }
 

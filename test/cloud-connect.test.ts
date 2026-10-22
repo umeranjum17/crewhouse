@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { DeviceLink, hostId, keyPair, unb64url, type DeviceGrant } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
 import { startFakeSandboxServer, memoryStore } from '@byokit/cloud/testing';
-import { checkKey, connect, cost, progress, provider, said } from '../web/src/cloud.ts';
+import { checkKey, connect, cost, make, progress, provider, said } from '../web/src/cloud.ts';
 import { until, delegated } from './lab.ts';
 import { temp } from './tmp.ts';
 
@@ -35,10 +35,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.equal((await store.load())!.providerKey, 'good-key');
   assert.equal(cost(), '$0.018/hour · about $13.14 for 730 hours. boat.dev plans start at $20 a month with compute credit included; this computer uses that credit. List price checked 13 Oct.');
 
+  server.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
   server.machine.script('curl', { code: 1, stdout: '', stderr: 'no route', timedOut: false });
   const phone = keyPair();
   const failed = await all(connect(p, store, listed[0], phone));
-  assert.deepEqual(progress(failed), { done: 2, failed: 2, why: 'boat.dev reports a problem with your cloud computer.', retry: true });
+  assert.deepEqual(progress(failed), { done: 2, failed: 2, why: 'Installing Chief stopped partway. boat.dev reports a problem with your cloud computer.', retry: true, move: false });
+  // Chief's own screen needs a display: the recipe's one root step installs it before anything else.
+  assert.ok(server.machine.runs.some((r) => r.root && r.argv.join(' ').includes('apt-get install -y xvfb')), 'the computer gets Xvfb');
 
   // The computer: the headless runner with the recipe's relay published, its kit folder bridged to the fake machine's.
   const dir = temp('cloud-host'), bin = join(dir, 'bin'), repo = join(import.meta.dirname, '..'), cloud = join(dir, '.byokit'), remote = '/home/user/crewhouse/.byokit';
@@ -52,11 +55,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   let log = '', host: ReturnType<typeof spawn> | undefined, link: DeviceLink | undefined;
   const boot = () => { log = ''; host = spawn(process.execPath, ['scripts/headless.mjs'], { cwd: repo, env }); host.stdout!.on('data', (b) => log += b); host.stderr!.on('data', (b) => log += b); };
   const stop = async () => { if (host?.exitCode === null) { host.kill('SIGTERM'); await new Promise((r) => host!.once('exit', r)); } };
-  const machines = [server.machine];
+  const machines = [server.machine], ownerKeys = new Set<string>();
   const bridge = setInterval(() => {
     for (const m of machines) {
       const delivered = m.files.get(`${remote}/inbox/phone.bin`);
       if (delivered && !existsSync(join(cloud, 'inbox/phone.bin')) && !existsSync(join(cloud, 'outbox/receipt.json'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
+      const owner = m.files.get(`${remote}/inbox/owner.bin`); // the move: a new owner phone's key
+      if (owner && !ownerKeys.has(owner.bytes.toString())) { ownerKeys.add(owner.bytes.toString()); mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/owner.bin'), owner.bytes); }
       if (existsSync(join(cloud, 'outbox/receipt.json'))) m.writeFile(`${remote}/outbox/receipt.json`, readFileSync(join(cloud, 'outbox/receipt.json')), 0o600);
     }
   }, 50);
@@ -67,10 +72,10 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   server.machine.script('curl', { code: 0, stdout: '', stderr: '', timedOut: false });
   const steps = await all(connect(p, store, listed[0], phone));
   assert.deepEqual(steps.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
-  assert.deepEqual(progress(steps), { done: 5, failed: -1, why: '', retry: false });
+  assert.deepEqual(progress(steps), { done: 5, failed: -1, why: '', retry: false, move: false });
   // A throw mid-setup marks the row setup was on; one before the kit's first step marks none. Both offer Try again.
-  assert.deepEqual(progress(steps.slice(0, 4), 'lost'), { done: 3, failed: 3, why: 'lost', retry: true });
-  assert.deepEqual(progress([], 'lost'), { done: 0, failed: -1, why: 'lost', retry: true });
+  assert.deepEqual(progress(steps.slice(0, 4), 'lost'), { done: 3, failed: 3, why: 'lost', retry: true, move: false });
+  assert.deepEqual(progress([], 'lost'), { done: 0, failed: -1, why: 'lost', retry: true, move: false });
   assert.equal(server.requests.filter((r) => r.method === 'POST' && r.path === '/sandboxes').length, 1, 'only the seeded computer was ever rented');
   assert.match(log, /owner phone is enrolled/);
 
@@ -78,8 +83,14 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   // phone pairs again, so the setup is not a once-per-phone thing.
   const again = await all(connect(p, store, listed[0], phone));
   assert.deepEqual(again.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
-  assert.deepEqual(progress(again), { done: 5, failed: -1, why: '', retry: false });
+  assert.deepEqual(progress(again), { done: 5, failed: -1, why: '', retry: false, move: false });
   assert.equal((await store.load())!.ref!.id, seeded.id, 'the computer the phone already has stays the one it has');
+
+  // A second phone on the computer this one set up is offered the move (made at the end, since it ends this phone's access).
+  const newPhone = keyPair(), newStore = memoryStore();
+  const offered = await all(connect(p, newStore, listed[0], newPhone));
+  assert.deepEqual(progress(offered), { done: 1, failed: 1, retry: false, move: true,
+    why: 'Checking the computer stopped. Chief is already on this cloud computer, set up with another phone. You can move it to this phone instead. The other phone then loses access.' });
 
   // The app's own refusals are named, not one generic line: a computer that is gone, and a setup that is
   // already running on this phone.
@@ -98,9 +109,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   const other = await startFakeSandboxServer({ key: 'good-key' });
   t.after(() => other.close());
   machines.push(other.machine);
+  other.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
   const otherProvider = provider(async () => 'good-key', other.url);
-  await otherProvider.create!({ name: 'other-one', size: 'small', keepCopies: true, idempotencyKey: 'seed-2' });
-  const second = await otherProvider.create!({ name: 'other-two', size: 'small', keepCopies: true, idempotencyKey: 'seed-3' });
+  // A new account has no computer: Make a new computer rents one there, one rental per press.
+  assert.deepEqual(await checkKey(otherProvider, memoryStore(), 'good-key'), []);
+  await make(otherProvider, 'press-1');
+  const second = await make(otherProvider, 'press-2');
+  assert.equal((await make(otherProvider, 'press-2')).id, second.id, 'a repeated press is the same rental');
   const moved = await all(connect(otherProvider, store, second, phone));
   assert.deepEqual(moved.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
   assert.equal((await store.load())!.ref!.id, second.id, 'the phone’s computer is the one the person picked');
@@ -131,4 +146,15 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   writeFileSync(join(cloud, 'inbox/phone.bin'), keyPair().publicKey);
   await until('a second phone is refused', () => /already has an owner phone/.test(log), 10_000);
   assert.equal(existsSync(join(dir, 'ts-called')), false, 'the cloud computer never needs Tailscale');
+
+  // Move Chief to the new phone, as the person confirmed: setup runs again, the new phone is the owner and reaches
+  // Chief, and the phone that set the computer up loses access at once.
+  const moveSteps = await all(connect(p, newStore, listed[0], newPhone, undefined, true));
+  assert.deepEqual(moveSteps.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
+  const newSide = dial(moveSteps.find((s) => s.grant)!.grant!);
+  t.after(() => newSide.l.stop());
+  assert.equal((await newSide.req('GET', '/api/accounts')).status, 200, 'the new phone owns the computer');
+  assert.equal((await newSide.req('GET', '/api/phones')).body.length, 1, 'one phone: the old one was revoked');
+  link.stop(); phoneSide = dial(grant); link = phoneSide.l;
+  assert.notEqual((await phoneSide.req('GET', '/api/accounts')).status, 200, 'the old phone lost access');
 });

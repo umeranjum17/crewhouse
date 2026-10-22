@@ -3,7 +3,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isIPv4 } from 'node:net';
-import { PHONE_KEY_FILE, RECEIPT_FILE } from '@byokit/cloud';
+import { OWNER_KEY_FILE, PHONE_KEY_FILE, RECEIPT_FILE } from '@byokit/cloud';
 import { tailscaleState } from '@byokit/discover';
 import { keyPairFrom } from '@byokit/pair';
 import { qrText } from '@byokit/ui-core/link';
@@ -54,11 +54,12 @@ async function pair() {
 }
 /** A cloud computer set up from the phone (@byokit/cloud): the person's cloud account delivers the phone's public key to
  *  <workDir>/.byokit/inbox; crewd enrols it as this host's owner, and the receipt in the outbox tells the phone how to
- *  pair. The inbox file goes only once its enrol answered, so a crash part-way is finished on the next start. */
+ *  pair. The inbox file goes only once its enrol answered, so a crash part-way is finished on the next start. A new
+ *  owner phone the person moved Chief to arrives as the kit's owner file: it replaces the old phone, which loses access. */
 async function inbox(dir) {
-  const path = join(dir, 'inbox', PHONE_KEY_FILE);
+  const replace = existsSync(join(dir, 'inbox', OWNER_KEY_FILE)), path = join(dir, 'inbox', replace ? OWNER_KEY_FILE : PHONE_KEY_FILE);
   if (!existsSync(path)) return;
-  const { receipt } = await api('phones/enrol', { key: readFileSync(path).toString('base64') });
+  const { receipt } = await api('phones/enrol', { key: readFileSync(path).toString('base64'), replace });
   mkdirSync(join(dir, 'outbox'), { recursive: true, mode: 0o700 });
   writeFileSync(join(dir, 'outbox', '.receipt.tmp'), receipt, { mode: 0o600 });
   renameSync(join(dir, 'outbox', '.receipt.tmp'), join(dir, 'outbox', RECEIPT_FILE));
