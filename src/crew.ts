@@ -215,7 +215,7 @@ export class Crew {
   private seenLearned = new Set<string>();
   /** When to next check the engine's collection-review job (the weekly tidy, run on crewhouse's own boundary). */
   private curationAt = 0;
-  private curationBusy = false;
+  private curationBusy = false; private signedAt = 0; // the latest sign-in: a "no account" read begun before it is stale
   /** Bots whose screen the person is driving: the bot is paused until they give the controls back. */
   private held = new Set<string>();
   readonly desktops: Desktops;
@@ -259,7 +259,7 @@ export class Crew {
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
     this.runtime.onEngine = () => this.db.live('system.engine', '', {}); // each install or start phase, live for Hello's getting-ready screen
-    this.accounts.onSignedIn = () => { stamp('account signed in'); this.wake(`You're signed in. I'll start now.`); };
+    this.accounts.onSignedIn = () => { stamp('account signed in'); this.signedAt = Date.now(); this.wake(`You're signed in. I'll start now.`); };
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
     this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null);
@@ -1290,8 +1290,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
 
   /** A queued job's checks, then its first-job tool wait: a job that pauses or waits for tomorrow never downloads. */
   private async admit(task: Row) {
-    const choices = this.choices(task);
-    if (!await this.usable(choices)) { this.pause(task, choices); return null; }
+    const choices = this.choices(task), since = Date.now();
+    if (!await this.usable(choices)) { this.pause(task, choices, since); return null; }
     if (task.origin === 'routine' && this.overShare()) { this.waitForTomorrow(task); return null; }
     return this.fetchTools!(disk.botConfig(this.cfg, task.bot).tools ?? []);
   }
@@ -1300,8 +1300,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private async run(task: Row) {
     const bot = this.bot(task.bot)!;
     try {
-      const choices = this.choices(task), brain = await this.usable(choices);
-      if (!brain) return this.pause(task, choices);
+      const choices = this.choices(task), since = Date.now(), brain = await this.usable(choices);
+      if (!brain) return this.pause(task, choices, since);
       if (task.origin === 'routine' && this.overShare()) return this.waitForTomorrow(task);
       this.setTask(task, 'working');
       if (this.runtime.memoryLimited?.()) {
@@ -1472,7 +1472,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** Nothing usable yet: the task waits for this person's own sign-in and starts by itself once they sign in. */
-  private pause(task: Row, choices: disk.Brain[]) {
+  private pause(task: Row, choices: disk.Brain[], since: number) {
+    if (this.signedAt >= since) return; // the read began before the latest sign-in: the task stays queued and the next dispatch reads again
     // The copy names the blocked plan or an account the person has, never an unchosen default; else it names no provider.
     const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? PROVIDERS[key]?.name ?? key : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
     // The account the person has first: a resting one wakes up; one never signed in doesn't.

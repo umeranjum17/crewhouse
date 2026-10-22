@@ -302,10 +302,7 @@ export class OpenClawRuntime implements AgentRuntime {
   composioBegin() { return this.kit.beginComposioSignIn(); }
   composioDone() { return this.kit.completeComposioSignIn(); }
   composioSignOut() { return this.kit.signOutComposio(); }
-  async learned() {
-    const rows = await this.proposals();
-    return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state }));
-  }
+  async learned() { const rows = await this.proposals(); return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state })); }
 
   /** The member lane's learned-skills folder, and a lane's pre-change capture: crewhouse's own git versioning. A
    *  capture that cannot be verified throws, and the caller must refuse the change — the data stays. */
