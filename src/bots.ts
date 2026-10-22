@@ -120,7 +120,7 @@ export function loadTemplate(cfg: Config, id: string): Template {
 
 /** Stable id from a display name; ids authorize, names are display only. */
 export function slug(name: string) {
-  return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'bot';
+  return name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').slice(0, 24).replace(/^-+|-+$/g, '') || 'bot';
 }
 
 /** "Frames" for "Reel": a template's own name swapped for the bot's, in its soul and its job. */

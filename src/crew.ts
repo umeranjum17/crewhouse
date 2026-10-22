@@ -79,6 +79,17 @@ export function quietNow(quiet: string | null | undefined, at = new Date()) {
   return from <= to ? t >= from && t < to : t >= from || t < to;
 }
 
+/** The pinned yt-dlp's own read of a link (`-J`) as the person's choices: up to three qualities at 1080p or under, then the sound
+ *  alone, each with the format to fetch and its size (yt-dlp's estimate; from the bit rate and length when it gives none). mp4 and
+ *  m4a come first, so the file opens anywhere. */
+const videoChoices = (info: Row) => {
+  const all: Row[] = Array.isArray(info.formats) ? info.formats : [], size = (f?: Row) => Number(f?.filesize ?? f?.filesize_approx ?? (f?.tbr ?? 0) * (info.duration ?? 0) * 125) || 0;
+  const best = (fs: Row[]) => fs.sort((a, b) => Number(['mp4', 'm4a'].includes(b.ext)) - Number(['mp4', 'm4a'].includes(a.ext)) || size(b) - size(a))[0], words = (n: number) => n ? `about ${n < 1e9 ? `${Math.max(1, Math.round(n / 1e6))} MB` : `${(n / 1e9).toFixed(1)} GB`}` : 'size unknown';
+  const audio = best(all.filter((f) => f.vcodec === 'none' && f.acodec && f.acodec !== 'none')), heights = [...new Set(all.filter((f) => f.height && f.vcodec !== 'none').map((f) => Number(f.height)))].sort((a, b) => b - a);
+  return [...heights.filter((h) => h <= 1080 || h === heights.at(-1)).slice(0, 3).map((h) => [h, best(all.filter((f) => f.height === h && f.vcodec !== 'none' && (audio || f.acodec !== 'none')))] as const)
+    .map(([h, v]) => { const whole = !!v.acodec && v.acodec !== 'none'; return { id: `${h}p`, label: `${h}p`, size: words(size(v) + (whole ? 0 : size(audio))), format: whole ? v.format_id : `${v.format_id}+${audio.format_id}`, ext: whole ? v.ext : 'mp4' }; }),
+    ...audio ? [{ id: 'audio', label: 'Audio only', size: words(size(audio)), format: audio.format_id, ext: audio.ext }] : []];
+};
 const sha = (s: string) => createHash('sha256').update(s).digest('hex'), DRAFT_CAP = 20_000, clean = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n), fileName = (rel: string) => { const b = rel.split('/').pop() ?? rel; try { return decodeURIComponent(b).split('/').pop()!; } catch { return b; } }; // a file's own name, as the person knows it
 /** A hire card's won't-do lines switch grants off (posting/sending, spending, deleting: browser; passwords/sign-in: computer). Lines matching nothing are shown only. */
 const hireOff = (wont: string[]) => { const t = wont.join('\n').toLowerCase(), off = new Set<string>(); if (/post|send|publish|reply|like|follow|message|tweet|upload|share/.test(t)) off.add('browser'); if (/spend|pay|buy|purchase|checkout|order|book|cost|money/.test(t)) off.add('browser'); if (/delet|remov|eras|wipe|cancel/.test(t)) off.add('browser'); if (/password|sign.?in|log.?in|credential|passcode/.test(t)) off.add('computer'); return off; }, hireList = (v: unknown) => (Array.isArray(v) ? v : v == null ? [] : [v]).map((x) => clean(x, 200)).filter(Boolean).slice(0, 6);
@@ -1502,7 +1513,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const task = this.activeTask(botId), text = cleanReply(reply.trim());
     let wants = false;
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
       if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
@@ -1797,7 +1808,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id,task_id,title,detail FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id) && (!e.mail || permissionIdentity(botId, task?.id, e.words, e) === permissionIdentity(botId, a.task_id, a.title, JSON.parse(a.detail)))), askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}), ...(e.mail ? { mail: e.mail } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
-    // In their quiet hours nobody will answer soon: park at once instead of holding the bot.
+    return this.hold(botId, task, askId);
+  }
+  /** A tool call waits on the person's answer; in their quiet hours nobody will answer soon, so it parks at once. */
+  private async hold(botId: string, task: Row | undefined, askId: number) {
     const quiet = quietNow(this.person().quiet), answer = await new Promise<string | null>((resolve) => {
       const t = setTimeout(() => { this.holds.delete(askId); resolve(null); }, quiet ? 0 : HOLD_MS);
       this.holds.set(askId, (a) => { clearTimeout(t); resolve(a); });
@@ -1823,7 +1837,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; rule?: string }, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
@@ -1848,8 +1862,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       }
     }
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
-    const picked = ask.kind === 'style' && body.answer === 'allow' ? (detail.pick?.styles ?? []).find((s: { id: string }) => s.id === String(body.style ?? '')) : undefined;
-    if (ask.kind === 'style' && body.answer === 'allow' && !picked) throw fail('pick one of the styles on the card');
+    const picks = ask.kind === 'style' || ask.kind === 'video', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
+    if (picks && body.answer === 'allow' && !picked) throw fail(`pick one of the ${ask.kind === 'style' ? 'styles' : 'choices'} on the card`);
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
@@ -1865,7 +1879,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style')", task.id)) this.setTask(task, 'working');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id)) this.setTask(task, this.live.get(task.bot)?.task === task.id ? 'working' : 'queued');
       if (body.answer === 'deny' && body.remind === true) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
     });
@@ -1880,9 +1894,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       return this.dispatch();
     }
     if (body.answer === 'allow') this.granted.add(permissionIdentity(ask.bot, ask.task_id, ask.title, detail));
-    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style')", task.id)) return;
-    const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return; // not running now (after a restart): it asks again when it resumes, and goes through
-    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style') ORDER BY id", task.id);
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id)) return;
+    const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return void (task && this.handoffs.set(task.id, `${this.called().replace(/^the/, 'The')} answered: ${shown}`), this.dispatch()); // not running now (a hand-off's turn ended, or a restart): it resumes with the answer
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video') ORDER BY id", task.id);
     this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
@@ -1988,6 +2002,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
         'The person sees a Sign in card, signs in on your screen themselves and taps Done; never type a password or code. End your turn with one short line; you are resumed when they are done.', (p) => this.askSignin(botId, String(p.site ?? ''))));
       own.push(tool('crew_unlock', 'A PDF in your folder is password-locked (reading it fails on a password): call this with `files`, their paths in your folder. Never ask for a password in words: the person types each one on a card in Chief\'s chat, Crewhouse opens the file on this computer into an unlocked copy in files/unlocked/ and forgets it. End your turn with one short line; you are resumed with the copies when they are done.', (p) => this.askUnlock(botId, p.files)));
+      if (this.live.get(botId)?.grants.includes('video-download') && sandboxReady()) own.push(tool('crew_video', 'Save a video, or its sound, from a web link into your files/: {url}. The person first picks the quality or audio only, each with its size, on a card in Chief\'s chat; nothing downloads before. Crewhouse runs your pinned yt-dlp and delivers the file with its link.', (p) => this.video(botId, p.url)));
       own.push(tool('crew_routine', 'Offer the person a recurring check of your own: the same task on a schedule, which nothing runs until they say ' +
         'yes on a card. `when` is plain words in local time: "every day 9:00", "every 2 hours". `on` starts it on an event instead of a time: "when an email from the bank with subject statement arrives" (sender and subject are optional, matched as written), "10 minutes before each meeting", "when a meeting starts" (Gmail or Calendar connected first), "when a file arrives in the inbox" or "when this computer wakes up" (the card names the inbox; `when` may be empty then). `watch`: a page address Crewhouse reads itself, waking ' +
         'you only when it changed, so a quiet day costs the person no AI — prefer it. `quiet`: you look each time but speak only when something ' +
@@ -2276,6 +2291,30 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     if (!this.db.get("SELECT 1 FROM asks WHERE kind = 'style' AND state = 'open' AND task_id IS ?", task?.id ?? null))
       this.openAsk(CHIEF, task, `Pick a style for “${title}”`, { pick: { deck: title, ...sample, styles: STYLES.map(({ id, label }) => ({ id, label })) } }, 'style');
     return { asked: true, note: 'The person sees three sample looks as a pick card in Chief’s chat now. End your turn with one short line; you are resumed with their pick, then call crew_slides again with that style.' };
+  }
+
+  /** crew_video: the bot's pinned yt-dlp reads the link in its own sandbox; the person picks a quality or the sound alone, each with
+   *  its size, on a card in Chief's chat; only that pick is then downloaded into files/ and delivered with the link it came from. */
+  private async video(botId: string, link: unknown) {
+    const url = String(link ?? '').trim(), task = this.activeTask(botId), space = disk.botDir(this.cfg, botId), info = `work/video-${task?.id ?? 0}.json`;
+    if (!/^https?:\/\/\S+$/.test(url) || url.length > 2000) throw new Error('give the web link to the video');
+    const yt = async (args: string) => { const r = await runSandboxed(space, [this.cfg.toolsDir], { PATH: toolBin(this.cfg) }, `mkdir -p work files && yt-dlp --no-playlist --no-warnings ${args}`, this.netOf(botId)?.sock), cause = r.tail.trim().split('\n').at(-1);
+      if (r.code) throw new Error(`yt-dlp failed (exit ${r.code})${cause ? `: ${cause}` : ''}\n${pinnedNote(this.cfg, 'yt-dlp')}`); };
+    let ask = this.db.get("SELECT id, state FROM asks WHERE kind = 'video' AND task_id IS ? AND json_extract(detail, '$.url') = ? ORDER BY id DESC", task?.id ?? null, url);
+    if (!ask) {
+      await yt(`-J -- ${q(url)} > ${info}`);
+      const meta = JSON.parse(readFileSync(join(space, info), 'utf8')), formats = videoChoices(meta), title = clean(meta.title, 80) || 'the video';
+      if (!formats.length) throw new Error('yt-dlp found no video or sound to save at that link');
+      ask = { id: this.openAsk(CHIEF, task, `Save “${title}”`, { url, formats, pick: { title, from: new URL(url).hostname.replace(/^www\./, ''), choices: formats.map(({ id, label, size }) => ({ id, label, size })) } }, 'video'), state: 'open' };
+    } else if (ask.state === 'open' && task) this.setTask(task, 'needs_you');
+    if (ask.state === 'open' && !this.holds.has(ask.id)) await this.hold(botId, task, ask.id);
+    const now = this.db.get('SELECT state, answer, detail FROM asks WHERE id = ?', ask.id)!, d = JSON.parse(now.detail), pick = (d.formats as Row[]).find((c) => c.label === now.answer);
+    if (now.state === 'open') return { asked: true, note: 'The person has the card in Chief’s chat. End your turn with one short line; you are resumed when they pick, then call crew_video again with the same url.' };
+    if (!pick) return { saved: false, note: 'The person said not now, so nothing was downloaded. End with one short line.' };
+    const rel = this.fileName(botId, disk.slug(d.pick.title), pick.ext);
+    await yt(`-f ${q(pick.format)} ${pick.id === 'audio' ? '' : '--merge-output-format mp4 '}-o ${q(rel)} -- ${q(url)}`);
+    await this.deliver(botId, rel, `${d.pick.title}, ${pick.id === 'audio' ? 'the sound only' : `in ${pick.label}`}, from ${url}`);
+    return { ok: true, path: rel, picked: pick.label, from: url, note: 'Say it is saved, in what, and give the link it came from.' };
   }
 
   /** A raw file only opens after delivery, the same check the previews use. */

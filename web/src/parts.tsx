@@ -1047,7 +1047,34 @@ function StyleCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
   );
 }
 
+/** A video link's quality pick, in Chief's colour: the video's own title, where it is from, one radio row per quality (or the
+ *  sound alone) with its size, and one Save for the row picked. Nothing downloads before the tap; "Not now" waits behind ⋯. */
+function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  const v = c.video!, [sel, setSel] = useState(v.choices[0].id), [oops, setOops] = useState(false), picked = v.choices.find((x) => x.id === sel) ?? v.choices[0];
+  const act = async (body: Json) => { setOops(false); if (await answer(c, body)) onDone(); else setOops(true); }, save = () => act({ answer: 'allow', pick: picked.id });
+  const deny = c.choices.find((x) => x.body.answer === 'deny'), remind = deny ? { ...deny.body, remind: true } : null;
+  return (
+    <div className="card ask stack-ask chief-ask video-ask" id={id} aria-label={c.head} style={{ '--ask-colour': art.colourOf('chief') } as CSSProperties}>
+      <AskHead c={c} who={who} />
+      <p className="ask-words">{c.head}</p>
+      <p className="small">{v.from ? `From ${v.from}. ` : ''}{c.words}</p>
+      <div role="radiogroup" aria-label="How to save it">
+        {v.choices.map((x) => <button key={x.id} role="radio" aria-checked={sel === x.id} className={`pick ${sel === x.id ? 'on' : ''}`} onClick={() => setSel(x.id)}>
+          <span className="radio" aria-hidden /><span className="grow">{x.label}</span><span className="pick-size">{x.size}</span></button>)}
+      </div>
+      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={save}>Try again</button></div>}
+      <div className="btns">
+        <button className="btn go" onClick={save}>{picked.id === 'audio' ? 'Save the sound' : `Save in ${picked.label}`}</button>
+        <More title={c.head} sub={c.status} acts={[
+          deny && { label: deny.label, run: () => act(deny.body) },
+          remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
+      </div>
+    </div>
+  );
+}
+
 export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  if (c.kind === 'video') return <VideoCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
