@@ -3,7 +3,7 @@
 // The install can be made to fail with a flag file, so the phone's own "Try again" is what reaches "ready".
 // No real boat.dev, no money, no model: the phone's own flow, the kit's own steps (docs/verification/where-cloud.md).
 //
-//   LAB_PORT=7411 node scripts/verify/boat-fake-lab.mjs          # the lab runs until it is stopped
+//   LAB_PORT=7411 node scripts/verify/boat-fake-lab.mjs          # the lab runs until it is stopped (LAB_EMPTY=1: no computer)
 //   touch <lab dir>/install-fails                               # the install fails; remove the file and it passes
 //
 // The phone's build was given the lab's port (EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:<port>/api/v1),
@@ -24,7 +24,9 @@ mkdirSync(cloud, { recursive: true });
 
 const server = await startFakeSandboxServer({ key: KEY });
 const provider = boat({ baseUrl: server.url, label: 'boat.dev', prices: [], key: async () => KEY });
-const seeded = await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
+// LAB_EMPTY=1 is a new account with no computer, so the phone's Make a new computer is the way in.
+const seeded = process.env.LAB_EMPTY === '1' ? { id: 'none' } : await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
+server.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false }); // the recipe's display install
 const fakePort = Number(new URL(server.url).port);
 netServer((c) => { const u = netConnect(fakePort, '127.0.0.1'); c.pipe(u); u.pipe(c); }).listen(PORT, '127.0.0.1');
 

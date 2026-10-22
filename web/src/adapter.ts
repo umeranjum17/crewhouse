@@ -144,11 +144,13 @@ export const CLOUD = {
   },
   make: {
     pill: 'New rental', title: 'Make a cloud computer?', lead: 'It will be in your own boat.dev account. boat.dev bills you, not Crewhouse.', size: 'Standard · 2 CPU / 4 GB',
-    check: 'Your account’s balance and trial limit must be checked before I make one.', create: 'Check cost before creating', back: 'Use my existing computer instead',
+    check: 'boat.dev checks your balance and trial limit when I make it.', create: 'Make it and set it up', making: 'Making your computer…', back: 'Use my existing computer instead',
   },
   steps: {
     pill: 'Setting up', title: 'I’m setting up your computer.', count: (n: number) => `${n} of 5 steps done`, help: 'Setup needs your help',
-    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again picks up where this stopped. Don’t make another computer.',
+    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again is safe: it picks up on this same computer, and nothing new is rented. Don’t make another computer.',
+    /** The first words when a row stops, so the person knows which step it was. */
+    stopped: ['Checking your access stopped.', 'Checking the computer stopped.', 'Installing Chief stopped partway.', 'Opening the secure connection stopped.', 'Connecting this phone stopped.'],
     rows: [['Checked your access', 'Only your chosen computer.'], ['Checked the computer', 'Files and services checked before installing.'],
       ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
       ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
@@ -167,6 +169,7 @@ export const CLOUD = {
     'computer-gone': 'That computer is not in your boat.dev account any more. Pick another one.',
     'no-address': 'boat.dev gave that computer no public address. Try another computer.',
     'setup-running': 'Setup is already running on this phone. Wait for it to finish.',
+    'owner-enrolled': 'Chief is already on this computer, set up with another phone. Talk to Chief from that phone, or go back and pick or make another computer.',
   } as Record<string, string>,
 };
 

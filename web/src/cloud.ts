@@ -22,6 +22,8 @@ export const RELAY_PORT = 7300;
 export const WORK_DIR = '/home/user/crewhouse';
 export const recipe = (relay: string, lab: { download?: string; env?: Record<string, string> } = {}, workDir = WORK_DIR) => ({
   name: 'crewhouse', workDir,
+  // Chief's own screen runs on a virtual display; boat.dev's computer has none until this one root step adds it.
+  installRoot: [['apt-get', 'install', '-y', 'xvfb']],
   node: { version: '24.21.0', sha256: { 'linux-x64': 'fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6', 'linux-arm64': '6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2' } },
   install: [['curl', '-fsSLo', 'crewhouse.tar.gz', lab.download || LINUX_DOWNLOAD],
     // The download unpacks read-only files (the engine set is locked), so unpacking it over an earlier install
@@ -54,6 +56,10 @@ export async function checkKey(p: Provider, store: MachineStore, key: string): P
   await store.save({ ref: kept?.ref ?? null, providerKey: key });
   return listed;
 }
+
+/** Make a new computer: boat.dev rents it in the person's own account, then it is set up like a picked one. The
+ *  press's own key makes a repeated call the same rental, never a second one. */
+export const make = (p: Provider, press: string) => p.create!({ name: 'computer', size: PRICES[0].size, keepCopies: true, idempotencyKey: press });
 
 /** One setup at a time per store: a retry must not race the run it retries. */
 const running = new WeakSet<MachineStore>();
@@ -96,10 +102,12 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
  *  receipt finishes the last two (its tailnet `securing` step isn't used). */
 const DONE: Partial<Record<SetupStep['step'], number>> = { 'checking-access': 1, inspecting: 2, installing: 3, pairing: 5, ready: 5 };
 const AT = { 'checking-access': 0, listing: 1, inspecting: 1, installing: 2, securing: 3, pairing: 3 };
-/** The kit's words for a failed step. The one failure the app itself causes is the picked computer being
- *  gone: the kit lists the account's computers and the app's pick cannot find it, which the kit words as a
- *  plain problem. The app knows what happened, so it says that. */
-const whyOf = (s: Extract<SetupStep, { step: 'failed' }>) => (s.at === 'listing' && s.cause === 'error.app' ? CLOUD.problem['computer-gone'] : words(s.cause, vars));
+/** A failed step's words: which step stopped, then the kit's cause. The one failure the app itself causes is the
+ *  picked computer being gone: the kit lists the account's computers and the app's pick cannot find it, which the kit
+ *  words as a plain problem. The app knows what happened, so it says that. A computer set up with another phone is
+ *  said in the app's words, since this screen can't move Chief to this phone. */
+const whyOf = (s: Extract<SetupStep, { step: 'failed' }>) => s.at === 'listing' && s.cause === 'error.app' ? CLOUD.problem['computer-gone']
+  : `${CLOUD.steps.stopped[AT[s.at]]} ${s.cause === 'error.ownerEnrolled' ? CLOUD.problem['owner-enrolled'] : words(s.cause, vars)}`;
 export const progress = (steps: SetupStep[], thrown = '') => {
   const last = steps.at(-1);
   const done = Math.max(0, ...steps.map((s) => DONE[s.step] ?? 0));

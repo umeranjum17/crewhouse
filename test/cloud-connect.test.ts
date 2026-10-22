@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { DeviceLink, hostId, keyPair, unb64url, type DeviceGrant } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
 import { startFakeSandboxServer, memoryStore } from '@byokit/cloud/testing';
-import { checkKey, connect, cost, progress, provider, said } from '../web/src/cloud.ts';
+import { checkKey, connect, cost, make, progress, provider, said } from '../web/src/cloud.ts';
 import { until, delegated } from './lab.ts';
 import { temp } from './tmp.ts';
 
@@ -35,10 +35,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.equal((await store.load())!.providerKey, 'good-key');
   assert.equal(cost(), '$0.018/hour · about $13.14 for 730 hours. boat.dev plans start at $20 a month with compute credit included; this computer uses that credit. List price checked 13 Oct.');
 
+  server.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
   server.machine.script('curl', { code: 1, stdout: '', stderr: 'no route', timedOut: false });
   const phone = keyPair();
   const failed = await all(connect(p, store, listed[0], phone));
-  assert.deepEqual(progress(failed), { done: 2, failed: 2, why: 'boat.dev reports a problem with your cloud computer.', retry: true });
+  assert.deepEqual(progress(failed), { done: 2, failed: 2, why: 'Installing Chief stopped partway. boat.dev reports a problem with your cloud computer.', retry: true });
+  // Chief's own screen needs a display: the recipe's one root step installs it before anything else.
+  assert.ok(server.machine.runs.some((r) => r.root && r.argv.join(' ').includes('apt-get install -y xvfb')), 'the computer gets Xvfb');
 
   // The computer: the headless runner with the recipe's relay published, its kit folder bridged to the fake machine's.
   const dir = temp('cloud-host'), bin = join(dir, 'bin'), repo = join(import.meta.dirname, '..'), cloud = join(dir, '.byokit'), remote = '/home/user/crewhouse/.byokit';
@@ -81,6 +84,11 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.deepEqual(progress(again), { done: 5, failed: -1, why: '', retry: false });
   assert.equal((await store.load())!.ref!.id, seeded.id, 'the computer the phone already has stays the one it has');
 
+  // A second phone on the computer this one set up: the screen can't move Chief over, so the words don't offer it.
+  const secondPhone = await all(connect(p, memoryStore(), listed[0], keyPair()));
+  assert.deepEqual(progress(secondPhone), { done: 1, failed: 1, retry: false,
+    why: 'Checking the computer stopped. Chief is already on this computer, set up with another phone. Talk to Chief from that phone, or go back and pick or make another computer.' });
+
   // The app's own refusals are named, not one generic line: a computer that is gone, and a setup that is
   // already running on this phone.
   const gone = await all(connect(p, store, { ...listed[0], id: 'sbx-gone' }, phone)).catch((e) => e);
@@ -98,9 +106,13 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   const other = await startFakeSandboxServer({ key: 'good-key' });
   t.after(() => other.close());
   machines.push(other.machine);
+  other.machine.script('apt-get', { code: 0, stdout: '', stderr: '', timedOut: false });
   const otherProvider = provider(async () => 'good-key', other.url);
-  await otherProvider.create!({ name: 'other-one', size: 'small', keepCopies: true, idempotencyKey: 'seed-2' });
-  const second = await otherProvider.create!({ name: 'other-two', size: 'small', keepCopies: true, idempotencyKey: 'seed-3' });
+  // A new account has no computer: Make a new computer rents one there, one rental per press.
+  assert.deepEqual(await checkKey(otherProvider, memoryStore(), 'good-key'), []);
+  await make(otherProvider, 'press-1');
+  const second = await make(otherProvider, 'press-2');
+  assert.equal((await make(otherProvider, 'press-2')).id, second.id, 'a repeated press is the same rental');
   const moved = await all(connect(otherProvider, store, second, phone));
   assert.deepEqual(moved.map((s) => s.step), ['checking-access', 'listing', 'inspecting', 'installing', 'pairing', 'ready']);
   assert.equal((await store.load())!.ref!.id, second.id, 'the phone’s computer is the one the person picked');

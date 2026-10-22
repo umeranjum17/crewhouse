@@ -42,7 +42,7 @@ import { pairWords } from './src/pair-words';
 import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneKeyUrl, phoneMode, phonePlan, phoneProviderName, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, type ChatTurn, type PhoneDocument, type PhoneLine } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
-import { checkKey, connect as setUpCloud, cost, progress, said } from '../web/src/cloud.ts';
+import { checkKey, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
 import type { MachineRef, SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
@@ -870,6 +870,7 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const [setupError, setSetupError] = useState('');
   const [way, setWay] = useState(-1);
   const held = useRef(''); // the checked key, never on screen
+  const press = useRef(''); // one rental per press: a repeated Make after a lost answer is the same request
   const [grant, setGrant] = useState<Grant | null>(null); // the computer's receipt, as this phone's link
   const check = async (k: string) => {
     if (!k.trim() || busy) return;
@@ -891,17 +892,24 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
       }
     } catch (e) { setSetupError(said(e)); }
   };
+  const create = async () => {
+    if (busy) return;
+    setBusy(true); setErr('');
+    press.current ||= `make-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try { const ref = await makeComputer(boatOn(held.current), press.current); press.current = ''; setListed((x) => [...x, ref]); void run(ref); }
+    catch (e) { setErr(said(e)); } finally { setBusy(false); }
+  };
   const p = progress(steps, setupError), ready = steps.at(-1)?.step === 'ready';
   const box = (lead: boolean, body: ReactNode) => <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: lead ? 2 : 1, borderColor: lead ? t.go : t.line }]}>{body}</View>;
   const pill = (w: string) => <T style={[s.label2, { alignSelf: 'flex-start', color: t.go, backgroundColor: t.softAccent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{w}</T>;
+  const problem = !!err && <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]} /* the failed step's "!" and colour, not link blue */>
+    <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{err}</T></View>;
   const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
     <T style={[s.small, s.b]}>{c.key.label}</T>
     <Pressable onPress={() => void Clipboard.getString().then(check)} disabled={busy} accessibilityRole="button" accessibilityLabel={c.key.paste}
       style={[s.input, { minHeight: 48, justifyContent: 'center', borderColor: t.line2, backgroundColor: t.bg }]} /* paste-only: nothing typed, the key never on screen */>
       <T tone="mute">{busy ? c.key.checking : c.key.paste}</T></Pressable>
-    {err ? <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]} /* the failed step's "!" and colour, not link blue */>
-      <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{err}</T></View>
-      : <T tone="mute" style={s.small}>{c.key.after}</T>}
+    {problem || <T tone="mute" style={s.small}>{c.key.after}</T>}
     <Pressable onPress={() => setWay(way === 9 ? -1 : 9)} accessibilityRole="button" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.key.make}</T></Pressable>
     {way === 9 && <><T tone="ink2" style={s.small}>{c.key.how}</T><Btn label={c.key.open} onPress={() => void Linking.openURL(c.key.url)} /></>}
     <View style={{ backgroundColor: t.soft, borderRadius: radius.card, padding: 12 }}><T tone="ink2" style={s.small}>{c.kept.map((x, i) => i % 2 ? <Text key={i} style={s.b}>{x}</Text> : x)}</T></View></>;
@@ -913,7 +921,8 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
     <Btn big label={c.pick.make} onPress={() => setView('make')} /></>;
   const make = <>{pill(c.make.pill)}<T style={s.title}>{c.make.title}</T><T>{c.make.lead}</T>
     <View style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}><T style={s.b}>{c.make.size}</T><T tone="ink2" style={s.small}>{cost()}</T><T tone="mute" style={s.small}>{c.make.check}</T></View>
-    <Btn big disabled label={c.make.create} onPress={() => {}} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
+    {problem}
+    <Btn go big disabled={busy} label={busy ? c.make.making : c.make.create} onPress={() => void create()} /><Btn ghost label={c.make.back} onPress={() => setView('pick')} /></>;
   const progressList = ready ? <>{pill(c.ready.pill)}<T style={s.title}>{c.ready.title}</T>{c.ready.lines.map((l) => <T key={l} tone="ink2">{l}</T>)}
     {grant && <Btn go big label={c.ready.talk} onPress={() => onPaired(grant)} />}</> : <>
     {pill(c.steps.pill)}<T style={s.title}>{c.steps.title}</T>
@@ -921,15 +930,15 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
     {c.steps.rows.map(([title, sub], i) => <View key={title} style={[s.row, { alignItems: 'flex-start', opacity: i > p.done && i !== p.failed ? 0.6 : 1 }]}>
       <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: i < p.done ? t.softAccent : t.soft, color: i < p.done ? t.go : i === p.failed ? t.danger : t.mute }]}>{i < p.done ? '✓' : i === p.failed ? '!' : i + 1}</Text>
       <View style={{ flex: 1 }}><T style={s.b}>{title}</T><T tone="mute" style={s.small}>{sub}</T></View></View>)}
-    {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T><T tone="mute" style={s.small}>{c.steps.again}</T>
-      {p.retry && <Btn go big label={c.steps.retry} onPress={() => void run(listed.find((r) => r.id === picked)!, true)} />}</View>}</>;
+    {!p.why ? <T tone="mute" style={s.small}>{c.steps.note}</T> : <View accessibilityLiveRegion="polite" style={{ gap: 8 }}><T>{p.why}</T>
+      {p.retry && <><T tone="mute" style={s.small}>{c.steps.again}</T><Btn go big label={c.steps.retry} onPress={() => void run(listed.find((r) => r.id === picked)!, true)} /></>}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
       <View style={s.row}><T style={[s.b, { flex: 1 }]}>{title}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{sub}</T>
       {way === i && <T tone="ink2" style={s.small}>{more}</T>}</Pressable>)}
     <T tone="mute" style={s.small}>{c.other.foot}</T></>;
-  const back = view === 'key' ? onBack : () => setView(view === 'make' || view === 'steps' ? 'pick' : 'key');
+  const back = view === 'key' ? onBack : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : 'key'); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]} keyboardShouldPersistTaps="handled">
