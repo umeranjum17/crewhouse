@@ -50,8 +50,9 @@ class CrewhouseVoiceModule : Module() {
     return listOf(true, false).filter { !it || onDevice(context) }.flatMap { local -> tags.map { local to it } }
   }
 
-  // One listen with the first of `left`; a failure to hear (no pack) moves on to the next.
-  private fun listen(context: Context, left: List<Pair<Boolean, String>>, promise: Promise) {
+  // One listen with the first of `left`; a failure to hear (no pack) moves on to the next. Hearing nothing in a language
+  // (the service takes en-AE and returns no words) is tried once more in the next language, `again` being that one step.
+  private fun listen(context: Context, left: List<Pair<Boolean, String>>, promise: Promise, again: Boolean = true) {
     val (local, tag) = left.first()
     val r = if (local) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
     ear = r
@@ -64,7 +65,10 @@ class CrewhouseVoiceModule : Module() {
       when (error) {
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> promise.reject(CodedException("blocked", "blocked", null))
         // Nothing was said: "didn't catch that" is right. Any other failure is the phone not being set up to hear.
-        null, SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> promise.resolve(words.orEmpty())
+        null, SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+          val next = left.drop(1).dropWhile { it.second == tag }
+          if (words.isNullOrEmpty() && again && next.isNotEmpty()) listen(context, next, promise, false) else promise.resolve(words.orEmpty())
+        }
         else ->
           if (left.size > 1) listen(context, left.drop(1), promise)
           else promise.reject(CodedException("unready", "unready", null))

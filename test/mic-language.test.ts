@@ -18,3 +18,8 @@ test('no pack on-device moves on to the system speech service before the person 
   assert.match(kt, /if \(left\.size > 1\) listen\(context, left\.drop\(1\), promise\)\s*\n\s*else promise\.reject\(CodedException\("unready"/)
   assert.match(kt, /createSpeechRecognizer\(context\)/)
 })
+
+test('words that come back empty in one language get one more listen in the next', () => {
+  assert.match(kt, /val next = left\.drop\(1\)\.dropWhile \{ it\.second == tag \}/)
+  assert.match(kt, /words\.isNullOrEmpty\(\) && again && next\.isNotEmpty\(\)\) listen\(context, next, promise, false\)/)
+})
