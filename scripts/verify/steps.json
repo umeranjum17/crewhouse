@@ -8,6 +8,17 @@
     ],
     "result": "The ask card's own top is inside the thread box at 390 and 1440, day and night: the card is never hidden behind the composer"
   },
+  "connect-apps": {
+    "start": "Crewhouse is signed in to an AI account and no apps are connected",
+    "steps": [
+      "Open Apps and tap Connect on Connect apps",
+      "On the Composio page that opens, choose Continue with Google and say yes; the sheet turns to Your apps are connected",
+      "Ask Chief to read today's calendar without changing anything",
+      "Chief asks to use your Composio apps; say yes once",
+      "Chief writes what he read in his thread"
+    ],
+    "result": "Chief used a connected app on {{model}} for a read-only request: {{ask}}"
+  },
   "chat-real": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
     "steps": [
