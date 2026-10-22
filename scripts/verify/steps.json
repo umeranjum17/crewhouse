@@ -176,6 +176,37 @@
     ],
     "result": "The installed app opens on its own origin and shows what the plan captured"
   },
+  "key-sheet": {
+    "start": "a fresh stub-engine crewd with the kit on its own fake Gateway, no AI account signed in",
+    "steps": [
+      "Tap Sign in with OpenRouter on Home and the key sheet opens",
+      "Paste a stub key and the kit checks it",
+      "The sheet lists the account's own live models, searchable when the list is long",
+      "Pick the free Flash model, whose id has a colon, and tap Use this model",
+      "Repeat for MiniMax, whose live list also offers Flash"
+    ],
+    "result": "The sheet titled Which model should your crew use? lists the account's live models at 390 and 1280, day and night, and the pick is the model the crew uses"
+  },
+  "flash-read": {
+    "start": "a fresh Crewhouse signed in to OpenRouter on MiniMax M3.1 Flash, with Scout on the crew who has written a file in its own folder",
+    "steps": [
+      "Ask Chief to read the file Scout wrote in its own folder",
+      "Wait for Chief to read it and close the job",
+      "Open Chief's thread at 390 and 1440 wide, day and night"
+    ],
+    "result": "Chief's thread shows his answer from the helper's file and no question to the person, and his job ended done"
+  },
+  "onboard-chat": {
+    "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
+    "steps": [
+      "Open Crewhouse after computer setup: it opens on Chief's chat, and he asks what to call you",
+      "Type a name in the chat",
+      "Read Chief's pitch and the ideas to try",
+      "Tap How does this work? and read the answer in the chat",
+      "Tap an idea: it goes to Chief as the first job"
+    ],
+    "result": "Chief asks the name in chat and pitches with ideas to tap, with no Hello screen between; the name is saved as the address"
+  },
   "quiet-nudge": {
     "start": "a fresh stub-engine crewd with one helper",
     "steps": [

@@ -86,3 +86,19 @@ test('a MiniMax key starts on Flash when its catalog lists it, the picker offers
     assert.equal(f.fake.calls.filter((c) => c.method === 'models.list').length, 1, 'the sign-in read the catalog; the run and the picker reused it');
   } finally { await f.done(); }
 });
+
+test('an OpenRouter key signs in through the kit and the picker lists the key\'s live models, an id with a colon included', async () => {
+  const f = faked({}, { 'models.authStatus': (p: any) => ({ providers: p.agentId === 'byokit-key-m1' ? [{ provider: 'openrouter' }] : [] }), 'byokit.catalog': () => ({ ok: true, models: [
+    { id: 'minimax/minimax-m3.1-flash:free', name: 'MiniMax M3.1 Flash (free)', api: 'openai-completions' },
+    { id: 'deepseek/deepseek-v4', name: 'DeepSeek V4', api: 'openai-completions' },
+  ] }) } as {});
+  try {
+    await f.started;
+    const steps: { done?: boolean; error?: string }[] = [];
+    const signIn = f.runtime.signIn('openrouter', 'key', (s) => steps.push(s));
+    await signIn.paste('fixture-openrouter-key');
+    for (let i = 0; i < 100 && !steps.some((s) => s.done || s.error); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.ok(steps.some((s) => s.done), JSON.stringify(steps));
+    assert.deepEqual((await f.runtime.models('openrouter')).map((m) => m.id), ['minimax/minimax-m3.1-flash:free', 'deepseek/deepseek-v4']);
+  } finally { await f.done(); }
+});

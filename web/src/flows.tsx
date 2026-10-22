@@ -9,7 +9,7 @@ import * as art from './art.ts';
 import { AiMark, attempt, ChiefArt, Dots, Face, Icon, Laptop, More, Pill, toast, useDialogOwn } from './parts.tsx';
 import { appLink } from './typed.ts';
 
-type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
+type Phase = 'opening' | 'waiting' | 'code' | 'key' | 'model' | 'done' | 'work' | 'busy' | 'cancelled' | 'unticked' | 'expired' | 'failed' | 'offline' | 'unavailable' | 'house';
 /** ?demo&phase=expired pins a flow to one state, for design review and screenshots. */
 const pinned = demo ? (new URLSearchParams(location.search).get('phase') as Phase | null) : null;
 /** ?demo&sheet=signin|connect opens that sheet straight away. */
@@ -99,6 +99,10 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const [pasted, setPasted] = useState('');
   const [checking, setChecking] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [cat, setCat] = useState<Json>(null);
+  const [sel, setSel] = useState('');
+  const [find, setFind] = useState('');
+  const [chosen, setChosen] = useState(false);
   const choose = (id: string) => { setPicking(true); toast('Connecting'); void api.signInWorkspace(ai.key, id).catch((e: any) => toast(e.status === 400 ? e.message : 'That didn’t work. Please try again.')).finally(() => setPicking(false)); };
   const tab = useTab(first);
   const start = (body: { fresh?: boolean; via?: 'code' | 'key' } = {}) => { setCancelled(false); void (async () => {
@@ -107,9 +111,15 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   })().catch(() => {}); };
   const again = (body: { fresh?: boolean } = {}) => { if (!keyed) tab.fresh(); start(keyed ? { via: 'key' } : body); };
   useEffect(() => { if (!pinned) start(keyed ? { via: 'key' } : {}); }, []);
-  const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
+  const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : keyed && !chosen && (!cat || cat.models.length > 0) ? 'model' : 'done')
     : g.key ? 'key' : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
+  // A key account lists its own live models once the key is saved; the person picks one (or keeps the account's default).
+  useEffect(() => { if (!keyed || g.state !== 'ready' || cat) return; let live = true; void (async () => {
+    for (let i = 0; i < 4 && live; i++) { const c = await api.models(ai.key).catch(() => null); if (c?.models.length || i === 3) return live && setCat(c ?? { models: [], picked: null }); await new Promise((r) => setTimeout(r, 1000)); } // the engine reads its catalog just after a key is saved; an empty list is asked again before the sheet moves on
+  })(); return () => { live = false; }; }, [keyed, g.state]);
+  const shown: Json[] = (cat?.models ?? []).filter((m: Json) => `${m.name} ${m.id}`.toLowerCase().includes(find.trim().toLowerCase()));
+  const useModel = () => attempt(async () => { await api.pickModel(ai.key, sel); setChosen(true); }, undefined);
   useEffect(() => { if (phase === 'waiting') tab.goTo(g.page); else if (phase !== 'opening') tab.drop(); }, [phase, g.page]);
   // Signed in: the sheet says so, then gets out of the way; the waiting request is already under way.
   useEffect(() => { if (phase === 'done' && !pinned) { const t = setTimeout(onReady, 700); return () => clearTimeout(t); } }, [phase]);
@@ -117,12 +127,12 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
   const close = () => { if (phase === 'waiting' || phase === 'opening' || phase === 'code' || phase === 'key') void api.signInCancel(ai.key).catch(() => {}); onClose(); };
   const code = g.signing?.code || 'WB60-FFV06';
   const page = g.signing?.url || (ai.key === 'chatgpt' ? 'https://auth.openai.com/codex/device' : '');
-  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'waiting' || phase === 'code' || phase === 'key' ? 1 : 0;
+  const at = phase === 'done' || phase === 'work' ? 3 : phase === 'model' ? 2 : phase === 'waiting' || phase === 'code' || phase === 'key' ? 1 : 0;
   const notNow = <button className="link" onClick={onClose}>Not now</button>;
   return (
     <Sheet label={`Sign in with ${name}`} onClose={close}>
-      {!['offline', 'busy'].includes(phase) && !g.cliLogin && <Progress at={at} steps={phase === 'key' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
-      <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />
+      {!['offline', 'busy'].includes(phase) && !g.cliLogin && <Progress at={at} steps={phase === 'key' || phase === 'model' ? ['Get your key', 'Paste it', 'Done'] : [`Open ${name}`, 'Say yes', 'Done']} />}
+      {phase !== 'model' && <Mood phase={phase === 'code' || phase === 'key' ? 'waiting' : phase} ai={phase === 'offline' ? undefined : ai} />}
       {phase === 'opening' && <><h2>Opening {name}…</h2><div className="dotdot" aria-hidden><i /><i /><i /></div><button className="link" onClick={cancel}>Cancel</button></>}
       {phase === 'key' && <>
         {g.pick ? <>
@@ -132,7 +142,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         </> : <>
           <h2>Paste your {name} key</h2>
           <p className="mute">Paste the key from your {name} account. It uses your own {name} plan and stays on your computer.</p>
-          <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }, 'Checking the key').then(() => setChecking(false)); }}>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }).then(() => setChecking(false)); }}>
             <input className="input" value={pasted} disabled={checking} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />
             <button className="btn go big" disabled={checking || !pasted.trim()}>{checking ? 'Checking…' : <>Sign in with {name}</>}</button>
           </form>
@@ -155,6 +165,19 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         {ai.key === 'chatgpt' && <a className="link" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>}
         <button className="link" onClick={cancel}>Cancel</button>
+      </>}
+      {phase === 'model' && <>
+        <h2>Which model should your crew use?</h2>
+        <p className="mute">The list comes straight from {name}, so it is always current. You can change it later in Settings.</p>
+        {!cat ? <div className="dotdot" aria-hidden><i /><i /><i /></div> : <>
+          {cat.models.length > 8 && <input className="input" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search models" aria-label="Search models" autoComplete="off" />}
+          <div className="model-pick" role="radiogroup" aria-label="Which model your crew uses">
+            {shown.map((m: Json) => <button key={m.id} role="radio" aria-checked={sel === m.id} className={`pick ${sel === m.id ? 'on' : ''}`} onClick={() => setSel(m.id)}>
+              <span className="radio" aria-hidden /><span className="grow">{m.name}</span></button>)}
+            {!shown.length && <p className="mute small">No model matches that.</p>}
+          </div>
+          <button className="btn go big" disabled={!sel} onClick={useModel}>Use this model</button>
+          <button className="link" onClick={() => setChosen(true)}>Use the default for now</button></>}
       </>}
       {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p></>}
       {phase === 'work' && <><h2>That looks like your work {name}</h2>

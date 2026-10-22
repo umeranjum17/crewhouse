@@ -183,8 +183,8 @@ export class OpenClawRuntime implements AgentRuntime {
   private catalog() { return this.listed ??= this.kit.ensureMember(ME).then(({ agentId }) => this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 })).catch((e) => { this.listed = undefined; throw e; }); } // 'all' is the kit's account read (default lists nothing)
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
-    const provider = await this.routeOf(account), signed = ['openai-codex', 'minimax'].includes(provider) && await this.kit.signedIn(ME, provider), r = await this.catalog(); // the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
-    return (r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
+    const provider = await this.routeOf(account), signed = ['openai-codex', 'minimax'].includes(provider) && await this.kit.signedIn(ME, provider), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
+    return (live.length ? live.map((m) => ({ ...m, provider, available: true })) : r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
   private async thinks(provider: string, model: string | undefined, level: string) {

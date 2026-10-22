@@ -2061,3 +2061,5 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 }
 /* The crew room's standup: Chief's one closing post, set apart from the hand-offs above it. */
 .room-page.st-helper-chat .chat .line.standup .bubble-text.helper-bubble { background: var(--soft); border: 2px solid var(--line2); }
+.model-pick { width: 100%; max-height: min(34vh, 280px); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.model-pick .pick .grow { min-width: 0; overflow-wrap: anywhere; }
