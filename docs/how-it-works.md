@@ -91,4 +91,4 @@ npm run check        # typecheck (tsc, strict)
 ./crewhouse test     # the suite, on a scripted model: no account, no network, no quota
 ```
 
-`./crewhouse test` runs in a throwaway HOME and then checks that your own `~/.pi` sign-ins, settings and extensions are unchanged, byte for byte. CI runs the typecheck, the suite (`npm test`) and the web build on Node 22.22.3 and 24. Project conventions for contributors and coding agents are in [AGENTS.md](../AGENTS.md). The README's pictures are retaken with `node scripts/capture-readme.mjs <address>` against a stub-engine crewd.
+`./crewhouse test` runs in a throwaway HOME and then checks that your own `~/.pi` sign-ins, settings and extensions are unchanged, byte for byte. CI runs the typecheck, the suite (`npm test`) and the web build on Node 24. Project conventions for contributors and coding agents are in [AGENTS.md](../AGENTS.md). The README's pictures are retaken with `node scripts/capture-readme.mjs <address>` against a stub-engine crewd.

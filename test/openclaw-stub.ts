@@ -60,8 +60,9 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     const messages: any[] = body.messages ?? [];
     const system = messages.filter((m: any) => m.role === 'system').map((m: any) => words(m)).join('\n');
     const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(system)?.[1] ?? 'bot';
-    // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"): not the person's.
-    const asked = (m: any) => m.role === 'user' && !words(m).startsWith('Attached image(s) from tool result');
+    // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"), and the engine adds
+    // its own context block after the person's words: neither is the person's.
+    const asked = (m: any) => m.role === 'user' && !/^(Attached image\(s\) from tool result|<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>)/.test(words(m));
     const lastUser = [...messages].reverse().find(asked);
     const planned = script?.(body, words(lastUser)), said = planned?.text ?? words(lastUser);
     const results = messages.slice(messages.findLastIndex(asked) + 1).filter((m: any) => m.role === 'tool');

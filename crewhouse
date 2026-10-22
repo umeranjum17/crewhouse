@@ -14,9 +14,9 @@ entry() {
 }
 
 need_node() {
-  command -v node >/dev/null || { echo "Crewhouse needs Node 22.22.3 or later: https://nodejs.org" >&2; exit 1; }
-  node -e 'const [a,b,c]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&(b>22||(b===22&&c>=3)))?0:1)' \
-    || { echo "Crewhouse needs Node 22.22.3 or later (found $(node --version))" >&2; exit 1; }
+  command -v node >/dev/null || { echo "Crewhouse needs Node 24.16 or later on 24, or 26.1 or later: https://nodejs.org" >&2; exit 1; }
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a===24&&b>=16||a===26&&b>=1||a>26?0:1)' \
+    || { echo "Crewhouse needs Node 24.16 or later on 24, or 26.1 or later (found $(node --version))" >&2; exit 1; }
 }
 
 # Where this Crewhouse keeps things, from the same config crewd reads (so env overrides agree).

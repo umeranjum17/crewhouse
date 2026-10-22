@@ -12,8 +12,8 @@ const line = (ok: boolean | null, what: string, detail = '') => {
   console.log(`${ok === null ? '·' : ok ? '✓' : '✗'} ${what}${detail ? ` — ${detail}` : ''}`);
 };
 
-const [maj, min, patch] = process.versions.node.split('.').map(Number);
-line(maj > 22 || (maj === 22 && (min > 22 || (min === 22 && patch >= 3))), `Node ${process.versions.node}`, 'needs 22.22.3 or later');
+const [maj, min] = process.versions.node.split('.').map(Number);
+line(maj === 24 && min >= 16 || maj === 26 && min >= 1 || maj > 26, `Node ${process.versions.node}`, 'needs 24.16 or later on 24, or 26.1 or later');
 line(true, `Engine: ${name} ${version}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/${name.toLowerCase()}; your own ${name} and ~/.${name.toLowerCase()} are never used`);
 line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');

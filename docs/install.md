@@ -18,7 +18,7 @@ The link above names the current preview; for anything newer, check the [release
 
 ## From source
 
-You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
+You need **Linux** and **[Node.js](https://nodejs.org) 24.16 or later on 24, or 26.1 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
@@ -116,7 +116,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
 
 The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
 
-Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](../packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 24.16+ or 26.1+). The bar runs [packaging/bar-pill.mjs](../packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
 
 For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
 

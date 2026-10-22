@@ -31,9 +31,9 @@ test('install policy: crewhouse content passes, everything else is blocked by na
     const dep = ask({ protocolVersion: 1, targetType: 'skill', targetName: 'x', sourcePath: join(crew, 'x'), request: { kind: 'skill-dependency-install' } }, [crew]);
     assert.equal(dep.decision, 'block');
     // A bundled skill's content that was swapped after review: the hash no longer matches, blocked.
-    mkdirSync(join(dir, 'staged', 'video-frames'), { recursive: true });
-    writeFileSync(join(dir, 'staged', 'video-frames', 'SKILL.md'), 'tampered');
-    const swapped = ask({ protocolVersion: 1, targetType: 'skill', targetName: 'video-frames', origin: { slug: 'video-frames', version: '2026.8.1' }, sourcePath: join(dir, 'staged', 'video-frames'), sourcePathKind: 'directory', request: { kind: 'skill-install' } });
+    mkdirSync(join(dir, 'staged', 'summarize'), { recursive: true });
+    writeFileSync(join(dir, 'staged', 'summarize', 'SKILL.md'), 'tampered');
+    const swapped = ask({ protocolVersion: 1, targetType: 'skill', targetName: 'summarize', origin: { slug: 'summarize', version: '2026.9.33' }, sourcePath: join(dir, 'staged', 'summarize'), sourcePathKind: 'directory', request: { kind: 'skill-install' } });
     assert.equal(swapped.decision, 'block');
     // A broken request fails closed, never open.
     const bad = JSON.parse(execFileSync(process.execPath, [policy], { input: '{oops' }).toString());

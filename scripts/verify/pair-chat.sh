@@ -39,7 +39,7 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$LAB"/{home,state,crew,tools,run,relay,tmp} "$LAB/state/openclaw"
 free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})'; }
-# The node on PATH may be a shim that cannot run; the engine's floor is Node 22.22.3.
+# The node on PATH may be a shim that cannot run; the engine needs Node 24.16+ or 26.1+.
 NODE_BIN=${NODE_BIN:-$(dirname "$(readlink -f "$(command -v node)")")}
 export PATH="$NODE_BIN:/usr/bin:/bin"
 [ -x "$NODE_BIN/node" ] || { echo "pair-chat: no node at $NODE_BIN" >&2; exit 1; }

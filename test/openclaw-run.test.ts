@@ -77,14 +77,14 @@ test('memory flush: crossing the soft threshold adds no silent provider turn; en
     const start = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19];
     appendFileSync(process.env.CREWHOUSE_GUARD_RECEIPT, `${role}\t${pid}\t${start}\t${home}\t${port}\n`);
   };
-  const stub = await startModelStub(40_001);
+  const stub = await startModelStub(44_001);
   assert.match(stub.url, /^http:\/\/127\.0\.0\.1:\d+\/v1$/);
   receipt('provider', process.pid, process.env.HOME!, new URL(stub.url).port);
   const runtime = new OpenClawRuntime(state);
   const { kit } = runtime;
+  // 2026.9.33 sends the flush instruction as a user message of its own.
   const flush = (calls: typeof stub.calls) => calls.filter((c) =>
-    /Continue the OpenClaw runtime event\./.test(JSON.stringify(c.body.messages.findLast((m: any) => m.role === 'user')?.content)) &&
-    c.body.messages.some((m: any) => m.role === 'system' && /Pre-compaction memory flush turn\./.test(JSON.stringify(m.content))));
+    c.body.messages.some((m: any) => m.role === 'user' && /^Pre-compaction memory flush\. Store durable memories/.test(typeof m.content === 'string' ? m.content : m.content?.[0]?.text ?? '')));
   const run = (key: string, message: string) => runtime.run({ key: `agent:m1:crewhouse:chief:${key}`, bot: 'chief', task: 1,
     account: 'chatgpt', cwd: '', system: 'Be brief.', message, builtins: [] }, () => {});
   try {
@@ -99,11 +99,11 @@ test('memory flush: crossing the soft threshold adds no silent provider turn; en
     console.log(JSON.stringify({ resolvedDefaults: resolved.config.agents.defaults, workshop: resolved.config.skills.workshop, provider: stub.url }));
     await runtime.configureModelProvider(stub.url, 'stub-m1');
     const config = JSON.parse(readFileSync(join(state, 'openclaw/openclaw.json'), 'utf8'));
-    // Both sides expose only the flush's workspace-confined read builtin. Production denies group:fs;
-    // with that denial an enabled flush fails on an empty toolset BEFORE it can call the provider.
+    // Both sides expose only the flush's workspace-confined read and write builtins (2026.9.33 refuses a flush that cannot
+    // write). Production denies group:fs; with that denial an enabled flush is refused BEFORE it can call the provider.
     // The scripted provider makes no tool calls, and Crewhouse's gate still refuses every tool.
     const policy = await kit.call('config.get', {}) as { hash: string };
-    await kit.call('config.patch', { raw: JSON.stringify({ tools: { deny: [...config.tools.deny.filter((name: string) => name !== 'group:fs'), 'write', 'edit', 'apply_patch'] } }),
+    await kit.call('config.patch', { raw: JSON.stringify({ tools: { deny: [...config.tools.deny.filter((name: string) => name !== 'group:fs'), 'edit', 'apply_patch'] } }),
       baseHash: policy.hash, replacePaths: ['tools.deny'] });
     await kit.patchConfig({ models: { providers: { 'crewhouse-stub': { models: [{ ...config.models.providers['crewhouse-stub'].models[0], contextWindow: 64_000 }] } } } });
     for (const enabled of [false, true]) {
@@ -116,7 +116,7 @@ test('memory flush: crossing the soft threshold adds no silent provider turn; en
       assert.equal(active.config.agents.defaults.compaction.memoryFlush.enabled, enabled, 'positive/negative config readback');
       assert.ok(health.plugins.loaded.includes('memory-core'), 'the flush-plan memory capability plugin must be loaded');
       assert.equal(active.config.tools.fs.workspaceOnly, true, 'read stays in the fixture workspace');
-      assert.ok(!active.config.tools.deny.includes('group:fs') && ['write', 'edit', 'apply_patch'].every((name) => active.config.tools.deny.includes(name)), 'both controls expose only the flush read builtin');
+      assert.ok(!active.config.tools.deny.includes('group:fs') && ['edit', 'apply_patch'].every((name) => active.config.tools.deny.includes(name)), 'both controls expose only the flush read and write builtins');
       const key = enabled ? 'flush-control' : 'flush-disabled';
       // The agent RPC flushes AFTER each turn: the seed itself can trigger it, not just the follow-up.
       const before = stub.calls.length;
@@ -124,29 +124,33 @@ test('memory flush: crossing the soft threshold adds no silent provider turn; en
       assert.ok(seed.ok, JSON.stringify(seed));
       const sessions = await kit.call('sessions.list', {}) as { sessions: { key: string; totalTokens: number; totalTokensFresh: boolean; provider?: string; model?: string; contextTokens?: number; compactionCount?: number; memoryFlush?: object }[] };
       const seeded = sessions.sessions.find((s) => s.key === `agent:m1:crewhouse:chief:${key}`);
-      assert.ok(seeded?.totalTokensFresh && seeded.totalTokens >= 40_001, `fresh prompt usage must cross 40k: ${JSON.stringify(seeded)}`);
+      assert.ok(seeded?.totalTokensFresh && seeded.totalTokens >= 44_001, `fresh prompt usage must cross 44k: ${JSON.stringify(seeded)}`);
       console.log(JSON.stringify({ memoryFlush: enabled, seeded: { key: seeded.key, totalTokens: seeded.totalTokens,
         totalTokensFresh: seeded.totalTokensFresh, provider: seeded.provider, model: seeded.model,
         contextTokens: seeded.contextTokens, compactionCount: seeded.compactionCount, memoryFlush: seeded.memoryFlush } }));
       const afterSeed = stub.calls.length;
       const end = await run(key, 'Finish the task in one sentence.');
       assert.ok(end.ok, JSON.stringify(end));
+      // 2026.9.33 dispatches the flush detached, after the turn returns: wait on its request, never a fixed sleep.
+      if (enabled) for (const deadline = Date.now() + 10_000; !flush(stub.calls.slice(before)).length;) {
+        assert.ok(Date.now() < deadline, 'timed out waiting for the detached flush request');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       const added = stub.calls.slice(before);
       // A compaction summary is a different request: never classify it as a memory flush by count alone.
       console.log(JSON.stringify({ memoryFlush: enabled, requests: added.length, seedRequests: afterSeed - before,
         followupRequests: stub.calls.length - afterSeed, flushRequests: flush(added).length,
         requestsByLastMessage: added.map((c) => String(c.body.messages.at(-1)?.content).slice(0, 120)) }));
-      // The final RPC can precede the file logger's flush: wait on the recorded cycle, never a fixed sleep.
-      if (enabled) for (const deadline = Date.now() + 10_000; !readFileSync(join(state, 'logs/openclaw-events.log'), 'utf8').includes('memoryFlushCompactionCount=0');) {
-        assert.ok(Date.now() < deadline, 'timed out waiting for the successful flush-cycle trace');
+      // The final RPC can precede the file logger's flush: wait on the recorded dispatch, never a fixed sleep.
+      if (enabled) for (const deadline = Date.now() + 10_000; !readFileSync(join(state, 'logs/openclaw-events.log'), 'utf8').includes('memory flush dispatched');) {
+        assert.ok(Date.now() < deadline, 'timed out waiting for the flush dispatch trace');
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       const maintenance = readFileSync(join(state, 'logs/openclaw-events.log'), 'utf8').split('\n')
-        .filter((line) => /memoryFlush (check|triggered)|memory flush failed/.test(line)).map((line) => JSON.parse(line).message as string);
+        .filter((line) => /memoryFlush (check|triggered)|memory flush (failed|dispatched)/.test(line)).map((line) => JSON.parse(line).message as string);
       console.log('observedMaintenance', maintenance.join('\n'));
       console.log('flushWireSignatures', JSON.stringify(flush(added).map((c) => ({
         latestUser: c.body.messages.findLast((m: any) => m.role === 'user')?.content,
-        systemPassage: String(JSON.stringify(c.body.messages.find((m: any) => m.role === 'system' && /Pre-compaction memory flush turn\./.test(JSON.stringify(m.content)))?.content)).match(/Pre-compaction memory flush turn\.[\s\S]{0,180}/)?.[0],
         toolNames: c.body.tools.map((t: any) => t.function.name),
       }))));
       if (!enabled) {
@@ -154,12 +158,12 @@ test('memory flush: crossing the soft threshold adds no silent provider turn; en
         assert.ok(!maintenance.some((line) => /memoryFlush triggered/.test(line)), 'disabled flush never enters maintenance');
         assert.equal(added.length, 2, 'only the explicit seed and follow-up reached the provider (no compaction needed)');
       } else {
-        assert.equal(flush(added).length, 1, 'enabled control exposes the current-system flush instruction and runtime-event user carrier');
+        assert.equal(flush(added).length, 1, 'enabled control sends the flush instruction as its own user turn');
         assert.ok(added.length > 2, 'the enabled control adds a silent provider turn');
-        assert.deepEqual(flush(added)[0].body.tools.map((t: any) => t.function.name), ['read'], 'the counterfactual exposes only workspace-confined read');
-        assert.ok(maintenance.some((line) => /memoryFlush check:.*contextWindow=64000 threshold=40000/.test(line)), 'actual engine threshold, not inferred arithmetic');
-        assert.ok(maintenance.some((line) => /memoryFlush triggered:.*tokenCount=40001 threshold=40000/.test(line)), 'the soft threshold actually triggered');
-        assert.ok(maintenance.some((line) => /memoryFlushCompactionCount=0/.test(line)), 'the flush succeeded for this compaction cycle');
+        assert.deepEqual(flush(added)[0].body.tools.map((t: any) => t.function.name), ['read', 'write'], 'the counterfactual exposes only workspace-confined read and write');
+        assert.ok(maintenance.some((line) => /memoryFlush check:.*contextWindow=64000 threshold=44000/.test(line)), 'actual engine threshold, not inferred arithmetic');
+        assert.ok(maintenance.some((line) => /memoryFlush triggered:.*tokenCount=44001 threshold=44000/.test(line)), 'the soft threshold actually triggered');
+        assert.ok(maintenance.some((line) => /memory flush dispatched/.test(line)), 'the flush was dispatched for this compaction cycle');
         assert.ok(!maintenance.some((line) => /memory flush failed/.test(line)), 'no failed-flush request is accepted as success');
       }
     }
