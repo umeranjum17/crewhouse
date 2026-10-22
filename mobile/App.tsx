@@ -357,12 +357,12 @@ function Mic({ on, text, put, listen = false }: { on: boolean; text: string; put
   const start = async () => {
     setListening(true);
     const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, { title: 'Speak to Chief',
-      message: 'Crewhouse hears you only while the mic is on, on this phone. Your words wait in the box until you send them.', buttonPositive: 'OK' });
+      message: 'Crewhouse hears you only while the mic is on. Your words wait in the box until you send them.', buttonPositive: 'OK' });
     if (!shown.current) return;
     if (mic !== PermissionsAndroid.RESULTS.GRANTED) { setListening(false); return say('Allow the microphone for Crewhouse in your phone settings, then try again.'); }
     hear().then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else say("I didn't catch that. Try again."); },
       (e) => say(/blocked/.test(`${e?.code} ${e?.message}`) ? 'Allow the microphone for Crewhouse in your phone settings, then try again.'
-        : "Speaking isn't ready on this phone yet. Type instead, or use the keyboard's mic."))
+        : "This phone can't hear yet. In Settings, open Google ▸ Speech services (or Voice) and download your language, then try again."))
       .finally(() => setListening(false));
   };
   // `listen`: opened by holding the bubble, so the mic starts at once (it is this screen's, never the bubble's).
