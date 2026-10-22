@@ -13,11 +13,11 @@
     "steps": [
       "Tap In my cloud and paste the boat.dev key; the account has no computer",
       "Tap Make a new computer instead, then Make it and set it up, while the install on the computer fails",
-      "Read why setup stopped, then tap Try again once the install can pass",
+      "Read why setup stopped, then tap Try again once the install can pass; the progress list runs to its end and the screen ends on Your cloud computer, with the card Chief is on your cloud computer and its Talk to Chief button",
       "On a second phone, paste the same key and tap Use this computer on the computer the first phone set up",
       "Tap Move Chief to this phone, read who loses access, and tap Yes, move Chief"
     ],
-    "result": "Make it and set it up rents a computer and sets it up; the failed install says Installing Chief stopped partway and that trying again is safe, with Try again; Try again reaches Chief is on your cloud computer under the title Your cloud computer; the second phone is offered Move Chief to this phone and Back, the confirm says the phone that set up this computer loses access, and after Yes, move Chief this phone reaches Chief is on your cloud computer"
+    "result": "Make it and set it up rents a computer and sets it up; the failed install says Installing Chief stopped partway and that trying again is safe, with Try again; Try again ends on the screen titled Your cloud computer, with the card Chief is on your cloud computer and a Talk to Chief button; the second phone is offered Move Chief to this phone and Back, the confirm says the phone that set up this computer loses access, and after Yes, move Chief this phone reaches Chief is on your cloud computer"
   },
   "chat-real": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
