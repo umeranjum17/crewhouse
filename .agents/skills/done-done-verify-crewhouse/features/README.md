@@ -16,3 +16,4 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [A hand-off that fails: Chief's lane is reset](handoff-lane-reset.md): A helper's own job fails; Chief's job settles at once in plain words and his lane is let go
 - [Voice with Chief](voice.md): Tap the mic in Chief's box and speak, the words wait in the box; tap Talk, Chief's reply is read aloud with its line marked
 - [Speaking with no on-device voice pack](phone-mic-fallback.md): Tap the mic on the Android app with no speech pack; the phone's speech service opens the mic
+- [Chief on this phone with a MiniMax key](phone-only-minimax.md): Use this phone only, pick MiniMax, paste the key, pick the model; the chat names it
