@@ -81,3 +81,5 @@ journeys:
   phone-continue:
     spends: 'live phone-only model calls on an explicitly authorized test account'
     command: 'timeout -k 10 600 node scripts/verify/phone-continue.mjs --serial "${SERIAL:?owned emulator}" --ev "$DONE_DONE_EVIDENCE_ROOT" --apk "${APK:?release apk}" --key-file "${KEY_FILE:?authorized test key file}"'
+  skill-eval:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/skill-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'

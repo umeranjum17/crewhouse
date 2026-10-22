@@ -208,6 +208,16 @@
     ],
     "result": "Home shows the person's crew and Chief's thread shows the message that was sent, at 390 and 1440, day and night"
   },
+  "skill-eval": {
+    "start": "a fresh crew on the stub engine, with crewhouse-research-report under test and eight prompts to ask it",
+    "steps": [
+      "Run the paired eval: every prompt, once with the skill in the helper's folder and once without it",
+      "Read the trigger table: which prompts the skill's own name and description matched",
+      "Read the checks table: what each arm's document owed the person, and how many checks it passed",
+      "Read the verdict line: whether the skill beats the baseline, and by how much"
+    ],
+    "result": "The report shows the trigger table, the checks each arm passed and the verdict: {{verdict}}"
+  },
   "signin-card": {
     "start": "a fresh crewd with no account signed in",
     "steps": [
