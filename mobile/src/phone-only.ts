@@ -4,7 +4,7 @@
 // The system prompt is Chief's real template files, bundled as words by metro (scripts/markdown.cjs).
 // For this proof the account is an API-key route (DeepSeek on OpenRouter, or the picked MiniMax model, billed per
 // use), which needs no human hand-off; the ChatGPT subscription route is the eventual one and is left as an open item.
-import { Accounts, IncompleteError, KeyRouteError, PROVIDERS, ResponseError, portable, secureStore,
+import { Accounts, IncompleteError, KeyRouteError, ResponseError, portable, secureStore,
   type Context, type Model, type AssistantMessage } from '@byokit/accounts';
 import { withKeys } from '@byokit/accounts/keys';
 import { nativeStore } from '@byokit/secrets/native';
@@ -91,9 +91,11 @@ async function liveModels(): Promise<{ id: string; name?: string }[]> {
 /** Every model the saved key can use, in words, as MiniMax lists it (its live list, else the kit's catalogue when that
  *  cannot be read): nothing is filtered or described here. The one tag is Recommended, on the kit's fast model (MiniMax may
  *  list it under a newer id: M3.1-Flash for the kit's -Preview), which goes first. OpenRouter's stays the pinned DeepSeek. */
+/** The kit's fast MiniMax model, named here: @byokit/accounts 0.30 dropped the catalogue's model tiers. */
+const MINIMAX_FAST = 'MiniMax-M3.1-Flash-Preview';
 export async function phoneModels(): Promise<PhoneModel[]> {
   if (current.route === PROVIDER) return [];
-  const fast = PROVIDERS.minimax.models.fast;
+  const fast = MINIMAX_FAST;
   const listed = await liveModels().catch(async () =>
     (await phoneAccounts.models(MEMBER, current.route)).map((m) => ({ id: m.id, name: undefined })));
   const recommended = (id: string) => !!fast && (fast === id || fast.startsWith(`${id}-`));
@@ -334,7 +336,7 @@ const MODEL: Model<'openai-completions'> = {
 };
 /** A MiniMax key's model: the person's pick, else the kit's fast one, on MiniMax's Anthropic-shaped API (Pi's pinned shape). */
 const minimaxModel = (): Model<'anthropic-messages'> => ({
-  id: picked ?? PROVIDERS.minimax.models.fast ?? PROVIDERS.minimax.models.strong, name: 'MiniMax', api: 'anthropic-messages', provider: 'minimax',
+  id: picked ?? MINIMAX_FAST, name: 'MiniMax', api: 'anthropic-messages', provider: 'minimax',
   // A lab build names its fake MiniMax in EXPO_PUBLIC_CREWHOUSE_MINIMAX_API (scripts/verify/phone-only-minimax.sh).
   baseUrl: process.env.EXPO_PUBLIC_CREWHOUSE_MINIMAX_API || 'https://api.minimax.io/anthropic', reasoning: true, input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 204_800, maxTokens: 8_192,
