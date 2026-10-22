@@ -38,6 +38,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [A pinned tool that failed](features/a-pinned-tool-that-failed.md): Run the pinned-tool drive script; the helper's "What happened" shows the failed step and the newer copy an update brings in
 - [The video job](features/the-video-job.md): Run `scripts/verify/video-job.sh <repo> <out>`; a pasted link gets Chief's quality card, the pick downloads only that, with its link (`docs/verification/video-job.md`)
 - [Voice with Chief](features/voice.md): Run the `voice` journey; the mic puts what was said in the box, Talk reads Chief's reply aloud, in the installed app (`docs/verification/voice.md`)
+- [Speaking with no on-device voice pack](features/phone-mic-fallback.md): Run `scripts/verify/phone-mic-fallback.sh <out>`; on an emulator with no pack the phone's speech service opens the mic (`docs/verification/voice.md`)
 - [An image both ways](features/image-both-ways.md): Run `scripts/verify/image.sh <repo> <out>`; a photo picked in Chief's box shows its thumbnail, is sent and kept, and a helper's picture comes back on Chief's reply (`docs/verification/image.md`)
 - [A helper looks inside a binary](features/binary-inspect.md): Run the `binary-inspect` journey; the helper's thread holds what the inspector found, and a file from outside its own folder is refused
 - [Key sign-in sheet](features/key-sign-in-sheet.md): Home's "Sign in with OpenRouter" opens the key sheet; paste a stub key, pick a live model (`docs/verification/key-sheet.md`)
