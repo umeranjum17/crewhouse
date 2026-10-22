@@ -2,6 +2,10 @@
   <!-- One still of the screen for "Hand my screen to…" (CrewhouseScreenModule.kt): the phone asks every time. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <!-- Speaking to Chief (CrewhouseVoiceModule.kt) asks whether the phone has a speech service to fall back on. -->
+  <queries>
+    <intent><action android:name="android.speech.RecognitionService" /></intent>
+  </queries>
   <application>
     <!-- "Ask Crewhouse" on text picked in any app: the words go to the share screen, where the person picks who gets them. -->
     <activity

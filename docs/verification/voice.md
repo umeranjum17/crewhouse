@@ -13,7 +13,7 @@ What a person can do by voice in Chief's chat, in the web app and the installed 
   Talk shows only where the browser has a voice of its own. The call itself is [voice-call.md](voice-call.md).
 
 Code: `web/src/voice.ts`, `useVoice`/`useCall`/`CallPanel` in `web/src/parts.tsx`. The native phone app has the mic
-(`Mic` in `mobile/App.tsx`, the phone's own recognizer) but reads nothing aloud: Talk is the web app's.
+(`Mic` in `mobile/App.tsx`: the phone's own recognizer, else its system speech service when the on-device pack is missing) but reads nothing aloud: Talk is the web app's.
 
 ## Drive and witness
 
