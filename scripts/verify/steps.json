@@ -176,6 +176,17 @@
     ],
     "result": "The installed app opens on its own origin and shows what the plan captured"
   },
+  "key-sheet": {
+    "start": "a fresh stub-engine crewd with the kit on its own fake Gateway, no AI account signed in",
+    "steps": [
+      "Tap Sign in with OpenRouter on Home and the key sheet opens",
+      "Paste a stub key and the kit checks it",
+      "The sheet lists the account's own live models, searchable when the list is long",
+      "Pick the free Flash model, whose id has a colon, and tap Use this model",
+      "Repeat for MiniMax, whose live list also offers Flash"
+    ],
+    "result": "The sheet titled Which model should your crew use? lists the account's live models at 390 and 1280, day and night, and the pick is the model the crew uses"
+  },
   "quiet-nudge": {
     "start": "a fresh stub-engine crewd with one helper",
     "steps": [

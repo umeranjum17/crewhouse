@@ -55,3 +55,4 @@ for account in ${ACCOUNTS:-openrouter minimax}; do
   down
 done
 ls "$OUT"/key-sheet-*.png | wc -l | grep -qx 28 || { echo "unexpected shot count" >&2; exit 1; }
+node "$REPO/scripts/verify/steps.mjs" "$OUT" key-sheet
