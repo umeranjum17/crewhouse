@@ -27,6 +27,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | phone-pairing | `done-done run phone-pair` plus typed/timed-code drivers |
 | phone-chat-keep | `done-done verify phone-chat-keep --outcome "<claim>"` once the person approves the spend (below), plus approval-sheet driver |
 | phone-continue | `done-done verify phone-continue --outcome "<claim>"` once the person approves the spend (below) |
+| image | `done-done run image` (includes installed PWA) |
 | binary-inspect | `done-done run binary-inspect` — Byte looks inside a binary in its own folder: the note holds the inspector's own words, and a file from outside that folder is refused |
 | skill-eval | `done-done run skill-eval` — the paired skill eval on the stub engine: the same prompts with and without a bundled skill, every run's document checked, the raw runs in a JSONL file and the two arms diffed on one page |
 | All other rows | Drive the recipe through `done-done run -- <command>`; use its existing tests and `scripts/verify/` drivers, retaining every manual leg |
@@ -77,6 +78,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | chief-wait | [chief-wait.md](chief-wait.md) | Chief waits for a helper's report: the hand-off goes out natively, the report comes back in Chief's next turn and Chief answers the person from it, with no work of his own and no question while the helper works; driven on the real engine with a scripted model, with Chief's thread at 390/1440, day and night |
 | phone-live-control | [phone-live-control.md](phone-live-control.md) | A live helper run on the phone layout (390 wide, day and night) with its control bar, then Stop, Take control with Hand it back, and Yes, go ahead on a file ask each working, on MiniMax M3.1 Flash and the real engine; fails when any step does not happen in its bound |
 | phone-web-pair | [phone-web-pair.md](phone-web-pair.md) | A new person's phone browser pairs by the computer's QR (a link to the computer's own web app) and chats with Chief on MiniMax M3.1 Flash: Where screen, Pair sheet, the two words, paired Home and Chief's reply at 390 wide |
+| image | [image.md](image.md) | A photo both ways in Chief's chat: picked with + it shows its thumbnail in the box with the words, sent it is kept under crewd's name and given to Chief's model, and a helper's picture comes back on Chief's reply (never the person's photo again), at 390/1440, day and night, in the installed app, on the stub engine |
 | video-job | [video-job.md](video-job.md) | A pasted video link: Chief's quality card with sizes before anything downloads, then only the pick saved with its link, at 390/1440, day and night, in the installed app |
 | pinned-tool-failure | [pinned-tool-failure.md](pinned-tool-failure.md) | A pinned kit tool that failed: the step says the work did not happen and names the newer copy an update brings in, at 390/1440, day and night |
 | answer-check | [answer-check.md](answer-check.md) | A scout's answer waits for a second helper to challenge it: Chief's thread names the checked answer, who checked it and what the check found (390, day and night), on the stub engine |

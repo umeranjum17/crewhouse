@@ -1590,7 +1590,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
  *  person's own filename for display only (the path stays crewd's). */
 const ATTACH = /\n?\[(photo|file) ([a-z0-9-]+)\] (files\/\S+)(?: ([0-9]+B)(?: ([^\n]*))?)?/g;
 const attached = (text: string) => [...text.matchAll(ATTACH)].map((m) => m[1] === 'photo' || !m[4]
-  ? { kind: m[1], view: fileView(m[2], m[3]) }
+  ? { kind: m[1], view: fileView(m[2], m[3], undefined, undefined, m[1] === 'photo' ? 'Your photo' : undefined) }
   : { kind: m[1], view: fileView(m[2], m[3], undefined, Number(m[4].slice(0, -1)), m[5]?.trim() || undefined) });
 const photos = (text: string) => attached(text).filter((a) => a.kind === 'photo').map((a) => a.view);
 /** Every upload on the line, photos and documents alike, with crewd's byte count where it wrote one. */
@@ -1639,7 +1639,8 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     if (m.author === 'person') asks.set(m.task_id, String(m.text ?? '').replace(ATTACH, '').trim());
     if (m.author === 'bot') lastOf.set(m.task_id, m.id);
   }
-  return msgs.filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json): Line => {
+  // The stub engine's words are hidden, never the files crewd attached to them (a helper's picture in Chief's reply).
+  return msgs.map((m: Json) => STUB.test(String(m.text ?? '')) ? { ...m, text: '' } : m).map((m: Json): Line => {
     const retry = bot === 'chief' && !live && m.author === 'bot' && m.task_id === newest && lastOf.get(m.task_id) === m.id ? asks.get(m.task_id) || undefined : undefined;
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();

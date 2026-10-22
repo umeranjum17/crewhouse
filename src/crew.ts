@@ -466,10 +466,10 @@ export class Crew {
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
-  /** A delivered file handed over from another helper is that task's input, never its result. New rows carry
-   *  input:true; rows recorded before that tag still read as input by their handoff-copy path (files/from-<helper>/). */
+  /** A file the person sent, or one handed over from another helper, is that task's input, never its result. New rows
+   *  carry input:true; older ones still read as input by their photo tag or handoff-copy path (files/from-<helper>/). */
   private isInput(d: Row): boolean {
-    return !!d.input || String(d.path ?? '').startsWith('files/from-');
+    return !!d.input || !!d.photo || String(d.path ?? '').startsWith('files/from-');
   }
 
   /** A task's delivered files, its own output first, so Things previews and opens what the task itself made. */
@@ -1116,7 +1116,7 @@ export class Crew {
         const photo = p.photo !== false, rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
         mkdirSync(join(disk.botDir(this.cfg, bot), 'files', photo ? 'photos' : 'inbox'), { recursive: true });
         writeFileSync(join(disk.botDir(this.cfg, bot), rel), p.bytes);
-        this.db.event('file.delivered', bot, { task: id, path: rel, note: photo ? 'your photo' : 'your file', size: p.bytes.length, ...(photo ? { photo: true } : { input: true }), ...(p.name ? { name: p.name } : {}) });
+        this.db.event('file.delivered', bot, { task: id, path: rel, note: photo ? 'your photo' : 'your file', size: p.bytes.length, input: true, ...(photo ? { photo: true } : {}), ...(p.name ? { name: p.name } : {}) });
         return rel;
       });
       if (kept.length) this.db.run('UPDATE tasks SET photos = ? WHERE id = ?', JSON.stringify(kept.filter((_, i) => pics[i].photo !== false)), id);
