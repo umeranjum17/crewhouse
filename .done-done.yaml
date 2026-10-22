@@ -27,6 +27,8 @@ journeys:
     command: 'bash scripts/verify/upgrade.sh "$DONE_DONE_EVIDENCE_ROOT"'
   onboard-chat:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" NODE_BIN=/usr/bin/node timeout -k 10 600 bash scripts/verify/onboard-chat.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  desktop-first-launch:
+    command: 'timeout -k 10 900 node scripts/verify/desktop-first-launch.mjs --out "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

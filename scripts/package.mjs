@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { crewd, node } from '../packaging/bundle.mjs';
+import { crewd, engine, node } from '../packaging/bundle.mjs';
 
 const repo = new URL('..', import.meta.url).pathname;
 const { version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
@@ -20,22 +20,7 @@ rmSync(stage, { recursive: true, force: true });
 node(dist, join(opt, 'node'));
 const app = join(opt, 'app');
 const bundledEnv = crewd(app, join(opt, 'node'));
-const engineState = join(stage, 'engine-prepare');
-// The download carries its engine in app/runtime/openclaw (Config.engineDir finds it there once installed).
-sh(join(opt, 'node', 'bin', 'node'), ['scripts/prepare-engine.mjs', engineState], { cwd: app, env: { ...bundledEnv, CREWHOUSE_ENGINE_DIR: join(app, 'runtime', 'openclaw') } });
-// Since kit 0.6.2 the engine installs as a verified read-only set; audit the installed set, not the engine dir.
-const engineSet = readFileSync(join(engineState, 'openclaw', 'engine-set'), 'utf8').trim();
-sh(join(opt, 'node', 'bin', 'npm'), ['audit', 'signatures', '--prefix', engineSet], { cwd: app, env: bundledEnv });
-// The kit patches a copy of the stock set and keeps both; the engine runs only the patched one, so only it ships
-// (the stock copy is a second ~900 MB tree: it nearly doubled the download).
-for (const name of readdirSync(dirname(engineSet)).filter((n) => join(dirname(engineSet), n) !== engineSet)) {
-  sh('chmod', ['-R', 'u+w', join(dirname(engineSet), name)]);
-  rmSync(join(dirname(engineSet), name), { recursive: true });
-}
-// The kit locks its engine folders to 0700 for the build user; dpkg unpacks them root-owned, and crewd runs as the
-// person, who then cannot read the engine it was given. Everyone reads it; only crewd's own state stays private.
-sh('chmod', ['-R', 'a+rX', join(app, 'runtime')]);
-rmSync(engineState, { recursive: true, force: true });
+engine(app, join(opt, 'node'), bundledEnv, stage);
 
 // The launcher, the menu entry and the icon.
 for (const name of ['launch.mjs', 'trouble.mjs']) cpSync(join(repo, 'packaging', name), join(opt, name));
