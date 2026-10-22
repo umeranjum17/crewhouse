@@ -32,9 +32,14 @@ if (mode === '--scripted') {
     if (report) return { reply: `${helperName} checked the file. Umer owns the blue folder. Reference BLUE-42.` };
     const key = new RegExp(`${helperId}: (agent:[^\\s]+)`).exec(system)?.[1];
     if (!key) return { reply: 'No helper session was offered.' };
+    // A model that does not wait: it hands the job on and keeps working in the same turn, going after the helper's file
+    // for the report. The crew holds the run while the helper has the job, so the model is told to wait, ends its turn,
+    // and the report arrives in the next turn.
+    if (body.messages.filter((m: any) => m.role === 'tool').length >= 3) return { reply: 'Waiting for the helper.' };
     const outcome = text.includes('uncertain proof') ? '[tool crew_outcome {"worked":false,"seen":"The requested result could not be confirmed."}] ' : '';
     return { text: `[tool sessions_send ${JSON.stringify({ sessionKey: 'agent:m1:not-a-helper', message: 'Do not admit this target', timeoutSeconds: 0 })}] ` +
-      `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}]` };
+      `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}] ` +
+      `[tool crew_read {"path":"files/facts.txt"}]` };
   });
   process.env.CREWHOUSE_ENGINE_BASE_URL = stub.url; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';
   const legacy = join(scratch, 'state/people/1/engine/auth.json'); mkdirSync(join(legacy, '..'), { recursive: true });

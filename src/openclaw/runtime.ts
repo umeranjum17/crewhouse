@@ -62,6 +62,7 @@ export class OpenClawRuntime implements AgentRuntime {
   private host?: ToolHost; private keyChecks = new Set<string>();
   private runs = new Map<string, RunRef & { account?: string; keyLane?: boolean }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
   private targets = new Map<string, Map<string, { bot: string; run?: RunRef }>>(); private legs = new Map<string, number>(); // a native job's spawned-lookup count
+  private waits = new Set<string>(); // a run that has handed work to a helper and is still waiting for its report
   private failed = ''; private nodes = new Map<string, { display: string; child: ChildProcess }>();
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
@@ -77,6 +78,9 @@ export class OpenClawRuntime implements AgentRuntime {
           const run = this.runOf(ref.sessionKey), leg = !run && ref.parent && !ref.helper && ref.root ? this.runOf(ref.root.sessionKey) : undefined; // legwork: a child Chief's run spawned
           if (!run) return leg ? this.host && LEGWORK.has(tool) ? this.host.gate(leg, crewName(tool), input) : { allow: false, reason: 'This legwork only reads the web. Report what you found.' } : ref.parent || ref.helper ? { allow: false, reason: 'This helper’s task is no longer active.' } : { allow: true };
           if (!this.host) return { allow: false, reason: 'Crewhouse could not check this call.' };
+          // A helper has the job: Chief waits for its report instead of working past it. The report arrives in the
+          // run's next turn, so the model ends this turn and answers the person from it there.
+          if (this.waits.has(run.key)) return { allow: false, reason: 'The helper has this job now. Wait for its report: it arrives in your next turn, and you answer the person from it there. Do not call any tool until then.' };
           if (tool === 'sessions_yield') return this.legs.get(run.key) ? { allow: true } : { allow: false, reason: 'There is nothing to wait for.' };
           if (tool === 'sessions_spawn') {
             const own = /^agent:([^:]+):/.exec(ref.sessionKey)?.[1], n = this.legs.get(run.key) ?? MAX_LEGS;
@@ -89,6 +93,7 @@ export class OpenClawRuntime implements AgentRuntime {
             try {
               target.run = await this.host.delegate(run, target.bot, String(input.sessionKey), typeof input.message === 'string' ? input.message : '');
               this.runs.set(String(input.sessionKey), target.run);
+              this.waits.add(run.key); // the helper has the job now: the run waits for its report
               return { allow: true };
             } catch (e) { return { allow: false, reason: (e as Error).message }; }
           }
@@ -256,20 +261,23 @@ export class OpenClawRuntime implements AgentRuntime {
     });
     const offReturn = this.kit.onEvent('agent', (e) => {
       if (!dispatched || !('sessionKey' in e) || e.sessionKey !== rootKey || e.runId === id) return; // display only; the kit admits every tool call by exact run identity
+      // The report comes back in a turn of its own on the same session: that turn is Chief's again, so the run may
+      // work. The turn that handed the job on ends first, and the turn that carries the report starts after it.
+      if (e.stream === 'lifecycle' && (e.data?.phase === 'start' || e.data?.phase === 'end')) this.waits.delete(spec.key);
       if (e.stream === 'assistant' && typeof e.data?.text === 'string') on({ type: 'text', text: e.data.text });
-      if (e.stream === 'lifecycle' && e.data?.phase === 'end' && !admitted.size) {
+      if (e.stream === 'lifecycle' && e.data?.phase === 'end' && !admitted.size && ![...targets.values()].some((t) => t.run)) {
         const reply = e.data.terminalReply as { disposition?: string; text?: string } | undefined;
         finish(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
       }
     });
     try {
-      const end = await this.kit.run({ ...request, idempotencyKey: id, delegates: { [lane]: [] }, helperDelegates: helpers, system: `${spec.system}${targets.size ? `\nNative hand-off: use sessions_send with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. Admission is not completion. Your helper reports back natively; do not invent its result.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` : ''}\nLegwork: for plain web lookups, call sessions_spawn with agentId "${lane}", task (one thing to look up and what to report) and label, up to ${MAX_LEGS} in a job. Each only reads the web and reports back. Then call sessions_yield with how to answer (tone, format) and answer when the reports arrive, never in their place.` }, (e) => {
+      const end = await this.kit.run({ ...request, idempotencyKey: id, delegates: { [lane]: [] }, helperDelegates: helpers, system: `${spec.system}${targets.size ? `\nNative hand-off: use sessions_send once with an exact sessionKey below, message with the job and done means, timeoutSeconds: 0. The helper then has the job: its report arrives in your next turn, and you answer the person from it there. End this turn after the hand-off; do not send it again and do not go looking for the helper's files.\n${[...targets].map(([key, t]) => `${t.bot}: ${key}`).join('\n')}` : ''}\nLegwork: for plain web lookups, call sessions_spawn with agentId "${lane}", task (one thing to look up and what to report) and label, up to ${MAX_LEGS} in a job. Each only reads the web and reports back. Then call sessions_yield with how to answer (tone, format) and answer when the reports arrive, never in their place.` }, (e) => {
         if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
-        if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; }
+        if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; this.waits.delete(spec.key); }
       });
       return end.ok && dispatched ? await returned : end;
     } finally {
-      clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key); this.legs.delete(spec.key); if (admitted.size) await this.abort(spec.key).catch(() => {});
+      clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key); this.legs.delete(spec.key); this.waits.delete(spec.key); if (admitted.size) await this.abort(spec.key).catch(() => {});
       for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }
     }
   }

@@ -271,5 +271,15 @@
       "Read the chart on each sheet at 1440 and 390, day and night"
     ],
     "result": "The preview panel draws the bar and pie charts of the finished workbook, and the file's own chart parts are real"
+  },
+  "chief-wait": {
+    "target": { "version": "{{version}}+{{sha}}" },
+    "start": "a fresh Crewhouse with one helper on the crew, on {{model}}",
+    "steps": [
+      "Ask Chief to get a helper to read a file and bring back its reference",
+      "Wait for the helper to work and for Chief to answer the person from its report",
+      "Open Chief's thread at 390 and 1440 wide, day and night"
+    ],
+    "result": "Chief's thread shows one answer, the words the helper's report brought, with no question and no work of Chief's own while the helper worked"
   }
 }
