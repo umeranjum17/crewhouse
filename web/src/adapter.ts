@@ -1512,8 +1512,8 @@ const planOf = (body: unknown): string[] => {
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
   heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number>; side?: 'phone'; signedOut?: boolean }): LiveLine | null {
   // While no account is ready to think with (the sign-in card's own test), the card is the one state: no working,
-  // reading or waiting line above it, so the thread and the header say one thing (ch-signin-wait-truth). The phone,
-  // which cannot see the accounts, passes nothing and keeps its waiting line naming where to sign in.
+  // reading or waiting line above it, so the thread and the header say one thing (ch-signin-wait-truth). The phone
+  // passes nothing and keeps its waiting line naming where to sign in.
   if (o.signedOut) return null;
   const evs = new Map<number, Json>();
   for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });

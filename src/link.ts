@@ -431,8 +431,8 @@ export class Link {
       if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).catch(() => {}).then(() => ({ status: 200, body: { ok: true } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
-    // Only a headless host's enrolled owner gets computer authority; normal phones retain their existing limits.
-    if (op !== 'POST /api/phones/refresh' && !(g.role === 'control' && this.setting('link.owner') === g.id) && (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET'))) return { status: 403, body: { error: 'do that on the computer' } };
+    // Only a headless host's enrolled owner gets computer authority; normal phones retain their existing limits, but may read which AI accounts are signed in.
+    if (op !== 'POST /api/phones/refresh' && !(g.role === 'control' && this.setting('link.owner') === g.id) && (/^\/api\/(accounts|house|phones)\b/.test(path) && op !== 'GET /api/accounts' || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET'))) return { status: 403, body: { error: 'do that on the computer' } };
     try { return { status: 200, body: await this.handle(method, path, body ?? {}, key, g.id) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }

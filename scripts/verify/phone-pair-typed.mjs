@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Pairs a task-owned emulator to the lab crewd (pair-lab.sh) by the typed relay code and stops on the app's Home, for
-// a proof that starts there (docs/verification/chief-computer.md). From "Where should I work?": On my computer, Type the code,
+// a proof that starts there (docs/verification/chief-computer.md). From "Where should I work?": On my computer, Type the code
+// (or from a build without the cloud flag: Pair with my computer),
 // the relay code (`phones code`'s last line: `input text` drops pieces of the relay code on a slow
 // emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports.
 //
@@ -39,8 +40,10 @@ for (const port of [env.LINK_PORT, env.RELAY.split(':').pop()]) A('reverse', `tc
 await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past Hello, so the phone opens on Home
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
 A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
-await waitFor(/^On my computer$/, 60000); tap(/^On my computer$/);
-await waitFor(/^Type the code$/, 20000); tap(/^Type the code$/); // Put Chief on your computer → the code box
+// The cloud build opens on "Where should I work?"; without the cloud flag the first screen is "Pair with my computer".
+await waitFor(/^(On my computer|Pair with my computer)$/, 60000);
+if (find(/^Pair with my computer$/)) tap(/^Pair with my computer$/);
+else { tap(/^On my computer$/); await waitFor(/^Type the code$/, 20000); tap(/^Type the code$/); } // Put Chief on your computer → the code box
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
 A('shell', 'input', 'text', code); await sleep(800);
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/); // close the keyboard, then Pair
