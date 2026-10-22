@@ -14,7 +14,7 @@ import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, 
 import { allowed, proxy } from './net.ts';
 import type { Server } from 'node:net';
 import { acts, claimOf, COMPUTER_LOOKS, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
-import { axiEnv, registry, resolveGrants, toolBin, which } from './tools.ts';
+import { axiEnv, pinnedNote, registry, resolveGrants, toolBin, which } from './tools.ts';
 import { describe, describeTrigger, firstRun, hhmm, looksFor, nextRun, parseSchedule, parseTrigger, reminderAt, type Trigger } from './routines.ts';
 import { mailChanges, mailTool, newThreads } from './mail.ts';
 import { events } from './calendar.ts';
@@ -69,6 +69,8 @@ const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
   'skill.learned', 'skill.removed', 'soul.changed', 'draft.approved', 'draft.rejected', 'profile.edited'];
+/** The engine's own tools: they run inside the engine and never call back, so the gate is the only place their step can be written. */
+const BUILTINS = new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']);
 
 /** Whether the person's quiet hours ("22:00-07:00", may wrap past midnight) cover this moment. */
 export function quietNow(quiet: string | null | undefined, at = new Date()) {
@@ -1290,8 +1292,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
   private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
     const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: task.session ?? (bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : this.db.get("SELECT session FROM tasks WHERE bot = ? AND session LIKE 'agent:%:h-%:%' ORDER BY id DESC LIMIT 1", bot.id)?.session ?? `agent:m1:crewhouse:${bot.id}`), task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
-    // The bot's shell: bubblewrap, where its space is the only writable part of the disk.
-    if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock);
+    // The bot's shell: bubblewrap, where its space is the only writable part of the disk. A pinned kit tool that fails
+    // says so in the result, with the kit's own words about the copy it pins and the way to a newer one.
+    if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock, (program) => pinnedNote(this.cfg, program));
     // The person's connected apps (their Notion, their Google…): Chief reaches every one; a helper only the ones its bot.json grants (src/bots.ts). Through the gate either way.
     const apps = await this.connections.tools();
     l.apps = apps.effects; l.owners = apps.owner;
@@ -1564,9 +1567,13 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
         try {
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) { ok = false; text = `error: ${String(e?.message ?? e).slice(0, 300)}`; }
+        // A result that reads "error: …" is a failure the model was told about, so the record says so too.
+        const failed = !ok || text.startsWith('error:'), [name, input] = this.unwrap(tool, rawInput);
         // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
-        const [name] = this.unwrap(tool, rawInput);
-        this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok, head: text.split('\n')[0].slice(0, 160) });
+        this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok: !failed, head: text.split('\n')[0].slice(0, 160) });
+        // The trail's step, written once the call is over: a call that failed never claims the work was done.
+        const words = toolWords(name, input, !failed), note = failed && name === 'bash' ? pinnedNote(this.cfg, String(input.command ?? '').trim().split(/\s+/)[0] ?? '') : '';
+        if (words) this.db.event('run.tool', run.bot, { task: run.task, words: note ? `${words}. ${note}` : words });
         return text;
       },
     };
@@ -1609,7 +1616,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
     const grants = l.grants ?? [];
     // OpenClaw's own read/recall/media tools, adopted for unfenced runs; a fenced helper's way out stays crewd's.
     // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
-    if (new Set(['web_search', 'web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate']).has(name)) return !this.netOf(botId);
+    if (BUILTINS.has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
     if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();
     if (name === 'crew_web_fetch' || name === 'crew_web_search') return grants.includes('web');
@@ -1661,8 +1668,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Save facts the person
       this.refusedNet(botId, tool);
       return { block: true, reason: 'This helper may reach only the places on its list; that tool goes elsewhere.' };
     }
-    const words = toolWords(tool, input);
-    if (words) this.db.event('run.tool', botId, { task: task?.id, words });
+    // The engine's own tools never call back into crewd, so their step is written here; every tool the crew runs is
+    // written once the call is over, with the truth of how it went.
+    if (BUILTINS.has(tool)) { const words = toolWords(tool, input); if (words) this.db.event('run.tool', botId, { task: task?.id, words }); }
     // Lines the helper types on a page nobody has approved yet (an unsigned register's form) are remembered for the
     // card of the press that sends them; a new page starts a new form.
     if (tool === 'browser' && e.kind === 'safe') {

@@ -10,8 +10,8 @@
   "source": "pinned",
   "install": {
     "download": {
-      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp",
-      "sha256": "1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6"
+      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.10.233141/yt-dlp",
+      "sha256": "f40b6a9e4c5786360953911cab5d2f87507626b8fb7bfee3f8f1c2e5cf341fae"
     }
   },
   "asks": [
@@ -20,6 +20,6 @@
   "grant": {
     "default": false
   },
-  "note": "Needs python3.",
+  "note": "Needs python3. A dated build of yt-dlp, checked against its checksum: the stable release falls behind the sites it reads, so the pin moves to a newer build when one does.",
   "migrationDebt": "Raw tool installation/execution and third-party SDK ownership must move to published BYOKit capabilities; this manifest records current behavior, not an approved bypass."
 }

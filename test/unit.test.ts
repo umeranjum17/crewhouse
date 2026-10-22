@@ -375,7 +375,7 @@ test('installs: pinned npm and checksummed download land in the tool folder; bad
   const root = temp('crewhouse-kit');
   const payload = '#!/bin/sh\necho downloaded\n';
   const sha = createHash('sha256').update(payload).digest('hex');
-  const srv = createServer((_q, r) => r.end(payload)).listen(0, '127.0.0.1');
+  const srv = createServer((q, r) => (q.url === '/never' ? r.writeHead(404).end() : r.end(payload))).listen(0, '127.0.0.1');
   await new Promise((r) => srv.once('listening', r));
   const url = `http://127.0.0.1:${(srv.address() as any).port}/fake-dl`;
   const pkg = join(root, 'pkg');
@@ -408,6 +408,10 @@ test('installs: pinned npm and checksummed download land in the tool folder; bad
     symlinkSync(join(cfg.toolsDir, 'dltool', 'old-program'), join(kit.toolBin(cfg), 'old-program'));
     await kit.installTool(cfg, 'dltool');
     assert.ok(!readdirSync(kit.toolBin(cfg)).includes('old-program') && existsSync(join(kit.toolBin(cfg), 'fake-dl')));
+    // A download that never arrives leaves the person with the copy they had, not with none.
+    manifest('dltool', { download: { url: url.replace('/fake-dl', '/never'), sha256: sha } }, ['fake-dl']);
+    await assert.rejects(kit.installTool(cfg, 'dltool'), /download failed/);
+    assert.equal(readFileSync(join(kit.toolBin(cfg), 'fake-dl'), 'utf8'), payload, 'the copy that was there is still there');
     await assert.rejects(kit.installTool(cfg, 'nope'), /unknown tool/);
   } finally {
     srv.close();

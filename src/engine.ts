@@ -69,11 +69,18 @@ export const runSandboxed = (space: string, readOnly: string[], env: Record<stri
     { cwd: space, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, timeout, maxBuffer: 64 << 20 },
     (err: any, out, errOut) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, tail: `${out}${errOut}`.slice(-1000) })).stdin?.on('error', () => {}).end(stdin));
 
-/** The shell as one crewd-owned tool: a timeout and an output tail, like the engine's own bash was. */
-export const bashTool = (space: string, readOnly: string[], env: Record<string, string>, net?: string) =>
+/** The shell as one crewd-owned tool: a timeout and an output tail, like the engine's own bash was. A command that
+ *  failed comes back as a failure (the house's `error: …`), with the cause first, so the model reads a real reason
+ *  instead of a wall of output. `note` is the kit's own words about the program that failed, when it has any. */
+export const bashTool = (space: string, readOnly: string[], env: Record<string, string>, net?: string, note?: (program: string) => string) =>
   tool('bash', 'Run a shell command in your own space (a sandbox: your folder is the only writable part of the disk). ' +
     'Long output is cut to the last lines.', PARAMETERS.shell,
-    async (p) => { const r = await runSandboxed(space, readOnly, env, String(p.command ?? ''), net); return r.code === 0 ? r.tail : `(exit: ${r.code}) ${r.tail}`; });
+    async (p) => {
+      const r = await runSandboxed(space, readOnly, env, String(p.command ?? ''), net);
+      if (r.code === 0) return r.tail;
+      const program = String(p.command ?? '').trim().split(/\s+/)[0] ?? '', cause = r.tail.trim().split('\n').filter(Boolean).at(-1) ?? '', said = note?.(program);
+      return `error: ${program} failed (exit ${r.code})${cause ? `: ${cause}` : ''}\n${r.tail}${said ? `\n${said}` : ''}`;
+    });
 
 // ---- the web, without a key ----
 const plain = (html: string) => html.replace(/<(script|style|noscript)[^]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')

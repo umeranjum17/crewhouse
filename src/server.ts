@@ -102,8 +102,9 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     child.on('error', (e) => { console.error(`install ${id}:`, e); clearTimeout(stall); if (!stalled) finish(false); });
   })).get(id)!, packaged = process.env.CREWHOUSE_PACKAGED === '1';
   // First-use tool installs: the downloaded app sets CREWHOUSE_PACKAGED, the terminal path's start sets CREWHOUSE_FIRST_USE_TOOLS.
+  // A tool whose pin moved (the kit pins a newer copy) is refreshed the same way, through the manifest's checksum.
   if (packaged || process.env.CREWHOUSE_FIRST_USE_TOOLS === '1') crew.fetchTools = async (grants) => {
-    const stalled = await Promise.all(toolStatus(cfg, grants).filter((t) => t.installable && !t.ready).map(async (t) => (await install(t.id) ? t : null))), t = stalled.find(Boolean);
+    const stalled = await Promise.all(toolStatus(cfg, grants).filter((t) => t.installable && (!t.ready || t.outdated)).map(async (t) => (await install(t.id) ? t : null))), t = stalled.find(Boolean);
     return t ? `${t.name} took too long to install, so this one stopped. It will try again next time.` : null;
   };
   let update: { version: string; url: string } | null = null;
@@ -268,7 +269,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (!task) throw Object.assign(new Error('no such task'), { status: 404 });
       return db.all("SELECT at, data FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ? ORDER BY seq", id)
         .map((e: any) => { const d = JSON.parse(e.data); let input = {}; try { input = JSON.parse(d.input ?? '{}'); } catch { /* unreadable input: words only */ }
-          return { at: e.at, words: toolWords(d.tool, input) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok: d.ok !== false && !String(d.head ?? '').startsWith('error:') }; });
+          const ok = d.ok !== false && !String(d.head ?? '').startsWith('error:');
+          return { at: e.at, words: toolWords(d.tool, input, ok) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok }; });
     }
     // What the engine learned from your work, and Forget.
     if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned() : [];
