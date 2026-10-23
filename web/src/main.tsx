@@ -30,7 +30,7 @@ const removed = (() => { try { return sessionStorage.getItem(REMOVED) === '1'; }
 const clearRemoved = () => { try { sessionStorage.removeItem(REMOVED); } catch { /* nothing kept */ } };
 type View = 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
-const cloudOn = process.env.CREWHOUSE_CLOUD === '1';
+const cloudOn = process.env.CREWHOUSE_CLOUD !== '0';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string; title?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -448,14 +448,14 @@ function AppDownloadQR({ android }: { android?: boolean }) {
 }
 /** The public web app's first screen with no computer paired (mock C): Chief asks where he should work.
  *  On my computer opens the Pair sheet (#/pair); a cloud, or Chief on the phone alone, is set up in the phone app, so
- *  both rows say so. The cloud row waits for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows it. */
+ *  both rows say so. Cloud first is the release default. */
 function Where({ pairing }: { pairing: boolean }) {
   const [app, setApp] = useState(false);
   const w = A.where(cloudOn);
   return <div className="where">
     <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
     {w.line && <p className="where-line">{w.line}</p>}
-    {w.rows.filter((r) => r.key !== 'phone').map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
+    {w.rows.map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
       <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="mute small">{r.sub}</span></span><i aria-hidden>›</i>
     </button>)}
     <div className="where-note"><Icon name="shield" size={18} /><p>{w.note}</p></div>
@@ -1758,56 +1758,26 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   );
 }
 
-/** Settings › Chief's computer (mock computer): the one cloud computer the crew shares. Every value
- *  and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not connected,
- *  Reset and Daily snapshots stay dimmed and disabled with the reason under the group, and a tap on either answers
- *  with that reason — never the Reset sheet, never a toast. */
+/** Boat forbids browser setup/management (CORS); its key stays on the owner phone. No placeholder actions. */
 function ChiefComputer() {
-  const [c, setC] = useState<A.Computer | null>(null);
-  const [resetting, setResetting] = useState(false);
-  const [nudged, setNudged] = useState(false);
-  const [note, setNote] = useState('');
-  const nudgeT = useRef<number | undefined>(undefined);
-  const connectRef = useRef<HTMLParagraphElement | null>(null);
-  useEffect(() => { A.computerCall().then(setC, () => setC(null)); }, []);
-  useEffect(() => () => window.clearTimeout(nudgeT.current), []);
-  const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
-  const w = A.computer(c), boat = A.CLOUD.boat, off = !c;
-  // Not connected: the dimmed rows never act — a tap flashes the reason line and says it aloud instead.
-  const nudge = () => {
-    setNudged(true); setNote(w.connect);
-    connectRef.current?.scrollIntoView({ block: 'nearest' });
-    window.clearTimeout(nudgeT.current);
-    nudgeT.current = window.setTimeout(() => { setNudged(false); setNote(''); }, 1600);
-  };
+  const w = A.computer(null), boat = A.CLOUD.boat;
   const two = ([l, v]: string[], red = false) => <span className="grow"><span className={red ? 'danger' : ''}>{l}</span><span className="mute small">{v}</span></span>;
   return (
     <div className="page settings computer">
       <a href="#/settings" className="back">‹ Settings</a>
       <h1>{w.title}</h1>
-      <div className="card list"><button className="row-item" onClick={() => act('update')}><span className="grow">{w.update[0]}</span><span className="mute">{w.update[1]}</span></button>
-        {off
-          ? <div className="computer-off" onClick={nudge}><button className="row-item" disabled aria-disabled="true">{two(w.reset, true)}</button></div>
-          : <button className="row-item" onClick={() => setResetting(true)}>{two(w.reset, true)}</button>}</div>
+      <p className="mute">Manage this computer in the phone app that set it up. {w.keyAway}</p>
+      <div className="card list"><button className="row-item" disabled>{two([w.update[0], 'Use the phone app'])}</button>
+        <button className="row-item" disabled>{two([w.reset[0], 'Use the phone app'], true)}</button></div>
       <p className="mute small computer-cap">{w.caption}</p>
-      <div className="card list">{off
-        ? <div className="computer-off" onClick={nudge}><label className="row-item" aria-disabled="true">{two(w.daily)}<input type="checkbox" role="switch" checked={false} disabled aria-disabled="true" onChange={() => {}} /></label></div>
-        : <label className="row-item">{two(w.daily)}<input type="checkbox" role="switch" checked={!!c?.daily} onChange={(e) => act(e.target.checked ? 'daily-on' : 'daily-off')} /></label>}
-        <div className="row-item"><span className="grow">{w.disk[0]}</span><span className="mute">{w.disk[1]}</span></div></div>
-      {off && <p ref={connectRef} className={`mute small computer-cap computer-connect${nudged ? ' nudge' : ''}`}>{w.connect}</p>}
-      {note ? <span role="status" className="vh">{note}</span> : null}
+      <div className="card list"><label className="row-item">{two(w.daily)}<input type="checkbox" role="switch" checked={false} disabled /></label>
+        <button className="row-item" disabled>{two([w.save[0], 'Use the phone app'])}</button>
+        <div className="row-item">{two([w.disk[0], 'Check in the phone app'])}</div></div>
       <div className="card list"><div className="row-item"><span className="o-ic" style={{ background: boat.tile, color: '#fff' }}>{boat.mark}</span>{two(w.host)}</div></div>
       <p className="mute small computer-cap">{w.keyAway}</p>
       <details className="more-ways"><summary><span className="grow">{w.more}</span><i aria-hidden>›</i></summary>
-        <div className="card list"><button className="row-item" onClick={() => act('undo')}><span className="grow">{w.undo}</span></button>
-          <button className="row-item" onClick={() => confirm(w.removeAsk.join('\n\n')) && act('delete')}><span className="grow danger">{w.remove}</span></button></div></details>
-      {resetting && <Sheet label={w.sheet.title} onClose={() => setResetting(false)}><div className="computer-ask">
-        <h2>{w.sheet.title}</h2>
-        <p>{w.sheet.lost.map((p, i) => (i % 2 ? <b key={i}>{p}</b> : p))}</p>
-        <p>{w.sheet.safe}</p>
-        <button className="btn big danger" onClick={() => { setResetting(false); void act('reset'); }}>{w.sheet.yes}</button>
-        <button className="btn big ghost" onClick={() => setResetting(false)}>{w.sheet.no}</button>
-      </div></Sheet>}
+        <div className="card list"><button className="row-item" disabled>{two([w.undo, w.unavailable])}</button>
+          <button className="row-item" disabled>{two([w.remove, 'Use the phone app'], true)}</button></div></details>
     </div>
   );
 }

@@ -90,9 +90,16 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
 
   await send('Page.navigate', { url: shell });
   await until('the first question', async () => (await mode()) === 'where', 30_000);
-  // A release build keeps the cloud row off until BYOKit's cloud kit is published (CREWHOUSE_CLOUD unset).
-  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['On my computer']);
-  // The web app has no phone-only mode to offer, so there is no row that dead-ends.
+  // The release default is approved choice C; only an explicit CREWHOUSE_CLOUD=0 opts out.
+  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['In my cloud', 'On my computer', 'Just on this phone']);
+  // Browser-only choices hand off to the native app instead of pretending setup ran or dead-ending.
+  for (const title of ['In my cloud', 'Just on this phone']) {
+    await run(`[...document.querySelectorAll('.where-opt')].find((b) => b.querySelector('b').textContent === ${JSON.stringify(title)}).click()`);
+    await until('the phone-app handoff', () => run(`document.querySelector('[role="dialog"]')?.getAttribute('aria-label') === 'Use the phone app to set this up'`));
+    assert.equal(await run(`!!document.querySelector('.sheet .qr')`), true, 'the handoff gives the app download code');
+    await run(`[...document.querySelectorAll('.sheet button')].find((b) => b.textContent === 'Not now').click()`);
+    await until('back at the choices', () => run(`!document.querySelector('[role="dialog"]') && !!document.querySelector('.where')`));
+  }
 
   // A share that lands before the person has paired is kept, not dropped: the Share view asks to connect first (J14).
   await send('Page.navigate', { url: `${shell}share?text=Dinner%20at%20Luigi` });
@@ -131,8 +138,8 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!![...document.querySelectorAll('.go-to .grow b')].find((b) => b.textContent === 'Phones')`), false, 'phones stay the computer’s to manage');
-  // Chief's computer is the cloud kit's too: a release build lists no row for it.
-  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to .grow b')].map((a) => a.textContent)`), ['You', 'Custom rules', 'What the crew remembers', 'AI accounts', 'Apps']);
+  // Chief's computer is reachable in release-default Settings too, alongside the existing custom rules.
+  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to .grow b')].map((a) => a.textContent)`), ['You', 'Custom rules', 'What the crew remembers', 'AI accounts', 'Apps', "Chief's computer"]);
   // Custom rules are editable over the paired control link too, not a computer-only dead end.
   await http('PUT', '/api/rules', { text: 'Keep replies short.' });
   await run(`document.querySelector('a[href="#/settings/rules"]').click()`);

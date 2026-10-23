@@ -49,6 +49,14 @@ test('the cloud install runs again on a computer that already has Chief', () => 
   assert.equal(readFileSync(join(work, 'crewhouse', 'app', 'runtime', 'openclaw.sets', 'abc', 'node_modules', 'engine.js'), 'utf8'), 'engine\n');
   assert.equal(existsSync(join(work, '.byokit', 'installed.json')), true, 'the kit’s own folder survives the install');
 
+  const update = (file: string) => { for (const argv of recipe('http://127.0.0.1:7300', { download: `file://${file}` }, work).update!) execFileSync(argv[0], argv.slice(1), { cwd: work, stdio: 'pipe' }); };
+  writeFileSync(join(work, 'crewhouse', 'old-file'), 'old release');
+  assert.throws(() => update(join(dir, 'missing.tar.gz')));
+  assert.equal(readFileSync(join(work, 'crewhouse', 'old-file'), 'utf8'), 'old release', 'failed download leaves the running release untouched');
+  update(tgz);
+  assert.equal(existsSync(join(work, 'crewhouse', 'old-file')), false, 'update replaces the release, not only its service');
+  assert.equal(existsSync(join(work, '.byokit', 'installed.json')), true, 'update preserves the binding');
+
   // The download streams into tar, so a download that fails must still fail the step (not hand tar an empty stream).
   assert.throws(() => install(work, join(dir, 'missing.tar.gz')));
 });

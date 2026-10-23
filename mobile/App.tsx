@@ -42,8 +42,8 @@ import { pairWords } from './src/pair-words';
 import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
-import { checkKey, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
-import type { MachineRef, SetupStep } from '@byokit/cloud';
+import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
+import { MachineError, type MachineRef, type SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 
 // ---------- look ----------
@@ -814,8 +814,7 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
 
 // ---------- phone only: Chief on this phone, no computer ----------
 /** The first screen with no computer paired (mock C): Chief asks where he should work. On my computer is
- *  the pairing as before, Just on this phone the phone-only floor as before, In my cloud the cloud set-up steps (only
- *  in a build with the cloud on, src/cloud.ts). */
+ *  the setup/pairing, Just on this phone the phone-only floor, In my cloud the cloud set-up steps. */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
   const [at, setAt] = useState<'where' | 'put' | 'code' | 'computer' | 'cloud'>('where');
@@ -824,19 +823,21 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
   if (at === 'put') return <PutChief onCode={() => setAt('code')} onHave={() => setAt('computer')} onBack={back!} />;
   if (at === 'code' || at === 'computer') return <Pair onPaired={onPaired} onBack={back!} onPut={at === 'computer' ? () => setAt('put') : undefined} />;
   if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} onPaired={onPaired} />;
-  // Get started (J17a): Chief on his disc, the name, one line, then where he should work. In my cloud shows only in a
-  // build with the cloud on (A.where).
+  const w = A.where(cloudOn);
   return (
-    <ScrollView contentContainerStyle={[s.screen, { gap: 12, paddingTop: 64 }]}>
-      <View style={{ alignItems: 'center', gap: 16, marginBottom: 12 }}>
-        <ChiefArt mood="hello" size={120} whole />
-        <Text style={[s.wide, s.centerText, { color: t.ink, fontSize: 40, lineHeight: 44 }]}>Crewhouse</Text>
-        <T tone="ink2" style={[s.centerText, { fontSize: 18, lineHeight: 25 }]}>Your crew lives on your computer. This phone answers them and gives them jobs.</T>
+    <ScrollView contentContainerStyle={[s.screen, { gap: 16, paddingTop: 48 }]}>
+      <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
+        <ChiefArt mood="hello" size={72} whole />
+        <View style={{ flex: 1 }}><T style={s.b}>Chief</T><T style={s.title}>{w.hello}</T></View>
       </View>
-      <Btn ink tall label="Pair with my computer" onPress={() => setAt('computer')} />
-      {cloudOn && <Btn soft tall label="In my cloud" onPress={() => setAt('cloud')} />}
-      <Btn soft tall label="Use this phone only" onPress={onPhoneOnly} />
-      <T tone="mute" style={[s.small, { marginHorizontal: 4 }]}>Phone only: Chief runs on your AI account from this phone, no computer needed.</T>
+      {!!w.line && <T tone="ink2">{w.line}</T>}
+      {w.rows.map((r, i) => <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={r.title}
+        onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'cloud' ? 'cloud' : 'put')}
+        style={[s.card, s.row, { gap: 12, backgroundColor: t.card, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }]}>
+        <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
+        <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
+      </Pressable>)}
+      <Note>{w.note}</Note><T tone="mute" style={[s.small, s.centerText]}>{w.later}</T>
     </ScrollView>
   );
 }
@@ -1436,6 +1437,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     // itself. Pairing again reuses the scan/type flow and only replaces the kept grant once the new one succeeds;
     // backing out keeps retrying the old one. Nothing here names the machinery.
     if (repair) return <Pair onPaired={(g) => { setRepair(false); onRepaired(g); }} onBack={() => setRepair(false)} />;
+    if (route.view === 'computer') return <ChiefComputer back={['Back', () => go({ view: 'home' }, true)]} onRestored={(g) => { link.current?.addUrl(g.urls[0]); onRepaired(g); }} />;
     return (
       <ScrollView contentContainerStyle={s.centerScroll}>
         <ChiefArt mood="work" size={112} whole />
@@ -1443,6 +1445,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         <T tone="ink2" style={s.centerText}>This phone is still paired with it, but it doesn't answer. It may be switched off, asleep, or gone. Trying again by itself.</T>
         <Btn go big label="Pair again" onPress={() => setRepair(true)} />
         <Btn label="Try again" onPress={() => link.current?.retry()} />
+        {cloudOn && <Btn label="Chief's computer" onPress={() => go({ view: 'computer' })} />}
         <Btn ghost label="Just on this phone" onPress={onPhoneOnly} />
       </ScrollView>
     );
@@ -1485,7 +1488,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
         {route.view === 'phone' && <ThisPhone grant={grant} status={status} person={state.person} writer={canAct} refresh={refresh} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
-        {route.view === 'computer' && <ChiefComputer back={['Settings', back]} />}
+        {route.view === 'computer' && <ChiefComputer back={['Settings', back]} onRestored={(g) => { link.current?.addUrl(g.urls[0]); onRepaired(g); }} />}
         {route.view === 'jobs' && <JobsPage {...ctx} />}
       </View>
       <Tabs place={placeOf(route)} go={go} state={state} offline={offline} />
@@ -2939,11 +2942,8 @@ function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget,
   );
 }
 
-/** Settings › Chief's computer (mock computer), as on the web (web/src/main.tsx ChiefComputer): every
- *  value and action is the cloud kit's, through `A.computerCall`; until the kit is published the page says Not
- *  connected, Reset and Daily snapshots stay dimmed and disabled with the reason under the group, and a tap on either
- *  answers with that reason — never the Reset sheet, never a toast. */
-function ChiefComputer({ back }: { back: [string, () => void] }) {
+/** The owner phone manages its bound cloud computer through the kit, even when crewd is out of touch. */
+function ChiefComputer({ back, onRestored }: { back: [string, () => void]; onRestored: (g: Grant) => void }) {
   const t = useLook();
   const reduce = motion.useReduceMotion();
   const [c, setC] = useState<A.Computer | null>(null);
@@ -2955,9 +2955,21 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
   const scroll = useRef<ScrollView | null>(null);
   const reasonY = useRef(0);
   const [held, setHeld] = useState(false); // this phone keeps the boat.dev key
-  useEffect(() => { A.computerCall().then(setC, () => setC(null)); void keptKey().then((k) => setHeld(!!k)); }, []);
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const acting = useRef(false);
+  const act = async (x?: A.ComputerAct) => {
+    if (acting.current) return;
+    acting.current = true; setBusy(true); setError('');
+    try {
+      const g = await loadGrant(), key = await keptKey(); setHeld(!!key);
+      if (!g || !key) throw new Error('Use the phone that set up this computer to manage it.');
+      const next = await computerCall(boatOn(key), cloudStore, g.host, x, c?.snapshotId, lab, async (relay) => onRestored(await keepGrant(computerGrant(g, relay))));
+      setC(next); setNote(next?.warning || (x ? 'Finished.' : ''));
+    } catch (e) { setError(e instanceof MachineError ? said(e) : e instanceof Error ? e.message : 'Could not reach your computer.'); }
+    finally { acting.current = false; setBusy(false); }
+  };
+  useEffect(() => { void act(); }, []);
   useEffect(() => () => { if (nudgeT.current) clearTimeout(nudgeT.current); }, []);
-  const act = (x: A.ComputerAct) => attempt(async () => setC(await A.computerCall(x)));
   const w = A.computer(c), boat = A.CLOUD.boat, off = !c;
   // Not connected: the dimmed rows never act — a tap flashes the reason line, says it aloud, and brings it into
   // view (at the largest text it starts below the fold) instead.
@@ -2980,26 +2992,29 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
     <View style={[s.listRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line, opacity: 0.55 }]}
       accessibilityRole="button" accessibilityLabel={w.reset[0]} accessibilityState={{ disabled: true }}>{two(w.reset, true)}</View>
   </Pressable>;
-  const offDaily = <Pressable onPress={nudge} accessible={false}>
-    <View style={[s.listRow, { opacity: 0.55 }]} accessibilityRole="switch" accessibilityLabel={w.daily[0]} accessibilityState={{ disabled: true, checked: false }}>
-      <>{two(w.daily)}<View pointerEvents="none"><Switch value={false} disabled accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={() => {}} /></View></>
-    </View>
-  </Pressable>;
+  const offDaily = <View style={[s.listRow, { opacity: 0.55 }]}>
+    {two(w.daily)}<Switch value={false} disabled accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} />
+  </View>;
   return (
     <Page title={w.title} back={back} scroll={scroll}>
-      <View style={group}>{row(0, value(w.update), () => void act('update'), w.update[0])}{off ? offReset : row(1, two(w.reset, true), () => setResetting(true), w.reset[0])}</View>
+      <View pointerEvents={busy ? 'none' : 'auto'} style={[group, busy && { opacity: 0.5 }]}>{row(0, value(w.update), off ? undefined : () => void act('update'), w.update[0])}{off || !c?.snapshotId ? offReset : row(1, two(w.reset, true), () => setResetting(true), w.reset[0])}</View>
+      {busy && <ActivityIndicator accessibilityLabel="Working on your computer" color={t.ink} />}
+      {!!error && <View accessibilityLiveRegion="polite"><T tone="pinkInk">{error}</T></View>}
+      <Btn label="Refresh computer" disabled={busy} onPress={() => void act()} />
       <T tone="mute" style={[s.small, { marginHorizontal: 16, marginTop: -4 }]}>{w.caption}</T>
       <View style={group}>
-        {off ? offDaily : row(0, <>{two(w.daily)}<Switch value={!!c?.daily} accessibilityLabel={w.daily[0]} trackColor={{ false: t.line, true: t.ok }} thumbColor={t.solid} onValueChange={(on) => void act(on ? 'daily-on' : 'daily-off')} /></>)}
-        {row(1, value(w.disk))}</View>
+        {offDaily}
+        {row(1, two(w.save), !off && !busy ? () => void act('snapshot') : undefined, w.save[0])}
+        {row(2, value(w.disk))}</View>
+      <T tone="mute" style={s.small}>{w.last}</T>
       {off && <View onLayout={(e) => { reasonY.current = e.nativeEvent.layout.y; }}><T tone="mute" style={[s.small, { marginHorizontal: 16 }, nudged && { color: t.ink }]}>{w.connect}</T></View>}
-      {!!note && <Text accessibilityLiveRegion="polite" style={{ height: 0, opacity: 0 }}>{note}</Text>}
+      {!!note && <View accessibilityLiveRegion="polite"><T>{note}</T></View>}
       <View style={group}>{row(0, <><View style={[s.mark, { backgroundColor: boat.tile }]}><Text style={s.markText}>{boat.mark}</Text></View>{two(w.host)}</>)}</View>
-      {held && <View style={group}>{row(0, <>{two(w.key)}<Btn label={w.forget} onPress={() => void attempt(async () => { await forgetKey(); setHeld(false); })} /></>)}</View>}
+      {held && <View style={group}>{row(0, <>{two(w.key)}<Btn disabled={busy} label={w.forget} onPress={() => void attempt(async () => { await forgetKey(); setHeld(false); setC(null); })} /></>)}</View>}
       <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel={w.more} style={[s.row, { minHeight: 48, paddingHorizontal: 4 }]}>
         <T tone="ink2" style={{ flex: 1, ...fw('500') }}>{w.more}</T><T tone="mute">{more ? '⌄' : '›'}</T></Pressable>
       {more && <View style={group}>
-        {row(0, <T style={[s.rowTitle, { flex: 1 }]}>{w.undo}</T>, () => void act('undo'), w.undo)}
+        {row(0, <View accessibilityState={{ disabled: true }} style={{ opacity: 0.55, flex: 1 }}>{two([w.undo, w.unavailable])}</View>)}
         {row(1, <T style={[s.rowTitle, { flex: 1, color: t.danger }]}>{w.remove}</T>, () => Alert.alert(w.removeAsk[0], w.removeAsk[1],
           [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void act('delete') }]), w.remove)}</View>}
       <Modal visible={resetting} transparent animationType={motion.sheet(reduce)} onRequestClose={() => setResetting(false)}>
@@ -3008,7 +3023,7 @@ function ChiefComputer({ back }: { back: [string, () => void] }) {
             <T style={s.title}>{w.sheet.title}</T>
             <T tone="ink2">{w.sheet.lost.map((p, i) => (i % 2 ? <Text key={i} style={[s.b, { color: t.ink }]}>{p}</Text> : p))}</T>
             <T tone="ink2">{w.sheet.safe}</T>
-            <Btn danger big label={w.sheet.yes} onPress={() => { setResetting(false); void act('reset'); }} />
+            <Btn danger big disabled={busy} label={w.sheet.yes} onPress={() => { setResetting(false); void act('reset'); }} />
             <Btn ghost big label={w.sheet.no} onPress={() => setResetting(false)} />
           </Pressable>
         </Pressable>

@@ -6,9 +6,9 @@ this phone, the sign-in-yourself note and "You can change this later in Settings
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
-The cloud row is behind a build flag (`@byokit/cloud` 0.2.1 from npm):
-`EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for the phone, `CREWHOUSE_CLOUD=1` for
-`scripts/build-web.mjs`. Without it the screen has two rows, On my computer first. The phone runs the kit
+Cloud first is the release default (`@byokit/cloud` 0.2.1 from npm). Build without any cloud-enable variable:
+phone and web both show all three approved `A.where` choices, In my cloud first. An explicit
+`EXPO_PUBLIC_CREWHOUSE_CLOUD=0` (phone) or `CREWHOUSE_CLOUD=0` (web) opts out for a deployment. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
 
 ## What it proves
@@ -119,7 +119,7 @@ Only with no key file does it make the one claim (the kit's `claim()`, `BOAT_EMA
 documents a self-revoke (`POST /api/boat/oauth2/revoke`, unused here); `DELETE /api-keys/{id}` answers 403 to an agent key.
 
 The cloud screen's states on an emulator, at 390 wide by day and night (Make, a failed install, ready after Try
-again, a second phone): build the flagged lab APK (`EXPO_PUBLIC_CREWHOUSE_CLOUD=1`,
+again, a second phone): build a lab APK with **no cloud-enable variable** (only
 `EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1`), start an emulator, then
 `SERIAL=<serial> bash scripts/verify/cloud-screen.sh <out> <apk>`. It runs `boat-fake-lab.mjs` with `LAB_EMPTY=1`
 (an account with no computer), writes `cloud-{make,failed,ready,second-phone,move-confirm,moved}-{day,night}-390.png` (with `CLOUD_OTHER` set, every one but the claimed state goes there: `CLOUD_CLAIM`, default the second phone's offer) and the

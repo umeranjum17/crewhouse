@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { DeviceLink, hostId, keyPair, unb64url, type DeviceGrant } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
 import { startFakeSandboxServer, memoryStore } from '@byokit/cloud/testing';
-import { checkKey, connect, cost, make, progress, provider, said } from '../web/src/cloud.ts';
+import { checkKey, computerCall, computerGrant, connect, cost, make, progress, provider, said } from '../web/src/cloud.ts';
 import { until, delegated } from './lab.ts';
 import { temp } from './tmp.ts';
 
@@ -157,4 +157,24 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.equal((await newSide.req('GET', '/api/phones')).body.length, 1, 'one phone: the old one was revoked');
   link.stop(); phoneSide = dial(grant); link = phoneSide.l;
   assert.notEqual((await phoneSide.req('GET', '/api/accounts')).status, 200, 'the old phone lost access');
+
+  // The owner phone's management path uses the kit against the HTTP provider, never a successful UI placeholder.
+  const ownerGrant = moveSteps.find((s) => s.grant)!.grant!;
+  server.machine.script('df', { code: 0, stdout: 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/root 10000000 1000000 9000000 10% /\n', stderr: '', timedOut: false });
+  await assert.rejects(computerCall(p, newStore, 'another-host', 'update'), /phone that set up/);
+  const view = await computerCall(p, newStore, ownerGrant.host);
+  assert.equal(view!.disk, 'normal'); assert.equal(view!.daily, false); assert.equal(view!.snapshotId, undefined);
+  await assert.rejects(computerCall(p, newStore, ownerGrant.host, 'reset'), /Save a snapshot/);
+  await computerCall(p, newStore, ownerGrant.host, 'update');
+  assert.ok(server.machine.runs.some((r) => r.argv.includes('byokit-crewhouse.service') && r.argv.includes('restart')), 'update restarts the host through the kit');
+  server.machine.writeFile('/home/user/saved.txt', Buffer.from('before snapshot'), 0o600);
+  const saved = await computerCall(p, newStore, ownerGrant.host, 'snapshot');
+  assert.ok(saved!.snapshotId); assert.ok(saved!.snapshot);
+  server.machine.writeFile('/home/user/saved.txt', Buffer.from('after snapshot'), 0o600);
+  let reached = '';
+  const restored = await computerCall(p, newStore, ownerGrant.host, 'reset', saved!.snapshotId, undefined, async (relay) => { reached = relay; });
+  assert.notEqual((await newStore.load())!.ref!.id, seeded.id, 'restore persists the replacement before reconnecting');
+  assert.equal(server.machine.files.get('/home/user/saved.txt')!.bytes.toString(), 'before snapshot');
+  assert.equal(reached, restored!.relay);
+  assert.deepEqual(computerGrant(ownerGrant, reached).urls, [linkUrl(reached, hostId(unb64url(ownerGrant.host)))]);
 });

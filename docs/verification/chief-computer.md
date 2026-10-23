@@ -1,62 +1,57 @@
 # Settings › Chief's computer
 
-Chief's settings page for the one cloud computer the crew shares (`ChiefComputer` in `web/src/main.tsx` and in
-`mobile/App.tsx`): Update computer, Reset computer (red) with its sheet "Reset Chief's computer?", the sandbox
-caption, Daily snapshots (switch), Disk space, Runs on boat.dev, and More (Undo update, Delete my cloud computer). The
-web says the key stays on the phone that set up this computer; key management is phone-only. On
-the phone that kept a boat.dev key, a "boat.dev key" row with Forget key follows Runs on boat.dev. Forget removes the
-key from the phone's secure store, and the row goes away. The web shows "Your boat.dev key stays on the phone that set
-this computer up. Forget it there." instead.
-The words are `A.computer` in `web/src/adapter.ts`, one source for both. Approved mock: `computer` in
-`scripts/verify/mocks.tsv`.
+Release-default on phone and web (explicit `EXPO_PUBLIC_CREWHOUSE_CLOUD=0` / `CREWHOUSE_CLOUD=0` opts out).
+Approved `computer` mock: `scripts/verify/mocks.tsv`. The provider key stays only on the phone that set up the
+computer. Boat forbids browser management (CORS), so the web/PWA page names the phone requirement and disables
+provider actions; it never pretends an action succeeded.
 
-Behind the same build flag as the cloud row ([where-cloud.md](where-cloud.md)): `EXPO_PUBLIC_CREWHOUSE_CLOUD=1` for
-the phone, `CREWHOUSE_CLOUD=1` for `scripts/build-web.mjs`. Without it Settings has no row and `#/computer` opens
-Home. The phone can forget its stored boat.dev key; computer actions and kit-only values (update state, snapshot
-time, disk) remain unconnected and read "Not connected" or are left out. While nothing is
-connected, Reset computer and the Daily snapshots switch stay dimmed and disabled with one muted line under the
-group (`A.computer(null).connect`: "Connect Chief's computer first."); a tap on either answers with that reason
-(the line flashes and is announced) — the Reset sheet never opens and no toast appears. Other rows keep the
-not-ready line.
+## Phone controls
 
-## What it proves
+`mobile/App.tsx` calls `web/src/cloud.ts` `computerCall` through the pinned `@byokit/cloud` 0.2.1:
 
-- Web, installed app and phone: Settings' Chief's computer row opens the page; Reset computer and Daily snapshots
-  are dimmed and disabled with the reason line under the group; tapping either flashes and announces the reason,
-  with no sheet and no toast. No snapshot time, disk state or "Up to date" is invented.
-- At the largest text (look check, 360 wide) no word splits: a row's value drops under its label.
-- Flag off: Settings is pixel-identical to main's (web) and has no row (phone).
+- Read the bound machine's real disk usage and latest snapshot. Normal is below 80%, Getting full below 95%,
+  Full otherwise. No snapshot time or update status is invented. The secure record's host must match this phone's
+  paired host; a retained key from another cloud computer cannot manage the current pairing.
+- Update computer installs the latest release archive with the recipe's `update` argv, then the kit restarts the
+  host. The download is unpacked and validated before replacing the old release; a failed download leaves it intact.
+- Save a snapshot calls `snapshot({keep:7})`. Retention failure says the snapshot was saved but pruning failed.
+- Reset computer is disabled until there is a snapshot. Its warning names the exact snapshot time and the lost
+  chats/files. Cancel changes nothing. Confirm calls `restore` with that displayed snapshot's ID, not a newly
+  chosen copy. The kit persists the replacement machine; its new relay address is saved to the phone's grant
+  before subsequent metadata reads. The snapshot restores the sign-ins and phone access it held at that time.
+- Daily snapshots and Undo update say **Not available yet** and are disabled. The kit's scheduler only runs while
+  the app runs; it is not an always-on backup service. No app timer or provider key on crewd substitutes for it.
+- Delete asks explicitly and uses the kit's remove; Forget key removes the provider record from this phone.
+- Every request has busy protection, failure words and Refresh computer; no unconditional-success placeholder.
 
-## How to drive it
+## Drive and evidence
 
-Web, from the repo root, on a lab crewd ([pwa-pair.md](pwa-pair.md)'s `pair-lab.sh`; `$B` and the key are in `$LAB`):
+No real model or provider spend is needed. First run:
 
-```bash
-CREWHOUSE_CLOUD=1 node scripts/build-web.mjs
-S=scripts/verify; LAB=<scratch> $S/pair-lab.sh up . && . $LAB/env
-node $S/look-check.mjs web --out <dir> --person $LAB/state/person.key computer=$B/#/computer
-node $S/look-check.mjs web --out <dir> --person $LAB/state/person.key \
-  --then "await (async()=>{document.querySelector('.computer-off .row-item')?.click(); await new Promise(r=>setTimeout(r,900))})()" computer-tap=$B/#/computer
-# computer-tap proves the answer: the reason line reads "Connect Chief's computer first.", no `.computer-ask`
-# sheet opened and no `.toast` appeared (assert both absent with an eval).
-node $S/computer-plan.mjs $LAB <dir> > plan.json && xvfb-run -a node $S/pwa-shell.mjs plan.json  # installed app
+```
+node scripts/test.mjs test/cloud-connect.test.ts test/cloud-install.test.ts
 ```
 
-Phone: a release APK built with the flag on a task-owned emulator, paired to the same lab by the typed relay code:
+This extends the existing real headless-host / HTTP-provider journey through the actual management dispatcher:
+wrong-host refusal, disk, reset-before-save refusal, update/service restart, save, changed file, reset back to
+that file's saved bytes and the replacement's relay address. The on-disk release journey also executes the
+recipe's update shell on a read-only download and checks failed-download preservation.
 
-```bash
-(cd mobile/android && EXPO_PUBLIC_CREWHOUSE_CLOUD=1 NODE_ENV=production ./gradlew assembleRelease)
-LAB=<scratch> node $S/phone-pair-typed.mjs --serial $SERIAL --apk mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk
-SERIAL=$SERIAL node $S/look-check.mjs android --out <dir> --then "Settings>>Chief's computer" computer
-# Then tap the dimmed Reset and prove the same answer (reason shown, no sheet, no toast) with phone-ui.mjs shot + texts.
-```
+For native captures, build the release APK through the fleet memory gate, with **no cloud-enable variable**;
+only `EXPO_PUBLIC_CREWHOUSE_BOAT_API` points to the task's fake-Boat API. Use the owned/private emulator recipe in
+[where-cloud.md](where-cloud.md). Start `boat-fake-lab.mjs` with private HOME/XDG and a task-owned `LAB_DIR`, and
+script its `df` response from a synthetic disk (the live machine path is covered by the kit dispatcher journey).
+Walk Paste key → Use this computer → Ready. The computer's binding is written by real crewd. Pair to that same
+lab through its typed relay code without clearing the app's secure store, then Settings → Chief's computer.
+Capture disk, Save a snapshot, Reset warning/Cancel, unavailable Daily snapshots and Undo, and Refresh error/retry.
+Never point a fixture build at a real provider or use real keys. The fake provider cannot route its public
+`boat.test` URL; don't call that a real-cloud round trip.
 
-Flag off: build without the flag (a flag-off APK needs `./gradlew :app:createBundleReleaseJsAndAssets --rerun`
-first; Gradle keeps the flag-on bundle otherwise) and compare Settings to a `git archive main` build with
-`screens.sh` and `magick compare -metric AE` (0 is unchanged).
+For web/PWA, use [runbook.md](runbook.md) and the installed shell [pwa-pair.md](pwa-pair.md): capture the page at
+390 and 1440 in day/night. Controls are disabled and say to use the owner phone; Daily/Undo say Not available yet.
+For the chooser, use [where-cloud.md](where-cloud.md). Open every retained shot and compare it beside its approved
+mock; approved automatic backups remain an explicit limitation, not a visual-match claim.
 
-## Evidence
-
-Each look check beside its mock (day and night, largest text), the installed app's page at 390 and 1440
-day and night, the phone at 390 dp day and night, one recording of tapping the dimmed Reset → the reason answer
-with no sheet and no toast, and the flag-off Settings.
+Seal the exact-head real-product capture with `done-done run --open`, capture into its printed folder, write a
+steps.json describing only witnessed behavior, then `done-done run --close <id>`. A sealed run is not a judge PASS;
+request the bounded check/receipt separately and report any unperformed native/provider acceptance honestly.

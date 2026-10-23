@@ -178,14 +178,8 @@ export const CLOUD = {
 
 // ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer) ----------
 /** What only BYOKit's cloud kit can say: whether crewd is the latest, the daily snapshots and the last one, the disk. */
-export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
-export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
-/** The page's one call: no `act` reads the computer, an act does it and reads again. It stops at the kit:
- *  @byokit/cloud's machine.update, reset, copies and remove aren't wired here yet, so no computer is reached and nothing
- *  changes. The 404 is crewd's own "not here yet" (api.ts `trouble`), so each surface says it isn't ready. */
-export async function computerCall(_act?: ComputerAct): Promise<Computer> {
-  throw Object.assign(new Error("Chief's computer isn't connected yet"), { status: 404 });
-}
+export type Computer = { daily: false; snapshot?: number; snapshotId?: string; disk: 'normal' | 'filling' | 'full'; relay: string; warning?: string };
+export type ComputerAct = 'update' | 'snapshot' | 'reset' | 'delete';
 /** The page's words; `c` null until the kit answers, so nothing it alone knows is ever made up. A snapshot's time is
  *  the odd part of `reset.lost`, set bold. */
 export const computer = (c: Computer | null) => {
@@ -193,11 +187,13 @@ export const computer = (c: Computer | null) => {
   const off = 'Not connected', lost = ' Anything Chief and his crew did after that is lost, including chats and finished files.';
   return {
     title: "Chief's computer",
-    update: ['Update computer', c ? (c.current ? 'Up to date' : 'Update ready') : off],
+    update: ['Update computer', c ? 'Install the latest release' : off],
+    save: ['Save a snapshot', 'Save now. Keeps the last 7 snapshots.'], unavailable: 'Not available yet',
     reset: ['Reset computer', `Go back to the last snapshot${at && `, from ${at}`}. Changes since then are lost.`],
     caption: 'The one cloud computer Chief and his crew share. It is their sandbox, away from your phone and your files.',
-    connect: "Connect Chief's computer first.",
-    daily: ['Daily snapshots', `Keeps the last 7.${at && ` Last one ${at}.`}`],
+    connect: c ? 'Save a snapshot before resetting the computer.' : "Connect Chief's computer first.",
+    daily: ['Daily snapshots', 'Not available yet. Save a snapshot yourself instead.'],
+    last: at ? `Last snapshot ${at}.` : 'No saved snapshot yet.',
     disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
     host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
     /** The boat.dev key: kept only on the phone that set the computer up, never on the computer or the web. */

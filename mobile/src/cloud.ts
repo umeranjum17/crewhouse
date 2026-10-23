@@ -6,9 +6,8 @@ import { b64url, keyPair, keyPairFrom, unb64url, type KeyPair } from '@byokit/pa
 import * as SecureStore from 'expo-secure-store';
 import { BOAT, provider } from '../../web/src/cloud.ts';
 
-/** Off in a release build until @byokit/cloud is on npm: a build made with EXPO_PUBLIC_CREWHOUSE_CLOUD=1 shows the
- *  cloud row on the first screen. */
-export const cloudOn = process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD === '1';
+/** Cloud first in releases; an explicit 0 is the deployment opt-out. */
+export const cloudOn = process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD !== '0';
 
 /** The kit's MachineStore: `{ providerKey, ref }`, through BYOKit's own phone store. */
 const keys = nativeStore({ prefix: 'crewhouse.cloud', options: { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY } });

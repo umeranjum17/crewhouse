@@ -10,7 +10,7 @@
 # record): CLOUD_CLAIM names it (make, failed, ready, second-phone, move-confirm or moved; default second-phone, the
 # offer to move Chief). Every other state and the lab's log go to CLOUD_OTHER when it is set, else beside it.
 #
-# The emulator is the caller's (started and stopped by them); the APK is built with EXPO_PUBLIC_CREWHOUSE_CLOUD=1 and
+# The emulator is the caller's (started and stopped by them); the APK has no cloud-enable variable, only
 # EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:7411/api/v1. The emulator has no shell clipboard and the key box
 # only reads it, so the lab key is typed into the pairing-code field and copied from there.
 set -euo pipefail
@@ -48,7 +48,7 @@ adb install -r "$APK" >/dev/null
 adb shell wm size 1080x2400; adb shell wm density 443
 open_app() { adb shell pm clear "$PKG" >/dev/null; adb shell am start -n "$PKG/.MainActivity" >/dev/null; see '^.* In my cloud$'; }
 paste_key() {
-  ui tap '^Pair with my computer$'; see 'Pairing code'; ui tap 'Pairing code'; sleep 1
+  ui tap '^On my computer$'; see 'Crewhouse is already on my computer'; ui tap '^Crewhouse is already on my computer$'; see 'Pairing code'; ui tap 'Pairing code'
   # Controlled inputs drop fast injected text: a few letters at a time.
   for part in $(echo "$KEY" | fold -w 3); do adb shell input text "$part"; sleep 0.4; done
   see "$KEY"
