@@ -808,7 +808,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {

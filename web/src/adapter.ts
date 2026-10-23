@@ -917,7 +917,7 @@ export function card(a: Json, state: Json): Card {
       video: { from: plain(String(d.pick.from ?? '')), choices },
       choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
-  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Check that this says exactly what you want. Every helper will read this rule.', preview: { body: String(d.customRule.text) },
+  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Confirm custom rule', preview: { head: 'For every helper', body: String(d.customRule.text) },
     choices: [{ label: 'Create rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It

@@ -47,7 +47,7 @@ function parseRoute(): Route {
   if (a === 'routines' && /^\d+$/.test(b ?? '')) return { view: 'routines', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
-  if (a === 'settings' && ['you', 'memory', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
+  if (a === 'settings' && ['you', 'memory', 'rules', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
   return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
