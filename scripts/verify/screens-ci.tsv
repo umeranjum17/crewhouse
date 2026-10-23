@@ -14,6 +14,7 @@ chief-instructions	demo	#/h/chief/instructions
 settings	demo	#/settings
 add-to-crew	demo	#/crew/add
 chief-things	demo	#/things
+things	demo	#/things
 handoff	demo=after	#/
 handoff-helper	demo=after	#/h/reel
 ask-hire	demo=ask-hire	#/chief

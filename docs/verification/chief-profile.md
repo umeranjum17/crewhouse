@@ -21,9 +21,12 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
 - "Take control" / "Hand it back" everywhere: helper Details' Screen card, the stuck-helper line, the phone.
 - News: "Tell me when Chief finishes or needs me" (`GET`/`PUT /api/notify`); off, no content-free news
   reaches any phone or browser.
-- Instructions (`#/h/chief/instructions`): Chief's personality, which the person changes or puts back there
-  ([chief-soul.md](chief-soul.md)), and the read-only plain-words limits of his job, no tool names; those change
-  only through a card the person approves.
+- How Chief works (`#/h/chief/instructions`, Stack J09d): "Who Chief is" as a plain card said about him (his soul's
+  opening line and the start of its Voice, `A.chiefIs`) and "What Chief never does" as one plain line to the person
+  (the first of his job's limits, `A.chiefNever`), then **Change it** (full width on a phone; in the header bar beside
+  his face on a computer, the cards side by side). Change it opens the whole soul to rewrite, with Save, Cancel and
+  **Put back how Chief started** ([chief-soul.md](chief-soul.md)); the limits change only through a card the person
+  approves. Driven by `scripts/verify/stack-design.sh` (`chief-instructions-*`, paired with J09d).
 - Things: Files, Links and Pictures rows with counts ("None yet" when empty) open `#/h/chief/files|links|pictures`,
   one switch between the three; each list newest first with who and when ("You sent it", "Penny"), each with its
   own empty state. Approved mock: `chief-things` (things.html). Driver: `scripts/verify/chief-things.sh`

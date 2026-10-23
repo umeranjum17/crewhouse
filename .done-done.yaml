@@ -44,11 +44,12 @@ journeys:
     command: 'node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/steps.mjs "$DONE_DONE_EVIDENCE_ROOT" personal-voice'
   screens:
     command: 'scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"'
-  # Chief's profile (J09c), Settings (J09a), one-line hire names, face motion and the installed app, beside the approved
-  # mocks when EVIDENCE_HOME holds them (docs/verification/settings-hub.md).
+  # Chief's profile (J09c), How Chief works (J09d), Settings (J09a), one-line hire names, Your things (J07a) and a file
+  # opened from it (J07b), face motion and the installed app, beside the approved mocks when EVIDENCE_HOME holds them
+  # (docs/verification/settings-hub.md, things.md).
   stack-design:
     timeout: 20m
-    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" PATH="/usr/bin:$PATH" timeout -k 10 1100 bash scripts/verify/stack-design.sh "$DONE_DONE_EVIDENCE_ROOT"'
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 1100 bash scripts/verify/stack-design.sh "$DONE_DONE_EVIDENCE_ROOT"'
   delivered-files:
     command: 'timeout -k 10 600 bash scripts/verify/files-gate.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   workbook-chart:

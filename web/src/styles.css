@@ -79,15 +79,6 @@ b { font-weight: 600; }
 .status-word i.needs { background: var(--pink); }
 .starter-row { min-height: 68px; }
 .starter-name { width: 100%; border: 0; border-radius: 0; background: transparent; padding: 0; font: 500 15px/22px var(--ui); outline-offset: 3px; }
-.thing-list { padding-top: 0; padding-bottom: 0; }
-.file-row { min-height: 60px; }
-.file-row .media { width: 48px; height: 40px; object-fit: cover; margin: 0; flex: none; border-radius: 10px; }
-/* A sheet or page row carries its own preview card: who made it and when sit under it, inside the row, not squeezed beside it. */
-.file-row:has(> .wb-card, > .doc) { flex-wrap: wrap; gap: 6px; }
-/* A media row's title sits over its meta line: names read in full and wrap cleanly, never crushed beside it. */
-.file-row .grow > b { display: block; overflow-wrap: anywhere; }
-.file-row > .wb-card, .file-row > .doc { flex: 1 0 100%; }
-.file-row:has(> .wb-card, > .doc) > .grow > b, .file-row:has(> .wb-card, > .doc) > .mute:last-child { display: none; }
 .file-chip { width: 36px; height: 40px; flex: none; display: grid; place-items: center; background: var(--soft); border-radius: 6px; color: var(--ok); font-size: 10px; font-weight: 600; }
 .routine-footnote { margin: 12px 4px 0; }
 .routine-switch { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 12px; }
@@ -1094,7 +1085,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 
 .o-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--ink2); }
 /* A file's extension sits in the shared tile: four capitals at tile size, never cut. */
-.row-item .o-ic, .list-row .o-ic, .file-row .o-ic { font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.row-item .o-ic, .list-row .o-ic { font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 
 /* Settings on a phone: the places the desk rail reaches, one row each (B1 has no tab bar). */
 .go-to { color: inherit; text-decoration: none; min-height: 52px; font: 500 15px/20px var(--ui); }
@@ -1879,6 +1870,41 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .wb-made .wb-thumb.leaf .ln { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; color: inherit; opacity: .78; font-weight: 600; }
 .wb-made .wb-open { min-height: 50px; display: grid; place-items: center; border: 0; border-radius: 16px; background: #000; color: #FFF; font: 700 16px/1.2 var(--ui); }
 .wb-made.wb-chief { color: #F7F7FB; }
+/* Your things (Stack J07a): a round Back over the wide title on a phone, then each file as its maker's colour card
+   (face, name, kind, maker and time, a peek, a black Open) under Today, Yesterday and Earlier. On a computer a header
+   bar with the search box, two cards a row, and the newest sheet or page open in the column beside. */
+.st-things .st-head { flex-wrap: wrap; padding-top: 0; }
+.st-things .st-head > .grow { flex-basis: 100%; display: grid; gap: 10px; }
+.st-things h1.wide { margin: 14px 0 0; font-size: 40px; line-height: 1.02; }
+.st-back { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--soft); color: var(--ink); }
+.st-search { display: none; }
+.st-made { display: grid; gap: 8px; margin: 0 -4px; }
+.st-things .st-empty { margin-top: 26px; }
+.wb-peek .wb-panel { width: auto; height: auto; padding: 0; gap: 12px; border: 0; border-radius: 0; box-shadow: none; background: none; overflow: visible; }
+.wb-peek .wb-reading { overflow: visible; }
+.wb-peek .btn.wb-down { width: 100%; min-height: 50px; justify-content: center; }
+.wb-file { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: var(--ink); }
+.wb-file .wb-what b { font-size: 16px; }
+.wb-file > .wb-ic { width: 52px; font-size: 12px; }
+/* The peek shows a sheet's first three columns, as the card's corner does; the file page holds them all. */
+.wb-peek .wb-sheet :is(th, td):nth-child(n+4) { display: none; }
+.wb-made .wb-thumb i { white-space: nowrap; }
+@media (max-width: 899px) { .st-made .wb-thumb.leaf { display: none; } }
+@media (min-width: 900px) {
+  .page.st-things { max-width: none; width: 100%; padding: 0; }
+  .st-things .st-head { flex-wrap: nowrap; min-height: 76px; padding: 12px 28px; border-bottom: 1px solid var(--line); }
+  .st-things .st-head > .grow { flex-basis: auto; gap: 4px; }
+  .st-things h1.wide { margin: 0; font-size: 26px; line-height: 1.1; }
+  .st-things .st-back { display: none; }
+  .st-search { display: flex; align-items: center; gap: 8px; width: 340px; flex: none; min-height: 54px; padding: 0 16px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: var(--mute); }
+  .st-search:focus-within { border-color: var(--mute); }
+  .st-search input { flex: 1; min-width: 0; height: 50px; border: 0; background: none; color: var(--ink); font-size: 16px; outline: none; }
+  .st-search input::placeholder { color: var(--mute); opacity: 1; }
+  .st-things .st-pri > section:first-child .st-label { margin-top: 0; }
+  .st-made { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; }
+  .st-made .wb-thumb i { padding: 8px 6px; }
+  .st-peek .st-label { margin: 0 0 4px; }
+}
 /* A job just finished, in Chief's thread (Stack J16a): the maker's colour, a big face, Done., the thread's own words, a
    peek, then a black Open it beside a quiet Later. Centred on a phone; on a computer the face sits beside the words. */
 .line .wb-made { height: auto; max-width: 480px; margin-top: 10px; }
@@ -2136,3 +2162,17 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .room-page.st-helper-chat .chat .line.standup .bubble-text.helper-bubble { background: var(--soft); border: 2px solid var(--line2); }
 .model-pick { width: 100%; max-height: min(34vh, 280px); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
 .model-pick .pick .grow { min-width: 0; overflow-wrap: anywhere; }
+/* How Chief works (Stack J09d): who he is and what he never does as plain cards, then Change it, full width on a
+   phone; on a computer his face heads the page with Change it beside, and the two cards sit side by side. */
+.chief-works .cw-card { display: grid; gap: 12px; padding: 20px 22px; border-radius: 28px; }
+.chief-works .cw-card p { margin: 0; font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
+.chief-works .btn.cw-change { width: 100%; min-height: 54px; margin-top: 20px; border: 0; border-radius: 18px; background: var(--soft); color: var(--ink); font: 700 17px/1.2 var(--ui); }
+@media (min-width: 900px) {
+  .page.chief-works { max-width: none; width: 100%; padding: 0; }
+  .chief-works > .detail { max-width: none; padding: 24px 28px; }
+  .chief-works .chief-profile .st-label { margin-top: 0; }
+  .chief-works > .sticky-top { display: none; }
+  .chief-works .st-profile-head { align-items: center; gap: 14px; }
+  .chief-works .btn.cw-change { width: auto; margin: 0; padding: 0 22px; min-height: 50px; }
+  .chief-works .cw-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+}
