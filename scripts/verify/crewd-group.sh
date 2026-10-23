@@ -14,13 +14,17 @@ crewhouse_remove_lab() {
   chmod -R u+w -- "$lab" && rm -rf -- "$lab"
 }
 # crewd_start <dir> <log> <command…>: the command, run in <dir>, leads a fresh group and dies with this shell
-# (setpriv's parent-death signal). No job control, so setsid never forks and $! is crewd; CREWD is set once the
-# group exists, and a signal meanwhile waits for that, so cleanup still drains it.
+# (setpriv's parent-death signal). The group record lets a later shell stop it by lab directory alone.
 crewd_start() {
-  local sig="" rc=0
+  local sig="" rc=0 lab="" arg
+  for arg in "${@:3}"; do case "$arg" in TMPDIR=*) lab=${arg#TMPDIR=}; break;; esac; done
+  if [ -z "$lab" ]; then for arg in "${@:3}"; do case "$arg" in HOME=*) lab=${arg#HOME=}; lab=${lab%/home}; break;; esac; done; fi
+  case "$lab" in */tmp) lab=${lab%/tmp};; esac
+  [ -n "$lab" ] && [ -d "$lab" ] || { echo "${0##*/}: crewd_start needs a TMPDIR or HOME under its lab" >&"$crewd_err"; return 2; }
   trap 'sig=129' HUP; trap 'sig=130' INT; trap 'sig=143' TERM
   ( cd "$1" && exec setsid setpriv --pdeathsig KILL -- "${@:3}" ) > "$2" 2>&1 &
-  crewd_group $! || rc=$?
+  crewd_group "$!" || rc=$?
+  if [ "$rc" -eq 0 ]; then printf '%s\n' "$CREWD" > "$lab/.crewd-group.tmp" && mv -- "$lab/.crewd-group.tmp" "$lab/.crewd-group"; fi
   crewd_traps; [ -z "$sig" ] || exit "$sig"; return "$rc"
 }
 crewd_group() {
@@ -38,4 +42,14 @@ crewd_stop() {
     crewd_drain KILL || { echo "${0##*/}: crewd's process group $CREWD outlived SIGKILL; keeping $LAB" >&"$crewd_err"; return 1; }
   fi
   CREWD=""; crewd_traps
+}
+# crewd_stop_lab <dir>: stop only the process group recorded in the specified lab.
+crewd_stop_lab() {
+  local lab=$1 pgid
+  [ -f "$lab/.crewd-group" ] || return 0
+  IFS= read -r pgid < "$lab/.crewd-group" || return 1
+  [[ "$pgid" =~ ^[1-9][0-9]*$ ]] || { echo "${0##*/}: invalid crewd group record in $lab" >&"$crewd_err"; return 1; }
+  CREWD=$pgid
+  crewd_stop || return 1
+  rm -f -- "$lab/.crewd-group"
 }

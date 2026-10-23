@@ -17,7 +17,7 @@ REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d -t crewhouse-chief-reply.XXXXXX)
 trap '[ "${OK:-}" = 1 ] || cp "$LAB/lab.log" "$OUT/" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 ENGINE=$(cd "$REPO" && node -e 'import("@byokit/openclaw").then((m) => console.log(m.ENGINE_VERSION))')
-crewd_start "$REPO" "$LAB/lab.log" env -i PATH="$PATH" LANG=C.UTF-8 DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
+crewd_start "$REPO" "$LAB/lab.log" env -i PATH="$PATH" LANG=C.UTF-8 TMPDIR="$LAB" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
   CREWHOUSE_ENGINE_DIR="${CREWHOUSE_ENGINE_DIR:-$REPO/runtime/openclaw}" node scripts/verify/native-delegation.ts "$LAB/lab" "$LAB/ready.json" --scripted
 for _ in $(seq 1200); do [ -s "$LAB/ready.json" ] && break; crewd_gone && { cat "$LAB/lab.log" >&2; exit 1; }; sleep 0.25; done
 [ -s "$LAB/ready.json" ] || { echo "chief-reply-engine: the lab never became ready" >&2; exit 1; }

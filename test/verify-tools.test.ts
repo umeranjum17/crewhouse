@@ -55,6 +55,33 @@ exit ${code}`;
   }
 });
 
+test('verify lab stop drains only the group recorded inside that lab', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-stop-lab-'));
+  const lab = join(dir, 'lab');
+  mkdirSync(lab);
+  const script = `set -euo pipefail
+. scripts/verify/crewd-group.sh
+setsid sleep 30 </dev/null >/dev/null 2>&1 & unrelated=$!
+crewd_start "$PWD" "$LAB/child.log" env TMPDIR="$LAB" sleep 30
+touch "$LAB/started"
+pgid=$CREWD
+test -s "$LAB/.crewd-group"
+CREWD=""
+crewd_stop_lab "$LAB"
+touch "$LAB/stopped"
+! kill -0 -- "-$pgid" 2>/dev/null
+kill -0 -- "$unrelated"
+kill -TERM "$unrelated" 2>/dev/null || true
+wait "$unrelated" 2>/dev/null || true
+`;
+  try {
+    execFileSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, LAB: lab }, timeout: 12_000 });
+    assert.equal(existsSync(join(lab, '.crewd-group')), false);
+  } catch (error) {
+    throw new Error(`${String(error)}; started=${existsSync(join(lab, 'started'))}; stopped=${existsSync(join(lab, 'stopped'))}; record=${existsSync(join(lab, '.crewd-group')) ? readFileSync(join(lab, '.crewd-group'), 'utf8') : 'missing'}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('screen captures retry standalone failures under errexit', { timeout: 20_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-screens-'));
   writeFileSync(join(dir, 'chrome-devtools-axi'), `#!/usr/bin/env bash
