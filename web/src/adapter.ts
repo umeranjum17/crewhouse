@@ -1858,6 +1858,23 @@ export function aboutTraits(name: string, soul = ''): string[] {
   }
   return traits;
 }
+/** A line written to Chief, said to the person about him: "you turn what the person wants" → "he turns what you want". */
+const aboutChief = (l: string) => plain(l.replace(/^[-*]\s*/, '').trim())
+  .replace(/^you are chief\b,?\s*/i, 'Chief is ').replace(/^you are\b/i, 'Chief is')
+  .replace(/\bthe person(\s+)(\w+?)s\b/gi, 'you$1$2').replace(/\bthe person's\b/gi, 'your').replace(/\bthe person\b/gi, 'you')
+  .replace(/\bon your say-so\b/gi, 'without your say-so').replace(/\bthis machine\b/gi, 'this computer')
+  .replace(/\byou (\w+)\b/gi, (w, v: string) => /^(want|need|ask|share|send|pick|say|see|get|like)$/i.test(v) ? w : `he ${({ are: 'is', have: 'has', do: 'does', go: 'goes' } as Record<string, string>)[v.toLowerCase()] ?? `${v}s`}`);
+/** How Chief works in plain words (Stack J09d): his soul's opening line, then the start of its first two Voice lines.
+ *  A soul the person wrote without those reads as its own first two lines. */
+export function chiefIs(soul = ''): string[] {
+  const lines = soul.split('\n').map((l) => l.trim()), v = lines.findIndex((l) => /^##\s+voice\b/i.test(l));
+  const intro = lines.find((l) => l && !/^(#|[-*]\s)/.test(l)), end = lines.findIndex((l, i) => i > v && /^##\s/.test(l));
+  const voice = v < 0 ? [] : lines.slice(v + 1, end < 0 ? undefined : end).filter((l) => /^[-*]\s/.test(l)).slice(0, 2).map((l) => l.replace(/^[-*]\s*/, '').split(/(?<=\.)\s/)[0]);
+  const out = [intro, voice.join(' ')].filter((l): l is string => !!l).map(aboutChief);
+  return out.length ? out : personality(soul).slice(0, 2);
+}
+/** What Chief never does, as one plain line to the person: the first of his job's limits. */
+export const chiefNever = (rules = '') => aboutChief(rules.split('\n').find((l) => /^[-*]\s/.test(l.trim())) ?? rules.trim());
 /** What the person edits: the traits, one per line, nothing else. */
 export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).join('\n');
 /** The helper's instructions, composed behind the scenes from the person's plain words. */

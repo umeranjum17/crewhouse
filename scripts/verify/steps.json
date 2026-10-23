@@ -449,9 +449,11 @@
       "Open How Chief works from the profile",
       "Open Settings on a phone and on a computer",
       "Read Chief's two hire cards in his thread",
+      "Say yes to Invoice Ivy and ask her to put the invoices in one sheet",
+      "Open Your things, search it for letter, and open Ivy's sheet from it",
       "Watch Home while Rae works, then turn on Reduce Motion",
-      "Install Crewhouse from Settings and open Chief's profile and Settings in the installed window"
+      "Install Crewhouse from Settings and open Chief's profile, Settings, Your things and How Chief works in the installed window"
     ],
-    "result": "Chief's profile is the blue portrait card with Routines, News and Instructions, the portrait left and the rows right on a computer; Settings shows one card then Look on a phone and two columns on a computer; each hire card names the helper on one line and says Yes, bring Ivy on; Rae's face moves while she works and stands still under Reduce Motion; the installed window shows the same pages, standalone, with no install row"
+    "result": "Chief's profile is the blue portrait card with Routines, News and Instructions, the portrait left and the rows right on a computer; How Chief works says who Chief is and what he never does in two plain cards with Change it; Settings shows one card then Look on a phone and two columns on a computer; each hire card names the helper on one line and says Yes, bring Ivy on; Your things shows Ivy's sheet and Will's letter as colour cards with the sheet open beside on a computer, the search for letter leaves the letter alone, and Open shows Your invoices read-only with its Invoices and Paid pills; Rae's face moves while she works and stands still under Reduce Motion; the installed window shows the same pages, standalone, with no install row"
   }
 }
