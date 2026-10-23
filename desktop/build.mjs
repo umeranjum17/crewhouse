@@ -1,20 +1,23 @@
 // Builds the desktop app for Linux x64: dist/desktop/Crewhouse-<version>-x86_64.AppImage and
 // dist/desktop/crewhouse-desktop_<version>_amd64.deb. Electron shows the window and the tray; crewd runs on the Node the
-// app carries (packaging/bundle.mjs), never on Electron's own. The engine is not inside: it installs on first open.
+// app carries (packaging/bundle.mjs), never on Electron's own. The engine is inside (crewd/runtime/openclaw, as in the runner's download), so a first open downloads nothing.
 // Run after `npm run build:web` (repo root) and `npm ci` (here). Needs curl, tar and xz.
+import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { build as bundle } from 'esbuild';
 import { build } from 'electron-builder';
-import { crewd, node } from '../packaging/bundle.mjs';
+import { crewd, engine, node } from '../packaging/bundle.mjs';
 
 const here = import.meta.dirname, repo = join(here, '..');
 const { version } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
 const dist = join(repo, 'dist'), stage = join(dist, 'desktop-stage'), out = join(dist, 'desktop');
 
+// The engine set ships read-only, so an earlier build's stage needs write access back before it goes.
+if (existsSync(stage)) execFileSync('chmod', ['-R', 'u+w', stage]);
 for (const dir of [stage, out, join(here, 'out')]) { if (existsSync(dir)) chmodSync(dir, 0o755); rmSync(dir, { recursive: true, force: true }); }
 node(dist, join(stage, 'node'));
-crewd(join(stage, 'crewd'), join(stage, 'node'));
+engine(join(stage, 'crewd'), join(stage, 'node'), crewd(join(stage, 'crewd'), join(stage, 'node')), stage);
 
 // The main process, bundled with what it reads from crewd's source (config, the tray's counts, the plain screen).
 // ESM, so loadConfig's import.meta.dirname stays defined; CommonJS dependencies get a require of their own. The pairing

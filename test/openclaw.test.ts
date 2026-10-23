@@ -94,7 +94,8 @@ test('pinned engine uses the owner HOME and isolated Codex state, with loopback 
       assert.ok(!steps.some((s) => s.done), 'opening the route is not a completed sign-in');
     } finally { signIn.cancel(); await signIn.done; }
     assert.equal(await runtime.signedIn('openrouter'), false, 'cancelling the offer never signs in');
-    // Empty isolated fixture only: prove the upstream weekly job can wake; production stays off until backup gates it.
+    // Empty isolated fixture only: prove the upstream weekly job can wake. On 2026.9.33 it is a model turn, so with no
+    // account here it runs and stops on the missing sign-in; it never skips silently.
     await runtime.setLearning(true);
     const jobs = await kit.call('cron.list', { limit: 100 }) as { jobs: { id: string; name: string; enabled: boolean; nextRunAtMs: number }[] };
     const review = jobs.jobs.find((job) => job.name === 'skill-collection-review-m1');
@@ -102,16 +103,16 @@ test('pinned engine uses the owner HOME and isolated Codex state, with loopback 
     const kicked = await kit.call('cron.run', { id: review.id, mode: 'force' } as { id: string }) as { runId: string };
     let finished = false;
     for (const until = Date.now() + 10_000; Date.now() < until && !finished;) {
-      const runs = await kit.call('cron.runs', { id: review.id }) as { entries: { runId: string; action: string; status: string }[] };
-      finished = runs.entries.some((entry) => entry.runId === kicked.runId && entry.action === 'finished' && entry.status === 'ok');
+      const runs = await kit.call('cron.runs', { id: review.id }) as { entries: { runId: string; action: string; status: string; errorReason?: string }[] };
+      finished = runs.entries.some((entry) => entry.runId === kicked.runId && entry.action === 'finished' && (entry.status === 'ok' || entry.errorReason === 'auth'));
       if (!finished) await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    assert.ok(finished, 'system-owned review did not complete in empty fixture');
+    assert.ok(finished, 'system-owned review did not run in empty fixture');
     // A9: the reviewed bundled list is the one the agent sees; a bundled skill outside it is blocked by allowlist.
     const skills = await kit.call('skills.status', { agentId: 'm1' }, { timeoutMs: 30000 }) as { skills?: Record<string, unknown>[] };
     const byName = Object.fromEntries((skills.skills ?? []).map((s) => [s.name, s]));
     assert.equal(byName.weather?.blockedByAllowlist, true, 'a bundled skill outside the reviewed list is blocked');
-    for (const allowed of ['video-frames', 'summarize', 'diagram-maker'])
+    for (const allowed of ['summarize', 'diagram-maker'])
       assert.equal(byName[allowed]?.blockedByAllowlist, false, `${allowed} stays eligible`);
     assert.deepEqual(readdirSync(owner).sort(), ['.clawdbot', '.codex', '.openclaw', '.pi']);
     for (const name of readdirSync(owner)) assert.equal(readFileSync(join(owner, name, 'decoy'), 'utf8'), 'unchanged');

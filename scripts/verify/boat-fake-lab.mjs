@@ -3,7 +3,7 @@
 // The install can be made to fail with a flag file, so the phone's own "Try again" is what reaches "ready".
 // No real boat.dev, no money, no model: the phone's own flow, the kit's own steps (docs/verification/where-cloud.md).
 //
-//   LAB_PORT=7411 node scripts/verify/boat-fake-lab.mjs          # the lab runs until it is stopped
+//   LAB_PORT=7411 node scripts/verify/boat-fake-lab.mjs          # the lab runs until it is stopped (LAB_EMPTY=1: no computer)
 //   touch <lab dir>/install-fails                               # the install fails; remove the file and it passes
 //
 // The phone's build was given the lab's port (EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:<port>/api/v1),
@@ -24,7 +24,9 @@ mkdirSync(cloud, { recursive: true });
 
 const server = await startFakeSandboxServer({ key: KEY });
 const provider = boat({ baseUrl: server.url, label: 'boat.dev', prices: [], key: async () => KEY });
-const seeded = await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
+// LAB_EMPTY=1 is a new account with no computer, so the phone's Make a new computer is the way in.
+const seeded = process.env.LAB_EMPTY === '1' ? { id: 'none' } : await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
+server.machine.script('systemd-run', { code: 0, stdout: '', stderr: '', timedOut: false }); // the recipe's display install
 const fakePort = Number(new URL(server.url).port);
 netServer((c) => { const u = netConnect(fakePort, '127.0.0.1'); c.pipe(u); u.pipe(c); }).listen(PORT, '127.0.0.1');
 
@@ -42,15 +44,19 @@ host.stdout.on('data', (b) => log += b); host.stderr.on('data', (b) => log += b)
 
 // The bridge: the fake's inbox to the host's inbox, and the host's receipt back to the fake's outbox.
 let failing = null;
+const owners = new Set();
 const bridge = setInterval(() => {
   const wantFail = existsSync(flag);
   if (wantFail !== failing) {
     failing = wantFail;
-    server.machine.script('curl', wantFail ? { code: 1, stdout: '', stderr: 'no route', timedOut: false } : { code: 0, stdout: '', stderr: '', timedOut: false });
+    server.machine.script('bash', wantFail ? { code: 1, stdout: '', stderr: 'no route', timedOut: false } : { code: 0, stdout: '', stderr: '', timedOut: false });
     console.log('the install fails:', wantFail);
   }
   const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);
   if (delivered && !existsSync(join(cloud, 'inbox/phone.bin'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
+  // Move Chief to this phone: the new owner's key, handed over once.
+  const owner = server.machine.files.get(`${remote}/inbox/owner.bin`);
+  if (owner && !owners.has(owner.bytes.toString())) { owners.add(owner.bytes.toString()); mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/owner.bin'), owner.bytes); }
   if (existsSync(join(cloud, 'outbox/receipt.json'))) server.machine.writeFile(`${remote}/outbox/receipt.json`, readFileSync(join(cloud, 'outbox/receipt.json')), 0o600);
   if (log.includes('headless host ready')) { console.log('the host is ready'); log = ''; }
 }, 50);

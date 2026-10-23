@@ -579,7 +579,7 @@ const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, 
 
 /** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
  *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
- *  read and send; nothing is sent by speaking. */
+ *  read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
 function useVoice(on: boolean, text: string, put: (t: string) => void) {
   const [route, setRoute] = useState<Ears | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
@@ -587,7 +587,7 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
   now.current = text;
   useEffect(() => { if (on) void ears().then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
-  if (!route) return null;
+  if (!route) return { mic: null, on: false };
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = hear(route);
@@ -598,9 +598,9 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
       .finally(() => { setEar(null); setListen('chief', false); });
   };
   const off = route === 'none';
-  return <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
+  return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
     onClick={() => (off ? toast(VOICE_WORDS.none) : ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button>;
+      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button> };
 }
 
 /** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
@@ -787,8 +787,8 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
     <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
-      {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file"><b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
-      <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder}
+      {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file">{PHOTO_TYPES.includes(p.type) && <img className="c-thumb" src={`data:${p.type};base64,${p.data}`} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
+      <textarea rows={1} value={text} placeholder={voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
         onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
         onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       {chips && <div className="c-bar">
@@ -796,7 +796,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
         <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
         {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
       </div>}
-      {voice}
+      {voice.mic}
       {stop && !text.trim() && !picked.length
         ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
         : call.can && !text.trim() && !picked.length && !busy
@@ -808,7 +808,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -904,7 +904,7 @@ function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const by = c.by ?? c.helper, name = by === 'chief' ? 'Chief' : who?.name ?? c.head;
   if (c.hire) return <div className="ask-head hire-head">
     <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={64} />
-    <div className="grow"><b>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
+    <div className="grow"><b className="hire-name" style={{ '--n': c.hire.name.length } as CSSProperties}>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
   </div>;
   return <div className="ask-head">
     <Face who={by === 'chief' ? 'chief' : who ?? 'chief'} size={44} />
@@ -961,7 +961,8 @@ function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string;
  *  An approval outcome instead reads as one muted pill, the action in plain words on the left and the outcome word on
  *  the right ("Placed the order at shop.example   Allowed"), like the reference. A kept memory's own line carries the
  *  way to take it back as an inline text button on the same line. */
-export function AnsweredCard({ line, what, word, undo }: { line?: string; what?: string; word?: string; undo?: () => void }) {
+export function AnsweredCard({ line, what, word, rule, undo }: { line?: string; what?: string; word?: string; rule?: string; undo?: () => void }) {
+  if (rule) return <div className="card rule-receipt" role="status"><b>Custom rule · {word}</b><p>{rule}</p><a className="link" href="#/settings/rules">{line}</a></div>;
   if (word !== undefined) return <div className="card answered receipt" role="status"><span className="receipt-what">{what}</span><span className="receipt-word">{word}</span></div>;
   return <div className="card answered" role="status">{line}{undo && <> <button className="link saved-undo" onClick={undo}>Undo</button></>}</div>;
 }
@@ -1047,7 +1048,34 @@ function StyleCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
   );
 }
 
+/** A video link's quality pick, in Chief's colour: the video's own title, where it is from, one radio row per quality (or the
+ *  sound alone) with its size, and one Save for the row picked. Nothing downloads before the tap; "Not now" waits behind ⋯. */
+function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  const v = c.video!, [sel, setSel] = useState(v.choices[0].id), [oops, setOops] = useState(false), picked = v.choices.find((x) => x.id === sel) ?? v.choices[0];
+  const act = async (body: Json) => { setOops(false); if (await answer(c, body)) onDone(); else setOops(true); }, save = () => act({ answer: 'allow', pick: picked.id });
+  const deny = c.choices.find((x) => x.body.answer === 'deny'), remind = deny ? { ...deny.body, remind: true } : null;
+  return (
+    <div className="card ask stack-ask chief-ask video-ask" id={id} aria-label={c.head} style={{ '--ask-colour': art.colourOf('chief') } as CSSProperties}>
+      <AskHead c={c} who={who} />
+      <p className="ask-words">{c.head}</p>
+      <p className="small">{v.from ? `From ${v.from}. ` : ''}{c.words}</p>
+      <div role="radiogroup" aria-label="How to save it">
+        {v.choices.map((x) => <button key={x.id} role="radio" aria-checked={sel === x.id} className={`pick ${sel === x.id ? 'on' : ''}`} onClick={() => setSel(x.id)}>
+          <span className="radio" aria-hidden /><span className="grow">{x.label}</span><span className="pick-size">{x.size}</span></button>)}
+      </div>
+      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={save}>Try again</button></div>}
+      <div className="btns">
+        <button className="btn go" onClick={save}>{picked.id === 'audio' ? 'Save the sound' : `Save in ${picked.label}`}</button>
+        <More title={c.head} sub={c.status} acts={[
+          deny && { label: deny.label, run: () => act(deny.body) },
+          remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
+      </div>
+    </div>
+  );
+}
+
 export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  if (c.kind === 'video') return <VideoCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
@@ -1078,7 +1106,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
       <AskHead c={c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
-        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={!!c.rule} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {away ? <p className="mute small">You can answer once the home computer is back.</p> : c.kind === 'routine' ? (
         <>
@@ -1121,6 +1149,8 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
             deny && { label: deny.label, cls: 'ghost', run: () => act(deny.body) },
             remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
         </div>
+      ) : c.rule ? (
+        <div className="btns"><button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>{deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}</div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>

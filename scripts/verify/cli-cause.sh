@@ -7,13 +7,14 @@ set -euo pipefail
 OUT=$1; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
 S=$(mktemp -d -t crewhouse-cli-cause.XXXXXX); mkdir -p "$S/home"
+. "$REPO/scripts/verify/crewd-group.sh"
 ax() { chrome-devtools-axi "$@" >/dev/null 2>&1 || true; }
 env -i PATH="$PATH" LANG=C.UTF-8 HOME="$S/home" TMPDIR="$S" XDG_STATE_HOME="$S/home/.local/state" XDG_DATA_HOME="$S/home/.local/share" \
   XDG_CONFIG_HOME="$S/home/.config" XDG_CACHE_HOME="$S/home/.cache" XDG_RUNTIME_DIR="$S/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$S/no-bus" \
   CREWHOUSE_CALLBACK_PORT=0 node "$REPO/scripts/verify/cli-cause.ts" "$REPO" "$S/lab" "$S/ready.json" > "$S/fixture.log" 2>&1 &
 FIX=$!
 stop() { ax open about:blank; kill -TERM "$FIX" 2>/dev/null || true; for _ in $(seq 40); do kill -0 "$FIX" 2>/dev/null || break; sleep 0.25; done
-  kill -KILL "$FIX" 2>/dev/null || true; chmod -R u+w "$S"; rm -rf -- "$S"; }
+  kill -KILL "$FIX" 2>/dev/null || true; crewhouse_remove_lab "$S"; }
 trap stop EXIT
 for _ in $(seq 120); do [ -s "$S/ready.json" ] && break; sleep 0.5; done
 B=$(node -p "require('$S/ready.json').base"); P=$(<"$S/lab/state/person.key")

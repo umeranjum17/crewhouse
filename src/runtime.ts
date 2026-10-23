@@ -19,7 +19,7 @@ export interface RunSpec extends RunRef {
 export type RunEvent =
   | { type: 'started' | 'thinking' }
   | { type: 'text'; text: string }
-  | { type: 'tool'; name: string; phase: 'start' | 'end' }
+  | { type: 'tool'; name: string; phase: 'start' | 'end'; error?: boolean }
   | { type: 'usage'; tokens: number }
   | { type: 'delegated'; id: string; parent: string; root: string };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |

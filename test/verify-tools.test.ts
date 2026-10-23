@@ -19,6 +19,69 @@ const run = (command: string, args: string[], env = process.env) => {
   return { child, done };
 };
 
+test('shared verify cleanup removes its lab and drains children on pass and failure', { timeout: 15_000 }, async () => {
+  for (const code of [0, 7]) {
+    const dir = mkdtempSync(join(tmpdir(), 'verify-cleanup-'));
+    const lab = join(dir, 'lab');
+    const script = `set -euo pipefail
+. scripts/verify/crewd-group.sh
+LAB=$(mktemp -d "${dir}/lab.XXXXXX")
+trap 'crewhouse_remove_lab "$LAB"' EXIT
+printf '%s\\n' "$LAB" > "${lab}"
+mkdir -p "$LAB"/{home,state,crew,tools,run}
+PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
+crewd_start "$PWD" "${dir}/child.log" env -i PATH="$PATH" MISE_TRUSTED_CONFIG_PATHS="\${MISE_TRUSTED_CONFIG_PATHS:-}" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \\
+  XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" \\
+  XDG_CACHE_HOME="$LAB/home/.cache" XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \\
+  CREWHOUSE_ENGINE=stub CREWHOUSE_PORT="$PORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" \\
+  CREWHOUSE_TOOLS_DIR="$LAB/tools" node "$PWD/src/main.ts"
+printf '%s\\n' "$CREWD" > "${dir}/group"
+for _ in $(seq 200); do [ -s "$LAB/state/person.key" ] && break; sleep 0.05; done
+test -s "$LAB/state/person.key"
+exit ${code}`;
+    try {
+      try {
+        const result = execFileSync('bash', ['-c', script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 12_000 });
+        assert.equal(code, 0, result);
+      } catch (error) {
+        const e = error as Error & { status?: number };
+        assert.equal(e.status, code);
+      }
+      const made = readFileSync(lab, 'utf8').trim();
+      assert.equal(existsSync(made), false, `lab remained after exit ${code}`);
+      const pgid = Number(readFileSync(join(dir, 'group'), 'utf8'));
+      assert.throws(() => process.kill(-pgid, 0), { code: 'ESRCH' }, `process group ${pgid} survived exit ${code}`);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
+test('verify lab stop drains only the group recorded inside that lab', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'verify-stop-lab-'));
+  const lab = join(dir, 'lab');
+  mkdirSync(lab);
+  const script = `set -euo pipefail
+. scripts/verify/crewd-group.sh
+setsid sleep 30 </dev/null >/dev/null 2>&1 & unrelated=$!
+crewd_start "$PWD" "$LAB/child.log" env TMPDIR="$LAB" sleep 30
+touch "$LAB/started"
+pgid=$CREWD
+test -s "$LAB/.crewd-group"
+CREWD=""
+crewd_stop_lab "$LAB"
+touch "$LAB/stopped"
+! kill -0 -- "-$pgid" 2>/dev/null
+kill -0 -- "$unrelated"
+kill -TERM "$unrelated" 2>/dev/null || true
+wait "$unrelated" 2>/dev/null || true
+`;
+  try {
+    execFileSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, LAB: lab }, timeout: 12_000 });
+    assert.equal(existsSync(join(lab, '.crewd-group')), false);
+  } catch (error) {
+    throw new Error(`${String(error)}; started=${existsSync(join(lab, 'started'))}; stopped=${existsSync(join(lab, 'stopped'))}; record=${existsSync(join(lab, '.crewd-group')) ? readFileSync(join(lab, '.crewd-group'), 'utf8') : 'missing'}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('screen captures retry standalone failures under errexit', { timeout: 20_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'verify-screens-'));
   writeFileSync(join(dir, 'chrome-devtools-axi'), `#!/usr/bin/env bash

@@ -1,7 +1,7 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
@@ -22,7 +22,7 @@ const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-api', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
 }, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
-const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool, MAX_LEGS = 24, LEGWORK = new Set(['web_search', 'web_fetch']); // Chief's spawned lookups: at most MAX_LEGS a job, web reads only
+const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool, MAX_LEGS = 24, LEGWORK = new Set(['web_search', 'web_fetch']), HANDOFF_MS = () => Number(process.env.CREWHOUSE_HANDOFF_MS || 120_000); // Chief's spawned lookups: at most MAX_LEGS a job, web reads only; a hand-off waits this long for a helper's report
 /** Why the engine failed, in the person's words: the kit's typed refusal and, for an install, its retained diagnosis (README: engine-install-drift.json). */
 function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) {
   const cause = (e as { cause?: string })?.cause, d = cause === 'write' && existsSync(diagnosis) ? JSON.parse(readFileSync(diagnosis, 'utf8')) : null, fresh = d && Date.parse(d.at) >= since;
@@ -35,10 +35,12 @@ function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) 
 const ABOUT: Record<string, string> = {
   shell: 'Run a shell command in your sandbox; only your folder is writable. Long output is cut to its last lines.', crew_profile: 'Save person facts.', crew_signin: 'Ask for a sign-in',
   browser: 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back.',
+  crew_inspect: "Look inside a binary file in your own folder: `what` is type, headers, strings, symbols or sections, `path` is the file. It never runs it and never writes.",
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
-  crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
+  crew_rule: 'Propose a rule; asks first.',
+  crew_remember: 'Save person facts: {text}, replaces?, everyone?. Rules need crew_rule.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
 export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
@@ -53,7 +55,7 @@ const CONFIG = {
     'memory-core': { config: { dreaming: { enabled: false } } }, 'cua-computer': { enabled: true },
     codex: { enabled: false },
   } },
-  skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
+  skills: { allowBundled: ['openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
 };
 
 export class OpenClawRuntime implements AgentRuntime {
@@ -246,8 +248,8 @@ export class OpenClawRuntime implements AgentRuntime {
       targets.set(key, { bot: member.bot });
     }
     this.targets.set(spec.key, targets); this.legs.set(spec.key, 0);
-    let finish!: (end: RunEnd) => void, timer: NodeJS.Timeout | undefined, dispatched = false;
-    const returned = new Promise<RunEnd>((resolve) => { finish = resolve; }), id = randomUUID(), rootKey = spec.key.replace(`agent:${ME}:`, `agent:${lane}:`);
+    let finish!: (end: RunEnd) => void, timer: NodeJS.Timeout | undefined, dispatched = false, running = true, decided: RunEnd | undefined, reported = '';
+    const returned = new Promise<RunEnd>((resolve) => { finish = resolve; }), id = randomUUID(), rootKey = spec.key.replace(`agent:${ME}:`, `agent:${lane}:`), decide = (end: RunEnd, release = false) => { if (decided) return; decided = end; finish(end); if (release && running) void this.abort(spec.key).catch(() => {}); }; // one outcome for the hand-off: the first one wins, and a hand-off that ends on its own lets Chief's lane go, so a report that never comes cannot hold it
     const offChild = this.kit.onEvent('byokit.delegated', (e) => {
       if (e.run.root.sessionKey !== rootKey || e.run.root.runId !== id) return;
       const target = targets.get(e.run.sessionKey), run = target ? target.run : this.runs.get(spec.key); // a spawned lookup has no job of its own: it is Chief's
@@ -256,8 +258,8 @@ export class OpenClawRuntime implements AgentRuntime {
       if (target && e.event?.stream === 'assistant' && typeof e.event.data?.text === 'string') { texts.set(e.run.runId, e.event.data.text); this.host?.event?.(run, { type: 'text', text: e.event.data.text }); }
       if (e.type === 'ended') {
         admitted.delete(e.run.runId);
-        if (target) { this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: texts.get(e.run.runId) ?? '' } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' }); this.runs.delete(e.run.sessionKey); target.run = undefined; if (e.reason !== 'terminal') return finish({ ok: false, kind: 'other', message: e.message || 'The helper stopped before reporting back. Check its job before trying again.' }); }
-        if (!admitted.size) timer = setTimeout(() => finish({ ok: false, kind: 'handoff', message: target ? 'The helper finished, but Chief did not get its report. Check the helper’s chat.' : 'The lookups finished, but Chief did not get their reports. Try again.' }), 120_000);
+        if (target) { const said = texts.get(e.run.runId) ?? ''; this.host?.end?.(run, e.reason === 'terminal' ? { ok: true, text: said } : { ok: false, kind: 'other', message: e.message || 'The helper stopped before its result could be confirmed.' }); this.runs.delete(e.run.sessionKey); target.run = undefined; if (e.reason !== 'terminal') return decide({ ok: false, kind: 'handoff', message: 'The helper stopped before reporting back. Check its job before trying again.' }, true); reported = said; }
+        if (!admitted.size) timer = setTimeout(() => decide(reported ? { ok: true, text: reported } : { ok: false, kind: 'handoff', message: target ? 'The helper finished, but Chief did not get its report. Check the helper’s chat.' : 'The lookups finished, but Chief did not get their reports. Try again.' }, true), HANDOFF_MS());
       }
     });
     const offReturn = this.kit.onEvent('agent', (e) => {
@@ -268,7 +270,7 @@ export class OpenClawRuntime implements AgentRuntime {
       if (e.stream === 'assistant' && typeof e.data?.text === 'string') on({ type: 'text', text: e.data.text });
       if (e.stream === 'lifecycle' && e.data?.phase === 'end' && !admitted.size && ![...targets.values()].some((t) => t.run)) {
         const reply = e.data.terminalReply as { disposition?: string; text?: string } | undefined;
-        finish(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
+        decide(e.data.aborted ? { ok: false, aborted: true } : { ok: true, text: reply?.disposition === 'visible' ? reply.text ?? '' : '' });
       }
     });
     try {
@@ -276,7 +278,7 @@ export class OpenClawRuntime implements AgentRuntime {
         if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e);
         if (e.type === 'tool' && e.name === 'sessions_send' && e.phase === 'end' && e.error) for (const [key, t] of targets) if (t.run && ![...this.kit.delegatedRuns()].some((r) => r.sessionKey === key)) { this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The job could not be handed to the helper. Try again.' }); this.runs.delete(key); t.run = undefined; this.waits.delete(spec.key); }
       });
-      return end.ok && dispatched ? await returned : end;
+      running = false; if (decided) return decided; return end.ok && dispatched ? await returned : end;
     } finally {
       clearTimeout(timer); offChild(); offReturn(); this.targets.delete(spec.key); this.legs.delete(spec.key); this.waits.delete(spec.key); if (admitted.size) await this.abort(spec.key).catch(() => {});
       for (const [key, t] of targets) if (t.run) { await this.kit.abort(key); this.host?.end?.(t.run, { ok: false, kind: 'handoff', message: 'The hand-off stopped before its result was confirmed.' }); this.runs.delete(key); }
@@ -284,22 +286,23 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
   abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
-  /** The workshop's pending and loaded skills on every lane that learns them: the member agent and, once a plan key
-   *  made it, its key agent (`byokit-key-<member>`, the kit's README), each with its own proposals and skills root
-   *  from the engine's roster. Newest first; a forgotten one has left its skills root, so it is gone here too. */
+  /** The Workshop's skills on every lane that learns them: the member agent and, once a plan key made it, its key agent
+   *  (`byokit-key-<member>`, the kit's README). Each lane's installed skills (`<state>/agents/<agent>/agent/workshop-skills`)
+   *  that are still switched on, named by the proposal that made them when there is one, and its pending proposals. Newest first. */
   private async proposals() {
-    const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined), lanes = (roster?.agents ?? []).filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') })), rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
-      .map((p) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: p.status, lane }))))).flat();
-    return rows.filter((p) => p.id && p.key && (p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md'))))).sort((a, b) => b.at - a.at);
+    const { agentId } = await this.kit.ensureMember(ME), timeoutMs = 20_000, roster = await this.kit.call('agents.list', {}, { timeoutMs }).catch(() => undefined), lanes = (roster?.agents ?? []).map((a) => a.id).filter((id) => id === agentId || id === `byokit-key-${ME}`);
+    const rows = (await Promise.all(lanes.map(async (lane) => {
+      const [list, status] = await Promise.all(['skills.proposals.list', 'skills.status'].map((m) => (this.kit.call as any)(m, { agentId: lane }, { timeoutMs }).catch(() => undefined))) as any[], off = new Set((status?.skills ?? []).filter((k: any) => k.disabled).map((k: any) => k.skillKey));
+      const made = (list?.proposals ?? []).map((p: any) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: String(p.status), lane }));
+      return [...made.filter((p: any) => p.state === 'pending'), ...(list?.installedSkills ?? []).filter((k: any) => !off.has(k.skillKey))
+        .map((k: any) => made.find((p: any) => p.state === 'applied' && p.key === k.skillKey) ?? { id: String(k.skillKey), skill: String(k.name), key: String(k.skillKey), at: 0, state: 'applied', lane })];
+    }))).flat() as { id: string; skill: string; key: string; at: number; state: string; lane: string }[]; return rows.filter((p) => p.id && p.key).sort((a, b) => b.at - a.at);
   }
   /** What the person sees learned: one row per skill name, whichever lane learned it; the newest copy wins. */
   composioBegin() { return this.kit.beginComposioSignIn(); }
   composioDone() { return this.kit.completeComposioSignIn(); }
   composioSignOut() { return this.kit.signOutComposio(); }
-  async learned() {
-    const rows = await this.proposals();
-    return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state }));
-  }
+  async learned() { const rows = await this.proposals(); return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state })); }
 
   /** The member lane's learned-skills folder, and a lane's pre-change capture: crewhouse's own git versioning. A
    *  capture that cannot be verified throws, and the caller must refuse the change — the data stays. */
@@ -370,18 +373,15 @@ export class OpenClawRuntime implements AgentRuntime {
       .map((i: any) => ({ ...i, reviewed: starter.some((s) => s.slug === i.slug && s.owner === i.owner), on: starter.some((s) => s.on && s.slug === i.slug && s.owner === i.owner) })),
     ...(p?.results ?? []).map((i) => ({ slug: i.package.name, name: i.package.displayName, kind: 'plugin', summary: i.package.summary ?? '', version: i.package.latestVersion ?? '', reviewed: false, on: false }))].filter((i: any) => i.slug);
   }
-  /** Forget one learned skill on every lane that holds it: a pending proposal is rejected, a loaded one is captured then archived
-   *  (restoreLearned brings it back; nothing is deleted). The engine has no single-skill removal of an applied skill yet. */
+  /** Forget one learned skill on every lane that holds it: a pending proposal is rejected, an installed one is switched off
+   *  the engine's own way (`skills.entries.<key>.enabled: false`); its files stay, and switching it on again brings it back. */
   async forget(id: string, skill = '') {
-    const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name));
+    const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name)), timeoutMs = 20_000;
     if (!copies.length) throw Object.assign(new Error(`"${skill || id}" is no longer a learned skill; nothing was forgotten`), { status: 404 });
     for (const p of copies) {
-      const at = { agentId: p.lane.agentId, proposalId: p.id }, timeoutMs = 20_000;
-      if (p.state === 'pending') { await this.kit.call('skills.proposals.reject', { ...at, expectedRevisionHash: (await this.kit.call('skills.proposals.inspect', at, { timeoutMs })).revisionHash ?? '' }, { timeoutMs }); continue; }
-      const capture = this.captureLearned(p.lane.skills, `Before forgetting ${p.key}`);
-      mkdirSync(join(p.lane.skills, '.archive'), { recursive: true });
-      renameSync(join(p.lane.skills, p.key), join(p.lane.skills, '.archive', `${p.key}-${Date.now()}`));
-      commit(p.lane.skills, ['.'], `Forgot ${p.key}; restore from ${capture}`);
+      const at = { agentId: p.lane, proposalId: p.id };
+      if (p.state === 'pending') await this.kit.call('skills.proposals.reject', { ...at, expectedRevisionHash: (await this.kit.call('skills.proposals.inspect', at, { timeoutMs })).revisionHash ?? '' }, { timeoutMs });
+      else await this.kit.call('skills.update', { skillKey: p.key, enabled: false }, { timeoutMs });
     }
   }
 }

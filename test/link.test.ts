@@ -218,7 +218,7 @@ test('an unmarked old phone reads only the update notice; a marked current phone
     const notice = await phone.link.request('GET /api/bots/chief') as { status: number; body: any };
     assert.equal(notice.status, 200, 'the old phone can open the update link in Chief’s chat');
     assert.equal(notice.body.messages.length, 1);
-    assert.match(A.lines(notice.body, 'chief')[0].text, /\[Get the latest Crewhouse app\]\(https:\/\/github.com\/umeranjum17\/crewhouse\/releases\/tag\/v1.0.0-preview.20261021.22\) to keep chatting\./);
+    assert.match(A.lines(notice.body, 'chief')[0].text, /\[Get the latest Crewhouse app\]\(https:\/\/github.com\/umeranjum17\/crewhouse\/releases\/tag\/v1.0.0-preview.20261022.23\) to keep chatting\./);
     assert.doesNotMatch(JSON.stringify(notice.body), /Private question/);
     const desktop = await phone.link.stream('desktop', { bot: 'chief' });
     assert.equal(await new Promise((r) => { desktop.onEnd = r; }), 'Get the latest Crewhouse app to keep chatting.', 'old desktop controls cannot act either');
@@ -256,7 +256,10 @@ test('pairing with a yes at the computer, grants, approvals from the phone, and 
   assert.ok(state.body.bots.some((x: any) => x.id === 'chief'));
   assert.equal((await a.req('POST', '/api/phones/pair', { role: 'control' })).status, 403, 'a phone cannot show pairing codes');
   assert.equal((await a.req('GET', '/api/phones')).status, 403, 'or list phones');
-  assert.equal((await a.req('GET', '/api/accounts')).status, 403, 'AI account sign-ins stay on the computer');
+  const accounts = await a.req('GET', '/api/accounts');
+  assert.equal(accounts.status, 200, 'a phone reads which AI accounts are signed in');
+  assert.ok(accounts.body.some((x: any) => x.account === 'chatgpt' && typeof x.signedIn === 'boolean'));
+  assert.equal((await a.req('POST', '/api/accounts/1/grok/login', { via: 'code' })).status, 403, 'AI account sign-ins stay on the computer');
   assert.equal((await a.req('POST', '/api/people', { name: 'Mallory' })).status, 403, 'and so does adding people');
   assert.equal((await a.req('POST', '/api/connections/notion')).status, 403, 'and connecting apps');
   assert.equal((await a.req('PUT', '/api/house/google', { id: 'x', secret: 'y' })).status, 403, 'and the house Google app');

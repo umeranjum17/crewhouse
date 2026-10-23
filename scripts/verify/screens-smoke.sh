@@ -14,7 +14,7 @@ OUT=$1; mkdir -p "$OUT/screens"
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-screens.XXXXXX)
-trap 'crewd_stop || exit 1; rm -rf "$LAB"' EXIT
+trap 'crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
@@ -37,7 +37,7 @@ for _ in $(seq 240); do
 done
 [ -n "$PERSON" ] || { echo "screens-smoke: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
-curl -fsS --max-time 10 "${H[@]}" -d '{"address":"Sir"}' "$B/api/onboard" > /dev/null
+curl -fsS --max-time 10 "${H[@]}" -d '{"address":"Umer"}' "$B/api/onboard" > /dev/null
 curl -fsS --max-time 10 "${H[@]}" -d '{"text":"smoke"}' "$B/api/bots/chief/messages" > /dev/null
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 URL="$B/#person=$PERSON"

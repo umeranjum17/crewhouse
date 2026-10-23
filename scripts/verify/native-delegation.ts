@@ -21,7 +21,8 @@ if (mode === '--scripted') {
     const reports = [...new Set(JSON.stringify(body.messages.filter((m: any) => m.role !== 'system')).match(/LEGWORK-DONE \w+/g) ?? [])];
     // The reports come back in a turn of the engine's own, without Chief's persona.
     if (reports.length) return { reply: `Legwork is in: ${reports.map((r) => r.split(' ')[1]).sort().join(', ')}.` };
-    if (!system.includes('Your id in Crewhouse is chief.')) return { text };
+    if (system.includes('Your id in Crewhouse is chief.') && /say hello back/i.test(text)) return { reply: 'Good morning, Umer. The crew is ready when you are.' }; // chief-reply-engine.sh
+    if (!system.includes('Your id in Crewhouse is chief.')) return text.includes('cannot do it') ? { fail: 'The helper’s own job could not be done.' } : { text };
     if (/\[legwork(-hold)?\]/.test(text)) {
       const hold = text.lastIndexOf('[legwork-hold]') > text.lastIndexOf('[legwork]'); // the latest ask, not an earlier job Chief's prompt recalls: one lookup whose report never comes, for the restart proof to kill under
       const own = /agentId "([a-z0-9-]+)"/.exec(system)?.[1] ?? 'm1', call = (input: object) => `[tool sessions_spawn ${JSON.stringify(input)}]`;
@@ -37,8 +38,11 @@ if (mode === '--scripted') {
     // and the report arrives in the next turn.
     if (body.messages.filter((m: any) => m.role === 'tool').length >= 3) return { reply: 'Waiting for the helper.' };
     const outcome = text.includes('uncertain proof') ? '[tool crew_outcome {"worked":false,"seen":"The requested result could not be confirmed."}] ' : '';
+    // A helper whose own job fails: the brief carries the marker, so the helper's own turn fails and Chief's hand-off
+    // has to settle on its own (the lane-reset proof: the job must not wait for the engine).
+    const fail = text.includes('cannot do it') ? 'cannot do it ' : '';
     return { text: `[tool sessions_send ${JSON.stringify({ sessionKey: 'agent:m1:not-a-helper', message: 'Do not admit this target', timeoutSeconds: 0 })}] ` +
-      `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}] ` +
+      `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${fail}${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}] ` +
       `[tool crew_read {"path":"files/facts.txt"}]` };
   });
   process.env.CREWHOUSE_ENGINE_BASE_URL = stub.url; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';

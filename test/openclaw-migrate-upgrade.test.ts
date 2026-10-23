@@ -29,10 +29,11 @@ test('a preserved sign-in survives the upgrade, a failed import stays recoverabl
       const db = new DatabaseSync(join(runtime.stateDir, 'openclaw/state/agents/m1/agent/openclaw-agent.sqlite'));
       const stored = JSON.parse((db.prepare('SELECT store_json FROM auth_profile_store').get() as { store_json: string }).store_json).profiles;
       db.close();
-      assert.deepEqual(Object.keys(stored), ['openai:default']);
-      assert.equal(stored['openai:default'].provider, 'openai');
-      assert.equal(stored['openai:default'].access, 'a-preserved');
-      assert.equal(stored['openai:default'].refresh, 'r-preserved');
+      // The staged profile is the member agent's own (kit 0.27): one member's retired archive cannot block another's import.
+      assert.deepEqual(Object.keys(stored), ['openai:m1']);
+      assert.equal(stored['openai:m1'].provider, 'openai');
+      assert.equal(stored['openai:m1'].access, 'a-preserved');
+      assert.equal(stored['openai:m1'].refresh, 'r-preserved');
       const config = await runtime.kit.call('config.get', {}) as any;
       assert.equal(config.config.agents.defaults.models['openai/*'].agentRuntime.id, 'openclaw');
       assert.deepEqual(config.config.agents.defaults.modelPolicy.allow, [], 'other members’ models remain selectable');

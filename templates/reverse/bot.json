@@ -4,6 +4,6 @@
   "models": ["chatgpt"],
   "color": "#7C3AED",
   "apps": [],
-  "tools": ["crew", "files", "web", "search-files"],
+  "tools": ["crew", "files", "web", "search-files", "binary-inspect"],
   "skills": ["crewhouse-reverse-engineer"]
 }

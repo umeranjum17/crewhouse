@@ -4,6 +4,7 @@
 // Script (read from the latest user message):
 //   [tool NAME {json}]   call that tool once, then reply with what it returned; several are called in turn, the reply
 //                        saying what the last one returned (the json may nest: braces are matched, not guessed)
+//   fail this turn       answer with the provider's own error, so the run ends as it failed (a helper's own job)
 //   hit the limit        answer with the account's own usage-limit error (rests it)
 //   no helpers in plan   answer as a plan without helpers does
 //   sign me out          answer as an account whose sign-in stopped working does
@@ -43,8 +44,15 @@ export function toolCalls(text: string) {
 
 const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map((c: any) => c.text ?? '').join('') : '';
 
+/** The person's own words. The engine wraps an inbound message in its envelope (a time stamp) and relocates its runtime
+ *  line into the message it sends, so the model reads both; neither is the person's, and a marker like `[legwork]` is. */
+const personWords = (text: string) => text
+  .replace(/^\[[^\]\n]*\d{4}-\d{2}-\d{2}[^\]\n]*\]\s*/, '')
+  .replace(/\s*\n+Runtime: [^\n]*$/, '')
+  .trim();
+
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
-export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string }) {
+export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string; fail?: string }) {
   const calls: { authorization: string; path: string; body: any }[] = [];
   const server: Server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -59,10 +67,11 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     const messages: any[] = body.messages ?? [];
     const system = messages.filter((m: any) => m.role === 'system').map((m: any) => words(m)).join('\n');
     const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(system)?.[1] ?? 'bot';
-    // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"): not the person's.
-    const asked = (m: any) => m.role === 'user' && !words(m).startsWith('Attached image(s) from tool result');
+    // A tool's screenshot comes back as its own user message ("Image(s) from tool result #1 (computer):"), and the
+    // engine adds its own context block after the person's words: neither is the person's.
+    const asked = (m: any) => m.role === 'user' && !/^(Image\(s\) from tool result|Attached image\(s\) from tool result|<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>)/.test(words(m));
     const lastUser = [...messages].reverse().find(asked);
-    const planned = script?.(body, words(lastUser)), said = planned?.text ?? words(lastUser);
+    const planned = script?.(body, personWords(words(lastUser))), said = planned?.text ?? personWords(words(lastUser));
     const results = messages.slice(messages.findLastIndex(asked) + 1).filter((m: any) => m.role === 'tool');
     const scripted = toolCalls(said);
     const lastResult = results.at(-1);
@@ -89,6 +98,10 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     if (/sign me out/i.test(said)) {
       res.writeHead(401, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ error: { message: '401 Unauthorized: your sign-in has expired' } }));
+    }
+    if (planned?.fail) { // this turn's own failure, as the provider's error (a helper's job that could not be done)
+      res.writeHead(400, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ error: { message: planned.fail } }));
     }
     if (/hit the limit/i.test(said)) {
       res.writeHead(429, { 'content-type': 'application/json' });

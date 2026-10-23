@@ -27,6 +27,7 @@ Every word and count reads `A.office` through `useOffice`.
 - **Chief's card.** `.sh-chief .sh-top b` reads `Chief has N things for you`; on a computer, `.st-asks .st-label` reads the same and `.st-asks .st-cc` counts N.
 - **Crew words.** `[...document.querySelectorAll('.st-today .st-card:not(.st-ask) .st-pill')].map((e) => e.textContent)` contains no `Needs you`.
 - **Installed app.** The same at `--app=<url>`.
+- **Faces move (Little nudge, A097).** Against the busy lab, `node scripts/verify/face-motion.mjs <app-url-with-#person=key> <out> day|night` runs its own headless Chromium at 390: the working helper's face (`data-motion="work"`) changes its pixels over 3 s, and under Reduce Motion every face reads `still` and its pixels hold for 1.5 s. It writes the frames, `face-work-<theme>.webm` and `face-motion-<theme>.json`, and exits 1 otherwise.
 
 ## Gotchas
 

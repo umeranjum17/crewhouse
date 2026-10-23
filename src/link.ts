@@ -10,7 +10,7 @@ import { WebSocketServer } from 'ws';
 import { Host, keyPair, keyPairFrom, b64url, type Grant, type PairRequest, type Role } from '@byokit/pair';
 import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bonjour, type TailscaleState } from '@byokit/discover';
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
-import { bindPhoneKey, phoneReceipt } from '@byokit/cloud';
+import { bindPhoneKey, phoneReceipt, replacePhoneKey } from '@byokit/cloud';
 import { relayOrigin, type Config } from './config.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
@@ -161,8 +161,8 @@ export class Link {
       setTimeout(() => done(false), PAIR_MS).unref();
     });
   }
-  /** A cloud computer's owner phone, delivered by the person's cloud account (scripts/headless.mjs), never by a phone. */
-  async enrol(key: Uint8Array) { this.put('link.owner', (await bindPhoneKey(this.host, key)).id); return phoneReceipt(this.host, key); }
+  /** A cloud computer's owner phone, delivered by the person's cloud account (scripts/headless.mjs), never by a phone; `replace` revokes the old one. */
+  async enrol(key: Uint8Array, replace = false) { this.put('link.owner', (await (replace ? replacePhoneKey : bindPhoneKey)(this.host, key)).id); return phoneReceipt(this.host, key); }
   answer(id: number, yes: boolean) { (this.asking.get(id) ?? fail404('that phone stopped waiting')).answer(yes); }
   approve(words: string) { ([...this.asking.values()].find((a) => a.words === words.trim()) ?? fail404('those words do not match a waiting phone')).answer(true); }
 
@@ -401,7 +401,7 @@ export class Link {
   /** Encrypted HTTP-shaped requests; mutations record the device's idempotency key with their effect. */
   private async request(op: string, body: unknown, g: Grant, key?: string): Promise<{ status: number; body: unknown }> {
     const [method, path = ''] = op.split(' ', 2);
-    if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261021.22) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
+    if (!currentPhone(body)) return op === 'GET /api/bots/chief' ? { status: 200, body: { messages: [{ id: 1, author: 'bot', text: '[Get the latest Crewhouse app](https://github.com/umeranjum17/crewhouse/releases/tag/v1.0.0-preview.20261022.23) to keep chatting.' }], tasks: [] } } : op === 'GET /api/state' ? { status: 200, body: {
       person: { id: 1, name: '', address: '', onboarded: 1 }, bots: [{ id: 'chief', display: 'Chief', last: { author: 'bot', text: UPDATE_APP } }],
       asks: [], tasks: [], events: [], ideas: [], templates: [], routines: [], resting: {}, connections: [], room: { last: null, busy: [] },
     } } : { status: 426, body: { error: UPDATE_APP } };
@@ -431,8 +431,8 @@ export class Link {
       if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).catch(() => {}).then(() => ({ status: 200, body: { ok: true } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }
-    // Only a headless host's enrolled owner gets computer authority; normal phones retain their existing limits.
-    if (op !== 'POST /api/phones/refresh' && !(g.role === 'control' && this.setting('link.owner') === g.id) && (/^\/api\/(accounts|house|phones)\b/.test(path) || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET'))) return { status: 403, body: { error: 'do that on the computer' } };
+    // Only a headless host's enrolled owner gets computer authority; normal phones retain their existing limits, but may read which AI accounts are signed in.
+    if (op !== 'POST /api/phones/refresh' && !(g.role === 'control' && this.setting('link.owner') === g.id) && (/^\/api\/(accounts|house|phones)\b/.test(path) && op !== 'GET /api/accounts' || (/^\/api\/(people|connections)\b/.test(path) && method !== 'GET'))) return { status: 403, body: { error: 'do that on the computer' } };
     try { return { status: 200, body: await this.handle(method, path, body ?? {}, key, g.id) }; }
     catch (e: any) { return { status: e.status ?? 400, body: { error: e.message } }; }
   }

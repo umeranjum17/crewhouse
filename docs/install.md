@@ -9,16 +9,16 @@ Crewhouse is self-hosted only. There is no hosted service and no account with us
 GitHub's `/releases/latest` links don't apply yet: every release so far is a prerelease, which GitHub skips there.
 
 - **Computer (Ubuntu or Debian, 64-bit):** [crewhouse_0.1.1_amd64.deb](https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.1/crewhouse_0.1.1_amd64.deb) (about 200 MB). Open it and press **Install** in your software centre, then open **Crewhouse** from your app menu. It carries its own Node, the AI engine and the helpers' sandbox and screens, installs under `/opt/crewhouse`, and starts the crew by itself when you log in. A helper fetches its own tools (its web browser is the big one, about 170 MB) the first time it needs them. From a checkout, `npm run build:web && node scripts/package.mjs` builds the same `.deb` and a portable **`crewhouse-<version>-linux-x64.tar.gz`** (any 64-bit Linux: extract it and run `crewhouse/node/bin/node crewhouse/launch.mjs`). Both carry the AI engine already installed, so neither spends minutes on a "Getting your crew ready" screen the first time. Pushing a `linux-v<version>` tag publishes both downloads (`.github/workflows/release-linux.yml`); a `cloud-v<version>` tag publishes the tarball alone under a stable name for headless hosts (`.github/workflows/release-cloud-linux.yml`).
-- **Phone app (Android, preview):** v1.0.0-preview.20261021.22. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](../TRY-IT.md#3-the-phone-app)).
-  - [CREWHOUSE-APK-1.0.0-preview.20261021.22-arm64-v8a.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261021.22/CREWHOUSE-APK-1.0.0-preview.20261021.22-arm64-v8a.apk) (arm64-v8a, 57990408 bytes, SHA-256 `913c8651bbc0efbab85c29ef705f5a36e9b14278fcadcab4689b37770949dffe`)
-  - [CREWHOUSE-APK-1.0.0-preview.20261021.22-armeabi-v7a.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261021.22/CREWHOUSE-APK-1.0.0-preview.20261021.22-armeabi-v7a.apk) (armeabi-v7a, 46700842 bytes, SHA-256 `eb9696dd9607e14e025ac431efbc7e3b9c7fd35d9126e5faa8d71eaffdc69203`)
-  - [CREWHOUSE-APK-1.0.0-preview.20261021.22-x86_64.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261021.22/CREWHOUSE-APK-1.0.0-preview.20261021.22-x86_64.apk) (x86_64, 60778401 bytes, SHA-256 `c9fb8486d3d10b636127d2cf7fc1fcbe7bafa7284664be65bc7e1925cb29ff8d`)
+- **Phone app (Android, preview):** v1.0.0-preview.20261022.23. Debug-signed preview; updates the previous preview in place. Pair it under Settings, Phones on the computer (see [TRY-IT.md](../TRY-IT.md#3-the-phone-app)).
+  - [CREWHOUSE-APK-1.0.0-preview.20261022.23-arm64-v8a.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261022.23/CREWHOUSE-APK-1.0.0-preview.20261022.23-arm64-v8a.apk) (arm64-v8a, 58008780 bytes, SHA-256 `2ab551e9705dde39018110d03746b698c1c0893f0c7348efe2d9789ba52967ce`)
+  - [CREWHOUSE-APK-1.0.0-preview.20261022.23-armeabi-v7a.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261022.23/CREWHOUSE-APK-1.0.0-preview.20261022.23-armeabi-v7a.apk) (armeabi-v7a, 46719214 bytes, SHA-256 `0daf9c294562f471f5cd27a73adde46f1f5ae963d6c8395e80d00536b885ab3a`)
+  - [CREWHOUSE-APK-1.0.0-preview.20261022.23-x86_64.apk](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261022.23/CREWHOUSE-APK-1.0.0-preview.20261022.23-x86_64.apk) (x86_64, 60796773 bytes, SHA-256 `98bad5dc43f1d7c04deae5174896a40052f06f7a4f8eeb13ea1f083499619dec`)
 
 The link above names the current preview; for anything newer, check the [releases page](https://github.com/umeranjum17/crewhouse/releases).
 
 ## From source
 
-You need **Linux** and **[Node.js](https://nodejs.org) 22.22.3 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
+You need **Linux** and **[Node.js](https://nodejs.org) 24.16 or later on 24, or 26.1 or later**. Nothing else: the AI engine ships inside Crewhouse, and you sign in from the app.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
@@ -38,7 +38,7 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 
 ## Headless Linux host
 
-A cloud computer in **your own account** can run Chief without a desktop or browser. Sign the computer and phone into your Tailscale network first. Download and extract the portable Linux tarball from the [releases page](https://github.com/umeranjum17/crewhouse/releases), then run:
+A cloud computer in **your own account** can run Chief without a desktop or browser. Connect with `ssh -i /path/to/key <user>@<host>`; do not join the machine to your Tailscale network. Download and extract the portable Linux tarball from the [releases page](https://github.com/umeranjum17/crewhouse/releases), then run:
 
 ```bash
 cd crewhouse/app
@@ -47,11 +47,11 @@ cd crewhouse/app
 
 The download includes its pinned Node, AI engine, web app and private relay; no git clone is needed. Setup starts `crewhouse-headless.service` and prints a private, single-use first-phone code and terminal QR, valid for two minutes. In the phone app choose **Pair with a computer**, then paste the code or scan the QR. This first phone becomes the owner without waiting for a confirmation on the computer. Its encrypted grant can manage the accounts and settings normally reserved for the computer. Other phones still require the owner's confirmation. Revoking the first phone does not reopen first-owner setup.
 
-The service keeps running without the setup terminal. Root installs use a system unit; other installs use a user unit (enable lingering if it must survive logout). Run under the account intended to own the install. The API stays on loopback with its private capability; by default the phone link and relay listen only on loopback/Tailscale, never the public interface. The relay enrols only this host, with public signup disabled. Both devices must be on the same tailnet; there is no relay hosted by us.
+The service keeps running without the setup terminal. Root installs use a system unit; other installs use a user unit (enable lingering if it must survive logout). Run under the account intended to own the install. Use SSH with the key supplied by path to administer the cloud machine, then delete the machine when finished. For phone access, configure `CREWHOUSE_RELAY_PUBLIC` to a published relay URL; the cloud machine does not join your tailnet. The relay enrols only this host, with public signup disabled. There is no relay hosted by us.
 
 For an installer that owns its systemd unit, use `./crewhouse setup --headless --install-only`, run the bundled Node on `scripts/headless.mjs serve` in `crewhouse/app`, then run `./crewhouse headless pair` from the host terminal. Keep pairing output out of installer logs. `./crewhouse headless health` exits zero only when the authenticated API, phone route and private relay are ready. If an unused code expires, `headless pair` prints a new one; once a phone has joined, it refuses. Stop or disable `crewhouse-headless.service` with the matching system or user `systemctl` before removing this headless install.
 
-For an operator-managed container behind a published tailnet port, set `CREWHOUSE_RELAY_PUBLIC=http://<tailnet-ip>:<published-relay-port>` consistently on setup and the service. This relay-only mode skips all Tailscale discovery and peer checks and keeps the API private. The relay binds all **container** interfaces; publish only that port on the tailnet interface, never on the public internet. The published address must be a tailnet, private-LAN or loopback IPv4 origin. An operator can publish on a private LAN for phones on the same Wi-Fi; that does not prove remote tailnet reach. Port publication and the tailnet identity belong to the operator, not Crewhouse.
+For an operator-managed cloud container, set `CREWHOUSE_RELAY_PUBLIC=https://<your-relay-host>` consistently on setup and the service. This relay-only mode skips all Tailscale discovery and peer checks and keeps the API private. The relay binds all **container** interfaces; publish only the relay port through an operator-managed HTTPS endpoint, never expose the API or an unprotected relay publicly. Administer the container host over SSH with a key supplied by path, then delete the machine after use.
 
 Sign-in uses BYOKit's existing account wizard on the host; an AI key never moves to the phone. Browser-only account redirects still return to the host, so choose a supported device-code/key route on a machine without a browser.
 
@@ -116,7 +116,7 @@ Phone notifications currently use raw Expo registration, delivery and a local qu
 
 The computer owner's bar can show `2 working · 1 needs you`, using the same status as the phone. It shows only your own work, with counts in both the pill and tooltip. It clears when the crew is quiet or unreachable. Start Crewhouse normally; the bar only reads its status.
 
-Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 22.22.3 or later). The bar runs [packaging/bar-pill.mjs](../packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
+Replace `/absolute/path/crewhouse` with your source checkout and `/absolute/path/node` with your Node executable (`command -v node`, Node 24.16+ or 26.1+). The bar runs [packaging/bar-pill.mjs](../packaging/bar-pill.mjs) once every 10 seconds. For a different Crewhouse port, prefix both the polling and click commands with `CREWHOUSE_PORT=1234`.
 
 For Omarchy's Quickshell bar, add this command module to an existing `bar.layout` section in `~/.config/omarchy/shell.json`:
 

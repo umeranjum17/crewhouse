@@ -54,6 +54,7 @@ test('chief, a built-in and an imported helper carry the record in the job conte
     assert.match(message, /About me and my work/, `${bot} sees the record section`);
     assert.match(message, /solo ops consultant/, `${bot} sees the voice`);
     assert.match(message, /agency founders/, `${bot} sees the audience`);
+    if (bot === 'chief') assert.match(message, /name is already saved, so never write it/, 'Chief is told the name is saved and a message with nothing new gets no profile call');
   }
   done();
 });

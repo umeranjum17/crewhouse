@@ -15,11 +15,13 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style'; head: string; words: string;
+  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style' | 'video'; head: string; words: string;
   /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
   pick?: { deck: string; title: string; lines: string[]; styles: { id: string; label: string }[] };
+  /** A video link's quality pick: where it is from, each quality (or the sound alone) with its size (`pick` in the answer). */
+  video?: { from: string; choices: { id: string; label: string; size: string }[] };
   /** The one plain rule for the copies an unlock leaves, picked on the same card: how long they stay in the folder. */
   keep?: { line: string; rule: string; options: { label: string; rule: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
@@ -44,6 +46,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  rule?: string;
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
@@ -142,16 +145,21 @@ export const CLOUD = {
   },
   make: {
     pill: 'New rental', title: 'Make a cloud computer?', lead: 'It will be in your own boat.dev account. boat.dev bills you, not Crewhouse.', size: 'Standard · 2 CPU / 4 GB',
-    check: 'Your account’s balance and trial limit must be checked before I make one.', create: 'Check cost before creating', back: 'Use my existing computer instead',
+    check: 'boat.dev checks your balance and trial limit when I make it.', create: 'Make it and set it up', making: 'Making your computer…', back: 'Use my existing computer instead',
   },
   steps: {
     pill: 'Setting up', title: 'I’m setting up your computer.', count: (n: number) => `${n} of 5 steps done`, help: 'Setup needs your help',
-    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again picks up where this stopped. Don’t make another computer.',
+    note: 'No guaranteed time. A step is ticked only when it has really finished.', retry: 'Try again', again: 'Trying again is safe: it picks up on this same computer, and nothing new is rented. Don’t make another computer.',
+    /** The first words when a row stops, so the person knows which step it was. */
+    stopped: ['Checking your access stopped.', 'Checking the computer stopped.', 'Installing Chief stopped partway.', 'Opening the secure connection stopped.', 'Connecting this phone stopped.'],
     rows: [['Checked your access', 'Only your chosen computer.'], ['Checked the computer', 'Files and services checked before installing.'],
       ['Installing Chief', 'The next step starts when installation finishes.'], ['Opening the secure connection', 'Through your cloud’s own address.'],
       ['Connecting this phone', 'Chief must recognize this phone before it’s ready.']],
   },
-  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
+  /** A computer another phone set up: Chief moves here only once the person confirms the other phone loses access. */
+  move: { go: 'Move Chief to this phone', back: 'Back', title: 'Move Chief to this phone?', yes: 'Yes, move Chief',
+    lines: ['The phone that set up this computer loses access to Chief at once. It can’t send Chief anything after this.', 'Your chats and your crew stay on the computer. I set Chief up again here, then this phone takes over.'] },
+  ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
     link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],
@@ -170,14 +178,8 @@ export const CLOUD = {
 
 // ---------- Chief's computer: Settings' page for the one cloud computer the crew shares (mock computer) ----------
 /** What only BYOKit's cloud kit can say: whether crewd is the latest, the daily snapshots and the last one, the disk. */
-export type Computer = { current: boolean; daily: boolean; snapshot?: number; disk: 'normal' | 'filling' | 'full' };
-export type ComputerAct = 'update' | 'undo' | 'reset' | 'daily-on' | 'daily-off' | 'delete';
-/** The page's one call: no `act` reads the computer, an act does it and reads again. It stops at the kit:
- *  @byokit/cloud's machine.update, reset, copies and remove aren't wired here yet, so no computer is reached and nothing
- *  changes. The 404 is crewd's own "not here yet" (api.ts `trouble`), so each surface says it isn't ready. */
-export async function computerCall(_act?: ComputerAct): Promise<Computer> {
-  throw Object.assign(new Error("Chief's computer isn't connected yet"), { status: 404 });
-}
+export type Computer = { daily: false; snapshot?: number; snapshotId?: string; disk: 'normal' | 'filling' | 'full'; relay: string; warning?: string };
+export type ComputerAct = 'update' | 'snapshot' | 'reset' | 'delete';
 /** The page's words; `c` null until the kit answers, so nothing it alone knows is ever made up. A snapshot's time is
  *  the odd part of `reset.lost`, set bold. */
 export const computer = (c: Computer | null) => {
@@ -185,11 +187,13 @@ export const computer = (c: Computer | null) => {
   const off = 'Not connected', lost = ' Anything Chief and his crew did after that is lost, including chats and finished files.';
   return {
     title: "Chief's computer",
-    update: ['Update computer', c ? (c.current ? 'Up to date' : 'Update ready') : off],
+    update: ['Update computer', c ? 'Install the latest release' : off],
+    save: ['Save a snapshot', 'Save now. Keeps the last 7 snapshots.'], unavailable: 'Not available yet',
     reset: ['Reset computer', `Go back to the last snapshot${at && `, from ${at}`}. Changes since then are lost.`],
     caption: 'The one cloud computer Chief and his crew share. It is their sandbox, away from your phone and your files.',
-    connect: "Connect Chief's computer first.",
-    daily: ['Daily snapshots', `Keeps the last 7.${at && ` Last one ${at}.`}`],
+    connect: c ? 'Save a snapshot before resetting the computer.' : "Connect Chief's computer first.",
+    daily: ['Daily snapshots', 'Not available yet. Save a snapshot yourself instead.'],
+    last: at ? `Last snapshot ${at}.` : 'No saved snapshot yet.',
     disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
     host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
     /** The boat.dev key: kept only on the phone that set the computer up, never on the computer or the web. */
@@ -441,7 +445,7 @@ export function plain(text = '') {
     .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
-export const teaser = (text: string) => plain(text).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
+export const teaser = (text: string) => plain(text.replace(/(^|\n)[ \t]*(?:[-*•]|\d+[.)])[ \t]+/g, '$1')).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
@@ -776,7 +780,7 @@ export function preview(last: Json | null | undefined, status = '') {
   const text = bare ? (u && !n ? (u === 1 ? 'File' : `${u} files`) : n ? (n === 1 ? 'Photo' : `${n} photos`) : said) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
-  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text.replace(/\s+/g, ' '));
+  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text).replace(/\s+/g, ' ');
 }
 /** A hero line is a real sentence: bare fragments ("4."), list markers and empty lines never reach it. */
 const realSentence = (text: string): string => String(text ?? '').split(/(?<=[.!?…])\s+/)
@@ -900,6 +904,17 @@ export function card(a: Json, state: Json): Card {
         lines: (Array.isArray(d.pick.lines) ? d.pick.lines : []).map((l: Json) => plain(String(l ?? '')).slice(0, 220)).filter(Boolean).slice(0, 4), styles },
       choices: [...styles.map((s: { id: string; label: string }, i: number) => ({ label: s.label, body: { answer: 'allow', style: s.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'video' && d.pick) {
+    // A video link a helper will save: the qualities yt-dlp found, each with its size, and the sound alone. The tap names
+    // the pick (`pick` in the answer); nothing downloads before it.
+    const choices = (Array.isArray(d.pick.choices) ? d.pick.choices : []).slice(0, 4)
+      .map((c: Json) => ({ id: plain(String(c?.id ?? '')), label: plain(String(c?.label ?? '')), size: plain(String(c?.size ?? '')) })).filter((c: { id: string; label: string }) => c.id && c.label);
+    if (choices.length) return { ...base, kind: 'video', status: 'Pick a quality', head: plain(a.title), words: 'Nothing downloads until you pick. Sizes are estimates.',
+      video: { from: plain(String(d.pick.from ?? '')), choices },
+      choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
+  }
+  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Confirm custom rule', preview: { head: 'For every helper', body: String(d.customRule.text) },
+    choices: [{ label: 'Create rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -1001,7 +1016,7 @@ export function card(a: Json, state: Json): Card {
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
-const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked' };
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked', video: 'Picked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
  *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {
@@ -1029,14 +1044,15 @@ function receiptAction(kind: string, detail: Json): string {
  *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
  *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
  *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
-export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string; rule?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
+    if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
-    const named = c.evidence === 'draft' ? receiptWhat(c) : '';
+    const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
     return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });
@@ -1496,8 +1512,8 @@ const planOf = (body: unknown): string[] => {
 export function liveLine(o: { id: string; name: string; crew: { id: string; name: string }[]; tasks: Json[]; events: Json[];
   heard: Json[]; sent?: number; writing: Map<number, number>; last?: Map<number, number>; side?: 'phone'; signedOut?: boolean }): LiveLine | null {
   // While no account is ready to think with (the sign-in card's own test), the card is the one state: no working,
-  // reading or waiting line above it, so the thread and the header say one thing (ch-signin-wait-truth). The phone,
-  // which cannot see the accounts, passes nothing and keeps its waiting line naming where to sign in.
+  // reading or waiting line above it, so the thread and the header say one thing (ch-signin-wait-truth). The phone
+  // passes nothing and keeps its waiting line naming where to sign in.
   if (o.signedOut) return null;
   const evs = new Map<number, Json>();
   for (const e of [...o.events, ...o.heard]) if (typeof e.seq === 'number') evs.set(e.seq, { ...evs.get(e.seq), ...e });
@@ -1579,7 +1595,7 @@ export function liveLine(o: { id: string; name: string; crew: { id: string; name
  *  person's own filename for display only (the path stays crewd's). */
 const ATTACH = /\n?\[(photo|file) ([a-z0-9-]+)\] (files\/\S+)(?: ([0-9]+B)(?: ([^\n]*))?)?/g;
 const attached = (text: string) => [...text.matchAll(ATTACH)].map((m) => m[1] === 'photo' || !m[4]
-  ? { kind: m[1], view: fileView(m[2], m[3]) }
+  ? { kind: m[1], view: fileView(m[2], m[3], undefined, undefined, m[1] === 'photo' ? 'Your photo' : undefined) }
   : { kind: m[1], view: fileView(m[2], m[3], undefined, Number(m[4].slice(0, -1)), m[5]?.trim() || undefined) });
 const photos = (text: string) => attached(text).filter((a) => a.kind === 'photo').map((a) => a.view);
 /** Every upload on the line, photos and documents alike, with crewd's byte count where it wrote one. */
@@ -1628,7 +1644,8 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     if (m.author === 'person') asks.set(m.task_id, String(m.text ?? '').replace(ATTACH, '').trim());
     if (m.author === 'bot') lastOf.set(m.task_id, m.id);
   }
-  return msgs.filter((m: Json) => !STUB.test(String(m.text ?? ''))).map((m: Json): Line => {
+  // The stub engine's words are hidden, never the files crewd attached to them (a helper's picture in Chief's reply).
+  return msgs.map((m: Json) => STUB.test(String(m.text ?? '')) ? { ...m, text: '' } : m).map((m: Json): Line => {
     const retry = bot === 'chief' && !live && m.author === 'bot' && m.task_id === newest && lastOf.get(m.task_id) === m.id ? asks.get(m.task_id) || undefined : undefined;
     const pics = uploads(String(m.text ?? ''));
     const text = String(m.text ?? '').replace(ATTACH, '').trim();
@@ -1841,6 +1858,23 @@ export function aboutTraits(name: string, soul = ''): string[] {
   }
   return traits;
 }
+/** A line written to Chief, said to the person about him: "you turn what the person wants" → "he turns what you want". */
+const aboutChief = (l: string) => plain(l.replace(/^[-*]\s*/, '').trim())
+  .replace(/^you are chief\b,?\s*/i, 'Chief is ').replace(/^you are\b/i, 'Chief is')
+  .replace(/\bthe person(\s+)(\w+?)s\b/gi, 'you$1$2').replace(/\bthe person's\b/gi, 'your').replace(/\bthe person\b/gi, 'you')
+  .replace(/\bon your say-so\b/gi, 'without your say-so').replace(/\bthis machine\b/gi, 'this computer')
+  .replace(/\byou (\w+)\b/gi, (w, v: string) => /^(want|need|ask|share|send|pick|say|see|get|like)$/i.test(v) ? w : `he ${({ are: 'is', have: 'has', do: 'does', go: 'goes' } as Record<string, string>)[v.toLowerCase()] ?? `${v}s`}`);
+/** How Chief works in plain words (Stack J09d): his soul's opening line, then the start of its first two Voice lines.
+ *  A soul the person wrote without those reads as its own first two lines. */
+export function chiefIs(soul = ''): string[] {
+  const lines = soul.split('\n').map((l) => l.trim()), v = lines.findIndex((l) => /^##\s+voice\b/i.test(l));
+  const intro = lines.find((l) => l && !/^(#|[-*]\s)/.test(l)), end = lines.findIndex((l, i) => i > v && /^##\s/.test(l));
+  const voice = v < 0 ? [] : lines.slice(v + 1, end < 0 ? undefined : end).filter((l) => /^[-*]\s/.test(l)).slice(0, 2).map((l) => l.replace(/^[-*]\s*/, '').split(/(?<=\.)\s/)[0]);
+  const out = [intro, voice.join(' ')].filter((l): l is string => !!l).map(aboutChief);
+  return out.length ? out : personality(soul).slice(0, 2);
+}
+/** What Chief never does, as one plain line to the person: the first of his job's limits. */
+export const chiefNever = (rules = '') => aboutChief(rules.split('\n').find((l) => /^[-*]\s/.test(l.trim())) ?? rules.trim());
 /** What the person edits: the traits, one per line, nothing else. */
 export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).join('\n');
 /** The helper's instructions, composed behind the scenes from the person's plain words. */

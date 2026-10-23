@@ -1,4 +1,14 @@
 {
+  "inbox-triage": {
+    "start": "Umer on a private real crewd, scripted engine, synthetic recorded inbox and a Railway case; no real Google or model",
+    "steps": [
+      "Connect the local synthetic Gmail provider and run Mail watch once to baseline old mail",
+      "A synthetic Stripe alert arrives; run Mail watch through its HTTP button route",
+      "Open Chief's thread at phone and desktop widths in day and night and read the linked scripted alert",
+      "Run Mail watch again without new mail"
+    ],
+    "result": "One scripted alert with cross-sender context and source links reaches Chief through real HTTP, a quiet poll creates no task, and Gmail receives GETs only. This is not live ranking, real-inbox phone or installed-PWA proof."
+  },
   "ask-in-view": {
     "start": "a fresh crew on the stub engine, with one card waiting for the person in Chief's thread",
     "steps": [
@@ -19,6 +29,29 @@
       "Tell Chief it is connected; he asks again, say yes once, and he writes what he read in his thread"
     ],
     "result": "Chief used a connected app on {{model}} for a read-only request: {{ask}}"
+  },
+  "custom-rules": {
+    "start": "Umer on a private real crewd, stub engine, no rules",
+    "steps": [
+      "Chief shows a Confirm custom rule card with the full rule text, Create rule and Cancel; nothing is saved",
+      "Create rule: Saved card and settings link",
+      "Cancel another rule: Cancelled card, original rule unchanged",
+      "Cancel an edit, then save the edited rule in Settings, Custom rules",
+      "Scripted helper produces a draft, not a send; integration test checks its actual run context",
+      "Restart crewd: edited rule survives"
+    ],
+    "result": "Confirmed custom-rule lifecycle and helper draft, with separate unchanged safety approvals. No real model, mailbox or send."
+  },
+  "cloud-screen": {
+    "start": "the phone app with the cloud on, a boat.dev account with no computer (the kit's fake boat.dev, Chief's own host behind it on the stub engine)",
+    "steps": [
+      "Tap In my cloud and paste the boat.dev key; the account has no computer",
+      "Tap Make a new computer instead, then Make it and set it up, while the install on the computer fails",
+      "Read why setup stopped, then tap Try again once the install can pass; the progress list runs to its end and the screen ends on Your cloud computer, with the card Chief is on your cloud computer and its Talk to Chief button",
+      "On a second phone, paste the same key and tap Use this computer on the computer the first phone set up",
+      "Tap Move Chief to this phone, read who loses access, and tap Yes, move Chief"
+    ],
+    "result": "Make it and set it up rents a computer and sets it up; the failed install says Installing Chief stopped partway and that trying again is safe, with Try again; Try again ends on the screen titled Your cloud computer, with the card Chief is on your cloud computer and a Talk to Chief button; the second phone is offered Move Chief to this phone and Back, the confirm says the phone that set up this computer loses access, and after Yes, move Chief this phone reaches Chief is on your cloud computer"
   },
   "chat-real": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
@@ -288,6 +321,16 @@
     ],
     "result": "The preview panel shows the deck's slides one frame at a time, and the file opens as a real presentation"
   },
+  "desktop-first-launch": {
+    "start": "the desktop app on a new computer with nothing installed, on the stub engine",
+    "steps": [
+      "Open the Crewhouse desktop app for the first time",
+      "Wait for the crew to be ready; no engine is downloaded",
+      "Say hello from Hello (onboard)",
+      "Send Chief a message and wait for his reply in the thread"
+    ],
+    "result": "Chief's first reply arrived {{seconds}} s after the app opened, with the AI engine carried inside the app: {{reply}}"
+  },
   "stub-drive": {
     "start": "first launch of Crewhouse on the stub engine, a new person, nothing sent yet",
     "steps": [
@@ -334,5 +377,139 @@
       "Open Chief's thread at 390 and 1440 wide, day and night"
     ],
     "result": "Chief's thread shows one answer, the words the helper's report brought, with no question and no work of Chief's own while the helper worked"
+  },
+  "handoff-lane-reset": {
+    "target": { "version": "{{version}}+{{sha}}" },
+    "start": "a fresh Crewhouse with one helper on the crew, on {{model}}",
+    "steps": [
+      "Ask Chief to get a helper to read a file and bring back its reference, and to say so plainly if it cannot",
+      "The helper's own job fails, and Chief's job settles",
+      "Open Chief's thread at 390 and 1440 wide, day and night"
+    ],
+    "result": "Chief's job ends failed in seconds with the hand-off's own words, \"The helper stopped before reporting back\", and no question reaches the person"
+  },
+  "answer-check": {
+    "start": "a fresh stub-engine crewd with Research Rae on the crew",
+    "steps": [
+      "Chief offers Research Rae the job on a card and the person says yes",
+      "Rae answers; her answer is held while Verifier Vera challenges it",
+      "Chief's thread shows one line naming Rae's answer, who checked it and what the check found",
+      "Chief's thread is captured at 390, day and night"
+    ],
+    "result": "Chief's thread says Research Rae's answer was checked by Verifier Vera and that it does not hold, with no unchecked answer shown before it"
+  },
+  "video-job": {
+    "start": "a crew on the stub engine with Video Vic hired and its pinned video tool in place, nothing in Vic's files",
+    "steps": [
+      "Paste a video link in Chief's chat: Save this video for me: https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      "Chief hands it to Video Vic, whose pinned tool reads the link; Chief's chat shows a card with each quality and audio only, each with its size",
+      "In the installed app at phone width, tap 720p, then Save in 720p",
+      "Wait while Video Vic downloads the pick on the computer and Chief answers"
+    ],
+    "result": "Nothing downloads before the pick; then only the 720p video is in Video Vic's files, delivered with the link it came from, and Chief's chat says it is saved"
+  },
+  "binary-inspect": {
+    "start": "a fresh crew on the stub engine, with Byte on the crew and a small binary in Byte's own folder",
+    "steps": [
+      "Open Byte's chat on the phone and on the computer",
+      "Read the note Byte left after looking inside the file"
+    ],
+    "result": "Byte's chat holds the note the inspector wrote for the binary, at 390 and 1440, day and night"
+  },
+  "voice": {
+    "start": "a fresh crew on the stub engine, the app installed from Settings, on a device whose ears and voices are a script: what the person says goes in as text and what is read aloud comes out as text",
+    "steps": [
+      "Open Chief's chat in the installed app at phone width (390) and desktop width (1440), day and night",
+      "Tap the mic in Chief's box: the empty box says Listening and the mic is a stop button",
+      "Say hi: the words heard sit in the box, unsent, and no new message is in the thread until the person taps send",
+      "Tap send; Chief's reply comes into the thread",
+      "With the box empty tap Talk: the call says Listening; say i want to market my app",
+      "Chief's reply is read aloud a sentence at a time: the call says Chief is speaking with the sentence, and the reply's line in the thread is marked green",
+      "Open Voice for the device's voice and speed, then tap Stop: Call ended",
+      "On a recognizer shaped like Safari's (iPad and iPhone), tap the mic: the online line shows first, and what was said lands in the box"
+    ],
+    "result": "At phone and desktop width, day and night: the mic listens with Listening in the box, the words heard wait unsent in the box with no message in the thread until send, Talk sends what was said once and reads Chief's reply aloud with its line marked green, then Stop ends the call; a Safari-shaped recognizer hears with the online line"
+  },
+  "image": {
+    "start": "a fresh crew on the stub engine with Video Vic on it, and nothing in Chief's or Vic's files",
+    "steps": [
+      "Open Chief's chat, tap + (the paperclip on a computer) and pick a photo of a desk lamp",
+      "See the photo in the box with its name and size, and type: Make this into a picture for my shop page.",
+      "Send it, and wait while Chief hands the job to Video Vic"
+    ],
+    "result": "Chief's chat shows the photo above the words sent with it, then Video Vic's finished picture of the lamp; the photo is kept on the computer under crewd's own name and Chief's model was given it"
+  },
+  "home-list-preview": {
+    "start": "a fresh stub-engine crewd, onboarded as Umer",
+    "steps": [
+      "Chief's last line in his thread is a list answer, two dash items",
+      "Home opens at 390 and 1280, day and night",
+      "A web search that cannot run ends on Chief's trail as one plain line"
+    ],
+    "result": "Home's Chief card shows his last answer as plain sentences with no dash marker in front of the list items"
+  },
+  "phone-accounts": {
+    "start": "the phone app paired to a fresh crew on the stub engine, where the computer has MiniMax signed in and every other AI account signed out",
+    "steps": [
+      "Open the phone app on Home",
+      "Read the Your AI accounts row under the crew, in day and in night",
+      "On the computer, sign MiniMax out too, then open the phone app again"
+    ],
+    "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows a plain key, no account's mark, and says You sign in on the home computer, in Settings"
+  },
+  "phone-mic-fallback": {
+    "start": "the release app on an Android emulator paired to a stub-engine crewd, Home open, no on-device speech pack for the phone's language",
+    "steps": [
+      "Tap the mic (Speak to Chief) in Chief's box on Home",
+      "Wait while the phone's speech service opens the microphone",
+      "Read the box: the mic is a stop button and nothing was sent"
+    ],
+    "result": "With no on-device voice pack the mic opens a listener (a stop button in the box) instead of the 'not ready' toast; words would land in the box unsent"
+  },
+  "phone-only-minimax": {
+    "start": "the phone app's lab release APK with no computer paired and no key saved, on the kit's own MiniMax key route, its MiniMax live list a lab fake with the 9 ids MiniMax lists (a lab key, no model call)",
+    "steps": [
+      "Tap Use this phone only; Chief on this phone offers OpenRouter and MiniMax",
+      "Tap MiniMax, paste the key, and tap Connect",
+      "Tap MiniMax M3 among the models listed for the key, then tap Use MiniMax M3",
+      "In Chief's chat, tap Sign out, confirm, and tap Use this phone only again"
+    ],
+    "result": "After Connect the phone asks Which model should Chief use? and lists all 9 models the live list gives, MiniMax M3.1 Flash first and tagged Recommended, then MiniMax M3, M2.7, M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed and M2, under a Search 9 models box, with Use the default for now: MiniMax M3.1 Flash; tapping MiniMax M3 marks it selected and the button reads Use MiniMax M3; confirming opens Chief's chat with MiniMax M3 under his name; after Sign out, Use this phone only asks for a key again"
+  },
+  "stack-design": {
+    "start": "a fresh crew on the stub engine for Umer: Research Rae at work, Writer Will done with a letter, a Morning digest routine, and Chief asking to bring Invoice Ivy and Translator Tess on",
+    "steps": [
+      "Open Chief's profile from his thread, on a phone and on a computer, by day and by night",
+      "Open How Chief works from the profile",
+      "Open Settings on a phone and on a computer",
+      "Read Chief's two hire cards in his thread",
+      "Say yes to Invoice Ivy and ask her to put the invoices in one sheet",
+      "Open Your things, search it for letter, and open Ivy's sheet from it",
+      "Watch Home while Rae works, then turn on Reduce Motion",
+      "Install Crewhouse from Settings and open Chief's profile, Settings, Your things and How Chief works in the installed window"
+    ],
+    "result": "Chief's profile is the blue portrait card with Routines, News and Instructions, the portrait left and the rows right on a computer; How Chief works says who Chief is and what he never does in two plain cards with Change it; Settings shows one card then Look on a phone and two columns on a computer; each hire card names the helper on one line and says Yes, bring Ivy on; Your things shows Ivy's sheet and Will's letter as colour cards with the sheet open beside on a computer, the search for letter leaves the letter alone, and Open shows Your invoices read-only with its Invoices and Paid pills; Rae's face moves while she works and stands still under Reduce Motion; the installed window shows the same pages, standalone, with no install row"
+  },
+  "chief-profile": {
+    "start": "a fresh crew on the stub engine for Umer: Chief alone, his computer switched off for the first look; then his computer back, Writer Will on the crew and a Morning digest routine",
+    "steps": [
+      "Open Chief's profile with no computer in the crew, on a phone and on a computer, by day and by night",
+      "Give Chief his computer back, then tap Chief's name in his thread",
+      "Scroll Chief's profile to Computer on a phone and on a computer, by day and by night",
+      "Tap Take control",
+      "Open Chief's screen on a phone and on a computer while you have control",
+      "Tap Hand it back",
+      "Install Crewhouse from Settings and open Chief's profile in the installed window"
+    ],
+    "result": "With no computer the profile's Computer section says No computer yet in plain words; tapping Chief's name opens his profile: the blue portrait card, Routines with Morning digest and Add a routine, and Computer with Chief's live screen and Take control; Take control opens Chief's screen saying You have control, the screen outlined, with Hand it back, and the controls are the person's; Hand it back gives them to Chief again and the screen offers Take control; the installed window shows the same profile, standalone"
+  },
+  "chief-reply-engine": {
+    "start": "a crew on this checkout's pinned OpenClaw engine ({{engine}}), its model a scripted local provider, Umer signed in and onboarded",
+    "steps": [
+      "Send Chief a message: {{ask}}",
+      "Wait while Chief's job runs on the engine and ends done",
+      "Open Chief's thread from his card on Home, at 390 wide, day and night"
+    ],
+    "result": "Chief's thread shows the reply under the person's message: {{reply}}"
   }
 }

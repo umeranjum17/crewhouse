@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.22.3', '24'] # OpenClaw's supported Node floor and the current LTS
+        node: ['24'] # the engine's supported line (OpenClaw 2026.9.33: Node 24.16+ or 26.1+)
         # The suite in three parallel parts: the gateway files are most of the wall time, so they get two of them.
         group: [migrate, engine, app]
     name: check (${{ matrix.node }}, ${{ matrix.group }})

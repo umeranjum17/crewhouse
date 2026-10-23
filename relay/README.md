@@ -15,7 +15,7 @@ What the relay can and can't see:
 
 There is no hosted Crewhouse relay, and the app has no relay address built in. You run your own and set it: **Settings, Phones** on the computer (`PUT /api/phones/relay {url}`), or
 `CREWHOUSE_RELAY=https://relay.example` for crewd. `''` turns the relay off. A cloud machine whose provider fronts the relay at another
-origin also sets `CREWHOUSE_RELAY_PUBLIC=https://provider.example` at install; phones use that origin, and Settings relay changes keep it.
+origin also sets `CREWHOUSE_RELAY_PUBLIC=https://provider.example` at install; phones use that origin, and Settings relay changes keep it. For cloud or sandbox machines, administer the machine over SSH with a key supplied by path, use this published relay URL for phone access, and delete the machine after use; never join it to the owner's tailnet.
 
 ## Without Tailscale's servers: Headscale
 

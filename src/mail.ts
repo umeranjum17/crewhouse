@@ -48,7 +48,7 @@ export function bodyOf(payload: any): string {
   if (!pick) return '';
   let text = Buffer.from(pick.body.data, 'base64url').toString('utf8');
   if (pick.mimeType === 'text/html') {
-    text = text.replace(/<(style|script)[\s\S]*?<\/\1>/gi, '').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '')
+    text = text.replace(/<(style|script)[\s\S]*?<\/\1>/gi, '').replace(/<a\b[^>]*\bhref\s*=\s*(['"])(https?:\/\/[^'"]+)\1[^>]*>([\s\S]*?)<\/a>/gi, '$3 ($2)').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   }
   const lines = text.replace(/\r/g, '').split('\n'), quoted = lines.findIndex((l) => /^On .+ wrote:$/.test(l.trim()) || /^-{2,} ?Original Message ?-{2,}$/i.test(l.trim()));
@@ -63,15 +63,10 @@ async function rows(token: Token, threads: { id: string }[]) {
   }));
 }
 
-export async function newThreads(token: Token, after: number, limit = 25) {
-  const list = await get(token, `/threads?${new URLSearchParams({ q: 'in:inbox', maxResults: String(limit) })}`);
-  return (await rows(token, list.threads ?? [])).filter((m) => m.at > after);
-}
-
 /** Inbox mail added since `after`, a Gmail history id (an opaque string; it outgrows a JS number). No `after`, or one
  *  Gmail has forgotten (a week or more away), starts again from now: old mail never counts as new. */
 export async function mailChanges(token: Token, after?: string) {
-  const ids = new Set<string>(), messages: { id: string; from: string; subject: string }[] = [], now = async () => ({ history: String((await get(token, '/profile')).historyId), messages });
+  const ids = new Set<string>(), messages: { id: string; thread: string; from: string; subject: string }[] = [], now = async () => ({ history: String((await get(token, '/profile')).historyId), messages });
   if (!after) return now();
   let page: string | undefined, history = after;
   try {
@@ -83,7 +78,7 @@ export async function mailChanges(token: Token, after?: string) {
   } catch (e: any) { if (e.status === 404) return now(); throw e; }
   for (const id of ids) {
     const m = await get(token, `/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`).catch((e) => { if (e.status === 404) return null; throw e; }); // deleted since
-    if (m) messages.push({ id, from: header(m, 'From'), subject: header(m, 'Subject') });
+    if (m) messages.push({ id, thread: String(m.threadId ?? id), from: header(m, 'From'), subject: header(m, 'Subject') });
   }
   return { history, messages };
 }
@@ -106,7 +101,7 @@ export async function runMail(token: Token, args: string[], root?: string, filin
     // A conversation id is Gmail's own (hex); anything else would change the address asked for.
     if (!/^[a-f0-9]{8,32}$/i.test(id)) return bad('mail read <id>, with the id from mail or mail search');
     const t = await get(token, `/threads/${id}?format=full`), msgs: any[] = t.messages ?? [], last = msgs.at(-1), body = bodyOf(last?.payload), cut = more.includes('--full') ? FULL : CUT, list = attachments(t);
-    return [`subject: ${header(msgs[0], 'Subject') || '(no subject)'}`,
+    return [`subject: ${header(msgs[0], 'Subject') || '(no subject)'}`, `source: https://mail.google.com/mail/u/0/#inbox/${id}`,
       table('messages', ['from', 'age'], msgs.map((m) => ({ from: header(m, 'From').slice(0, 60), age: ageOf(Number(m.internalDate ?? 0)) }))),
       `latest: ${header(last, 'From').slice(0, 60)}${list.length ? `, ${list.length} attached (mail attachments ${id})` : ''}`,
       'body: |', ...body.slice(0, cut).split('\n').map((l) => '  ' + l),

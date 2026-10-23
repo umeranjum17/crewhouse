@@ -27,22 +27,57 @@ journeys:
     command: 'bash scripts/verify/upgrade.sh "$DONE_DONE_EVIDENCE_ROOT"'
   onboard-chat:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" NODE_BIN=/usr/bin/node timeout -k 10 600 bash scripts/verify/onboard-chat.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  desktop-first-launch:
+    command: 'timeout -k 10 900 node scripts/verify/desktop-first-launch.mjs --out "$DONE_DONE_EVIDENCE_ROOT"'
+  # The phone's cloud screen on the kit's fake boat.dev: the caller's emulator and flagged lab APK (where-cloud.md).
+  cloud-screen:
+    command: 'SERIAL="${SERIAL:?the emulator serial}" CLOUD_OTHER="${CLOUD_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 900 bash scripts/verify/cloud-screen.sh "$DONE_DONE_EVIDENCE_ROOT" "${CLOUD_APK:?the flagged lab APK}"'
+  # The phone's Home row naming the AI account signed in on the computer: the caller's emulator and lab APK (phone-accounts.md).
+  phone-accounts:
+    command: 'SERIAL="${SERIAL:?the emulator serial}" ACCOUNTS_OTHER="${ACCOUNTS_OTHER:?a folder for the MiniMax-signed-in state}" timeout -k 10 900 bash scripts/verify/phone-accounts.sh "$DONE_DONE_EVIDENCE_ROOT" "${ACCOUNTS_APK:?the lab APK}"'
+  # Chief on this phone with a MiniMax key: the caller's emulator and lab release APK, a lab key, a fake live model list, no model call (phone-only-minimax.md).
+  phone-only-minimax:
+    command: 'SERIAL="${SERIAL:?the emulator serial}" PHONE_OTHER="${PHONE_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 600 bash scripts/verify/phone-only-minimax.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the lab release APK}"'
+  inbox-triage:
+    command: 'timeout -k 3 240 node scripts/verify/inbox-triage.mjs "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
     command: 'node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/steps.mjs "$DONE_DONE_EVIDENCE_ROOT" personal-voice'
   screens:
     command: 'scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief's profile (J09c), How Chief works (J09d), Settings (J09a), one-line hire names, Your things (J07a) and a file
+  # opened from it (J07b), face motion and the installed app, beside the approved mocks when EVIDENCE_HOME holds them
+  # (docs/verification/settings-hub.md, things.md).
+  stack-design:
+    timeout: 20m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 1100 bash scripts/verify/stack-design.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief's profile from his hero (mock profile-b on the final Stack): no computer (its empty state), then Chief's own
+  # live with Take control, You have control and Hand it back, at 390 and 1440, day and night, and in the installed
+  # app (docs/verification/chief-profile.md).
+  chief-profile:
+    timeout: 15m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 850 bash scripts/verify/chief-profile.sh "$DONE_DONE_EVIDENCE_ROOT"'
   delivered-files:
     command: 'timeout -k 10 600 bash scripts/verify/files-gate.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   workbook-chart:
     command: 'PWA=1 timeout -k 10 600 bash scripts/verify/workbook-chart.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   slides-deck:
     command: 'timeout -k 10 600 bash scripts/verify/slides-deck.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
+  video-job:
+    command: 'timeout -k 10 900 bash scripts/verify/video-job.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
+  phone-mic-fallback:
+    command: 'FM_MEM_GATE=~/firstmate/config/fm-mem-gate.sh timeout -k 10 1800 bash scripts/verify/phone-mic-fallback.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  voice:
+    command: 'timeout -k 10 600 bash scripts/verify/voice.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  image:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/image.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   unlock-card:
     command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
   event-routines:
     command: 'PWA=1 timeout -k 10 900 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/event-routines.mjs "$DONE_DONE_EVIDENCE_ROOT" && timeout -k 10 300 node scripts/test.mjs test/event-routines.test.ts > "$DONE_DONE_EVIDENCE_ROOT/event-routines-test.log" 2>&1'
+  custom-rules:
+    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" bash scripts/verify/custom-rules.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chief-soul:
     command: 'timeout -k 10 600 bash scripts/verify/chief-soul.sh "$DONE_DONE_EVIDENCE_ROOT"'
   ask-in-view:
@@ -59,8 +94,12 @@ journeys:
     command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" --out "$DONE_DONE_EVIDENCE_ROOT" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
   key-sheet:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/key-sheet.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  home-list-preview:
+    command: 'timeout -k 10 600 bash scripts/verify/home-list-preview.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  answer-check:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/answer-check.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge-pwa:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/quiet-nudge-pwa.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chat-real:
@@ -70,6 +109,9 @@ journeys:
     timeout: 60m
     spends: 'a few live model calls on the MiniMax key file named in ~/.config/crewhouse/connect-apps.conf, and one real read through the person''s own Composio sign-in'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:-connect-apps}" timeout -k 10 3000 bash scripts/verify/connect-apps.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief answers on the checkout's pinned engine with a scripted model: no account, no spend (the proof after a pin bump).
+  chief-reply-engine:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chief-reply-engine.sh "$DONE_DONE_EVIDENCE_ROOT"'
   crew-room:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE, or on OPENROUTER_API_KEY with CREW_ACCOUNT=openrouter'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:-}"'
@@ -78,6 +120,8 @@ journeys:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/flash-read.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chief-wait:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chief-wait.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  handoff-lane-reset:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" CREWHOUSE_ENGINE_DIR="$PWD/runtime/openclaw" timeout -k 10 900 bash scripts/verify/handoff-lane-reset.sh "$DONE_DONE_EVIDENCE_ROOT"'
   phone-live-control:
     spends: 'a few live model calls on the key named by KEY_FILE (a path, or env:NAME)'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 1500 bash scripts/verify/phone-live-control.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized key file}"'
@@ -92,5 +136,7 @@ journeys:
   phone-continue:
     spends: 'live phone-only model calls on an explicitly authorized test account'
     command: 'timeout -k 10 600 node scripts/verify/phone-continue.mjs --serial "${SERIAL:?owned emulator}" --ev "$DONE_DONE_EVIDENCE_ROOT" --apk "${APK:?release apk}" --key-file "${KEY_FILE:?authorized test key file}"'
+  binary-inspect:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/binary-inspect.sh "$DONE_DONE_EVIDENCE_ROOT"'
   skill-eval:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/skill-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'

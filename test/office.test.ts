@@ -444,15 +444,16 @@ test('a stepper\'s step labels split only between words, never mid-word, at the 
   }
 });
 
-test('things, routines and helper profiles: shared file cards, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
+test('things, routines and helper profiles: each thing its maker\'s card, shared file cards, names in full, nothing overlaps', { skip: !bin && 'no Chromium here' }, async () => {
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   // Old-style markers: the pastel file chip and the coral result link. Their Term replacements carry the rows.
   const markers = `(() => ({ chips: document.querySelectorAll('.file-chip').length,
     coral: document.querySelectorAll('.link.pink').length,
-    tiles: [...document.querySelectorAll('.thing-list .o-ic, .st-made .wb-ic, .st-made .doc-ic')].map((e) => e.textContent),
+    tiles: [...document.querySelectorAll('.st-made .wb-ic, .st-made .doc-ic')].map((e) => e.textContent),
+    made: [...document.querySelectorAll('.st-things .st-made .wb-card')].map((c) => !!c.querySelector(':scope > .face') && !!c.querySelector(':scope > .wb-open')),
     primary: [...document.querySelectorAll('.routine .btn.go, .wb-panel .btn.go')].map((e) => e.textContent),
-    rows: [...document.querySelectorAll('.thing-list .row-item, .routine, .st-made .wb-card, .st-made .doc')].map((row) => {
+    rows: [...document.querySelectorAll('.routine, .st-made .wb-card, .st-made .doc')].map((row) => {
       const r = row.getBoundingClientRect(), kids = [...row.children].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
       const overlap = kids.some((a, i) => kids.some((c, j) => j > i && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1));
       const clip = kids.some((k) => k.left < r.left - 1 || k.right > r.right + 1);
@@ -463,10 +464,11 @@ test('things, routines and helper profiles: shared file cards, names in full, no
     await b.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
     const at = `${theme} ${w}`;
     await b.open(`demo&${theme}#/things`);
-    await until('the things rows', () => b.run("document.querySelectorAll('.thing-list .row-item').length > 0"), 30_000);
+    await until('the things cards', () => b.run("document.querySelectorAll('.st-things .st-made .wb-card').length > 0"), 30_000);
     let m = await b.run(markers);
     assert.equal(m.chips, 0, `${at} things: no old file chips`);
-    assert.ok((m.tiles as string[]).length > 0 && (m.tiles as string[]).every((t) => t.trim().length > 0), `${at} things: every file row wears its extension tile`);
+    assert.ok((m.made as boolean[]).length > 0 && (m.made as boolean[]).every(Boolean), `${at} things: every card wears its maker's face and an Open`);
+    for (const [i, r] of m.rows.entries()) assert.ok(!r.overlap && !r.clip && !r.cut, `${at} thing ${i}: nothing overlaps, spills or cuts`);
     await b.open(`demo&${theme}#/routines`);
     await until('the routine rows', () => b.run("document.querySelectorAll('.routine').length > 0"), 30_000);
     m = await b.run(markers);
@@ -643,7 +645,7 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   assert.equal(await b.run(`document.querySelector('.chat-head .face img').src`), speaking, 'streaming words do not restart the nod');
   await b.run('location.hash = "#/"');
   await until('Home', () => b.run("!!document.querySelector('.stack-home')"), 30_000);
-  await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job);
+  await release(lab.crew, 'scout', 'Three Friday flights are ready.'); await settled(lab.db, job); await release(lab.crew, 'verifier-vera'); // the check's brief repeats the ask, so the stub holds it too
   await until('Scout done on its card', async () => /^Done /.test((await row())?.word ?? ''), 30_000);
   assert.equal(await rowMotion(), 'done', 'the real completed job hops once instead of continuing to talk');
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
@@ -671,22 +673,22 @@ test('live crew cards keep one status, Chief carries the ask, and the opening NE
   const next = assign('scout', 'check the Monday trains; ask permission');
   await holding(lab.crew, 'scout');
   await b.run('location.hash = "#/chief"');
-  await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
+  await until('the hand-off chip', () => b.run(`/at work/.test([...document.querySelectorAll('a.hand[href="#/h/scout"]')].at(-1)?.textContent ?? '')`), 30_000);
   // The Friday request was Chief's first hand-off to Scout, so it carries the limit; this Monday one is the second and does not.
-  const chip = await b.run(`(() => { const hs = [...document.querySelectorAll('.hand-off')], h = hs.at(-1), lines = [...document.querySelectorAll('.chat .lines .line:not(.live-line)')];
+  const chip = await b.run(`(() => { const hs = [...document.querySelectorAll('.hand-off')].filter((e) => e.querySelector('a.hand[href="#/h/scout"]')), h = hs.at(-1), lines = [...document.querySelectorAll('.chat .lines .line:not(.live-line)')];
     return { limit: hs[0].querySelector('.hand-limit').textContent, second: h.querySelector('.hand-limit'), href: h.querySelector('a.hand').getAttribute('href'), after: lines.indexOf(h) > lines.findIndex((l) => /Monday trains/.test(l.textContent)) }; })()`);
   assert.match(chip.limit, /^Scout .*can't pay or send anything without asking you\.$/);
   assert.deepEqual([chip.href, chip.after, chip.second], ['#/h/scout', true, null], 'the chip opens Scout\'s thread and sits after the request that handed it on');
-  await release(lab.crew, 'scout', 'Two trains on Monday.'); await settled(lab.db, next);
+  await release(lab.crew, 'scout', 'Two trains on Monday.'); await settled(lab.db, next); await release(lab.crew, 'verifier-vera'); // the check's brief repeats the ask, so the stub holds it too
   // The result is already the chip, so the finished job raises no toast in the thread it appears in (chat quality gap 12).
-  await until('the first chip reads done', () => b.run(`/done/.test([...document.querySelectorAll('.hand')].at(-1)?.textContent ?? '')`), 30_000);
+  await until('the first chip reads done', () => b.run(`/done/.test([...document.querySelectorAll('a.hand[href="#/h/scout"]')].at(-1)?.textContent ?? '')`), 30_000);
   assert.deepEqual(await b.run(`[...document.querySelectorAll('.toast')].map((t) => t.textContent).filter((t) => /Monday trains/.test(t))`), [], 'no toast repeats the finished job in the open thread');
   // A second hand-off to the same helper says the job alone: the limit sentence rides only its first hand-off (gap 13).
   const again = assign('scout', 'check the Friday flights; ask permission');
   await holding(lab.crew, 'scout');
-  await until('the third hand-off chip', () => b.run(`document.querySelectorAll('.hand-off').length === 3 && /at work/.test(document.querySelectorAll('.hand')[2]?.textContent ?? '')`), 30_000);
-  assert.equal(await b.run(`!!document.querySelectorAll('.hand-off')[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
-  await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again);
+  await until('the third hand-off chip', () => b.run(`[...document.querySelectorAll('.hand-off')].filter((e) => e.querySelector('a.hand[href="#/h/scout"]')).length === 3 && /at work/.test([...document.querySelectorAll('a.hand[href="#/h/scout"]')][2]?.textContent ?? '')`), 30_000);
+  assert.equal(await b.run(`!![...document.querySelectorAll('.hand-off')].filter((e) => e.querySelector('a.hand[href="#/h/scout"]'))[2].querySelector('.hand-limit')`), false, 'the third hand-off carries no limit sentence');
+  await release(lab.crew, 'scout', 'Two flights on Friday.'); await settled(lab.db, again); await release(lab.crew, 'verifier-vera'); // the check's brief repeats the ask, so the stub holds it too
   // Hold the browser's roster refresh while a real new helper starts: an old snapshot cannot prove it was deleted.
   await b.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/state', requestStage: 'Request' }] });
   const rae = await api('/api/recruit', { template: 'scout', name: 'Research Rae' });

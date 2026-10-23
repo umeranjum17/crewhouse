@@ -7,7 +7,7 @@
   "repository": { "type": "git", "url": "git+https://github.com/umeranjum17/crewhouse.git" },
   "type": "module",
   "engines": {
-    "node": ">=22.22.3"
+    "node": ">=24.16.0 <25 || >=26.1.0"
   },
   "bin": { "crewhouse": "bin/crewhouse.mjs" },
   "files": ["bin", "dist", "web/dist", "templates", "skills", "tools", "scripts/prepare-engine.mjs", "scripts/build-web.mjs", "scripts/grok-recipe.mjs", "scripts/claude-skill.mjs", "src/openclaw/*.json", "package.json", "package-lock.json", "crewhouse"],
@@ -20,11 +20,11 @@
     "check": "tsc"
   },
   "dependencies": {
-    "@byokit/accounts": "0.28.2",
+    "@byokit/accounts": "0.30.0",
     "@byokit/cloud": "0.2.1",
     "@byokit/connect": "0.7.0",
-    "@byokit/discover": "0.8.4",
-    "@byokit/openclaw": "0.25.0",
+    "@byokit/discover": "0.8.5",
+    "@byokit/openclaw": "0.27.2",
     "@byokit/pair": "0.10.4",
     "@byokit/relay": "0.8.2",
     "@byokit/secrets": "0.5.2",

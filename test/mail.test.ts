@@ -83,6 +83,7 @@ test('mail-axi: what is new, a search, a conversation without its quoted history
   assert.equal(await runMail(token, ['search', 'from:school']), 'threads[1]{id,from,subject,age}:\n  18c0a1f00d2e3b4a,Sam <sam@home.example>,"Trip on Friday, forms",2h\ntotal: 1');
   assert.equal(await runMail(token, ['read', '18c0a1f00d2e3b4a']), [
     'subject: Trip on Friday, forms',
+    'source: https://mail.google.com/mail/u/0/#inbox/18c0a1f00d2e3b4a',
     'messages[2]{from,age}:', '  School Office <office@school.example>,2d', '  Sam <sam@home.example>,2h',
     'latest: Sam <sam@home.example>, 4 attached (mail attachments 18c0a1f00d2e3b4a)', 'body: |', '  Signed and sent.'].join('\n'), 'plain text first, and the quoted history left out');
   const long = await runMail(token, ['read', '18c0b2f00d2e3b4a']);

@@ -9,6 +9,7 @@ set -euo pipefail
 EV=${1:?evidence dir}
 REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d /tmp/crewhouse-verify.XXXXXX)
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
 mkdir -p "$EV/screens" "$LAB/home" "$LAB"/{state,crew,tools} "$LAB/run"
 PORT=$(/usr/bin/node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 
@@ -35,7 +36,7 @@ CREWD=$!
 for _ in $(seq 100); do kill -0 -- "-$CREWD" 2>/dev/null && break; sleep 0.05; done
 gone() { ! kill -0 -- "-$CREWD" 2>/dev/null; }
 drain() { kill "-$1" -- "-$CREWD" 2>/dev/null; for _ in $(seq 100); do gone && return; sleep 0.05; done; gone; }
-cleanup() { trap '' HUP INT TERM; drain TERM || drain KILL || { echo "crewd's group outlived KILL; keeping $LAB" >&2; return 1; }; rm -rf "$LAB"; }
+cleanup() { trap '' HUP INT TERM; drain TERM || drain KILL || { echo "crewd's group outlived KILL; keeping $LAB" >&2; return 1; }; crewhouse_remove_lab "$LAB"; }
 trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 
 B="http://127.0.0.1:$PORT"

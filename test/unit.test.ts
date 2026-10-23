@@ -534,7 +534,7 @@ test('limits: a limit pauses on that account and says so plainly; the person\'s 
   const c = delegated(crew, 'scout', 'one more').task;
   await settled(db, c);
   assert.equal(task(db, c).state, 'done');
-  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' ORDER BY seq DESC")!.data).account, 'chatgpt');
+  assert.equal(JSON.parse(db.get("SELECT data FROM events WHERE kind = 'run.started' AND bot = 'scout' ORDER BY seq DESC")!.data).account, 'chatgpt');
   // Signed in to nothing at all: the task waits for the person's own sign-in (nobody else's), and says so plainly.
   const signedIn = crew.accounts.signedIn;
   crew.accounts.signedIn = async () => false;
@@ -1310,11 +1310,11 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.ok(card(), 'a card, not a helper');
   assert.equal(crew.bot('property-pip'), undefined);
   const view = crew.snapshot().asks.find((a: any) => a.id === card()!.id)!;
-  assert.equal(view.detail.yes, 'Yes, bring Property Pip on');
+  assert.equal(view.detail.yes, 'Yes, bring Pip on');
   // The hire in a glance, never the five-part job: the role, what it can and can't do, its first job.
   const shown = A.card(view, crew.snapshot());
   assert.deepEqual([shown.status, shown.words, shown.lines, shown.choices.map((c: any) => c.label)], ['A new helper', 'Bring Property Pip onto the crew?',
-    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, bring Property Pip on', 'Not now']]);
+    ['Finds you a flat in Phuket.', 'Can look things up. Asks you before sending or spending.', 'First job: find me flats in Phuket under $900'], ['Yes, bring Pip on', 'Not now']]);
   assert.ok(!crew.snapshot().templates.some((x: any) => x.id === 'helper'), 'the base is never offered on its own');
 
   // Not now: nothing is made.
@@ -1357,7 +1357,7 @@ test('Chief makes up a new helper on a short card (or adapts one already on the 
   assert.equal(db.get('SELECT bot FROM tasks WHERE id = ?', t4)!.bot, 'chief');
   await settled(db, t4);
   const adapt = A.card(crew.snapshot().asks.find((a: any) => a.id === card()!.id)!, crew.snapshot());
-  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Give Property Pip this job?', 'Property Pip now finds you a flat or a room in Phuket.', ['Yes, give Property Pip the job', 'Not now']]);
+  assert.deepEqual([adapt.status, adapt.words, adapt.lines?.[0], adapt.choices.map((c: any) => c.label)], ['A new job', 'Give Property Pip this job?', 'Property Pip now finds you a flat or a room in Phuket.', ['Yes, give Pip the job', 'Not now']]);
   await crew.answer(card()!.id, { answer: 'allow' });
   assert.deepEqual([crew.snapshot().bots.length, crew.bot('property-pip')!.role, disk.readJob(crew['cfg'], 'property-pip').does], [crewSize, more.role, more.job.does], 'no new helper: Property Pip\'s role and job widen');
   assert.equal(readFileSync(join(dir, 'soul.md'), 'utf8'), '# Property Pip\n\nYou are Property Pip. Cheerful and quick.\n', 'who Property Pip is stays');

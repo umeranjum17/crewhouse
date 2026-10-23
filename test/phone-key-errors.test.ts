@@ -7,7 +7,7 @@ import { register } from 'node:module';
 import { reset } from './expo-fake.ts';
 
 register('./expo-hooks.mjs', import.meta.url);
-const { askPhone, phoneConnect, phoneExpired, phoneWords } = await import('../mobile/src/phone-only.ts');
+const { askPhone, phoneConnect, phoneExpired, phoneModels, phonePick, phonePlan, phoneSignOut, phoneSignedIn, phoneWords, PHONE_KEYS } = await import('../mobile/src/phone-only.ts');
 
 const realFetch = globalThis.fetch;
 const turns = [{ who: 'you' as const, text: 'Draft a note to Sam.' }];
@@ -32,7 +32,7 @@ async function failure(): Promise<Error & { code: string }> {
 
 beforeEach(async () => {
   reset();
-  await phoneConnect('sk-or-v1-test-key');
+  await phoneConnect(PHONE_KEYS[0], 'sk-or-v1-test-key');
 });
 afterEach(() => { globalThis.fetch = realFetch; });
 
@@ -61,4 +61,39 @@ test('a key the provider is rate limiting says to wait a minute, then send again
   assert.equal(error.code, 'rate_limited');
   assert.equal(phoneExpired(error), false);
   assert.equal(phoneWords(error), 'OpenRouter is busy with this key right now. Wait a minute, then send it again.');
+});
+
+test('a MiniMax key runs Chief on the MiniMax model the person picked, its refusals name MiniMax, and Sign out leaves no key', async () => {
+  await phoneConnect(PHONE_KEYS[1], 'sk-mm-test-key');
+  // MiniMax's live list for the key, as MiniMax answered it on 2026-10-22: the picker shows every one of them, unfiltered
+  // and undescribed, with one Recommended tag on the kit's fast model, which goes first.
+  const live = ['MiniMax-M3.1-Flash', 'MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5',
+    'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed', 'MiniMax-M2'];
+  let asked: { url: string; key: string | null } | undefined;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    asked = { url: String(url), key: new Headers(init?.headers).get('x-api-key') };
+    return Response.json({ data: live.map((id) => ({ id, display_name: id })) });
+  }) as typeof fetch;
+  const models = await phoneModels();
+  assert.deepEqual(asked, { url: 'https://api.minimax.io/anthropic/v1/models', key: 'sk-mm-test-key' });
+  assert.deepEqual(models.map((m) => m.id), live, 'every model MiniMax lists, in its order, none dropped');
+  assert.deepEqual(models.filter((m) => m.recommended).map((m) => m.name), ['MiniMax M3.1 Flash']);
+  // A list MiniMax will not give leaves the phone the one model it knows, the fast one, still recommended.
+  globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
+  assert.deepEqual((await phoneModels()).map((m) => [m.name, m.recommended]), [['MiniMax M3.1 Flash Preview', true]]);
+  await phonePick(models[1].id);
+  assert.equal(await phonePlan(), 'MiniMax M3');
+  let sent: { url: string; model: string } | undefined;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    sent = { url: String(url), model: JSON.parse(String(init?.body)).model };
+    return new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid api key' } }), {
+      status: 401, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+  const error = await failure();
+  assert.equal(error.code, 'key_refused');
+  assert.match(sent!.url, /^https:\/\/api\.minimax\.io\/anthropic\//);
+  assert.equal(sent!.model, 'MiniMax-M3');
+  assert.equal(phoneWords(error), 'MiniMax refused this key. Connect a key that works to keep chatting.');
+  await phoneSignOut();
+  assert.equal(await phoneSignedIn(), false);
 });

@@ -1,5 +1,4 @@
-// What a bot may do without asking. Safe work in its own space runs silently; sending, spending, deleting and touching the
-// person's own files stop for one plain sentence first. Decided here from the tool and its input, never by the model's words.
+// Effects come from the tool and its input, never the model's words: safe work runs silently; acting or touching the person's files asks.
 import { homedir } from 'node:os';
 import { basename, dirname, relative, resolve } from 'node:path';
 
@@ -39,7 +38,7 @@ export function acts(tool: string, input: Record<string, any>, e: Effect) {
 /** Always safe: they only touch the bot's own space, the web, or Crewhouse itself. bash runs in the sandbox. The
  *  crew's file tools are NOT here: a write outside the bot's folder asks, exactly as it always did. */
 const SAFE = new Set(['bash', 'web_search', 'web_fetch', 'crew_web_search', 'crew_web_fetch', 'memory_search', 'memory_get', 'view_image', 'pdf', 'image_generate',
-  'crew_connect', 'crew_signin', 'crew_unlock', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_slides', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_case', 'crew_profile']);
+  'crew_inspect', 'crew_connect', 'crew_signin', 'crew_unlock', 'crew_outcome', 'crew_report', 'crew_deliver', 'crew_workbook', 'crew_document', 'crew_slides', 'crew_video', 'crew_rule', 'crew_remember', 'crew_draft', 'crew_verify', 'crew_learn', 'crew_routine', 'crew_add_phone', 'crew_roster', 'crew_recruit', 'crew_routines', 'crew_status', 'crew_suggest', 'crew_create', 'crew_import', 'crew_call_me', 'crew_case', 'crew_profile']);
 /** The file tools keep their old names' effects under their crew_ names: same asks, same keys, same words. */
 const baseName = (tool: string) => tool.startsWith('crew_') ? tool.slice(5) : tool;
 // The browser AXI's commands: looking never asks, acting follows the "asks first" rules, anything else is refused
@@ -149,8 +148,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (['read', 'list', 'status'].includes(action)) return { kind: 'safe' };
     return { kind: 'refuse', why: 'Skills that write come from how you work, reviewed between jobs; keep one with crew_learn.' };
   }
-  // Composio's hosted tools (the engine's composio__<tool>): no read-only hint is known here, so every call asks.
-  if (tool.startsWith('composio__')) return { kind: 'send', words: `${s.bot} wants to use your Composio apps: ${tool.slice(10).replaceAll('_', ' ').toLowerCase()}.` };
+  // Only a clear read action is free. Mutation tokens and compound/unknown actions still ask, with no standing answer.
+  if (tool.startsWith('composio__')) {
+    const name = tool.slice(10), read = /^(?:[A-Z0-9]+_)?(FETCH|LIST|GET|SEARCH|READ|FIND)(?:_[A-Z0-9]+)*$/.test(name) && !/(^|_)(SEND|DELETE|CREATE|UPDATE|MODIFY|LABEL|TRASH|FORWARD|REPLY|SHARE|ARCHIVE|MARK|REMOVE|EXECUTE|AND|THEN)(_|$)/.test(name);
+    return read ? { kind: 'safe' } : { kind: 'send', words: `${s.bot} wants to use your Composio apps: ${name.replaceAll('_', ' ').toLowerCase()}.` };
+  }
   const app = s.apps?.[tool];
   if (app) {
     if (app.readOnly) return { kind: 'safe' };
@@ -242,14 +244,16 @@ export function toolWords(tool: string, input: Record<string, any>, ok = true): 
     case 'write': return `Saved ${file}`;
     case 'edit': return `Changed ${file}`;
     case 'ls': case 'find': case 'grep': return 'Looked through its files';
+    case 'inspect': return 'Looked inside a binary file';
     case 'bash': {
       const action = PROGRAMS[String(input.command ?? '').trim().split(/\s+/)[0]] ?? 'work in its own space', done = past(action);
       return ok ? done[0].toUpperCase() + done.slice(1) : `Couldn't ${action}`;
     }
-    case 'web_search': return `Searched the web for “${String(input.query ?? '').slice(0, 80)}”`;
+    case 'web_search': return `Tried a web search for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return ({ search: `Searched the email for “${String(input.args?.[1] ?? '').slice(0, 60)}”`, read: 'Read an email', attachments: Number(input.args?.[2]) ? 'Saved an attachment from an email' : 'Looked at an email’s attachments', draft: 'Drafted a reply to an email', label: 'Filed an email under a label' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the email';
+    case 'video': return ok ? `Looked at the video on ${host(input.url)}` : `Couldn't save the video from ${host(input.url)}`;
     case 'browser': return input.args?.[0] === 'goto' ? `Opened ${host(input.args[1])} in its browser` : 'Used its browser';
     case 'signin': return `Asked you to sign in to ${host(/^https?:/i.test(input.site) ? input.site : `https://${input.site}`)}`;
     case 'report': return String(input.text ?? '').trim().slice(0, 200); // the note names its own object; folds with it

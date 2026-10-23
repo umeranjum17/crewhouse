@@ -79,15 +79,6 @@ b { font-weight: 600; }
 .status-word i.needs { background: var(--pink); }
 .starter-row { min-height: 68px; }
 .starter-name { width: 100%; border: 0; border-radius: 0; background: transparent; padding: 0; font: 500 15px/22px var(--ui); outline-offset: 3px; }
-.thing-list { padding-top: 0; padding-bottom: 0; }
-.file-row { min-height: 60px; }
-.file-row .media { width: 48px; height: 40px; object-fit: cover; margin: 0; flex: none; border-radius: 10px; }
-/* A sheet or page row carries its own preview card: who made it and when sit under it, inside the row, not squeezed beside it. */
-.file-row:has(> .wb-card, > .doc) { flex-wrap: wrap; gap: 6px; }
-/* A media row's title sits over its meta line: names read in full and wrap cleanly, never crushed beside it. */
-.file-row .grow > b { display: block; overflow-wrap: anywhere; }
-.file-row > .wb-card, .file-row > .doc { flex: 1 0 100%; }
-.file-row:has(> .wb-card, > .doc) > .grow > b, .file-row:has(> .wb-card, > .doc) > .mute:last-child { display: none; }
 .file-chip { width: 36px; height: 40px; flex: none; display: grid; place-items: center; background: var(--soft); border-radius: 6px; color: var(--ok); font-size: 10px; font-weight: 600; }
 .routine-footnote { margin: 12px 4px 0; }
 .routine-switch { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); font-size: 12px; }
@@ -1068,6 +1059,8 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
    and ✕ takes one back. */
 .c-files { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 6px; }
 .c-file { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 5px 4px 5px 10px; border: 1px solid var(--line2); border-radius: 10px; background: var(--sunken); font: 500 12.5px/18px var(--ui); color: var(--ink); }
+.c-file:has(.c-thumb) { padding-left: 4px; }
+.c-thumb { flex: none; width: 40px; height: 40px; border-radius: 7px; object-fit: cover; }
 .c-file b { min-width: 0; font-weight: 600; }
 .c-file .mute { white-space: nowrap; }
 .c-file button { border: 0; background: none; color: var(--ink2); font-size: 13px; padding: 2px 6px; }
@@ -1092,7 +1085,7 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 
 .o-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--ink2); }
 /* A file's extension sits in the shared tile: four capitals at tile size, never cut. */
-.row-item .o-ic, .list-row .o-ic, .file-row .o-ic { font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.row-item .o-ic, .list-row .o-ic { font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 
 /* Settings on a phone: the places the desk rail reaches, one row each (B1 has no tab bar). */
 .go-to { color: inherit; text-decoration: none; min-height: 52px; font: 500 15px/20px var(--ui); }
@@ -1386,12 +1379,39 @@ h1 { font: 600 32px/36px var(--serif); letter-spacing: -.005em; }
 .home-chat .composer.has-bar:has(.c-files), .chat .dock .composer:has(.c-files) { flex-wrap: wrap; }
 .home-chat .composer > .c-files, .chat .dock .composer > .c-files { order: -2; }
 
-/* Chief's profile, one page (mock profile-b): a tight header, so Take control shows whole on the first phone screen. */
+/* Chief's profile (Stack J09c): a round back, then his portrait card in his blue; Routines, News and Instructions as
+   rows with a 17px title over a 16px line; on a computer a header bar, the portrait left and the rows right. */
 a.ch-art, .ch-name a { color: inherit; text-decoration: none; }
-.cp-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 0; }
-.cp-head .helmet { width: 64px; height: auto; flex: none; } /* the phone header's mascot (Chief's critter), crisp at 64px */
-.cp-head h1 { margin: 0; }
-.cp-head .lead { margin: 2px 0 0; }
+.st-profile.chief-profile .cp-back { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 20px 16px 16px; padding: 0 0 3px; border-radius: 50%; background: var(--soft); color: var(--ink); font-size: 30px; }
+.st-profile.chief-profile .st-profile-hero { margin: 0 16px; padding: 24px 20px 30px; border-radius: 32px; color: #FFFFFF; }
+.chief-profile .st-profile-hero h1 { margin: 0; font-size: 40px; }
+.chief-profile .st-profile-hero > p { margin: 10px 0 0; opacity: .85; font-size: 17px; }
+.st-profile.chief-profile .card.list { margin: 0; padding: 0 16px; border-radius: 22px; }
+.st-profile.chief-profile .card.list + .card.list { margin-top: 12px; }
+.st-profile.chief-profile .row-item { min-height: 64px; padding: 14px 0; gap: 14px; }
+.st-profile.chief-profile .row-item .grow { display: grid; gap: 2px; min-width: 0; }
+.st-profile.chief-profile .row-item b { font: 700 17px/1.3 Archivo, var(--ui); font-stretch: 105%; }
+.st-profile.chief-profile .row-item .grow > .mute { font-size: 16px; line-height: 1.35; }
+.st-profile.chief-profile .row-item .o-ic { width: 40px; height: 40px; border-radius: 12px; color: var(--ink); }
+.st-profile.chief-profile .row-item > .lucide { flex: none; color: var(--ink); }
+.st-profile.chief-profile .cp-trail { margin-top: 26px; }
+.cp-subhead .grow { display: grid; min-width: 0; }
+.cp-subhead .grow > b { font: 800 22px/1.15 Archivo, var(--ui); font-stretch: 112%; }
+.cp-subhead .grow > .mute { font-size: 16px; }
+.cp-subhead .back { margin: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--soft); padding: 0 0 3px; color: var(--ink); }
+.chief-profile .st-label { display: block; margin: 26px 4px 10px; font: 800 14px/1.3 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+@media (min-width: 900px) {
+  .st-profile.chief-profile .st-profile-layout { grid-template-columns: minmax(0, 1fr); }
+  .st-profile.chief-profile .st-profile-hero { margin: 0; }
+  .st-profile.chief-profile .cp-back { display: none; }
+  .chief-profile .st-profile-head h1 { margin: 0 0 2px; }
+  .chief-profile .st-profile-head .mute { font-size: 16px; }
+}
+@media (min-width: 1200px) {
+  .st-profile.chief-profile .st-profile-hero > .face { width: 112px !important; height: 112px !important; }
+  .st-profile.chief-profile .st-profile-hero h1 { font-size: 36px; }
+  .st-profile.chief-profile .st-profile-main { align-items: start; }
+}
 .chief-profile .label { margin: 18px 4px 8px; }
 .chief-profile .row-item { min-height: 44px; padding: 8px 0; text-align: left; }
 .chief-profile .row-item .small { display: block; }
@@ -1404,7 +1424,6 @@ a.ch-art, .ch-name a { color: inherit; text-decoration: none; }
 .peek-live.on { color: var(--go); }
 .peek-live.on::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 .cp-take { display: block; width: 100%; margin-top: 12px; }
-.cp-dot { display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--ok); vertical-align: 1px; }
 .screen-held { border-radius: 18px; box-shadow: 0 0 0 3px var(--go); }
 .hand-back { display: flex; flex-direction: column; gap: 10px; }
 .hand-back .btn { width: 100%; }
@@ -1431,6 +1450,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .chief-profile .file-chip[data-ext=PDF] { background: #8A8478; color: #fff; }
 .cp-none { display: flex; flex-direction: column; gap: 4px; border-style: dashed; }
 .cp-none b { color: var(--ink); }
+.st-profile.chief-profile .cp-none { align-items: flex-start; gap: 4px; padding: 18px 20px; border-radius: 22px; text-align: left; }
+.st-profile.chief-profile .cp-none b { font: 700 17px/1.3 Archivo, var(--ui); font-stretch: 105%; }
 
 /* Home, Stack (design C): the wide greeting, Chief's card with his line and box, then a card per crew member in their
    own colour (art.colourOf) with black words, and the jobs to hand over. Faces are Geo, each on its own black disc. */
@@ -1708,6 +1729,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .home-chat .chat .line.me { display: flex; flex-direction: column; align-items: flex-end; max-width: none; align-self: stretch; }
 .home-chat .chat .line:is(.them, .chief, .me) > .bubble-text { width: fit-content; max-width: 100%; padding: 12px 15px; border: 1px solid var(--line); border-radius: 20px 20px 20px 6px; background: var(--solid); color: var(--ink); font: 400 16px/1.4 Archivo, var(--ui); }
 .home-chat .chat .line.me > .bubble-text { max-width: 82%; border-color: transparent; border-radius: 20px 20px 6px 20px; background: var(--ink); color: var(--bg); }
+.home-chat .chat .line.reading > .bubble-text { border-left: 2px solid var(--ok); } /* the line a call reads aloud (.line.reading above, under the bubble's own border) */
 .home-chat .chat .hand-off .hand { gap: 12px; margin: 0; padding: 6px 18px 6px 6px; border: 0; background: var(--soft); font: 700 18px/1.2 Archivo, var(--ui); font-stretch: 108%; }
 .home-chat .chat .hand b { font-weight: inherit; }
 .home-chat .chat .hand .hand-word { font-size: 16px; font-weight: 600; }
@@ -1732,6 +1754,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .home-chat .chat .dock .composer, .home-chat .chat .dock .composer.has-bar { flex-wrap: nowrap; align-items: center; gap: 6px; min-height: 54px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--solid); }
 .home-chat .chat .dock .composer textarea { flex: 1 1 0; min-width: 0; order: 0; min-height: 0; padding: 9px 0; border-radius: 0; background: none; font: 400 16px/24px Archivo, var(--ui); }
 .home-chat .chat .dock .c-bar { flex: none; order: -1; }
+/* Picked files take their own row above the box here too: nowrap above pushed the words, + and Send off the screen. */
+.home-chat .chat .dock .composer:has(> .c-files) { flex-wrap: wrap; }
 .home-chat .chat .dock .mic { margin: 0; }
 .home-chat .chat .dock .send-away { bottom: calc(100% + 1px); } /* the box's border is its own: the held line sits wholly above it */
 .home-chat .chat .dock .send { width: 42px; height: 42px; border-radius: 13px; background: var(--ink); color: var(--bg); }
@@ -1756,6 +1780,10 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .stack-ask .hire-head { gap: 12px; }
 .chat .card.ask.stack-ask .hire-head > .face { display: inline-grid; }
 .card.ask.stack-ask .hire-head b, .chat .card.ask.stack-ask .hire-head b { display: block; color: #0B0B0B; font: 800 26px/1.05 Archivo, var(--ui); font-stretch: 125%; overflow-wrap: anywhere; }
+/* A helper's name is one line (A069): it shrinks to fit its column, down to 20px, rather than break "Research Rae". */
+.stack-ask .hire-head .grow, .approve .hire-head .grow { container-type: inline-size; min-width: 0; }
+.card.ask.stack-ask .hire-head b.hire-name, .chat .card.ask.stack-ask .hire-head b.hire-name { white-space: nowrap; font-size: clamp(20px, calc(100cqi / (var(--n) * .86)), 26px); }
+.approve .hire-head b.hire-name { white-space: nowrap; font-size: clamp(20px, calc(100cqi / (var(--n) * .86)), 30px); }
 .stack-ask .hire-role { margin-top: 4px; color: inherit; font: 600 16px/1.4 Archivo, var(--ui); }
 .card.ask.stack-ask .ev { padding: 0; margin: 0; border-radius: 0; background: none; color: inherit; font: inherit; gap: 8px; }
 .stack-ask .hire-sect { margin-top: 12px; font: 800 14px/1.4 Archivo, var(--ui); letter-spacing: .08em; color: inherit; opacity: .7; }
@@ -1777,6 +1805,11 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .card.ask.stack-ask .more-dots { display: grid; width: 44px; flex: none; padding: 0; }
 .card.ask.stack-ask .btns:not(:has(.more-act ~ .more-act)) .more-dots { display: none; }
 .card.ask.stack-ask .ask-words { font: 700 24px/1.1 Archivo, var(--ui); font-stretch: 112%; color: inherit; }
+/* A video's quality pick: the radio rows of the model picker, in the card's own colour. */
+.stack-ask .pick { border: 0; background: rgba(0,0,0,.1); color: inherit; font: 700 16px/1.3 Archivo, var(--ui); }
+.stack-ask .pick.on { box-shadow: 0 0 0 2px currentColor inset; }
+.stack-ask .pick .radio, .stack-ask .pick.on .radio { border-color: currentColor; }
+.pick-size { flex: none; font-weight: 400; }
 .card.ask.stack-ask .ask-note, .card.ask.stack-ask .small { font: 400 16px/1.4 Archivo, var(--ui); color: inherit; text-align: left; }
 .card.answered { font: 400 16px/1.4 Archivo, var(--ui); max-width: 640px; overflow-wrap: anywhere; }
 .card.answered.receipt .receipt-what { overflow: visible; white-space: normal; }
@@ -1839,6 +1872,41 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .wb-made .wb-thumb.leaf .ln { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; color: inherit; opacity: .78; font-weight: 600; }
 .wb-made .wb-open { min-height: 50px; display: grid; place-items: center; border: 0; border-radius: 16px; background: #000; color: #FFF; font: 700 16px/1.2 var(--ui); }
 .wb-made.wb-chief { color: #F7F7FB; }
+/* Your things (Stack J07a): a round Back over the wide title on a phone, then each file as its maker's colour card
+   (face, name, kind, maker and time, a peek, a black Open) under Today, Yesterday and Earlier. On a computer a header
+   bar with the search box, two cards a row, and the newest sheet or page open in the column beside. */
+.st-things .st-head { flex-wrap: wrap; padding-top: 0; }
+.st-things .st-head > .grow { flex-basis: 100%; display: grid; gap: 10px; }
+.st-things h1.wide { margin: 14px 0 0; font-size: 40px; line-height: 1.02; }
+.st-back { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--soft); color: var(--ink); }
+.st-search { display: none; }
+.st-made { display: grid; gap: 8px; margin: 0 -4px; }
+.st-things .st-empty { margin-top: 26px; }
+.wb-peek .wb-panel { width: auto; height: auto; padding: 0; gap: 12px; border: 0; border-radius: 0; box-shadow: none; background: none; overflow: visible; }
+.wb-peek .wb-reading { overflow: visible; }
+.wb-peek .btn.wb-down { width: 100%; min-height: 50px; justify-content: center; }
+.wb-file { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: var(--ink); }
+.wb-file .wb-what b { font-size: 16px; }
+.wb-file > .wb-ic { width: 52px; font-size: 12px; }
+/* The peek shows a sheet's first three columns, as the card's corner does; the file page holds them all. */
+.wb-peek .wb-sheet :is(th, td):nth-child(n+4) { display: none; }
+.wb-made .wb-thumb i { white-space: nowrap; }
+@media (max-width: 899px) { .st-made .wb-thumb.leaf { display: none; } }
+@media (min-width: 900px) {
+  .page.st-things { max-width: none; width: 100%; padding: 0; }
+  .st-things .st-head { flex-wrap: nowrap; min-height: 76px; padding: 12px 28px; border-bottom: 1px solid var(--line); }
+  .st-things .st-head > .grow { flex-basis: auto; gap: 4px; }
+  .st-things h1.wide { margin: 0; font-size: 26px; line-height: 1.1; }
+  .st-things .st-back { display: none; }
+  .st-search { display: flex; align-items: center; gap: 8px; width: 340px; flex: none; min-height: 54px; padding: 0 16px; border-radius: 18px; background: var(--solid); border: 1px solid var(--line); color: var(--mute); }
+  .st-search:focus-within { border-color: var(--mute); }
+  .st-search input { flex: 1; min-width: 0; height: 50px; border: 0; background: none; color: var(--ink); font-size: 16px; outline: none; }
+  .st-search input::placeholder { color: var(--mute); opacity: 1; }
+  .st-things .st-pri > section:first-child .st-label { margin-top: 0; }
+  .st-made { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; }
+  .st-made .wb-thumb i { padding: 8px 6px; }
+  .st-peek .st-label { margin: 0 0 4px; }
+}
 /* A job just finished, in Chief's thread (Stack J16a): the maker's colour, a big face, Done., the thread's own words, a
    peek, then a black Open it beside a quiet Later. Centred on a phone; on a computer the face sits beside the words. */
 .line .wb-made { height: auto; max-width: 480px; margin-top: 10px; }
@@ -1863,6 +1931,39 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .trust-card p { margin: 0; color: var(--ink2); }
 .trust-card b { color: var(--ink); }
 .settings .go-to .small { display: block; }
+/* The hub (J09a): one header bar on a computer; the rows at the Stack size, a 40px tile, a 17px title over a 16px line,
+   with the lines running the card's full width. A phone reads You and Connected as one card, then Look, full width. */
+.settings.hub .st-head .back { margin: 0; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--soft); padding: 0 0 3px; font-size: 30px; color: var(--ink); }
+.settings.hub .trust-card { margin-top: 18px; padding: 18px 20px; border-radius: 22px; font-size: 16px; line-height: 1.4; }
+.settings.hub .trust-card b { display: block; }
+.settings.hub .trust-card .o-ic { width: 24px; height: 24px; background: none; color: var(--ink); }
+.settings.hub .go-tos { margin: 0; padding: 0; border-radius: 22px; overflow: hidden; }
+.settings.hub .go-to { min-height: 66px; padding: 12px 16px; gap: 14px; color: inherit; text-decoration: none; }
+.settings.hub .go-to b { font: 700 17px/1.3 Archivo, var(--ui); font-stretch: 105%; }
+.settings.hub .go-to .small { font-size: 16px; line-height: 1.35; }
+.settings.hub .go-to .o-ic { width: 40px; height: 40px; border-radius: 12px; color: var(--ink); font-size: 17px; }
+.settings.hub .seg { display: flex; width: 100%; padding: 4px; border-radius: 16px; }
+.settings.hub .seg button { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 0 8px; border-radius: 12px; white-space: nowrap; font: 700 16px/1.2 Archivo, var(--ui); }
+.settings.hub .set-more .label { margin: 26px 4px 10px; font: 800 14px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.settings.hub .set-more .card { border-radius: 22px; }
+.settings.hub .set-more, .settings.hub .set-more .small { font-size: 16px; }
+.set-cols .st-label { margin: 26px 4px 10px; }
+@media (max-width: 899px) {
+  .settings.hub .st-head { flex-direction: column; align-items: flex-start; }
+  .settings.hub .st-head h1 { font-size: 40px; line-height: 1; }
+  .set-cols { display: flex; flex-direction: column; margin-top: 12px; }
+  .set-col { display: contents; }
+  .set-cols .st-label.desk-only { display: none; }
+  .set-you { order: 1; border-bottom: 0; border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+  .set-con { order: 2; border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
+  .set-con > .go-to:first-child { border-top: 1px solid var(--line); }
+  .set-look { order: 3; }
+  .set-more { order: 4; }
+}
+@media (min-width: 900px) {
+  .settings.hub .trust-card { margin-top: 0; padding: 20px 24px; }
+  .set-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
+}
 .settings.sub .chat-head { padding-top: 12px; }
 .settings.sub .back, .settings > .back.phone-only { margin: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--soft); padding: 0 0 3px; }
 .settings.sub .chat-head b { font: 700 18px/1.2 var(--ui); }
@@ -1953,13 +2054,15 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 @media (min-width: 900px) { .fr-h { font-size: clamp(44px, 4.4vw, 64px); } }
 /* watch a helper (J15) */
 .card.screen { border-radius: 28px; }
-.screen-h { font: 800 22px/1.15 Archivo, sans-serif; font-stretch: 125%; }
+.screen-h { flex: 1 1 auto; font: 800 22px/1.15 Archivo, sans-serif; font-stretch: 125%; }
 .screen-hand { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 0; font: 400 16px/1.45 var(--ui); color: var(--mute); }
 .screen-hand svg { flex: none; margin-top: 2px; }
 .screen-btns .btn { min-height: 52px; border-radius: 18px; font-size: 16px; }
 .screen-btns .btn:nth-child(2) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .screen-btns .btn:nth-child(n+3) { background: var(--soft); border-color: transparent; }
-.card.screen > .row { margin-bottom: 12px; }
+.card.screen > .row { flex-wrap: wrap; margin-bottom: 12px; }
+.screen-hand + .screen-held, .screen-held ~ .hand-back { margin-top: 14px; }
+.st-screen.page { width: 100%; }
 .btn.soft { background: var(--soft); border-color: transparent; }
 
 /* Stack J05c What happened, J05d Add a helper, J06a the crew room. */
@@ -2063,3 +2166,17 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .room-page.st-helper-chat .chat .line.standup .bubble-text.helper-bubble { background: var(--soft); border: 2px solid var(--line2); }
 .model-pick { width: 100%; max-height: min(34vh, 280px); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
 .model-pick .pick .grow { min-width: 0; overflow-wrap: anywhere; }
+/* How Chief works (Stack J09d): who he is and what he never does as plain cards, then Change it, full width on a
+   phone; on a computer his face heads the page with Change it beside, and the two cards sit side by side. */
+.chief-works .cw-card { display: grid; gap: 12px; padding: 20px 22px; border-radius: 28px; }
+.chief-works .cw-card p { margin: 0; font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
+.chief-works .btn.cw-change { width: 100%; min-height: 54px; margin-top: 20px; border: 0; border-radius: 18px; background: var(--soft); color: var(--ink); font: 700 17px/1.2 var(--ui); }
+@media (min-width: 900px) {
+  .page.chief-works { max-width: none; width: 100%; padding: 0; }
+  .chief-works > .detail { max-width: none; padding: 24px 28px; }
+  .chief-works .chief-profile .st-label { margin-top: 0; }
+  .chief-works > .sticky-top { display: none; }
+  .chief-works .st-profile-head { align-items: center; gap: 14px; }
+  .chief-works .btn.cw-change { width: auto; margin: 0; padding: 0 22px; min-height: 50px; }
+  .chief-works .cw-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+}

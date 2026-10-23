@@ -28,7 +28,7 @@ MASK=(env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_
 "${MASK[@]}" "$NODE" src/tools.ts install documents 2>&1 | tail -2 | tee -a "$EV/transcript.txt"
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 . scripts/verify/crewd-group.sh
-trap 'chrome-devtools-axi stop >/dev/null 2>&1 || true; crewd_stop || exit 1; { chmod -R u+w "$LAB"; rm -rf "$LAB"; } >/dev/null 2>&1 || true' EXIT
+trap 'chrome-devtools-axi stop >/dev/null 2>&1 || true; crewhouse_remove_lab "$LAB" >/dev/null 2>&1 || true' EXIT
 crewd_start . "$EV/crewd.log" "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts
 B="http://127.0.0.1:$PORT"
 for _ in $(seq 600); do [ -s "$LAB/state/person.key" ] && curl --max-time 10 -fsS -o /dev/null -H x-crewhouse:1 -H "Authorization: Bearer $(<"$LAB/state/person.key")" "$B/api/state" 2>/dev/null && break; sleep 0.2; done

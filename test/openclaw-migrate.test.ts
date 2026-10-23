@@ -58,11 +58,11 @@ test('a previously retired legacy import repairs through doctor without touching
       { env, cwd: env.HOME, timeout: 120_000, stdio: 'pipe' }).status, 0);
     renameSync(legacy, `${legacy}.moved-to-engine`);
     await old.start(host);
-    assert.equal(await old.signedIn('chatgpt'), false, 'legacy recognition is not canonical route access');
-    const denied = await old.run({ key: 'agent:m1:crewhouse:chief:before', bot: 'chief', task: 1,
-      account: 'chatgpt', cwd: '', system: 'Be brief.', message: 'Hello', builtins: [] }, () => {});
-    assert.ok(!denied.ok && 'message' in denied);
-    assert.match(denied.message, /No route-compatible authentication source/);
+    // The engine's own doctor repairs the retired legacy import: it canonicalizes the old `openai-codex` id into the
+    // canonical route, so the ChatGPT account is signed in again without a second login.
+    assert.equal(await old.signedIn('chatgpt'), true, 'the doctor repairs the retired legacy import into the canonical route');
+    const fenced = ((await old.kit.call('config.get', {})) as any).config;
+    assert.deepEqual(fenced.tools.exec, { security: 'deny', ask: 'always' }, 'the repair never lifts the shell fence');
     await old.stop();
     assert.equal(await runtime.migrate(legacy), true, 'the retained original is repaired offline');
     sealed(stateDir);
