@@ -62,7 +62,9 @@ import { join } from 'node:path';
 // Raised 7261 -> 7361 for native standing-helper delegation (ch-teams-f4-native-delegation, owner exception,
 // firstmate inbox 005, 20 Oct): at most +100 net src for this first slice. Legacy deletion is tracked as
 // ch-teams-f4-legacy-delegation-delete; no silent ceiling increase or relocated implementation.
-const BUDGET = 7361;
+// Raised 7361 -> 7394 for confirmed custom rules (A021, owner exception, 23 Oct): +33 net src,
+// within the explicitly approved +50. Separate rule storage, confirmation, context and scripted proof replies.
+const BUDGET = 7394;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

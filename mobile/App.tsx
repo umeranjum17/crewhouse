@@ -1551,7 +1551,7 @@ function Land({ go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -1712,7 +1712,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {!c.hire && <T style={s.askWords}>{question}</T>}
       {edit.box || (c.kind === 'routine' && c.lines ? <View style={{ gap: 4, marginTop: 8 }}>{c.lines.map((l: string, i: number) =>
         <T key={i} tone={i ? 'mute' : 'ink2'} style={i ? s.small : { fontSize: 15, lineHeight: 24 }}>{l}</T>)}</View>
-        : <AskEvidence c={c} open={false} readAll={<Link label="Read all" onPress={() => open(c)} />} />)}
+        : <AskEvidence c={c} open={!!c.rule} readAll={<Link label="Read all" onPress={() => open(c)} />} />)}
       {c.mailTo && <MailSetup c={c} canAct={canAct && !offline} done={onDone} />}
       {oops && <T tone="pinkInk" style={s.small}>{c.mailSend ? 'Sending was not confirmed. Check Gmail before doing anything else.' : "That didn't go through. Try again."}</T>}
       {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T>
@@ -1777,8 +1777,9 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
 
 /** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). An approval
  *  outcome instead reads as one muted row, the action in plain words left and the outcome word right. */
-function AnsweredRow({ line, what, word }: { line?: string; what?: string; word?: string }) {
+function AnsweredRow({ line, what, word, rule }: { line?: string; what?: string; word?: string; rule?: string }) {
   const t = useLook();
+  if (rule) return <Card><T style={s.semi}>Custom rule · {word}</T><T>{rule}</T><T tone="ink2">{line}</T></Card>;
   if (word !== undefined) return <View style={{ paddingLeft: 70, marginTop: -2 }}>
     <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, backgroundColor: t.night ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9 }}>
       <T tone="mute" lines={1} style={[s.small, { flex: 1, minWidth: 0 }]}>{what}</T>
@@ -2178,7 +2179,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
           </View>}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>
           {(slots.before.get(i) ?? []).map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-          {(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
+          {(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />)}
           {(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} go={go} />)}
           {l.id === mark.current && <View style={s.newDivider} accessibilityRole="header"><View style={[s.newDividerLine, { backgroundColor: t.line }]} /><T style={[s.newDividerText, { color: t.pink }]}>New</T><View style={[s.newDividerLine, { backgroundColor: t.line }]} /></View>}
           {dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
@@ -2224,7 +2225,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         </View>}
         {canAct && !!last?.choices.length && <View style={s.chips}>{last.choices.map((c) => <Btn key={c} label={c} onPress={() => send(c)} />)}</View>}
         {slots.tail.map((c) => <AskCard key={c.id} c={c} who={h} state={state} onDone={refresh} canAct={canAct} offline={offline} open={open} />)}
-        {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
+        {receiptSlots.tail.map((r) => <AnsweredRow key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />)}
       </ScrollView>
       {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
@@ -2856,6 +2857,19 @@ function BubbleRow({ grant }: { grant: Grant }) {
 /** The places the desk's rail reaches, listed first in Settings on the phone (web/src/main.tsx GO_TO): no tab bar. */
 const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew'],
   ...(cloudOn ? [['computer', A.computer(null).title, null] as [Route['view'], string, null]] : [])];
+function CustomRules({ writer }: { writer: boolean }) {
+  const t = useLook(), [rules, setRules] = useState<string[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [error, setError] = useState('');
+  const load = async () => { try { setRules((await api.rules()).rules); setError(''); } catch (e) { setError((e as Error).message); } };
+  useEffect(() => { void load(); }, []);
+  const save = (next: string, old: string) => void attempt(async () => { await api.setRule(next, old); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
+  return <><Label>Custom rules</Label><T tone="ink2">Rules you confirmed with Chief. Every helper reads them before a job. These do not change safety checks.</T>
+    {!!error && <T>{error}</T>}
+    {rules.length ? rules.map((rule) => <Card key={rule}>{editing === rule ? <>
+      <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 120 }]} value={text} onChangeText={setText} multiline maxLength={1000} accessibilityLabel="Edit rule" />
+      <View style={s.chips}><Btn go label="Save changes" disabled={!text.trim() || !writer} onPress={() => save(text, rule)} /><Btn label="Cancel" onPress={() => setEditing(null)} /></View>
+    </> : <><T>{rule}</T>{writer && <View style={s.chips}><Btn label="Edit" onPress={() => { setEditing(rule); setText(rule); }} /><Btn ghost label="Remove" onPress={() => save('', rule)} /></View>}</>}</Card>) : !error && <T tone="mute">No custom rules yet. Tell Chief how you want the crew to work.</T>}
+  </>;
+}
 function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget, onClear }: { grant: Grant; status: Status; person: Json; writer: boolean; refresh: () => void; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
   const t = useLook();
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
@@ -2913,6 +2927,7 @@ function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget,
         return v ? <Pressable key={label} onPress={() => go({ view: v })} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [s.listRow, edge, pressed && { opacity: 0.6 }]}>{body}</Pressable>
           : <View key={label} style={[s.listRow, edge]}>{body}</View>;
       })}</View>
+      <CustomRules writer={writer && status === 'online'} />
       <Label>Your AI accounts</Label>
       <PhoneAccounts />
       {Platform.OS === 'android' && <StatusBarRow />}

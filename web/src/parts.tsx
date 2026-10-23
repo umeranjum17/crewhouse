@@ -808,7 +808,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { pla
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -961,7 +961,8 @@ function MoreSheet({ title, sub, acts, onClose }: { title: string; sub?: string;
  *  An approval outcome instead reads as one muted pill, the action in plain words on the left and the outcome word on
  *  the right ("Placed the order at shop.example   Allowed"), like the reference. A kept memory's own line carries the
  *  way to take it back as an inline text button on the same line. */
-export function AnsweredCard({ line, what, word, undo }: { line?: string; what?: string; word?: string; undo?: () => void }) {
+export function AnsweredCard({ line, what, word, rule, undo }: { line?: string; what?: string; word?: string; rule?: string; undo?: () => void }) {
+  if (rule) return <div className="card rule-receipt" role="status"><b>Custom rule · {word}</b><p>{rule}</p><a className="link" href="#/settings/rules">{line}</a></div>;
   if (word !== undefined) return <div className="card answered receipt" role="status"><span className="receipt-what">{what}</span><span className="receipt-word">{word}</span></div>;
   return <div className="card answered" role="status">{line}{undo && <> <button className="link saved-undo" onClick={undo}>Undo</button></>}</div>;
 }
@@ -1105,7 +1106,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
       <AskHead c={c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}
       {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
-        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={false} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={!!c.rule} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
       {away ? <p className="mute small">You can answer once the home computer is back.</p> : c.kind === 'routine' ? (
         <>
@@ -1148,6 +1149,8 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
             deny && { label: deny.label, cls: 'ghost', run: () => act(deny.body) },
             remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
         </div>
+      ) : c.rule ? (
+        <div className="btns"><button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>{deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}</div>
       ) : yes ? (
         <div className="btns">
           <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>

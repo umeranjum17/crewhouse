@@ -21,6 +21,9 @@ function calls(text: string) {
 
 const GOLDEN: Record<string, string> = {
   hi: 'Hi. What would you like to work on?',
+  'From now on, only prepare drafts. I will send messages myself.': 'Check this rule before I save it. [tool crew_rule {"text":"Only prepare drafts. I will send messages myself."}]',
+  'From now on, always write long replies.': 'Check this rule before I save it. [tool crew_rule {"text":"Always write long replies."}]',
+  'Write a draft reply to Alex.': 'The reply is a draft. Nothing was sent. [tool crew_write {"path":"files/reply.txt","content":"Thanks, Alex. I will reply tomorrow. — Umer"}] [tool crew_draft {"path":"files/reply.txt","channel":"message","to":"Alex"}]',
   'how do i pair my computer with you?': 'Open Add a phone on your computer and scan its code with your phone.',
   'i want to market my app': 'I can help market it. Send the site so I can see the product and audience before drafting a plan.',
   'https://trymuxr.com/': 'muxr lets developers manage coding agents from their phone. I’ll map the audience, focus on developer communities and founder posts, then ask Research Rae and Writer Will for first drafts. Nothing will be posted.',

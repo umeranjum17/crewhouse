@@ -8,6 +8,18 @@
     ],
     "result": "The ask card's own top is inside the thread box at 390 and 1440, day and night: the card is never hidden behind the composer"
   },
+  "custom-rules": {
+    "start": "Umer on a private real crewd, stub engine, no rules",
+    "steps": [
+      "Chief shows a Confirm custom rule card with the full rule text, Create rule and Cancel; nothing is saved",
+      "Create rule: Saved card and settings link",
+      "Cancel another rule: Cancelled card, original rule unchanged",
+      "Cancel an edit, then save the edited rule in Settings, Custom rules",
+      "Scripted helper produces a draft, not a send; integration test checks its actual run context",
+      "Restart crewd: edited rule survives"
+    ],
+    "result": "Confirmed custom-rule lifecycle and helper draft, with separate unchanged safety approvals. No real model, mailbox or send."
+  },
   "cloud-screen": {
     "start": "the phone app with the cloud on, a boat.dev account with no computer (the kit's fake boat.dev, Chief's own host behind it on the stub engine)",
     "steps": [

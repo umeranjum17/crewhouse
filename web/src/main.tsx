@@ -47,7 +47,7 @@ function parseRoute(): Route {
   if (a === 'routines' && /^\d+$/.test(b ?? '')) return { view: 'routines', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
-  if (a === 'settings' && ['you', 'memory', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
+  if (a === 'settings' && ['you', 'memory', 'rules', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
   return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
@@ -729,7 +729,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           // An answered card's muted outcome shows just above this line, in time order (A.receiptSlots).
           const before = [
             ...(slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh)),
-            ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />),
+            ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />),
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
@@ -759,7 +759,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {id === 'chief' && A.firstChips(lines, state) && <FirstTry state={state} send={send} />}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
-        {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
+        {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
@@ -1686,6 +1686,20 @@ function SettingsPage({ title, children }: { title: string; children: React.Reac
 const HubRow = ({ href, tile, title, says }: { href: string; tile: React.ReactNode; title: string; says: string }) =>
   <a href={href} className="row-item go-to"><span className="o-ic">{tile}</span><span className="grow"><b>{title}</b><div className="mute small">{says}</div></span><Icon name="next" /></a>;
 
+function CustomRules({ tick }: { tick: number }) {
+  const [rules, setRules] = useState<string[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [error, setError] = useState('');
+  const load = useCallback(async () => { try { setRules((await api.rules()).rules); setError(''); } catch (e) { setError((e as Error).message); } }, []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const save = (next: string, old: string) => void attempt(async () => { await api.setRule(next, old); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
+  return <><p>Rules you confirmed with Chief. Every helper reads them before a job.</p><p className="mute">These do not change safety checks or give permission to send, spend or delete.</p>
+    {error && <p role="alert">{error}</p>}
+    {rules.length ? rules.map((rule) => <div className="card" key={rule}>{editing === rule ? <form onSubmit={(e) => { e.preventDefault(); save(text, rule); }}>
+      <label className="label">Edit rule<textarea className="input" aria-label="Edit rule" maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} rows={5} /></label>
+      <div className="btns"><button className="btn go" disabled={!text.trim()}>Save changes</button><button className="btn" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
+    </form> : <><p>{rule}</p><div className="btns"><button className="btn" onClick={() => { setEditing(rule); setText(rule); }}>Edit</button><button className="link" onClick={() => save('', rule)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
+    <a className="btn" href="#/chief">Talk to Chief</a></>;
+}
+
 function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & { look: string; setLook: (l: string) => void; tab?: string }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const [lines, setLines] = useState<number | null>(null), [phones, setPhones] = useState<Json[] | null>(null);
@@ -1695,6 +1709,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   const mine = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready'), on = A.apps(state).filter((a) => a.on);
   const signingSheet = signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />;
   if (tab === 'you') return <SettingsPage title="You"><You state={state} act={act} plan={A.planName(accounts)} /><Money state={state} refresh={refresh} /></SettingsPage>;
+  if (tab === 'rules') return <SettingsPage title="Custom rules"><CustomRules tick={tick} /></SettingsPage>;
   if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
   if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />{signingSheet}</SettingsPage>;
   if (tab === 'phones' && !paired) return <SettingsPage title="Phones"><Phones tick={tick} /></SettingsPage>;
@@ -1712,6 +1727,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
             <div className="st-label desk-only"><span>You</span></div>
             <div className="card list go-tos set-you">
               <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
+              <HubRow href="#/settings/rules" tile={<Icon name="lock" />} title="Custom rules" says="How you want the crew to work" />
               <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
             </div>
             <div className="st-label set-look"><span>Look</span></div>

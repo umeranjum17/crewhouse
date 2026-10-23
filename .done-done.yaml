@@ -68,6 +68,8 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
   event-routines:
     command: 'PWA=1 timeout -k 10 900 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/event-routines.mjs "$DONE_DONE_EVIDENCE_ROOT" && timeout -k 10 300 node scripts/test.mjs test/event-routines.test.ts > "$DONE_DONE_EVIDENCE_ROOT/event-routines-test.log" 2>&1'
+  custom-rules:
+    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" bash scripts/verify/custom-rules.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chief-soul:
     command: 'timeout -k 10 600 bash scripts/verify/chief-soul.sh "$DONE_DONE_EVIDENCE_ROOT"'
   ask-in-view:
