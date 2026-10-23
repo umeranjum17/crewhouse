@@ -467,5 +467,18 @@
       "Install Crewhouse from Settings and open Chief's profile, Settings, Your things and How Chief works in the installed window"
     ],
     "result": "Chief's profile is the blue portrait card with Routines, News and Instructions, the portrait left and the rows right on a computer; How Chief works says who Chief is and what he never does in two plain cards with Change it; Settings shows one card then Look on a phone and two columns on a computer; each hire card names the helper on one line and says Yes, bring Ivy on; Your things shows Ivy's sheet and Will's letter as colour cards with the sheet open beside on a computer, the search for letter leaves the letter alone, and Open shows Your invoices read-only with its Invoices and Paid pills; Rae's face moves while she works and stands still under Reduce Motion; the installed window shows the same pages, standalone, with no install row"
+  },
+  "chief-profile": {
+    "start": "a fresh crew on the stub engine for Umer: Chief alone, his computer switched off for the first look; then his computer back, Writer Will on the crew and a Morning digest routine",
+    "steps": [
+      "Open Chief's profile with no computer in the crew, on a phone and on a computer, by day and by night",
+      "Give Chief his computer back, then tap Chief's name in his thread",
+      "Scroll Chief's profile to Computer on a phone and on a computer, by day and by night",
+      "Tap Take control",
+      "Open Chief's screen on a phone and on a computer while you have control",
+      "Tap Hand it back",
+      "Install Crewhouse from Settings and open Chief's profile in the installed window"
+    ],
+    "result": "With no computer the profile's Computer section says No computer yet in plain words; tapping Chief's name opens his profile: the blue portrait card, Routines with Morning digest and Add a routine, and Computer with Chief's live screen and Take control; Take control opens Chief's screen saying You have control, the screen outlined, with Hand it back, and the controls are the person's; Hand it back gives them to Chief again and the screen offers Take control; the installed window shows the same profile, standalone"
   }
 }

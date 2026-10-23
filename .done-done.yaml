@@ -50,6 +50,12 @@ journeys:
   stack-design:
     timeout: 20m
     command: 'PATH="/usr/bin:$PATH" timeout -k 10 1100 bash scripts/verify/stack-design.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief's profile from his hero (mock profile-b on the final Stack): no computer (its empty state), then Chief's own
+  # live with Take control, You have control and Hand it back, at 390 and 1440, day and night, and in the installed
+  # app (docs/verification/chief-profile.md).
+  chief-profile:
+    timeout: 15m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 850 bash scripts/verify/chief-profile.sh "$DONE_DONE_EVIDENCE_ROOT"'
   delivered-files:
     command: 'timeout -k 10 600 bash scripts/verify/files-gate.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   workbook-chart:

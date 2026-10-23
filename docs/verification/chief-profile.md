@@ -12,10 +12,13 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
   computer a header bar ("Chief's profile") with the portrait left and the rows right, no back.
 - Routines: the first two of `A.routines`, each with its switch; "See all N" past two; "Add a routine" opens the
   Routines screen, where Talk to Chief takes the routine in plain words.
-- Computer (under Instructions, only while a helper has one): a live, watch-only look at the crew member on a
-  computer ("Penny is using it" while it works), and the whole **Take control** button. Take control holds the computer and lands on that
-  helper's Screen: "You have control", the screen outlined, "Penny is paused until you hand it back.", a note and a
-  big **Hand it back**; Hand it back returns the controls (`bot.controls` back to `bot`).
+- Computer (right under Routines, as in profile-b): a live, watch-only look at the computer you hold or a helper is on
+  ("Penny is using it" while it works), else Chief's own ("Chief's computer"), else the first helper's, and the whole
+  **Take control** button. Take control holds that computer and lands on its Screen (`#/h/<id>/screen`, Chief's
+  included): "You have control", the screen outlined, "Penny is paused until you hand it back.", a note and a big
+  **Hand it back**; Hand it back returns the controls (`bot.controls` back to `bot`). With no computer in the crew the
+  section says "No computer yet" and why (what this machine is missing for one, or that no one has one); it never
+  fakes a screen.
 - A computer that stopped any way (idle stop, crewd restarted or killed) starts again with no "Restore pages?"
   bubble: the start path clears the profile's crash mark (`test/desktop.test.ts`, "give back…" pins it).
 - "Take control" / "Hand it back" everywhere: helper Details' Screen card, the stuck-helper line, the phone.
@@ -36,6 +39,11 @@ hero (helmet or name) or the desk's "Chief's profile" link. Approved mocks: `chi
   an ask ([crew-list.md](crew-list.md)).
 
 ## How to drive it
+
+`done-done run chief-profile` (`scripts/verify/chief-profile.sh <out>`) drives all of the below on a fresh stub lab at
+390 and 1440, day and night: the empty state (Chief's computer switched off with `PUT /api/bots/chief/tools`),
+Chief's hero opening the profile, the live Computer with Take control, `you-have-control-*` on Chief's screen, Hand it
+back (`controls` back to `bot`), and the installed app's profile (`pwa/`). By hand:
 
 A lab crewd on the stub engine ([runbook.md](runbook.md)), the person named Umer, a helper with a computer (the
 `scout` template) given a job holding on "ask permission", and a routine or two via `POST /api/routines`. Point
