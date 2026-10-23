@@ -138,8 +138,22 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await run(`location.hash = '#/settings'`);
   await until('the paired row', () => run(`[...document.querySelectorAll('.card')].some((c) => /Paired with your computer/.test(c.textContent))`));
   assert.equal(await run(`!![...document.querySelectorAll('.go-to .grow b')].find((b) => b.textContent === 'Phones')`), false, 'phones stay the computer’s to manage');
-  // Chief's computer is reachable in release-default Settings too, not only a flagged build.
-  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to .grow b')].map((a) => a.textContent)`), ['You', 'What the crew remembers', 'AI accounts', 'Apps', "Chief's computer"]);
+  // Chief's computer is reachable in release-default Settings too, alongside the existing custom rules.
+  assert.deepEqual(await run(`[...document.querySelectorAll('.go-to .grow b')].map((a) => a.textContent)`), ['You', 'Custom rules', 'What the crew remembers', 'AI accounts', 'Apps', "Chief's computer"]);
+  // Custom rules are editable over the paired control link too, not a computer-only dead end.
+  await http('PUT', '/api/rules', { text: 'Keep replies short.' });
+  await run(`document.querySelector('a[href="#/settings/rules"]').click()`);
+  await until('the paired rules list', () => run(`/Keep replies short/.test(document.body.innerText)`));
+  await run(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Edit').click()`);
+  await until('the rule editor', () => run(`!!document.querySelector('textarea[aria-label="Edit rule"]')`));
+  await run(`document.querySelector('textarea[aria-label="Edit rule"]').focus(); document.querySelector('textarea[aria-label="Edit rule"]').select()`);
+  await send('Input.insertText', { text: 'Keep drafts short.' });
+  await until('the edited rule in the box', () => run(`document.querySelector('textarea[aria-label="Edit rule"]').value === 'Keep drafts short.'`));
+  await run(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Save changes').click()`);
+  await until('the rule saved over the link', async () => (await http('GET', '/api/rules')).rules[0] === 'Keep drafts short.');
+  assert.deepEqual((await http('GET', '/api/rules')).rules, ['Keep drafts short.']);
+  await run(`location.hash = '#/settings'`);
+  await until('back to paired Settings', () => run(`[...document.querySelectorAll('.card')].some(c => /Paired with your computer/.test(c.textContent))`));
   // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
   // over the link (`POST /api/push {key}`, never /api/phones/link).
   await until('the notifications line', () => run(`/Notifications: (On|Off)/.test(document.body.innerText)`));

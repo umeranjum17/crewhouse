@@ -1,36 +1,40 @@
-# mail-watch
+# Chief inbox triage
 
-Chief's Gmail watch. While Gmail is connected, Chief keeps one quiet routine ("Mail
-watch", every 2 hours) that reads only threads newer than its stored cursor and starts at
-most one quiet task per run. The model decides whether anything in the new mail needs the
-person and, if so, says it once in the Dot shape: the fact; a date or deadline; what is not
-confirmed yet; one thing they can do; one link to the source thread. Mail is read-only.
+While Gmail is connected, one quiet Chief routine checks every two hours through the existing Gmail connector. It uses the same paginated Gmail history reader as email-triggered routines, not a newest-25-thread snapshot. The first run, a legacy timestamp cursor, or expired Gmail history establishes a fresh baseline without alerting on old mail. Mail arriving in that baseline window is not recovered; do not claim exhaustive historical triage.
 
-## Drive
+A changed batch starts one task. Its history cursor commits with that task; failed reads keep the cursor, report their cause once and retry on the next check. Overlapping tasks are skipped. Gmail message IDs resolve to thread IDs before case lookup and links. Multiple new messages on one thread become one contender.
 
-- Gmail must be connected first: Apps → **Gmail** → **Connect** (with the kit's house client
-  that is one tap; `docs/ui-contract.md` "Connecting an app"). The notice wording needs the
-  **real engine** with a signed-in account; on the stub engine the crew logic is real and the
-  wording is scripted.
-- The routine appears by itself: the first `Crew.schedule()` tick after Gmail is connected
-  inserts one `mailwatch = 1` routine for Chief. Read it back with `GET /api/routines`
-  (bot `chief`, name "Mail watch", `quiet`).
-- Trigger a run the app's own way: `POST /api/routines/<id>/run` — the routine's button —
-  never by editing rows.
-- Seed mail the person's way. The cursor is the newest `internalDate` seen, so the first run
-  with only old mail sets the baseline and notices nothing.
+Chief is instructed to read contenders, rank impact/urgency/personal relevance, choose the most important actionable change, distinguish facts from uncertainty, cite mail and read first-party sources, preserve vendor step order, and ask at most one focused question. Exact versions may only come from read sources. The profile and five recent cases (with links, even across senders) supply context, not proof of a relationship. Same-thread/sender held facts remain available; cases expire after 30 days. ALL-CLEAR posts no chat reply. These are model instructions, not a claim that scripted text proves judgement.
 
-## Prove
+The automatic task gate permits only mail inbox/search/read, web reads/search and crew_case; it refuses writes, connection/sign-in requests, and delegation. Manual draft/label workflows retain their existing approvals. HTML mail reads preserve HTTP(S) href targets and include the Gmail thread source.
 
-- One run with new mail → exactly one bot message in Chief's chat, carrying the fact, a
-  date/deadline, what is unconfirmed, one action and one `https://mail.google.com/...` thread
-  link; the phone is pushed that same message.
-- A second run with no new mail → no new task and no message (the run records `same`).
-- Mail older than the first look never appears in any task body.
+## Recorded-fixture proof
 
-## Limits
+Build first: `npm run build:web`. On a clean committed candidate run:
 
-- The wording is a model output: it needs a signed-in account (see `signin-stepper.md`), so
-  cite the stub script for the crew logic and capture the real wording only once a sign-in
-  works. `node --test test/mail-watch.test.ts` drives the same crew path with a scripted model
-  and a scripted Gmail.
+```sh
+~/firstmate/config/fm-mem-gate.sh done-done run inbox-triage
+```
+
+This uses the DEFAULT done-done evidence root, creates a private HOME/XDG/state and local synthetic Gmail provider, starts real crewd HTTP/chat on an OS-assigned port, then closes only its own browser/server/crew and removes its private scratch. No real login, model or Google request occurs. Fixture advisory URLs and version strings are synthetic, not current verified vendor advice.
+
+Inspect `api-proof.json`, `browser-proof.txt`, `steps.json`, and all four `chief-<390|1440>-<day|night>.png` captures. Confirm one linked scripted alert, a quiet repeat, cross-sender context delivery, an actual mail read with preserved source targets, and zero Gmail mutations. Open every shot; source links must render as links, no raw Markdown or horizontal overflow. This proves the bounded plumbing outcome, not the quality of the scripted ranking or vendor research. No model judge is run under this task's no-real-model restriction; an unjudged done-done capture is not a passing judge receipt.
+
+Extend existing integration journeys rather than adding isolated logic tests:
+
+```sh
+# One file per invocation, through the memory gate, each bounded to 240 seconds.
+node scripts/test.mjs test/mail-watch.test.ts
+node scripts/test.mjs test/notice-followup.test.ts
+node scripts/test.mjs test/event-routines.test.ts
+node scripts/test.mjs test/mail.test.ts
+node scripts/test.mjs test/line-budget.test.ts
+```
+
+The watch journey covers a burst over 25 threads across pages, read failure/retry, malicious write/recruit instructions, no approval or send, silence on unchanged history, and restart deduplication. The notice journey covers same-thread/sender memory, unrelated noise, cross-sender Railway context, scripted Stripe alert delivery through HTTP, source preservation and Forget. The scripted words do not establish real-model performance.
+
+## Full acceptance still required
+
+Use only an authorized, isolated, already-connected route to the owner's personal Gmail and a working approved model plan. Never borrow the owner's installed Crewhouse state or copy credentials. If any real sign-in/password/phone-code step appears, stop and report blocked. No sends, replies, drafts, filing, archives or deletes. Trigger via `POST /api/routines/<id>/run`, the app's own button route; do not alter production rows.
+
+Inspect the real inbox selection, factual support, exact first-party versions and step order, context separation and one-question message. Capture it on the actual phone and installed PWA, with recording and source/head provenance. Stub browser captures do not replace this. MiniMax's reported 402 and lack of an authorized connected lab prevent this leg under the current brief.

@@ -38,12 +38,26 @@ journeys:
   # Chief on this phone with a MiniMax key: the caller's emulator and lab release APK, a lab key, a fake live model list, no model call (phone-only-minimax.md).
   phone-only-minimax:
     command: 'SERIAL="${SERIAL:?the emulator serial}" PHONE_OTHER="${PHONE_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 600 bash scripts/verify/phone-only-minimax.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the lab release APK}"'
+  inbox-triage:
+    command: 'timeout -k 3 240 node scripts/verify/inbox-triage.mjs "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
     command: 'node scripts/verify/personal-voice.mjs --self-test > $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/personal-voice.mjs >> $DONE_DONE_EVIDENCE_ROOT/personal-voice.log 2>&1 && node scripts/verify/steps.mjs "$DONE_DONE_EVIDENCE_ROOT" personal-voice'
   screens:
     command: 'scripts/verify/screens-smoke.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief's profile (J09c), How Chief works (J09d), Settings (J09a), one-line hire names, Your things (J07a) and a file
+  # opened from it (J07b), face motion and the installed app, beside the approved mocks when EVIDENCE_HOME holds them
+  # (docs/verification/settings-hub.md, things.md).
+  stack-design:
+    timeout: 20m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 1100 bash scripts/verify/stack-design.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief's profile from his hero (mock profile-b on the final Stack): no computer (its empty state), then Chief's own
+  # live with Take control, You have control and Hand it back, at 390 and 1440, day and night, and in the installed
+  # app (docs/verification/chief-profile.md).
+  chief-profile:
+    timeout: 15m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 850 bash scripts/verify/chief-profile.sh "$DONE_DONE_EVIDENCE_ROOT"'
   delivered-files:
     command: 'timeout -k 10 600 bash scripts/verify/files-gate.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   workbook-chart:
@@ -62,6 +76,8 @@ journeys:
     command: 'timeout -k 10 600 bash scripts/verify/unlock-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
   event-routines:
     command: 'PWA=1 timeout -k 10 900 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/event-routines.mjs "$DONE_DONE_EVIDENCE_ROOT" && timeout -k 10 300 node scripts/test.mjs test/event-routines.test.ts > "$DONE_DONE_EVIDENCE_ROOT/event-routines-test.log" 2>&1'
+  custom-rules:
+    command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" bash scripts/verify/custom-rules.sh "$DONE_DONE_EVIDENCE_ROOT"'
   chief-soul:
     command: 'timeout -k 10 600 bash scripts/verify/chief-soul.sh "$DONE_DONE_EVIDENCE_ROOT"'
   ask-in-view:

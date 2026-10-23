@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewPanel, DoneCard, KEPT, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, DoneCard, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -47,7 +47,7 @@ function parseRoute(): Route {
   if (a === 'routines' && /^\d+$/.test(b ?? '')) return { view: 'routines', id: b };
   if (a === 'crew' && b === 'add') return { view: 'add' };
   if (a === 'settings' && b === 'ai' && c) return { view: 'ai', id: c };
-  if (a === 'settings' && ['you', 'memory', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
+  if (a === 'settings' && ['you', 'memory', 'rules', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
   return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
@@ -729,7 +729,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           // An answered card's muted outcome shows just above this line, in time order (A.receiptSlots).
           const before = [
             ...(slots.before.get(i) ?? []).map((c) => cardFor(c, h, state, refresh)),
-            ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />),
+            ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />),
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
@@ -759,7 +759,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {id === 'chief' && A.firstChips(lines, state) && <FirstTry state={state} send={send} />}
         {last?.choices.length ? <div className="chips">{last.choices.map((c) => <button key={c} className="chip" onClick={() => send(c)}>{c}</button>)}</div> : null}
         {slots.tail.map((c) => cardFor(c, h, state, refresh))}
-        {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} />)}
+        {receiptSlots.tail.map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />)}
         {A.stuckIn(crewNames, id).map((x) => <Stuck key={x.id} h={x} refresh={refresh} />)}
         <AccountCard accounts={accounts} inChat onReady={() => { void load(); refresh(); }} />
         {h?.seat === 'waiting' && A.resting(state) && <div className="card nudge"><span className="grow">{A.resting(state)}. {name} carries on then.</span></div>}
@@ -930,7 +930,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
     void load();
   }, 'Forgotten');
   return (
-    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : ''}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
+    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : 'st-screen'}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
       {tab === 'chat' && h && <>
         <div className="sticky-top">
           <header className="chat-head">
@@ -987,33 +987,34 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
         <p className="st-recorded"><Icon name="lock" /><span>Recorded by Crewhouse, not remembered by {short}.</span></p>
       </> : null)}
-      {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
+      {tab === 'screen' && b?.computer && <div className="sticky-top"><header className="chat-head">
         <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>Computer</b></div></header></div>}
-      {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'screen' && b?.computer && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
     </div>
   );
 }
 
-/** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
- *  his one notification switch, his instructions (the personality editable, the limits read-only), and his crew. Take control is on the first phone screen. */
+/** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the computer with Take control (his own,
+ *  or the helper's on one now; an empty state when none has one), his one notification switch, his instructions and his things. */
 const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
   ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
-  const { state, live, refresh, tab, page } = ctx;
-  const crew = A.crew(state), all = A.routines(state), [adding, setAdding] = useState(false);
+  const { state, refresh, tab, page } = ctx;
+  const crew = A.crew(state), all = A.routines(state);
   // ponytail: read from the chat crewd sends (its last 200 lines); an older file drops off, a things API if that matters.
   const stuff = A.chatThings(state, page), list = THINGS.find(([k]) => k === tab);
   const [notify, setNotify] = useState<boolean | null>(null);
   useEffect(() => { api.notify().then((n) => setNotify(n.on)).catch(() => {}); }, []);
-  // The computer to show: whoever is on one now, else the first helper with one.
-  const pc = crew.find((h) => h.computer && h.driving) ?? crew.find((h) => h.computer && h.seat === 'working') ?? crew.find((h) => h.computer);
+  // The computer to show: whoever you or the crew are on now, else Chief's own, else the first helper with one.
+  const me = state.bots.find((b: Json) => b.id === 'chief'), desk = page?.tools?.find((t: Json) => t.id === 'computer');
+  const pcs = [...(me?.computer ? [{ id: 'chief', name: 'Chief', driving: me.controls === 'person', working: !!me.task }] : []),
+    ...crew.filter((h) => h.computer).map((h) => ({ id: h.id, name: h.name, driving: h.driving, working: h.seat === 'working' }))];
+  const pc = pcs.find((p) => p.driving) ?? pcs.find((p) => p.working) ?? pcs[0];
   const who = (r: Json) => (r.helper === 'chief' ? '' : `${crew.find((h) => h.id === r.helper)?.name ?? 'Chief'} does it`);
-  const head = (title: string) => <div className="sticky-top"><header className="chat-head">
-    <a href="#/chief" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b></div></header></div>;
-  if (tab === 'instructions') return <div className="page helper">{head('How Chief works for you')}<section className="detail rest-screen">
-    <p className="lead">Plain words Chief reads before every reply. Only you change them.</p>
-    <h2 className="plate">Chief's personality</h2><ChiefSoul tick={ctx.tick} />
-    <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
+  // A page behind the profile: a round back, its name, and "Chief's profile" under it (J09d).
+  const head = (title: string) => <div className="sticky-top"><header className="chat-head cp-subhead">
+    <a href={CHIEF_PROFILE} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b><span className="mute">Chief's profile</span></div></header></div>;
+  if (tab === 'instructions') return <ChiefWorks tick={ctx.tick} rules={page?.rules ?? ''} head={head('How Chief works')} />;
   if (list) return <div className="page helper">{head('Things')}<section className="detail rest-screen chief-profile">
     <div className="seg cp-seg" role="tablist" aria-label="Things">{THINGS.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} className={k === tab ? 'on' : ''}
       onClick={() => location.replace(`#/h/chief/${k}`)}>{l} {stuff[k].length}</button>)}</div>
@@ -1024,42 +1025,42 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
       <p className="mute small">Everything made or read in your chat with Chief, newest first.</p></>
       : <div className="card empty cp-none"><b>No {list[1].toLowerCase()} yet</b><span className="mute small">{list[2]}</span></div>}
   </section></div>;
-  return <div className="page helper">{head('Chat')}<section className="detail rest-screen chief-profile">
-    <div className="cp-head"><ChiefArt mood={live.chief.mood} mascot /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
-    <a className="card row-item cp-link" href={CHIEF_TRAIL}><span className="grow">What happened</span><span className="mute">›</span></a>
-    <div className="label">Routines</div>
-    <div className="card list">
-      {all.slice(0, 2).map((r: Json) => <div key={r.id} className="row-item">
-        <a className="grow cp-link" href="#/routines"><span className="clamp1">{r.name}</span><span className="mute small">{[r.when, who(r)].filter(Boolean).join(' · ')}</span></a>
-        <input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => attempt(async () => { await api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }); refresh(); })} />
-      </div>)}
-      {all.length > 2 && <a className="row-item link" href="#/routines">See all {all.length}</a>}
-      <button className="row-item link" onClick={() => setAdding(!adding)}>+ Add routine</button>
-    </div>
-    {adding && <RoutineAsk />}
-    <div className="label">Computer</div>
-    {pc ? <div className="card cp-computer">
-      <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.seat === 'working' ? `${pc.name} is using it` : `${pc.name}'s computer`} />
-      <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>Take control</button>
-    </div> : <div className="card empty">No one on the crew has a computer yet.</div>}
-    <div className="label">Notifications</div>
-    <div className="card list"><label className="row-item"><span className="grow">Tell me when Chief finishes or needs me<span className="mute small">On every device with notifications on</span></span>
-      <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
-    <div className="label">Instructions</div>
-    <div className="card list"><a className="row-item cp-link" href="#/h/chief/instructions"><span className="grow">How Chief works for you<span className="mute small">Plain words Chief follows on every job. Only you change them.</span></span><span className="mute">›</span></a></div>
-    {live.crew.length > 0 && <>
-      <div className="label">Chief's crew</div>
-      <div className="card list">{A.roster(live.crew).map((m) => {
-        const r = A.statusOf(m, live), working = r.seat === 'working';
-        // A crew row's dot means working, and nothing else: only Chief's own row ever shows something for you.
-        return <a key={m.id} className="row-item cp-link" href={hrefOf(m.id)}><Face who={m} size={36} />
-          <span className="grow">{m.name}<span className="mute small clamp1">{working && <i className="cp-dot" aria-hidden />}{working && m.step ? `${r.word} · ${m.step}` : r.word}</span></span><span className="mute">›</span></a>;
-      })}</div>
-    </>}
-    <div className="label">Things</div>
-    <div className="card list">{THINGS.map(([k, l]) => <a key={k} className="row-item cp-link" href={`#/h/chief/${k}`}><span className="grow">{l}</span>
-      <span className="mute">{stuff[k].length || 'None yet'}</span><span className="mute">›</span></a>)}</div>
-  </section></div>;
+  const go2 = (href: string, title: string, says: string) => <a className="row-item cp-link" href={href}><span className="grow"><b>{title}</b>{says && <span className="mute">{says}</span>}</span><Icon name="next" /></a>;
+  return <div className="page helper st-profile chief-profile" style={{ '--helper-colour': art.colourOf('chief') } as CSSProperties}>
+    <header className="chat-head st-profile-head desk-only"><Face who="chief" size={44} /><div className="grow"><h1>Chief's profile</h1><span className="mute">Runs your crew</span></div></header>
+    <div className="st-profile-layout"><section className="st-profile-main">
+      <div className="st-profile-overview">
+        <a href="#/chief" className="back cp-back phone-only" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+        <div className="st-profile-hero"><Face who="chief" size={112} /><h1>Chief</h1><p>Runs your crew</p></div>
+      </div>
+      <div className="st-profile-job">
+        <h2 className="st-label">Routines</h2>
+        <div className="card list">
+          {all.slice(0, 2).map((r: Json) => <label key={r.id} className="row-item">
+            <span className="grow"><b className="clamp1">{r.name}</b><span className="mute">{[r.when, who(r)].filter(Boolean).join(' · ')}</span></span>
+            <input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => attempt(async () => { await api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }); refresh(); })} />
+          </label>)}
+          {all.length > 2 && go2('#/routines', `See all ${all.length}`, '')}
+          <a className="row-item cp-link" href="#/routines"><span className="o-ic"><Icon name="plus" /></span><span className="grow"><b>Add a routine</b></span><Icon name="next" /></a>
+        </div>
+        <h2 className="st-label">Computer</h2>
+        {pc ? <div className="card cp-computer">
+          <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.working ? `${pc.name} is using it` : `${pc.name}'s computer`} />
+          <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>{pc.driving ? 'Back to the controls' : 'Take control'}</button>
+          <p className="mute small">Its own screen, away from yours. Taking control pauses {pc.name} until you hand it back.</p>
+        </div> : <div className="card empty cp-none"><b>No computer yet</b><span className="mute small">{desk && !desk.ready && desk.missing?.length
+          ? `This machine is missing what a computer needs: ${desk.missing.join(', ')}.` : 'None of your crew has a computer, so no one can work on a screen of their own.'}</span></div>}
+        <h2 className="st-label">News</h2>
+        <div className="card list"><label className="row-item"><span className="grow"><b>Tell me when Chief finishes or needs me</b><span className="mute">On every device with news on</span></span>
+          <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
+        <h2 className="st-label">Instructions</h2>
+        <div className="card list">{go2('#/h/chief/instructions', 'How Chief works for you', 'Plain words. Only you change them.')}</div>
+        <h2 className="st-label">Things</h2>
+        <div className="card list">{THINGS.map(([k, l]) => <Fragment key={k}>{go2(`#/h/chief/${k}`, l, stuff[k].length ? String(stuff[k].length) : 'None yet')}</Fragment>)}</div>
+        <div className="card list cp-trail">{go2(CHIEF_TRAIL, 'What happened', 'Every step Chief took, as it happened')}</div>
+      </div>
+    </section></div>
+  </div>;
 }
 
 /** A helper's remembered lines, each with Forget. A new line comes from the helper's own work or through Chief: the person talks only to Chief. */
@@ -1118,21 +1119,30 @@ function JobSection({ page }: { page: Json }) {
     <Fragment key={k}><dt>{k}</dt><dd>{v || <span className="mute">Not set yet.</span>}</dd></Fragment>)}</dl>;
 }
 
-/** Chief's personality: the engine reads it as its own SOUL.md on his next reply. The person writes it; Chief never does. */
-function ChiefSoul({ tick }: { tick: number }) {
+/** How Chief works (Stack J09d): who he is and what he never does, each one plain card, then Change it. His soul is the
+ *  engine's own SOUL.md on his next reply: Change it opens it whole for the person to rewrite; Chief never does. */
+function ChiefWorks({ tick, rules, head }: { tick: number; rules: string; head: ReactNode }) {
   const [page, setPage] = useState<Json>(null), [draft, setDraft] = useState<string | null>(null);
   const load = useCallback(() => api.bot('chief').then(setPage).catch(() => {}), []);
   useEffect(() => { void load(); }, [load, tick]);
   const body = String(page?.soul ?? '').replace(/^# .*\n+/, ''), text = `# Chief\n\n${(draft ?? '').trim()}`, left = (page?.soulCap ?? 2000) - text.length;
-  if (draft === null) return <div className="card chief-soul"><ChatText text={body} />
-    <div className="btns"><button className="btn" onClick={() => setDraft(body)}>Change</button>
-      <button className="btn ghost" onClick={() => confirm('Put Chief back the way he started?') && attempt(async () => { await api.soulReset('chief'); await load(); }, 'Chief is back to how he started')}>Put back how Chief started</button></div></div>;
-  return <div className="card form chief-soul"><b>How should Chief talk to you?</b>
-    <p className="mute small">Plain words. Change what he calls you, his tone, anything. Your next message gets the new Chief.</p>
-    <textarea className="input" rows={14} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Chief's personality" />
-    <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
-    <div className="btns"><button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul('chief', text); setDraft(null); await load(); }, 'Saved')}>Save</button>
-      <button className="btn ghost" onClick={() => setDraft(null)}>Cancel</button></div></div>;
+  const change = <button className="btn cw-change" disabled={!page} onClick={() => setDraft(body)}>Change it</button>;
+  return <div className="page helper chief-works">{head}
+    <header className="chat-head st-profile-head desk-only"><Face who="chief" size={44} /><div className="grow"><h1>How Chief works</h1><span className="mute">Plain words Chief reads before every job. Only you change them.</span></div>{draft === null && change}</header>
+    <section className="detail rest-screen chief-profile">
+      <p className="lead phone-only">Plain words Chief reads before every job. Only you change them.</p>
+      {draft === null ? <><div className="cw-cols">
+        <div><h2 className="st-label">Who Chief is</h2><div className="card cw-card chief-soul">{page ? A.chiefIs(page.soul).map((l, i) => <p key={i}>{l}</p>) : <p className="mute">Opening…</p>}</div></div>
+        <div><h2 className="st-label">What Chief never does</h2><div className="card cw-card"><p>{A.chiefNever(rules)}</p></div></div>
+      </div><div className="phone-only">{change}</div></>
+      : <div className="card form chief-soul"><b>How should Chief talk to you?</b>
+        <p className="mute small">Plain words. Change what he calls you, his tone, anything. Your next message gets the new Chief.</p>
+        <textarea className="input" rows={14} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Chief's personality" />
+        <div className={`small ${left < 0 ? 'bad' : 'mute'}`}>{left < 0 ? 'A little shorter, please.' : left < 300 ? 'Nearly full.' : ''}</div>
+        <div className="btns"><button className="btn go" disabled={!draft.trim() || left < 0} onClick={() => attempt(async () => { await api.soul('chief', text); setDraft(null); await load(); }, 'Saved')}>Save</button>
+          <button className="btn ghost" onClick={() => setDraft(null)}>Cancel</button>
+          <button className="btn ghost" onClick={() => confirm('Put Chief back the way he started?') && attempt(async () => { await api.soulReset('chief'); setDraft(null); await load(); }, 'Chief is back to how he started')}>Put back how Chief started</button></div></div>}
+    </section></div>;
 }
 
 /** Who a helper is, in plain words, and what it knows how to do. The person changes it; the helper never does. */
@@ -1251,8 +1261,15 @@ const keptDone = (): string[] => { try { return JSON.parse(localStorage.getItem(
 /** Who made a finished thing: Chief, a helper on the crew, or nobody left on it. */
 const makerOf = (state: Json, id: string) => id === 'chief' ? 'chief' as const : A.crew(state).find((x) => x.id === id);
 
+const makerName = (state: Json, id: string) => { const w = makerOf(state, id); return w === 'chief' ? 'Chief' : w?.name ?? 'The crew'; };
+
+/** Your things (Stack J07a): every file the crew made, newest first, as the maker's colour cards under Today,
+ *  Yesterday and Earlier. On a computer a search box heads it and the newest sheet or page is open beside the cards. */
 function Things({ state, id }: Ctx & { id?: string }) {
-  const list = A.things(state);
+  const [q, setQ] = useState('');
+  const word = q.trim().toLowerCase();
+  const all = A.things(state).sort((a, b) => b.at - a.at);
+  const list = all.filter((t) => !word || [t.title, makerName(state, t.helper), ...t.files.map((f) => f.name)].some((x) => x.toLowerCase().includes(word)));
   // A search hit for a finished thing lands on the result itself.
   const want = id ? Number(id.slice(1)) : 0;
   useEffect(() => {
@@ -1264,13 +1281,31 @@ function Things({ state, id }: Ctx & { id?: string }) {
     const t = setTimeout(() => el.classList.remove('land'), 1300);
     return () => clearTimeout(t);
   }, [want, list.length]);
-  return <div className="page rest-screen"><a href="#/" className="back phone-only">‹ Home</a><h1>Things</h1><p className="lead">Everything the crew has made for you.</p>{(['Today', 'Yesterday', 'Earlier'] as const).map((group) => {
-    const now = new Date(); now.setHours(0, 0, 0, 0);
-    const start = group === 'Today' ? now.getTime() : group === 'Yesterday' ? now.getTime() - 86400000 : 0;
-    const end = group === 'Today' ? now.getTime() + 86400000 : now.getTime();
-    const items = list.filter((t) => group === 'Earlier' ? t.at < now.getTime() - 86400000 : t.at >= start && t.at < end);
-    return items.length ? <section key={group}><div className="label">{group}</div><div className="card list thing-list">{items.map((t) => { const h = A.crew(state).find((x) => x.id === t.helper); const f = t.files[0]; return <a key={t.id} id={`t${t.id}`} className="row-item file-row" href={f?.url ?? `#/h/${t.helper}`} target={f?.url ? '_blank' : undefined} rel={f?.url ? 'noreferrer' : undefined}>{f ? <Media f={f} /> : <span className="o-ic" aria-hidden>FILE</span>}<span className="grow"><b>{t.title}</b><span className="mute small">{h?.name ?? 'The crew'} · {A.clock(t.at)}</span></span><span className="mute">›</span></a>; })}</div></section> : null;
-  })}{!list.length && <div className="card empty">Videos, lists, letters and plans the crew makes for you land here.</div>}</div>;
+  const day = new Date().setHours(0, 0, 0, 0);
+  const groups: [string, (at: number) => boolean][] = [['Today', (at) => at >= day], ['Yesterday', (at) => at >= day - 86400000 && at < day], ['Earlier', (at) => at < day - 86400000]];
+  const peek = all.flatMap((t) => t.files.filter((f) => f.kind === 'sheet' || f.kind === 'page').map((f) => ({ t, f, src: A.fileSource(f.url)! })))[0];
+  const card = (t: A.Thing) => {
+    const who = makerOf(state, t.helper), meta = `${makerName(state, t.helper)} · ${A.clock(t.at)}`;
+    if (!t.files.length) return <a key={t.id} id={`t${t.id}`} className={`wb-card wb-made${who === 'chief' ? ' wb-chief' : ''}`} style={tint(who)} href={hrefOf(t.helper)}>
+      {who && <Face who={who} />}<span className="grow wb-what"><b>{t.title}</b><span className="mute small">{meta}</span></span>
+      {t.summary && <span className="wb-thumb leaf"><span className="ln">{t.summary}</span></span>}<span className="wb-open">Open</span></a>;
+    return t.files.map((f, i) => <div key={f.url} id={i ? undefined : `t${t.id}`}>{f.kind === 'sheet' || f.kind === 'page' ? <PreviewCard f={f} who={who} meta={meta} />
+      : <Media f={f} />}</div>);
+  };
+  return <div className="page stack st-things">
+    <header className="st-head"><a href="#/" className="st-back" aria-label="Home" onClick={(e) => { e.preventDefault(); back(); }}><Icon name="back" size={20} /></a>
+      <span className="grow"><h1 className="wide">Your things</h1><span className="st-line">Everything the crew has made for you.</span></span>
+      {all.length > 0 && <label className="st-search"><Icon name="search" size={20} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your things" aria-label="Search your things" /></label>}</header>
+    <div className="st-body"><div className="st-pri">
+      {groups.map(([group, on]) => {
+        const items = list.filter((t) => on(t.at));
+        return items.length ? <section key={group}><div className="st-label"><span>{group}</span></div><div className="st-made">{items.flatMap(card)}</div></section> : null;
+      })}
+      {!all.length && <div className="st-empty"><b className="wide">Nothing yet</b><span>Videos, lists, letters and plans the crew makes for you land here.</span></div>}
+      {all.length > 0 && !list.length && <div className="st-empty"><span>Nothing matches “{q.trim()}”.</span></div>}
+    </div>{peek && <aside className="st-asks st-peek"><div className="st-label"><span>{peek.f.name}</span></div>
+      <PreviewPanel key={peek.f.url} inline who={makerOf(state, peek.t.helper)} bot={peek.src.bot} path={peek.src.path} title={peek.f.name} made={A.clock(peek.t.at)} onClose={() => {}} /></aside>}</div>
+  </div>;
 }
 
 // ---------- routines ----------
@@ -1657,6 +1692,20 @@ function SettingsPage({ title, children }: { title: string; children: React.Reac
 const HubRow = ({ href, tile, title, says }: { href: string; tile: React.ReactNode; title: string; says: string }) =>
   <a href={href} className="row-item go-to"><span className="o-ic">{tile}</span><span className="grow"><b>{title}</b><div className="mute small">{says}</div></span><Icon name="next" /></a>;
 
+function CustomRules({ tick }: { tick: number }) {
+  const [rules, setRules] = useState<string[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [error, setError] = useState('');
+  const load = useCallback(async () => { try { setRules((await api.rules()).rules); setError(''); } catch (e) { setError((e as Error).message); } }, []);
+  useEffect(() => { void load(); }, [load, tick]);
+  const save = (next: string, old: string) => void attempt(async () => { await api.setRule(next, old); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
+  return <><p>Rules you confirmed with Chief. Every helper reads them before a job.</p><p className="mute">These do not change safety checks or give permission to send, spend or delete.</p>
+    {error && <p role="alert">{error}</p>}
+    {rules.length ? rules.map((rule) => <div className="card" key={rule}>{editing === rule ? <form onSubmit={(e) => { e.preventDefault(); save(text, rule); }}>
+      <label className="label">Edit rule<textarea className="input" aria-label="Edit rule" maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} rows={5} /></label>
+      <div className="btns"><button className="btn go" disabled={!text.trim()}>Save changes</button><button className="btn" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
+    </form> : <><p>{rule}</p><div className="btns"><button className="btn" onClick={() => { setEditing(rule); setText(rule); }}>Edit</button><button className="link" onClick={() => save('', rule)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
+    <a className="btn" href="#/chief">Talk to Chief</a></>;
+}
+
 function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & { look: string; setLook: (l: string) => void; tab?: string }) {
   const [signing, setSigning] = useState<{ ai: (typeof A.AIS)[number]; tab: Window | null } | null | false>(sheet === 'signin' ? null : false);
   const [lines, setLines] = useState<number | null>(null), [phones, setPhones] = useState<Json[] | null>(null);
@@ -1666,29 +1715,44 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   const mine = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready'), on = A.apps(state).filter((a) => a.on);
   const signingSheet = signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />;
   if (tab === 'you') return <SettingsPage title="You"><You state={state} act={act} plan={A.planName(accounts)} /><Money state={state} refresh={refresh} /></SettingsPage>;
+  if (tab === 'rules') return <SettingsPage title="Custom rules"><CustomRules tick={tick} /></SettingsPage>;
   if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
   if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />{signingSheet}</SettingsPage>;
   if (tab === 'phones' && !paired) return <SettingsPage title="Phones"><Phones tick={tick} /></SettingsPage>;
+  // On a computer (J09a) two columns under the trust card: You and Look on the left, what is connected on the right; on a
+  // phone the two lists read as one card, then Look.
   return (
-    <div className="page settings">
-      <a href="#/" className="back phone-only" aria-label="Back">‹</a>
-      <h1>Settings</h1>
-      <div className="card trust-card"><span className="o-ic"><Icon name="lock" /></span><p><b>{A.trust.hub[0]}</b> {A.trust.hub[1]}</p></div>
-      {demo && <PairRow />}
-      {paired && <PairedCard tick={tick} />}
-      <div className="card list go-tos">
-        <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
-        <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
-        <HubRow href="#/settings/accounts" tile={<Icon name="chief" />} title="AI accounts" says={mine.length ? `${mine[0].ai.name} · signed in` : 'Not signed in yet'} />
-        <HubRow href="#/apps" tile={<Icon name="plus" />} title="Apps" says={on.length ? on.map((a) => a.name).slice(0, 3).join(', ') : 'None added yet'} />
-        {!paired && <HubRow href="#/settings/phones" tile={<Icon name="phone" />} title="Phones" says={phones === null ? '' : phones.length ? `${phones.length} ${phones.length === 1 ? 'phone' : 'phones'} paired` : 'None paired yet'} />}
-        {cloudOn && <HubRow href="#/computer" tile={<Icon name="cloud" />} title={A.computer(null).title} says="" />}
+    <div className="page stack stack-home settings hub">
+      <header className="st-head"><a href="#/" className="back phone-only" aria-label="Back">‹</a><span className="grow"><h1 className="wide">Settings</h1></span></header>
+      <div className="st-pri">
+        <div className="card trust-card"><span className="o-ic"><Icon name="lock" /></span><p><b>{A.trust.hub[0]}</b> {A.trust.hub[1]}</p></div>
+        {demo && <PairRow />}
+        {paired && <PairedCard tick={tick} />}
+        <div className="set-cols">
+          <div className="set-col">
+            <div className="st-label desk-only"><span>You</span></div>
+            <div className="card list go-tos set-you">
+              <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
+              <HubRow href="#/settings/rules" tile={<Icon name="lock" />} title="Custom rules" says="How you want the crew to work" />
+              <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
+            </div>
+            <div className="st-label set-look"><span>Look</span></div>
+            <div className="seg set-look">{[['auto', 'Match device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
+            <div className="set-more"><Install /></div>
+          </div>
+          <div className="set-col">
+            <div className="st-label desk-only"><span>Connected</span></div>
+            <div className="card list go-tos set-con">
+              <HubRow href="#/settings/accounts" tile={<Icon name="talk" />} title="AI accounts" says={mine.length ? `${mine[0].ai.name} · signed in` : 'Not signed in yet'} />
+              <HubRow href="#/apps" tile={<Icon name="plus" />} title="Apps" says={on.length ? on.map((a) => a.name).slice(0, 3).join(', ') : 'None added yet'} />
+              {!paired && <HubRow href="#/settings/phones" tile={<Icon name="phone" />} title="Phones" says={phones === null ? '' : phones.length ? `${phones.length} ${phones.length === 1 ? 'phone' : 'phones'} paired` : 'None paired yet'} />}
+              {cloudOn && <HubRow href="#/computer" tile={<Icon name="cloud" />} title={A.computer(null).title} says="" />}
+            </div>
+            <div className="set-more"><HomeSetup state={state} accounts={accounts} tick={tick} />
+              <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} /></div>
+          </div>
+        </div>
       </div>
-      <div className="label">Look</div>
-      <div className="seg">{[['auto', 'Match device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
-      <Install />
-      <HomeSetup state={state} accounts={accounts} tick={tick} />
-      <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signingSheet}
     </div>
   );
@@ -2047,11 +2111,13 @@ function Jobs({ state, live }: Ctx) {
   </div>;
 }
 
+/** Where a file opens as the whole page with what it is beside it (J07b), instead of beside a chat. */
+const OVER: View[] = ['chief', 'things'];
 function App() {
   const [route, setRoute] = useState<Route>(parseRoute());
   const under = useRef<Route>({ view: route.view === 'ask' ? 'chief' : 'home' });
-  // A file opened from Chief's thread reads over his thread, not over the chat of the helper who made it.
-  if (route.view !== 'ask' && route.view !== 'pair' && !(route.file && under.current.view === 'chief')) under.current = route;
+  // A file opened from Chief's thread or Your things reads over it, not over the chat of the helper who made it.
+  if (route.view !== 'ask' && route.view !== 'pair' && !(route.file && OVER.includes(under.current.view))) under.current = route;
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -2151,7 +2217,7 @@ function App() {
   return (
     <>
       {splash}
-      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book && v.view !== 'chief' ? ' with-book' : ''}`}>
+      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book && !OVER.includes(v.view) ? ' with-book' : ''}`}>
         <aside className="side">
           <a href="#/" className="brand"><Face who="chief" size={36} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
           <nav className="side-navs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav nav-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
@@ -2185,7 +2251,7 @@ function App() {
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === (sheet.by ?? sheet.helper))} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
-      {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} wide={v.view === 'chief'} who={makerOf(ctx.state, book.bot)}
+      {book && <PreviewPanel bot={book.bot} path={book.path} title={book.title} wide={OVER.includes(v.view)} who={makerOf(ctx.state, book.bot)}
         made={made && A.clock(made.at)} summary={made?.summary} onClose={() => history.length > 1 ? history.back() : go('#/')} />}
       {route.view === 'pair' && !(pairable && !paired) && <PairSheet onClose={back} />}
       {party && <Celebrate title={party.title} href={hrefOf(party.helper)} onDone={() => setParty(null)} />}

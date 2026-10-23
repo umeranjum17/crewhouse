@@ -46,6 +46,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  rule?: string;
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
@@ -912,6 +913,8 @@ export function card(a: Json, state: Json): Card {
       video: { from: plain(String(d.pick.from ?? '')), choices },
       choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Confirm custom rule', preview: { head: 'For every helper', body: String(d.customRule.text) },
+    choices: [{ label: 'Create rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -1041,10 +1044,11 @@ function receiptAction(kind: string, detail: Json): string {
  *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
  *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
  *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
-export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string; rule?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
+    if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
@@ -1854,6 +1858,23 @@ export function aboutTraits(name: string, soul = ''): string[] {
   }
   return traits;
 }
+/** A line written to Chief, said to the person about him: "you turn what the person wants" → "he turns what you want". */
+const aboutChief = (l: string) => plain(l.replace(/^[-*]\s*/, '').trim())
+  .replace(/^you are chief\b,?\s*/i, 'Chief is ').replace(/^you are\b/i, 'Chief is')
+  .replace(/\bthe person(\s+)(\w+?)s\b/gi, 'you$1$2').replace(/\bthe person's\b/gi, 'your').replace(/\bthe person\b/gi, 'you')
+  .replace(/\bon your say-so\b/gi, 'without your say-so').replace(/\bthis machine\b/gi, 'this computer')
+  .replace(/\byou (\w+)\b/gi, (w, v: string) => /^(want|need|ask|share|send|pick|say|see|get|like)$/i.test(v) ? w : `he ${({ are: 'is', have: 'has', do: 'does', go: 'goes' } as Record<string, string>)[v.toLowerCase()] ?? `${v}s`}`);
+/** How Chief works in plain words (Stack J09d): his soul's opening line, then the start of its first two Voice lines.
+ *  A soul the person wrote without those reads as its own first two lines. */
+export function chiefIs(soul = ''): string[] {
+  const lines = soul.split('\n').map((l) => l.trim()), v = lines.findIndex((l) => /^##\s+voice\b/i.test(l));
+  const intro = lines.find((l) => l && !/^(#|[-*]\s)/.test(l)), end = lines.findIndex((l, i) => i > v && /^##\s/.test(l));
+  const voice = v < 0 ? [] : lines.slice(v + 1, end < 0 ? undefined : end).filter((l) => /^[-*]\s/.test(l)).slice(0, 2).map((l) => l.replace(/^[-*]\s*/, '').split(/(?<=\.)\s/)[0]);
+  const out = [intro, voice.join(' ')].filter((l): l is string => !!l).map(aboutChief);
+  return out.length ? out : personality(soul).slice(0, 2);
+}
+/** What Chief never does, as one plain line to the person: the first of his job's limits. */
+export const chiefNever = (rules = '') => aboutChief(rules.split('\n').find((l) => /^[-*]\s/.test(l.trim())) ?? rules.trim());
 /** What the person edits: the traits, one per line, nothing else. */
 export const aboutDraft = (name: string, soul = '') => aboutTraits(name, soul).join('\n');
 /** The helper's instructions, composed behind the scenes from the person's plain words. */

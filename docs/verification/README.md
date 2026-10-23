@@ -12,11 +12,13 @@ negative/security legs remain required; generic smoke is not their replacement.
 
 | Feature recipe | Named primitive / driver |
 |---|---|
+| mail-watch / Chief inbox triage | `done-done run inbox-triage` — recorded synthetic Gmail, read-only scripted Chief alert, cross-sender context and quiet repeat; real personal-inbox phone/PWA acceptance remains separate |
 | delivered-files | `done-done run delivered-files` |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
+| custom-rules | `done-done run custom-rules` — confirmation, save/cancel/edit, scripted helper draft and restart (browser only) |
 | chief-soul | `done-done run chief-soul` (live voice: the recipe's real-model leg) |
 | helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep it / Keep them, Forget this file, and Remove it when the job ends taking a copy) |
 | thread-hygiene | `done-done run ask-in-view` and `done-done run -- bash scripts/verify/new-pill.sh "$DONE_DONE_EVIDENCE_ROOT"` plus the recipe's other cases |
@@ -73,6 +75,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: one pasted line installs the headless host on a clean Linux box, then the phone types its code |
 | look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/verify/mocks.tsv`) |
 | chat-attach | [chat-attach.md](chat-attach.md) | Chief's paperclip: a PDF or document lands in the helper's inbox under crewd's own name and shows as a one-line file card above the words, at 390/1440, the largest text and in the installed app; the phone app's + sheet, chip and big-file stream on an emulator |
+| custom-rules | [custom-rules.md](custom-rules.md) | Chief confirms a standing instruction before saving; explicit Saved/Cancelled cards, editable rules in Settings, separate safety checks and helper draft (browser only) |
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | crew-room | [crew-room.md](crew-room.md) | The crew room and Chief's standup on a real MiniMax M3.1 Flash run: Chief hands one job to Scout then Scribe, the room shows his brief to each and his closing words as the standup, at 390 wide, day and night |
 | chat-real | [chat-real.md](chat-real.md) | First-day path on the real engine (no name, first request from Hello, MiniMax key): Chief starts on M3.1 Flash by itself and a real reply arrives (the stub engine's reply is hidden by design); `timeline.txt` times each step; the reply at 390 wide, day and night; fails when none arrives in time |
@@ -87,8 +90,10 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | quiet-nudge | [quiet-nudge.md](quiet-nudge.md) | A job quiet for hours: Chief's one line in his thread (390 and 1280, day and night), no repeat, ends unsure at 24 hours |
 | chief-capabilities | [chief-capabilities.md](chief-capabilities.md) | Real model words: Chief answers "What can you do?" plainly and truly (crew's computers, files, websites, yes before buying or sending, routines, Google once connected) and ends with one personal next step |
 | recruit-assign | [recruit-assign.md](recruit-assign.md) | Chief recruits or proposes a custom helper; assignment, wrap-up and long/bullet-only relay openings; real Marketing crew recipe, shared profile and Chief's read-only skill admission |
-| home-stack | [home-stack.md](home-stack.md) | Home is the crew view (Stack): Chief's card is the one way to his asks and thread, crew cards and `#/crew` tiles read one status, at desktop and phone, web and native |
-| chief-profile | [chief-profile.md](chief-profile.md) | Chief's profile from his hero: Routines with + Add routine, the crew's computer live with the whole Take control on the first phone screen, You have control / Hand it back, the Notifications switch silencing news, read-only Instructions; Take control everywhere |
+| home-stack | [home-stack.md](home-stack.md) | Home is the crew view (Stack): Chief's card is the one way to his asks and thread, crew cards and `#/crew` tiles read one status, at desktop and phone, web and native; a working face moves and Reduce Motion stills it (`scripts/verify/face-motion.mjs`) |
+| chief-profile | [chief-profile.md](chief-profile.md) | Chief's profile from his hero (Stack J09c: blue portrait card; on a computer portrait left, rows right): Routines with Add a routine, the News switch silencing news, Instructions, the computer live (Chief's own, or the helper on one) with Take control, or No computer yet with its reason; You have control / Hand it back; Take control everywhere. Journey: `done-done run chief-profile` |
+| settings-hub | [settings-hub.md](settings-hub.md) | Settings on the final Stack J09a: one card then Look on a phone, a header bar and two columns (You and Look, Connected) on a computer; a hire card's name on one line and its yes in the helper's first name |
+| things | [things.md](things.md) | Your things on the final Stack J07a: each file its maker's colour card under Today, search and the newest sheet open beside on a computer; Open lands on the J07b read-only page, over Your things on a computer |
 | add-to-crew | [add-to-crew.md](add-to-crew.md) | Add to your crew: every reviewed app, skill and plugin in sections by purpose (Mail, calendar and files first), search with a hit, a miss and the catalog, a filter chip, "N added", and a real Add on Weather turning into Added through the engine's trust gate |
 | handoff | [handoff.md](handoff.md) | Chief's thread shows each hand-off as a chip (`Messaged <helper> · <status>`) under the one-limit sentence from crewd's grants; a helper's chat is read only with **Ask Chief about this**; the desk/iPad rail row carries the last line and time and a dot only while working, beside mocks `handoff` and `handoff-ipad` |
 | handoff-lane-reset | [handoff-lane-reset.md](handoff-lane-reset.md) | A helper's job that fails (or a report that never comes) settles Chief's job at once in its own words and lets go of his lane; a helper that finished is read for its result instead of being reported failed |

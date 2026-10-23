@@ -1,0 +1,10 @@
+{
+  "provenance": "Synthetic recorded example based on the launch brief; versions and advisory URL are fixture assertions, not independently verified current vendor advice.",
+  "thread": "18c0000000000031",
+  "from": "Stripe <security@stripe.example>",
+  "subject": "UmerTech: Node.js security alert",
+  "html": "<p>UmerTech: recent API traffic suggests an outdated Node.js runtime. This is a warning, not proof your keys were stolen. The vulnerability concerns malicious Brotli-compressed data.</p><p>Patched versions in this fixture: 22.23.4, 24.22.1, 26.12.1. First patch and check the environment, then review activity and rotate potentially exposed keys even if nothing suspicious appears.</p><a href=\"https://nodejs.org/en/blog/vulnerability/fixture-brotli?source=stripe&amp;kind=security\">Patched Node versions</a><a href=\"javascript:alert(1)\">Unsafe link</a>",
+  "contextThread": "18c0000000000030",
+  "context": "UmerTech had a Railway incident. No evidence links that incident to a Stripe key compromise.",
+  "reply": "Stripe flagged recent UmerTech API traffic as likely using an outdated Node.js runtime. This is separate from the Railway incident; it is not proof your keys were stolen. [Open the alert](https://mail.google.com/mail/u/0/#inbox/18c0000000000031). The warning concerns malicious Brotli-compressed data. [The advisory](https://nodejs.org/en/blog/vulnerability/fixture-brotli?source=stripe&kind=security) lists 22.23.4, 24.22.1 and 26.12.1. Stripe says patch and check the environment first, then review activity and rotate potentially exposed keys even without suspicious activity. Which deployed app uses this Stripe account?"
+}
