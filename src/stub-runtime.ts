@@ -20,6 +20,7 @@ function calls(text: string) {
 }
 
 const GOLDEN: Record<string, string> = {
+  '• ⟦UmerTech: Node.js security alert⟧ — ⟦Stripe <security@stripe.example>⟧ (https://mail.google.com/mail/u/0/#inbox/18c0000000000031)': 'Stripe flagged recent UmerTech API traffic as likely using an outdated Node.js runtime. This is separate from the Railway incident; it is not proof your keys were stolen. [Open the alert](https://mail.google.com/mail/u/0/#inbox/18c0000000000031). The warning concerns malicious Brotli-compressed data. [The advisory](https://nodejs.org/en/blog/vulnerability/fixture-brotli?source=stripe&kind=security) lists 22.23.4, 24.22.1 and 26.12.1. Stripe says patch and check the environment first, then review activity and rotate potentially exposed keys even without suspicious activity. Which deployed app uses this Stripe account? [tool mail {"args":["read","18c0000000000031","--full"]}] [tool crew_case {"thread":"18c0000000000031","facts":"UmerTech: Node runtime warning, no proof of compromise; https://mail.google.com/mail/u/0/#inbox/18c0000000000031"}]',
   hi: 'Hi. What would you like to work on?',
   'From now on, only prepare drafts. I will send messages myself.': 'Check this rule before I save it. [tool crew_rule {"text":"Only prepare drafts. I will send messages myself."}]',
   'From now on, always write long replies.': 'Check this rule before I save it. [tool crew_rule {"text":"Always write long replies."}]',
