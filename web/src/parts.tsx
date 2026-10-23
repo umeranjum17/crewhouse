@@ -904,7 +904,7 @@ function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   const by = c.by ?? c.helper, name = by === 'chief' ? 'Chief' : who?.name ?? c.head;
   if (c.hire) return <div className="ask-head hire-head">
     <Face who={{ kind: c.hire.kind, name: c.hire.name }} size={64} />
-    <div className="grow"><b>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
+    <div className="grow"><b className="hire-name" style={{ '--n': c.hire.name.length } as CSSProperties}>{c.hire.name}</b>{c.hire.role ? <div className="hire-role">{c.hire.role}</div> : <div className="ask-status"><i />{c.status}</div>}</div>
   </div>;
   return <div className="ask-head">
     <Face who={by === 'chief' ? 'chief' : who ?? 'chief'} size={44} />

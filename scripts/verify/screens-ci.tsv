@@ -10,6 +10,8 @@ jobs	demo	#/jobs
 chief-chat	demo	#/chief
 hello	demo=hello	#/
 chief-profile	demo	#/h/chief/details
+chief-instructions	demo	#/h/chief/instructions
+settings	demo	#/settings
 add-to-crew	demo	#/crew/add
 chief-things	demo	#/things
 handoff	demo=after	#/
