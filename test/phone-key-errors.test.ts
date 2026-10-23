@@ -78,9 +78,9 @@ test('a MiniMax key runs Chief on the MiniMax model the person picked, its refus
   assert.deepEqual(asked, { url: 'https://api.minimax.io/anthropic/v1/models', key: 'sk-mm-test-key' });
   assert.deepEqual(models.map((m) => m.id), live, 'every model MiniMax lists, in its order, none dropped');
   assert.deepEqual(models.filter((m) => m.recommended).map((m) => m.name), ['MiniMax M3.1 Flash']);
-  // A list MiniMax will not give falls back to the kit's catalogue, also unfiltered.
+  // A list MiniMax will not give leaves the phone the one model it knows, the fast one, still recommended.
   globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
-  assert.deepEqual((await phoneModels()).map((m) => [m.name, m.recommended]), [['MiniMax M3.1 Flash Preview', true], ['MiniMax M3', false]]);
+  assert.deepEqual((await phoneModels()).map((m) => [m.name, m.recommended]), [['MiniMax M3.1 Flash Preview', true]]);
   await phonePick(models[1].id);
   assert.equal(await phonePlan(), 'MiniMax M3');
   let sent: { url: string; model: string } | undefined;

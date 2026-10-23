@@ -9,8 +9,8 @@ process.env.CREWHOUSE_RUN_MODE ??= 'product';
 const here = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const [cmd = 'start', ...args] = process.argv.slice(2);
 const node = process.versions.node.split('.').map(Number);
-if (node[0] < 22 || node[0] === 22 && (node[1] < 22 || node[1] === 22 && node[2] < 3)) {
-  console.error(`Crewhouse needs Node 22.22.3 or later (found ${process.version}).`);
+if (!(node[0] === 24 && node[1] >= 16 || node[0] === 26 && node[1] >= 1 || node[0] > 26)) {
+  console.error(`Crewhouse needs Node 24.16 or later on 24, or 26.1 or later (found ${process.version}).`);
   process.exit(1);
 }
 

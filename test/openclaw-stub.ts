@@ -44,6 +44,13 @@ export function toolCalls(text: string) {
 
 const words = (m: any) => typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map((c: any) => c.text ?? '').join('') : '';
 
+/** The person's own words. The engine wraps an inbound message in its envelope (a time stamp) and relocates its runtime
+ *  line into the message it sends, so the model reads both; neither is the person's, and a marker like `[legwork]` is. */
+const personWords = (text: string) => text
+  .replace(/^\[[^\]\n]*\d{4}-\d{2}-\d{2}[^\]\n]*\]\s*/, '')
+  .replace(/\s*\n+Runtime: [^\n]*$/, '')
+  .trim();
+
 /** One loopback HTTP server that speaks the script. `keyFor` names the hold a request's body waits on. */
 export function startModelStub(promptTokens?: number, script?: (body: any, text: string) => { text?: string; reply?: string; fail?: string }) {
   const calls: { authorization: string; path: string; body: any }[] = [];
@@ -60,10 +67,11 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     const messages: any[] = body.messages ?? [];
     const system = messages.filter((m: any) => m.role === 'system').map((m: any) => words(m)).join('\n');
     const bot = /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(system)?.[1] ?? 'bot';
-    // A tool's screenshot comes back as its own user message ("Attached image(s) from tool result"): not the person's.
-    const asked = (m: any) => m.role === 'user' && !words(m).startsWith('Attached image(s) from tool result');
+    // A tool's screenshot comes back as its own user message ("Image(s) from tool result #1 (computer):"), and the
+    // engine adds its own context block after the person's words: neither is the person's.
+    const asked = (m: any) => m.role === 'user' && !/^(Image\(s\) from tool result|Attached image\(s\) from tool result|<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>)/.test(words(m));
     const lastUser = [...messages].reverse().find(asked);
-    const planned = script?.(body, words(lastUser)), said = planned?.text ?? words(lastUser);
+    const planned = script?.(body, personWords(words(lastUser))), said = planned?.text ?? personWords(words(lastUser));
     const results = messages.slice(messages.findLastIndex(asked) + 1).filter((m: any) => m.role === 'tool');
     const scripted = toolCalls(said);
     const lastResult = results.at(-1);

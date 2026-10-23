@@ -26,6 +26,12 @@ test('crewd killed under a spawned lookup: the job is unsure, nothing replays, a
     const { task } = await api('POST', '/api/bots/chief/messages', { text: '[legwork-hold] Look up one thing slowly.' });
     await until('the lookup is admitted and reading', async () => (await api('GET', '/api/events')).some((e: any) => e.data.task === task && e.kind === 'run.tool' && /example\.invalid/.test(e.data.words)), 120_000);
     const first = lab; process.kill(lived.pid, 'SIGKILL'); await new Promise((r) => first.once('exit', r));
+    // The kit's orphan takeover waits only three seconds (a kit gap); 9.33 drains for a minute on SIGTERM.
+    // Let this lab-owned orphan finish its drain before checking crewd's persisted hand-off recovery.
+    // A hard kill instead leaves the interrupted engine turn resumable.
+    const engine = Number(readFileSync(join(root, 'state/openclaw/gateway.pid'), 'utf8'));
+    try { process.kill(engine, 'SIGTERM'); } catch { /* it is already gone */ }
+    await until('the crashed engine let the state go', () => !alive(engine), 150_000);
     rmSync(ready); lived = await boot();
     await until('the recovered job is flagged', async () => (await api('GET', '/api/bots/chief')).tasks.some((t: any) => t.id === task && t.state === 'unsure'), 30_000);
     const page = await api('GET', '/api/bots/chief'), events = (await api('GET', '/api/events')).filter((e: any) => e.data.task === task);
@@ -52,3 +58,6 @@ test('crewd killed under a spawned lookup: the job is unsure, nothing replays, a
   assert.equal(seen.filter((e) => e.type === 'ended' && e.reason === 'terminal').length, 3, 'each fresh lookup ended once, through the kit');
   assert.ok(!JSON.parse(readFileSync(`${ready}.provider.json`, 'utf8')).some((c: any) => JSON.stringify(c.body.messages).includes('item=held')), 'the held lookup was never asked of the model again');
 });
+
+/** A pid that is still running. */
+const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };

@@ -19,7 +19,7 @@ This records what the earlier investigation actually ran, including direct OpenC
 | Memory recall | Bundled `memory-core` (FTS) | Adopted in the ecosystem step; the official `@openclaw/memory-lancedb` needs paid embeddings that 429 on a subscription, so FTS stays |
 | Self-learning + weekly collection review | OpenClaw Skill Workshop, `auto` | "Learned … [Forget]" surfacing, per-member workspaces (learning step, B5) |
 | Media: `view_image`, `pdf`, `image_generate` | Core + bundled `openai` | Adopted in the ecosystem step |
-| Clip ingredients | Bundled `video-frames`, `openai-whisper`, `summarize`, `nano-pdf`, `diagram-maker` | `allowBundled` after SKILL.md review; ffmpeg/whisper as kit tools |
+| Clip ingredients | Bundled `openai-whisper`, `summarize`, `nano-pdf`, `diagram-maker` | `allowBundled` after SKILL.md review; ffmpeg/whisper as kit tools |
 | Run/tool event stream | Core protocol (`tool-events` cap) | crewd's own `run.call` record + the drawer |
 
 ## Historical bespoke decisions and remaining migration debt

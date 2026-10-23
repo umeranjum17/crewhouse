@@ -1,7 +1,7 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
@@ -55,7 +55,7 @@ const CONFIG = {
     'memory-core': { config: { dreaming: { enabled: false } } }, 'cua-computer': { enabled: true },
     codex: { enabled: false },
   } },
-  skills: { allowBundled: ['video-frames', 'openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
+  skills: { allowBundled: ['openai-whisper', 'summarize', 'nano-pdf', 'diagram-maker'], workshop: { approvalPolicy: 'auto' } },
 };
 
 export class OpenClawRuntime implements AgentRuntime {
@@ -286,22 +286,23 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   steer(key: string, text: string) { return this.kit.steer(key, text, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
   abort(key: string) { return this.kit.abort(key, this.runs.get(key)?.keyLane ? { auth: 'apiKey' as const } : undefined); }
-  /** The workshop's pending and loaded skills on every lane that learns them: the member agent and, once a plan key
-   *  made it, its key agent (`byokit-key-<member>`, the kit's README), each with its own proposals and skills root
-   *  from the engine's roster. Newest first; a forgotten one has left its skills root, so it is gone here too. */
+  /** The Workshop's skills on every lane that learns them: the member agent and, once a plan key made it, its key agent
+   *  (`byokit-key-<member>`, the kit's README). Each lane's installed skills (`<state>/agents/<agent>/agent/workshop-skills`)
+   *  that are still switched on, named by the proposal that made them when there is one, and its pending proposals. Newest first. */
   private async proposals() {
-    const { agentId } = await this.kit.ensureMember(ME), roster = await this.kit.call('agents.list', {}, { timeoutMs: 20_000 }).catch(() => undefined), lanes = (roster?.agents ?? []).filter((a) => (a.id === agentId || a.id === `byokit-key-${ME}`) && a.workspace).map((a) => ({ agentId: a.id, skills: join(a.workspace!, 'skills') })), rows = (await Promise.all(lanes.map(async (lane) => ((await this.kit.call('skills.proposals.list', { agentId: lane.agentId }, { timeoutMs: 20_000 }).catch(() => undefined))?.proposals ?? [])
-      .map((p) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: p.status, lane }))))).flat();
-    return rows.filter((p) => p.id && p.key && (p.state === 'pending' || (p.state === 'applied' && existsSync(join(p.lane.skills, p.key, 'SKILL.md'))))).sort((a, b) => b.at - a.at);
+    const { agentId } = await this.kit.ensureMember(ME), timeoutMs = 20_000, roster = await this.kit.call('agents.list', {}, { timeoutMs }).catch(() => undefined), lanes = (roster?.agents ?? []).map((a) => a.id).filter((id) => id === agentId || id === `byokit-key-${ME}`);
+    const rows = (await Promise.all(lanes.map(async (lane) => {
+      const [list, status] = await Promise.all(['skills.proposals.list', 'skills.status'].map((m) => (this.kit.call as any)(m, { agentId: lane }, { timeoutMs }).catch(() => undefined))) as any[], off = new Set((status?.skills ?? []).filter((k: any) => k.disabled).map((k: any) => k.skillKey));
+      const made = (list?.proposals ?? []).map((p: any) => ({ id: String(p.id ?? ''), skill: String(p.skillName ?? p.title ?? ''), key: String(p.skillKey ?? ''), at: Date.parse(p.updatedAt ?? p.createdAt ?? '') || 0, state: String(p.status), lane }));
+      return [...made.filter((p: any) => p.state === 'pending'), ...(list?.installedSkills ?? []).filter((k: any) => !off.has(k.skillKey))
+        .map((k: any) => made.find((p: any) => p.state === 'applied' && p.key === k.skillKey) ?? { id: String(k.skillKey), skill: String(k.name), key: String(k.skillKey), at: 0, state: 'applied', lane })];
+    }))).flat() as { id: string; skill: string; key: string; at: number; state: string; lane: string }[]; return rows.filter((p) => p.id && p.key).sort((a, b) => b.at - a.at);
   }
   /** What the person sees learned: one row per skill name, whichever lane learned it; the newest copy wins. */
   composioBegin() { return this.kit.beginComposioSignIn(); }
   composioDone() { return this.kit.completeComposioSignIn(); }
   composioSignOut() { return this.kit.signOutComposio(); }
-  async learned() {
-    const rows = await this.proposals();
-    return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state }));
-  }
+  async learned() { const rows = await this.proposals(); return rows.filter((p, i) => rows.findIndex((q) => q.skill === p.skill) === i).map(({ id, skill, at, state }) => ({ id, skill, at, state })); }
 
   /** The member lane's learned-skills folder, and a lane's pre-change capture: crewhouse's own git versioning. A
    *  capture that cannot be verified throws, and the caller must refuse the change — the data stays. */
@@ -372,18 +373,15 @@ export class OpenClawRuntime implements AgentRuntime {
       .map((i: any) => ({ ...i, reviewed: starter.some((s) => s.slug === i.slug && s.owner === i.owner), on: starter.some((s) => s.on && s.slug === i.slug && s.owner === i.owner) })),
     ...(p?.results ?? []).map((i) => ({ slug: i.package.name, name: i.package.displayName, kind: 'plugin', summary: i.package.summary ?? '', version: i.package.latestVersion ?? '', reviewed: false, on: false }))].filter((i: any) => i.slug);
   }
-  /** Forget one learned skill on every lane that holds it: a pending proposal is rejected, a loaded one is captured then archived
-   *  (restoreLearned brings it back; nothing is deleted). The engine has no single-skill removal of an applied skill yet. */
+  /** Forget one learned skill on every lane that holds it: a pending proposal is rejected, an installed one is switched off
+   *  the engine's own way (`skills.entries.<key>.enabled: false`); its files stay, and switching it on again brings it back. */
   async forget(id: string, skill = '') {
-    const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name));
+    const rows = await this.proposals(), name = rows.find((p) => p.id === id)?.skill ?? skill, copies = rows.filter((p) => p.id === id || (name && p.skill === name)), timeoutMs = 20_000;
     if (!copies.length) throw Object.assign(new Error(`"${skill || id}" is no longer a learned skill; nothing was forgotten`), { status: 404 });
     for (const p of copies) {
-      const at = { agentId: p.lane.agentId, proposalId: p.id }, timeoutMs = 20_000;
-      if (p.state === 'pending') { await this.kit.call('skills.proposals.reject', { ...at, expectedRevisionHash: (await this.kit.call('skills.proposals.inspect', at, { timeoutMs })).revisionHash ?? '' }, { timeoutMs }); continue; }
-      const capture = this.captureLearned(p.lane.skills, `Before forgetting ${p.key}`);
-      mkdirSync(join(p.lane.skills, '.archive'), { recursive: true });
-      renameSync(join(p.lane.skills, p.key), join(p.lane.skills, '.archive', `${p.key}-${Date.now()}`));
-      commit(p.lane.skills, ['.'], `Forgot ${p.key}; restore from ${capture}`);
+      const at = { agentId: p.lane, proposalId: p.id };
+      if (p.state === 'pending') await this.kit.call('skills.proposals.reject', { ...at, expectedRevisionHash: (await this.kit.call('skills.proposals.inspect', at, { timeoutMs })).revisionHash ?? '' }, { timeoutMs });
+      else await this.kit.call('skills.update', { skillKey: p.key, enabled: false }, { timeoutMs });
     }
   }
 }

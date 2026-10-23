@@ -13,6 +13,6 @@ await build({
   packages: 'external',
   platform: 'node',
   format: 'esm',
-  target: 'node22.22',
+  target: 'node24.16',
   sourcemap: false,
 });

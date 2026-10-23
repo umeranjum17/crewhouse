@@ -105,6 +105,9 @@ journeys:
   chat-real:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+  # Chief answers on the checkout's pinned engine with a scripted model: no account, no spend (the proof after a pin bump).
+  chief-reply-engine:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chief-reply-engine.sh "$DONE_DONE_EVIDENCE_ROOT"'
   crew-room:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE, or on OPENROUTER_API_KEY with CREW_ACCOUNT=openrouter'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/crew-room.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:-}"'

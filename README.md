@@ -104,7 +104,7 @@ On **Ubuntu or Debian** (64-bit), with nothing to type:
 
 Chief greets you and offers three things to take off your plate. Tap one, then **Sign in with…** under his reply. No terminal logins. You never copy an API key, except where an account is a key: OpenCode Go and MiniMax ask you to paste your key on the card. A helper fetches its own tools, such as its web browser, the first time it needs them.
 
-**From the code** (any Linux, for developers): you need **[Node.js](https://nodejs.org) 22.22.3 or later**.
+**From the code** (any Linux, for developers): you need **[Node.js](https://nodejs.org) 24.16 or later on 24, or 26.1 or later**.
 
 ```bash
 git clone https://github.com/umeranjum17/crewhouse && cd crewhouse
