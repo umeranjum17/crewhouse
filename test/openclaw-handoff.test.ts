@@ -100,3 +100,26 @@ test('a helper whose job failed after Chief\'s turn ended: the job settles with 
     assert.match(out.message, /stopped before reporting back/);
   } finally { await f.done(); }
 });
+
+// The kit reads the receipt the engine gives a hand-off. 2026.8.35 said accepted or queued; 2026.9.33 gives only the run
+// id and status timeout when it has no snapshot. Both mean the helper is working: the run is admitted, not dropped.
+for (const status of ['accepted', 'queued', 'timeout']) {
+  test(`a hand-off receipt of "${status}" is a helper still working, and its report settles the job`, async () => {
+    const { f, accepted, end } = waiting();
+    try {
+      await f.started;
+      const run = chiefRun(f);
+      const ref = await handOff(f, await accepted);
+      const ids = { key: CHIEF, runId: ref.parent.runId, callId: 'send-1' };
+      await f.ask({ kind: 'delegation-prepare', ...ids, tool: 'sessions_send', input: { sessionKey: ref.sessionKey, message: 'find it', timeoutSeconds: 0 } });
+      await f.ask({ kind: 'delegation-receipt', ...ids, result: { details: { status, runId: ref.runId, sessionKey: ref.sessionKey } } });
+      assert.equal([...(f.runtime as any).kit.delegatedRuns()].length, 1, `a "${status}" receipt dropped the helper's run`);
+      end();
+      f.fake.emit('byokit.delegated', { type: 'event', run: ref, event: { stream: 'assistant', data: { text: 'Scout found it.' } } });
+      f.fake.emit('byokit.delegated', { type: 'ended', run: ref, reason: 'terminal' });
+      const out: any = await settle(run);
+      assert.ok(out.ok, JSON.stringify(out));
+      assert.equal(out.text, 'Scout found it.');
+    } finally { await f.done(); }
+  });
+}
