@@ -5,7 +5,6 @@ import { promisify } from 'node:util';
 import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
-import { writeStepsRecord, version } from './steps.mjs';
 const EV = resolve(process.argv[2]), REPO = resolve(import.meta.dirname, '../..');
 mkdirSync(EV, { recursive: true });
 const d = mkdtempSync(join(EV, '.lab-'));
@@ -84,6 +83,5 @@ try {
     await browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
     await stop(); await start(); assert.deepEqual((await api('GET', '/api/rules')).rules, [edited]);
     writeFileSync(join(EV, 'restart.json'), JSON.stringify({ rules: (await api('GET', '/api/rules')).rules, cancelledRuleAbsent: true }));
-    writeStepsRecord(EV, { target: { version: version() }, start: 'Umer on a private real crewd, stub engine, no rules', steps: ['Chief shows a Confirm custom rule card with the full rule text, Create rule and Cancel; nothing is saved', 'Create rule: Saved card and settings link', 'Cancel another rule: Cancelled card, original rule unchanged', 'Cancel an edit, then save the edited rule in Settings, Custom rules', 'Scripted helper produces a draft, not a send; integration test checks its actual run context', 'Restart crewd: edited rule survives'], result: 'Confirmed custom-rule lifecycle and helper draft, with separate unchanged safety approvals. No real model, mailbox or send.' });
   }
 } finally { await stop(); rmSync(d, { recursive: true, force: true }); }

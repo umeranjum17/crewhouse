@@ -23,7 +23,9 @@ test('confirmed rules save, cancel, edit and reach a helper without changing saf
   try {
     await api('POST', '/api/onboard', { address: 'Umer' });
     assert.deepEqual((await api('GET', '/api/rules')).rules, []);
-    await turn('chief', `Never send for me. ${call('crew_rule', { text: rule })}`);
+    const offered = await turn('chief', `Never send for me. ${call('crew_rule', { text: rule })}`);
+    const initial = (crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', offered)!.session);
+    assert.doesNotMatch(initial.message, /Confirmed custom rules/, 'a run with no saved rules carries no empty rules block');
     let state = await api('GET', '/api/state'), card = A.cards(state).find((c) => c.rule)!;
     assert.ok(card, JSON.stringify({ asks: state.asks, calls: db.all("SELECT data FROM events WHERE kind = 'run.call'") })); assert.equal(card.preview?.body, rule);
     assert.deepEqual(card.choices.map((c) => c.label), ['Create rule', 'Cancel']);

@@ -39,8 +39,8 @@ const ABOUT: Record<string, string> = {
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
-  crew_rule: 'Offer a lasting instruction on a confirmation card: {text}. Preserve the person’s exact scope; nothing is saved before Create rule.',
-  crew_remember: 'Save a lasting preference: pass {text: "one short line"}; optionally replaces and everyone. Do not save how to address the person.',
+  crew_rule: 'Propose a rule; asks first.',
+  crew_remember: 'Save person facts: {text}, replaces?, everyone?. Rules need crew_rule.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
 export const TOOLS: ToolSpec[] = Object.entries(PARAMETERS).map(([name, parameters]) => ({ name, description: ABOUT[name] ?? `Crewhouse ${name.slice(5).replaceAll('_', ' ')}. The person sees the result in their crew.`, parameters }));
