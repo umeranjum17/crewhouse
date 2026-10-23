@@ -68,7 +68,7 @@ done
 echo "connect-apps: Connect apps is on"
 bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LAB/stop-film" & FILM=$!
 sleep 14
-ASK=${ASK:-'Chief, please use my connected apps to read what is on my calendar today. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
+ASK=${ASK:-'Chief, use my Composio apps (not a direct Google connection) to read what is on my Google Calendar today. If Google Calendar is not connected in Composio yet, give me the Composio connect link. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
 node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null
 # Each ask card must name a Composio app and is answered once (no standing answer exists for it). await_chief waits, bounded,
 # for Chief's job to end: END is done, unsure, failed or none; his last words are in $LAB/last.txt and a Composio connect link
@@ -98,7 +98,7 @@ if [ "$END" != done ] && [ -n "$LINK" ]; then # an app is not connected yet: the
   echo "connect-apps: Chief offered a connect link in $HAND/connect-link.txt; waiting for $HAND/granted"
   DEADLINE=$((SECONDS + ${GRANT_SECONDS:-900}))
   until [ -e "$HAND/granted" ]; do [ "$SECONDS" -lt "$DEADLINE" ] || { echo "connect-apps: the connect link was never approved" >&2; exit 1; }; sleep 2; done
-  ASK=${ASK2:-'I connected it. Please read what is on my calendar today. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
+  ASK=${ASK2:-'I connected it in Composio. Please use my Composio apps to read what is on my Google Calendar today. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
   node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null
   await_chief
 fi
