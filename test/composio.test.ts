@@ -35,8 +35,9 @@ test('Composio on removes native Gmail offers and rejects stale calls; off resto
   writeFileSync(join(cfg.crewDir, 'bots/chief/AGENTS.md'), 'Use crew_connect for Gmail. No links in chat.\n'); // an older installed job
   await crew.composio.connect();
   await until('Composio signed in', () => crew.composio.on());
-  const id = (await crew.post('chief', 'Read Gmail through Composio, read-only. ask permission'))!.task;
+  const id = (await crew.post('chief', 'Connect Gmail through Composio, read-only. ask permission'))!.task;
   await holding(crew, 'chief');
+  assert.equal(crew.snapshot().asks.length, 0, 'Connect Gmail reaches Chief instead of the native inline-how-to card');
   const run = { bot: 'chief', task: id, key: task(db, id).session }, host = crew.toolHost();
   const offer = (await host.tools(run)).find((t) => t.name === 'crew_connect')!;
   assert.ok(offer, 'other native apps remain available');

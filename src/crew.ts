@@ -1064,7 +1064,7 @@ export class Crew {
     if (!text.trim() && !pics.length) throw Object.assign(new Error('empty message'), { status: 400 });
     const words = text.trim() || (pics.some((p) => p.photo === false) ? `Here ${pics.length === 1 ? 'is a file.' : 'are some files.'}` : `Here ${pics.length === 1 ? 'is a photo.' : 'are some photos.'}`);
     if (botId === CHIEF && !this.person().onboarded) this.db.run('UPDATE people SET onboarded = 1 WHERE id = 1');
-    if (botId === CHIEF && !moved && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app')) {
+    if (botId === CHIEF && !moved && !pics.length && (asksForPhone(words) || inlineHowTo(words) === 'signin' || inlineHowTo(words) === 'app' && !(this.composio.on() && /\bgmail\b/i.test(words)))) {
       this.say(CHIEF, 'person', words, null);
       if (asksForPhone(words)) { await this.addPhone(); return; }
       if (inlineHowTo(words) === 'signin') { this.say(CHIEF, 'bot', `Sign in with ${(Object.values(PROVIDERS).find((p) => !this.accounts.unready(p.key) && !this.accounts.notIncluded(p.key) && !this.accounts.restingUntil(p.key)) ?? PROVIDERS.chatgpt).name}.`, null); return; }
