@@ -85,7 +85,9 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
    *  (Undo takes it back through crewd); `saved` is a sentence added to the record (Undo drops it from there). */
   memory?: number; saved?: string;
   /** The last line of a job that ended stopped or failed: Try again re-posts the person's own ask for that job. */
-  retry?: string };
+  retry?: string;
+  /** Chief's Mail watch alert (`inboxOf`), and crewd's cause when Mail watch could not read Gmail. */
+  inbox?: Inbox; mailDown?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 /** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
@@ -445,7 +447,40 @@ export function plain(text = '') {
     .replace(/\0(\d+)\0/g, (_, i: string) => kept[+i]);
 }
 /** A teaser line (a chat list row, a Things summary): plain words, no raw ** emphasis marks — those render only in a chat bubble. */
-export const teaser = (text: string) => plain(text.replace(/(^|\n)[ \t]*(?:[-*•]|\d+[.)])[ \t]+/g, '$1')).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
+export const teaser = (text: string) => plain(unlinked(text).replace(/(^|\n)[ \t]*(?:[-*•]|\d+[.)])[ \t]+/g, '$1')).replace(/(\*\*|\*)(?=[^\s*])([^*]*[^\s*])\1/g, '$2');
+
+const MD_LINK = /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, BARE_URL = /(?<![(<\w])https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"”’]/g;
+/** Where a link goes, as a person names it: Gmail for a mail link, else the site without www. */
+export const siteOf = (href: string) => { try { const h = new URL(href).hostname.replace(/^www\./, ''); return h === 'mail.google.com' ? 'Gmail' : h; } catch { return ''; } };
+/** A bare address in a sentence, said as where it goes ("Open in Gmail", "nodejs.org"): never a 60-letter URL on a phone. */
+const bareLabel = (href: string) => siteOf(href) === 'Gmail' ? 'Open in Gmail' : siteOf(href);
+/** A teaser carries no link machinery: a Markdown link reads as its words, a bare address as its site. */
+const unlinked = (text: string) => text.replace(MD_LINK, '$1').replace(BARE_URL, (u) => bareLabel(u) || u);
+
+/** A Mail watch alert in Chief's thread (docs/verification/mail-watch.md), read for a phone: its first sentence leads,
+ *  every source is one tappable row naming its site, and the one closing question stands apart to answer. The words are
+ *  Chief's own: a bare address reads as its site's name, and a sentence that is only a link moves to its row.
+ *  `lead` and `ask` are '' when absent. */
+export type Inbox = { lead: string; body: string; ask: string; sources: { label: string; href: string; site: string }[] };
+const SENTENCE = /(?<=[.!?])\s+(?=[A-Z“"[(])|\n[ \t]*\n\s*(?=[A-Z“"[(])/g;
+export function inboxOf(text: string): Inbox {
+  const sources: Inbox['sources'] = [];
+  const add = (label: string, href: string) => { const h = safeLink(href); if (h && !sources.some((s) => s.href === h)) sources.push({ label, href: h, site: siteOf(h) }); };
+  const named = text.replace(MD_LINK, (m, label: string, href: string) => (add(label.trim(), href), m));
+  const words = named.replace(BARE_URL, (u, at: number, all: string) => all.slice(at - 2, at) === '](' ? u : (add(bareLabel(u), u), `[${bareLabel(u)}](${u})`)).trim();
+  // Sentence ends, cut at their own spaces so a list or a paragraph break inside the body stays as written.
+  const ends = [...words.matchAll(SENTENCE)], plainOne = (s: string) => !s.includes('](') && !s.includes('\n');
+  // One closing question without a link of its own; a whole message that is one question stays the body.
+  const q = ends.at(-1), last = q ? words.slice(q.index + q[0].length) : '';
+  const ask = q && /\?$/.test(last) && plainOne(last) ? last : '';
+  const upTo = ask ? q!.index : words.length, l = ends[0], first = l && l.index < upTo ? words.slice(0, l.index) : '';
+  const lead = first && first.length <= 220 && plainOne(first) ? first : '';
+  // A sentence that is only a link is already its source row: the words keep the sentences that say something.
+  const body = words.slice(lead ? l!.index + l![0].length : 0, upTo).replace(/(?<=^|[.!?])[ \t]*\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)(?:[.!](?=\s|$)|$)/g, '').trim();
+  return { lead, body, ask, sources };
+}
+/** crewd's own line when Mail watch could not read Gmail: the cause, kept as said (docs/verification/mail-watch.md). */
+const MAIL_DOWN = /^Mail watch couldn't check Gmail:\s*(.+)$/s;
 
 // ---------- the crew ----------
 const KINDS = Object.keys(PALS) as Kind[];
@@ -780,7 +815,7 @@ export function preview(last: Json | null | undefined, status = '') {
   const text = bare ? (u && !n ? (u === 1 ? 'File' : `${u} files`) : n ? (n === 1 ? 'Photo' : `${n} photos`) : said) : said;
   const f = /^Delivered (files\/.+?)(?::\s|$)/.exec(text);
   if (f) return `Sent “${pretty(f[1])}”`;
-  return last.author === 'person' ? `You: ${text.replace(/\s+/g, ' ')}` : teaser(text).replace(/\s+/g, ' ');
+  return last.author === 'person' ? `You: ${text.replace(/^>[^\n]*\n+/, '').replace(/\s+/g, ' ')}` : teaser(text).replace(/\s+/g, ' ');
 }
 /** A hero line is a real sentence: bare fragments ("4."), list markers and empty lines never reach it. */
 const realSentence = (text: string): string => String(text ?? '').split(/(?<=[.!?…])\s+/)
@@ -1640,6 +1675,9 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
   const newest = Math.max(0, ...tasks.filter((t: Json) => t.state === 'failed').map((t: Json) => t.id));
   const live = tasks.some((t: Json) => ['queued', 'working', 'needs_you', 'paused'].includes(t.state));
   const asks = new Map<number, string>(), lastOf = new Map<number, number>();
+  // Chief's jobs that Mail watch started: their reply is an inbox alert.
+  const mailWatch = new Set((state.routines ?? []).filter((r: Json) => r.mailwatch).map((r: Json) => r.id));
+  const watched = new Set(tasks.filter((t: Json) => mailWatch.has(t.routine)).map((t: Json) => Number(t.id)));
   for (const m of msgs) if (m.task_id) {
     if (m.author === 'person') asks.set(m.task_id, String(m.text ?? '').replace(ATTACH, '').trim());
     if (m.author === 'bot') lastOf.set(m.task_id, m.id);
@@ -1653,6 +1691,8 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     const at0 = m.at ? at(m.at) : undefined;
     if (m.author === 'system') {
       const f = /^(?:Delivered|Kept) (files\/.+?)(?::\s|$)/.exec(text);
+      const down = MAIL_DOWN.exec(text)?.[1];
+      if (down) return { id: m.id, from: 'note', text: plain(text), mailDown: plain(down), files: [], choices: [], at: at0 };
       if (!f) return { id: m.id, from: 'note', text: plain(text), event: bot === 'chief' && /^New routine “/.test(text), files: [], choices: [], at: at0 };
       const words = plain(text.slice(f[0].length)) || `Here's “${pretty(f[1])}”`;
       // A built workbook or document is its card on the web, which says what is in it: no words of its own there. The
@@ -1672,8 +1712,9 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     if (m.author === 'chief' && bot !== 'chief') return { id: m.id, from: 'chief', at: at0,
       text: `From Chief: ${handOff(plain(String(m.title ?? text.split('\n')[0])), text)}`, detail: chatWords(text),
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
-    return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}),
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : noTools(text)) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
+    const inbox = m.author === 'bot' && watched.has(Number(m.task_id)) ? inboxOf(chatWords(text)) : undefined;
+    return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}), ...(inbox ? { inbox } : {}),
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
   }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)) })).filter((l: Line) => l.text || l.files.length);
 }
 
@@ -1890,7 +1931,7 @@ export function routines(state: Json, bot?: string) {
     id: r.id, name: plain(r.name), helper: r.kind === 'digest' ? 'chief' : r.bot, when: one ? 'One time' : plain(r.words ?? ''), ...bigTime(one ? '' : plain(r.words ?? '')), on: one ? '' : plain(r.on ?? ''), paused: r.state === 'paused',
     next: one ? (r.next_at ? `at ${moment(Number(r.next_at))}` : r.last_at ? `reminded ${clock(Number(r.last_at))}` : '') : r.next_at ? nextAt(r.next_at) : '', digest: r.kind === 'digest', remind: one, reminded: one && !r.next_at,
     quiet: !!r.quiet, watching: r.watch ? host(r.watch) : '', looks: plain(r.looks ?? ''),
-    runs: (r.history ?? []).slice(0, 5).map((h: Json) => runOf(h, one)), // newest first
+    runs: (r.history ?? []).slice(0, 5).map((h: Json) => runOf(h, one, !!r.mailwatch)), // newest first
   };
   });
 }
@@ -1917,18 +1958,18 @@ function nextAt(at: number) {
 /** One run of a routine: when, and what came of it in plain words — nothing new, told you, or why it didn't work.
  *  `tone` is `none`, `told`, `bad` or `running`; `result` is where it ended up: the thing it made, else its line in the
  *  chat. A skipped or failed run has neither. */
-function runOf(h: Json, reminder = false) {
+function runOf(h: Json, reminder = false, mail = false) {
   const result = h.state === 'done' && h.thing ? { thing: h.thing } : h.state === 'done' && h.msg ? { msg: h.msg } : !h.task && h.message ? { msg: h.message } : null;
   const [tone, words] = h.state === 'paused' ? ['bad', h.reason?.includes('share of your AI today') ? "Waiting until tomorrow: today's share for background jobs is used up. Tap Do it now to run it anyway." : `Waiting: ${plain(h.reason ?? 'the crew cannot start yet')}`]
     : h.kind === 'routine.skipped' ? ['bad', h.why === 'daily' ? "Didn't run: today's is already in Chief's chat" : "Didn't start: the last run was still going"]
     : h.state === 'failed' || h.state === 'unsure' ? ['bad', `Didn't finish: ${plain(h.reason ?? 'please try again')}`]
     : h.state === 'needs_you' ? ['running', 'Waiting for your OK']
     : h.task && h.state !== 'done' ? ['running', 'Running now']
-    : h.watch === 'unreachable' ? ['bad', "Couldn't open the page. I'll try again next time"]
+    : h.watch === 'unreachable' ? ['bad', mail ? "Couldn't reach Gmail. I'll try again next time" : "Couldn't open the page. I'll try again next time"]
     : h.watch === 'signed-out' ? ['bad', "Gmail isn't connected"]
-    : h.watch === 'started' ? ['none', 'Started watching. Nothing to compare yet']
-    : h.watch === 'same' ? ['none', 'Nothing new']
-    : h.clear ? ['none', h.watch === 'changed' ? 'The page changed, nothing worth telling you' : 'Nothing new']
+    : h.watch === 'started' ? ['none', mail ? 'Started watching your inbox. Mail from now on counts' : 'Started watching. Nothing to compare yet']
+    : h.watch === 'same' ? ['none', mail ? 'No new mail' : 'Nothing new']
+    : h.clear ? ['none', h.watch === 'changed' ? 'The page changed, nothing worth telling you' : mail ? 'New mail, nothing that needs you' : 'Nothing new']
     : result ? ['told', reminder ? 'Reminded you' : 'Told you'] : ['none', 'Done'];
   return { at: clock(h.at), t: Number(h.at), tone, words, result };
 }

@@ -7,7 +7,7 @@ import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json }
 import * as A from './adapter.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, AskSheet, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, DoneCard, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, DoneCard, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -682,7 +682,12 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     if (el) { el.scrollTop = el.scrollHeight; seenH.current = el.scrollHeight; }
     setNewBelow(false);
   };
-  const send = async (t: string, files?: { name: string; type: string; data: string }[]) => {
+  // The inbox alert being answered (its line id): Answer sets it; a sent answer or ✕ clears it.
+  const [answering, setAnswering] = useState<number>();
+  const send = async (said: string, files?: { name: string; type: string; data: string }[]) => {
+    // An answer to an inbox alert's question carries it as a quote: the person sees what they answered, and Chief reads
+    // the exact question (his earlier lines reach him only in short).
+    const ask = answering !== undefined && answering === last?.id && said ? last.inbox?.ask : undefined, t = ask ? `> ${ask}\n\n${said}` : said;
     // A send is the person's own hand reaching the newest line: re-pin at once so the echo
     // bubble and the live line are visible in the first frame, even from scrolled-up reading.
     pinned.current = true; touched.current = false;
@@ -693,10 +698,13 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
     // The first words of a new install, if short, answer Chief's "What shall I call you?"; anything longer is already the first job.
     const named = id === 'chief' && !state.person.onboarded && !files?.length && A.asName(t);
     const ok = await attempt(() => named ? api.onboard(t, undefined, undefined, true) : api.post(id, t, undefined, undefined, files?.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
-    if (ok) { setAround(0); void load(0); refresh(); } else setPending(null);
+    if (ok) { setAround(0); setAnswering(undefined); void load(0); refresh(); } else setPending(null);
     return ok;
   };
   const name = h?.name ?? 'Chief';
+  // An inbox alert's Answer: the person's own box, under an "Answering Chief" strip naming the question.
+  const answerTo = answering !== undefined && answering === last?.id ? last.inbox?.ask : undefined;
+  const answerBox = () => { setAnswering(last?.id); box.current?.closest('.chat')?.querySelector<HTMLTextAreaElement>('.dock textarea')?.focus(); };
   // Take back a memory the crew just kept: crewd's own undo for a note, or drop the sentence from the shared record.
   const undoMemory = (l: A.Line) => attempt(async () => {
     if (l.memory !== undefined) await api.undoMemory(id, l.memory);
@@ -733,7 +741,9 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
-          const content = <>{l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+          const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
+            : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
+            : l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
             {l.files.map((f) => f === doneFile && doneBy ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} settle={(later) => keep(f, later)} />
               : <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved
@@ -751,7 +761,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             {l.id === firstAnswer && <AddPhonePrompt accounts={accounts} tick={tick} />}</Fragment>;
         })}
         {id === 'chief' && A.campaignOutcomes(state).map((c) => <CampaignReceipt key={c.id} outcome={c} />)}
-        {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text">{pending.text}</div></div>}
+        {echoed && <div className="line me fresh sending"><div className="line-by"><span className="who">You</span></div><div className="bubble-text"><ChatText text={pending.text} latest /></div></div>}
         {!!partial && <div className="line them streaming" aria-live="polite"><div className="line-by"><Face who={id === 'chief' ? 'chief' : h!} size={hero ? 36 : 28} /><span className="who">{name}</span></div><div className="bubble-text"><ChatText text={partial} latest /></div></div>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />)}
         {ln && <LiveRow ln={ln} quiet={quiet} chipped={chipped} replied={replied} asked={askedAbove} who={A.crew(state).find((x) => x.id === ln.helper) ?? (id === 'chief' ? undefined : h)} />}
@@ -776,7 +786,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
         {id === 'chief' && <MadeHere made={hero ? A.madeInChat(state, page)
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
-      <div className="dock"><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={{ chat: id, name, lines, reading: setReading }} {...typeInto(id)} /></div>
+      <div className="dock">{answerTo && <div className="reply-to"><div className="grow"><b>Answering Chief</b><span>{answerTo}</span></div><button type="button" className="icon-btn" aria-label="Not answering" onClick={() => setAnswering(undefined)}>×</button></div>}
+        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={{ chat: id, name, lines, reading: setReading }} {...typeInto(id)} /></div>
     </div>
   );
 }
