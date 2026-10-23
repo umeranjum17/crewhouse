@@ -145,7 +145,7 @@ test('paste a boat.dev key, pick the computer, and chat with Chief running there
   assert.equal((await phoneSide.req('GET', '/api/phones')).body.length, 1);
   writeFileSync(join(cloud, 'inbox/phone.bin'), keyPair().publicKey);
   await until('a second phone is refused', () => /already has an owner phone/.test(log), 10_000);
-  assert.equal(existsSync(join(dir, 'ts-called')), false, 'the cloud computer never needs Tailscale');
+  assert.equal(existsSync(join(dir, 'ts-called')), false, 'the cloud computer flow never invokes Tailscale');
 
   // Move Chief to the new phone, as the person confirmed: setup runs again, the new phone is the owner and reaches
   // Chief, and the phone that set the computer up loses access at once.

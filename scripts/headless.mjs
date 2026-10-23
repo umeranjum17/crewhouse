@@ -98,7 +98,7 @@ async function setup() {
   const quote = s => JSON.stringify(s).replaceAll('%', '%%');
   const env = Object.entries(process.env).filter(([k]) => /^(CREWHOUSE_|XDG_|HOME$|PATH$)/.test(k)).map(([k, v]) => `Environment=${quote(`${k}=${v}`)}`).join('\n');
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'crewhouse-headless.service'), `[Unit]\nDescription=Crewhouse headless host and private relay\nAfter=network-online.target tailscaled.service\n[Service]\nWorkingDirectory=${repo.replaceAll('%', '%%')}\nExecStart=${quote(process.execPath)} ${quote(join(repo, 'scripts/headless.mjs'))} serve\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=30\nUMask=0077\n${env}\n[Install]\nWantedBy=${root ? 'multi-user.target' : 'default.target'}\n`, { mode: 0o600 });
+  writeFileSync(join(dir, 'crewhouse-headless.service'), `[Unit]\nDescription=Crewhouse headless host and private relay\nAfter=network-online.target${publicRelay ? '' : ' tailscaled.service'}\n[Service]\nWorkingDirectory=${repo.replaceAll('%', '%%')}\nExecStart=${quote(process.execPath)} ${quote(join(repo, 'scripts/headless.mjs'))} serve\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=30\nUMask=0077\n${env}\n[Install]\nWantedBy=${root ? 'multi-user.target' : 'default.target'}\n`, { mode: 0o600 });
   execFileSync('systemctl', [...scope, 'daemon-reload'], { stdio: 'inherit' });
   execFileSync('systemctl', [...scope, 'enable', '--now', 'crewhouse-headless.service'], { stdio: 'inherit' });
   await pair(); // secrets go to the calling terminal, never the unit's journal

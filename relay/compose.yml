@@ -3,7 +3,7 @@ services:
   relay:
     build: .
     ports:
-      - "127.0.0.1:7300:7300" # loopback: Caddy or Tailscale Serve on this machine carries it to the internet
+      - "127.0.0.1:7300:7300" # loopback: an operator-managed HTTPS reverse proxy carries it to the internet
     volumes:
       - relay-data:/data
     environment:

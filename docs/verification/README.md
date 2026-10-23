@@ -72,7 +72,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 |----|------|----------------|
 | herdr-setup | [herdr-setup.md](herdr-setup.md) | The helper's Herdr setup and prerequisite refusal |
 | phone-pairing | [phone-pairing.md](phone-pairing.md) | Native camera, typed and timed-code pairing on the release app |
-| put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: one pasted line installs the headless host on a clean Linux box, then the phone types its code |
+| put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: a cloud/sandbox host is administered over SSH with a key supplied by path, uses the published relay for phone access, never joins the owner's tailnet, and is deleted after the run; `test/cloud-connect.test.ts` rejects any Tailscale invocation |
 | look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/verify/mocks.tsv`) |
 | chat-attach | [chat-attach.md](chat-attach.md) | Chief's paperclip: a PDF or document lands in the helper's inbox under crewd's own name and shows as a one-line file card above the words, at 390/1440, the largest text and in the installed app; the phone app's + sheet, chip and big-file stream on an emulator |
 | custom-rules | [custom-rules.md](custom-rules.md) | Chief confirms a standing instruction before saving; explicit Saved/Cancelled cards, editable rules in Settings, separate safety checks and helper draft (browser only) |
