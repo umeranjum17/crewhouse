@@ -38,7 +38,7 @@ Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, 
 
 ## Headless Linux host
 
-A cloud computer in **your own account** can run Chief without a desktop or browser. Sign the computer and phone into your Tailscale network first. Download and extract the portable Linux tarball from the [releases page](https://github.com/umeranjum17/crewhouse/releases), then run:
+A cloud computer in **your own account** can run Chief without a desktop or browser. Connect with `ssh -i /path/to/key <user>@<host>`; do not join the machine to your Tailscale network. Download and extract the portable Linux tarball from the [releases page](https://github.com/umeranjum17/crewhouse/releases), then run:
 
 ```bash
 cd crewhouse/app
@@ -47,11 +47,11 @@ cd crewhouse/app
 
 The download includes its pinned Node, AI engine, web app and private relay; no git clone is needed. Setup starts `crewhouse-headless.service` and prints a private, single-use first-phone code and terminal QR, valid for two minutes. In the phone app choose **Pair with a computer**, then paste the code or scan the QR. This first phone becomes the owner without waiting for a confirmation on the computer. Its encrypted grant can manage the accounts and settings normally reserved for the computer. Other phones still require the owner's confirmation. Revoking the first phone does not reopen first-owner setup.
 
-The service keeps running without the setup terminal. Root installs use a system unit; other installs use a user unit (enable lingering if it must survive logout). Run under the account intended to own the install. The API stays on loopback with its private capability; by default the phone link and relay listen only on loopback/Tailscale, never the public interface. The relay enrols only this host, with public signup disabled. Both devices must be on the same tailnet; there is no relay hosted by us.
+The service keeps running without the setup terminal. Root installs use a system unit; other installs use a user unit (enable lingering if it must survive logout). Run under the account intended to own the install. Use SSH with the key supplied by path to administer the cloud machine, then delete the machine when finished. For phone access, configure `CREWHOUSE_RELAY_PUBLIC` to a published relay URL; the cloud machine does not join your tailnet. The relay enrols only this host, with public signup disabled. There is no relay hosted by us.
 
 For an installer that owns its systemd unit, use `./crewhouse setup --headless --install-only`, run the bundled Node on `scripts/headless.mjs serve` in `crewhouse/app`, then run `./crewhouse headless pair` from the host terminal. Keep pairing output out of installer logs. `./crewhouse headless health` exits zero only when the authenticated API, phone route and private relay are ready. If an unused code expires, `headless pair` prints a new one; once a phone has joined, it refuses. Stop or disable `crewhouse-headless.service` with the matching system or user `systemctl` before removing this headless install.
 
-For an operator-managed container behind a published tailnet port, set `CREWHOUSE_RELAY_PUBLIC=http://<tailnet-ip>:<published-relay-port>` consistently on setup and the service. This relay-only mode skips all Tailscale discovery and peer checks and keeps the API private. The relay binds all **container** interfaces; publish only that port on the tailnet interface, never on the public internet. The published address must be a tailnet, private-LAN or loopback IPv4 origin. An operator can publish on a private LAN for phones on the same Wi-Fi; that does not prove remote tailnet reach. Port publication and the tailnet identity belong to the operator, not Crewhouse.
+For an operator-managed cloud container, set `CREWHOUSE_RELAY_PUBLIC=https://<your-relay-host>` consistently on setup and the service. This relay-only mode skips all Tailscale discovery and peer checks and keeps the API private. The relay binds all **container** interfaces; publish only the relay port through an operator-managed HTTPS endpoint, never expose the API or an unprotected relay publicly. Administer the container host over SSH with a key supplied by path, then delete the machine after use.
 
 Sign-in uses BYOKit's existing account wizard on the host; an AI key never moves to the phone. Browser-only account redirects still return to the host, so choose a supported device-code/key route on a machine without a browser.
 
