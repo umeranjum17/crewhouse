@@ -1,6 +1,7 @@
 // A021: real HTTP/SQLite and real rendered screens on the scripted engine, never an AI key or a send.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -29,10 +30,11 @@ const matrix = (slug, route, shown) => ['day', 'night'].flatMap(look => [390, 14
   { name: 'ready', wait: `${ready} && (${shown})` },
   { name: `${slug}-geometry-${look}-${w}`, eval: geometry, out: join(EV, `${slug}-${look}-${w}.png`) }
 ]));
-const browser = (name, steps, pwa = false) => {
+const browser = async (name, steps, pwa = false) => {
   const path = join(d, `${name}.json`), out = join(EV, `${name}-run.json`);
   writeFileSync(path, JSON.stringify({ profile: join(d, `${name}-profile`), home: join(d, 'home'), headless: false, args: ['--window-size=1440,1000', '--force-device-scale-factor=1', 'about:blank'], xkey: join(REPO, 'scripts/verify/xkey.py'), recorder: join(REPO, 'scripts/verify/record.mjs'), steps: [{ name: 'authenticate', url: `${B}/#person=${key}`, settle: 0 }, { name: 'authority-ready', wait: `sessionStorage.getItem('crewhouse.person')?.length === 64` }, ...steps] }));
-  const result = execFileSync(process.execPath, [join(REPO, 'scripts/verify/pwa-shell.mjs'), path], { cwd: REPO, encoding: 'utf8', timeout: 300000, maxBuffer: 10_000_000 });
+  // Keep HTTP socket-close events flowing while the browser runs; a synchronous child leaves pooled sockets stale.
+  const { stdout: result } = await promisify(execFile)(process.execPath, [join(REPO, 'scripts/verify/pwa-shell.mjs'), path], { cwd: REPO, encoding: 'utf8', timeout: 300000, maxBuffer: 10_000_000 });
   writeFileSync(out, result.replaceAll(d, '<lab>').replaceAll(key, '<lab-key>'));
   const rows = JSON.parse(result), bad = rows.filter(r => r.error || r.value === false || r.value?.scrollWidth > r.value?.width);
   assert.deepEqual(bad, [], `${name} browser assertions`);
@@ -44,13 +46,13 @@ const request = (text) => `fetch('/api/bots/chief/messages',{method:'POST',heade
 try {
   await start(); await api('POST', '/api/onboard', { address: 'Umer' });
   if (process.env.BASELINE) {
-    browser('before', matrix('before-settings', 'settings', `document.body.innerText.includes('Settings')`));
+    await browser('before', matrix('before-settings', 'settings', `document.body.innerText.includes('Settings')`));
   } else {
     await post('chief', 'From now on, only prepare drafts. I will send messages myself.');
     await until('pending rule card', async () => (await api('GET', '/api/state')).asks.some(a => a.detail.customRule));
     assert.deepEqual((await api('GET', '/api/rules')).rules, []);
     const confirm = `!!document.querySelector('[aria-label="Confirm custom rule"]')`;
-    browser('journey', [
+    await browser('journey', [
       ...matrix('confirm', 'chief', confirm),
       { name: 'phone', w: 390, h: 844, url: `${B}/?day#/chief`, settle: 0 }, { name: 'ready', wait: confirm },
       { name: 'record', record: join(EV, 'rule-journey.webm'), seconds: 120 },
@@ -78,10 +80,10 @@ try {
     assert.ok(helper.trail.some(e => e.kind === 'run.call' && e.data.tool === 'crew_draft' && e.data.ok));
     assert.equal(helper.trail.filter(e => e.kind === 'run.call').some(e => ['browser', 'computer', 'mail', 'crew_app'].includes(e.data.tool)), false);
     writeFileSync(join(EV, 'helper.json'), JSON.stringify(helper, null, 2));
-    browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
+    await browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
     await stop(); await start(); assert.deepEqual((await api('GET', '/api/rules')).rules, [edited]);
     writeFileSync(join(EV, 'restart.json'), JSON.stringify({ rules: (await api('GET', '/api/rules')).rules, cancelledRuleAbsent: true }));
-    browser('pwa', [
+    await browser('pwa', [
       { name: 'settings', url: `${B}/?day#/settings`, settle: 0 }, { name: 'installable', wait: `!!document.querySelector('.install .btn')` },
       { name: 'install', click: '.install .btn', settle: 0 }, { name: 'tab', key: 'Tab' }, { name: 'return', key: 'Return' },
       { name: 'attach', attachApp: B }, { name: 'standalone', eval: `matchMedia('(display-mode: standalone)').matches` },
