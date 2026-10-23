@@ -76,10 +76,12 @@ try {
     await api('POST', '/api/recruit', { template: 'scribe', name: 'Scribe' });
     const task = await post('scribe', 'Write a draft reply to Alex.');
     await until('helper draft', async () => (await api('GET', '/api/bots/scribe')).tasks.some(t => t.id === task.task && t.state === 'done'));
-    const helper = await api('GET', '/api/bots/scribe');
-    assert.ok(helper.trail.some(e => e.kind === 'run.call' && e.data.tool === 'crew_draft' && e.data.ok));
-    assert.equal(helper.trail.filter(e => e.kind === 'run.call').some(e => ['browser', 'computer', 'mail', 'crew_app'].includes(e.data.tool)), false);
-    writeFileSync(join(EV, 'helper.json'), JSON.stringify(helper, null, 2));
+    const helper = await api('GET', '/api/bots/scribe'), trail = await api('GET', `/api/task/${task.task}/trail`);
+    writeFileSync(join(EV, 'helper.json'), JSON.stringify({ helper, trail }, null, 2));
+    assert.deepEqual(trail.map(({ words, ok }) => ({ words, ok })), [{ words: 'Saved reply.txt', ok: true }, { words: 'Used draft', ok: true }], 'the complete public task trail is successful draft-only work, with no outward action');
+    const draft = (await api('GET', '/api/state')).asks.find(a => a.bot === 'scribe' && a.detail.draft);
+    assert.equal(draft?.detail.preview.body, 'Thanks, Alex. I will reply tomorrow. — Umer'); assert.equal(draft.detail.draft.to, 'Alex');
+    assert.deepEqual(helper.allow, [], 'the confirmed rule gave no standing safety permission');
     await browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
     await stop(); await start(); assert.deepEqual((await api('GET', '/api/rules')).rules, [edited]);
     writeFileSync(join(EV, 'restart.json'), JSON.stringify({ rules: (await api('GET', '/api/rules')).rules, cancelledRuleAbsent: true }));
