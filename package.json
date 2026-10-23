@@ -24,7 +24,7 @@
     "@byokit/cloud": "0.2.1",
     "@byokit/connect": "0.7.0",
     "@byokit/discover": "0.8.5",
-    "@byokit/openclaw": "0.27.0",
+    "@byokit/openclaw": "0.27.2",
     "@byokit/pair": "0.10.4",
     "@byokit/relay": "0.8.2",
     "@byokit/secrets": "0.5.2",
