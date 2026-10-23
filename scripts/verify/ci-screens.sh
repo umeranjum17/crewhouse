@@ -15,7 +15,8 @@ mkdir -p "$OUT"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:-ci-screens}"
 
 LAB=$(mktemp -d -t ci-screens.XXXXXX)
-trap 'kill "$SRV" 2>/dev/null || true; rm -rf "$LAB"' EXIT
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
+trap 'kill "$SRV" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 node "$VERIFY_DIR/serve-web.mjs" "$REPO/web/dist" > "$LAB/serve.log" 2>&1 & SRV=$!
 for _ in $(seq 100); do
   grep -q '^serving ' "$LAB/serve.log" 2>/dev/null && break

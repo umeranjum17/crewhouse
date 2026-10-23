@@ -22,7 +22,7 @@ LAB=$(mktemp -d -t crewhouse-chat-real.XXXXXX)
 TL="$OUT/timeline.txt"; : > "$TL" # every step stamped: seconds from crewd's start to the first Chief reply
 mark() { printf '%s %s\n' "$(date +%s.%N)" "$1" >> "$TL"; }
 mark start
-trap 'crewd_stop || exit 1; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+trap '[ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"

@@ -7,6 +7,12 @@ CREWD=""
 exec {crewd_err}>&2
 crewd_traps() { trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; }
 crewd_traps
+# crewhouse_remove_lab <dir>: only discard a lab after every owned process group is empty.
+crewhouse_remove_lab() {
+  local lab=$1
+  crewd_stop || return 1
+  chmod -R u+w -- "$lab" && rm -rf -- "$lab"
+}
 # crewd_start <dir> <log> <command…>: the command, run in <dir>, leads a fresh group and dies with this shell
 # (setpriv's parent-death signal). No job control, so setsid never forks and $! is crewd; CREWD is set once the
 # group exists, and a signal meanwhile waits for that, so cleanup still drains it.

@@ -20,7 +20,7 @@ REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-screen.XXXXXX)
 HELPER="" FILM="" APP=""
-trap '[ -z "$APP" ] || { touch "$LAB/stop-film"; wait "$APP" 2>/dev/null; }; [ -z "$FILM" ] || kill -INT "$FILM" 2>/dev/null; [ -z "$HELPER" ] || kill "$HELPER" 2>/dev/null; crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+trap '[ -z "$APP" ] || { touch "$LAB/stop-film"; wait "$APP" 2>/dev/null; }; [ -z "$FILM" ] || kill -INT "$FILM" 2>/dev/null; [ -z "$HELPER" ] || kill "$HELPER" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 node "$REPO/scripts/verify/chief-screen-model.ts" "$LAB/env" "$OUT/saved.txt" ${KEYFILE:+real} > "$OUT/model.log" 2>&1 &
 HELPER=$!

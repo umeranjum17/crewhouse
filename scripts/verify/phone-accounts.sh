@@ -20,7 +20,8 @@ ui() { SERIAL=$SERIAL node "$VERIFY_DIR/phone-ui.mjs" "$@"; }
 see() { for _ in $(seq "${2:-30}"); do ui texts 2>/dev/null | grep -qE -- "$1" && return 0; sleep 1; done; ui texts >&2 || true; echo "phone-accounts: never saw: $1" >&2; return 1; }
 
 export LAB; LAB=$(mktemp -d -t phone-accounts.XXXXXX)
-trap 'bash "$VERIFY_DIR/pair-lab.sh" down || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; cp "$LAB/crewd.log" "$OTHER/crewd.log" 2>/dev/null || true; rm -rf -- "$LAB"' EXIT
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
+trap 'bash "$VERIFY_DIR/pair-lab.sh" down || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; cp "$LAB/crewd.log" "$OTHER/crewd.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 bash "$VERIFY_DIR/pair-lab.sh" up "$REPO" >/dev/null
 . "$LAB/env"
 api() { curl -fsS -X "$1" -H x-crewhouse:1 -H 'content-type: application/json' -H "Authorization: Bearer $(cat "$LAB/state/person.key")" "$B$2" ${3:+-d "$3"}; }

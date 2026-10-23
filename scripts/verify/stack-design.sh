@@ -18,7 +18,7 @@ REPO=$(git rev-parse --show-toplevel)
 MOCK=${EVIDENCE_HOME:+$EVIDENCE_HOME/data/evidence/ch-canvas-overlap-start/final}
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-stack.XXXXXX)
-trap 'crewd_stop || exit 1; chmod -R u+w "$LAB" 2>/dev/null; rm -rf -- "$LAB"' EXIT
+trap 'crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run,pwa}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"

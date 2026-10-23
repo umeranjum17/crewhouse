@@ -33,8 +33,7 @@ cleanup() {
     sleep 0.1
   done
   for p in "$RELAY_PID" "$WEB_PID"; do [ -n "$p" ] && kill -KILL "$p" 2>/dev/null || true; done
-  chmod -R u+w "$LAB" 2>/dev/null || true
-  rm -rf "$LAB"
+  crewhouse_remove_lab "$LAB"
 }
 trap cleanup EXIT
 mkdir -p "$LAB"/{home,state,crew,tools,run,relay,tmp} "$LAB/state/openclaw"

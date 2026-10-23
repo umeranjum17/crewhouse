@@ -25,7 +25,7 @@ axi() { local out rc n=0; while :; do if out=$(timeout -k 10 120 chrome-devtools
 page() { axi open about:blank > /dev/null 2>&1 && return 0; axi selectpage "$(axi pages | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) id = $1 } END { print id }')" > /dev/null; axi open about:blank > /dev/null || axi newpage about:blank > /dev/null; } # leave the last page first: one document reloaded all run ran out of WebAssembly memory
 node "$REPO/scripts/verify/personal-voice.mjs" --self-test > /dev/null && node "$REPO/scripts/verify/personal-voice.mjs" > /dev/null
 LAB=$(mktemp -d -t crewhouse-live.XXXXXX)
-trap 'crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB" || { sleep 5; chmod -R u+w "$LAB"; rm -rf "$LAB"; }' EXIT
+trap 'crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home/Documents" "$LAB"/{state,crew,tools,run}
 NOTE="$LAB/home/Documents/lab-note.txt"
 echo "The lab note says the garden gate code is 4417." > "$NOTE"
