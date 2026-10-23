@@ -16,7 +16,9 @@ call-idle	data/ch-voice-call/mocks/png/idle-390-{theme}.png
 call-listening	data/ch-voice-call/mocks/png/listening-390-{theme}.png
 call-speaking	data/ch-voice-call/mocks/png/speaking-390-{theme}.png
 call-voice	data/ch-voice-call/mocks/png/voice-390-{theme}.png
-chief-profile	data/ch-chief-profile-gaps/shots/mocks/profile-b-{look}.png
+chief-profile	data/evidence/ch-canvas-overlap-start/final/J09c-390-{theme}.png
+chief-instructions	data/evidence/ch-canvas-overlap-start/final/J09d-390-{theme}.png
+settings	data/evidence/ch-canvas-overlap-start/final/J09a-390-{theme}.png
 screen-control	data/ch-chief-profile-gaps/shots/mocks/computer-{look}.png
 add-to-crew	data/ch-chief-profile-gaps/shots/mocks/market-a-{look}.png
 model-pick	data/ch-chief-profile-gaps/shots/mocks/model-a-{look}.png

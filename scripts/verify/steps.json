@@ -441,5 +441,17 @@
       "In Chief's chat, tap Sign out, confirm, and tap Use this phone only again"
     ],
     "result": "After Connect the phone asks Which model should Chief use? and lists all 9 models the live list gives, MiniMax M3.1 Flash first and tagged Recommended, then MiniMax M3, M2.7, M2.7 Highspeed, M2.5, M2.5 Highspeed, M2.1, M2.1 Highspeed and M2, under a Search 9 models box, with Use the default for now: MiniMax M3.1 Flash; tapping MiniMax M3 marks it selected and the button reads Use MiniMax M3; confirming opens Chief's chat with MiniMax M3 under his name; after Sign out, Use this phone only asks for a key again"
+  },
+  "stack-design": {
+    "start": "a fresh crew on the stub engine for Umer: Research Rae at work, Writer Will done with a letter, a Morning digest routine, and Chief asking to bring Invoice Ivy and Translator Tess on",
+    "steps": [
+      "Open Chief's profile from his thread, on a phone and on a computer, by day and by night",
+      "Open How Chief works from the profile",
+      "Open Settings on a phone and on a computer",
+      "Read Chief's two hire cards in his thread",
+      "Watch Home while Rae works, then turn on Reduce Motion",
+      "Install Crewhouse from Settings and open Chief's profile and Settings in the installed window"
+    ],
+    "result": "Chief's profile is the blue portrait card with Routines, News and Instructions, the portrait left and the rows right on a computer; Settings shows one card then Look on a phone and two columns on a computer; each hire card names the helper on one line and says Yes, bring Ivy on; Rae's face moves while she works and stands still under Reduce Motion; the installed window shows the same pages, standalone, with no install row"
   }
 }
