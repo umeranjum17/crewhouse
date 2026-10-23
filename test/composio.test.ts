@@ -27,6 +27,43 @@ test('Connect apps: the person signs in once and the state turns on; a failed ca
   assert.equal(s.crew.composio.on(), false);
 });
 
+test('Composio on removes native Gmail offers and rejects stale calls; off restores the native card', async () => {
+  const { crew, db } = setup();
+  crew.onboard('Umer');
+  await crew.composio.connect();
+  await until('Composio signed in', () => crew.composio.on());
+  const id = (await crew.post('chief', 'Read Gmail through Composio, read-only. ask permission'))!.task;
+  await holding(crew, 'chief');
+  const run = { bot: 'chief', task: id, key: task(db, id).session }, host = crew.toolHost();
+  const offer = (await host.tools(run)).find((t) => t.name === 'crew_connect')!;
+  assert.ok(offer, 'other native apps remain available');
+  const apps = (offer.parameters as any).properties.app.enum as string[];
+  assert.ok(Array.isArray(apps), 'native connect advertises an explicit app allowlist');
+  assert.ok(apps.includes('calendar'));
+  assert.ok(!apps.some((a) => a.startsWith('gmail')), 'no native Gmail grant is advertised');
+  assert.match(offer.description, /Composio/);
+  const system = (crew.runtime as any).specOf(run.key).system;
+  assert.match(system, /Composio is on/);
+  assert.match(system, /read-only access for a read request/);
+  assert.match(system, /Show the Composio connection link/);
+  await release(crew, 'chief');
+  await settled(db, id);
+  // A previously advertised tool call, or an old Chief job file, cannot open a broader native grant.
+  const stale = (await crew.post('chief', 'Read Gmail through Composio [tool crew_connect {"app":"gmail"}] [tool crew_connect {"app":"gmailwrite"}] [tool crew_connect {"app":"gmailsend"}]'))!.task;
+  await release(crew, 'chief');
+  await settled(db, stale);
+  assert.equal(crew.snapshot().asks.length, 0, 'no native Gmail connect card');
+  assert.match(task(db, stale).result, /Composio/);
+  assert.match(task(db, stale).result, /read.only/i);
+  await crew.composio.disconnect();
+  const native = (await crew.post('chief', 'Read Gmail [tool crew_connect {"app":"gmail"}]'))!.task;
+  await until('native Gmail connect card', () => task(db, native).state === 'needs_you');
+  const asks = crew.snapshot().asks.filter((a: any) => a.state === 'open');
+  assert.equal(asks.length, 1);
+  assert.equal(asks[0].kind, 'connect');
+  assert.equal(asks[0].detail.app, 'gmail');
+});
+
 test('Composio reads finish without cards or an action outcome; writes, mixed and unknown names still ask', async () => {
   const { crew, db } = setup();
   crew.onboard('Umer');

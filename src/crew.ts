@@ -1404,7 +1404,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     this.db.event('run.prompted', botId, { task: l.task, ...(images?.length ? { photos: images.length } : {}) });
     this.busy.add(botId); l.news = Date.now();
     const skills = disk.listSkills(this.cfg, botId), apps = [...(l.appTools?.keys() ?? [])].filter((n) => n !== 'calendar' && n !== 'mail')
-      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF)
+      .map((n) => `${n} (${l.apps?.[n]?.app ?? 'app'})`).concat(Object.entries(this.seen(botId, l.grants).run).map(([n, t]) => `${n} (${t.name}; input: {args: [...]})`)), system = disk.systemPrompt(this.cfg, botId, botId === CHIEF) + (botId === CHIEF && this.composio.on() ? '\nComposio is on. For Gmail, use Composio tools and its connection link, with read-only access for a read request. Native Gmail grants are unavailable; do not call crew_connect for Gmail. Show the Composio connection link to the person when needed.\n' : '')
       + (skills.length ? `\n## Skills you follow\n${skills.map((s) => `- ${s.name}: ${s.description || 'how you do this kind of job'} (in ${join(disk.botDir(this.cfg, botId), 'skills', s.name)})`).join('\n')}\n` : '')
       + (l.node ? `\nYour own screen is the computer tool's node "${l.node}": name it on every computer call.\n` : '') + (apps.length ? `\nThe person's apps and granted tools give you more tools through crew_app: pass \`tool\` (one of ${apps.join(', ')}) and \`input\` (its arguments).\n` : ''), spec: RunSpec = { key: l.key, bot: botId, task: l.task, account: l.account, ...(l.model ? { model: l.model } : {}), cwd: disk.botDir(this.cfg, botId), system, message: text,
       ...(images?.length ? { images } : {}), thinking: botId === CHIEF ? 'low' : undefined, builtins: [],
@@ -1946,11 +1946,10 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   // ---- the crew tools: how a bot reports, delivers and remembers, and how Chief runs the crew ----
   private crewTools(botId: string): CrewTool[] {
     const tool = (name: keyof typeof PARAMETERS, description: string, fn: (p: any) => unknown): CrewTool => ({
-      name, description, parameters: name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
+      name, description, parameters: name === 'crew_connect' ? { type: 'object', properties: { app: { type: 'string', enum: apps } }, required: ['app'] } : name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
-    }), task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).join(', '), own = [
-      tool('crew_connect', `Ask the person to connect one of their apps (${apps}) when the task needs it and it isn't connected yet. ` +
-        'Ask for one app at a time, then end your turn with one short line saying what you could do with it; you are resumed when they answer.',
+    }), task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).filter((app) => !this.composio.on() || !app.startsWith('gmail')), own = [
+      tool('crew_connect', `Ask the person to connect one of these native apps (${apps.join(', ')}). Ask for one app at a time, then end your turn; you are resumed when they answer.${this.composio.on() ? ' Gmail uses Composio instead: use its tools to get a Gmail connection link with read-only access for a read request, never a native Gmail grant.' : ''}`,
         (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
       tool('crew_outcome', 'Before you end a job that did something outside your own space (booked, sent, bought, posted, pressed a button on a ' +
         'site, changed something in an app), say whether it worked. `worked`: true only when you saw the proof yourself (a confirmation page ' +
@@ -2178,6 +2177,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
   private askConnect(botId: string, app: string) {
+    if (this.composio.on() && app.startsWith('gmail')) return { connected: false, note: 'Use Composio tools to get the Gmail connection link, with read-only access for a read request. Do not ask for a native Gmail grant.' };
     const a = this.connections.apps[app], granted = botId === CHIEF || (disk.botConfig(this.cfg, botId).apps ?? []).includes(app);
     if (!a || !granted) throw fail(a ? `${a.name} isn't part of this job, so you can't connect it. Tell the person that.` : `no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
