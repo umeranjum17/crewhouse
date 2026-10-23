@@ -24,7 +24,7 @@ const built = await build({
   entryNames: '[name]-[hash]', chunkNames: 'chunk-[hash]', splitting: true, format: 'esm', metafile: true,
   nodePaths: [new URL('../node_modules/', import.meta.url).pathname], // a copy of the tree built from elsewhere still resolves this checkout's packages
   outdir: root + 'dist', bundle: true, minify: true, sourcemap: true, target: 'es2022', jsx: 'automatic',
-  // CREWHOUSE_CLOUD=1 shows the first screen's cloud row, which stays off in a release until BYOKit's cloud kit is published.
+  // Cloud first is the release default; CREWHOUSE_CLOUD=0 is the explicit opt-out.
   define: { 'process.env.NODE_ENV': '"production"', 'process.env.CREWHOUSE_CLOUD': JSON.stringify(process.env.CREWHOUSE_CLOUD ?? '') }, logLevel: 'warning',
   // @desklink/react-native's browser build: its *.web.* files, with the few react-native names it needs shimmed.
   resolveExtensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.jsx', '.js', '.json'],

@@ -76,7 +76,7 @@ await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past 
 
 // 1. A real chat with Chief on the phone alone.
 relaunch();
-await waitFor(/^Use this phone only$/, 90000); tap(/^Use this phone only$/);
+await waitFor(/^Just on this phone$/, 90000); tap(/^Just on this phone$/);
 await waitFor(/Paste your .* key/, 15000); tap(/Paste your .* key/);
 A('push', KEY_FILE, '/data/local/tmp/kc.txt'); A('shell', 'input text "$(cat /data/local/tmp/kc.txt)"'); A('shell', 'rm', '-f', '/data/local/tmp/kc.txt');
 await sleep(800); tap(/^Connect$/);
@@ -190,12 +190,12 @@ A('shell', 'settings', 'put', 'system', 'font_scale', '1.0'); A('shell', 'wm', '
 const moved = () => { try { return A('shell', 'ls', `${FILES}/phone-moved`).split(/\s+/).filter(Boolean); } catch { return []; } };
 say(`before sign out: hidden archive holds ${moved().length} file(s)`);
 for (const d of await api('GET', '/api/phones')) await api('DELETE', `/api/phones/${d.id}`);
-await waitFor(/^Use this phone only$/, 60000); tap(/^Use this phone only$/);
+await waitFor(/^Just on this phone$/, 60000); tap(/^Just on this phone$/);
 await waitFor(/Ask Chief anything/, 30000); tap(/^Sign out$/);
 await waitFor(/Sign out of Chief\?/, 10000); shot('11-signout-confirm.png');
 const btn = nodes().filter((n) => /^sign out$/i.test(n.text)).sort((x, y) => y.b[1] - x.b[1])[0];
 A('shell', 'input', 'tap', String((btn.b[0] + btn.b[2]) >> 1), String((btn.b[1] + btn.b[3]) >> 1));
-await waitFor(/^Use this phone only$/, 30000);
+await waitFor(/^Just on this phone$/, 30000);
 const leftOver = moved(); say(`after sign out: hidden archive ${leftOver.length ? `STILL HOLDS ${leftOver.join(' ')}` : 'gone'}; chat file ${kept().includes('phone-chat.jsonl') ? 'STILL THERE' : 'gone'}`);
 A('shell', 'pm', 'clear', PKG); // the key and the chats go with the app's data
 say('erased the key and the app data from the emulator');

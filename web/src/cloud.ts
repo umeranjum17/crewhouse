@@ -3,7 +3,7 @@
 import { boat, errorKey, machine, MachineError, pairEnrol, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
 import { b64url, hostId, unb64url, type DeviceGrant, type KeyPair } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
-import { CLOUD, LINUX_DOWNLOAD } from './adapter.ts';
+import { CLOUD, LINUX_DOWNLOAD, type Computer, type ComputerAct } from './adapter.ts';
 
 export const BOAT = { label: 'boat.dev', api: 'https://boat.dev/api/v1' };
 const vars = { app: 'Chief', label: BOAT.label };
@@ -36,6 +36,8 @@ export const recipe = (relay: string, lab: { download?: string; env?: Record<str
     // Unpacked as it arrives: no 347 MB file written and read back (10.3 s against 19.8 s), and pipefail keeps curl's own failure.
     ['bash', '-c', 'set -o pipefail; curl -fsSL "$0" | tar -xz', lab.download || LINUX_DOWNLOAD],
     ['env', `CREWHOUSE_RELAY_PUBLIC=${relay}`, 'crewhouse/app/crewhouse', 'setup', '--headless', '--install-only']],
+  // Download and validate before replacing the running app. The kit restarts only after the swap succeeds.
+  update: [['bash', '-c', 'set -euo pipefail; d=$(mktemp -d .update.XXXXXX); trap \'chmod -R u+w "$d"; rm -rf -- "$d"\' EXIT; curl -fsSL "$0" | tar -xz -C "$d"; test -x "$d/crewhouse/app/crewhouse"; mv crewhouse "$d/previous"; mv "$d/crewhouse" crewhouse || { mv "$d/previous" crewhouse; exit 1; }', lab.download || LINUX_DOWNLOAD]],
   run: { argv: ['node', 'crewhouse/app/scripts/headless.mjs', 'serve'], env: { CREWHOUSE_RELAY_PUBLIC: relay, CREWHOUSE_CLOUD_DIR: `${workDir}/.byokit`, ...lab.env } },
 });
 
@@ -93,6 +95,7 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
     // computer this run released, not the one an earlier run held.
     const s: MachineStore = { load: () => store.load(), save: (record) => store.save(record) };
     for await (const step of setup({ provider: p, store: s, recipe: r, pick, confirmId: picked.id, replaceOwner: move, pair: pairEnrol(machine({ provider: p, store: s }), r, phone.publicKey) })) {
+      if (step.step === 'pairing' && step.receipt) await store.save(Object.assign((await store.load())!, { host: step.receipt.host }));
       yield step.step === 'pairing' && step.receipt
         ? { ...step, grant: { v: 1, secretKey: b64url(phone.secretKey), hostName: 'Your cloud computer', host: step.receipt.host, device: step.receipt.device, urls: [linkUrl(relay, hostId(unb64url(step.receipt.host)))] } } : step;
     }
@@ -100,6 +103,38 @@ export async function* connect(p: Provider, store: MachineStore, picked: Machine
     running.delete(store);
   }
 }
+
+/** Phone-side management: the provider key never goes to crewd or a browser. No invented update/schedule state. */
+export async function computerCall(p: Provider, store: MachineStore, host: string, act?: ComputerAct, snapshotId?: string, lab?: Parameters<typeof recipe>[1], onRestored?: (relay: string) => Promise<void>): Promise<Computer | null> {
+  if (running.has(store)) throw refuse('setup-running', 'Setup or a computer action is already running on this phone.');
+  running.add(store);
+  try {
+    const kept = await store.load();
+    if (!kept?.ref || !('host' in kept) || kept.host !== host) throw new Error('Use the phone that set up this computer to manage it.');
+    const s: MachineStore = { load: () => store.load(), save: (r) => store.save(r) }, m = machine({ provider: p, store: s });
+    const address = async () => {
+      const url = await p.url!(m.ref ?? kept.ref!, RELAY_PORT);
+      if (!url) throw refuse('no-address', 'boat.dev gave that computer no public address.');
+      return new URL(url).origin;
+    };
+    let warning: string | undefined;
+    if (act === 'delete') { await m.remove(kept.ref.id); return null; }
+    if (act === 'update') await m.update(recipe(await address(), lab));
+    if (act === 'snapshot') {
+      const saved = await m.snapshot({ keep: 7 });
+      if (saved.pruneError) warning = `Snapshot saved, but older snapshots could not be removed. ${said(saved.pruneError)}`;
+    }
+    if (act === 'reset') {
+      if (!snapshotId) throw new Error('Save a snapshot before resetting the computer.');
+      await m.restore(snapshotId); // the exact copy whose time the person confirmed, never a newer replacement
+      await onRestored?.(await address()); // keep the replacement's reach even if the following disk read fails
+    }
+    const [copies, disk, relay] = await Promise.all([m.snapshots(), m.disk(), address()]);
+    return { daily: false, snapshot: copies[0] ? Date.parse(copies[0].at) : undefined, snapshotId: copies[0]?.id,
+      disk: disk.usedGb / disk.totalGb >= 0.95 ? 'full' : disk.usedGb / disk.totalGb >= 0.8 ? 'filling' : 'normal', relay, warning };
+  } finally { running.delete(store); }
+}
+export const computerGrant = (g: DeviceGrant, relay: string): DeviceGrant => ({ ...g, urls: [linkUrl(relay, hostId(unb64url(g.host)))] });
 
 /** The progress list's five rows: how many the kit's last step finished, and the one a failure stopped at. The secure
  *  connection is the computer's own address, whose relay answers only once Chief runs there, so the kit's `pairing`
