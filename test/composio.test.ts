@@ -2,6 +2,8 @@
 // stand-in sign-in finishes at once; the failed path is forced by the test. Nothing here proves a connected app works.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { setup, until, holding, release, settled, task } from './lab.ts';
 
 test('Connect apps: the person signs in once and the state turns on; a failed callback says so in plain words', async () => {
@@ -28,12 +30,14 @@ test('Connect apps: the person signs in once and the state turns on; a failed ca
 });
 
 test('Composio on removes native Gmail offers and rejects stale calls; off restores the native card', async () => {
-  const { crew, db } = setup();
+  const { crew, db, cfg } = setup();
   crew.onboard('Umer');
+  writeFileSync(join(cfg.crewDir, 'bots/chief/AGENTS.md'), 'Use crew_connect for Gmail. No links in chat.\n'); // an older installed job
   await crew.composio.connect();
   await until('Composio signed in', () => crew.composio.on());
-  const id = (await crew.post('chief', 'Read Gmail through Composio, read-only. ask permission'))!.task;
+  const id = (await crew.post('chief', 'Connect Gmail through Composio, read-only. ask permission'))!.task;
   await holding(crew, 'chief');
+  assert.equal(crew.snapshot().asks.length, 0, 'Connect Gmail reaches Chief instead of the native inline-how-to card');
   const run = { bot: 'chief', task: id, key: task(db, id).session }, host = crew.toolHost();
   const offer = (await host.tools(run)).find((t) => t.name === 'crew_connect')!;
   assert.ok(offer, 'other native apps remain available');
@@ -42,10 +46,19 @@ test('Composio on removes native Gmail offers and rejects stale calls; off resto
   assert.ok(apps.includes('calendar'));
   assert.ok(!apps.some((a) => a.startsWith('gmail')), 'no native Gmail grant is advertised');
   assert.match(offer.description, /Composio/);
+  assert.ok(offer.description.includes('MCP.composio.$api'), 'the native offer redirects to the schema API too');
   const system = (crew.runtime as any).specOf(run.key).system;
   assert.match(system, /Composio is on/);
   assert.match(system, /read-only access for a read request/);
   assert.match(system, /Show the Composio connection link/);
+  assert.ok(system.includes('return await MCP.composio.$api("COMPOSIO_MANAGE_CONNECTIONS", {schema: true});'), 'Chief gets the exact schema discovery call, not an engine file path');
+  assert.match(system, /not a shell command/);
+  assert.match(system, /never read engine files/);
+  assert.match(system, /composio__COMPOSIO_MANAGE_CONNECTIONS/);
+  assert.match(system, /returned schema/);
+  assert.match(system, /even though ordinary replies omit links/);
+  assert.match(system, /wait for consent/);
+  assert.match(system, /do not request send, modify or delete access/);
   await release(crew, 'chief');
   await settled(db, id);
   // A previously advertised tool call, or an old Chief job file, cannot open a broader native grant.
@@ -55,6 +68,10 @@ test('Composio on removes native Gmail offers and rejects stale calls; off resto
   assert.equal(crew.snapshot().asks.length, 0, 'no native Gmail connect card');
   assert.match(task(db, stale).result, /Composio/);
   assert.match(task(db, stale).result, /read.only/i);
+  const redirect = (crew.runtime as any).transcript(task(db, stale).session);
+  assert.ok(redirect.includes('MCP.composio.$api'), 'stale native calls get the exact discovery call');
+  assert.match(redirect, /read-only access/);
+  assert.doesNotMatch(redirect, /crew_read:|read:|node_modules\/openclaw/, 'no engine file read or read approval was needed');
   await crew.composio.disconnect();
   const native = (await crew.post('chief', 'Read Gmail [tool crew_connect {"app":"gmail"}]'))!.task;
   await until('native Gmail connect card', () => task(db, native).state === 'needs_you');
