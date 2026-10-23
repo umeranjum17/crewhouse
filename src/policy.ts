@@ -1,5 +1,4 @@
-// What a bot may do without asking. Safe work in its own space runs silently; sending, spending, deleting and touching the
-// person's own files stop for one plain sentence first. Decided here from the tool and its input, never by the model's words.
+// Effects come from the tool and its input, never the model's words: safe work runs silently; acting or touching the person's files asks.
 import { homedir } from 'node:os';
 import { basename, dirname, relative, resolve } from 'node:path';
 
@@ -149,8 +148,11 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (['read', 'list', 'status'].includes(action)) return { kind: 'safe' };
     return { kind: 'refuse', why: 'Skills that write come from how you work, reviewed between jobs; keep one with crew_learn.' };
   }
-  // Composio's hosted tools (the engine's composio__<tool>): no read-only hint is known here, so every call asks.
-  if (tool.startsWith('composio__')) return { kind: 'send', words: `${s.bot} wants to use your Composio apps: ${tool.slice(10).replaceAll('_', ' ').toLowerCase()}.` };
+  // Only a clear read action is free. Mutation tokens and compound/unknown actions still ask, with no standing answer.
+  if (tool.startsWith('composio__')) {
+    const name = tool.slice(10), read = /^(?:[A-Z0-9]+_)?(FETCH|LIST|GET|SEARCH|READ|FIND)(?:_[A-Z0-9]+)*$/.test(name) && !/(^|_)(SEND|DELETE|CREATE|UPDATE|MODIFY|LABEL|TRASH|FORWARD|REPLY|SHARE|ARCHIVE|MARK|REMOVE|EXECUTE|AND|THEN)(_|$)/.test(name);
+    return read ? { kind: 'safe' } : { kind: 'send', words: `${s.bot} wants to use your Composio apps: ${name.replaceAll('_', ' ').toLowerCase()}.` };
+  }
   const app = s.apps?.[tool];
   if (app) {
     if (app.readOnly) return { kind: 'safe' };
