@@ -18,7 +18,7 @@ Hosted assistant bots are easy to start, but they run on someone else's computer
 
 - **OpenClaw with batteries included.** It is set up for you, with good UX on top, so it feels like a managed service. But it runs on your own phone, computer and cloud, with your own AI accounts.
 - **One assistant, a crew of helpers.** Chief gives each job to the right helper, watches the work and tells you the result. Each helper has its own memory, skills and files. Chief is the default, and you can also talk to any helper.
-- **Your cloud or your computer, same assistant.** It works as well on a cloud computer you rent as on the computer in front of you. You can start with only the phone, then add a cloud computer or your own computer.
+- **Your cloud or your computer, same assistant.** It works as well on a cloud computer you rent as on the computer in front of you. You can start with only the phone, then add a cloud computer or your own computer. From the phone, you set Crewhouse up on a computer, with nothing to install there. Your cloud computer comes first, then your own desktop where possible. In the owner's words, so that the user "doesn't have to fiddle around and install … on two places mobile and desktop."
 - **Every job those bots do, done better.** Each use case that hosted bots cover is covered here and improved, until Crewhouse is the assistant you use every day.
 
 ## Principles and quality bar
