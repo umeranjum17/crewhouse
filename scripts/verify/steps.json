@@ -15,7 +15,8 @@
       "On the Composio page that opens, choose Continue with Google and say yes; the sheet turns to Your apps are connected",
       "Ask Chief to read today's calendar without changing anything",
       "Chief asks to use your Composio apps; say yes once",
-      "Chief writes what he read in his thread"
+      "Chief says Google Calendar is not connected yet and offers Composio's own link; open it and say yes",
+      "Tell Chief it is connected; he asks again, say yes once, and he writes what he read in his thread"
     ],
     "result": "Chief used a connected app on {{model}} for a read-only request: {{ask}}"
   },
