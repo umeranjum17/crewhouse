@@ -999,8 +999,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
 const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
   ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
-  const { state, live, refresh, tab, page } = ctx;
-  const crew = A.crew(state), all = A.routines(state), [adding, setAdding] = useState(false);
+  const { state, refresh, tab, page } = ctx;
+  const crew = A.crew(state), all = A.routines(state);
   // ponytail: read from the chat crewd sends (its last 200 lines); an older file drops off, a things API if that matters.
   const stuff = A.chatThings(state, page), list = THINGS.find(([k]) => k === tab);
   const [notify, setNotify] = useState<boolean | null>(null);
@@ -1008,12 +1008,13 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   // The computer to show: whoever is on one now, else the first helper with one.
   const pc = crew.find((h) => h.computer && h.driving) ?? crew.find((h) => h.computer && h.seat === 'working') ?? crew.find((h) => h.computer);
   const who = (r: Json) => (r.helper === 'chief' ? '' : `${crew.find((h) => h.id === r.helper)?.name ?? 'Chief'} does it`);
-  const head = (title: string) => <div className="sticky-top"><header className="chat-head">
-    <a href="#/chief" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b></div></header></div>;
-  if (tab === 'instructions') return <div className="page helper">{head('How Chief works for you')}<section className="detail rest-screen">
-    <p className="lead">Plain words Chief reads before every reply. Only you change them.</p>
-    <h2 className="plate">Chief's personality</h2><ChiefSoul tick={ctx.tick} />
-    <h2 className="plate">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
+  // A page behind the profile: a round back, its name, and "Chief's profile" under it (J09d).
+  const head = (title: string) => <div className="sticky-top"><header className="chat-head cp-subhead">
+    <a href={CHIEF_PROFILE} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>{title}</b><span className="mute">Chief's profile</span></div></header></div>;
+  if (tab === 'instructions') return <div className="page helper">{head('How Chief works')}<section className="detail rest-screen chief-profile">
+    <p className="lead">Plain words Chief reads before every job. Only you change them.</p>
+    <h2 className="st-label">Who Chief is</h2><ChiefSoul tick={ctx.tick} />
+    <h2 className="st-label">What Chief never does</h2><div className="card"><ChatText text={page?.rules ?? ''} /></div></section></div>;
   if (list) return <div className="page helper">{head('Things')}<section className="detail rest-screen chief-profile">
     <div className="seg cp-seg" role="tablist" aria-label="Things">{THINGS.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} className={k === tab ? 'on' : ''}
       onClick={() => location.replace(`#/h/chief/${k}`)}>{l} {stuff[k].length}</button>)}</div>
@@ -1024,42 +1025,39 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
       <p className="mute small">Everything made or read in your chat with Chief, newest first.</p></>
       : <div className="card empty cp-none"><b>No {list[1].toLowerCase()} yet</b><span className="mute small">{list[2]}</span></div>}
   </section></div>;
-  return <div className="page helper">{head('Chat')}<section className="detail rest-screen chief-profile">
-    <div className="cp-head"><ChiefArt mood={live.chief.mood} mascot /><div><h1>Chief</h1><p className="lead">Runs your crew</p></div></div>
-    <a className="card row-item cp-link" href={CHIEF_TRAIL}><span className="grow">What happened</span><span className="mute">›</span></a>
-    <div className="label">Routines</div>
-    <div className="card list">
-      {all.slice(0, 2).map((r: Json) => <div key={r.id} className="row-item">
-        <a className="grow cp-link" href="#/routines"><span className="clamp1">{r.name}</span><span className="mute small">{[r.when, who(r)].filter(Boolean).join(' · ')}</span></a>
-        <input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => attempt(async () => { await api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }); refresh(); })} />
-      </div>)}
-      {all.length > 2 && <a className="row-item link" href="#/routines">See all {all.length}</a>}
-      <button className="row-item link" onClick={() => setAdding(!adding)}>+ Add routine</button>
-    </div>
-    {adding && <RoutineAsk />}
-    <div className="label">Computer</div>
-    {pc ? <div className="card cp-computer">
-      <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.seat === 'working' ? `${pc.name} is using it` : `${pc.name}'s computer`} />
-      <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>Take control</button>
-    </div> : <div className="card empty">No one on the crew has a computer yet.</div>}
-    <div className="label">Notifications</div>
-    <div className="card list"><label className="row-item"><span className="grow">Tell me when Chief finishes or needs me<span className="mute small">On every device with notifications on</span></span>
-      <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
-    <div className="label">Instructions</div>
-    <div className="card list"><a className="row-item cp-link" href="#/h/chief/instructions"><span className="grow">How Chief works for you<span className="mute small">Plain words Chief follows on every job. Only you change them.</span></span><span className="mute">›</span></a></div>
-    {live.crew.length > 0 && <>
-      <div className="label">Chief's crew</div>
-      <div className="card list">{A.roster(live.crew).map((m) => {
-        const r = A.statusOf(m, live), working = r.seat === 'working';
-        // A crew row's dot means working, and nothing else: only Chief's own row ever shows something for you.
-        return <a key={m.id} className="row-item cp-link" href={hrefOf(m.id)}><Face who={m} size={36} />
-          <span className="grow">{m.name}<span className="mute small clamp1">{working && <i className="cp-dot" aria-hidden />}{working && m.step ? `${r.word} · ${m.step}` : r.word}</span></span><span className="mute">›</span></a>;
-      })}</div>
-    </>}
-    <div className="label">Things</div>
-    <div className="card list">{THINGS.map(([k, l]) => <a key={k} className="row-item cp-link" href={`#/h/chief/${k}`}><span className="grow">{l}</span>
-      <span className="mute">{stuff[k].length || 'None yet'}</span><span className="mute">›</span></a>)}</div>
-  </section></div>;
+  const go2 = (href: string, title: string, says: string) => <a className="row-item cp-link" href={href}><span className="grow"><b>{title}</b>{says && <span className="mute">{says}</span>}</span><Icon name="next" /></a>;
+  return <div className="page helper st-profile chief-profile" style={{ '--helper-colour': art.colourOf('chief') } as CSSProperties}>
+    <header className="chat-head st-profile-head desk-only"><Face who="chief" size={44} /><div className="grow"><h1>Chief's profile</h1><span className="mute">Runs your crew</span></div></header>
+    <div className="st-profile-layout"><section className="st-profile-main">
+      <div className="st-profile-overview">
+        <a href="#/chief" className="back cp-back phone-only" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
+        <div className="st-profile-hero"><Face who="chief" size={112} /><h1>Chief</h1><p>Runs your crew</p></div>
+      </div>
+      <div className="st-profile-job">
+        <h2 className="st-label">Routines</h2>
+        <div className="card list">
+          {all.slice(0, 2).map((r: Json) => <label key={r.id} className="row-item">
+            <span className="grow"><b className="clamp1">{r.name}</b><span className="mute">{[r.when, who(r)].filter(Boolean).join(' · ')}</span></span>
+            <input type="checkbox" role="switch" checked={!r.paused} aria-label={`${r.paused ? 'Resume' : 'Pause'} ${r.name}`} onChange={(e) => attempt(async () => { await api.routine(r.id, { state: e.target.checked ? 'on' : 'paused' }); refresh(); })} />
+          </label>)}
+          {all.length > 2 && go2('#/routines', `See all ${all.length}`, '')}
+          <a className="row-item cp-link" href="#/routines"><span className="o-ic"><Icon name="plus" /></span><span className="grow"><b>Add a routine</b></span><Icon name="next" /></a>
+        </div>
+        <h2 className="st-label">News</h2>
+        <div className="card list"><label className="row-item"><span className="grow"><b>Tell me when Chief finishes or needs me</b><span className="mute">On every device with news on</span></span>
+          <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
+        <h2 className="st-label">Instructions</h2>
+        <div className="card list">{go2('#/h/chief/instructions', 'How Chief works for you', 'Plain words. Only you change them.')}</div>
+        {pc && <><h2 className="st-label">Computer</h2><div className="card cp-computer">
+          <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.seat === 'working' ? `${pc.name} is using it` : `${pc.name}'s computer`} />
+          <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>Take control</button>
+        </div></>}
+        <h2 className="st-label">Things</h2>
+        <div className="card list">{THINGS.map(([k, l]) => <Fragment key={k}>{go2(`#/h/chief/${k}`, l, stuff[k].length ? String(stuff[k].length) : 'None yet')}</Fragment>)}</div>
+        <div className="card list cp-trail">{go2(CHIEF_TRAIL, 'What happened', 'Every step Chief took, as it happened')}</div>
+      </div>
+    </section></div>
+  </div>;
 }
 
 /** A helper's remembered lines, each with Forget. A new line comes from the helper's own work or through Chief: the person talks only to Chief. */
@@ -1684,27 +1682,40 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
   if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />{signingSheet}</SettingsPage>;
   if (tab === 'phones' && !paired) return <SettingsPage title="Phones"><Phones tick={tick} /></SettingsPage>;
+  // On a computer (J09a) two columns under the trust card: You and Look on the left, what is connected on the right; on a
+  // phone the two lists read as one card, then Look.
   return (
-    <div className="page settings">
-      <a href="#/" className="back phone-only" aria-label="Back">‹</a>
-      <h1>Settings</h1>
-      <div className="card trust-card"><span className="o-ic"><Icon name="lock" /></span><p><b>{A.trust.hub[0]}</b> {A.trust.hub[1]}</p></div>
-      {demo && <PairRow />}
-      {paired && <PairedCard tick={tick} />}
-      <div className="card list go-tos">
-        <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
-        <HubRow href="#/settings/rules" tile={<Icon name="lock" />} title="Custom rules" says="How you want the crew to work" />
-        <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
-        <HubRow href="#/settings/accounts" tile={<Icon name="chief" />} title="AI accounts" says={mine.length ? `${mine[0].ai.name} · signed in` : 'Not signed in yet'} />
-        <HubRow href="#/apps" tile={<Icon name="plus" />} title="Apps" says={on.length ? on.map((a) => a.name).slice(0, 3).join(', ') : 'None added yet'} />
-        {!paired && <HubRow href="#/settings/phones" tile={<Icon name="phone" />} title="Phones" says={phones === null ? '' : phones.length ? `${phones.length} ${phones.length === 1 ? 'phone' : 'phones'} paired` : 'None paired yet'} />}
-        {cloudOn && <HubRow href="#/computer" tile={<Icon name="cloud" />} title={A.computer(null).title} says="" />}
+    <div className="page stack stack-home settings hub">
+      <header className="st-head"><a href="#/" className="back phone-only" aria-label="Back">‹</a><span className="grow"><h1 className="wide">Settings</h1></span></header>
+      <div className="st-pri">
+        <div className="card trust-card"><span className="o-ic"><Icon name="lock" /></span><p><b>{A.trust.hub[0]}</b> {A.trust.hub[1]}</p></div>
+        {demo && <PairRow />}
+        {paired && <PairedCard tick={tick} />}
+        <div className="set-cols">
+          <div className="set-col">
+            <div className="st-label desk-only"><span>You</span></div>
+            <div className="card list go-tos set-you">
+              <HubRow href="#/settings/you" tile={<b>{(display || 'You')[0]}</b>} title="You" says={`${display || 'Your name'}${m.quiet ? ` · quiet ${from} to ${to}` : ''}`} />
+              <HubRow href="#/settings/rules" tile={<Icon name="lock" />} title="Custom rules" says="How you want the crew to work" />
+              <HubRow href="#/settings/memory" tile={<Icon name="copy" />} title="What the crew remembers" says={lines === null ? '' : `${lines} ${lines === 1 ? 'line' : 'lines'}`} />
+            </div>
+            <div className="st-label set-look"><span>Look</span></div>
+            <div className="seg set-look">{[['auto', 'Match device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
+            <div className="set-more"><Install /></div>
+          </div>
+          <div className="set-col">
+            <div className="st-label desk-only"><span>Connected</span></div>
+            <div className="card list go-tos set-con">
+              <HubRow href="#/settings/accounts" tile={<Icon name="talk" />} title="AI accounts" says={mine.length ? `${mine[0].ai.name} · signed in` : 'Not signed in yet'} />
+              <HubRow href="#/apps" tile={<Icon name="plus" />} title="Apps" says={on.length ? on.map((a) => a.name).slice(0, 3).join(', ') : 'None added yet'} />
+              {!paired && <HubRow href="#/settings/phones" tile={<Icon name="phone" />} title="Phones" says={phones === null ? '' : phones.length ? `${phones.length} ${phones.length === 1 ? 'phone' : 'phones'} paired` : 'None paired yet'} />}
+              {cloudOn && <HubRow href="#/computer" tile={<Icon name="cloud" />} title={A.computer(null).title} says="" />}
+            </div>
+            <div className="set-more"><HomeSetup state={state} accounts={accounts} tick={tick} />
+              <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} /></div>
+          </div>
+        </div>
       </div>
-      <div className="label">Look</div>
-      <div className="seg">{[['auto', 'Match device'], ['day', 'Day'], ['night', 'Night']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
-      <Install />
-      <HomeSetup state={state} accounts={accounts} tick={tick} />
-      <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} />
       {signingSheet}
     </div>
   );
