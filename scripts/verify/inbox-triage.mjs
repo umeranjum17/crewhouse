@@ -16,6 +16,7 @@ const requests = [], gmail = createServer((req, res) => {
   requests.push({ method: req.method, path: req.url });
   res.setHeader('content-type', 'application/json');
   const path = new URL(req.url, 'http://localhost').pathname, message = { threadId: fixture.thread, payload: { headers: [{ name: 'From', value: fixture.from }, { name: 'Subject', value: fixture.subject }], mimeType: 'text/html', body: { data: Buffer.from(fixture.html).toString('base64url') } } };
+  if (path === '/oauth2/token') return res.end(JSON.stringify({ access_token: 'tok', token_type: 'Bearer', expires_in: 3600, scope: 'openid email https://www.googleapis.com/auth/gmail.readonly' }));
   const data = path.endsWith('/profile') ? { historyId: '1' } : path.endsWith('/history') ? { historyId: arrived ? '2' : '1', history: arrived && req.url.includes('startHistoryId=1') ? [{ messagesAdded: [{ message: { id: '18c0000000000099', labelIds: ['INBOX'] } }] }] : [] }
     : path.includes('/messages/') ? message : { messages: [message] };
   res.end(JSON.stringify(data));
@@ -54,7 +55,7 @@ try {
   assert.match(spec.message, /Railway incident/); assert.match(transcript, /fixture-brotli\?source=stripe&kind=security/);
   await api('POST', `/api/routines/${routine.id}/run`, {});
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', routine.id).n, 1);
-  assert.ok(requests.every((r) => r.method === 'GET'));
+  assert.ok(requests.filter((r) => r.path.startsWith('/gmail/')).every((r) => r.method === 'GET'));
   writeFileSync(join(out, 'api-proof.json'), JSON.stringify({ mode: 'synthetic recorded Gmail + scripted engine, not live ranking', alert: alert[0].text, taskCount: 1, quietPoll: true, sends: 0, requests, contextDelivered: spec.message.includes(fixture.context), sourceRead: transcript }, null, 2));
   browser = true; await chrome('open', `${base}/#person=${key}`);
   const geometry = [];
