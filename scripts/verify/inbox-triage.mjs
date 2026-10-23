@@ -22,17 +22,16 @@ const requests = [], gmail = createServer((req, res) => {
   res.end(JSON.stringify(data));
 });
 await new Promise((r) => gmail.listen(0, '127.0.0.1', r));
-const session = `inbox-triage-${process.pid}`, exec = promisify(execFile), path = `/usr/bin:/bin:${process.env.PATH}`;
+const exec = promisify(execFile), path = `/usr/bin:/bin:${process.env.PATH}`;
 for (const d of ['home', 'state', 'crew', 'tools', 'run']) mkdirSync(join(lab, d));
 process.env = { PATH: path, LANG: 'C.UTF-8', HOME: join(lab, 'home'), TMPDIR: lab,
   XDG_CONFIG_HOME: join(lab, 'config'), XDG_DATA_HOME: join(lab, 'data'), XDG_STATE_HOME: join(lab, 'state'), XDG_CACHE_HOME: join(lab, 'cache'), XDG_RUNTIME_DIR: join(lab, 'run'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${lab}/no-bus`,
   CREWHOUSE_ENGINE: 'stub', CREWHOUSE_STUB_GOLDEN: '1', CREWHOUSE_PORT: '0', CREWHOUSE_STATE_DIR: join(lab, 'state'), CREWHOUSE_CREW_DIR: join(lab, 'crew'), CREWHOUSE_TOOLS_DIR: join(lab, 'tools'), CREWHOUSE_GOOGLE_CLIENT: join(lab, 'absent-client'),
-  CREWHOUSE_GOOGLE_EMULATOR: `http://127.0.0.1:${gmail.address().port}`, CHROME_DEVTOOLS_AXI_SESSION: session, CHROME_DEVTOOLS_AXI_CHROME_ARGS: '--no-sandbox --disable-dev-shm-usage' };
+  CREWHOUSE_GOOGLE_EMULATOR: `http://127.0.0.1:${gmail.address().port}` };
 const [{ loadConfig }, { Store }, { Crew }, { startServer }, { signInApp }] = await Promise.all([
   import('../../src/config.ts'), import('../../src/db.ts'), import('../../src/crew.ts'), import('../../src/server.ts'), import('../../test/connect-fixture.ts')]);
 const cfg = loadConfig(), db = new Store(cfg.stateDir), crew = new Crew(cfg, db);
-let server, browser = false;
-const chrome = async (...args) => (await exec('chrome-devtools-axi', args, { timeout: 120_000, maxBuffer: 1024 * 1024 })).stdout;
+let server;
 try {
   crew.init(); server = await startServer(cfg, db, crew);
   const base = `http://127.0.0.1:${server.address().port}`, key = readFileSync(join(cfg.stateDir, 'person.key'), 'utf8').trim();
@@ -57,23 +56,23 @@ try {
   assert.equal(db.get('SELECT COUNT(*) AS n FROM tasks WHERE routine = ?', routine.id).n, 1);
   assert.ok(requests.filter((r) => r.path.startsWith('/gmail/')).every((r) => r.method === 'GET'));
   writeFileSync(join(out, 'api-proof.json'), JSON.stringify({ mode: 'synthetic recorded Gmail + scripted engine, not live ranking', alert: alert[0].text, taskCount: 1, quietPoll: true, sends: 0, requests, contextDelivered: spec.message.includes(fixture.context), sourceRead: transcript }, null, 2));
-  browser = true; await chrome('open', `${base}/#person=${key}`);
-  const geometry = [];
-  for (const look of ['day', 'night']) for (const width of [390, 1440]) {
-    await chrome('resize', String(width), '1000');
-    await chrome('open', `${base}/?${look}#/chief`);
-    await chrome('eval', `async () => { const end = Date.now()+20000; while (!document.body.innerText.includes('Which deployed app uses this Stripe account?')) { if(Date.now()>end) throw Error('alert not rendered'); await new Promise(r=>setTimeout(r,50)); } return true; }`);
-    geometry.push(await chrome('eval', `() => ({width: innerWidth, overflow: document.documentElement.scrollWidth > innerWidth, scrollContainers: [...document.querySelectorAll('*')].filter(e => getComputedStyle(e).overflowY === 'auto' && e.scrollHeight > e.clientHeight).length, links: [...document.querySelectorAll('a')].filter(a=>a.href.includes('fixture-brotli')||a.href.includes('/#inbox/')).map(a=>({text:a.textContent, href:a.href}))})`));
-    await chrome('screenshot', join(out, `chief-${width}-${look}.png`));
-  }
-  writeFileSync(join(out, 'browser-proof.txt'), geometry.join('\n'));
+  const steps = [{ name: 'private-launch', url: `${base}/#person=${key}`, settle: 0 }, { name: 'authority-ready', wait: "!!sessionStorage.getItem('crewhouse.person')" }];
+  for (const look of ['day', 'night']) for (const width of [390, 1440]) steps.push(
+    { name: `${look}-${width}`, w: width, h: 1000, mobile: width === 390, url: `${base}/?${look}#/chief`, settle: 0 },
+    { name: 'alert-ready', wait: "document.body.innerText.includes('Which deployed app uses this Stripe account?')" },
+    { name: 'paint-ready', eval: "(async()=>{await document.fonts.ready; await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); return true;})()" },
+    { name: `geometry-${look}-${width}`, eval: "({width:innerWidth, overflow:document.documentElement.scrollWidth>innerWidth, scrollContainers:[...document.querySelectorAll('*')].filter(e=>getComputedStyle(e).overflowY==='auto'&&e.scrollHeight>e.clientHeight).length, links:[...document.querySelectorAll('a')].filter(a=>a.href.includes('fixture-brotli')||a.href.includes('/#inbox/')).map(a=>({text:a.textContent,href:a.href}))})", out: join(out, `chief-${width}-${look}.png`) });
+  const plan = join(lab, 'browser-plan.json');
+  writeFileSync(plan, JSON.stringify({ bin: '/usr/bin/chromium', profile: join(lab, 'profile'), home: join(lab, 'home'), args: ['--no-sandbox', '--disable-dev-shm-usage', 'about:blank'], steps }));
+  const { stdout } = await exec(process.execPath, [resolve(import.meta.dirname, 'pwa-shell.mjs'), plan], { timeout: 180_000, maxBuffer: 1024 * 1024 });
+  writeFileSync(join(out, 'browser-proof.txt'), stdout.replaceAll(lab, '<lab>'));
+  const results = JSON.parse(stdout);
+  assert.ok(results.every((r) => !r.error));
+  assert.ok(results.filter((r) => r.step?.startsWith('geometry-')).every((r) => !r.value.overflow && r.value.links.length === 2));
   writeSteps(out, 'inbox-triage');
   console.log('PASS: one scripted linked alert reaches Chief through real HTTP; quiet poll creates no task; Gmail receives GETs only. Not live-model, native-phone or installed-PWA proof.');
 } finally {
-  try { if (browser) await chrome('stop'); }
-  finally {
-    if (server) await new Promise((r) => server.close(r));
-    await crew.stop(); db.close(); await new Promise((r) => gmail.close(r));
-    rmSync(lab, { recursive: true, force: true });
-  }
+  if (server) await new Promise((r) => server.close(r));
+  await crew.stop(); db.close(); await new Promise((r) => gmail.close(r));
+  rmSync(lab, { recursive: true, force: true });
 }
