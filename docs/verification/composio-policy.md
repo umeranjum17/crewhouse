@@ -8,6 +8,8 @@ Run `node scripts/test.mjs test/composio.test.ts` under the usual isolated test 
 
 The table covers FETCH, LIST, GET, SEARCH, READ and FIND actions; every listed mutation verb; read/write mixtures in either order; compound unknown actions; substring and malformed-name lookalikes. Clear read actions pass with zero cards and no `acted` flag. Finishing the held task without `crew_outcome` ends `done`. Unknown or mixed actions ask as `send`, with no standing approval; two approved writes ask twice and still end `unsure` without an outcome. Disconnecting blocks even a read name at admission.
 
+The Gmail routing journey in that file signs Composio in, reads Chief's actual engine-host tool offer, and checks that native Gmail, drafts/labels and sending grants are absent from its app enum. Scripted `crew_connect` calls for all three still return Composio connection-link guidance without opening a native card. Disconnecting restores the native Gmail Connect card; Calendar remains offered. The actual RunSpec prompt states that Composio is on and requests its connection link with read-only access for read requests. OpenClaw registers static tool schemas, so the host-offer enum alone is not model-side enforcement: the shared connect handler is the deterministic barrier against native cards, including calls from an older installed Chief job. No Composio link is fetched or Gmail read executed by this test.
+
 Capture the regression smoke at the committed head with `CHROME_DEVTOOLS_AXI_SESSION=<task> done-done run screens`. Inspect its Home and Chief captures in both themes and widths. Seal an honestly bounded Home/Chief smoke claim; retain the integration-test log separately as the policy evidence.
 
 ## Limits
