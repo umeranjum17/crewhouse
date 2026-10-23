@@ -129,6 +129,7 @@ More: [install and run](docs/install.md) (every command, the phone app, the inst
 
 ## Learn more
 
+- [Vision](VISION.md): who Crewhouse is for, where it is going, and what it is not
 - [30-minute tour](TRY-IT.md): a first walk through, step by step
 - [How it works](docs/how-it-works.md): each feature in detail, and the pieces underneath
 - [Install and run](docs/install.md): commands, updates, the phone app, the installed web app, the desktop bar
