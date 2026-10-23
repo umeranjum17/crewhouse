@@ -26,6 +26,14 @@ test('crewd killed under a spawned lookup: the job is unsure, nothing replays, a
     const { task } = await api('POST', '/api/bots/chief/messages', { text: '[legwork-hold] Look up one thing slowly.' });
     await until('the lookup is admitted and reading', async () => (await api('GET', '/api/events')).some((e: any) => e.data.task === task && e.kind === 'run.tool' && /example\.invalid/.test(e.data.words)), 120_000);
     const first = lab; process.kill(lived.pid, 'SIGKILL'); await new Promise((r) => first.once('exit', r));
+    // The crashed lab's engine outlives it and still holds the state. The kit ends an engine with a sign and then a
+    // kill three seconds later, and its orphan takeover waits those three seconds; OpenClaw 2026.9.33 drains for a
+    // minute before it lets go, so the lab ends its own engine the way the kit does before the next crewd takes over.
+    const engine = Number(readFileSync(join(root, 'state/openclaw/gateway.pid'), 'utf8'));
+    try { process.kill(engine, 'SIGTERM'); } catch { /* it is already gone */ }
+    for (let i = 0; i < 30 && alive(engine); i++) await new Promise((r) => setTimeout(r, 100));
+    if (alive(engine)) { try { process.kill(engine, 'SIGKILL'); } catch { /* it is already gone */ } }
+    await until('the crashed engine let the state go', () => !alive(engine), 30_000);
     rmSync(ready); lived = await boot();
     await until('the recovered job is flagged', async () => (await api('GET', '/api/bots/chief')).tasks.some((t: any) => t.id === task && t.state === 'unsure'), 30_000);
     const page = await api('GET', '/api/bots/chief'), events = (await api('GET', '/api/events')).filter((e: any) => e.data.task === task);
@@ -52,3 +60,6 @@ test('crewd killed under a spawned lookup: the job is unsure, nothing replays, a
   assert.equal(seen.filter((e) => e.type === 'ended' && e.reason === 'terminal').length, 3, 'each fresh lookup ended once, through the kit');
   assert.ok(!JSON.parse(readFileSync(`${ready}.provider.json`, 'utf8')).some((c: any) => JSON.stringify(c.body.messages).includes('item=held')), 'the held lookup was never asked of the model again');
 });
+
+/** A pid that is still running. */
+const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };

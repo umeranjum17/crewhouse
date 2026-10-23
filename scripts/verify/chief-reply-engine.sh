@@ -7,7 +7,8 @@
 #   CHROME_DEVTOOLS_AXI_SESSION=<task-name> scripts/verify/chief-reply-engine.sh <out-dir>
 #
 # Exit 0 with chief-reply-engine/chief-{day,night}-390.png, reply.txt (the engine version, the message and Chief's
-# words) and steps.json in <out-dir>; non-zero when the job does not end done within REPLY_SECONDS (default 180).
+# words) and the journey's step record in <out-dir>; non-zero when the job does not end done within REPLY_SECONDS
+# (default 180).
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: chief-reply-engine.sh <out-dir>" >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)

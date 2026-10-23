@@ -88,16 +88,17 @@ async function liveModels(): Promise<{ id: string; name?: string }[]> {
     return data.map((m) => ({ id: m.id, name: m.display_name }));
   } finally { clearTimeout(timer); }
 }
-/** Every model the saved key can use, in words, as MiniMax lists it (its live list, else the kit's catalogue when that
- *  cannot be read): nothing is filtered or described here. The one tag is Recommended, on the kit's fast model (MiniMax may
- *  list it under a newer id: M3.1-Flash for the kit's -Preview), which goes first. OpenRouter's stays the pinned DeepSeek. */
-/** The kit's fast MiniMax model, named here: @byokit/accounts 0.30 dropped the catalogue's model tiers. */
+/** Every model the saved key can use, in words, as MiniMax lists it (its live list; the one model the phone knows when
+ *  that cannot be read): nothing is filtered or described here. The one tag is Recommended, on the kit's fast model
+ *  (MiniMax may list it under a newer id: M3.1-Flash for the kit's -Preview), which goes first. OpenRouter's stays the
+ *  pinned DeepSeek. */
+/** The kit's fast MiniMax model, named here: @byokit/accounts 0.30 dropped the catalogue's model tiers, and the kit
+ *  keeps no model list of its own, so the phone knows this one model for itself. */
 const MINIMAX_FAST = 'MiniMax-M3.1-Flash-Preview';
 export async function phoneModels(): Promise<PhoneModel[]> {
   if (current.route === PROVIDER) return [];
   const fast = MINIMAX_FAST;
-  const listed = await liveModels().catch(async () =>
-    (await phoneAccounts.models(MEMBER, current.route)).map((m) => ({ id: m.id, name: undefined })));
+  const listed = await liveModels().catch(() => [{ id: fast, name: undefined }]);
   const recommended = (id: string) => !!fast && (fast === id || fast.startsWith(`${id}-`));
   return listed.map((m) => ({ id: m.id, name: modelName(m.name ?? m.id), recommended: recommended(m.id) }))
     .sort((a, b) => Number(b.recommended) - Number(a.recommended));
