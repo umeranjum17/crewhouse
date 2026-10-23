@@ -105,8 +105,8 @@ cat > "$LAB/pwa/plan.json" <<JSON
     { "name": "standalone-390", "url": "$B/?night#/settings", "settle": 2500, "eval": "matchMedia('(display-mode: standalone)').matches", "out": "$OUT/pwa/pwa-settings-night-390.png" }
   ] }
 JSON
-xvfb-run -a -s "-screen 0 1920x1200x24" node "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa/plan.json" | sed "s|$K|<key>|g" > "$OUT/pwa/steps.json"
-node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).filter((x)=>x.step==="standalone"||x.step==="no-install-row"||x.step==="standalone-390");if(s.length!==3||!s.every((x)=>x.value===true))process.exit(1)' "$OUT/pwa/steps.json" \
+xvfb-run -a -s "-screen 0 1920x1200x24" node "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa/plan.json" | sed "s|$K|<key>|g" > "$OUT/pwa/pwa-shell.json"
+node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).filter((x)=>x.step==="standalone"||x.step==="no-install-row"||x.step==="standalone-390");if(s.length!==3||!s.every((x)=>x.value===true))process.exit(1)' "$OUT/pwa/pwa-shell.json" \
   || { echo "stack-design: the installed window was not standalone or still offered Install" >&2; exit 1; }
 node "$REPO/scripts/verify/steps.mjs" "$OUT" stack-design
 echo "stack-design: $(find "$OUT" -name '*.png' | wc -l) captures in $OUT"
