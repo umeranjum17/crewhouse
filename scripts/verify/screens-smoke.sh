@@ -10,6 +10,7 @@
 # crewd's process group is emptied before the lab goes (crewd-group.sh).
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: screens-smoke.sh <evidence-dir>" >&2; exit 2; }
+export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean environment, where a version-manager shim fails
 OUT=$1; mkdir -p "$OUT/screens"
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
