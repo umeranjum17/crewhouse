@@ -37,8 +37,9 @@ shot() {
 }
 
 LAB=$(mktemp -d -t cloud-screen.XXXXXX)
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
 (cd "$REPO" && exec env LAB_EMPTY=1 LAB_PORT=7411 LAB_DIR="$LAB" HOME="$LAB" node "$VERIFY_DIR/boat-fake-lab.mjs") > "$LAB/lab.log" 2>&1 & LABPID=$!
-trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; chmod -R u+w "$LAB" 2>/dev/null; rm -rf -- "$LAB"' EXIT
+trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 for _ in $(seq 120); do grep -q 'the host is ready' "$LAB/lab.log" && break; kill -0 "$LABPID" 2>/dev/null || { cat "$LAB/lab.log" >&2; exit 1; }; sleep 1; done
 grep -q 'the host is ready' "$LAB/lab.log" || { cat "$LAB/lab.log" >&2; echo "cloud-screen: the lab's host never got ready" >&2; exit 1; }
 

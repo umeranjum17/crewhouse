@@ -16,7 +16,8 @@ set -euo pipefail
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d -t crewhouse-upgrade.XXXXXX)
-cleanup() { chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB"; }
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
+cleanup() { crewhouse_remove_lab "$LAB"; }
 trap cleanup EXIT
 CURRENT=$(node -e 'console.log(require(process.argv[1] + "/package.json").version)' "$REPO")
 # The version before this one on npm: what a person has installed today.

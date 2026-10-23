@@ -18,7 +18,7 @@ mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run,lo}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 . "$REPO/scripts/verify/crewd-group.sh"
-cleanup() { chrome-devtools-axi stop >/dev/null 2>&1 || true; crewd_stop || exit 1; rm -rf "$LAB"; }
+cleanup() { chrome-devtools-axi stop >/dev/null 2>&1 || true; crewhouse_remove_lab "$LAB"; }
 trap cleanup EXIT
 crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \

@@ -15,7 +15,7 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-phone-web.XXXXXX)
-trap 'rc=$?; [ $rc -eq 0 ] || cp -r "$LAB/context" "$OUT/context-failed" 2>/dev/null; crewd_stop || exit 1; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+trap 'rc=$?; [ $rc -eq 0 ] || cp -r "$LAB/context" "$OUT/context-failed" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run} "$OUT/shots" "$LAB/context"
 free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})'; }
 PORT=$(free); LP=$(free)

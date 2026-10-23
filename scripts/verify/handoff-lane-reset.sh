@@ -16,9 +16,10 @@ set -euo pipefail
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d -t crewhouse-lane-reset.XXXXXX)
+. "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
 LAB_PID=""
 stop() { [ -z "$LAB_PID" ] || kill "$LAB_PID" 2>/dev/null || true; }
-trap 'stop; sleep 1; chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB" 2>/dev/null || true' EXIT
+trap 'stop; crewhouse_remove_lab "$LAB" 2>/dev/null || true' EXIT
 # The scripted model needs a real npm on the PATH (a mise shim that cannot read its own config fails the install).
 PATH=/usr/bin:$PATH
 export PATH

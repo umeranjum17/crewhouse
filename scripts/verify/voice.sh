@@ -26,7 +26,7 @@ MASK=(env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" XDG_STATE_
 PORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 . "$REPO/scripts/verify/crewd-group.sh"
-cleanup() { crewd_stop || exit 1; chmod -R u+w "$LAB" 2>/dev/null || true; rm -rf "$LAB"; }
+cleanup() { crewhouse_remove_lab "$LAB"; }
 trap cleanup EXIT
 crewd_start "$REPO" "$OUT/crewd.log" "${MASK[@]}" CREWHOUSE_PORT="$PORT" "$NODE" src/main.ts
 wait_for() { for _ in $(seq 1 600); do "$@" >/dev/null 2>&1 && return 0; kill -0 "$CREWD" 2>/dev/null || { log "crewd exited"; tail "$OUT/crewd.log"; exit 1; }; sleep 0.2; done; log "timed out: $*"; exit 1; }

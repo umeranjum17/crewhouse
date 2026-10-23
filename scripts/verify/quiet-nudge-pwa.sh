@@ -14,7 +14,7 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 export LAB=$(mktemp -d -t crewhouse-quiet-pwa.XXXXXX)
 . scripts/verify/crewd-group.sh
-trap 'bash scripts/verify/pair-lab.sh down 2>&"$crewd_err" || exit 1; rm -rf "$LAB"' EXIT
+trap 'bash scripts/verify/pair-lab.sh down 2>&"$crewd_err" || exit 1; crewhouse_remove_lab "$LAB"' EXIT
 bash scripts/verify/pair-lab.sh up "$REPO" > "$OUT/lab.log" 2>&1
 . "$LAB/env"
 PERSON=$(cat "$LAB/state/person.key")

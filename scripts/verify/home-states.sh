@@ -15,7 +15,7 @@ OUT=$1; STATE=$2; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-home.XXXXXX)
-trap 'crewd_stop || exit 1; rm -rf "$LAB"' EXIT
+trap 'crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"

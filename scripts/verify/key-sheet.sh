@@ -7,6 +7,7 @@
 set -euo pipefail
 OUT=$1; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
+. "$REPO/scripts/verify/crewd-group.sh"
 pick() { chrome-devtools-axi selectpage "$(chrome-devtools-axi pages 2>/dev/null | awk -F, '/^  [0-9]/{gsub(/ /,"",$1);print $1;exit}')" >/dev/null 2>&1 || true; }
 ax() { local o; o=$(chrome-devtools-axi "$@" 2>&1) || true; [ -z "${AXLOG:-}" ] || printf "%s\n--> %s\n" "$*" "$o" >> "$AXLOG"; case $o in *"No page is currently selected"*) pick; chrome-devtools-axi "$@" >/dev/null 2>&1 || true;; esac; }
 # One fixture per account: the fake Gateway keeps a saved key's provider signed in, so a second account would start signed in.
@@ -21,7 +22,7 @@ up() {
   api -X POST -d '{"address":"Umer"}' "$B/api/onboard" >/dev/null
 }
 down() { [ -z "${S:-}" ] && return 0; ax open about:blank; kill -TERM "$FIX" 2>/dev/null || true; for _ in $(seq 40); do kill -0 "$FIX" 2>/dev/null || break; sleep 0.25; done
-  kill -KILL "$FIX" 2>/dev/null || true; chmod -R u+w "$S"; rm -rf -- "$S"; S=; }
+  kill -KILL "$FIX" 2>/dev/null || true; crewhouse_remove_lab "$S"; S=; }
 trap down EXIT
 api() { curl -fsS -H x-crewhouse:1 -H "Authorization: Bearer $P" -H 'content-type: application/json' "$@"; }
 click() { ax eval "(()=>{const b=[...document.querySelectorAll('$1')].find(b=>/$2/i.test(b.textContent||b.getAttribute('aria-label')));b.click();return 1})()"; }

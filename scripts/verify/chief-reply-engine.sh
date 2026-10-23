@@ -15,7 +15,7 @@ OUT=$(mkdir -p "$1" && cd "$1" && pwd -P)
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-chief-reply.XXXXXX)
-trap 'crewd_stop || exit 1; [ "${OK:-}" = 1 ] || cp "$LAB/lab.log" "$OUT/" 2>/dev/null; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
+trap '[ "${OK:-}" = 1 ] || cp "$LAB/lab.log" "$OUT/" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 ENGINE=$(cd "$REPO" && node -e 'import("@byokit/openclaw").then((m) => console.log(m.ENGINE_VERSION))')
 crewd_start "$REPO" "$LAB/lab.log" env -i PATH="$PATH" LANG=C.UTF-8 DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
   CREWHOUSE_ENGINE_DIR="${CREWHOUSE_ENGINE_DIR:-$REPO/runtime/openclaw}" node scripts/verify/native-delegation.ts "$LAB/lab" "$LAB/ready.json" --scripted
