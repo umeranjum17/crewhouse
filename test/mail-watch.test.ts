@@ -96,6 +96,7 @@ test("Chief's mail watch notices only new mail, once, with links", async () => {
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id = ?", tasks[0].id)!.n, 1);
   assert.match(db.get('SELECT result FROM tasks WHERE id = ?', tasks[0].id)!.result, /read-only/, 'injected write/recruit calls hit the automatic-watch gate');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM asks')!.n, 0, 'automatic triage cannot request write approval');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE author = 'system' AND task_id = ?", tasks[0].id)!.n, 0, 'automatic triage never exposes its internal prompt in the chat');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM bots')!.n, 1, 'mail cannot recruit a helper');
 
   await fire(r.id); // nothing new: silence, no second task

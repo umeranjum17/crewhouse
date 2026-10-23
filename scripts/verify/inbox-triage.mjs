@@ -60,7 +60,7 @@ try {
   for (const look of ['day', 'night']) for (const width of [390, 1440]) steps.push(
     { name: `${look}-${width}`, w: width, h: 1000, mobile: width === 390, url: `${base}/?${look}#/chief`, settle: 0 },
     { name: 'alert-ready', wait: "document.body.innerText.includes('Which deployed app uses this Stripe account?')" },
-    { name: 'paint-ready', eval: "(async()=>{await document.fonts.ready; await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); return true;})()" },
+    { name: 'paint-ready', eval: "(async()=>{await document.fonts.ready; await Promise.allSettled(document.getAnimations().filter(a=>a.effect.getComputedTiming().iterations!==Infinity).map(a=>a.finished)); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); return true;})()" },
     { name: `geometry-${look}-${width}`, eval: "({width:innerWidth, overflow:document.documentElement.scrollWidth>innerWidth, scrollContainers:[...document.querySelectorAll('*')].filter(e=>getComputedStyle(e).overflowY==='auto'&&e.scrollHeight>e.clientHeight).length, links:[...document.querySelectorAll('a')].filter(a=>a.href.includes('fixture-brotli')||a.href.includes('/#inbox/')).map(a=>({text:a.textContent,href:a.href}))})", out: join(out, `chief-${width}-${look}.png`) });
   const plan = join(lab, 'browser-plan.json');
   writeFileSync(plan, JSON.stringify({ bin: '/usr/bin/chromium', profile: join(lab, 'profile'), home: join(lab, 'home'), args: ['--no-sandbox', '--disable-dev-shm-usage', 'about:blank'], steps }));

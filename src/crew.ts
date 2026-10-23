@@ -1124,7 +1124,7 @@ export class Crew {
       shown = kept.map((k, i) => pics[i].photo !== false ? `\n[photo ${bot}] ${k}` : `\n[file ${bot}] ${k} ${pics[i].bytes.length}B${pics[i].name ? ` ${pics[i].name}` : ''}`).join('');
       if (kept.some((_, i) => pics[i].photo === false)) this.db.run('UPDATE tasks SET body = body || ? WHERE id = ?', `\nFiles attached (in files/inbox; read them with the documents tool): ${kept.filter((_, i) => pics[i].photo === false).join(', ')}`, id);
       // The thread shows the routine's own words, never Crewhouse's note to the bot (a watch's page and its before and after).
-      if (routine) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id);
+      if (routine) { if (!routine.mailwatch) this.say(bot, 'system', `${routine.watch ? `“${routine.name}”: the page changed` : `Routine “${routine.name}”`}: ${body.split('\n\n[Crewhouse]')[0]}`, id); }
       else this.say(bot, origin === 'person' ? 'person' : origin, said + shown, id);
       this.db.event('task.created', bot, { task: id, origin, title });
       if (routine?.eventCursor) this.db.run('UPDATE routines SET cursor = ?, down = 0 WHERE id = ?', routine.eventCursor, routine.id); // an event routine's cursor moves with the task it started
