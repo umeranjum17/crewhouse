@@ -17,7 +17,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |
 | unlock-card | `done-done run unlock-card` |
-| custom-rules | `done-done run custom-rules` — confirmation, save/cancel/edit, scripted helper draft, restart and installed PWA |
+| custom-rules | `done-done run custom-rules` — confirmation, save/cancel/edit, scripted helper draft and restart (browser only) |
 | chief-soul | `done-done run chief-soul` (live voice: the recipe's real-model leg) |
 | helper-files | `done-done run unlock-card` — the rule is on that card, so its driver carries the helper-files leg (Keep it / Keep them, Forget this file, and Remove it when the job ends taking a copy) |
 | thread-hygiene | `done-done run ask-in-view` and `done-done run -- bash scripts/verify/new-pill.sh "$DONE_DONE_EVIDENCE_ROOT"` plus the recipe's other cases |
@@ -74,7 +74,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: one pasted line installs the headless host on a clean Linux box, then the phone types its code |
 | look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/verify/mocks.tsv`) |
 | chat-attach | [chat-attach.md](chat-attach.md) | Chief's paperclip: a PDF or document lands in the helper's inbox under crewd's own name and shows as a one-line file card above the words, at 390/1440, the largest text and in the installed app; the phone app's + sheet, chip and big-file stream on an emulator |
-| custom-rules | [custom-rules.md](custom-rules.md) | Chief confirms a standing instruction before saving; explicit Saved/Cancelled cards, editable rules in Settings, separate safety checks, helper draft and installed PWA |
+| custom-rules | [custom-rules.md](custom-rules.md) | Chief confirms a standing instruction before saving; explicit Saved/Cancelled cards, editable rules in Settings, separate safety checks and helper draft (browser only) |
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | crew-room | [crew-room.md](crew-room.md) | The crew room and Chief's standup on a real MiniMax M3.1 Flash run: Chief hands one job to Scout then Scribe, the room shows his brief to each and his closing words as the standup, at 390 wide, day and night |
 | chat-real | [chat-real.md](chat-real.md) | First-day path on the real engine (no name, first request from Hello, MiniMax key): Chief starts on M3.1 Flash by itself and a real reply arrives (the stub engine's reply is hidden by design); `timeline.txt` times each step; the reply at 390 wide, day and night; fails when none arrives in time |

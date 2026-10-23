@@ -21,10 +21,10 @@ the separate safety policy, tool grants or per-action approvals.
 
 Capture confirmation, Saved/Cancelled cards, the rules list and the helper draft
 at 390×844 and 1440×900 in day/night, plus a recording of confirmation/editing.
-Install the PWA through the app's own install offer and require
-`matchMedia('(display-mode: standalone)').matches` in its new window before its
-captures. The driver records geometry and the scroll-container count beside each
-shot, exact rule persistence, helper tool outcomes and the step record.
+The driver waits for the startup overlay to leave, then records geometry and the
+scroll-container count beside each shot, exact rule persistence, helper tool
+outcomes and the step record. The A021 journey is browser-only: installed-app
+capture was explicitly excluded from its acceptance scope; it is not witnessed.
 Open every shot and compare the confirm/save/list journey with the approved
 custom-rule reference; capture limitations are not a pass.
 

@@ -23,14 +23,14 @@ const start = async () => {
 const stop = async () => { if (!child || child.exitCode !== null) return; const closed = new Promise(r => child.once('exit', r)); process.kill(-child.pid, 'SIGTERM'); await closed; };
 const click = label => `(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(label)}); if(!b) throw Error('No button: ${label}'); b.click(); return true; })()`;
 const fill = text => `(() => { const e=document.querySelector('textarea[aria-label="Edit rule"]'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,${JSON.stringify(text)}); e.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`;
-const ready = `document.fonts.status === 'loaded'`;
+const ready = `document.fonts.status === 'loaded' && !document.querySelector('.splash')`;
 const geometry = `({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,scrollContainers:[...document.querySelectorAll('*')].filter(e=>e.clientHeight>0 && e.scrollHeight>e.clientHeight+2 && /auto|scroll/.test(getComputedStyle(e).overflowY)).length})`;
 const matrix = (slug, route, shown) => ['day', 'night'].flatMap(look => [390, 1440].flatMap(w => [
   { name: `${slug}-${look}-${w}`, w, h: w === 390 ? 844 : 900, dpr: 1, url: `${B}/?${look}#/${route}`, settle: 0 },
   { name: 'ready', wait: `${ready} && (${shown})` },
   { name: `${slug}-geometry-${look}-${w}`, eval: geometry, out: join(EV, `${slug}-${look}-${w}.png`) }
 ]));
-const browser = async (name, steps, pwa = false) => {
+const browser = async (name, steps) => {
   const path = join(d, `${name}.json`), out = join(EV, `${name}-run.json`);
   writeFileSync(path, JSON.stringify({ profile: join(d, `${name}-profile`), home: join(d, 'home'), headless: false, args: ['--window-size=1440,1000', '--force-device-scale-factor=1', 'about:blank'], xkey: join(REPO, 'scripts/verify/xkey.py'), recorder: join(REPO, 'scripts/verify/record.mjs'), steps: [{ name: 'authenticate', url: `${B}/#person=${key}`, settle: 0 }, { name: 'authority-ready', wait: `sessionStorage.getItem('crewhouse.person')?.length === 64` }, ...steps] }));
   // Keep HTTP socket-close events flowing while the browser runs; a synchronous child leaves pooled sockets stale.
@@ -38,7 +38,6 @@ const browser = async (name, steps, pwa = false) => {
   writeFileSync(out, result.replaceAll(d, '<lab>').replaceAll(key, '<lab-key>'));
   const rows = JSON.parse(result), bad = rows.filter(r => r.error || r.value === false || r.value?.scrollWidth > r.value?.width);
   assert.deepEqual(bad, [], `${name} browser assertions`);
-  if (pwa) assert.ok(rows.some(r => r.step === 'standalone' && r.value === true), 'a genuinely installed standalone window');
 };
 const post = (bot, text) => api('POST', `/api/bots/${bot}/messages`, { text });
 const rule = 'Only prepare drafts. I will send messages myself.', edited = `${rule} Keep each draft short.`;
@@ -85,13 +84,6 @@ try {
     await browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
     await stop(); await start(); assert.deepEqual((await api('GET', '/api/rules')).rules, [edited]);
     writeFileSync(join(EV, 'restart.json'), JSON.stringify({ rules: (await api('GET', '/api/rules')).rules, cancelledRuleAbsent: true }));
-    await browser('pwa', [
-      { name: 'settings', url: `${B}/?day#/settings`, settle: 0 }, { name: 'installable', wait: `!!document.querySelector('.install .btn')` },
-      { name: 'install', click: '.install .btn', settle: 0 }, { name: 'tab', key: 'Tab' }, { name: 'return', key: 'Return' },
-      { name: 'attach', attachApp: B }, { name: 'standalone', eval: `matchMedia('(display-mode: standalone)').matches` },
-      { name: 'app-authority', url: `${B}/#person=${key}`, settle: 0 }, { name: 'authority-ready', wait: `sessionStorage.getItem('crewhouse.person')?.length === 64` },
-      ...matrix('installed-pwa', 'settings/rules', `matchMedia('(display-mode: standalone)').matches && document.body.innerText.includes('Keep each draft short.')`)
-    ], true);
-    writeStepsRecord(EV, { target: { version: version() }, start: 'Umer on a private real crewd, stub engine, no rules', steps: ['Offer exact rule: nothing saved', 'Create rule: Saved card and settings link', 'Cancel another rule: Cancelled card, original rule unchanged', 'Cancel an edit, then save the edited rule in Settings, Custom rules', 'Scripted helper produces a draft, not a send; integration test checks its actual run context', 'Restart crewd: edited rule survives', 'Install PWA; standalone rules screen in both themes and widths'], result: 'Confirmed custom-rule lifecycle and helper draft, with separate unchanged safety approvals. No real model, mailbox or send.' });
+    writeStepsRecord(EV, { target: { version: version() }, start: 'Umer on a private real crewd, stub engine, no rules', steps: ['Chief shows a Confirm custom rule card with the full rule text, Create rule and Cancel; nothing is saved', 'Create rule: Saved card and settings link', 'Cancel another rule: Cancelled card, original rule unchanged', 'Cancel an edit, then save the edited rule in Settings, Custom rules', 'Scripted helper produces a draft, not a send; integration test checks its actual run context', 'Restart crewd: edited rule survives'], result: 'Confirmed custom-rule lifecycle and helper draft, with separate unchanged safety approvals. No real model, mailbox or send.' });
   }
 } finally { await stop(); rmSync(d, { recursive: true, force: true }); }
