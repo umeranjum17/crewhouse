@@ -26,8 +26,8 @@ export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean enviro
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-connect-apps.XXXXXX)
-trap 'touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; crewd_stop || true; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; chmod -R u+w "$LAB"; rm -rf "$LAB"' EXIT
-trap 'exit 143' HUP INT TERM # an aborted run still reaches the EXIT trap, which stops crewd's group and removes the lab
+trap 'touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "$OUT/" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
+trap 'exit 143' HUP INT TERM # an aborted run still reaches the EXIT trap, which removes the lab and stops its processes
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"; ST="$LAB/state"; CR="$LAB/crew"
