@@ -2,12 +2,14 @@
   "inbox-triage": {
     "start": "Umer on a private real crewd, scripted engine, synthetic recorded inbox and a Railway case; no real Google or model",
     "steps": [
-      "Connect the local synthetic Gmail provider and run Mail watch once to baseline old mail",
+      "Connect the local synthetic Gmail provider; Gmail answers 503 once, then Mail watch baselines old mail",
       "A synthetic Stripe alert arrives; run Mail watch through its HTTP button route",
-      "Open Chief's thread at phone and desktop widths in day and night and read the linked scripted alert",
-      "Run Mail watch again without new mail"
+      "Open Chief's thread at phone and desktop widths in day and night: the Gmail failure card, then the alert card with its lead, source rows and one question",
+      "Run Mail watch again without new mail, and open Mail watch's runs on Routines in day and night",
+      "Install the app and open Chief's thread in its own window at phone and desktop sizes",
+      "On the phone, tap Answer, type the answer and send it"
     ],
-    "result": "One scripted alert with cross-sender context and source links reaches Chief through real HTTP, a quiet poll creates no task, and Gmail receives GETs only. This is not live ranking, real-inbox phone or installed-PWA proof."
+    "result": "One scripted alert card with cross-sender context reaches Chief through real HTTP: its first sentence leads, each source is a 44px row naming Gmail or nodejs.org, and its question stands apart with Answer. The Gmail failure reads as a card with its cause, Routines reads each run in inbox words, a quiet poll creates no task, the answer reaches Chief quoting the question, and Gmail receives GETs only. The installed app shows the same card. This is not live ranking or real-inbox phone proof."
   },
   "ask-in-view": {
     "start": "a fresh crew on the stub engine, with one card waiting for the person in Chief's thread",

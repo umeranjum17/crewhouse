@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -38,6 +38,25 @@ export function ChatText({ text, latest }: { text: string; latest?: boolean }) {
   const shown = long && !more ? text.slice(0, 650).replace(/\s+\S*$/, '').replace(/\n[ \t]*(?:[-*+]|\d+[.)])(?:[ \t][^\n]*)?$/, '') : text;
   return <div className="chat-md">{mdBlocks(chatTokens(shown))}{long && <button className="chat-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}</div>;
 }
+
+/** Chief's Mail watch alert as a card in his thread (A.inboxOf): his first sentence leads, each source is a row naming
+ *  where it goes, and his one question stands apart. `answer` is offered only while the question is still the newest
+ *  line: it puts the person in the box, and the sent reply quotes the question. */
+export function InboxAlert({ inbox, at, answer }: { inbox: Inbox; at?: number; answer?: () => void }) {
+  return <div className="inbox">
+    <div className="inbox-tag"><Icon name="mail" /><span>From your inbox</span>{at ? <time>{clock(at)}</time> : null}</div>
+    <div className="chat-md">{inbox.lead && <div className="inbox-lead">{mdBlocks(chatTokens(inbox.lead))}</div>}{mdBlocks(chatTokens(inbox.body))}</div>
+    {inbox.sources.length > 0 && <ul className="inbox-src" aria-label="Sources">{inbox.sources.map((s) =>
+      <li key={s.href}><a href={s.href} target="_blank" rel="noopener noreferrer"><span className="grow">{s.label}</span>{!s.label.includes(s.site) && <span className="inbox-site">{s.site}</span>}<Icon name="next" /></a></li>)}</ul>}
+    {inbox.ask && <div className="inbox-ask"><span className="inbox-ask-tag">Chief asks</span><div className="chat-md">{mdBlocks(chatTokens(inbox.ask))}</div>
+      {answer && <button type="button" className="btn go" onClick={answer}>Answer</button>}</div>}
+  </div>;
+}
+/** crewd's line when Mail watch could not read Gmail: what happened, its cause as given, and that it tries again. */
+export const InboxDown = ({ cause }: { cause: string }) => <div className="inbox inbox-down">
+  <div className="inbox-tag"><Icon name="mail" /><span>Mail watch</span></div>
+  <b>Couldn't check your Gmail</b><span>{cause}</span><span className="mute">Mail watch tries again by itself at its next check.</span>
+</div>;
 
 // ---------- toasts ----------
 type Said = { m: string; act?: { label: string; run: () => void } };
