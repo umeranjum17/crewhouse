@@ -27,6 +27,7 @@ Select affected recipes from the full maintained map in `docs/verification/READM
 
 Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS_AXI_SESSION for the browser UI; a shell for the lab and teardown. Drive through the repo's real handles that each feature file names:
 
+- [Confirmed custom rules](../../../docs/verification/custom-rules.md): `done-done run custom-rules` proves the confirm card, Saved/Cancelled, editable Settings list, restart, scripted helper draft and installed PWA. Run `node scripts/test.mjs test/standing-rules.test.ts` for the actual helper-context and safety-grant assertions; a scripted result is not real-model interpretation or native APK proof.
 - [Onboard and chat with Chief](features/onboard-and-chat-with-chief.md): Open the app's first screen (Hello), or call the API directly after a fresh lab starts (`docs/verification/runbook.md`)
 - [Recruit a helper and assign it a job](features/recruit-a-helper-and-assign-it-a-job.md): Send a message to Chief that carries a crew_recruit tool call, then post a job in the new helper's own thread (`docs/verification/recruit-assign.md`)
 - [Chief's thread on a desktop and a phone](features/chief-s-thread-on-a-desktop-and-a-phone.md): Open the app's private launcher URL for the lab, then the Chief thread (#/chief) (`docs/verification/runbook.md`)

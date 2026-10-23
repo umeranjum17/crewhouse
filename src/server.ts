@@ -331,6 +331,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       db.event('memory.edited', null, { by: 'person', everyone: true });
       return { ok: true };
     }
+    if (p === '/api/rules' && m === 'GET') return { rules: crew.rules() };
+    if (p === '/api/rules' && m === 'PUT') { crew.setRule(body.text, body.replaces); return { ok: true }; }
     if (p === '/api/profile' && m === 'GET') return { text: disk.readProfile(cfg), cap: disk.PROFILE_CAP };
     if (p === '/api/profile' && m === 'PUT') { disk.writeProfile(cfg, body.text ?? ''); db.event('profile.edited', null, { by: 'person' }); return { ok: true }; }
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/)) && m === 'POST') {

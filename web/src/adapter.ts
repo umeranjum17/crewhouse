@@ -46,6 +46,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
+  rule?: string;
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
@@ -916,6 +917,8 @@ export function card(a: Json, state: Json): Card {
       video: { from: plain(String(d.pick.from ?? '')), choices },
       choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Check that this says exactly what you want. Every helper will read this rule.', preview: { body: String(d.customRule.text) },
+    choices: [{ label: 'Create rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -1045,10 +1048,11 @@ function receiptAction(kind: string, detail: Json): string {
  *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
  *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
  *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
-export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string }[] {
+export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string; rule?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
+    if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
