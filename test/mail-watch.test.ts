@@ -107,6 +107,7 @@ test("Chief's mail watch notices only new mail, once, with links", async () => {
   const restarted = new Crew(cfg, db);
   try {
     restarted.init();
+    await signInApp(restarted.connections, 'gmail');
     due(r.id); restarted.schedule();
     await until('restarted watch settled', () => fired(r.id).length === 5);
     assert.equal(fired(r.id).at(-1), 'same', 'history cursor survives a restart');

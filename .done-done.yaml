@@ -38,6 +38,8 @@ journeys:
   # Chief on this phone with a MiniMax key: the caller's emulator and lab release APK, a lab key, a fake live model list, no model call (phone-only-minimax.md).
   phone-only-minimax:
     command: 'SERIAL="${SERIAL:?the emulator serial}" PHONE_OTHER="${PHONE_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 600 bash scripts/verify/phone-only-minimax.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the lab release APK}"'
+  inbox-triage:
+    command: 'timeout -k 3 240 node scripts/verify/inbox-triage.mjs "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
