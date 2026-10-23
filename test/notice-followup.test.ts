@@ -33,6 +33,10 @@ globalThis.fetch = (async (url: any, init: any = {}) => {
   const u = new URL(String(url));
   const path = u.pathname.replace('/gmail/v1/users/me', '');
   const json = (x: unknown) => new Response(JSON.stringify(x), { status: 200 });
+  const history = String(Math.max(0, ...Object.values(threads).flatMap((t) => t.messages.map((m: any) => Number(m.internalDate)))));
+  if (path === '/profile') return json({ historyId: history });
+  if (path === '/history') return json({ historyId: history, history: order.filter((id) => threads[id].messages.some((m: any) => Number(m.internalDate) > Number(u.searchParams.get('startHistoryId')))).map((id) => ({ messagesAdded: [{ message: { id, labelIds: ['INBOX'] } }] })) });
+  if (path.startsWith('/messages/')) { const id = path.split('/')[2], messages = threads[id]?.messages ?? []; return json({ ...messages.filter((m: any) => !m.labelIds?.includes('SENT')).at(-1), threadId: id }); }
   if (path === '/threads') return json({ threads: [...order].reverse().map((id) => ({ id })) });
   const t = threads[path.split('/threads/')[1]];
   return json(t ?? {});
@@ -147,19 +151,32 @@ test('a two-step case gives one notice and one follow-up; unrelated mail adds no
   const t9 = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
   await settled(db, t9.id);
   assert.match(promptOf(t9.id), new RegExp(`cases you hold with this sender: ⟦${FACTS500}⟧`), 'the same address under another display name matches the held case');
-  server.close();
   assert.match(runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', t3.id)!.session), /^crew_case: error: /m, 'a thread the check did not show is refused');
+  const stripe = JSON.parse(readFileSync(new URL('fixtures/inbox-stripe.json', import.meta.url), 'utf8'));
+  db.run('INSERT INTO cases (thread, sender, facts, updated_at) VALUES (?, ?, ?, ?)', stripe.contextThread, 'alerts@railway.example', stripe.context, Date.now());
+  threads[stripe.thread] = { messages: [{ ...msg(stripe.from, stripe.subject, '', Date.now() + 10_000), payload: { headers: [{ name: 'From', value: stripe.from }, { name: 'Subject', value: stripe.subject }], mimeType: 'text/html', body: { data: Buffer.from(stripe.html).toString('base64url') } } }] }; order.push(stripe.thread);
+  await fire(r.id);
+  const alert = db.all('SELECT * FROM tasks WHERE routine = ? ORDER BY id', r.id).at(-1)!;
+  await settled(db, alert.id);
+  assert.match(promptOf(alert.id), /Railway incident/, 'cross-sender context survives into the next watch task');
+  assert.match(promptOf(alert.id), new RegExp(stripe.contextThread), 'context has its source link');
+  assert.equal(said(alert.id), stripe.reply, 'scripted alert reaches Chief once; not a model-quality assertion');
+  const read = runtime.transcript(db.get('SELECT session FROM tasks WHERE id = ?', alert.id)!.session);
+  assert.match(read, /source: https:\/\/mail.google.com/);
+  assert.match(read, /fixture-brotli\?source=stripe&kind=security/, 'HTML source links survive the read path');
+  assert.doesNotMatch(read, /javascript:/, 'unsafe links do not become references');
+  assert.ok((await call('GET', '/api/bots/chief')).messages.some((m: any) => m.text === stripe.reply), 'the phone reads the same Chief alert from the API');
+  server.close();
   done();
 });
 
 test('the sender is the bank when the person replied last, and a long From keeps its address', async () => {
-  const { newThreads } = await import('../src/mail.ts');
+  const { runMail } = await import('../src/mail.ts');
   const PERSON_LAST = '18c0000000000021', LONG = '18c0000000000022';
   threads[PERSON_LAST] = { messages: [msg(FROM, 'LOCI800: reply needed', 'Question.', 1000), { ...msg('Umer <umer@home.example>', 'Re: LOCI800: reply needed', 'Sent.', 2000), labelIds: ['SENT'] }] };
   threads[LONG] = { messages: [msg('Commonwealth Bank Insurance Alerts Team Pty Ltd Customer Care <alerts@bank.example>', 'LOCI900: cover', 'Long name.', 3000)] };
   order.push(PERSON_LAST, LONG);
-  const rows = await newThreads(async () => 'tok', 0);
-  const row = (id: string) => rows.find((r) => r.id === id)!;
-  assert.equal(row(PERSON_LAST).from, FROM, 'the person replied last, and the bank is still the sender');
-  assert.equal(row(LONG).from, 'Commonwealth Bank Insurance Alerts Team <alerts@bank.example>', 'the display name is shortened, the address is kept');
+  const rows = await runMail(async () => 'tok', ['search', 'in:inbox']);
+  assert.match(rows, new RegExp(`${PERSON_LAST}.*Bank <alerts@bank.example>`), 'the person replied last, and the bank is still the sender');
+  assert.match(rows, new RegExp(`${LONG}.*Commonwealth Bank Insurance Alerts Team <alerts@bank.example>`), 'the display name is shortened, the address is kept');
 });

@@ -12,6 +12,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 
 | Feature recipe | Named primitive / driver |
 |---|---|
+| mail-watch / Chief inbox triage | `done-done run inbox-triage` — recorded synthetic Gmail, read-only scripted Chief alert, cross-sender context and quiet repeat; real personal-inbox phone/PWA acceptance remains separate |
 | delivered-files | `done-done run delivered-files` |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
