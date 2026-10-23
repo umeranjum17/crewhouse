@@ -16,7 +16,7 @@ REPO=$(git rev-parse --show-toplevel)
 LAB=$(mktemp -d -t crewhouse-screens.XXXXXX)
 trap 'rc=$?; [ "$rc" = 0 ] || cp "$LAB/crewd.log" "$OUT/crewd-screens.log" 2>/dev/null; crewhouse_remove_lab "$LAB"' EXIT
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
-node -v > /dev/null 2>&1 || { mkdir "$LAB/bin" && ln -s /usr/bin/node "$LAB/bin/node" && export PATH=$LAB/bin:$PATH; } # done-done runs with a clean environment, where a version-manager shim fails: use the distro node, alone, so every other shim keeps its place
+node -v > /dev/null 2>&1 || { mkdir "$LAB/bin" && ln -s /usr/bin/node /usr/bin/npm /usr/bin/npx "$LAB/bin/" && export PATH=$LAB/bin:$PATH; } # done-done runs with a clean environment, where a version-manager shim fails: use the distro node and npm, alone, so every other shim keeps its place
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 crewd_start "$REPO" "$LAB/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
