@@ -1450,6 +1450,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .chief-profile .file-chip[data-ext=PDF] { background: #8A8478; color: #fff; }
 .cp-none { display: flex; flex-direction: column; gap: 4px; border-style: dashed; }
 .cp-none b { color: var(--ink); }
+.st-profile.chief-profile .cp-none { align-items: flex-start; gap: 4px; padding: 18px 20px; border-radius: 22px; text-align: left; }
+.st-profile.chief-profile .cp-none b { font: 700 17px/1.3 Archivo, var(--ui); font-stretch: 105%; }
 
 /* Home, Stack (design C): the wide greeting, Chief's card with his line and box, then a card per crew member in their
    own colour (art.colourOf) with black words, and the jobs to hand over. Faces are Geo, each on its own black disc. */
@@ -2052,13 +2054,15 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 @media (min-width: 900px) { .fr-h { font-size: clamp(44px, 4.4vw, 64px); } }
 /* watch a helper (J15) */
 .card.screen { border-radius: 28px; }
-.screen-h { font: 800 22px/1.15 Archivo, sans-serif; font-stretch: 125%; }
+.screen-h { flex: 1 1 auto; font: 800 22px/1.15 Archivo, sans-serif; font-stretch: 125%; }
 .screen-hand { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 0; font: 400 16px/1.45 var(--ui); color: var(--mute); }
 .screen-hand svg { flex: none; margin-top: 2px; }
 .screen-btns .btn { min-height: 52px; border-radius: 18px; font-size: 16px; }
 .screen-btns .btn:nth-child(2) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .screen-btns .btn:nth-child(n+3) { background: var(--soft); border-color: transparent; }
-.card.screen > .row { margin-bottom: 12px; }
+.card.screen > .row { flex-wrap: wrap; margin-bottom: 12px; }
+.screen-hand + .screen-held, .screen-held ~ .hand-back { margin-top: 14px; }
+.st-screen.page { width: 100%; }
 .btn.soft { background: var(--soft); border-color: transparent; }
 
 /* Stack J05c What happened, J05d Add a helper, J06a the crew room. */

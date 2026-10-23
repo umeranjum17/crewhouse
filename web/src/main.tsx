@@ -930,7 +930,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
     void load();
   }, 'Forgotten');
   return (
-    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : ''}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
+    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : 'st-screen'}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
       {tab === 'chat' && h && <>
         <div className="sticky-top">
           <header className="chat-head">
@@ -987,15 +987,15 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
         <p className="st-recorded"><Icon name="lock" /><span>Recorded by Crewhouse, not remembered by {short}.</span></p>
       </> : null)}
-      {tab === 'screen' && h && <div className="sticky-top"><header className="chat-head">
+      {tab === 'screen' && b?.computer && <div className="sticky-top"><header className="chat-head">
         <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>Computer</b></div></header></div>}
-      {tab === 'screen' && h && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'screen' && b?.computer && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
     </div>
   );
 }
 
-/** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the crew's computer with Take control,
- *  his one notification switch, his instructions (the personality editable, the limits read-only), and his crew. Take control is on the first phone screen. */
+/** Chief's profile, one page (mock profile-b, tapped from his hero): his routines, the computer with Take control (his own,
+ *  or the helper's on one now; an empty state when none has one), his one notification switch, his instructions and his things. */
 const THINGS = [['files', 'Files', 'Files you send Chief, or the crew makes, land here.'], ['links', 'Links', 'Links you or the crew share in the chat land here.'],
   ['pictures', 'Pictures', 'Photos and screenshots you send Chief, or the crew makes, land here.']] as const;
 function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
@@ -1005,8 +1005,11 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   const stuff = A.chatThings(state, page), list = THINGS.find(([k]) => k === tab);
   const [notify, setNotify] = useState<boolean | null>(null);
   useEffect(() => { api.notify().then((n) => setNotify(n.on)).catch(() => {}); }, []);
-  // The computer to show: whoever is on one now, else the first helper with one.
-  const pc = crew.find((h) => h.computer && h.driving) ?? crew.find((h) => h.computer && h.seat === 'working') ?? crew.find((h) => h.computer);
+  // The computer to show: whoever you or the crew are on now, else Chief's own, else the first helper with one.
+  const me = state.bots.find((b: Json) => b.id === 'chief'), desk = page?.tools?.find((t: Json) => t.id === 'computer');
+  const pcs = [...(me?.computer ? [{ id: 'chief', name: 'Chief', driving: me.controls === 'person', working: !!me.task }] : []),
+    ...crew.filter((h) => h.computer).map((h) => ({ id: h.id, name: h.name, driving: h.driving, working: h.seat === 'working' }))];
+  const pc = pcs.find((p) => p.driving) ?? pcs.find((p) => p.working) ?? pcs[0];
   const who = (r: Json) => (r.helper === 'chief' ? '' : `${crew.find((h) => h.id === r.helper)?.name ?? 'Chief'} does it`);
   // A page behind the profile: a round back, its name, and "Chief's profile" under it (J09d).
   const head = (title: string) => <div className="sticky-top"><header className="chat-head cp-subhead">
@@ -1040,15 +1043,18 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
           {all.length > 2 && go2('#/routines', `See all ${all.length}`, '')}
           <a className="row-item cp-link" href="#/routines"><span className="o-ic"><Icon name="plus" /></span><span className="grow"><b>Add a routine</b></span><Icon name="next" /></a>
         </div>
+        <h2 className="st-label">Computer</h2>
+        {pc ? <div className="card cp-computer">
+          <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.working ? `${pc.name} is using it` : `${pc.name}'s computer`} />
+          <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>{pc.driving ? 'Back to the controls' : 'Take control'}</button>
+          <p className="mute small">Its own screen, away from yours. Taking control pauses {pc.name} until you hand it back.</p>
+        </div> : <div className="card empty cp-none"><b>No computer yet</b><span className="mute small">{desk && !desk.ready && desk.missing?.length
+          ? `This machine is missing what a computer needs: ${desk.missing.join(', ')}.` : 'None of your crew has a computer, so no one can work on a screen of their own.'}</span></div>}
         <h2 className="st-label">News</h2>
         <div className="card list"><label className="row-item"><span className="grow"><b>Tell me when Chief finishes or needs me</b><span className="mute">On every device with news on</span></span>
           <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
         <h2 className="st-label">Instructions</h2>
         <div className="card list">{go2('#/h/chief/instructions', 'How Chief works for you', 'Plain words. Only you change them.')}</div>
-        {pc && <><h2 className="st-label">Computer</h2><div className="card cp-computer">
-          <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.seat === 'working' ? `${pc.name} is using it` : `${pc.name}'s computer`} />
-          <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>Take control</button>
-        </div></>}
         <h2 className="st-label">Things</h2>
         <div className="card list">{THINGS.map(([k, l]) => <Fragment key={k}>{go2(`#/h/chief/${k}`, l, stuff[k].length ? String(stuff[k].length) : 'None yet')}</Fragment>)}</div>
         <div className="card list cp-trail">{go2(CHIEF_TRAIL, 'What happened', 'Every step Chief took, as it happened')}</div>
