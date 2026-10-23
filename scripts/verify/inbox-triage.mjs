@@ -22,7 +22,7 @@ const requests = [], gmail = createServer((req, res) => {
   res.end(JSON.stringify(data));
 });
 await new Promise((r) => gmail.listen(0, '127.0.0.1', r));
-const session = `inbox-triage-${process.pid}`, exec = promisify(execFile), path = process.env.PATH;
+const session = `inbox-triage-${process.pid}`, exec = promisify(execFile), path = `/usr/bin:/bin:${process.env.PATH}`;
 for (const d of ['home', 'state', 'crew', 'tools', 'run']) mkdirSync(join(lab, d));
 process.env = { PATH: path, LANG: 'C.UTF-8', HOME: join(lab, 'home'), TMPDIR: lab,
   XDG_CONFIG_HOME: join(lab, 'config'), XDG_DATA_HOME: join(lab, 'data'), XDG_STATE_HOME: join(lab, 'state'), XDG_CACHE_HOME: join(lab, 'cache'), XDG_RUNTIME_DIR: join(lab, 'run'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${lab}/no-bus`,
@@ -70,8 +70,10 @@ try {
   writeSteps(out, 'inbox-triage');
   console.log('PASS: one scripted linked alert reaches Chief through real HTTP; quiet poll creates no task; Gmail receives GETs only. Not live-model, native-phone or installed-PWA proof.');
 } finally {
-  if (browser) await chrome('stop');
-  if (server) await new Promise((r) => server.close(r));
-  await crew.stop(); db.close(); await new Promise((r) => gmail.close(r));
-  rmSync(lab, { recursive: true, force: true });
+  try { if (browser) await chrome('stop'); }
+  finally {
+    if (server) await new Promise((r) => server.close(r));
+    await crew.stop(); db.close(); await new Promise((r) => gmail.close(r));
+    rmSync(lab, { recursive: true, force: true });
+  }
 }
