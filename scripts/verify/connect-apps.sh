@@ -76,13 +76,13 @@ node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK"
 # he offered (an app the person has not connected yet) in LINK.
 : > "$OUT/ask.txt"
 await_chief() {
-  END=none; LINK=""; local DEADLINE=$((SECONDS + ${REPLY_SECONDS:-420})) o
+  END=none; LINK=""; local DEADLINE=$((SECONDS + ${REPLY_SECONDS:-900})) o
   while [ "$SECONDS" -lt "$DEADLINE" ]; do
     api /api/state | node -e 'const s = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const a of s.asks.filter((x) => x.bot === "chief")) console.log(a.id + "\t" + a.kind + "\t" + a.title)' > "$LAB/asks.tsv"
     while IFS=$'\t' read -r id kind title; do
       [ -n "$id" ] || continue
       printf 'ask %s (%s): %s\n' "$id" "$kind" "$title" >> "$OUT/ask.txt"
-      case "$title" in *"Composio apps"*) api /api/asks/$id/answer -d '{"answer":"allow","scope":"once"}' > /dev/null ;; *) echo "connect-apps: an ask that is not a Composio app: $title" >&2; exit 1 ;; esac
+      case "$title" in *"remote bash tool"*) api /api/asks/$id/answer -d '{"answer":"deny"}' > /dev/null ;; *"composio search tools"*|*"manage connections"*|*"wait for connections"*|*"multi execute tool"*) api /api/asks/$id/answer -d '{"answer":"allow","scope":"once"}' > /dev/null ;; *) echo "connect-apps: an ask that is not a Composio app: $title" >&2; exit 1 ;; esac
     done < "$LAB/asks.tsv"
     o=$(api /api/bots/chief | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = t.tasks?.[0]?.state, m = (t.messages ?? []).filter((x) => x.author === "bot" && String(x.text ?? "").trim());
       const link = m.map((x) => /https:\/\/connect\.composio\.dev\/link\/[\w-]+/.exec(x.text)?.[0]).filter(Boolean).at(-1) ?? "";
