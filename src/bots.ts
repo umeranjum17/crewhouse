@@ -59,10 +59,14 @@ export const brainKey = (b: Brain) => b.model ? `${b.provider}:${b.model}` : b.p
 /** "ChatGPT", "Grok": the account's name only, never a model id. */
 export const brainName = (b: Brain) => PROVIDERS[b.provider]?.name ?? b.provider;
 
-/** The bot's accounts in fallback order. Without a list: ChatGPT. */
+/** Each member's accounts, one readable file the person can edit or tell Chief to change: `<crew folder>/models.json`, `{ "scribe": ["chatgpt:gpt-5.1"] }`. */
+const modelsFile = (cfg: Config) => join(cfg.crewDir, 'models.json');
+const pickedModels = (cfg: Config): Record<string, string[]> => { try { return JSON.parse(readFileSync(modelsFile(cfg), 'utf8')); } catch { return {}; } };
+
+/** The bot's accounts in fallback order: its line in models.json, else its bot.json (templates). Without a list: ChatGPT. */
 export function brains(cfg: Config, id: string): Brain[] {
-  const c = botConfig(cfg, id);
-  return dedupe((c.models?.length ? c.models : ['chatgpt']).map(parseBrain));
+  const m = pickedModels(cfg)[id] ?? botConfig(cfg, id).models;
+  return dedupe((m?.length ? m : ['chatgpt']).map(parseBrain));
 }
 
 export function dedupe(list: Brain[]) { const seen = new Set<string>(); return list.filter((b) => !seen.has(brainKey(b)) && !!seen.add(brainKey(b))); }
@@ -70,7 +74,7 @@ export function dedupe(list: Brain[]) { const seen = new Set<string>(); return l
 export function setBrains(cfg: Config, id: string, models: string[]) {
   if (!Array.isArray(models) || !models.length) throw Object.assign(new Error('pick at least one model'), { status: 400 });
   const list = dedupe(models.map(parseBrain)).map(brainKey);
-  patchConfig(cfg, id, { models: list });
+  writeFileSync(modelsFile(cfg), JSON.stringify({ ...pickedModels(cfg), [id]: list }, null, 2) + '\n');
   return list;
 }
 /** The person's standing answers for a bot ("Always for Reel") and its memory switch. */

@@ -133,7 +133,7 @@ test('crew_import takes the handle however the model sends it (real run shapes),
     const dir = disk.botDir(cfg, 'testy-prospecting');
     const conf = JSON.parse(readFileSync(join(dir, 'bot.json'), 'utf8'));
     const helper = disk.loadTemplate(cfg, 'helper');
-    assert.deepEqual(conf.models, helper.models, 'an import is seated on the crew\u2019s own accounts, like a recruit');
+    assert.deepEqual(disk.brains(cfg, 'testy-prospecting').map(disk.brainKey), helper.models, 'an import is seated on the crew\u2019s own accounts, like a recruit');
     assert.deepEqual(conf.tools, helper.tools, 'an import carries the crew\u2019s own tool grants, like a recruit');
     await assert.rejects(tool.run({ source: 'grok' }), /marketplace bot/, 'a marker with no handle still fails honestly');
   } finally { unstub(); done(); }

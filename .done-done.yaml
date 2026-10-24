@@ -44,6 +44,9 @@ journeys:
   versions:
     timeout: 25m
     command: 'PATH="/usr/bin:$PATH" timeout -k 10 1440 bash scripts/verify/versions.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # A chat order to Chief sets one member's account and model (docs/verification/member-models.md).
+  member-models:
+    command: 'node scripts/verify/member-models.mjs --out "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
