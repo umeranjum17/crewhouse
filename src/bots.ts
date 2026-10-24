@@ -61,7 +61,7 @@ export const brainName = (b: Brain) => PROVIDERS[b.provider]?.name ?? b.provider
 
 /** Each member's accounts, one readable file the person can edit or tell Chief to change: `<crew folder>/models.json`, `{ "scribe": ["chatgpt:gpt-5.1"] }`. */
 const modelsFile = (cfg: Config) => join(cfg.crewDir, 'models.json');
-const pickedModels = (cfg: Config): Record<string, string[]> => { try { return JSON.parse(readFileSync(modelsFile(cfg), 'utf8')); } catch { return {}; } };
+export const pickedModels = (cfg: Config): Record<string, string[]> => { try { return JSON.parse(readFileSync(modelsFile(cfg), 'utf8')); } catch { return {}; } };
 
 /** The bot's accounts in fallback order: its line in models.json, else its bot.json (templates). Without a list: ChatGPT. */
 export function brains(cfg: Config, id: string): Brain[] {

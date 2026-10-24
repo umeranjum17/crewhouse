@@ -154,9 +154,9 @@ export const api = {
   moneyCap: (cap: number) => call('PUT', '/api/house/money', { cap }),
   signInCancel: (account: string) => call('POST', `/api/accounts/1/${account}/cancel`),
   signOut: (account: string) => call('POST', `/api/accounts/1/${account}/logout`),
-  /** One account's live catalog `{models: [{id, name}], picked}`; a pick leads the whole crew from the next turn. */
+  /** One account's live catalog `{models: [{id, name}], picked}`; a pick leads the whole crew from the next turn, or only `bot`. */
   models: (account: string) => call('GET', `/api/accounts/1/${account}/model`),
-  pickModel: (account: string, model: string) => call('PUT', `/api/accounts/1/${account}/model`, { model }),
+  pickModel: (account: string, model?: string, bot?: string) => call('PUT', `/api/accounts/1/${account}/model`, { model, ...(bot ? { bot } : {}) }),
   schedule: (text: string) => call('GET', `/api/schedule?text=${encodeURIComponent(text)}`),
   routine: (id: number, body: { state?: 'on' | 'paused'; schedule?: string; quiet?: boolean }) => call('PUT', `/api/routines/${id}`, body),
   runRoutine: (id: number) => call('POST', `/api/routines/${id}/run`),

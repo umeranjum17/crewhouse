@@ -2051,6 +2051,17 @@ export const cliLoginWords = (c: { signIn: boolean }, name: string) => c.signIn
   ? { head: 'Claude Code isn\'t signed in', body: `Sign in with your ${name} plan and the crew can think with it. You'll say yes once on ${name}'s page.`, cmd: '', action: `Sign in with ${name}` }
   : { head: 'Sign in to Claude Code on this computer', body: `Crewhouse uses the Claude Code already on this computer, and it isn't signed in. Open a command window on this computer, run this, and sign in there. Then tap Try again.`, cmd: 'claude', action: 'Try again' };
 
+/** Which AI one crew member thinks with, from its own line in crewd's one store (the same line Chief's "use ChatGPT for
+ *  Scout" writes): the account and its model by the name the account's live list gives it, "Not chosen" when nobody
+ *  picked, the accounts it can move to (signed in only), and one calm line while it waits on a limit. */
+export function memberAi(state: Json, accounts: Json[] | null, id: string, lists: Record<string, { id: string; name: string }[]> = {}) {
+  const b = state.bots?.find((x: Json) => x.id === id), [key, model = ''] = String(b?.ai ?? '').split(/:(.*)/s), ai = AIS.find((a) => a.key === key);
+  const out = ai && account(accounts, ai.key).state === 'signed-out', rest = ai ? state.resting?.[ai.key] : 0;
+  return { key: ai?.key ?? null, model: model || null, choices: AIS.filter((a) => account(accounts, a.key).state === 'ready'),
+    says: ai ? [ai.name, lists[ai.key]?.find((m) => m.id === model)?.name, out && 'not signed in'].filter(Boolean).join(' · ') : 'Not chosen',
+    waits: rest && b?.pausedUntil ? `Waiting for your ${ai!.name} limit to reset at ${clock(rest)}. It won't move to another account by itself.` : '' };
+}
+
 /** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
  *  while none is), every other route under "More ways to sign in". The sign-in card's one recommended account is the
  *  first of these: the account this computer was signed in to, else ChatGPT. Each row's one line says where it stands in
