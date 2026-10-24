@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
+# Crewhouse: --version | setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
 set -euo pipefail
 export CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product}
 [ "${1:-}" != test ] || export CREWHOUSE_RUN_MODE=test
@@ -110,7 +110,11 @@ prepare_engine() {
   wait "$eng"
 }
 
+# The version this checkout runs, from package.json: a download says it plain, a source checkout adds -dev (as crewd's /api/state does).
+version() { echo "Crewhouse $(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' package.json)$([ -x ../node/bin/node ] || [ "${CREWHOUSE_PACKAGED:-}" = 1 ] || echo -dev)"; }
+
 case "${1:-}" in
+  --version|-v|version) version ;;
   setup)
     need_node
     paths
@@ -339,7 +343,8 @@ NODE
     [ -z "$before" ] || echo "~/.pi: sign-ins, settings and extensions unchanged, byte for byte."
     ;;
   *)
-    echo "usage: ./crewhouse setup [--headless [--install-only]] | headless serve|pair|health | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    version
+    echo "usage: ./crewhouse --version | setup [--headless [--install-only]] | headless serve|pair|health | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

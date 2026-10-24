@@ -21,6 +21,7 @@ import * as Linking from 'expo-linking';
 
 // React Native always defines this; @types/react-native is not installed, so say so once for tsc.
 declare const __DEV__: boolean;
+import { expo } from './app.json';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -1487,7 +1488,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         {route.view === 'routines' && <Page title="Routines" lead="Jobs the crew does on a schedule." back={toHome}><RoutineList {...ctx} /></Page>}
         {route.view === 'add' && <AddHelper {...ctx} />}
         {route.view === 'things' && <Page title="Things" lead="Everything the crew has made for you." back={toHome}><ThingsList list={A.things(state)} state={state} empty="Videos, lists, letters and plans the crew makes for you land here." /></Page>}
-        {route.view === 'phone' && <ThisPhone grant={grant} status={status} person={state.person} writer={canAct} refresh={refresh} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
+        {route.view === 'phone' && <ThisPhone state={state} grant={grant} status={status} person={state.person} writer={canAct} refresh={refresh} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
         {route.view === 'computer' && <ChiefComputer back={['Settings', back]} onRestored={(g) => { link.current?.addUrl(g.urls[0]); onRepaired(g); }} />}
         {route.view === 'jobs' && <JobsPage {...ctx} />}
       </View>
@@ -1913,6 +1914,7 @@ function Home(ctx: Ctx) {
           <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><T tone="ink2" style={s.small}>{ais.length ? `${andJoin(ais.map((a) => a.name))} ${ais.length > 1 ? 'are' : 'is'} signed in on the home computer.` : 'You sign in on the home computer, in Settings.'}</T></View><T tone="mute">›</T>
         </Pressable>
         <JobList state={state} go={go} refresh={refresh} />
+        <Versions state={state} hint={false} />
       </ScrollView>
       {!!desk && <DeskSheet desk={desk} {...ctx} onClose={() => setDesk(null)} />}
     </View>
@@ -2873,7 +2875,12 @@ function CustomRules({ writer }: { writer: boolean }) {
     </> : <><T>{rule}</T>{writer && <View style={s.chips}><Btn label="Edit" onPress={() => { setEditing(rule); setText(rule); }} /><Btn ghost label="Remove" onPress={() => save('', rule)} /></View>}</>}</Card>) : !error && <T tone="mute">No custom rules yet. Tell Chief how you want the crew to work.</T>}
   </>;
 }
-function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget, onClear }: { grant: Grant; status: Status; person: Json; writer: boolean; refresh: () => void; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
+/** Which Crewhouse this is, in small print: this app's build (app.json, `-dev` from Metro) and the home computer's. */
+function Versions({ state, hint = true }: { state: Json; hint?: boolean }) {
+  const v = A.versions(state, { version: `${expo.version}${__DEV__ ? '-dev' : ''}`, made: process.env.EXPO_PUBLIC_CREWHOUSE_VERSION ?? '' });
+  return <T tone="mute" style={[s.small, { textAlign: 'center' }]}>{v.line}{hint && v.hint ? `\n${v.hint}` : ''}</T>;
+}
+function ThisPhone({ state, grant, status, person, writer, refresh, go, back, onForget, onClear }: { state: Json; grant: Grant; status: Status; person: Json; writer: boolean; refresh: () => void; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
   const t = useLook();
   // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
@@ -2938,6 +2945,7 @@ function ThisPhone({ grant, status, person, writer, refresh, go, back, onForget,
       {Platform.OS === 'ios' && <OnYourScreen />}
       <T tone="mute" style={s.small}>{A.atHome('the home computer').join(' ')}</T>
       <T tone="mute" style={s.small}>To take a phone's access away for good, remove it on the computer too: Settings, Phones.</T>
+      <Versions state={state} />
     </Page>
   );
 }

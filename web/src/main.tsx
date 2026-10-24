@@ -31,6 +31,7 @@ const clearRemoved = () => { try { sessionStorage.removeItem(REMOVED); } catch {
 type View = 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD !== '0';
+const VERSION = process.env.CREWHOUSE_VERSION ?? '';
 type Route = { view: View; id?: string; tab?: string; m?: string; file?: string; title?: string };
 const ANCHOR = /^m(\d+)$/;
 function parseRoute(): Route {
@@ -1763,10 +1764,17 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
               <HouseGoogle on={!!state.house?.google} steps={state.house?.steps} refresh={refresh} /></div>
           </div>
         </div>
+        <Versions state={state} />
       </div>
       {signingSheet}
     </div>
   );
+}
+
+/** The small print at Settings' foot: which Crewhouse this is, and the home computer's when they differ. */
+function Versions({ state }: { state: Json }) {
+  const v = A.versions(state, { version: VERSION, made: VERSION });
+  return <p className="mute small versions">{v.line}{v.hint && <><br />{v.hint}</>}</p>;
 }
 
 /** Boat forbids browser setup/management (CORS); its key stays on the owner phone. No placeholder actions. */

@@ -13,7 +13,7 @@ const repo = join(import.meta.dirname, '..');
 test('unmasked starts get private homes; owner paths and symlink aliases fail before startup', async (t) => {
   const root = temp('startup'), home = join(root, 'home');
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: root, CREWHOUSE_PORT: '0', CREWHOUSE_LINK_PORT: '0' };
-  for (const k of Object.keys(env)) if (/^(CREWHOUSE_(STATE_DIR|CREW_DIR|TOOLS_DIR|ENGINE_DIR|GOOGLE_CLIENT|RUN_HOME|RUN_MODE|ENGINE)$|XDG_)/.test(k)) delete env[k];
+  for (const k of Object.keys(env)) if (/^(CREWHOUSE_(PACKAGED|STATE_DIR|CREW_DIR|TOOLS_DIR|ENGINE_DIR|GOOGLE_CLIENT|RUN_HOME|RUN_MODE|ENGINE)$|XDG_)/.test(k)) delete env[k];
   // NODE_TEST_CONTEXT is deliberately absent too: a standalone lab, including one selecting stub after loadConfig, is safe.
   delete env.NODE_TEST_CONTEXT;
   const probe = (extra: NodeJS.ProcessEnv = {}) => spawnSync(process.execPath, ['--input-type=module', '-e',
@@ -60,7 +60,13 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
   const state = /state: ([^)]+)/.exec(log)![1];
   assert.ok(state.startsWith(root + '/'), log);
   const r = await fetch(url + '/api/state', { headers: { 'x-crewhouse': '1', authorization: `Bearer ${readFileSync(join(state, 'person.key'), 'utf8')}` } });
-  assert.equal(r.status, 200); assert.ok((await r.json()).person);
+  assert.equal(r.status, 200); const live = await r.json(); assert.ok(live.person);
+  // The version a checkout runs: the same words from crewd (Settings' small print) and the CLI, marked as a dev build.
+  const dev = `${JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')).version}-dev`;
+  assert.equal(live.version, dev);
+  const cliVersion = spawnSync(join(repo, 'crewhouse'), ['--version'], { env, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(cliVersion.stdout, `Crewhouse ${dev}\n`, cliVersion.stderr);
+  assert.match(spawnSync(join(repo, 'crewhouse'), ['help'], { env, encoding: 'utf8', timeout: 30_000 }).stdout, new RegExp(`^Crewhouse ${dev}\nusage: `));
   assert.ok(!existsSync(join(home, 'Crewhouse')), 'startup never creates the inherited HOME crew');
   const unit = join(home, '.config/systemd/user/crewhouse.service');
   mkdirSync(join(unit, '..'), { recursive: true }); writeFileSync(unit, 'owner unit sentinel');
