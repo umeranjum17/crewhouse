@@ -227,3 +227,20 @@ test('without the terminal path marker, an unpackaged crewd installs nothing by 
   assert.equal(t?.state, 'done', 'the job runs without waiting on installs');
   assert.equal((await events()).filter((e) => e.kind === 'tool.installing').length, 0, 'no install was started');
 });
+
+test('a release build ships the version its tag names, and refuses a malformed tag', async () => {
+  const run = (t: string, dir: string) => new Promise<number | null>((r) => spawn(process.execPath, [join(import.meta.dirname, '..', 'scripts', 'set-version-from-tag.mjs'), t, dir], { stdio: 'ignore' }).on('close', r));
+  const stale = (dir: string) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'crewhouse', version: '0.1.1' })); writeFileSync(join(dir, 'package-lock.json'), JSON.stringify({ version: '0.1.1', packages: { '': { version: '0.1.1' } } })); };
+  const read = (dir: string, f: string) => JSON.parse(readFileSync(join(dir, f), 'utf8'));
+  for (const [kind, tag] of [['cloud', 'cloud-v0.1.5'], ['linux', 'linux-v0.1.5-rc1']]) {
+    const dir = join(root, `ver-${kind}`);
+    stale(dir);
+    assert.equal(await run(tag, dir), 0);
+    assert.equal(read(dir, 'package.json').version, '0.1.5');
+    assert.equal(read(dir, 'package-lock.json').packages[''].version, '0.1.5');
+  }
+  const bad = join(root, 'ver-bad');
+  stale(bad);
+  for (const t of ['cloud-v1.2', 'v0.1.5', 'desktop-v0.1.5', 'linux-v0.1.5; x']) assert.equal(await run(t, bad), 1);
+  assert.equal(read(bad, 'package.json').version, '0.1.1');
+});

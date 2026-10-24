@@ -106,6 +106,17 @@ xvfb-run -a -s "-screen 0 1920x1200x24" node "$VERIFY_DIR/pwa-shell.mjs" "$LAB/p
   || { echo "versions: the installed app did not show Settings' foot (pwa-same.json)" >&2; exit 1; }
 cp "$LAB/crewd.log" "$OUT/crewd-same.log"; bash "$VERIFY_DIR/pair-lab.sh" down
 
+# A tag-driven build (crewd started as the packaged app, so no -dev): the release workflow's own step sets the version from the tag, the web app is built from that copy, and both say it.
+TAGC=$ROOT/tag; mkdir -p "$TAGC"
+for part in src templates tools skills scripts web crewhouse package.json package-lock.json; do cp -r "$REPO/$part" "$TAGC/"; done
+mkdir -p "$TAGC/relay" && cp "$REPO"/relay/*.ts "$TAGC/relay/"; ln -s "$REPO/node_modules" "$TAGC/node_modules"
+(cd "$TAGC" && node scripts/set-version-from-tag.mjs "cloud-v$NEXT" . && node scripts/build-web.mjs "$TAGC/web")
+{ echo "\$ ./crewhouse --version   # a build made by: node scripts/set-version-from-tag.mjs cloud-v$NEXT"; (cd "$TAGC" && CREWHOUSE_PACKAGED=1 ./crewhouse --version); } > "$OUT/cli-version-tag.txt"
+grep -qx "Crewhouse $NEXT" "$OUT/cli-version-tag.txt" || { echo "versions: a cloud-v$NEXT build did not say Crewhouse $NEXT" >&2; exit 1; }
+LAB_PACKAGED=1 lab tag "$TAGC"
+web tag "Crewhouse $NEXT"
+cp "$LAB/crewd.log" "$OUT/crewd-tag.log"; bash "$VERIFY_DIR/pair-lab.sh" down
+
 lab next "$COPY"
 web next "App $NOW · Host $NEXT-dev"
 phone next "App $APP · Host $NEXT-dev" 'Update the app.'

@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - run: node scripts/set-version-from-tag.mjs "$GITHUB_REF_NAME"
       - run: npm ci --no-audit --no-fund
       - run: npm run build:web
       - run: node scripts/package.mjs
