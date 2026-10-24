@@ -25,6 +25,7 @@ export function setup(maxConcurrent = 3) {
   const db = new Store(cfg.stateDir);
   const crew = new Crew(cfg, db);
   crew.init();
+  crew.accounts.recheckMs = 0; // the engine's answer window is real time
   let closed = false;
   const done = () => { if (!closed) { closed = true; crew.stop(); db.close(); } };
   after(done); // a failed assertion must not leave the clock running
