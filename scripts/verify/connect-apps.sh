@@ -68,7 +68,9 @@ until api /api/composio | grep -q '"state":"on"'; do
 done
 echo "connect-apps: Connect apps is on"
 bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LAB/stop-film" & FILM=$!
-sleep 14
+# The engine keeps its lease on Composio's saved sign-in (core:mcp-oauth/composio) for about a minute after the page finishes; a request
+# sent before it lets go finds no Composio tools, and Chief goes looking in the engine's files instead. That is the kit's to close.
+sleep "${READY_SECONDS:-90}"
 ASK=${ASK:-'Chief, use my Composio apps (not a direct Google connection) to read the subject line of my most recent email in Gmail. If Gmail is not connected in Composio yet, give me the Composio connect link. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
 node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null
 # Each ask card must name a Composio app and is answered once (no standing answer exists for it). await_chief waits, bounded,
