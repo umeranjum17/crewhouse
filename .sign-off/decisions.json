@@ -8,6 +8,64 @@
       "about": "verify-crewhouse is deleted. Its checks are done-done journeys in .done-done.yaml: stub-drive, static-checks, screens and the feature journeys (delivered files, workbook chart, slides deck, unlock and sign-in cards, ask in view, site sign-in, installed-app pairing and plans, phone pairing; the two spending phone journeys ask first through done-done verify). CI runs stub-drive and static-checks on every code change and records a receipt. Each verification daemon runs in its own process group, ended and waited for before its test data is removed; test/verify-tools.test.ts fails if any child outlives it. learn-from-mistakes runs with both agents on the OpenCode Go plan, never Claude. No retro skill or Lavish use existed. The receipt for the merge head is in the PR's Checks block.",
       "recommend_value": "yes",
       "filer": "ch-tool-migration-v2"
+    },
+    {
+      "contract": 1,
+      "kind": "evidence",
+      "schema": 1,
+      "key": "merge-umeranjum17-crewhouse-pull-730",
+      "title": "The owner can see the running version on each surface. Paired surfaces show App and Host when distinct; Settings adds an update hint when the host package re...",
+      "about": "done-done checked the proof and it holds up: Read 1 text entry. It shows 'Crewhouse 0.1.1-dev' as one version label, which fits the single-version part.",
+      "link": "https://github.com/umeranjum17/crewhouse/pull/730",
+      "filer": "firstmate-merge",
+      "type": "evidence",
+      "number": 1,
+      "media": [
+        {
+          "path": "evidence/1/1.png",
+          "sha256": "b86c175b51db7f313ed38fff771fac4fbe1af5956df8693af4df0d67574e0d60",
+          "bytes": 208933,
+          "thumb": {
+            "path": "evidence/1/1-thumb.jpg",
+            "sha256": "9d4c61d8f1d18b643535608bc3468fa551a7bf5bf1a0beedb567e90343d17dc3",
+            "bytes": 109185,
+            "width": 720,
+            "height": 1440
+          }
+        },
+        {
+          "path": "evidence/1/2.png",
+          "sha256": "27e82882e93bb2dfdcd1a0eadacd8b25e40d4dc2720398a9da310bb4d9eccbfb",
+          "bytes": 213111,
+          "thumb": {
+            "path": "evidence/1/2-thumb.jpg",
+            "sha256": "a6f2d111052141093e558db36772eb8d1baeba35b19214eb97f149a24790942f",
+            "bytes": 104446,
+            "width": 720,
+            "height": 1440
+          }
+        },
+        {
+          "path": "evidence/1/3.png",
+          "sha256": "7103099da1b8947c26953ccff12fb09c1c22a2b5c12be76a816d39064e2b5283",
+          "bytes": 96999,
+          "light": {
+            "path": "evidence/1/3-light.jpg",
+            "sha256": "eea37d9b991dec843077143b8fa660180539e3cb8b218a645aed94528fa6f8d5",
+            "bytes": 91642,
+            "width": 1280,
+            "height": 800
+          },
+          "thumb": {
+            "path": "evidence/1/3-thumb.jpg",
+            "sha256": "a6d7f6e8f3711849099e6bc3ab7655f4108b6f67c320fb4269eeff2918fa8444",
+            "bytes": 35828,
+            "width": 720,
+            "height": 450
+          }
+        }
+      ],
+      "filed": "2026-10-24T11:20:45.568Z"
     }
   ]
 }
