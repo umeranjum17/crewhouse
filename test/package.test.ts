@@ -244,3 +244,28 @@ test('a release build ships the version its tag names, and refuses a malformed t
   for (const t of ['cloud-v1.2', 'v0.1.5', 'desktop-v0.1.5', 'linux-v0.1.5; x']) assert.equal(await run(t, bad), 1);
   assert.equal(read(bad, 'package.json').version, '0.1.1');
 });
+
+test('every Linux asset the release workflow builds carries the tag\'s version, the desktop app too', async () => {
+  const repo = join(import.meta.dirname, '..');
+  const dir = join(root, 'ver-linux-assets');
+  mkdirSync(join(dir, 'desktop'), { recursive: true });
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'crewhouse', version: '0.1.4' }));
+  writeFileSync(join(dir, 'desktop', 'package.json'), JSON.stringify({ name: 'crewhouse-desktop', version: '0.1.0' }));
+  await new Promise((r) => spawn(process.execPath, [join(repo, 'scripts', 'set-version-from-tag.mjs'), 'linux-v9.9.9', dir], { stdio: 'ignore' }).on('close', r));
+  const version = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version as string;
+  assert.equal(version, '9.9.9');
+  assert.equal(JSON.parse(readFileSync(join(dir, 'desktop', 'package.json'), 'utf8')).version, version, 'the desktop app reports the tag\'s version');
+  // The names each builder derives from that package version, and the globs the workflow publishes: every asset matches one.
+  const names = [`crewhouse_${version}_amd64.deb`, `crewhouse-${version}-linux-x64.tar.gz`, `Crewhouse-${version}-x86_64.AppImage`, `crewhouse-desktop_${version}_amd64.deb`];
+  const flow = readFileSync(join(repo, '.github', 'workflows', 'release-linux.yml'), 'utf8');
+  const globs = [...flow.matchAll(/dist\/(?:desktop\/)?[\w*.-]+/g)].map((m) => m[0].replace('dist/desktop/', '').replace('dist/', ''));
+  for (const n of names) assert.ok(globs.some((g) => new RegExp(`^${g.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`).test(n)), `${n} is published`);
+  // Each job that builds one of them sets the version from the tag first (a job checks out afresh).
+  for (const job of flow.split(/\n  (?=\w+:\n)/).slice(1)) {
+    const steps = job.split('\n').filter((l) => l.includes('- run:'));
+    const build = steps.findIndex((l) => /scripts\/package\.mjs|desktop\/build\.mjs/.test(l));
+    if (build < 0) continue;
+    const set = steps.findIndex((l) => l.includes('scripts/set-version-from-tag.mjs "$GITHUB_REF_NAME"'));
+    assert.ok(set >= 0 && set < build, `${job.split(':')[0]} sets the version before it builds`);
+  }
+});

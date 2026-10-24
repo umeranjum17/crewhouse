@@ -42,6 +42,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
+      # This job checks out afresh, so the tag's version is set here too: the AppImage and .deb names and the app's own version come from it.
+      - run: node scripts/set-version-from-tag.mjs "$GITHUB_REF_NAME"
       - run: npm ci --no-audit --no-fund
       - run: npm ci --no-audit --no-fund --prefix desktop
       - run: npm run build:web
