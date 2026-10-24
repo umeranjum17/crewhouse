@@ -19,8 +19,11 @@
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: connect-apps.sh <out-dir>" >&2; exit 2; }
 CONF=${CONNECT_CONFIG:-$HOME/.config/crewhouse/connect-apps.conf}
-[ ! -f "$CONF" ] || while IFS='=' read -r k v; do case $k in CONNECT_KEY_FILE|CONNECT_HANDOFF|ASK) [ -n "${!k:-}" ] || export "$k=$v";; esac; done < "$CONF"
-KEYFILE=${CONNECT_KEY_FILE:-}; [ -s "$KEYFILE" ] || { echo "connect-apps: CONNECT_KEY_FILE names no key file" >&2; exit 2; }
+[ ! -f "$CONF" ] || while IFS='=' read -r k v; do case $k in CONNECT_KEY_FILE|CONNECT_HANDOFF|CONNECT_CLAUDE_CONFIG_DIR|CONNECT_CLAUDE_MODEL|ASK) [ -n "${!k:-}" ] || export "$k=$v";; esac; done < "$CONF"
+CCD=${CONNECT_CLAUDE_CONFIG_DIR:-}; KEYFILE=${CONNECT_KEY_FILE:-}
+# The Claude route: the engine's Claude takes an existing, signed-in config folder by path (the kit passes CLAUDE_CONFIG_DIR from crewd's own environment); nothing is copied, linked or edited.
+if [ -n "$CCD" ]; then [ -d "$CCD" ] || { echo "connect-apps: CONNECT_CLAUDE_CONFIG_DIR names no folder" >&2; exit 2; }
+else [ -s "$KEYFILE" ] || { echo "connect-apps: CONNECT_KEY_FILE names no key file" >&2; exit 2; }; fi
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); HAND=$(mkdir -p "${CONNECT_HANDOFF:?CONNECT_HANDOFF names no folder}" && cd "$CONNECT_HANDOFF" && pwd -P)
 export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean environment, where a version-manager shim fails
 REPO=$(git rev-parse --show-toplevel)
@@ -34,7 +37,7 @@ B="http://127.0.0.1:$PORT"; ST="$LAB/state"; CR="$LAB/crew"
 crewd_start "$REPO" "$LAB/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
-  CREWHOUSE_PORT="$PORT" CREWHOUSE_STATE_DIR="$ST" CREWHOUSE_CREW_DIR="$CR" CREWHOUSE_TOOLS_DIR="$LAB/tools" node "$REPO/src/main.ts"
+  ${CCD:+CLAUDE_CONFIG_DIR="$CCD"} CREWHOUSE_PORT="$PORT" CREWHOUSE_STATE_DIR="$ST" CREWHOUSE_CREW_DIR="$CR" CREWHOUSE_TOOLS_DIR="$LAB/tools" node "$REPO/src/main.ts"
 PERSON=""
 for _ in $(seq 2400); do
   if [ -f "$ST/person.key" ]; then
@@ -46,6 +49,15 @@ done
 [ -n "$PERSON" ] || { echo "connect-apps: crewd never became ready" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 api() { curl -fsS --max-time 60 "${H[@]}" "${@:2}" "$B$1"; }
+if [ -n "$CCD" ]; then
+  MODEL=${CONNECT_CLAUDE_MODEL:-claude-sonnet-5-5}
+  node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["claude:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL"
+  api /api/onboard -d '{"address":"Umer"}' > /dev/null
+  api /api/accounts/1/claude/login -d '{"via":"cli"}' > /dev/null || true
+  for _ in $(seq 240); do api /api/accounts | grep -Eq '"account":"claude",[^}]*"signedIn":true' && break; sleep 0.5; done
+  api /api/accounts | grep -Eq '"account":"claude",[^}]*"signedIn":true' || { echo "connect-apps: claude did not sign in from the config folder" >&2; exit 1; }
+  api /api/accounts/1/claude/model -X PUT -d "{\"model\":\"$MODEL\"}" > /dev/null || true
+else
 MODEL=${CHAT_MODEL:-MiniMax-M3.1-Flash}
 node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSync(f, "utf8")); c.models = ["minimax:" + process.argv[2]]; require("node:fs").writeFileSync(f, JSON.stringify(c, null, 2))' "$CR/bots/chief/bot.json" "$MODEL"
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
@@ -58,6 +70,7 @@ for try in 1 2 3 4 5 6; do
   echo "connect-apps: the key sign-in did not go through (try $try); waiting before the next" >&2; sleep 60
 done
 signed || { echo "connect-apps: minimax did not take the key" >&2; exit 1; }
+fi
 # The hand-off: the address to open, then the wait for the person's own sign-in on Composio's page.
 printf '%s\n' "$B/#person=$PERSON" > "$HAND/app-url.txt"
 echo "connect-apps: app address in $HAND/app-url.txt; waiting for Connect apps to turn on"
@@ -109,7 +122,7 @@ fi
 R=$(cat "$LAB/last.txt")
 [ -s "$OUT/ask.txt" ] || { echo "connect-apps: Chief answered without asking, so no connected app was used" >&2; exit 1; }
 cp "$ST"/logs/openclaw*.log "$OUT"/ 2>/dev/null || true
-grep -q "\[model-fetch\] response provider=minimax .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "connect-apps: the reply did not come from $MODEL" >&2; exit 1; }
+[ -n "$CCD" ] || grep -q "\[model-fetch\] response provider=minimax .*model=$MODEL " "$OUT"/openclaw-events.log || { echo "connect-apps: the reply did not come from $MODEL" >&2; exit 1; }
 rm -f "$OUT"/openclaw*.log
 printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R" > "$OUT/reply.txt"
 sleep 6; touch "$LAB/stop-film"; wait "$FILM"; FILM=""
