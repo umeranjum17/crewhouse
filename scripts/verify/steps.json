@@ -353,6 +353,15 @@
     ],
     "result": "Chief confirmed in one line ({{ok}}); the refusal read: {{refused}}"
   },
+  "member-models-screens": {
+    "start": "a new person with Scout hired, every account signed in on the stub engine except Grok",
+    "steps": [
+      "Open Chief's thread and send: Use ChatGPT for Scout on the quick model.",
+      "Read Chief's one-line confirmation and send: Use Grok for Scout.",
+      "Read Chief's plain refusal, in dark and light at 1280 and 390"
+    ],
+    "result": "Chief confirms the pick and refuses the signed-out account in his thread, in four captures"
+  },
   "unlock-card": {
     "start": "a helper's locked statement: a PDF only the person's password opens",
     "steps": [

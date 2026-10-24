@@ -48,4 +48,5 @@ URL="$B/#person=$PERSON"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
 THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS="1280x800 390x844" bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" chief-models "$URL"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" member-models-screens
 echo "member-models-screens: $(ls "$OUT"/screens/*.png | wc -l) captures in $OUT/screens"
