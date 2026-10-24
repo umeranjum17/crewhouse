@@ -2,7 +2,7 @@
 // stand-in sign-in finishes at once; the failed path is forced by the test. Nothing here proves a connected app works.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, until, holding, release, settled, task } from './lab.ts';
 
@@ -71,6 +71,7 @@ test('Composio on removes native Gmail offers and rejects stale calls; off resto
   const redirect = (crew.runtime as any).transcript(task(db, stale).session);
   assert.ok(redirect.includes('MCP.composio.$api'), 'stale native calls get the exact discovery call');
   assert.match(redirect, /read-only access/);
+  assert.match(redirect, /Next step, now, before any other tool: in code-mode exec/, 'the connect result leads with the single next step');
   assert.doesNotMatch(redirect, /crew_read:|read:|node_modules\/openclaw/, 'no engine file read or read approval was needed');
   await crew.composio.disconnect();
   const native = (await crew.post('chief', 'Read Gmail [tool crew_connect {"app":"gmail"}]'))!.task;
@@ -133,4 +134,26 @@ test('Composio reads finish without cards or an action outcome; writes, mixed an
   await holding(crew, 'chief');
   assert.equal((await host.gate({ bot: 'chief', task: off, key: task(db, off).session }, 'composio__GMAIL_FETCH_EMAILS', {})).allow, false, 'safe names do not bypass sign-in admission');
   await release(crew, 'chief', 'No connected app was accessed.');
+});
+
+// The recorded run (test/fixtures/connect-apps-run4-events.json: Chief on MiniMax, Composio signed in, "what is the subject of
+// my latest email"): he called crew_connect for gmail, composio and google, got "no app called" twice and the Composio note
+// buried in the first, then never called a Composio tool. Every one of those calls must now return the same single next step.
+test('replaying the recorded Gmail run: each crew_connect call Chief made returns the one next step, never "no app called"', async () => {
+  const events = JSON.parse(readFileSync(new URL('./fixtures/connect-apps-run4-events.json', import.meta.url), 'utf8')) as { kind: string, data: { tool?: string, input?: string } }[];
+  const calls = events.filter((e) => e.kind === 'run.call' && e.data.tool === 'crew_connect').map((e) => e.data.input!);
+  assert.deepEqual(calls, ['{"app":"gmail"}', '{"app":"composio"}', '{"app":"google"}'], 'the fixture is the recorded run');
+  const { crew, db } = setup();
+  crew.onboard('Umer');
+  await crew.composio.connect();
+  await until('Composio signed in', () => crew.composio.on());
+  for (const input of calls) {
+    const id = (await crew.post('chief', `What is the subject line of my most recent email in Gmail? [tool crew_connect ${input}]`))!.task;
+    await settled(db, id);
+    const said = (crew.runtime as any).transcript(task(db, id).session);
+    assert.doesNotMatch(said, /no app called/, input);
+    assert.match(said, /Next step, now, before any other tool: in code-mode exec/, input);
+    assert.ok(said.includes('MCP.composio.$api('), input);
+    assert.equal(crew.snapshot().asks.length, 0, 'no card for the person');
+  }
 });

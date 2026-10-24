@@ -2176,7 +2176,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */
   private askConnect(botId: string, app: string) {
-    if (this.composio.on() && app.startsWith('gmail')) return { connected: false, note: GMAIL_CONNECT };
+    if (this.composio.on() && /^(gmail|google|composio)/.test(app)) return { connected: false, note: GMAIL_CONNECT };
     const a = this.connections.apps[app], granted = botId === CHIEF || (disk.botConfig(this.cfg, botId).apps ?? []).includes(app);
     if (!a || !granted) throw fail(a ? `${a.name} isn't part of this job, so you can't connect it. Tell the person that.` : `no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
