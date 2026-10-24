@@ -416,3 +416,28 @@ test('a Claude sign-in the kit cannot run says so: the sheet gets the run-it-you
     }
   } finally { done(); await f.done(); }
 });
+
+test('one flaky sign-in check never signs Claude out: only the engine saying no twice does, and a later yes brings it back', async () => {
+  const { db, crew, done } = setup();
+  only(crew, ['claude']); crew.accounts.ready.delete('claude');
+  const accounts = crew.accounts as any;
+  // The engine's check (a CLI call with a 3 s limit) fails, or says yes after the kit's own no: not a sign-out.
+  accounts.runtime.signedIn = async () => { throw new Error('timed out'); };
+  assert.equal(await crew.accounts.lost('claude', true), false);
+  accounts.runtime.signedIn = async () => true;
+  assert.equal(await crew.accounts.lost('claude', true), false, 'the kit said no before any turn ran, the engine says yes: once is a flake');
+  assert.equal(crew.accounts.expired.has('claude'), false);
+  // The engine says no, then no again: that is a sign-out.
+  let asked = 0;
+  accounts.runtime.signedIn = async () => ++asked === 1; // yes to start the run, then no, no
+  const { task: b } = await crew.post('chief', 'sign me out now') as { task: number };
+  await until('waiting after two nos', () => task(db, b).state === 'paused');
+  assert.equal(asked, 4, "yes to start, no, no, then the paused task's look");
+  assert.equal(crew.accounts.expired.has('claude'), true);
+  // Later the engine says yes: the no was a flake, and Claude is signed in again.
+  accounts.runtime.signedIn = async () => true;
+  accounts.fresh.clear(); // past the ten seconds a no is trusted
+  assert.equal(await crew.accounts.signedIn('claude'), true);
+  assert.equal(crew.accounts.expired.has('claude'), false);
+  done();
+});
