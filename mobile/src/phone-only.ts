@@ -28,7 +28,9 @@ const KEY_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_
  *  The key route answers through the `@byokit/accounts/keys` runtime (`withKeys`), loaded lazily on first use. */
 export const phoneAccounts = new Accounts({
   offer: [PROVIDER],
-  fetch: fetch as typeof globalThis.fetch,
+  // A lab build points the kit's live model read at its fake MiniMax (scripts/verify/phone-only-minimax.sh).
+  fetch: ((url, init) => fetch(process.env.EXPO_PUBLIC_CREWHOUSE_MINIMAX_API
+    ? String(url).replace('https://api.minimax.io/anthropic', process.env.EXPO_PUBLIC_CREWHOUSE_MINIMAX_API) : url, init)) as typeof globalThis.fetch,
   store: () => secureStore(SecureStore, 'crewhouse.phone-only', KEY_OPTIONS),
   keyStore: () => nativeStore({ prefix: 'crewhouse.phone-only', options: KEY_OPTIONS }),
 }, withKeys(portable));
@@ -76,19 +78,7 @@ export async function phoneConnect(account: PhoneKey, key: string) {
   current = account; picked = undefined;
 }
 export type PhoneModel = { id: string; name: string; recommended: boolean };
-/** MiniMax's own live list for the saved key (its Anthropic-shaped `/v1/models`, the base Chief already calls), newest
- *  first. Kit gap: the kit's `Accounts.models`/`modelsOf` returns only its catalogue pair, so the list is read here. The key goes only to MiniMax, through the kit's host-side hand-off, and is never kept or logged here. */
-async function liveModels(): Promise<{ id: string; name?: string }[]> {
-  const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 8_000);
-  try {
-    const res = await fetch(`${minimaxModel().baseUrl}/v1/models`, { signal: stop.signal,
-      headers: { 'x-api-key': await phoneAccounts.key(MEMBER, current.route), 'anthropic-version': '2023-06-01' } });
-    const { data } = await res.json() as { data?: { id: string; display_name?: string }[] };
-    if (!res.ok || !data?.length) throw new Error('no list');
-    return data.map((m) => ({ id: m.id, name: m.display_name }));
-  } finally { clearTimeout(timer); }
-}
-/** Every model the saved key can use, in words, as MiniMax lists it (its live list; the one model the phone knows when
+/** Every model the saved key can use, in words, as the kit reads MiniMax's live list (the one model the phone knows when
  *  that cannot be read): nothing is filtered or described here. The one tag is Recommended, on the kit's fast model
  *  (MiniMax may list it under a newer id: M3.1-Flash for the kit's -Preview), which goes first. OpenRouter's stays the
  *  pinned DeepSeek. */
@@ -98,9 +88,10 @@ const MINIMAX_FAST = 'MiniMax-M3.1-Flash-Preview';
 export async function phoneModels(): Promise<PhoneModel[]> {
   if (current.route === PROVIDER) return [];
   const fast = MINIMAX_FAST;
-  const listed = await liveModels().catch(() => [{ id: fast, name: undefined }]);
+  const live = (await phoneAccounts.models(MEMBER, current.route).catch(() => [])).filter((m) => m.available);
+  const listed = live.length ? live : [{ id: fast, name: fast }];
   const recommended = (id: string) => !!fast && (fast === id || fast.startsWith(`${id}-`));
-  return listed.map((m) => ({ id: m.id, name: modelName(m.name ?? m.id), recommended: recommended(m.id) }))
+  return listed.map((m) => ({ id: m.id, name: modelName(m.name), recommended: recommended(m.id) }))
     .sort((a, b) => Number(b.recommended) - Number(a.recommended));
 }
 /** Keep the person's model pick with the account, as the kit's own default. */
