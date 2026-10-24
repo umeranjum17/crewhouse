@@ -26,7 +26,7 @@ export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean enviro
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-connect-apps.XXXXXX)
-trap 'touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "${ST:-$LAB/state}"/logs/openclaw*.log "$OUT/" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
+trap 'touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; [ "${OK:-}" = 1 ] || { ! declare -F api > /dev/null || { api /api/events > "$OUT/events.json"; api /api/bots/chief > "$OUT/thread.json"; } 2> /dev/null || true; }; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "${ST:-$LAB/state}"/logs/openclaw*.log "$OUT/" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 trap 'exit 143' HUP INT TERM # an aborted run still reaches the EXIT trap, which removes the lab and stops its processes
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
@@ -71,7 +71,7 @@ bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LA
 # The engine keeps its lease on Composio's saved sign-in (core:mcp-oauth/composio) for about a minute after the page finishes; a request
 # sent before it lets go finds no Composio tools, and Chief goes looking in the engine's files instead. That is the kit's to close.
 sleep "${READY_SECONDS:-90}"
-ASK=${ASK:-'Chief, use my Composio apps (not a direct Google connection) to read the subject line of my most recent email in Gmail. If Gmail is not connected in Composio yet, give me the Composio connect link. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
+ASK=${ASK:-'Chief, what is the subject line of my most recent email in Gmail? Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
 node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null
 # Each ask card must name a Composio app and is answered once (no standing answer exists for it). await_chief waits, bounded,
 # for Chief's job to end: END is done, unsure, failed or none; his last words are in $LAB/last.txt and a Composio connect link
@@ -101,7 +101,7 @@ if [ "$END" != done ] && [ -n "$LINK" ]; then # an app is not connected yet: the
   echo "connect-apps: Chief offered a connect link in $HAND/connect-link.txt; waiting for $HAND/granted"
   DEADLINE=$((SECONDS + ${GRANT_SECONDS:-900}))
   until [ -e "$HAND/granted" ]; do [ "$SECONDS" -lt "$DEADLINE" ] || { echo "connect-apps: the connect link was never approved" >&2; exit 1; }; sleep 2; done
-  ASK=${ASK2:-'I connected it in Composio. Please use my Composio apps to read the subject line of my most recent email in Gmail. Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
+  ASK=${ASK2:-'I connected it. Now what is the subject line of my most recent email in Gmail? Only read it: do not create, change, send or delete anything. Tell me what you found in a few short lines.'}
   node -e 'process.stdout.write(JSON.stringify({ text: process.argv[1] }))' "$ASK" | api /api/bots/chief/messages --data-binary @- > /dev/null
   await_chief
 fi
