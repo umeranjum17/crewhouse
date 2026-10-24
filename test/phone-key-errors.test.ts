@@ -71,11 +71,11 @@ test('a MiniMax key runs Chief on the MiniMax model the person picked, its refus
     'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed', 'MiniMax-M2'];
   let asked: { url: string; key: string | null } | undefined;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-    asked = { url: String(url), key: new Headers(init?.headers).get('x-api-key') };
+    asked = { url: String(url), key: new Headers(init?.headers).get('authorization') };
     return Response.json({ data: live.map((id) => ({ id, display_name: id })) });
   }) as typeof fetch;
   const models = await phoneModels();
-  assert.deepEqual(asked, { url: 'https://api.minimax.io/anthropic/v1/models', key: 'sk-mm-test-key' });
+  assert.deepEqual(asked, { url: 'https://api.minimax.io/anthropic/v1/models', key: 'Bearer sk-mm-test-key' });
   assert.deepEqual(models.map((m) => m.id), live, 'every model MiniMax lists, in its order, none dropped');
   assert.deepEqual(models.filter((m) => m.recommended).map((m) => m.name), ['MiniMax M3.1 Flash']);
   // A list MiniMax will not give leaves the phone the one model it knows, the fast one, still recommended.

@@ -3,9 +3,9 @@
 Phone-only mode (`mobile/src/phone-only.ts`, `PhoneSignIn` in `mobile/App.tsx`) offers MiniMax beside OpenRouter. The
 key goes through the kit's own key route (`@byokit/accounts`, route `minimax:key`: MiniMax's plain name is its
 subscription sign-in), and the phone holds one key at a time (connecting one removes the other). A MiniMax key then
-picks its model from every model MiniMax's live list (`/anthropic/v1/models` on the saved key) gives, unfiltered, with
-one Recommended tag on the kit's fast model and a search box for a long list; the kit's catalogue pair is only the
-fallback when that list cannot be read (the kit's `models` returns nothing else: a kit gap). The pick is kept as the
+picks its model from every model MiniMax's live list gives, read by the kit's `Accounts.models` (0.30+) on the saved key,
+unfiltered, with one Recommended tag on the kit's fast model and a search box for a long list; the one fast model is only
+the fallback when that list cannot be read. The pick is kept as the
 kit's own default (`setDefaults`); "Use the default for now" names and runs the recommended model. OpenRouter keeps its pinned DeepSeek and has no pick. Chief's chat header names the
 model; Sign out removes the key and the pick.
 
