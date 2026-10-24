@@ -40,6 +40,10 @@ journeys:
     command: 'SERIAL="${SERIAL:?the emulator serial}" PHONE_OTHER="${PHONE_OTHER:?a folder for the states besides the claimed one}" timeout -k 10 600 bash scripts/verify/phone-only-minimax.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the lab release APK}"'
   inbox-triage:
     command: 'PWA=1 timeout -k 3 360 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/inbox-triage.mjs "$DONE_DONE_EVIDENCE_ROOT"'
+  # Which Crewhouse runs: the CLI, Settings' foot on web and installed app, and with SERIAL and APK the phone (versions.md).
+  versions:
+    timeout: 25m
+    command: 'PATH="/usr/bin:$PATH" timeout -k 10 1440 bash scripts/verify/versions.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

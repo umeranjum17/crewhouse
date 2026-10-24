@@ -33,6 +33,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | image | `done-done run image` (includes installed PWA) |
 | where-cloud (the phone's cloud screen) | `done-done run cloud-screen` with `SERIAL`, `CLOUD_APK` and `CLOUD_OTHER` (a folder for every state besides the second phone's offer) set (an emulator and the flagged lab APK; [where-cloud.md](where-cloud.md)) |
 | phone-only-minimax | `done-done run phone-only-minimax` with `SERIAL`, `PHONE_APK` and `PHONE_OTHER` (a folder for every state besides the model pick) set (an emulator and the release APK; [phone-only-minimax.md](phone-only-minimax.md)) |
+| versions | `done-done run versions`, with `SERIAL` and `APK` for the phone ([versions.md](versions.md)) |
 | binary-inspect | `done-done run binary-inspect` — Byte looks inside a binary in its own folder: the note holds the inspector's own words, and a file from outside that folder is refused |
 | skill-eval | `done-done run skill-eval` — the paired skill eval on the stub engine: the same prompts with and without a bundled skill, every run's document checked, the raw runs in a JSONL file and the two arms diffed on one page |
 | All other rows | Drive the recipe through `done-done run -- <command>`; use its existing tests and `scripts/verify/` drivers, retaining every manual leg |

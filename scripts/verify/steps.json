@@ -513,5 +513,15 @@
       "Open Chief's thread from his card on Home, at 390 wide, day and night"
     ],
     "result": "Chief's thread shows the reply under the person's message: {{reply}}"
+  },
+  "versions": {
+    "start": "Umer on a fresh crew on the stub engine, from this checkout and from a lab copy of it one release ahead, with the same built web app",
+    "steps": [
+      "Run ./crewhouse --version, and ./crewhouse with a mistyped command",
+      "Open Settings in the web app and the installed app and read its foot, in day and in night, at phone and computer width",
+      "On the paired phone app, read the foot of Home and of This phone settings, in day and in night",
+      "Do the same against the computer one release ahead"
+    ],
+    "result": "The CLI and this checkout say Crewhouse with the package version marked -dev; the phone says App with its preview version and Host with the computer's; against the newer computer the web app and the phone say App and Host apart, and Settings says to update the app"
   }
 }
