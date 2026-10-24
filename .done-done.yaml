@@ -105,6 +105,10 @@ journeys:
   chat-real:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+  connect-apps:
+    timeout: 60m
+    spends: 'a few live model calls on the MiniMax key file named in ~/.config/crewhouse/connect-apps.conf, and one real read through the person''s own Composio sign-in'
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:-connect-apps}" timeout -k 10 3000 bash scripts/verify/connect-apps.sh "$DONE_DONE_EVIDENCE_ROOT"'
   # Chief answers on the checkout's pinned engine with a scripted model: no account, no spend (the proof after a pin bump).
   chief-reply-engine:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chief-reply-engine.sh "$DONE_DONE_EVIDENCE_ROOT"'
