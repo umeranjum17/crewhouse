@@ -8,3 +8,5 @@ Run `done-done run member-models` (`node scripts/verify/member-models.mjs --out 
 - "Use Grok for Scout" with Grok signed out is refused in plain words and the file does not change.
 
 A limit still waits for the person: nothing moves a member to another account by itself (`test/member-models.test.ts`).
+
+Frames: `CHROME_DEVTOOLS_AXI_SESSION=<name> done-done run member-models-screens` captures Chief's thread with the order and his reply, dark and light at 1280 and 390. Chief's two lines are scripted (`CREWHOUSE_STUB_GOLDEN`, because the app hides stub-prefixed replies); the `crew_use` call behind each really runs and `models.json` is checked.
