@@ -408,12 +408,28 @@ export class Crew {
   }
 
   /** Settings › AI accounts: the person's model for an account leads every bot from the next turn; it answers a limit too. */
-  pickModel(account: string, model: string) {
-    for (const { id } of this.bots()) disk.setBrains(this.cfg, id, [`${account}:${model}`, ...disk.brains(this.cfg, id).filter((b) => b.provider !== account).map(disk.brainKey)]);
+  pickModel(account: string, model: string, who = this.bots().map((b) => b.id)) {
+    for (const id of who) disk.setBrains(this.cfg, id, [`${account}:${model}`, ...disk.brains(this.cfg, id).filter((b) => b.provider !== account).map(disk.brainKey)]);
     this.db.event('bot.models', null, { by: 'person' });
     this.accounts.rest(account, 0);
     this.db.run("UPDATE tasks SET wake_at = NULL WHERE state = 'paused'");
     this.wake();
+  }
+
+  /** Chief's `crew_use`: one member thinks with an account the person is signed in to, on the model they named from its live list. */
+  private async use(who: string, said: string, named = '') {
+    const b = this.bot(who.toLowerCase()), key = Object.keys(PROVIDERS).find((k) => [k, PROVIDERS[k].name.toLowerCase()].includes(said.toLowerCase().trim())), name = PROVIDERS[key ?? '']?.name;
+    if (!b) throw fail(`no one called ${who}; see crew_roster`, 404);
+    if (!key) throw fail(`"${said}" is not one of the AI accounts: ${Object.values(PROVIDERS).map((p) => p.name).join(', ')}`);
+    if (!await this.accounts.signedIn(key)) throw fail(`You are not signed in to ${name} yet. Sign in under Settings › AI accounts and ask me again.`);
+    const list = await this.runtime.models(key).catch(() => []), t = named.toLowerCase().split(/\s+/).filter(Boolean), kept = disk.brains(this.cfg, CHIEF).find((x) => x.provider === key)?.model;
+    const hits = list.filter((m) => t.length ? t.every((x) => `${m.id} ${m.name}`.toLowerCase().includes(x)) : m.id === kept), pick = hits.length === 1 ? hits[0] : hits.find((m) => [m.id, m.name].some((x) => x.toLowerCase() === t.join(' ')));
+    if (list.length && !pick) throw fail(`${hits.length || !t.length ? 'Which' : `${name} has no model like "${named}". Which`} ${name} model: ${(hits.length ? hits : list).map((m) => m.name).join(', ')}?`);
+    disk.setBrains(this.cfg, b.id, [disk.brainKey({ provider: key, model: pick?.id }), ...disk.brains(this.cfg, b.id).filter((x) => x.provider !== key).map(disk.brainKey)]);
+    this.db.event('bot.models', null, { by: 'chief', bot: b.id });
+    this.db.run("UPDATE tasks SET wake_at = NULL WHERE state = 'paused' AND bot = ?", b.id);
+    this.wake();
+    return { done: `${b.display} now thinks with ${name}${pick ? ` (${pick.name})` : ''}.` };
   }
 
   /** A working bot's latest step and how long it has been quiet; quiet past STUCK_MS reads as "stuck?". */
@@ -2084,6 +2100,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch, once: p.once })),
       tool('crew_routines', 'The routines and when each runs next.', () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
       tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
+      tool('crew_use', 'Set a member\'s AI account and model when asked: `bot` id from crew_roster, `account` name, `model` as named.',
+        (p) => this.use(String(p.bot ?? ''), String(p.account ?? ''), p.model ? String(p.model) : undefined)),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',
         (p) => {

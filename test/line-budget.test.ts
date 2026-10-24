@@ -64,7 +64,10 @@ import { join } from 'node:path';
 // ch-teams-f4-legacy-delegation-delete; no silent ceiling increase or relocated implementation.
 // Raised 7361 -> 7394 for confirmed custom rules (A021, owner exception, 23 Oct): +33 net src,
 // within the explicitly approved +50. Separate rule storage, confirmation, context and scripted proof replies.
-const BUDGET = 7394;
+// Raised 7394 -> 7415 for per-member accounts (ch-subs-engine): the models.json store, Chief's crew_use and its live-list checks.
+// Owner exception requested in the PR; no trim paired.
+// Raised 7415 -> 7417 for the two scripted chat lines the member-models screens drive (stub-runtime GOLDEN).
+const BUDGET = 7417;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

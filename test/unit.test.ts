@@ -461,7 +461,7 @@ test('accounts a bot thinks with: fallback order by name only, the person\'s one
   const { cfg, db, crew, done } = setup();
   crew.onboard('sir');
   crew.recruit('reel', 'Reel', 'person');
-  assert.deepEqual(disk.botConfig(cfg, 'reel').models, ['chatgpt']);
+  assert.deepEqual(disk.brains(cfg, 'reel').map(disk.brainKey), ['chatgpt']);
   // Claude is offered through the engine's own route; its sign-in says plainly it needs Claude Code on this computer.
   assert.equal(disk.setBrains(cfg, 'reel', ['claude']).includes('claude'), true, 'Claude is offered now');
   assert.equal(PROVIDERS.claude.cli !== undefined, true, 'its prerequisite is labelled');
@@ -483,10 +483,10 @@ test('accounts a bot thinks with: fallback order by name only, the person\'s one
   assert.match(lastSaid(db, 'reel'), /^stub reel: done/);
   // The person picks ChatGPT's model in Settings: it leads every bot, a new recruit included, and runs exactly that model.
   crew.pickModel('chatgpt', 'strong-1');
-  assert.deepEqual(disk.botConfig(cfg, 'reel').models, ['chatgpt:strong-1', 'copilot']);
-  assert.deepEqual(disk.botConfig(cfg, 'chief').models, ['chatgpt:strong-1']);
+  assert.deepEqual(disk.brains(cfg, 'reel').map(disk.brainKey), ['chatgpt:strong-1', 'copilot']);
+  assert.deepEqual(disk.brains(cfg, 'chief').map(disk.brainKey), ['chatgpt:strong-1']);
   crew.recruit('scout', 'Scout', 'person');
-  assert.deepEqual(disk.botConfig(cfg, 'scout').models, ['chatgpt:strong-1'], 'a recruit sits on the crew\'s picks');
+  assert.deepEqual(disk.brains(cfg, 'scout').map(disk.brainKey), ['chatgpt:strong-1'], 'a recruit sits on the crew\'s picks');
   const b = delegated(crew, 'reel', 'judge which take is best').task;
   await settled(db, b);
   assert.deepEqual([started().account, specOf(b).model], ['chatgpt', 'strong-1']);
