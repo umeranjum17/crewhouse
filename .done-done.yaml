@@ -50,6 +50,9 @@ journeys:
   # The same order as chat frames in Chief's thread, dark and light at 1280 and 390 (docs/verification/member-models.md).
   member-models-screens:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/member-models-screens.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The same map on the screens: Settings › AI accounts and a member's page, edited in place (docs/verification/member-models.md).
+  member-models-ui:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/member-models-ui.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

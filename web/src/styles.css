@@ -1437,6 +1437,12 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .pick.on { border-color: var(--go); box-shadow: 0 0 0 1px var(--go) inset; }
 .radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line2); flex: none; }
 .pick.on .radio { border: 7px solid var(--go); }
+/* Which AI each crew member uses (Settings › AI accounts, each member's page): a row, Change opens the picker in place. */
+.member-ai + .member-ai { border-top: 1px solid var(--line); }
+.member-ai .ai-row { border-top: 0; }
+.member-wait { margin: -4px 0 12px; }
+.member-pick { padding: 0 0 14px; }
+.member-pick .seg { flex-wrap: wrap; margin-bottom: 12px; }
 .ai-page .cap { color: var(--mute); font-size: 13px; line-height: 18px; margin: 10px 4px 0; }
 .ai-page .row-item b { font-weight: 500; }
 .ai-page .row-item .small { display: block; }

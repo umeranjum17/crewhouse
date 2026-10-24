@@ -362,6 +362,18 @@
     ],
     "result": "Chief confirms the pick and refuses the signed-out account in his thread, in four captures"
   },
+  "member-models-ui": {
+    "start": "a new person with Scout, Quill and Reel hired, every account signed in on the stub engine except Grok, the crew put on ChatGPT from Settings",
+    "steps": [
+      "Tell Chief in chat to use ChatGPT for Scout on the quick model",
+      "Open Settings, AI accounts: Who uses which lists Chief, Scout, Quill and Reel",
+      "Tap Change on Quill's row, pick GitHub Copilot, then Quick 1",
+      "Read the crew folder's models.json and the account Quill's next job ran on",
+      "Give Scout a job that hits a limit, delete Reel's line from models.json by hand",
+      "Capture Who uses which, the open picker and Scout's page, dark and light at 360, 390, 445, 1280 and 1440"
+    ],
+    "result": "Quill reads GitHub Copilot · Quick 1 in Settings, models.json holds it and Quill's next job ran on GitHub Copilot; Scout reads ChatGPT · Quick 1 with one waiting line; Reel reads Not chosen"
+  },
   "unlock-card": {
     "start": "a helper's locked statement: a PDF only the person's password opens",
     "steps": [

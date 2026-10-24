@@ -408,8 +408,8 @@ export class Crew {
   }
 
   /** Settings › AI accounts: the person's model for an account leads every bot from the next turn; it answers a limit too. */
-  pickModel(account: string, model: string, who = this.bots().map((b) => b.id)) {
-    for (const id of who) disk.setBrains(this.cfg, id, [`${account}:${model}`, ...disk.brains(this.cfg, id).filter((b) => b.provider !== account).map(disk.brainKey)]);
+  pickModel(account: string, model: string | undefined, who = this.bots().map((b) => b.id)) {
+    for (const id of who) disk.setBrains(this.cfg, id, [disk.brainKey({ provider: account, model }), ...disk.brains(this.cfg, id).filter((b) => b.provider !== account).map(disk.brainKey)]);
     this.db.event('bot.models', null, { by: 'person' });
     this.accounts.rest(account, 0);
     this.db.run("UPDATE tasks SET wake_at = NULL WHERE state = 'paused'");
@@ -454,7 +454,7 @@ export class Crew {
     return [...rows.filter((r) => !r.needs.length).concat(hire).slice(0, 6), ...rows.filter((r) => r.needs.length)];
   }
 
-  /** A bot as the app sees it: no token, no model, nothing technical. */
+  /** A bot as the app sees it: no token, nothing technical; `ai` is its own line in models.json ("account:model"), or null when nobody chose. */
   private pub(b: Row) {
     const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id), desk = this.desktops.info(b.id);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
@@ -462,7 +462,7 @@ export class Crew {
       // The active task carries its delivered files for the office desk: own output first, handed-over inputs marked.
       live: !this.live.get(b.id) ? 'off' : this.busy.has(b.id) ? 'working' : 'idle', task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
-      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w };
+      pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w, ai: disk.pickedModels(this.cfg)[b.id]?.[0] ?? null };
   }
 
   /** A task for the app: its words and state, not the AI it asked for or its session file. */
@@ -2084,7 +2084,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       }),
       tool('crew_roster', 'Who is on the crew, and the templates you can recruit from.', () => ({
         crew: this.bots().filter((x) => x.id !== CHIEF).map((x) => ({ id: x.id, name: x.display, role: x.role, busy: !!this.activeTask(x.id), does: disk.readJob(this.cfg, x.id).does,
-          knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name) })),
+          knows: disk.listSkills(this.cfg, x.id).map((k) => k.description || k.name), thinks_with: disk.pickedModels(this.cfg)[x.id]?.[0] ?? 'not chosen' })),
         templates: disk.listTemplates(this.cfg).map((t) => ({ id: t.id, name: t.display, role: t.role, knows: t.skills ?? [] })),
       })),
       tool('crew_recruit', 'Recruit a bot from a template.',

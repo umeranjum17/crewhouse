@@ -907,7 +907,7 @@ function HelperPortrait({ h, children }: { h: A.Helper; children?: ReactNode }) 
 function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const { id, tab, state, tick, refresh, offline } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
-  const [page, setPage] = useState<Json>(null);
+  const [page, setPage] = useState<Json>(null), lists = useModelLists(ctx.accounts);
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   // Chief has no helper card, but his Every-step trail (with Undo for what he learned) is the same view: admit him for it.
@@ -974,6 +974,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
               {page && <JobSection page={page} />}
               <h2 className="st-label">What {name} remembers</h2>
               {page && <Remembers id={id} name={name} page={page} reload={load} />}
+              <h2 className="st-label">Which AI {name} uses</h2>
+              <div className="card list"><MemberAi id={id} name={name} state={state} accounts={ctx.accounts} lists={lists} refresh={refresh} /></div>
               <button className="btn st-change" onClick={() => { keepDraft('chief', `I'd like to change ${name}'s job: `); go('#/chief'); }}>Ask Chief to change {short}'s job</button>
               <details className="st-profile-more"><summary>More about {name}</summary>
                 <LearnedRows name={name} />
@@ -1015,7 +1017,7 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
   const crew = A.crew(state), all = A.routines(state);
   // ponytail: read from the chat crewd sends (its last 200 lines); an older file drops off, a things API if that matters.
   const stuff = A.chatThings(state, page), list = THINGS.find(([k]) => k === tab);
-  const [notify, setNotify] = useState<boolean | null>(null);
+  const [notify, setNotify] = useState<boolean | null>(null), lists = useModelLists(ctx.accounts);
   useEffect(() => { api.notify().then((n) => setNotify(n.on)).catch(() => {}); }, []);
   // The computer to show: whoever you or the crew are on now, else Chief's own, else the first helper with one.
   const me = state.bots.find((b: Json) => b.id === 'chief'), desk = page?.tools?.find((t: Json) => t.id === 'computer');
@@ -1062,6 +1064,8 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
           <p className="mute small">Its own screen, away from yours. Taking control pauses {pc.name} until you hand it back.</p>
         </div> : <div className="card empty cp-none"><b>No computer yet</b><span className="mute small">{desk && !desk.ready && desk.missing?.length
           ? `This machine is missing what a computer needs: ${desk.missing.join(', ')}.` : 'None of your crew has a computer, so no one can work on a screen of their own.'}</span></div>}
+        <h2 className="st-label">Which AI Chief uses</h2>
+        <div className="card list"><MemberAi id="chief" name="Chief" state={state} accounts={ctx.accounts} lists={lists} refresh={refresh} /></div>
         <h2 className="st-label">News</h2>
         <div className="card list"><label className="row-item"><span className="grow"><b>Tell me when Chief finishes or needs me</b><span className="mute">On every device with news on</span></span>
           <input type="checkbox" role="switch" checked={!!notify} disabled={notify === null} onChange={(e) => attempt(async () => setNotify((await api.notify(e.target.checked)).on))} /></label></div>
@@ -1729,7 +1733,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   if (tab === 'you') return <SettingsPage title="You"><You state={state} act={act} plan={A.planName(accounts)} /><Money state={state} refresh={refresh} /></SettingsPage>;
   if (tab === 'rules') return <SettingsPage title="Custom rules"><CustomRules tick={tick} /></SettingsPage>;
   if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
-  if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} />{signingSheet}</SettingsPage>;
+  if (tab === 'accounts') return <SettingsPage title="AI accounts"><AiAccounts accounts={accounts} refresh={refresh} signIn={(ai) => setSigning({ ai, tab: 'keyEntry' in ai && ai.keyEntry === true ? null : openTab() })} /><CrewAi state={state} accounts={accounts} refresh={refresh} />{signingSheet}</SettingsPage>;
   if (tab === 'phones' && !paired) return <SettingsPage title="Phones"><Phones tick={tick} /></SettingsPage>;
   // On a computer (J09a) two columns under the trust card: You and Look on the left, what is connected on the right; on a
   // phone the two lists read as one card, then Look.
@@ -1851,6 +1855,46 @@ function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; re
   </>);
 }
 
+/** Each signed-in account's live model list, read once per account as a page opens: the only place model names come from. */
+function useModelLists(accounts: Json[] | null) {
+  const keys = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready').map((r) => r.ai.key).join();
+  const [lists, setLists] = useState<Record<string, { id: string; name: string }[]>>({});
+  useEffect(() => { void Promise.all(keys.split(',').filter(Boolean).map(async (k) => [k, (await api.models(k).catch(() => null))?.models ?? []] as const)).then((r) => setLists(Object.fromEntries(r))); }, [keys]);
+  return lists;
+}
+
+/** One crew member's AI, changed in place: the accounts the person is signed in to, then that account's own live list.
+ *  The same line in crewd's store as Chief's "use ChatGPT for Scout", so the chat, this row and the next job agree. */
+function MemberAi({ id, name, face, state, accounts, lists, refresh }: { id: string; name: string; face?: ReactNode; state: Json; accounts: Json[] | null; lists: Record<string, { id: string; name: string }[]>; refresh: () => void }) {
+  const v = A.memberAi(state, accounts, id, lists), [open, setOpen] = useState(false), [key, setKey] = useState<string | null>(null);
+  const shown = key ?? (v.choices.some((a) => a.key === v.key) ? v.key : v.choices[0]?.key ?? null), ai = v.choices.find((a) => a.key === shown), list = shown ? lists[shown] : undefined;
+  const pick = (model?: { id: string; name: string }) => attempt(async () => { await api.pickModel(shown!, model?.id, id); setOpen(false); setKey(null); refresh(); }, `${name} uses ${ai!.name}${model ? ` (${model.name})` : ''} from now on`);
+  return <div className="member-ai">
+    <div className="ai-row">{face}<div className="grow">{face ? <><b>{name}</b><div className="mute small">{v.says}</div></> : <b className="small">{v.says}</b>}</div>
+      <button className="link" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Done' : 'Change'}</button></div>
+    {v.waits && <p className="mute small member-wait">{v.waits}</p>}
+    {open && (!v.choices.length ? <p className="mute small">Sign in to an AI account first, under <a href="#/settings/accounts">AI accounts</a>.</p> : <div className="member-pick">
+      {v.choices.length > 1 && <div className="seg" role="tablist" aria-label={`Which account ${name} uses`}>{v.choices.map((a) =>
+        <button key={a.key} role="tab" aria-selected={a.key === shown} className={a.key === shown ? 'on' : ''} onClick={() => setKey(a.key)}>{a.name}</button>)}</div>}
+      {!list ? <p className="mute small">Checking your plan…</p> : list.length ? <div role="radiogroup" aria-label={`Which ${ai!.name} model ${name} uses`}>
+        {list.map((m) => { const on = v.key === shown && v.model === m.id; return <button key={m.id} role="radio" aria-checked={on} className={`pick ${on ? 'on' : ''}`} onClick={() => !on && pick(m)}>
+          <span className="radio" aria-hidden /><span className="grow">{m.name}</span></button>; })}
+      </div> : <button className="btn" disabled={v.key === shown} onClick={() => pick()}>{v.key === shown ? `${name} uses ${ai!.name}` : `Use ${ai!.name}`}</button>}
+    </div>)}
+  </div>;
+}
+
+/** Settings › AI accounts' crew list: Chief, then every helper, each on its own account and model. */
+function CrewAi({ state, accounts, refresh }: { state: Json; accounts: Json[] | null; refresh: () => void }) {
+  const lists = useModelLists(accounts), crew = A.crew(state);
+  return <><div className="label">Who uses which</div>
+    <div className="card list ai-list">
+      <MemberAi id="chief" name="Chief" face={<Face who="chief" size={36} />} state={state} accounts={accounts} lists={lists} refresh={refresh} />
+      {crew.map((h) => <MemberAi key={h.id} id={h.id} name={h.name} face={<Face who={h} size={36} />} state={state} accounts={accounts} lists={lists} refresh={refresh} />)}
+    </div>
+    <p className="mute small">You can also tell Chief, for example “use ChatGPT for {crew[0]?.name ?? 'a helper'}”. A member that reaches a limit waits for you; it never moves to another account by itself.</p></>;
+}
+
 /** One signed-in account (mock model-a): which of its plan's models the whole crew uses, picked by the person and
  *  never switched behind their back; a limit waits for them here. */
 function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
@@ -1877,7 +1921,7 @@ function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
         {cat.models.map((m: Json) => <button key={m.id} role="radio" aria-checked={cat.picked === m.id} className={`pick ${cat.picked === m.id ? 'on' : ''}`} onClick={() => cat.picked !== m.id && pick(m)}>
           <span className="radio" aria-hidden /><span className="grow">{m.name}</span></button>)}
       </div> : null}
-      {cat && <p className="cap">{cat.models.length ? `The list comes from your ${plan} and updates by itself. ${cat.picked ? 'Chief and every helper use this one.' : 'Until you pick, your crew uses the plan’s default.'}` : `Your crew uses the model saved with this ${plan}.`}</p>}
+      {cat && <p className="cap">{cat.models.length ? `The list comes from your ${plan} and updates by itself. ${cat.picked ? 'A pick here moves your whole crew to it; each member can differ below AI accounts.' : 'Until you pick, your crew uses the plan’s default.'}` : `Your crew uses the model saved with this ${plan}.`}</p>}
       {others.length > 0 && <><div className="label">Other accounts</div>
         <div className="card list">{others.map(({ ai: o }) => <a key={o.key} className="row-item" href={`#/settings/ai/${o.key}`}><AiMark ai={o} />
           <span className="grow"><b>{o.name}</b><span className="mute small">{their[o.key] ?? 'The plan’s default'}</span></span><Icon name="next" /></a>)}</div></>}
