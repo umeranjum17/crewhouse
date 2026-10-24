@@ -10,10 +10,13 @@
 
 ## What was not shown
 
-Four live runs after the hand read did not reach Composio's consent screen, so none of them is a proof:
+Six live runs after the hand read did not reach Composio's consent screen, so none of them is a proof:
 
 | Run | What stopped it |
 | --- | --- |
+| 20261023T160728Z-d7c3dab5-71c636 | Chief raised the native "Connect Gmail" card instead of Composio's link. |
+| 20261023T164532Z-48a2eb59-d536ad | Chief asked to read an engine file (`composio.d.ts`). |
+| 20261023T174737Z-705bf671-9fbfd5 | 15 minutes with no ask and no reply; the engine logs were lost with the lab. |
 | 20261024T032008Z-9582a7c5-4c6483 | Chief asked to read an engine docs file before Composio's tools were ready (the engine held its lease on Composio's saved sign-in for about a minute). |
 | 20261024T035232Z-4461b5c4-d50860 | Chief proposed hiring a helper instead of reading the mail; the kept logs held no tool calls, so the cause could not be read. |
 | 20261024T055457Z-1c67ece7-ac973f | Chief made 12 calls in 15 minutes: `crew_connect` for gmail, composio and google (the last two answered "no app called"), then skill and memory reads, `crew_routines` and `crew_import`. He made no Composio tool call and no code-mode exec call, and ignored the Composio note in the first `crew_connect` result. |
