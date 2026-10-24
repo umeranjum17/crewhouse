@@ -10,7 +10,7 @@
 
 ## What was not shown
 
-Seven live runs after the hand read did not reach Composio's consent screen, so none of them is a proof:
+Nine live runs after the hand read did not reach Composio's consent screen, so none of them is a proof:
 
 | Run | What stopped it |
 | --- | --- |
@@ -21,6 +21,8 @@ Seven live runs after the hand read did not reach Composio's consent screen, so 
 | 20261024T035232Z-4461b5c4-d50860 | Chief proposed hiring a helper instead of reading the mail; the kept logs held no tool calls, so the cause could not be read. |
 | 20261024T055457Z-1c67ece7-ac973f | Chief made 12 calls in 15 minutes: `crew_connect` for gmail, composio and google (the last two answered "no app called"), then skill and memory reads, `crew_routines` and `crew_import`. He made no Composio tool call and no code-mode exec call, and ignored the Composio note in the first `crew_connect` result. |
 | 20261024T072458Z-4e06953b-22c986 | After #724 (the connect step returns one next step): Chief called `crew_status`, `crew_read` (a directory), `crew_connect` for gmail, `crew_roster`, `crew_connect` for google and `crew_read` USER.md over 12 minutes, and again made no Composio tool call and no code-mode exec call. Nothing was connected or granted, so there was no connection to remove. |
+| 20261024T075218Z-08d68f8b-b3d68b | Sonnet 5.5 through the Claude config folder by path (`CLAUDE_CONFIG_DIR` in crewd's environment, nothing copied or linked). The engine ran the Claude CLI and Chief answered "Composio isn't reachable in this run" with no tool call; the Claude route did not offer Composio's tools (fixed in #727). |
+| 20261024T085749Z-7b20aaa2-9170fe | Same route after #727: Claude signed in at the start, then the task paused 11 seconds after it began with "Waiting for you to sign in with Claude" and the account read signed out. No Claude CLI turn ran, so the Composio tools were never tried. Cause not found: the shared account folder's login may have gone stale, or the engine's check on the lab's own home failed. Logs kept; no connection or grant was made. |
 
 The last run's kept record (`events.json`, `thread.json`, `openclaw-events.log`, `app.mp4`) is in the task evidence folder `final-run/`; the events are also committed as `test/fixtures/connect-apps-run4-events.json`, which the replay test in `test/composio.test.ts` uses.
 
