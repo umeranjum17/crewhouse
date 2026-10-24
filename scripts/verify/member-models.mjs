@@ -117,6 +117,7 @@ try {
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'models.json'), JSON.stringify(file(), null, 2) + '\n');
   writeFileSync(join(out, 'summary.json'), JSON.stringify({ ok, started: JSON.parse(started), refused }, null, 2) + '\n');
+  writeFileSync(join(out, 'chat-order.txt'), `Person to Chief: use ChatGPT for Scout (quick model)\nChief: ${ok}\nPerson to Chief: use Grok for Scout (Grok is not signed in)\nChief: ${refused}\nScout's next job ran on: ${JSON.parse(started).name}\nStored in models.json: ${JSON.stringify(file())}\n`);
   writeSteps(out, 'member-models', { ok, refused });
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
