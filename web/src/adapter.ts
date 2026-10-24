@@ -655,6 +655,18 @@ export function engineView(state: Json): { failed: boolean; words: string } | nu
 /** For the owner: a newer Crewhouse to download, in words. */
 export const update = (state: Json) => (state.update ? { words: `A new Crewhouse is ready (${state.update.version}). Download it and open it, and the crew carries on where it was.`, url: String(state.update.url) } : null);
 
+/** The small print under Settings (and the phone's Home): which Crewhouse runs, from each side's own version data. The
+ *  home computer's is `state.version` (its package version, `-dev` from a source checkout); `app` is this app's own
+ *  build and `made`, the Crewhouse release it was built from. A dev or preview build's version says so itself. */
+export function versions(state: Json, app: { version: string; made: string }) {
+  const host = String(state.version ?? ''), base = host.replace(/-.*/, ''), [x, y] = [app.made, base].map((v) => v.split('.').map(Number));
+  const cmp = x.map((n, i) => n - (y[i] ?? 0)).find((d) => d) ?? 0;
+  return {
+    line: !host ? `App ${app.version}` : app.version === app.made && !cmp ? `Crewhouse ${host}` : `App ${app.version} · Host ${host}`,
+    hint: !host || !cmp ? '' : cmp < 0 ? 'The home computer has a newer Crewhouse than this app. Update the app.' : 'This app is newer than the Crewhouse on the home computer. Update it there.',
+  };
+}
+
 /** The owner's steps to switch Google on for your crew, each with the Google page it happens on (docs/google-setup.md). */
 export const GOOGLE_STEPS = [
   { title: 'Make space for Crewhouse', url: 'https://console.cloud.google.com/projectcreate', says: 'Name it “Crewhouse (personal)” and press Create. No billing needed.' },

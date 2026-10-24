@@ -5,6 +5,8 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 const repo = path.resolve(__dirname, '..');
+// The Crewhouse release this app is built from, for Settings' small print (adapter.versions): the repo's own package version.
+process.env.EXPO_PUBLIC_CREWHOUSE_VERSION = require(path.join(repo, 'package.json')).version;
 const shared = [path.join(repo, 'src'), path.join(repo, 'web', 'src')]; // web/src/demo.ts reads ../../src/routines.ts
 config.watchFolders = [...shared, path.join(repo, 'templates', 'chief')];
 config.resolver.sourceExts.push('md');

@@ -25,7 +25,9 @@ const built = await build({
   nodePaths: [new URL('../node_modules/', import.meta.url).pathname], // a copy of the tree built from elsewhere still resolves this checkout's packages
   outdir: root + 'dist', bundle: true, minify: true, sourcemap: true, target: 'es2022', jsx: 'automatic',
   // Cloud first is the release default; CREWHOUSE_CLOUD=0 is the explicit opt-out.
-  define: { 'process.env.NODE_ENV': '"production"', 'process.env.CREWHOUSE_CLOUD': JSON.stringify(process.env.CREWHOUSE_CLOUD ?? '') }, logLevel: 'warning',
+  define: { 'process.env.NODE_ENV': '"production"', 'process.env.CREWHOUSE_CLOUD': JSON.stringify(process.env.CREWHOUSE_CLOUD ?? ''),
+    // The small print's app version: this checkout's package version (adapter.versions).
+    'process.env.CREWHOUSE_VERSION': JSON.stringify(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version) }, logLevel: 'warning',
   // @desklink/react-native's browser build: its *.web.* files, with the few react-native names it needs shimmed.
   resolveExtensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.jsx', '.js', '.json'],
   alias: { 'react-native': root + 'src/rn-web.tsx' },
