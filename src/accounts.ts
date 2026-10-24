@@ -41,6 +41,9 @@ export class Accounts {
   private fresh = new Map<string, { until: number; yes: boolean }>();
   /** States the product words come from: a sign-in that stopped working, a plan without helpers, a cooldown. */
   readonly expired = new Set<string>();
+  /** Latched because the engine itself said no twice (so its later yes clears it), and runs that said out while it said yes. */
+  private byEngine = new Set<string>(); private doubts = new Map<string, number>();
+  recheckMs = 11_000;
   readonly excluded = new Set<string>();
   private rests = new Map<string, number>();
   private views = new Map<string, View>();
@@ -56,13 +59,29 @@ export class Accounts {
   }
 
   async signedIn(account: string) {
-    if (this.expired.has(account) || this.excluded.has(account)) return false;
-    const r = this.ready.get(account);
+    const out = this.expired.has(account);
+    if (this.excluded.has(account) || (out && !this.byEngine.has(account))) return false;
+    const r = out ? undefined : this.ready.get(account);
     if (r !== undefined) return r;
     const hit = this.fresh.get(account); if (hit && hit.until > Date.now()) return hit.yes;
     const yes = await this.runtime.signedIn(account).catch(() => undefined); // a failed probe says nothing and is asked again
     if (yes !== undefined) this.fresh.set(account, { until: Date.now() + (yes ? 60_000 : 10_000), yes });
+    if (out && yes) { this.expired.delete(account); this.byEngine.delete(account); } // the engine's own check changed its mind: the no was a flake
     return !!yes;
+  }
+  /** A run says the sign-in is gone. The engine's CLI check behind it has a 3 s limit and reads a slow answer as a no, so one no
+   *  proves nothing: ask again past the engine's 10 s answer window. A failed probe is unknown, never a sign-out; two nos latch (and a
+   *  later yes clears them). A turn the API refused (`admission` false) is believed at once; the kit's own "not signed in" before any turn
+   *  is believed against a yes only the second time. True: it latched. */
+  async lost(account: string, admission: boolean) {
+    for (let i = 0; i < 2; i++) {
+      if (i) await new Promise((r) => setTimeout(r, this.recheckMs));
+      const yes = await this.runtime.signedIn(account).catch(() => undefined);
+      if (yes === undefined) return false;
+      if (yes) { if (!admission) break; const n = (this.doubts.get(account) ?? 0) + 1; this.doubts.set(account, n); if (n < 2) return false; break; }
+      if (i) this.byEngine.add(account);
+    }
+    this.doubts.delete(account); this.fresh.delete(account); this.expired.add(account); return true;
   }
   restingUntil(account: string) { return this.rests.get(account) ?? 0; }
   /** An account the person doesn't have: never signed in, or a sign-in that stopped working. */

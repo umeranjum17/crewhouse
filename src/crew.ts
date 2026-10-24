@@ -1437,6 +1437,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (l.pending && (end.ok || 'aborted' in end)) { const text = l.pending; delete l.pending; return this.turn(botId, l, text); }
     if (end.ok) { void this.recordLearned(botId, l).catch(() => {}); return this.finish(botId, end.text); } // a rest expires by its own time; a success never clears one early
     if ('aborted' in end) return; // stopped on purpose: Take over, Stop, or a parked question
+    if (end.kind === 'signed-out' && !this.accounts.expired.has(l.account)) { // believe it only once the engine agrees (Accounts.lost)
+      return void this.accounts.lost(l.account, /is not signed in for/.test(end.message)).then((gone) => this.settled(botId, task, l, gone ? end : { ok: false, kind: 'network', message: end.message }));
+    }
     if (end.kind === 'network') {
       this.handoffs.set(task.id, 'The connection dropped');
       this.close(botId);
