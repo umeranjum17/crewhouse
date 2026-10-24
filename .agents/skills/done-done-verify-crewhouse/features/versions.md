@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/versions.md`.
 
 ## How to get to it (user POV)
 
-`./crewhouse --version`; the foot of Settings on the web and in the installed app; on the phone, the foot of Home and of This phone settings. Matching sides read "Crewhouse 0.1.1-dev"; the phone, or sides from different releases, read "App … · Host …", and Settings says which one to update.
+`./crewhouse --version`; the foot of Settings on the web and in the installed app; on the phone, the foot of Home and of This phone settings. Matching sides read "Crewhouse 0.1.4-dev"; the phone, or sides from different releases, read "App … · Host …", and Settings says which one to update.
 
 ## Driving it
 
