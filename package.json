@@ -2,7 +2,17 @@
   "name": "crewhouse",
   "version": "0.1.4",
   "private": false,
-  "description": "Local-first crew of persistent AI helpers, run by Chief on your own AI accounts.",
+  "description": "A crew of AI helpers that does your errands on your own computer, and asks before it spends.",
+  "keywords": [
+    "ai-agent",
+    "personal-assistant",
+    "self-hosted",
+    "local-first",
+    "linux",
+    "privacy",
+    "openclaw"
+  ],
+  "homepage": "https://crewhouse.pages.dev",
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "git+https://github.com/umeranjum17/crewhouse.git" },
   "type": "module",

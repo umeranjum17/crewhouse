@@ -3,8 +3,9 @@
 //   CHROME_DEVTOOLS_AXI_SESSION=<yours> node scripts/capture-readme.mjs http://127.0.0.1:<port> [name ...]
 // Name the scenes to regenerate only those (e.g. `home-phone`); no names captures all.
 // The demo's own "You're trying a demo crew" nudge is hidden: it is not part of the app a person runs.
+// The README's moving picture (`loop-<look>.webp`) is built here too, from the plan, answer and spend frames.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 const base = process.argv[2];
 if (!base) throw new Error('Usage: node scripts/capture-readme.mjs http://127.0.0.1:<port> [name ...]');
@@ -17,10 +18,11 @@ const desk = '1440x900x1', phone = '390x844x2,mobile,touch';
 // A phone thread opens at its newest line; `scroll` starts the shot on a whole message instead of a cut one.
 const lines = (js) => `() => { const l = document.querySelector(".lines"); ${js}; return l.scrollTop }`;
 const scenes = [
-  ['home', 'demo#/', desk], ['home-phone', 'demo#/', phone], ['ask', 'demo=hello#/', phone],
+  ['home', 'demo#/', desk], ['home-phone', 'demo#/', phone],
   ['plan', 'demo=live#/chief', phone, lines('const m = [...l.children].find((e) => e.textContent.includes("great, and can")); l.scrollTop += m.getBoundingClientRect().top - 100')],
   ['answer', 'demo=answer#/chief', phone, lines('l.scrollTop = 0')],
   ['spend', 'demo=meals#/ask/20', phone], ['files', 'demo#/f/scribe/files%2Fmonthly-budget.xlsx', desk],
+  ['crew', 'demo#/crew', desk],
 ];
 for (const [name, query, view, scroll] of scenes) {
   if (only.size && !only.has(name)) continue;
@@ -40,4 +42,15 @@ for (const [name, query, view, scroll] of scenes) {
     execFileSync('magick', [png, '-quality', '82', resolve(`docs/screenshots/readme/${name}-${look}.webp`)]);
     console.log(name, look);
   }
+}
+// The core loop as one moving picture: the ask and the helper at work, the answer, and the yes. The frames are the
+// same real captures, in order, so the loop needs no second run.
+for (const look of ['day', 'night']) {
+  const frames = ['plan', 'answer', 'spend'].map((n) => `${out}/${n}-${look}.png`);
+  if (!frames.every((f) => existsSync(f))) {
+    console.log(`loop ${look}: skipped, capture plan, answer and spend first`);
+    continue;
+  }
+  execFileSync('magick', ['-delay', '250', '-loop', '0', ...frames, '-quality', '80', resolve(`docs/screenshots/readme/loop-${look}.webp`)]);
+  console.log('loop', look);
 }
