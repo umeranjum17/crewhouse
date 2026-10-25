@@ -172,7 +172,7 @@ export class OpenClawRuntime implements AgentRuntime {
   async signedIn(account: string) {
     const [provider, label] = refParts(account), id = label ? await this.idOf(account) : await this.routeOf(provider);
     if (!id) return false;
-    if (!label) return this.kit.signedIn(ME, id);
+    if (!label) return await this.kit.signedIn(ME, id) || !!(await this.kit.providerStatus(ME).catch(() => undefined))?.includes(id); // the engine's own list is the first word: the CLI's login and a sealed key are both its own, and the kit's admission read does not see a CLI-owned one
     const row = (await this.accounts()).find((r) => r.id === id);
     return !!row && (row.state === 'ready' || row.state === 'resting' || row.state === 'unknown'); // an unanswered probe is no sign-out: the engine asks again on the run
   }
@@ -233,7 +233,7 @@ export class OpenClawRuntime implements AgentRuntime {
   async models(account: string) {
     const [key, label] = refParts(account), second = label ? await this.idOf(account) : undefined;
     if (label) return !second ? [] : (await this.kit.models(ME, second)).map((m) => ({ id: m.id.slice(m.id.indexOf('/') + 1), name: m.name })); // the second account's own list, read with its own sign-in
-    const provider = await this.routeOf(key), signed = ['openai-codex', 'minimax'].includes(provider ?? '') && await this.kit.signedIn(ME, provider!), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
+    const provider = await this.routeOf(key), signed = ['openai-codex', 'minimax'].includes(provider ?? '') && (await this.kit.signedIn(ME, provider!) || !!(await this.kit.providerStatus(ME).catch(() => undefined))?.includes(provider!)), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
     return (live.length ? live.map((m) => ({ ...m, provider, available: true })) : r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
@@ -272,14 +272,14 @@ export class OpenClawRuntime implements AgentRuntime {
       if (helper) await this.kit.ensureHelper(ME, helper, { account: engine ?? provider, persona: spec.system });
       const request: KitRunSpec = { sessionKey: helper ? spec.key.replace(/^agent:byokit-key-m1:/, 'agent:m1:') : spec.key, member: ME, message: spec.message, ...(helper ? { helper, account: engine ?? provider } : { system: spec.system, ...(aid ? { account: aid } : {}) }),
         ...(keyLane && !helper ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && await this.thinks(provider, model, spec.thinking) ? { thinking: spec.thinking } : {}) };
-      return spec.team ? await this.nativeRun(spec, request, lane, on) : await this.kit.run(request,
+      return spec.team ? await this.nativeRun(spec, request, lane, on, aid ?? await this.idOf(spec.account)) : await this.kit.run(request,
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     } catch (error) { return { ok: false, kind: 'other', message: String(error) }; }
     finally { this.runs.delete(spec.key); }
   }
   /** Native dispatch owns execution; this adapter only prepares the target's host context and projects its events. */
-  private async nativeRun(spec: RunSpec, request: KitRunSpec, lane: string, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const targets = new Map<string, { bot: string; run?: RunRef }>(), helpers: Record<string, string[]> = {}, texts = new Map<string, string>(), admitted = new Set<string>(), account = typeof request.account === 'string' && request.account !== 'default' && request.account !== 'auto' ? request.account : undefined;
+  private async nativeRun(spec: RunSpec, request: KitRunSpec, lane: string, on: (event: RunEvent) => void, account?: string): Promise<RunEnd> {
+    const targets = new Map<string, { bot: string; run?: RunRef }>(), helpers: Record<string, string[]> = {}, texts = new Map<string, string>(), admitted = new Set<string>();
     if (!account) return this.kit.run(request, (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     for (const member of spec.team!) {
       if (member.system.length > 8192) return { ok: false, kind: 'handoff', message: 'A helper’s instructions and notes are too long. Shorten them before handing it this job.' };
