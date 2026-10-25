@@ -1,13 +1,12 @@
 <p align="center">
-  <img src="web/icon-192.png" width="88" alt="Crewhouse logo: Chief, a round face with two blue eyes" />
+  <img src="web/icon-512.png" width="88" alt="Crewhouse logo: a helmet with two eyes" />
 </p>
 
 <h1 align="center">Crewhouse</h1>
 
 <p align="center">
   <strong>A crew of AI helpers that does your errands, and asks before it spends.</strong><br/>
-  For anyone drowning in small jobs. It runs on your own Linux computer and thinks with the AI account you already pay for.<br/>
-  Ask Chief in plain words; a helper does the job; anything that sends, spends or deletes waits for your yes.
+  For anyone drowning in small jobs: it runs on your own Linux computer, thinks with the AI account you already pay for, and anything that sends, spends or deletes waits for your yes.
 </p>
 
 <p align="center">
