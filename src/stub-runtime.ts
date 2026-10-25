@@ -1,4 +1,5 @@
-import type { AgentRuntime, RunEnd, RunEvent, RunSpec, ToolHost } from './runtime.ts';
+import { refParts } from './runtime.ts';
+import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, ToolHost } from './runtime.ts';
 
 function calls(text: string) {
   const found: { name: string; input: Record<string, unknown> }[] = [];
@@ -23,6 +24,7 @@ const GOLDEN: Record<string, string> = {
   '• ⟦UmerTech: Node.js security alert⟧ — ⟦Stripe <security@stripe.example>⟧ (https://mail.google.com/mail/u/0/#inbox/18c0000000000031)': 'Stripe flagged recent UmerTech API traffic as likely using an outdated Node.js runtime. This is separate from the Railway incident; it is not proof your keys were stolen. [Open the alert](https://mail.google.com/mail/u/0/#inbox/18c0000000000031). The warning concerns malicious Brotli-compressed data. [The advisory](https://nodejs.org/en/blog/vulnerability/fixture-brotli?source=stripe&kind=security) lists 22.23.4, 24.22.1 and 26.12.1. Stripe says patch and check the environment first, then review activity and rotate potentially exposed keys even without suspicious activity. Which deployed app uses this Stripe account? [tool mail {"args":["read","18c0000000000031","--full"]}] [tool crew_case {"thread":"18c0000000000031","facts":"UmerTech: Node runtime warning, no proof of compromise; https://mail.google.com/mail/u/0/#inbox/18c0000000000031"}]',
   hi: 'Hi. What would you like to work on?',
   'Use ChatGPT for Scout on the quick model.': 'Done. Scout now thinks with ChatGPT (Quick 1). [tool crew_use {"bot":"scout","account":"ChatGPT","model":"quick"}]',
+  'Use my second ChatGPT for Scout on the quick model.': 'Done. Scout now thinks with ChatGPT · work (Quick 1). [tool crew_use {"bot":"scout","account":"my second ChatGPT","model":"quick"}]',
   'Use Grok for Scout.': 'I can’t yet: you are not signed in to Grok. Sign in under Settings › AI accounts and ask me again. [tool crew_use {"bot":"scout","account":"Grok"}]',
   'From now on, only prepare drafts. I will send messages myself.': 'Check this rule before I save it. [tool crew_rule {"text":"Only prepare drafts. I will send messages myself."}]',
   'From now on, always write long replies.': 'Check this rule before I save it. [tool crew_rule {"text":"Always write long replies."}]',
@@ -50,6 +52,7 @@ export class StubRuntime implements AgentRuntime {
   private holds = new Map<string, (reply?: string) => void>();
   private cancelled = new Set<string>();
   private tired = new Map<string, Set<string>>(); // "hit every limit": each account rests once on that key, two minutes
+  private extra = new Map<string, { label: string; email: string }>(); // a second account of one provider, signed in on the spot
   private transcripts = new Map<string, string>();
   private specs = new Map<string, RunSpec>();
   private steered = new Map<string, string>();
@@ -62,20 +65,31 @@ export class StubRuntime implements AgentRuntime {
   /** The last steer a key was given (tests read it; the engine keeps the conversation itself). */
   steerOf(key: string) { return this.steered.get(key); }
   async start(host: ToolHost) { this.host = host; }
-  async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); this.tired.clear(); }
+  async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); this.tired.clear(); this.extra.clear(); }
   // Grok stands in for an account that must be signed in first; the rest the person has.
-  async signedIn(account: string) { return account !== 'grok'; }
-  signIn(_account: string, via: 'browser' | 'code', on: (step: any) => void) {
-    // Grok stands in for an account that must be signed in first: the code shows, then it succeeds.
+  async accounts(): Promise<AccountRow[]> {
+    return [
+      { id: 'openai', provider: 'chatgpt', plan: 'Plus', email: 'umer@example.test', state: 'ready' },
+      { id: 'github-copilot', provider: 'copilot', plan: 'Pro', email: 'umer@example.test', state: 'ready' },
+      { id: 'openrouter', provider: 'openrouter', state: 'ready' }, { id: 'minimax', provider: 'minimax', state: 'ready' },
+      { id: 'claude-cli', provider: 'claude', state: 'ready' }, { id: 'opencode-go', provider: 'opencode-go', state: 'ready' },
+      ...[...this.extra].map(([ref, a]): AccountRow => ({ id: `openai.${a.label}`, provider: refParts(ref)[0], label: a.label, plan: 'Plus', email: a.email, state: 'ready' }))];
+  }
+  async signedIn(account: string) { const [provider, label] = refParts(account); return provider !== 'grok' && (!label || this.extra.has(account)); }
+  signIn(account: string, via: 'browser' | 'code', on: (step: any) => void) {
+    // Grok stands in for an account that must be signed in first: the code shows, then it succeeds. A named account is a
+    // second one of its provider, and the stub keeps it from then on (its own row, plan and email).
+    const label = refParts(account)[1];
+    if (label) this.extra.set(account, { label, email: `${label}@example.test` });
     if (via === 'code') on({ waiting: true, code: 'CREW-2026', url: 'https://example.test/xai/device' });
     const timer = setTimeout(() => on({ waiting: false, done: true }), 100);
     return { paste: () => {}, cancel: () => { clearTimeout(timer); on({ waiting: false, error: 'The sign-in was cancelled.' }); } };
   }
-  async signOut() {}
+  async signOut(account: string) { this.extra.delete(account); }
   async composioBegin() { return { url: 'https://connect.composio.dev/oauth/authorize?stub=1' }; }
   async composioDone() {}
   async composioSignOut() {}
-  async models(account: string) { return ['grok', 'opencode-go'].includes(account) ? [] : [{ id: 'strong-1', name: 'Strong 1' }, { id: 'quick-1', name: 'Quick 1' }]; }
+  async models(account: string) { return ['grok', 'opencode-go'].includes(refParts(account)[0]) ? [] : [{ id: 'strong-1', name: 'Strong 1' }, { id: 'quick-1', name: 'Quick 1' }]; }
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     if (!this.host) throw new Error('Stub not started');
     // A turn resumed with the person's answer to its parked card takes up the session's last ask again, as a model would.
@@ -100,9 +114,9 @@ export class StubRuntime implements AgentRuntime {
     }
     if (/link is down/i.test(said)) return { ok: false, kind: 'network', message: 'fetch failed' };
     const every = /hit every limit/i.test(said) ? this.tired.set(spec.key, new Set()).get(spec.key) : this.tired.get(spec.key);
-    if (/hit the limit/i.test(said) && spec.account === 'chatgpt' || every && !every.has(spec.account) && every.add(spec.account))
+    if (/hit the limit/i.test(said) && refParts(spec.account)[0] === 'chatgpt' || every && !every.has(spec.account) && every.add(spec.account))
       return { ok: false, kind: 'resting', message: 'You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.', until: Date.now() + (every ? 120_000 : 1_800_000) };
-    if (/no helpers in plan/i.test(said) && spec.account === 'chatgpt')
+    if (/no helpers in plan/i.test(said) && refParts(spec.account)[0] === 'chatgpt')
       return { ok: false, kind: 'plan', message: "Your plan doesn't include this model." };
     if (/sign me out/i.test(said)) return { ok: false, kind: 'signed-out', message: '401 Unauthorized: your sign-in has expired' };
     let text = result ? `stub ${spec.bot}: ${seen.at(-1)?.name} said ${result.slice(0, 300)}` : `stub ${spec.bot}: done with "${last.slice(0, 60)}"`;

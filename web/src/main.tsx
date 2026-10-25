@@ -1834,21 +1834,21 @@ function Install() {
 }
 
 /** The accounts the crew thinks with, signed in first; every other route waits quietly under "More ways to sign in". */
-function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; refresh: () => void; signIn: (ai: (typeof A.AIS)[number]) => void }) {
+function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; refresh: () => void; signIn: (ai: (typeof A.AIS)[number] & { key: string }) => void }) {
   const { mine, more } = A.aiList(accounts);
-  const row = ({ ai, g, says }: ReturnType<typeof A.aiList>['more'][number]) => (
-    <div key={ai.key} className="ai-row">
+  const row = ({ ai, g, says, ref, name }: ReturnType<typeof A.aiList>['more'][number]) => (
+    <div key={ref} className="ai-row">
       <AiMark ai={ai} />
-      {g.state === 'ready' ? <a className="grow ai-open" href={`#/settings/ai/${ai.key}`}><b>{ai.name}</b> <span className="mute" aria-hidden>›</span><div className="mute small">{says}</div></a>
-        : <div className="grow"><b>{ai.name}</b><div className="mute small">{says}</div></div>}
-      {g.state === 'signed-out' && <button className={`btn ${mine.some((r) => r.ai === ai) ? 'go' : 'quiet'}`} onClick={() => signIn(ai)}>Sign in</button>}
-      {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(ai.key); refresh(); }, `Signed out of ${ai.name}`)}>Sign out</button>}
+      {g.state === 'ready' ? <a className="grow ai-open" href={`#/settings/ai/${ref}`}><b>{name}</b> <span className="mute" aria-hidden>›</span><div className="mute small">{says}</div></a>
+        : <div className="grow"><b>{name}</b><div className="mute small">{says}</div></div>}
+      {g.state === 'signed-out' && <button className={`btn ${mine.some((r) => r.ref === ref) ? 'go' : 'quiet'}`} onClick={() => signIn(ai)}>Sign in</button>}
+      {g.state === 'ready' && <button className="link" onClick={() => attempt(async () => { await api.signOut(ref); refresh(); }, `Signed out of ${name}`)}>Sign out</button>}
     </div>
   );
   return (<>
     <div className="card list ai-list">{mine.map(row)}</div>
     {more.length > 0 && <details className="more-ways">
-      <summary><span className="grow">More ways to sign in</span><span className="ai-stack">{more.map((r) => <AiMark key={r.ai.key} ai={r.ai} size={22} />)}</span><i aria-hidden>›</i></summary>
+      <summary><span className="grow">More ways to sign in</span><span className="ai-stack">{more.map((r) => <AiMark key={r.ref} ai={r.ai} size={22} />)}</span><i aria-hidden>›</i></summary>
       <div className="card list ai-list">{more.map(row)}</div>
     </details>}
     <p className="mute small">{A.AI_ROUTES}</p>
@@ -1857,7 +1857,7 @@ function AiAccounts({ accounts, refresh, signIn }: { accounts: Json[] | null; re
 
 /** Each signed-in account's live model list, read once per account as a page opens: the only place model names come from. */
 function useModelLists(accounts: Json[] | null) {
-  const keys = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready').map((r) => r.ai.key).join();
+  const keys = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready').map((r) => r.ref).join();
   const [lists, setLists] = useState<Record<string, { id: string; name: string }[]>>({});
   useEffect(() => { void Promise.all(keys.split(',').filter(Boolean).map(async (k) => [k, (await api.models(k).catch(() => null))?.models ?? []] as const)).then((r) => setLists(Object.fromEntries(r))); }, [keys]);
   return lists;
@@ -1898,24 +1898,33 @@ function CrewAi({ state, accounts, refresh }: { state: Json; accounts: Json[] | 
 /** One signed-in account (mock model-a): which of its plan's models the whole crew uses, picked by the person and
  *  never switched behind their back; a limit waits for them here. */
 function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
-  const ai = A.AIS.find((a) => a.key === id), [cat, setCat] = useState<Json>(null), [their, setTheir] = useState<Record<string, string>>({});
-  const others = A.aiList(accounts).mine.filter((r) => r.ai !== ai && r.g.state === 'ready'), keys = others.map((r) => r.ai.key).join();
+  const row = accounts?.find((x) => x.account === id), ai = A.AIS.find((a) => a.key === (row?.provider ?? id)), [cat, setCat] = useState<Json>(null), [their, setTheir] = useState<Record<string, string>>({});
+  const name = ai ? A.refName({ ...(row ?? {}), name: ai.name }) : id;
+  const others = A.aiList(accounts).mine.filter((r) => r.ref !== id && r.g.state === 'ready'), keys = others.map((r) => r.ref).join();
   const load = () => api.models(id).then(setCat).catch(() => setCat({ models: [], picked: null }));
   useEffect(() => { setCat(null); void load(); }, [id]);
   // Each other account's own pick, by name: one catalog read each, as the page opens.
-  useEffect(() => { void Promise.all(others.map(async ({ ai: o }) => { const c = await api.models(o.key).catch(() => null); return [o.key, c?.models.find((m: Json) => m.id === c.picked)?.name] as const; }))
+  useEffect(() => { void Promise.all(others.map(async ({ ref: o }) => { const c = await api.models(o).catch(() => null); return [o, c?.models.find((m: Json) => m.id === c.picked)?.name] as const; }))
     .then((rows) => setTheir(Object.fromEntries(rows.filter(([, n]) => n) as [string, string][]))); }, [keys]);
   if (!ai) return null;
   const g = A.account(accounts, id), plan = ai.billing === 'api' ? 'account' : 'plan';
   const [pasting, setPasting] = useState(false), keyed = 'keyEntry' in ai && ai.keyEntry === true;
+  const [adding, setAdding] = useState(''), second = A.refOf(ai.key, adding), [more, setMore] = useState<{ key: string; name: string; tab: Window | null } | null>(null);
   const pick = (m: Json) => attempt(async () => { await api.pickModel(id, m.id); await load(); refresh(); }, `Your crew uses ${m.name} from now on`);
   return (
     <div className="page ai-page">
       <a href="#/settings/accounts" className="back">‹ AI accounts</a>
-      <h2>{ai.name}</h2>
+      <h2>{name}</h2>
       <p className="mute small">{g.state === 'signed-out' ? 'Not signed in' : `Signed in · your ${plan}`}{g.resting ? ` · ${g.resting}` : ''}</p>
       {keyed && <button className={`btn ${g.state === 'signed-out' ? 'go' : 'quiet'}`} onClick={() => setPasting(true)}>{g.state === 'signed-out' ? `Paste your ${ai.name} key` : 'Paste a new key'}</button>}
-      {pasting && <SignIn ai={ai} tab={null} onReady={() => { setPasting(false); refresh(); }} onClose={() => setPasting(false)} />}
+      {pasting && <SignIn ai={{ ...ai, key: id }} tab={null} onReady={() => { setPasting(false); refresh(); }} onClose={() => setPasting(false)} />}
+      {/* The same provider can hold a second account: its own sign-in, its own name, its own line in Settings. */}
+      {A.SECOND.includes(ai.key) && (more ? <SignIn ai={{ ...ai, key: more.key, name: more.name }} tab={more.tab} onReady={() => { setMore(null); refresh(); }} onClose={() => setMore(null)} />
+        : <form className="card form add-account" onSubmit={(e) => { e.preventDefault(); if (second) setMore({ key: second, name: `${ai.name} · ${adding.trim().toLowerCase()}`, tab: openTab() }); }}>
+            <label className="field">A second {ai.name} account, signed in on its own and named so you can tell them apart
+              <span className="row"><input className="input" value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="work" aria-label={`Name for your second ${ai.name} account`} autoComplete="off" />
+                <button className="btn" disabled={!second}>Sign in</button></span></label>
+          </form>)}
       <div className="label">Which model your crew uses</div>
       {!cat ? <p className="mute small">Checking your plan…</p> : cat.models.length ? <div role="radiogroup" aria-label="Which model your crew uses">
         {cat.models.map((m: Json) => <button key={m.id} role="radio" aria-checked={cat.picked === m.id} className={`pick ${cat.picked === m.id ? 'on' : ''}`} onClick={() => cat.picked !== m.id && pick(m)}>
@@ -1923,8 +1932,8 @@ function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
       </div> : null}
       {cat && <p className="cap">{cat.models.length ? `The list comes from your ${plan} and updates by itself. ${cat.picked ? 'A pick here moves your whole crew to it; each member can differ below AI accounts.' : 'Until you pick, your crew uses the plan’s default.'}` : `Your crew uses the model saved with this ${plan}.`}</p>}
       {others.length > 0 && <><div className="label">Other accounts</div>
-        <div className="card list">{others.map(({ ai: o }) => <a key={o.key} className="row-item" href={`#/settings/ai/${o.key}`}><AiMark ai={o} />
-          <span className="grow"><b>{o.name}</b><span className="mute small">{their[o.key] ?? 'The plan’s default'}</span></span><Icon name="next" /></a>)}</div></>}
+        <div className="card list">{others.map(({ ai: o, ref, name: their_name }) => <a key={ref} className="row-item" href={`#/settings/ai/${ref}`}><AiMark ai={o} />
+          <span className="grow"><b>{their_name}</b><span className="mute small">{their[ref] ?? 'The plan’s default'}</span></span><Icon name="next" /></a>)}</div></>}
     </div>
   );
 }

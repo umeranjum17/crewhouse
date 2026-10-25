@@ -67,7 +67,10 @@ import { join } from 'node:path';
 // Raised 7394 -> 7415 for per-member accounts (ch-subs-engine): the models.json store, Chief's crew_use and its live-list checks.
 // Owner exception requested in the PR; no trim paired.
 // Raised 7415 -> 7417 for the two scripted chat lines the member-models screens drive (stub-runtime GOLDEN).
-const BUDGET = 7417;
+// Raised 7417 -> 7509 for the second account of one provider (ch-subs-multi-account, +92 net): the kit's own account
+// rows and engine ids in OpenClawRuntime, a labelled ref in models.json, sign-in/sign-out by ref, and the stub's second
+// account. Owner exception requested in the PR; no trim paired (the same shape as ch-subs-engine above).
+const BUDGET = 7509;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

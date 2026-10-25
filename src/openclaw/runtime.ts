@@ -3,20 +3,26 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
+import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type SignInView, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { CALLBACK_PORT } from '../callback-port.ts';
 import { appDir, loadConfig } from '../config.ts';
 import { PARAMETERS } from '../engine.ts';
-import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
+import { accountRef, refParts } from '../runtime.ts';
+import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
 export { ENGINE_VERSION };
 
 const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' };
+/** The engine's provider id back to Crewhouse's account word (the Codex CLI's own login is a ChatGPT account too). */
+const PROVIDER_FOR: Record<string, string> = { ...Object.fromEntries(Object.entries(PROVIDER_OF).map(([k, v]) => [v, k])), 'openai-codex': 'chatgpt' };
+/** Which providers can hold a second account; the words say why not (a plan key is one per provider, and Claude Code's own
+ *  folder is one per computer: kit 0.28.1 binds a second in place but the engine cannot run on that binding yet). */
+const SECOND: Record<string, string> = { chatgpt: '', grok: '', copilot: '', claude: 'Claude Code keeps one sign-in on this computer, so a second Claude account cannot run yet.', openrouter: 'A second OpenRouter key is not supported yet.', minimax: 'A second MiniMax key is not supported yet.', 'opencode-go': 'A second OpenCode Go key is not supported yet.' };
 /** The engine's own sign-in route per account (the pin's wizard choices). */
 const AUTH_CHOICE: Record<string, string> = {
   chatgpt: 'openai', grok: 'xai-oauth', copilot: 'github-copilot', openrouter: 'openrouter-oauth', minimax: 'minimax-global-api', claude: 'anthropic-cli', 'opencode-go': 'opencode-go',
@@ -147,30 +153,63 @@ export class OpenClawRuntime implements AgentRuntime {
   // ---- accounts: the engine owns credentials; the kit drives its wizard and reads its status ----
 
   private async routeOf(account: string) { if (account !== 'chatgpt') return PROVIDER_OF[account]; if (process.env.CREWHOUSE_CODEX_CLI_ONLY === '1') return 'openai-codex'; const signed = await this.kit.providerStatus(ME).catch(() => undefined) ?? []; return signed.includes('openai-codex') && !signed.includes('openai') ? 'openai-codex' : 'openai'; }
-  async signedIn(account: string) { const provider = await this.routeOf(account); return provider ? await this.kit.signedIn(ME, provider) : false; }
+  private acct?: { at: number; rows: AccountRow[] };
+  /** Every account the engine keeps for this person, two of one provider included (id, Crewhouse's provider, its own name). */
+  async accounts(): Promise<AccountRow[]> {
+    if (this.acct && this.acct.at > Date.now() - 10_000) return this.acct.rows;
+    const prefer = await this.routeOf('chatgpt').catch(() => undefined), rows = (await this.kit.accounts(ME)).filter((a) => !a.id.endsWith('.key') && PROVIDER_FOR[a.provider]), seen = new Set<string>();
+    const mapped = rows.sort((a, b) => Number(b.id === prefer || b.id === b.provider) - Number(a.id === prefer || a.id === a.provider)).map((a): AccountRow => {
+      const provider = PROVIDER_FOR[a.provider], first = a.id === prefer || (a.provider !== 'openai-codex' && a.id === a.provider), label = first ? '' : String(a.name || a.label || a.id);
+      return { id: a.id, provider, ...(label ? { label } : {}), ...(a.email ? { email: a.email } : {}), ...(a.plan ? { plan: a.plan } : {}), ...(a.until ? { until: a.until } : {}), state: a.state }; });
+    return (this.acct = { at: Date.now(), rows: mapped.filter((r) => !seen.has(accountRef(r.provider, r.label)) && !!seen.add(accountRef(r.provider, r.label))) }).rows;
+  }
+  /** The engine's own id for the account the person's key names, or undefined when it lists no such account (a key lane, an
+   *  account signed out, an engine not started: a run then names none and the kit answers in its own words). */
+  private async idOf(account: string) {
+    const [provider, label] = refParts(account);
+    return PROVIDER_OF[provider] ? (await this.accounts().catch(() => [])).find((r) => r.provider === provider && (r.label ?? '') === label)?.id : undefined;
+  }
+  async signedIn(account: string) {
+    const [provider, label] = refParts(account), id = label ? await this.idOf(account) : await this.routeOf(provider);
+    if (!id) return false;
+    if (!label) return this.kit.signedIn(ME, id);
+    const row = (await this.accounts()).find((r) => r.id === id);
+    return !!row && (row.state === 'ready' || row.state === 'resting' || row.state === 'unknown'); // an unanswered probe is no sign-out: the engine asks again on the run
+  }
+  /** How a sign-in ended, in the card's plain words. */
+  private view(v: SignInView, on: (step: SignInStep) => void, name: string) {
+    if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
+    else if (v.state === 'done') on({ waiting: false, done: true });
+    else if (v.why === 'busy') on({ waiting: false, error: 'Another sign-in is already in progress. Finish or cancel it, then try again.' });
+    else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
+    else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed', ...(v.cause ? { cliLogin: { signIn: v.cause.signIn } } : {}) });
+  }
 
   signIn(account: string, via: 'browser' | 'code' | 'key', told: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> } {
-    const on = (step: SignInStep) => { if (step.done) { this.listed = undefined; void this.catalog().catch(() => {}); } told(step); }; // read the new catalog while the first run is being set up
+    const on = (step: SignInStep) => { if (step.done) { this.listed = undefined; this.acct = undefined; void this.catalog().catch(() => {}); } told(step); }; // read the new catalog while the first run is being set up
+    const [provider, label] = refParts(account), name = PROVIDERS[provider]?.name ?? provider;
     if (this.signInRecovery()) {
       let cancelled = false;
       void this.kit.start().then(async () => { if (!cancelled) on({ waiting: false, ...(await this.signedIn(account) ? { done: true } : { error: this.signInRecovery() || 'Please try again.' }) }); })
         .catch(() => { if (!cancelled) on({ waiting: false, error: 'Please try again.' }); });
       return { paste() {}, cancel() { cancelled = true; } };
     }
-    const cliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' && account === 'chatgpt', authChoice = cliOnly ? undefined : via === 'code' && account === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[account];
+    const cliOnly = process.env.CREWHOUSE_CODEX_CLI_ONLY === '1' && provider === 'chatgpt', authChoice = cliOnly ? undefined : via === 'code' && provider === 'chatgpt' ? 'openai-device-code' : AUTH_CHOICE[provider];
     if (!authChoice) {
-      queueMicrotask(() => on({ waiting: false, error: cliOnly ? 'Sign in to Codex CLI on this computer, then try again.' : `Sign-in for ${account} is not connected yet` }));
+      queueMicrotask(() => on({ waiting: false, error: cliOnly ? 'Sign in to Codex CLI on this computer, then try again.' : `Sign-in for ${name} is not connected yet` }));
       return { paste() {}, cancel() {} };
     }
+    if (label) {
+      // One more account of the same provider: the kit signs it in on its own agent, so neither account's credentials are touched.
+      const why = SECOND[provider] ?? `A second ${name} account isn't supported yet.`;
+      if (why || via === 'key') { queueMicrotask(() => on({ waiting: false, error: why || `A second ${name} account needs a sign-in, not a key.` })); return { paste() {}, cancel() {} }; }
+      let handle: { paste(t: string): void; cancel(): void } | undefined, cancelled = false;
+      const added = this.kit.addAccount(ME, { authChoice, name: label, via }, (v) => { if (v.state === 'waiting') this.view(v, on, name); })
+        .then((h) => { handle = h; if (cancelled) h.cancel(); void h.done.then((r) => this.view(r.view, on, name)).catch(() => on({ waiting: false, error: 'Sign-in failed' })); return h; });
+      return { paste: (text: string) => void added.then((h) => h.paste(text)), cancel: () => { cancelled = true; void added.then((h) => h.cancel()).catch(() => {}); } };
+    }
     if (via === 'key') return this.keyIn(account, authChoice, on);
-    const name = PROVIDERS[account]?.name ?? account;
-    return this.kit.signIn(ME, { authChoice, via }, (v) => {
-      if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
-      else if (v.state === 'done') on({ waiting: false, done: true });
-      else if (v.why === 'busy') on({ waiting: false, error: 'Another sign-in is already in progress. Finish or cancel it, then try again.' });
-      else if (v.why === 'expired') on({ waiting: false, error: `The sign-in took too long. Tap Sign in with ${name} to start again.` });
-      else if (v.why !== 'declined') on({ waiting: false, error: v.error ?? 'Sign-in failed', ...(v.cause ? { cliLogin: { signIn: v.cause.signIn } } : {}) });
-    });
+    return this.kit.signIn(ME, { authChoice, via }, (v) => this.view(v, on, name));
   }
 
   /** A plan-key account (OpenCode Go): the wizard has no page for it, so the pasted key goes to the kit's own choice;
@@ -186,13 +225,15 @@ export class OpenClawRuntime implements AgentRuntime {
     };
   }
 
-  async signOut(account: string) { this.listed = undefined; const provider = await this.routeOf(account); if (!provider) throw new Error('no such AI account'); await this.kit.signOut(ME, provider); }
+  async signOut(account: string) { this.listed = undefined; this.acct = undefined; const [provider, label] = refParts(account), id = label ? await this.idOf(account) : await this.routeOf(provider); if (!id) throw new Error('no such AI account'); if (label) await this.kit.removeAccount(ME, id); else await this.kit.signOut(ME, id); }
 
   private listed?: Promise<{ models?: any[] }>; // the catalog, read once for the picker, a MiniMax key's default and each run's thinking check (slow under load); a sign-in or sign-out reads it again
   private catalog() { return this.listed ??= this.kit.ensureMember(ME).then(({ agentId }) => this.kit.call('models.list', { agentId, view: 'all' }, { timeoutMs: 20_000 })).catch((e) => { this.listed = undefined; throw e; }); } // 'all' is the kit's account read (default lists nothing)
   /** A plan key (OpenCode Go) offers none: the kit does not yet honour a run's model on a key run, so it runs its saved one. */
   async models(account: string) {
-    const provider = await this.routeOf(account), signed = ['openai-codex', 'minimax'].includes(provider) && await this.kit.signedIn(ME, provider), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
+    const [key, label] = refParts(account), second = label ? await this.idOf(account) : undefined;
+    if (label) return !second ? [] : (await this.kit.models(ME, second)).map((m) => ({ id: m.id.slice(m.id.indexOf('/') + 1), name: m.name })); // the second account's own list, read with its own sign-in
+    const provider = await this.routeOf(key), signed = ['openai-codex', 'minimax'].includes(provider ?? '') && await this.kit.signedIn(ME, provider!), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
     return (live.length ? live.map((m) => ({ ...m, provider, available: true })) : r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name }));
   }
   /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
@@ -220,14 +261,16 @@ export class OpenClawRuntime implements AgentRuntime {
   async setLearning(on: boolean) { await this.kit.patchConfig({ skills: { workshop: { autonomous: { mode: on ? 'auto' : 'off' } } } }); }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const provider = await this.routeOf(spec.account), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : provider === 'minimax' ? (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && /flash/i.test(m.id))?.id.replace(`${provider}/`, '') : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
-    const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider); this.runs.set(spec.key, { ...spec, keyLane: keyLane && !spec.key.startsWith('agent:byokit-key-') }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
+    // The account the person gave this member, by the engine's own id, so two of one provider never mix; a provider they hold
+    // one account of stays unnamed, the engine's default pick being the widest (a vendor's model list can lag a model it runs).
+    const [word, label] = refParts(spec.account), many = (await this.accounts().catch(() => [])).find((r) => r.provider === word && r.label) !== undefined, aid = label || many ? await this.idOf(spec.account) : undefined, provider = aid ? aid.split('.')[0] : await this.routeOf(word), model = spec.model ?? (provider === 'claude-cli' ? 'claude-opus-5' : provider === 'minimax' ? (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && /flash/i.test(m.id))?.id.replace(`${provider}/`, '') : undefined); // the run's own account is the one called and billed; bare Claude runs the CLI's default, never the engine's (ChatGPT's); a plan-key account runs the model the run names, else the kit's saved default
+    const keyLane = !!provider && !(await this.kit.providers(ME)).includes(provider) && await this.kit.signedIn(ME, provider), engine = keyLane ? `${provider}.key` : aid; this.runs.set(spec.key, { ...spec, keyLane: keyLane && !spec.key.startsWith('agent:byokit-key-') }); // an account signed in only by its saved key runs on the key lane; a member sign-in wins
     try {
       const lane = keyLane ? `byokit-key-${ME}` : (await this.kit.ensureMember(ME)).agentId;
       if (!this.personas.has(lane)) { for (const [name, content] of [['SOUL.md', 'Follow the persona and job supplied for this session.\n'], ['IDENTITY.md', 'Use the identity supplied for this session.\n']]) await this.kit.call('agents.files.set', { agentId: lane, name, content }); this.personas.add(lane); }
       const helper = /^agent:(?:m1|byokit-key-m1):h-([^:]+):/.exec(spec.key)?.[1];
-      if (helper) await this.kit.ensureHelper(ME, helper, { account: `${provider}${keyLane ? '.key' : ''}`, persona: spec.system });
-      const request: KitRunSpec = { sessionKey: helper ? spec.key.replace(/^agent:byokit-key-m1:/, 'agent:m1:') : spec.key, member: ME, message: spec.message, ...(helper ? { helper, account: `${provider}${keyLane ? '.key' : ''}` } : { system: spec.system }),
+      if (helper) await this.kit.ensureHelper(ME, helper, { account: engine ?? provider, persona: spec.system });
+      const request: KitRunSpec = { sessionKey: helper ? spec.key.replace(/^agent:byokit-key-m1:/, 'agent:m1:') : spec.key, member: ME, message: spec.message, ...(helper ? { helper, account: engine ?? provider } : { system: spec.system, ...(aid ? { account: aid } : {}) }),
         ...(keyLane && !helper ? { auth: 'apiKey' as const } : {}), ...(model && provider ? { model: `${provider}/${model}` } : {}), ...(spec.images?.length ? { images: spec.images } : {}), ...(spec.thinking && await this.thinks(provider, model, spec.thinking) ? { thinking: spec.thinking } : {}) };
       return spec.team ? await this.nativeRun(spec, request, lane, on) : await this.kit.run(request,
         (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
@@ -236,7 +279,7 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** Native dispatch owns execution; this adapter only prepares the target's host context and projects its events. */
   private async nativeRun(spec: RunSpec, request: KitRunSpec, lane: string, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const targets = new Map<string, { bot: string; run?: RunRef }>(), helpers: Record<string, string[]> = {}, texts = new Map<string, string>(), admitted = new Set<string>(), accounts = await this.kit.accounts(ME), provider = await this.routeOf(spec.account), account = accounts.find((a) => a.id === `${provider}${lane.startsWith('byokit-key-') ? '.key' : ''}`)?.id;
+    const targets = new Map<string, { bot: string; run?: RunRef }>(), helpers: Record<string, string[]> = {}, texts = new Map<string, string>(), admitted = new Set<string>(), account = typeof request.account === 'string' && request.account !== 'default' && request.account !== 'auto' ? request.account : undefined;
     if (!account) return this.kit.run(request, (e) => { if (e.type !== 'account') on(e.type === 'tool' ? { ...e, name: crewName(e.name) } : e); });
     for (const member of spec.team!) {
       if (member.system.length > 8192) return { ok: false, kind: 'handoff', message: 'A helper’s instructions and notes are too long. Shorten them before handing it this job.' };

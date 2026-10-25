@@ -10,8 +10,16 @@ export interface ToolHost {
   event?(run: RunRef, event: RunEvent): void;
   end?(run: RunRef, end: RunEnd): void;
 }
+/** One of the person's AI accounts as the runtime keeps it: the engine's own id, the account's provider and the name it goes by.
+ *  `state` is the engine's answer; 'unknown' means the probe gave no answer (ask again), never a sign-out. */
+export type AccountRow = { id: string; provider: string; label?: string; email?: string; plan?: string; state: 'ready' | 'signing' | 'resting' | 'signed_out' | 'needs_again' | 'not_included' | 'unknown'; until?: number };
+/** The account key the person reads and edits: the provider alone ("chatgpt", the first account of it), or the provider and
+ *  the account's own name ("claude.work"), so two accounts of one provider are two keys. */
+export const accountRef = (provider: string, label?: string) => `${provider}${label ? `.${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}` : ''}`;
+export const refParts = (ref: string) => { const i = String(ref).indexOf('.'); return i < 0 ? [String(ref), ''] as const : [String(ref).slice(0, i), String(ref).slice(i + 1)] as const; };
 export interface RunSpec extends RunRef {
-  cwd: string; system: string; message: string; account: string; model?: string;
+  cwd: string; system: string; message: string; account: string; model?: string; // account: an accountRef, resolved by the runtime to the engine's own account
+
   images?: { data: string; mimeType: string }[];
   thinking?: 'low'; builtins: string[];
   team?: { bot: string; system: string; tools: string[] }[];
@@ -32,6 +40,8 @@ export interface AgentRuntime {
   stop(): Promise<void>;
   signInRecovery?(): string;
   engine?(): { phase: string; words: string }; onEngine?: () => void;
+  /** Every account the person has (two of one provider included), by engine id; the shim keys them by accountRef. */
+  accounts(): Promise<AccountRow[]>;
   signedIn(account: string): Promise<boolean>;
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; pick?(id: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;
