@@ -736,8 +736,8 @@ export function resting(state: Json) {
   const r = Object.entries(state.resting ?? {}).filter(([, t]) => t) as [string, number][];
   if (!r.length) return '';
   const when = clock(Math.min(...r.map(([, t]) => t)));
-  const ai = AIS.find((a) => a.key === r[0][0]);
-  return r.length === 1 && ai ? `Your ${ai.name} is resting until ${when}` : `Your AI accounts are resting until ${when}`;
+  const [provider, label] = r[0][0].split('.'), ai = AIS.find((a) => a.key === provider);
+  return r.length === 1 && ai ? `Your ${ai.name}${label ? ` · ${label}` : ''} is resting until ${when}` : `Your AI accounts are resting until ${when}`;
 }
 
 /**
@@ -2022,7 +2022,8 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
  *  busy, expired, failed); a plan without helpers. */
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
-  const none = { cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '' };
+  const [provider, ...rest] = key.split('.');
+  const none = { cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '', provider, label: rest.join('.'), plan: '', email: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -2041,7 +2042,8 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
     cliLogin: s?.state === 'failed' && s.cliLogin ? { signIn: !!s.cliLogin.signIn } : null,
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
-    work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '' };
+    work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '',
+    provider: String(a.provider ?? a.name ?? none.provider), label: a.label ? String(a.label) : none.label, plan: a.plan ? String(a.plan) : '', email: a.email ? String(a.email) : '' };
 }
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
@@ -2055,33 +2057,50 @@ export const cliLoginWords = (c: { signIn: boolean }, name: string) => c.signIn
  *  Scout" writes): the account and its model by the name the account's live list gives it, "Not chosen" when nobody
  *  picked, the accounts it can move to (signed in only), and one calm line while it waits on a limit. */
 export function memberAi(state: Json, accounts: Json[] | null, id: string, lists: Record<string, { id: string; name: string }[]> = {}) {
-  const b = state.bots?.find((x: Json) => x.id === id), [key, model = ''] = String(b?.ai ?? '').split(/:(.*)/s), ai = AIS.find((a) => a.key === key);
-  const out = ai && account(accounts, ai.key).state === 'signed-out', rest = ai ? state.resting?.[ai.key] : 0;
-  return { key: ai?.key ?? null, model: model || null, choices: AIS.filter((a) => account(accounts, a.key).state === 'ready'),
-    says: ai ? [ai.name, lists[ai.key]?.find((m) => m.id === model)?.name, out && 'not signed in'].filter(Boolean).join(' · ') : 'Not chosen',
-    waits: rest && b?.pausedUntil ? `Waiting for your ${ai!.name} limit to reset at ${clock(rest)}. It won't move to another account by itself.` : '' };
+  const b = state.bots?.find((x: Json) => x.id === id), [key, model = ''] = String(b?.ai ?? '').split(/:(.*)/s), row = accounts?.find((x) => x.account === key);
+  const name = row ? refName(row) : AIS.find((a) => a.key === key)?.name, out = row ? !row.signedIn : !!key && !(accounts ?? []).some((x) => x.account === key && x.signedIn);
+  const rest = key ? state.resting?.[key] : 0;
+  return { key: key || null, model: model || null, ref: key || null, choices: (accounts ?? []).filter((x) => x.signedIn).map(pickRow),
+    says: name ? [name, lists[key]?.find((m) => m.id === model)?.name, out && 'not signed in'].filter(Boolean).join(' · ') : 'Not chosen',
+    waits: rest && b?.pausedUntil && name ? `Waiting for your ${name} limit to reset at ${clock(rest)}. It won't move to another account by itself.` : '' };
 }
 
+/** One account as the screens say it: "ChatGPT", or "ChatGPT · work" for the second of a provider. */
+export const refName = (x: Json) => `${String(x.name ?? x.account)}${x.label ? ` · ${x.label}` : ''}`;
+/** A pickable account: its provider's mark and billing, the account's own name, and the ref the file stores. */
+export function pickRow(x: Json) {
+  const ai = AIS.find((a) => a.key === (x.provider ?? x.account)) ?? AIS[0];
+  return { ...ai, key: String(x.account), provider: String(x.provider ?? x.account), ref: String(x.account), name: refName({ ...x, name: ai.name }) };
+}
+/** The ref a second account of one provider gets from the name the person gave it: "chatgpt.work". Empty when the name
+ *  has no letters or numbers in it (and the button stays off), so a ref is always plain to read and safe in a URL. */
+export const refOf = (provider: string, label: string) => {
+  const slug = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+  return !slug || slug === provider ? '' : `${provider}.${slug}`;
+};
+/** Which providers can hold a second account, by the word the engine gives the reason when they cannot. */
+export const SECOND = ['chatgpt', 'grok', 'copilot'];
 /** Settings' account list: the accounts signed in first (or the one that signed out, or ChatGPT the front door,
  *  while none is), every other route under "More ways to sign in". The sign-in card's one recommended account is the
  *  first of these: the account this computer was signed in to, else ChatGPT. Each row's one line says where it stands in
  *  plain words; a route nobody has signed in to here is "not set up", never connected. */
 export function aiList(accounts: Json[] | null) {
-  const rows = AIS.map((ai) => {
-    const g = account(accounts, ai.key);
+  if (!accounts) return { mine: AIS.map((ai) => ({ ai, ref: ai.key, name: ai.name, label: '', g: account(null, ai.key), says: 'Checking…' })), more: [] };
+  const rows = accounts.map((x) => {
+    const key = String(x.account), ai = AIS.find((a) => a.key === (x.provider ?? key)) ?? AIS[0], g = account(accounts, key), label = x.label ? String(x.label) : '';
     const says = g.state === 'ready'
-      ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.` : `Signed in${g.work ? ` as ${g.work}, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
+      ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.`
+        : `Signed in${x.email ? ` as ${x.email}` : ''}${x.plan ? ` on your ${x.plan} plan` : ''}${g.work ? `, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
       : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
       : 'keyEntry' in ai && ai.keyEntry && g.signedOut ? 'Signed out. The key stays saved on this computer: it works again after a restart, or paste a new key if it stopped working.'
-      : ai.key === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
+      : (x.provider ?? key) === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
       : ai.billing === 'api' ? `Not set up. Charged per use on your ${ai.name} account.`
       : `Not set up. Uses your own ${ai.name} plan.`;
-    return { ai, g, says };
+    return { ai, ref: key, name: refName({ ...x, name: ai.name }), label, g, says };
   });
-  const mine = rows.filter((r) => r.g.state === 'ready' || r.g.notIncluded);
-  const out = rows.filter((r) => r.g.signedOut);
-  const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt');
+  const mine = rows.filter((r) => r.g.state === 'ready' || r.g.notIncluded), out = rows.filter((r) => r.g.signedOut);
+  const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt' && !r.label);
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };
 }
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */

@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import type { Config } from './config.ts';
 import { registry, toolStatus } from './tools.ts';
 import { PROVIDERS } from './accounts.ts';
+import { accountRef, refParts } from './runtime.ts';
 
 export interface Template {
   id: string;
@@ -45,21 +46,23 @@ export function setGrants(cfg: Config, id: string, tools: string[]) {
   patchConfig(cfg, id, { tools: [...new Set(['crew', ...tools])] });
 }
 
-/** An AI account a bot can think with, and optionally which of its models (the person's pick in Settings › AI accounts). */
+/** An AI account a bot can think with, and optionally which of its models (the person's pick in Settings › AI accounts).
+ *  `provider` is the account key: the provider alone for its first account, or "claude.work" for a second one (src/runtime.ts). */
 export interface Brain { provider: string; model?: string }
 
 export function parseBrain(s: string): Brain {
-  const [provider, ...rest] = String(s).trim().split(':'), model = rest.join(':') || undefined; // an OpenRouter id may carry a tag after a colon (`minimax/minimax-m3.1-flash:free`)
-  if (!PROVIDERS[provider] || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]:]{0,63}$/.test(model))) {
+  const [account, ...rest] = String(s).trim().split(':'), [provider, raw] = refParts(account), label = raw.toLowerCase(), model = rest.join(':') || undefined; // an OpenRouter id may carry a tag after a colon (`minimax/minimax-m3.1-flash:free`)
+  if (!PROVIDERS[provider] || (label && !/^[a-z0-9][a-z0-9-]{0,23}$/.test(label)) || (model !== undefined && !/^[A-Za-z0-9][\w.\-\/\[\]:]{0,63}$/.test(model))) {
     throw Object.assign(new Error(`not an AI account: "${s}" (try ${Object.keys(PROVIDERS).slice(0, 3).join(', ')})`), { status: 400 });
   }
-  return model ? { provider, model } : { provider };
+  return model ? { provider: accountRef(provider, label), model } : { provider: accountRef(provider, label) };
 }
 export const brainKey = (b: Brain) => b.model ? `${b.provider}:${b.model}` : b.provider;
-/** "ChatGPT", "Grok": the account's name only, never a model id. */
-export const brainName = (b: Brain) => PROVIDERS[b.provider]?.name ?? b.provider;
+/** "ChatGPT", "Claude · work": the account's name (and its own name when it has one), never a model id. */
+export const brainName = (b: Brain) => { const [provider, label] = refParts(b.provider); return `${PROVIDERS[provider]?.name ?? provider}${label ? ` · ${label}` : ''}`; };
 
-/** Each member's accounts, one readable file the person can edit or tell Chief to change: `<crew folder>/models.json`, `{ "scribe": ["chatgpt:gpt-5.1"] }`. */
+/** Each member's accounts, one readable file the person can edit or tell Chief to change: `<crew folder>/models.json`, `{ "scribe": ["chatgpt:gpt-5.1"] }`.
+ *  A second account of one provider is named by its own word: `{ "scribe": ["claude.work:claude-opus-5-5"] }`. */
 const modelsFile = (cfg: Config) => join(cfg.crewDir, 'models.json');
 export const pickedModels = (cfg: Config): Record<string, string[]> => { try { return JSON.parse(readFileSync(modelsFile(cfg), 'utf8')); } catch { return {}; } };
 

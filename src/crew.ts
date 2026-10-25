@@ -23,6 +23,7 @@ import { buildWorkbook, readWorkbook } from './workbooks.ts';
 import { buildDocument, readDocument } from './documents.ts';
 import { STYLES, buildDeck, readDeck } from './slides.ts';
 import type { Link } from './link.ts';
+import { refParts } from './runtime.ts';
 import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from './runtime.ts';
 import { pickRuntime } from './engines.ts';
 import { fileTool } from './files.ts';
@@ -416,15 +417,19 @@ export class Crew {
     this.wake();
   }
 
-  /** Chief's `crew_use`: one member thinks with an account the person is signed in to, on the model they named from its live list. */
+  /** Chief's `crew_use`: one member thinks with an account the person is signed in to, on the model they named from its live list.
+   *  The account is said in plain words: its provider ("Claude"), its own name ("Claude work"), or its place ("my second Claude"). */
   private async use(who: string, said: string, named = '') {
-    const b = this.bot(who.toLowerCase()), key = Object.keys(PROVIDERS).find((k) => [k, PROVIDERS[k].name.toLowerCase()].includes(said.toLowerCase().trim())), name = PROVIDERS[key ?? '']?.name;
+    const b = this.bot(who.toLowerCase()), word = said.toLowerCase().replace(/^my\s+/, '').trim();
     if (!b) throw fail(`no one called ${who}; see crew_roster`, 404);
-    if (!key) throw fail(`"${said}" is not one of the AI accounts: ${Object.values(PROVIDERS).map((p) => p.name).join(', ')}`);
-    if (!await this.accounts.signedIn(key)) throw fail(`You are not signed in to ${name} yet. Sign in under Settings › AI accounts and ask me again.`);
+    const rows = await this.accounts.list().catch(() => []), ord = /^(first|1st|second|2nd|third|3rd)\s+(.+)$/.exec(word), nth = ord ? (['first', '1st', 'second', '2nd', 'third', '3rd'].indexOf(ord[1]) >> 1) + 1 : 0, said2 = ord ? ord[2] : word;
+    const hits = rows.filter((r) => [r.account, r.provider, r.name, r.label, ...(r.label ? [`${r.name} ${r.label}`] : [])].filter(Boolean).some((x) => String(x).toLowerCase() === said2)), row = hits[nth ? nth - 1 : 0] ?? hits[0];
+    if (!row) throw fail(`"${said}" is not one of the AI accounts: ${[...new Set(rows.map((r) => (r.label ? `${r.name} · ${r.label}` : r.name)))].join(', ')}`);
+    const key = row.account, name = row.label ? `${row.name} · ${row.label}` : row.name;
+    if (!row.signedIn) throw fail(`You are not signed in to ${name} yet. Sign in under Settings › AI accounts and ask me again.`);
     const list = await this.runtime.models(key).catch(() => []), t = named.toLowerCase().split(/\s+/).filter(Boolean), kept = disk.brains(this.cfg, CHIEF).find((x) => x.provider === key)?.model;
-    const hits = list.filter((m) => t.length ? t.every((x) => `${m.id} ${m.name}`.toLowerCase().includes(x)) : m.id === kept), pick = hits.length === 1 ? hits[0] : hits.find((m) => [m.id, m.name].some((x) => x.toLowerCase() === t.join(' ')));
-    if (list.length && !pick) throw fail(`${hits.length || !t.length ? 'Which' : `${name} has no model like "${named}". Which`} ${name} model: ${(hits.length ? hits : list).map((m) => m.name).join(', ')}?`);
+    const models = list.filter((m) => t.length ? t.every((x) => `${m.id} ${m.name}`.toLowerCase().includes(x)) : m.id === kept), pick = models.length === 1 ? models[0] : models.find((m) => [m.id, m.name].some((x) => x.toLowerCase() === t.join(' ')));
+    if (list.length && !pick) throw fail(`${models.length || !t.length ? 'Which' : `${name} has no model like "${named}". Which`} ${name} model: ${(models.length ? models : list).map((m) => m.name).join(', ')}?`);
     disk.setBrains(this.cfg, b.id, [disk.brainKey({ provider: key, model: pick?.id }), ...disk.brains(this.cfg, b.id).filter((x) => x.provider !== key).map(disk.brainKey)]);
     this.db.event('bot.models', null, { by: 'chief', bot: b.id });
     this.db.run("UPDATE tasks SET wake_at = NULL WHERE state = 'paused' AND bot = ?", b.id);
@@ -510,7 +515,7 @@ export class Crew {
       answered: this.db.all("SELECT * FROM asks WHERE state = 'answered' AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 40").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's resting AI accounts, only while a job waits on them (pause(); docs/ui-contract.md). */
-      resting: this.db.get("SELECT 1 FROM tasks WHERE state = 'paused' AND result LIKE 'Your % reached its limit and rests until%'") ? Object.fromEntries(Object.keys(PROVIDERS).map((k) => [k, this.accounts.restingUntil(k)]).filter(([, t]) => t)) : {},
+      resting: this.db.get("SELECT 1 FROM tasks WHERE state = 'paused' AND result LIKE 'Your % reached its limit and rests until%'") ? Object.fromEntries([...this.accounts.rests].filter(([, t]) => t)) : {},
       /** The apps the person has connected, by the app screen's own names. */
       connections: this.connections.on(),
       /** Whether Google is switched on (Calendar, Gmail and Drive need it), and its four steps as
@@ -1493,13 +1498,13 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private pause(task: Row, choices: disk.Brain[], since: number) {
     if (this.signedAt >= since) return; // the read began before the latest sign-in: the task stays queued and the next dispatch reads again
     // The copy names the blocked plan or an account the person has, never an unchosen default; else it names no provider.
-    const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? PROVIDERS[key]?.name ?? key : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
+    const has = (f: (b: disk.Brain) => boolean) => choices.find(f)?.provider, blocked = has((b) => this.accounts.notIncluded(b.provider)), key = blocked ?? has((b) => this.accounts.expired.has(b.provider)), name = key ? disk.brainName({ provider: key }) : null, withName = name ? ` with ${name}` : '', who = this.bot(task.bot)!.display;
     // The account the person has first: a resting one wakes up; one never signed in doesn't.
     const lead = choices.find((b) => !this.accounts.unready(b.provider) && !this.accounts.notIncluded(b.provider)), rest = lead ? this.accounts.restingUntil(lead.provider) : 0, handoff = this.handoffs.get(task.id) ?? ''; this.handoffs.delete(task.id);
     let wake: number | null = null, state: string, words: string, voice: string;
     if (!rest) {
       state = blocked ? `Waiting for a ${name} plan with helpers.` : `Waiting for you to sign in${withName}.`;
-      words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${key === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
+      words = blocked ? `Your ${name} plan doesn't include helpers yet. Everything else in ${name} is fine.${refParts(key!)[0] === 'chatgpt' ? ' ChatGPT Plus includes it.' : ` A bigger ${name} plan includes it.`}`
         : /sign in again/.test(handoff) ? `${name ? `${name} signed you out` : 'You were signed out'}. That happens after a password change. Sign in again and the crew picks up where it left off.`
         : task.bot === CHIEF && !this.db.get("SELECT 1 FROM tasks WHERE id != ? AND state != 'paused'", task.id) ? `The crew uses your ${name ?? 'AI'} account. Sign in when you're ready and I'll start.`
         : `${task.bot === CHIEF ? 'I' : who} will start the moment you sign in${withName}.`;
@@ -2100,7 +2105,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         (p) => this.offerRoutine({ bot: p.bot, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch, once: p.once })),
       tool('crew_routines', 'The routines and when each runs next.', () => this.routines().map((x) => ({ id: x.id, bot: x.bot, name: x.name, when: x.words, on: x.on ?? '', state: x.state, next: x.next_at ? new Date(x.next_at).toString() : '' }))),
       tool('crew_status', 'Open tasks, and what this person’s crew finished recently (titles and delivered files).', () => ({ open: this.db.all("SELECT id, bot, title, state FROM tasks WHERE state IN ('queued','working','needs_you','paused') ORDER BY id"), finished: this.finishedList() })),
-      tool('crew_use', 'Set a member\'s AI account and model when asked: `bot` id from crew_roster, `account` name, `model` as named.',
+      tool('crew_use', 'Set a member\'s AI account and model when asked: `bot` id from crew_roster, `account` in the person\'s words ("ChatGPT", "Claude work", or "my second Claude"), `model` as named.',
         (p) => this.use(String(p.bot ?? ''), String(p.account ?? ''), p.model ? String(p.model) : undefined)),
       tool('crew_suggest', 'Suggest a change to how a helper comes across (its personality), when the person asks for one. ' +
         '`text`: the whole new personality, a few short plain lines in the second person ("You are Reel. …"). The person sees it and says yes or no.',

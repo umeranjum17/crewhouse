@@ -2,6 +2,7 @@
 // cooldowns; this file says which accounts Crewhouse offers, keeps the person-facing sign-in view, and tracks the
 // states the product words are built from (signed out, plan without helpers, resting until).
 import { REST_MS, classify, offered, route } from '@byokit/accounts';
+import { accountRef, refParts } from './runtime.ts';
 import type { AgentRuntime, SignInStep } from './runtime.ts';
 
 export type Provider = { key: string; name: string; billing: 'subscription' | 'api'; cli?: string };
@@ -22,10 +23,15 @@ export const PROVIDERS: Record<string, Provider> = Object.fromEntries([
 ]);
 
 export function provider(key: string) {
-  const p = PROVIDERS[key];
+  const p = PROVIDERS[refParts(key)[0]];
   if (!p) throw Object.assign(new Error('no such AI account'), { status: 404 });
   return p;
 }
+
+/** One account, in the app's words: its ref (what models.json and the screens key on), the provider it is an account of,
+ *  its own name, plan and email, and the sign-in states the words come from. */
+export type AccountView = { account: string; provider: string; name: string; label?: string; email?: string; plan?: string;
+  signedIn: boolean; restingUntil: number; signIn: ReturnType<Accounts['view']>; notIncluded: boolean; signedOut: boolean };
 
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
@@ -45,7 +51,7 @@ export class Accounts {
   private byEngine = new Set<string>(); private doubts = new Map<string, number>();
   recheckMs = 11_000;
   readonly excluded = new Set<string>();
-  private rests = new Map<string, number>();
+  readonly rests = new Map<string, number>();
   private views = new Map<string, View>();
   private running = new Map<string, { handle: { paste(text: string): void; pick?(id: string): Promise<unknown> | void }; cancel(): Promise<unknown> | void; finished: Promise<void> }>();
   /** Set by Crew: the person signed in, so waiting work starts now. */
@@ -100,7 +106,7 @@ export class Accounts {
 
   /** Start the engine's sign-in; the wizard's steps become the card's words (`via: 'key'` waits for a pasted plan key instead). */
   async login(account: string, via: 'browser' | 'code' | 'key' = 'browser', fresh = false) {
-    if (!PROVIDERS[account]) throw Object.assign(new Error('no such AI account'), { status: 404 });
+    provider(account);
     if (this.running.has(account)) return this.view(account);
     const view: View = { state: 'waiting', via };
     this.views.set(account, view);
@@ -137,5 +143,19 @@ export class Accounts {
   /** The sign-in is over (either way): the card's last word is in. */
   async finished(account: string) { await this.running.get(account)?.finished.catch(() => {}); }
   view(account: string): View | null { const error = this.runtime.signInRecovery?.(); return error ? { state: 'failed', via: 'browser', error, why: 'locked' } : this.views.get(account) ?? null; }
+  /** Settings › AI accounts: every account the person has, two of one provider included, each on its own line; a provider
+   *  with no account yet is listed once, so there is always a way to sign in to it. */
+  async list(): Promise<AccountView[]> {
+    const rows = await this.runtime.accounts().catch(() => []), have = new Set(rows.map((r) => r.provider));
+    const view = async (provider: string, label?: string, row?: { email?: string; plan?: string }) => {
+      const account = accountRef(provider, label);
+      return { account, provider, name: PROVIDERS[provider]?.name ?? provider, ...(label ? { label } : {}), ...(row?.email ? { email: row.email } : {}), ...(row?.plan ? { plan: row.plan } : {}),
+        signedIn: await this.signedIn(account), restingUntil: this.restingUntil(account), signIn: this.view(account),
+        notIncluded: this.notIncluded(account), signedOut: this.expired.has(account) };
+    };
+    const order = Object.keys(PROVIDERS), all = [...await Promise.all(rows.map((r) => view(r.provider, r.label, r))),
+      ...await Promise.all(order.filter((k) => !have.has(k)).map((k) => view(k)))];
+    return all.sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider) || a.account.localeCompare(b.account)); // a provider's accounts stay together, in the catalogue's order
+  }
   stop() { for (const [, handle] of this.running) handle.cancel(); this.running.clear(); }
 }

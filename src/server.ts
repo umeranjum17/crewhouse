@@ -9,7 +9,7 @@ import type { Store } from './db.ts';
 import { quietNow, type Crew } from './crew.ts';
 import * as disk from './bots.ts';
 import { herdrStatus, toolStatus } from './tools.ts';
-import { PROVIDERS, provider } from './accounts.ts';
+import { provider } from './accounts.ts';
 import { coversOf, toolWords } from './policy.ts';
 import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routines.ts';
 import { Link } from './link.ts';
@@ -219,22 +219,19 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updatePerson(body);
     if (m === 'GET' && p === '/api/accounts') {
-      // The person's AI accounts: signed in or not (the engine's own local check), resting until when, any sign-in in progress, the picked model.
-      return Promise.all(Object.entries(PROVIDERS).map(async ([key, pr]) => {
-        const signedIn = await crew.accounts.signedIn(key);
-        return { account: key, name: pr.name, signedIn, restingUntil: crew.accounts.restingUntil(key), signIn: crew.accounts.view(key),
-          notIncluded: crew.accounts.notIncluded(key), signedOut: crew.accounts.expired.has(key) };
-      }));
+      // The person's AI accounts: one line per account (two of one provider included), signed in or not, resting until
+      // when, any sign-in in progress, and the account's own name, plan and email.
+      return crew.accounts.list();
     }
-    // One model per account (Settings › AI accounts): the live catalog, and the person's pick, checked against it.
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/model$/)) && (m === 'GET' || m === 'PUT')) {
-      const key = provider(r[2]).key, models = await crew.runtime.models(key);
+    // One account (Settings › AI accounts): the live catalog, and the person's pick, checked against it.
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z0-9.-]+)\/model$/)) && (m === 'GET' || m === 'PUT')) {
+      const key = r[2], models = await crew.runtime.models(key);
       if (m === 'PUT' && (models.length || body.model != null) && !models.some((x) => x.id === body.model)) throw Object.assign(new Error('that model is not on this account'), { status: 400 });
       if (m === 'PUT') crew.pickModel(key, body.model, typeof body.bot === 'string' ? [crew.botPage(body.bot).bot.id] : undefined); // one member (404 if none), or the crew; no list: the account alone
       return { models, picked: disk.brains(cfg, 'chief').find((b) => b.provider === key)?.model ?? null };
     }
     // "Sign in with …": start (the page, or `via: 'code'` / `'key'`), paste the address or key, cancel, sign out; "I've changed my plan" (retry).
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z-]+)\/(login|paste|workspace|cancel|logout|retry)$/)) && m === 'POST') {
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z0-9.-]+)\/(login|paste|workspace|cancel|logout|retry)$/)) && m === 'POST') {
       const [key, act] = [r[2], r[3]];
       provider(key);
       const b = body;

@@ -1,5 +1,7 @@
 // done-done journey `member-models`: a chat order to Chief ("use ChatGPT for Scout") on the real crewd and the stub engine
 // changes one member's account and model, lands in the crew folder's models.json, and the member's next run uses it.
+// Then a second ChatGPT account is signed in and named "work", and "use my second ChatGPT for Scout" puts Scout on that
+// account alone: its own line leads models.json and its next run goes there, with the first account still listed beside it.
 //
 //   node scripts/verify/member-models.mjs --out "$DONE_DONE_EVIDENCE_ROOT"
 //
@@ -114,11 +116,28 @@ try {
   }, 30_000);
   const refused = await order({ bot: 'scout', account: 'Grok' });
   if (JSON.stringify(file().scout) !== '["chatgpt:quick-1"]') throw new Error('a refused order changed the file');
+  // One provider, two accounts: signed in from its own card, then said in the person's own words.
+  await call('POST', '/api/accounts/1/chatgpt.work/login', {});
+  const both = await until('the second ChatGPT account is listed', async () => {
+    const list = await call('GET', '/api/accounts'), rows = list.filter((r) => r.account.startsWith('chatgpt'));
+    return rows.length === 2 && rows[1].signIn?.state === 'done' ? rows : undefined;
+  }, 30_000);
+  const second = await order({ bot: 'scout', account: 'my second ChatGPT', model: 'quick' });
+  if (file().scout?.[0] !== 'chatgpt.work:quick-1') throw new Error(`the second account's pick: ${JSON.stringify(file().scout)}`);
+  // A new job of its own: the last run's own record is not this one.
+  const lastTask = async () => {
+    const db = new (await import('node:sqlite')).DatabaseSync(join(lab, 'state', 'crew.db'), { readOnly: true });
+    try { return JSON.parse(db.prepare("SELECT data FROM events WHERE kind = 'run.started' AND bot = 'scout' ORDER BY seq DESC LIMIT 1").get()?.data ?? '{}'); } finally { db.close(); }
+  };
+  const before = (await lastTask()).task ?? 0;
+  await call('POST', '/api/bots/scout/messages', { text: 'hello again' });
+  const onSecond = await until('scout runs on the second account', async () => { const r = await lastTask(); return r.task > before ? r : undefined; }, 30_000);
+  if (onSecond.account !== 'chatgpt.work') throw new Error(`the run went to ${JSON.stringify(onSecond.account)}`);
   writeFileSync(join(out, 'api-transcript.jsonl'), transcript.map((t) => JSON.stringify(t)).join('\n') + '\n');
   writeFileSync(join(out, 'models.json'), JSON.stringify(file(), null, 2) + '\n');
-  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ok, started: JSON.parse(started), refused }, null, 2) + '\n');
-  writeFileSync(join(out, 'chat-order.txt'), `Person to Chief: use ChatGPT for Scout (quick model)\nChief: ${ok}\nPerson to Chief: use Grok for Scout (Grok is not signed in)\nChief: ${refused}\nScout's next job ran on: ${JSON.parse(started).name}\nStored in models.json: ${JSON.stringify(file())}\n`);
-  writeSteps(out, 'member-models', { ok, refused });
+  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ok, started: JSON.parse(started), refused, both, second, onSecond }, null, 2) + '\n');
+  writeFileSync(join(out, 'chat-order.txt'), `Person to Chief: use ChatGPT for Scout (quick model)\nChief: ${ok}\nPerson to Chief: use Grok for Scout (Grok is not signed in)\nChief: ${refused}\nScout's next job ran on: ${JSON.parse(started).name}\n\nA second ChatGPT account, signed in and named work: ${both.map((r) => r.account).join(', ')}\nPerson to Chief: use my second ChatGPT for Scout (quick model)\nChief: ${second}\nScout's next job ran on: ${onSecond.name} (${onSecond.account})\nStored in models.json: ${JSON.stringify(file())}\n`);
+  writeSteps(out, 'member-models', { ok, refused, second });
 } catch (e) { await end(1, e.message); }
 const leftovers = transcript.length < 4 ? ' (short transcript)' : '';
 await end(0, `pass${leftovers} — ${transcript.length} calls in ${out}`);
