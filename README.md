@@ -37,10 +37,11 @@ For anyone drowning in small jobs: it runs on your own Linux computer, thinks wi
 
 ## Quick start
 
-On **Ubuntu or Debian** (64-bit), download `crewhouse_0.1.6_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.6), then two commands, and Chief asks your name:
+On **Ubuntu or Debian** (64-bit), download `crewhouse_0.1.6_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.6) into your Downloads folder, then three commands, and Chief asks your name:
 
 ```sh
-sudo apt install ./crewhouse_0.1.6_amd64.deb
+cd ~/Downloads
+sudo apt install ./*.deb
 crewhouse-app
 ```
 
