@@ -31,8 +31,8 @@
   },
   "dependencies": {
     "@byokit/accounts": "0.33.0",
-    "@byokit/cloud": "0.2.1",
-    "@byokit/connect": "0.7.0",
+    "@byokit/cloud": "0.3.0",
+    "@byokit/connect": "0.8.0",
     "@byokit/discover": "0.8.5",
     "@byokit/openclaw": "0.28.1",
     "@byokit/pair": "0.10.4",
