@@ -118,7 +118,7 @@ W="360x800 390x844 445x900 1280x800 1440x900"
 # The AI accounts list itself: two ChatGPT rows, the second one named, each with its own model and Sign out.
 BOTH="(async () => { const rows = () => [...document.querySelectorAll('.ai-row b')].map((b) => b.textContent);
   for (let i = 0; i < 50 && !rows().includes('ChatGPT · work'); i++) await new Promise((r) => setTimeout(r, 100));
-  await new Promise((r) => setTimeout(r, 400)); document.querySelector('.ai-list')?.scrollIntoView({ block: 'start' }); return rows(); })()"
+  await new Promise((r) => setTimeout(r, 400)); document.querySelector('.ai-list')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -120); return rows(); })()"
 THEN="$BOTH" WIDTHS="$W" bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" settings-two-accounts "$URL"
 THEN="$SEE" WIDTHS="$W" bash "$REPO/scripts/verify/screens.sh" "$OUT/screens" settings-who-uses-which "$URL"
 OPEN="(async () => { await ($SEE); const q = () => $(row Quill); if (q()?.querySelector('.link')?.getAttribute('aria-expanded') !== 'true') q()?.querySelector('.link')?.click(); /* the same page across widths keeps it open */ for (let i = 0; i < 50 && !q()?.querySelector('.pick'); i++) await new Promise((r) => setTimeout(r, 100)); q()?.scrollIntoView({ block: 'center' }); return !!q()?.querySelector('.pick.on'); })()"
