@@ -5,9 +5,10 @@
 <h1 align="center">Crewhouse</h1>
 
 <p align="center">
-  <strong>A crew of AI helpers that does your errands, and asks before it spends.</strong><br/>
-  For anyone drowning in small jobs: it runs on your own Linux computer, thinks with the AI account you already pay for, and anything that sends, spends or deletes waits for your yes.
+  <strong>A crew of AI helpers that does your errands, and asks before it spends.</strong>
 </p>
+
+For anyone drowning in small jobs: it runs on your own Linux computer, thinks with the AI account you already pay for, and anything that sends, spends or deletes waits for your yes.
 
 <p align="center">
   <picture>
@@ -36,10 +37,9 @@
 
 ## Quick start
 
-On **Ubuntu or Debian** (64-bit), three commands and Chief asks your name:
+On **Ubuntu or Debian** (64-bit), download `crewhouse_0.1.6_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.6), then two commands, and Chief asks your name:
 
 ```sh
-curl -LO https://github.com/umeranjum17/crewhouse/releases/download/linux-v0.1.6/crewhouse_0.1.6_amd64.deb
 sudo apt install ./crewhouse_0.1.6_amd64.deb
 crewhouse-app
 ```
@@ -52,12 +52,9 @@ Prefer no terminal? Download the same `.deb` and press **Install** in your softw
 
 ## Why Crewhouse
 
-|  | Asking a chat window | Hiring someone | Crewhouse |
-| --- | --- | --- | --- |
-| **Who does the small jobs** | you paste, then do the rest yourself | a person, part of their week | a helper takes one job, and reports |
-| **Spending your money** | you | they ask you | it asks you, every single time |
-| **Where the work happens** | their servers | their desk | your computer |
-| **What it costs** | your AI plan | a salary | your AI plan |
+- **Asking a chat window:** you paste the job, then do the rest yourself — on their servers, on your AI plan.
+- **Hiring someone:** a person gives part of their week, and they ask before they spend.
+- **Crewhouse:** a helper on your own computer takes one job and reports back, on the AI plan you already pay for — and spending, sending or deleting asks you every single time.
 
 ## See it work
 
@@ -72,24 +69,25 @@ Prefer no terminal? Download the same `.deb` and press **Install** in your softw
 
 ## What you get
 
-<table align="center">
-  <tr>
-    <td align="center" valign="top" width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/files-night.webp" />
-        <img src="docs/screenshots/readme/files-day.webp" width="430" alt="Scribe's chat beside an open spreadsheet, Monthly budget, with what was planned, spent and left for each line, and a Download button" />
-      </picture>
-      <br/><strong>Real files, not a chat log</strong><br/><sub>Ask for a spreadsheet or a document and you get a real <code>.xlsx</code> or <code>.docx</code>, open beside the chat and yours to download.</sub>
-    </td>
-    <td align="center" valign="top" width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/crew-night.webp" />
-        <img src="docs/screenshots/readme/crew-day.webp" width="430" alt="Your crew: Chief in blue, Reel, Scout, Tracer, Scribe and Pip each on their own colour, with what they do and whether they are working, waiting or free, and an Add a helper tile" />
-      </picture>
-      <br/><strong>One assistant, many hands</strong><br/><sub>Chief passes each job to the helper whose job it is. Want another? Describe it, and approve who joins.</sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/files-night.webp" />
+    <img src="docs/screenshots/readme/files-day.webp" width="640" alt="Scribe's chat beside an open spreadsheet, Monthly budget, with what was planned, spent and left for each line, and a Download button" />
+  </picture>
+  <br/>
+  <strong>Real files, not a chat log</strong><br/>
+  <sub>Ask for a spreadsheet or a document and you get a real <code>.xlsx</code> or <code>.docx</code>, open beside the chat and yours to download.</sub>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/crew-night.webp" />
+    <img src="docs/screenshots/readme/crew-day.webp" width="640" alt="Your crew: Chief in blue, Reel, Scout, Tracer, Scribe and Pip each on their own colour, with what they do and whether they are working, waiting or free, and an Add a helper tile" />
+  </picture>
+  <br/>
+  <strong>One assistant, many hands</strong><br/>
+  <sub>Chief passes each job to the helper whose job it is. Want another? Describe it, and approve who joins.</sub>
+</p>
 
 - ✋ **Asks before it acts.** Sending, deleting or opening something of yours asks first. Spending asks every time, from the shop's own page and its own total, never the helper's description of it.
 - ✉️ **Drafts, never sent behind your back.** Anything written in your name arrives as a draft for you to send.
@@ -100,14 +98,7 @@ Prefer no terminal? Download the same `.deb` and press **Install** in your softw
 
 ## The phone
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/readme/home-phone-night.webp" />
-    <img src="docs/screenshots/readme/home-phone-day.webp" width="300" alt="Crewhouse on a phone: Morning, Umer, with the things waiting for him as bright rows, and Home, Chief, Jobs and Crew along the bottom" />
-  </picture>
-</p>
-
-The Android preview pairs with your computer by QR code or a typed code, over your home Wi-Fi, over Tailscale or through a relay you run yourself, and its notifications only ever say "Crewhouse has news". An iPhone or iPad can add the web app to its Home Screen and use the same crew. [Install and run](docs/install.md) covers both, and the [releases page](https://github.com/umeranjum17/crewhouse/releases) has the current APK.
+The same crew is in your pocket. The Android preview pairs with your computer by QR code or a typed code — over your home Wi-Fi, over Tailscale, or through a relay you run yourself — and its notifications only ever say "Crewhouse has news". An iPhone or iPad can add the web app to its Home Screen and use the same crew. [Install and run](docs/install.md) covers both, and the [releases page](https://github.com/umeranjum17/crewhouse/releases) has the current APK.
 
 ## Proof
 
