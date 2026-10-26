@@ -652,8 +652,8 @@ export class Crew {
    *  Nothing runs until the person says yes on the card. */
   private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; name?: string; quiet?: unknown; watch?: string; once?: unknown }) {
     const yes = (v: unknown) => v === true || v === 1 || v === 'true' || v === '1', once = yes(b.once); // the model's JSON is untyped: a flag it wrote as "true" still means yes, or a watch Chief called quiet is made noisy
-    const bot = once ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase());
-    if (!bot || (!once && bot.id === CHIEF)) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
+    const own = !once && !b.bot, bot = once || own ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase()); // no helper named: the person's own, run as Chief's task
+    if (!bot || (!once && !own && bot.id === CHIEF)) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
     const watch = b.watch ? String(b.watch).trim() : null;
     if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
@@ -680,7 +680,7 @@ export class Crew {
       this.db.event('routine.created', plan.bot.id, { routine: row.id, name: plan.name, words, by });
       if (by === CHIEF) {
         this.say(CHIEF, 'system', plan.at ? `Reminder set: “${plan.name}”, ${firstRun(row.next_at)}.` : `New routine “${plan.name}”`, null);
-        if (!plan.at) this.say(CHIEF, 'bot', `I'll have ${plan.bot.display} ${plan.body.replace(/^./, (c) => c.toLowerCase()).replace(/[.!?]+$/, '')}. ${words}.${plan.when ? ` First check: ${firstRun(row.next_at)}.` : ''} ${looksFor(plan.body)?.replace(/^Tells you/, "I'll tell you") || (plan.quiet ? "I'll bring changes back here; nothing on a quiet day." : "I'll bring the result back here each time.")}`, null);
+        if (!plan.at) this.say(CHIEF, 'bot', `${plan.bot.id === CHIEF ? "I'll" : `I'll have ${plan.bot.display}`} ${plan.body.replace(/^./, (c) => c.toLowerCase()).replace(/[.!?]+$/, '')}. ${words}.${plan.when ? ` First check: ${firstRun(row.next_at)}.` : ''} ${looksFor(plan.body)?.replace(/^Tells you/, "I'll tell you") || (plan.quiet ? "I'll bring changes back here; nothing on a quiet day." : "I'll bring the result back here each time.")}`, null);
       }
       return row;
     });
