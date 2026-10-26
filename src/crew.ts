@@ -653,7 +653,7 @@ export class Crew {
   private planRoutine(b: { bot?: string; schedule?: string; on?: string; task?: string; name?: string; quiet?: unknown; watch?: string; once?: unknown }) {
     const yes = (v: unknown) => v === true || v === 1 || v === 'true' || v === '1', once = yes(b.once); // the model's JSON is untyped: a flag it wrote as "true" still means yes, or a watch Chief called quiet is made noisy
     const own = !once && !b.bot, bot = once || own ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase()); // no helper named: the person's own, run as Chief's task
-    if (!bot || (!once && !own && bot.id === CHIEF)) throw Object.assign(new Error(`no bot called ${b.bot}; a routine hands a task to one of the crew`), { status: 404 });
+    if (!bot || (!once && !own && bot.id === CHIEF)) throw Object.assign(new Error(`${b.bot ? `no bot called ${b.bot}` : 'no helper for this'}; a reminder the person asks for names no bot, a helper's job names one of the crew`), { status: 404 });
     // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
     const watch = b.watch ? String(b.watch).trim() : null;
     if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
@@ -700,7 +700,7 @@ export class Crew {
       (plan.quiet && looksFor(p.task)) || (plan.watch ? 'Tells you only when the page changes' : plan.quiet ? 'Tells you only when something changed' : 'Tells you each time it runs'),
       ...(plan.when ? [`First time: ${firstRun(nextRun(plan.when, Date.now()))}`] : [])], words = `${start.join('; ')}, ${what}.`;
     return this.propose(CHIEF, words, {
-      routine: { bot: plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, quiet: plan.quiet, watch: p.watch },
+      routine: { bot: plan.bot.id === CHIEF ? undefined : plan.bot.id, schedule: String(p.schedule ?? '').trim(), on: plan.on, task: p.task, name: p.name, quiet: plan.quiet, watch: p.watch },
       preview: { head: 'A new routine', body: lines.join('\n') },
     });
   }

@@ -33,6 +33,7 @@ test('routines: fire when due, catch up once after sleep, skip on overlap, pause
   const mine = crew.addRoutine({ schedule: 'every Sunday at 6pm', task: 'Remind me to water the plants', name: 'Water the plants' }, 'person');
   assert.equal(mine.bot, 'chief');
   assert.ok(mine.next_at > Date.now());
+
   const r = crew.addRoutine({ bot: 'reel', schedule: 'every Monday 9:00', task: 'ask permission: make the weekly demo', name: 'Weekly demo' }, 'person');
   assert.ok(r.next_at > Date.now());
   assert.equal(new Date(r.next_at).getDay(), 1);
