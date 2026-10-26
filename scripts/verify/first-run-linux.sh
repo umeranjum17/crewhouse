@@ -7,8 +7,11 @@
 # Every step is stamped in steps.tsv (seconds from the start of the unpack) with a 1440x900 frame in frames/.
 # The key is read from its file straight into the page's own paste box; it is never printed, logged or copied.
 set -uo pipefail
-[ $# -eq 3 ] || { echo "usage: timed-run.sh <out-dir> <deb> <minimax-key-file>" >&2; exit 2; }
-OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); DEB=$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2"); KEYFILE=$3
+# Arguments may come as arguments or as the environment (done-done's own run folder and files).
+OUTARG=${1:-${DONE_DONE_EVIDENCE_ROOT:?usage: first-run-linux.sh <out-dir> <deb> <minimax-key-file>}}
+DEBARG=${2:-${CREWHOUSE_DEB:?usage: first-run-linux.sh <out-dir> <deb> <key-file> (or CREWHOUSE_DEB)}}
+KEYFILE=${3:-${KEY_FILE:?usage: first-run-linux.sh <out-dir> <deb> <key-file> (or KEY_FILE)}}
+OUT=$(mkdir -p "$OUTARG" && cd "$OUTARG" && pwd -P); DEB=$(cd "$(dirname "$DEBARG")" && pwd -P)/$(basename "$DEBARG")
 [ -s "$DEB" ] || { echo "timed-run: no .deb at $DEB" >&2; exit 2; }
 [ -s "$KEYFILE" ] || { echo "timed-run: no key file" >&2; exit 2; }
 EV="$OUT"; mkdir -p "$EV/frames" "$EV/log"; rm -f "$EV/steps.tsv"; : > "$EV/steps.tsv"
