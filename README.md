@@ -33,6 +33,7 @@ For anyone drowning in small jobs: it runs on your own Linux computer, thinks wi
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-3b6fd8?style=flat" /></a>
   <img alt="Runs on Linux" src="https://img.shields.io/badge/runs%20on-Linux-3b6fd8?style=flat" />
   <img alt="Self-hosted, no telemetry" src="https://img.shields.io/badge/self--hosted-no%20telemetry-3b6fd8?style=flat" />
+  <a href="https://x.com/umership"><img alt="X: @umership" src="https://img.shields.io/badge/X-@umership-3b6fd8?style=flat" /></a>
 </p>
 
 ## Quick start
