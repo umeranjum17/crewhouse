@@ -2425,11 +2425,12 @@ export const GOAL_RULES = { short: 'Applying is always yours. The crew finds rol
   asks: ['Declarations you sign', 'Your right to work in a country', 'Visa and sponsorship', 'Pay you expect, and your notice period', 'Consent: your data, background checks, references'] };
 export type GoalPrep = { brief: { says: string; host: string; url: string; quote: string }[]; questions: { ask: string; why: string }[]; yours: string[] };
 export type GoalRole = { id: number; co: string; title: string; place: string; pay: string; fit: string[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; prepping: boolean; prep?: GoalPrep; next?: [string, string] };
-const hostOf = (u: string) => { try { return new URL(u).hostname; } catch { return ''; } };
+/** Where a page is, as a person says it: the site's own name; never a bare address or a machine's own name. */
+const hostOf = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return /^[\d.]+$|^\[|(^|\.)localhost$/.test(h) ? 'the company\'s website' : h; } catch { return ''; } };
 export function goal(state: Json) {
   const j = state?.jobs;
   if (!j) return null;
-  const roles: GoalRole[] = j.roles.map((r: Json) => ({ id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'Pay not in the posting', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: (() => { try { return new URL(r.url).hostname; } catch { return ''; } })(), url: r.url,
+  const roles: GoalRole[] = j.roles.map((r: Json) => ({ id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'Pay not in the posting', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: hostOf(r.url), url: r.url,
     checked: new Date(r.checked_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), stage: r.stage, drafting: !!r.drafting, prepping: !!r.prepping,
     prep: r.prep ? { brief: r.prep.brief.map((b: Json) => ({ says: plain(b.says), host: hostOf(b.url), url: b.url, quote: plain(b.quote) })), questions: r.prep.questions.map((q: Json) => ({ ask: plain(q.ask), why: plain(q.why) })), yours: r.prep.yours.map((q: string) => plain(q)) } : undefined,
     next: r.stage === 'drafted' ? ['applied', 'I applied'] : r.stage === 'applied' ? ['interview', 'I have an interview'] : r.stage === 'interview' ? ['offer', 'I have an offer'] : undefined }));
