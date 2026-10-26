@@ -179,6 +179,15 @@
     ],
     "result": "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back"
   },
+  "phone-download": {
+    "start": "a fresh Crewhouse on the stub engine, a new person, no phone paired yet",
+    "steps": [
+      "Open Settings, then Phones, with no phone paired",
+      "Read the Get-the-app card: the code and the link under it",
+      "Open the same card in a browser where the forge cannot be reached"
+    ],
+    "result": "The card offers the newest phone preview's arm64 build ({{preview}}), and the one stable link ({{stable}}) while the forge cannot be asked, at 390 and 1440, day and night"
+  },
   "phone-pair": {
     "start": "the real app on an emulator, with the camera showing the code the computer prints",
     "steps": [
