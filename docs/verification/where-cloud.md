@@ -85,7 +85,7 @@ outbox (the journey test does the same). Script the install's `curl` to fail, ta
 `curl` pass and tap Try again: the card reaches "Chief is on your cloud computer." with Talk to Chief.
 
 The emulator has no shell clipboard, and the key box only reads it. So type the key into the pairing-code
-field (On my computer › Type the code), then `input keycombination 113 29` (select all), `113 31` (copy) and
+field (On my computer › the code box), then `input keycombination 113 29` (select all), `113 31` (copy) and
 `keyevent 67` (clear the field). Then tap Paste key. Never dump the screen
 (`phone-ui.mjs texts`) while that field holds a real key. To show Chief's computer with the key row, pair by the
 typed relay code ([chief-computer.md](chief-computer.md)) without `pm clear`, which would drop the kept key.

@@ -124,7 +124,6 @@ export const PUT = {
   code: 'Type the code',
   needs: 'The computer and this phone both need Tailscale, signed in to your account. Nothing else is installed on this phone.',
   app: 'No Tailscale? Install the Crewhouse app on the computer instead. Then open Settings, Phones, Add a phone.',
-  have: 'Crewhouse is already on my computer',
 };
 /** The cloud connect on the phone (mock key-first): the boat.dev key, then the computer, then Chief sets it up. The kit
  *  side is web/src/cloud.ts; a web page can't call boat.dev, so only the phone app shows these. */
