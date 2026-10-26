@@ -142,7 +142,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose }: { ai?: (
         </> : <>
           <h2>Paste your {name} key</h2>
           <p className="mute">Paste the key from your {name} account. {ai.keyPage ? <>It stays on your computer, and {name} charges you for what the crew uses.</> : <>It uses your own {name} plan and stays on your computer.</>}</p>
-          {ai.keyPage && <><a className="btn" href={ai.keyPage} target="_blank" rel="noreferrer">Get a {name} key ↗</a>
+          {ai.keyPage && <><a className="btn" href={ai.keyPage} target="_blank" rel="noreferrer">Get {/^[aeiou]/i.test(name) ? 'an' : 'a'} {name} key ↗</a>
             <p className="mute small">Make an account, add a little credit, then create a key and copy it here.</p></>}
           <form className="stack" onSubmit={(e) => { e.preventDefault(); setChecking(true); void attempt(async () => { await api.signInPaste(ai.key, pasted); setPasted(''); }).then(() => setChecking(false)); }}>
             <input className="input" value={pasted} disabled={checking} onChange={(e) => setPasted(e.target.value)} placeholder={`${name} key`} aria-label={`${name} key`} type="password" autoComplete="off" />

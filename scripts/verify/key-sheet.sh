@@ -40,8 +40,8 @@ for account in ${ACCOUNTS:-openrouter minimax}; do
     ax open about:blank; ax resize "$w" "$h"; ax open "$B/?r=$n&$theme#person=$P"; nap 1500
     click 'button' "^Sign in with $name"; ax wait "Paste the key from your"
     # The sheet must name where a key comes from: a person who has never made one has nothing to paste otherwise.
-    ax wait "Get a $name key"
-    href=$(ax eval "(()=>{const a=[...document.querySelectorAll('a')].find(a=>/^Get a .* key/.test((a.textContent||'').trim()));return a?a.href:''})()" 2>/dev/null | grep -oE 'https?://[^" ]+' | head -1)
+    # Read the one plain button that leaves the app for the account's own key page (its words change with the account).
+    href=$(chrome-devtools-axi eval "(()=>{const a=[...document.querySelectorAll('a.btn')].find(a=>/^https?:/.test(a.getAttribute('href')||''));return a?a.getAttribute('href'):''})()" 2>/dev/null | grep -oE 'https?://[^"\\ ]+' | head -1)
     case "$href" in "$key_page"*) ;; *) echo "$account: the key sheet links '$href', wanted '$key_page'" >&2; exit 1;; esac
     ax screenshot "$OUT/key-sheet-1-key-$t.png"
     fillin 'input[type=password]' stub-key-not-real
