@@ -76,7 +76,8 @@ type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void;
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in.
  *  The sign-in wait is the thread card's own test (AccountCard: no account ready to think with), once accounts are known. */
 function chiefLocal(ctx: Pick<Ctx, 'accounts' | 'offline'>, listen = false): A.ChiefLocal {
-  const g = A.aiList(ctx.accounts).mine[0].g;
+  // Any account ready to think with counts, not just the first row: a person signed in to MiniMax alone is not signed out.
+  const rows = A.aiList(ctx.accounts).mine, g = (rows.find((r) => r.g.state === 'ready') ?? rows[0]).g;
   return { offline: ctx.offline, listen, signedOut: !!ctx.accounts && (g.state !== 'ready' || g.notIncluded) };
 }
 

@@ -82,7 +82,7 @@ test('a MiniMax key starts on Flash when its catalog lists it, the picker offers
     const end = await f.runtime.run({ ...runSpec('minimax', undefined, 6), thinking: 'low' }, () => {});
     assert.ok(end.ok, JSON.stringify(end));
     assert.equal((f.fake.calls.filter((c) => c.method === 'agent').at(-1)?.params as any)?.model, 'MiniMax-M3.1-Flash');
-    const listed = await f.runtime.models('minimax');
+    const listed = (await f.runtime.models('minimax')) as { id: string; dflt?: boolean }[];
     assert.deepEqual(listed.map((m) => m.id), ['MiniMax-M3', 'MiniMax-M3.1-Flash']);
     assert.deepEqual(listed.filter((m) => m.dflt).map((m) => m.id), ['MiniMax-M3.1-Flash'], 'the row the run takes with nothing picked is the one the app can name for a first sign-in');
     assert.equal(f.fake.calls.filter((c) => c.method === 'models.list').length, 1, 'the sign-in read the catalog; the run and the picker reused it');
