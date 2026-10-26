@@ -107,6 +107,28 @@ test('a helper makes one in its own chat: the file lands in files/, is delivered
   assert.deepEqual(A.made(crew.snapshot(), 'quill').map((f) => A.fileSource(f.url)?.path), ['files/table.csv', 'files/weekly-dinners.md', rel]);
 });
 
+// A file the person asks Chief for in the chat is made here, in his own thread (ch-chat-quality-core): before this his
+// turn had no document tool, so "make me a file from this" ended either in "the file tools aren't available" or in a
+// minute of blind reads hunting the crew folder for a file nobody had made.
+test('a file the person asks Chief for is made in his own chat and delivered there', async () => {
+  const { cfg, db, crew } = setup();
+  crew.onboard('sir');
+  const note = {
+    name: 'Neighbours barbecue',
+    blocks: [{ heading: 'Neighbours barbecue', level: 1 }, { text: 'Saturday 4pm, the park on Mill Street.' }, { bullets: ['Sam brings the chairs', 'Priya has the drinks'] }],
+  };
+  const id = (await crew.post('chief', `make me a file from this ${call('crew_document', note)}`))!.task;
+  await settled(db, id);
+  assert.equal(task(db, id).state, 'done');
+
+  const rel = 'files/neighbours-barbecue.docx', full = join(disk.botDir(cfg, 'chief'), rel);
+  assert.ok(existsSync(full), 'the document is in Chief\'s own folder');
+  const card = A.lines(crew.botPage('chief'), 'chief', crew.snapshot()).flatMap((l) => l.files).find((f) => /\.docx$/.test(f.url));
+  assert.equal(card?.name, 'Neighbours barbecue', 'the card carries the document in Chief\'s own chat');
+  const view = await crew.documentView('chief', rel) as any;
+  assert.match(view.parts.map((p: any) => p.text ?? '').join('\n'), /Mill Street/, 'the panel reads the pasted words back');
+});
+
 
 /** A deck the reference bar asks for: a stand-up someone can actually run. */
 const deckSpec = {

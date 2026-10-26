@@ -470,7 +470,7 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   // Acted and declared nothing: not sure, in crewd's words, never done.
   const silent = await job(`book it ${book}`);
   assert.equal(silent.state, 'unsure');
-  assert.equal(silent.lines.at(-1), "Not sure it worked: I did something on your Mocknote, but I didn't see it confirmed. Worth checking there yourself.");
+  assert.equal(silent.lines.at(-1), "Not sure it worked: I tried something on your Mocknote, and nothing came back to confirm it. Check there before you rely on it, then tell me to try again.");
   assert.ok(silent.alerted);
 
   // Said it worked, then acted again: the old "it worked" doesn't cover the new act.
@@ -512,7 +512,7 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   crew.runRoutine(r.id);
   await until('routine settled', () => { const t = db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id); return t && !['queued', 'working'].includes(t.state); });
   assert.equal(db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.state, 'unsure');
-  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I did something on your Mocknote/);
+  assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I tried something on your Mocknote/);
   assert.match(crew.digest(0), /- Not sure it worked: Quill, /);
   done();
 });

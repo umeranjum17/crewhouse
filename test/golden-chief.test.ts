@@ -123,11 +123,13 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // import. The guard is still a plain length check; P7's note stands, the prompt no longer varies with HOME.
   // Re-frozen 11,150 -> 11,220 for picked helper names on the plain-words rebase (ch-helper-names,
   // Firstmate decision B-plain): the longer job-word-plus-first-name crew names across Chief's crew lines.
+  // Re-frozen 11,220 -> 11,644 for the chat-quality slice (ch-chat-quality-core): Chief makes the document a person
+  // asks him for in his own chat, and never calls a routine set before they tap Start it (+424).
   const prompt = disk.systemPrompt(cfg, 'chief', true), soul = readFileSync(join(cfg.repoDir, 'templates', 'chief', 'soul.md'), 'utf8');
   assert.ok(prompt.startsWith(`${soul.trim()}\n\n`), 'Chief carries his soul in session context, not the shared workspace');
   // The same two budgets: the soul moved into this string; the job's allowance does not grow.
   const job = prompt.slice(soul.trim().length + 2);
-  assert.ok(job.length <= 11_220, `Chief prompt grew past its frozen size (job ${job.length})`);
+  assert.ok(job.length <= 11_644, `Chief prompt grew past its frozen size (job ${job.length})`);
   assert.ok(soul.length <= disk.SOUL_CAP, `Chief soul past SOUL_CAP (${soul.length})`);
   assert.doesNotMatch(soul, /on every line/, 'the soul never permits an occasional Sir');
   assert.match(soul, /no "Sir", no "Madam"/, 'Chief never titles the person');

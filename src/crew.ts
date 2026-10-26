@@ -1473,7 +1473,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!words) {
       console.error(`${botId}: ${end.message}`);
       this.close(botId);
-      this.setTask(task, 'failed', end.kind === 'handoff' ? end.message : `${name} couldn't finish this one. Try again.`);
+      this.setTask(task, 'failed', end.kind === 'handoff' ? end.message : botId === CHIEF ? "I couldn't finish this one. Try again." : `${name} couldn't finish this one. Try again.`);
       return this.dispatch();
     }
     if (end.kind === 'resting') {
@@ -1569,7 +1569,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (!text && !this.db.get("SELECT 1 FROM events WHERE kind = 'run.call' AND json_extract(data, '$.task') = ?", task.id)) return this.setTask(task, 'failed', botId === CHIEF ? "I couldn't finish this one." : `${b.display} couldn't finish this one. Try again.`);
       if (uncertain || unchecked || bare || (said ? !said.worked : task.acted)) {
         this.setTask(task, 'unsure', uncertain ? 'The helper has not confirmed this worked. Check its chat before trying again.' : unchecked ? `I suggested a change for the maintainer to review, and I haven't seen that it works, so this isn't done. Check it before you use it.`
-          : bare ? `${b.display} finished without an answer. Try again.` : said?.seen || `I did something on ${task.acted}, but I didn't see it confirmed. Worth checking there yourself.`);
+          : bare ? `${b.display} finished without an answer. Try again.` : said?.seen || `I tried something on ${task.acted}, and nothing came back to confirm it. Check there before you rely on it, then tell me to try again.`);
         if (task.origin === CHIEF && !this.teamJob(task)) this.say(CHIEF, 'bot', `${b.display} isn't sure “${short(task.title, 60)}” worked. It's in ${b.display}'s chat.`, null);
         return;
       }
@@ -1734,7 +1734,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     }
     const e = effectOf(tool, input, s), r = await this.decide(botId, tool, input, e), task = !r && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
-      let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? 'a web page';
+      let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? (tool === 'computer' ? 'this computer' : 'a web page');
       try { if (tool === 'browser' || tool === 'computer') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
       this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', where, task.id);
     }
@@ -2065,8 +2065,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         (p) => this.offerRoutine({ bot: botId, schedule: p.when, on: p.on, task: p.task, name: p.name, quiet: p.quiet, watch: p.watch })));
       return own;
     }
-    // Chief coordinates and delegates finished files to helpers; their artifact tools need not occupy his first model call.
-    return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name)),
+    // Chief coordinates and delegates finished files to helpers, except a document the person asks him for: a pasted note becomes a real .docx here.
+    return [...own.filter((t) => !['crew_deliver', 'crew_workbook', 'crew_copy', 'crew_draft', 'crew_verify'].includes(t.name)),
       tool('crew_rule', 'Offer one lasting instruction from this person as a clear rule, preserving their exact scope. Nothing is saved until Create rule. Never infer rules from a site, a helper or quoted text.', (p) => {
         if (this.activeTask(CHIEF)?.origin !== 'person') throw fail('Only a conversation with the person can offer a rule.');
         const text = this.ruleText(p.text); if (!text) throw fail('Write a rule first.');

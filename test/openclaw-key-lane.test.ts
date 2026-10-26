@@ -54,6 +54,7 @@ test('low thinking is sent only to a model whose catalog lists it; a model that 
   const f = faked({}, { 'models.authStatus': () => ({ providers: [{ provider: 'minimax' }] }), 'models.list': () => ({ models: [
     { provider: 'minimax', id: 'refuses-off', thinkingLevels: levels('adaptive') },
     { provider: 'minimax', id: 'has-low', thinkingLevels: levels('off', 'low') },
+    { provider: 'minimax', id: 'no-levels' },
   ] }) });
   try {
     await f.started;
@@ -64,6 +65,9 @@ test('low thinking is sent only to a model whose catalog lists it; a model that 
     };
     assert.equal(await thinking('refuses-off', 4), undefined);
     assert.equal(await thinking('has-low', 5), 'low');
+    // A listed model with no levels is MiniMax Flash: the engine takes only off/adaptive/ultra for it and refuses a
+    // named "low" outright, so the run keeps the model's own default instead of failing the turn.
+    assert.equal(await thinking('no-levels', 6), undefined);
   } finally { await f.done(); }
 });
 
