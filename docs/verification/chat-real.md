@@ -19,3 +19,17 @@ Chief's thread at 390 wide, day and night (`chat-real/chief-{night,day}-390.png`
 ## A release, not the checkout
 
 `PACKAGE_DIR=<the extracted crewhouse/ folder of crewhouse-<version>-linux-x64.tar.gz>` runs the same journey on a built release (its own Node and engine, product mode, a throwaway HOME) and writes `ready.txt`, the seconds from start to ready. It fails when the release installs an engine of its own under `~/.local/share/crewhouse/engine`: a release carries its engine in `app/runtime/openclaw.sets`, and `Config.engineDir` must find it there (`src/config.ts`).
+
+## A three-ask session (the `ch-chat-quality-core` drive)
+
+The same route, read the way a person reads it: three plain everyday asks go through the app's own composer in one Chief thread, and the thread is judged on what it hands over. A task-owned driver (kept in the task's home, not the repo) boots its own isolated crewd, signs the MiniMax key in through `drive.mjs signin`, and sends each ask with `scripts/verify/chat-probe.mjs`, declines the Connect card with a click on **Not now**, waits out each task, taps **Start it** on the routine card, then captures with `scripts/verify/screens.sh`.
+
+What the three asks must end as, and what a person can act on:
+
+1. "go through my inbox and tell me what came in today that needs an answer" — no Gmail connected, so `done` with what crewd cannot do, the one tap that would connect it, and one thing to do instead (a paste). Never a claim that something happened on the person's account.
+2. "make me a file from what I paste here" — `done` with a real `.docx` delivered (`crew_document`), the card in the thread and in "Made in this chat", and any assumption it made named in one line. Never "the file tools aren't available".
+3. "set me a weekly reminder to water the plants, Sunday evening" — `done` with the routine card offered and the words "nothing runs until you tap it"; `GET /api/state` `routines` stays empty until the tap, then holds the walk's own cadence.
+
+Captures (end state only; the probe's frames stay outside the evidence folder): `chief-{day,night}-{1440,390}.png`, `thread-final.json` (what the app showed), `run-record.txt` (crewd's own `run.call` and `tasks` rows). Judged by `done-done check` on those files, with the claim the ask-1 flail, the ask-2 dead end and the ask-3 false claim are gone.
+
+`done-done run -- bash -c 'export EV="$DONE_DONE_EVIDENCE_ROOT"; bash <task home>/data/ch-chat-quality-core/run-session.sh'` with `CHROME_DEVTOOLS_AXI_SESSION=<task-name>` set. Spends a few model calls on that key's account; needs the free MiniMax key file at `~/firstmate/config/minimax-api-key` and network for the engine install.
