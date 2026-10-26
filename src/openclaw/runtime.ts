@@ -1,7 +1,7 @@
 // The BYOKit engine port: accounts, runs, tools and Crewhouse's learned-skill capture.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState, type SignInView, type ToolSpec, type RunSpec as KitRunSpec } from '@byokit/openclaw';
 import { osKeyringSeal } from '@byokit/secrets';
@@ -15,7 +15,6 @@ import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignI
 
 export { ENGINE_VERSION };
 
-const repo = appDir;
 /** Crewhouse account key → OpenClaw provider id, one per account the sign-in card offers. Claude is its CLI: the kit names it claude-cli, never anthropic. */
 const PROVIDER_OF: Record<string, string> = { chatgpt: 'openai', grok: 'xai', copilot: 'github-copilot', openrouter: 'openrouter', minimax: 'minimax', claude: 'claude-cli', 'opencode-go': 'opencode-go' };
 /** The engine's provider id back to Crewhouse's account word (the Codex CLI's own login is a ChatGPT account too). */
@@ -29,13 +28,25 @@ const AUTH_CHOICE: Record<string, string> = {
 }, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), ME = 'm1';
 /** The engine-side name of a Crewhouse tool and back: only the shell differs. */
 const crewName = (tool: string) => tool === 'shell' ? 'bash' : tool, MAX_LEGS = 24, LEGWORK = new Set(['web_search', 'web_fetch']), HANDOFF_MS = () => Number(process.env.CREWHOUSE_HANDOFF_MS || 120_000); // Chief's spawned lookups: at most MAX_LEGS a job, web reads only; a hand-off waits this long for a helper's report
-/** Why the engine failed, in the person's words: the kit's typed refusal and, for an install, its retained diagnosis (README: engine-install-drift.json). */
-function failedWords(e: unknown, s: KitState, diagnosis: string, since: number) {
-  const cause = (e as { cause?: string })?.cause, d = cause === 'write' && existsSync(diagnosis) ? JSON.parse(readFileSync(diagnosis, 'utf8')) : null, fresh = d && Date.parse(d.at) >= since;
-  if (cause === 'drift-after-build') return "The download didn't match what Crewhouse trusts, so it wasn't used. Try again.";
-  if (fresh && !d.npm?.version) return "Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again.";
-  if (fresh && /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|network/.test(d.npmStderrTail)) return "Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again.";
-  return s.why === 'engine-already-running' || s.why?.startsWith('auth-store') ? stateWords(s) : "Your crew couldn't start on this computer. Try again.";
+/** The engine's log since a start began (the kit appends its output there): read once per failed start, never on `state` polls. */
+const logSince = (stateDir: string, at: number) => { try { const b = readFileSync(join(stateDir, 'logs', 'openclaw.log')); return b.subarray(Math.min(at, b.length)).toString('utf8').split('\n').map((l) => l.trim()).filter(Boolean); } catch { return []; } };
+
+/** Why the engine failed, in the person's words: one plain sentence naming the cause and the one action that fixes it, with the
+ *  engine's own last words behind Details. The one place a failed start is worded, so every screen that shows it says this, and
+ *  it never retries for the person: the kit's typed refusal, its retained install diagnosis and the engine's log say the cause. */
+function failedWords(e: unknown, s: KitState, stateDir: string, started: { at: number; since: number }) {
+  const o = { log: logSince(stateDir, started.at), diagnosis: join(stateDir, 'logs', 'engine-install-drift.json'), ...started }, out = (words: string, detail = '') => ({ words, detail: detail.slice(0, 600).trim() });
+  const cause = (e as { cause?: string })?.cause, code = (e as { code?: string })?.code, said = e instanceof Error ? e.message : '';
+  const d = cause === 'write' && existsSync(o.diagnosis) ? JSON.parse(readFileSync(o.diagnosis, 'utf8')) : null, fresh = d && Date.parse(d.at) >= o.since;
+  const log = o.log.join('\n'), detail = [said, o.log.slice(-4).join('\n'), fresh ? d.npmStderrTail : ''].filter(Boolean).join('\n'), denied = code === 'EACCES' || code === 'EPERM' || /EACCES|EPERM|permission denied/i.test(log) || (fresh && /EACCES|EPERM|permission denied/i.test(d.npmStderrTail));
+  if (cause === 'drift-after-build') return out("The download didn't match what Crewhouse trusts, so it wasn't used. Try again.", detail);
+  if (fresh && !d.npm?.version) return out("Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again.", detail);
+  if (fresh && /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|network/.test(d.npmStderrTail)) return out("Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again.", d.npmStderrTail);
+  if (s.why === 'engine-already-running' || s.why?.startsWith('auth-store')) return out(stateWords(s), detail);
+  if (denied) return out("Crewhouse isn't allowed to use its own files on this computer. Give its folder permission, then try again.", detail);
+  if (/EADDRINUSE|already in use|already listening/i.test(log)) return out('Another program on this computer is using what your crew needs to start. Close that program, then try again.', detail);
+  if (!o.log.length) return out('Some of the files your crew needs are missing from this computer. Install Crewhouse again to put them back.', detail);
+  return out(stateWords(s) || "Your crew couldn't start on this computer. Restart Crewhouse, then try again.", detail);
 }
 
 const ABOUT: Record<string, string> = {
@@ -73,7 +84,7 @@ export class OpenClawRuntime implements AgentRuntime {
   private runs = new Map<string, RunRef & { account?: string; keyLane?: boolean }>(); private personas = new Set<string>(); // neutral workspace files; each session supplies its own persona
   private targets = new Map<string, Map<string, { bot: string; run?: RunRef }>>(); private legs = new Map<string, number>(); // a native job's spawned-lookup count
   private waits = new Set<string>(); // a run that has handed work to a helper and is still waiting for its report
-  private failed = ''; private nodes = new Map<string, { display: string; child: ChildProcess }>();
+  private failed?: { words: string; detail: string }; private nodes = new Map<string, { display: string; child: ChildProcess }>();
   onEngine?: () => void; // every phase change, so Hello's getting-ready screen follows the kit
   constructor(stateDir: string, crewDir = '', o: Partial<KitOptions> = {}) {
     this.stateDir = stateDir;
@@ -81,7 +92,7 @@ export class OpenClawRuntime implements AgentRuntime {
       stateDir, offered: [...new Set([...Object.values(PROVIDER_OF), 'openai-codex'])], engineDir: loadConfig().engineDir, onState: () => this.onEngine?.(), plugin: { id: 'crewhouse' }, tools: TOOLS, config: CONFIG, enginePath: (process.env.PATH ?? '').split(':').filter((d) => d && ['claude', 'codex'].some((cli) => existsSync(join(d, cli)))), // only installed CLI directories enter the engine's otherwise /usr/bin:/bin PATH
       authSeal: 'authSeal' in o ? o.authSeal : osKeyringSeal({ service: 'crewhouse-engine', dualWrap: true }),
       permitted: (tool) => tool.startsWith('crew_'), callbackPort: CALLBACK_PORT,
-      installPolicy: { trustedSkills: join(appDir, 'src/openclaw/trusted-skills.json'), ownRoots: [repo, crewDir].filter(Boolean) },
+      installPolicy: { trustedSkills: join(appDir, 'src/openclaw/trusted-skills.json'), ownRoots: [appDir, crewDir].filter(Boolean) },
       host: {
         // A key the kit passes that Crewhouse never registered is the armed curation window's one call (allowOnce).
         gate: async (ref, tool, input) => {
@@ -121,9 +132,9 @@ export class OpenClawRuntime implements AgentRuntime {
   }
   /** The run behind a callback: a key-lane run's engine key is the member's own under the kit's key-agent prefix. */
   private runOf(sessionKey: string) { return this.runs.get(sessionKey) ?? this.runs.get(sessionKey.replace(/^agent:byokit-key-/, 'agent:')); }
-  async start(host: ToolHost) { this.host = host; this.failed = ''; const since = Date.now(); await this.kit.start().catch((e: unknown) => { this.failed = failedWords(e, this.kit.state, join(this.stateDir, 'logs', 'engine-install-drift.json'), since); this.onEngine?.(); throw e; }); }
+  async start(host: ToolHost) { this.host = host; this.failed = undefined; const at = statSync(join(this.stateDir, 'logs', 'openclaw.log'), { throwIfNoEntry: false })?.size ?? 0, since = Date.now(); await this.kit.start().catch((e: unknown) => { this.failed = failedWords(e, this.kit.state, this.stateDir, { at, since }); this.onEngine?.(); throw e; }); }
   /** The engine as the app's first screen shows it: the kit's real phase and its words, or why the last start failed. */
-  engine() { return this.failed ? { phase: 'failed', words: this.failed } : { phase: this.kit.state.phase, words: stateWords(this.kit.state) }; }
+  engine() { return this.failed ? { phase: 'failed', ...this.failed } : { phase: this.kit.state.phase, words: stateWords(this.kit.state) }; }
   async stop() { for (const n of this.nodes.values()) n.child.kill(); this.nodes.clear(); await this.kit.stop(); }
   /** `openclaw node run` with its bundled cua-computer on the bot's display, its own state and an env built from nothing;
    *  crewd approves its command surface (docs/nodes/computer-use.md). ponytail: a node outlives an idle-swept desktop

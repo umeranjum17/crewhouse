@@ -70,7 +70,12 @@ import { join } from 'node:path';
 // Raised 7417 -> 7509 for the second account of one provider (ch-subs-multi-account, +92 net): the kit's own account
 // rows and engine ids in OpenClawRuntime, a labelled ref in models.json, sign-in/sign-out by ref, and the stub's second
 // account. Owner exception requested in the PR; no trim paired (the same shape as ch-subs-engine above).
-const BUDGET = 7509;
+// Raised 7509 -> 7520 for the failed-start copy (ch-engine-fail-copy, +11 net): the engine's log since that start began, the
+// one place a failed start is worded from the kit's refusal, its retained diagnosis and that log (the cause and the one fix),
+// and the evidence behind Details. Owner exception requested in the PR; no trim paired: a --noUnusedLocals pass, a whole-repo
+// dead-export and unreferenced-file scan, and a declaration-join scan found nothing honest to delete in src/, and the only
+// way to pay it would be packing unrelated statements.
+const BUDGET = 7520;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
