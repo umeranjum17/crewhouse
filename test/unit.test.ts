@@ -1464,8 +1464,9 @@ test('Chief\'s coordination turn carries no helper tools, and the job page\'s Wr
   crew.onboard('sir');
   crew.recruit('scout', 'Scout', 'person');
   const chiefTools = (crew as any).crewTools('chief').map((t: any) => t.name);
-  for (const name of ['crew_deliver', 'crew_workbook', 'crew_document', 'crew_copy', 'crew_draft', 'crew_verify'])
+  for (const name of ['crew_deliver', 'crew_workbook', 'crew_copy', 'crew_draft', 'crew_verify'])
     assert.ok(!chiefTools.includes(name), `${name} belongs to helpers, not Chief's coordination turn`);
+  assert.ok(chiefTools.includes('crew_document'), 'a file the person asks Chief for in the chat is made here, not hunted for');
   assert.ok(!(crew as any).crewTools('scout').some((t: any) => t.name === 'crew_create'), 'a helper cannot change a job');
   const idea = 'sort my bills and letters, oldest first, do not pay or send anything';
   const { task: t2 } = (crew as any).requestChief(`Change Scout's job: ${idea}`, idea);

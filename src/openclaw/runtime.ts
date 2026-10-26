@@ -247,10 +247,10 @@ export class OpenClawRuntime implements AgentRuntime {
     const provider = await this.routeOf(key), signed = ['openai-codex', 'minimax'].includes(provider ?? '') && (await this.kit.signedIn(ME, provider!) || !!(await this.kit.providerStatus(ME).catch(() => undefined))?.includes(provider!)), r = await this.catalog(), live = provider === 'openrouter' && await this.kit.signedIn(ME, provider) ? await this.kit.models(ME, { authChoice: 'openrouter-api-key' }).catch(() => []) : []; // an OpenRouter key lists its vendor's live catalog (ids may carry a `:free` tag); the Codex CLI owns its login and a MiniMax key sits outside the catalog's own check, so both read unavailable until signed in
     return (live.length ? live.map((m) => ({ ...m, provider, available: true })) : r.models ?? []).filter((m) => provider !== 'opencode-go' && m.provider === provider && (m.available !== false || signed)).map((m) => ({ id: m.id.replace(`${provider}/`, ''), name: m.name, ...((provider === 'minimax' ? /flash/i.test(m.id) : !!m.tags?.includes('default')) ? { dflt: true } : {}) })); // `dflt` is the model a run takes with nothing picked, so a first sign-in can be told which model thinks: MiniMax's own Flash (run()'s rule) or the catalog's default row
   }
-  /** Low thinking goes only to a model whose catalog lists it; MiniMax M3 and Flash list off and adaptive, and refuse off, so they run on their default. */
+  /** A level goes only to a model whose catalog lists it, a listed model with no levels running on its default: MiniMax lists Flash with none and refuses a named "low". */
   private async thinks(provider: string, model: string | undefined, level: string) {
-    const levels = (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && (model ? m.id.replace(`${provider}/`, '') === model : m.tags?.includes('default')))?.thinkingLevels;
-    return !levels || levels.some((l: { id: string }) => l.id === level);
+    const entry = (await this.catalog().catch(() => undefined))?.models?.find((m) => m.provider === provider && (model ? m.id.replace(`${provider}/`, '') === model : m.tags?.includes('default')));
+    return !entry || !!entry.thinkingLevels?.some((l: { id: string }) => l.id === level);
   }
   /** Stage offline through the kit; confirmation removes the verified source without a plaintext archive. */
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
