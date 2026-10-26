@@ -228,7 +228,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       const key = r[2], models = await crew.runtime.models(key);
       if (m === 'PUT' && (models.length || body.model != null) && !models.some((x) => x.id === body.model)) throw Object.assign(new Error('that model is not on this account'), { status: 400 });
       if (m === 'PUT') crew.pickModel(key, body.model, typeof body.bot === 'string' ? [crew.botPage(body.bot).bot.id] : undefined); // one member (404 if none), or the crew; no list: the account alone
-      return { models, picked: disk.brains(cfg, 'chief').find((b) => b.provider === key)?.model ?? null };
+      return { models, picked: disk.brains(cfg, 'chief').find((b) => b.provider === key)?.model ?? null, dflt: models.find((x) => x.dflt)?.id ?? null };
     }
     // "Sign in with …": start (the page, or `via: 'code'` / `'key'`), paste the address or key, cancel, sign out; "I've changed my plan" (retry).
     if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z0-9.-]+)\/(login|paste|workspace|cancel|logout|retry)$/)) && m === 'POST') {
