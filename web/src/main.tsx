@@ -660,8 +660,9 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const answered = newestAnswer !== undefined || !!partial;
   // The Add-your-phone card waits below Chief's first answer, never between the first ask and the answer, and never at
   // the thread's foot: the thread holds its newest line, so a footer card filled a phone screen after every send and
-  // hid the echo, the live line and the reply above it.
-  const firstAnswer = id === 'chief' ? lines.find((l) => l.from === 'them' && l.text)?.id : undefined;
+  // hid the echo, the live line and the reply above it. First run is the one place his opening line is followed by
+  // nothing yet: a new install signs in there, so the card is held to the first line of his after the person's own.
+  const firstAnswer = id === 'chief' ? lines.find((l, i) => l.from === 'them' && l.text && lines.slice(0, i).some((x) => x.from === 'me'))?.id : undefined;
   // The newest finished sheet or page in Chief's thread is a Done card until the person speaks again, opens it or says
   // Later (Stack J16a); a person's line after it ends the moment.
   const [kept, setKept] = useState(keptDone);
