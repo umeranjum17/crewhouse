@@ -898,6 +898,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
       {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
       {c.draftWhy && <div className="ev-quiet">Because you said “{c.draftWhy}”</div>}
       <div className="ev-body draft-body">{body}</div>
+      {!!c.yours?.length && <div className="yours"><b>Only you can answer these</b>{c.yours.map((q, i) => <div key={i} className="yours-q"><span>{q}</span><i aria-hidden /></div>)}<span className="mute small">{c.yours.length} left for you. They stay empty in what you copy.</span></div>}
     </div>;
   }
   if (c.hire) return <div className="ev hire-ev">

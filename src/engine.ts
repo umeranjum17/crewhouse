@@ -28,6 +28,9 @@ export const PARAMETERS = {
   crew_routines: Type.Object({}),
   crew_status: Type.Object({}), crew_use: Type.Object({ bot: Type.String(), account: Type.String(), model: Type.Optional(Type.String()) }), crew_suggest: Type.Object({ bot: Type.String(), text: Type.String() }),
   crew_create: Type.Object({ bot: Type.Optional(Type.String()), name: Type.Optional(Type.String()), role: Type.String(), job: Type.Object(Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, Type.String({ minLength: 1, maxLength: 600 })])), { additionalProperties: false }), personality: Type.Optional(Type.String()), first: Type.Optional(Type.String()), will_do: Type.Optional(Type.Array(Type.String())), wont_do: Type.Optional(Type.Array(Type.String())), first_step: Type.Optional(Type.String()), first_job: Type.Optional(Type.String()), apps: Type.Optional(Type.Array(Type.String())) }),
+  crew_goal: Type.Object({ title: Type.String(), places: Type.String(), floor: Type.Optional(Type.String()), cv: Type.String() }),
+  crew_role: Type.Object({ company: Type.String(), title: Type.String(), place: Type.String(), url: Type.String(), pay: Type.Optional(Type.String()), fit: Type.Array(Type.Object({ says: Type.String(), cv: Type.String() })), missing: Type.String() }),
+  crew_application: Type.Object({ role: Type.Number(), cv: Type.Array(Type.String()), answers: Type.Array(Type.Object({ ask: Type.String(), answer: Type.String() })), yours: Type.Optional(Type.Array(Type.String())) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_case: Type.Object({ thread: Type.String(), facts: Type.String({ maxLength: 600 }) }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
 }, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
 

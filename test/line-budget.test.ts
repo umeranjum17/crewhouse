@@ -75,7 +75,9 @@ import { join } from 'node:path';
 // and the evidence behind Details. Owner exception requested in the PR; no trim paired: a --noUnusedLocals pass, a whole-repo
 // dead-export and unreferenced-file scan, and a declaration-join scan found nothing honest to delete in src/, and the only
 // way to pay it would be packing unrelated statements.
-const BUDGET = 7520;
+// Raised 7520 -> 7680 for the jobs loop (ch-jobs-loop-build): the goal card, the roles board (src/jobs.ts), the finder's and
+// writer's guarded tools and the person-only moves. Owner-directed in the brief; no trim paired, nothing working is cut to fit.
+const BUDGET = 7680;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

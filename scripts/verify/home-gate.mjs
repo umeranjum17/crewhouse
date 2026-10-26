@@ -1,7 +1,7 @@
 // Home's headless gate (home-states.sh). Capture one app URL at 390 and 1280, day and night, and run the headless gate on each:
 // no text under 16px outside caps labels, pills and tab labels; no clipped text; no horizontal scroll.
 //   node scripts/verify/home-gate.mjs <repo> <url-with-#hash> <out-dir> <slug> [then-js]
-// Writes <slug>-<390|1280>-<day|night>.png and <slug>-gate.json; exits 1 when any gate fails.
+// Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,8 +29,9 @@ try {
   await send('Page.enable'); await send('Runtime.enable');
   const gate = {}; let bad = false;
   const [base, hash] = url.split('#');
-  for (const theme of ['day', 'night']) for (const [w, h] of [[390, 844], [1280, 832]]) {
+  for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: w < 900 });
+    if (process.env.GATE_PWA) await send('Emulation.setEmulatedMedia', { features: [{ name: 'display-mode', value: 'standalone' }] }); // the installed app's window mode
     await send('Page.navigate', { url: `${base}${base.includes('?') ? '&' : '?'}${theme}&r=${Date.now()}#${hash ?? '/'}` });
     for (let i = 0; i < 100 && !(await run("!!document.querySelector('.page')").catch(() => false)); i++) await wait(100);
     await wait(1200);

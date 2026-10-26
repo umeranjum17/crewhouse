@@ -28,6 +28,7 @@ import type { AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, ToolHost } from '
 import { pickRuntime } from './engines.ts';
 import { fileTool } from './files.ts';
 import { inspectBinary } from './binary.ts';
+import * as jobs from './jobs.ts';
 
 /** The four marks a first run is timed by, in crewd.log: the service, the engine, the sign-in, the first words. */
 export const stamp = (what: string) => console.log(`[${new Date().toISOString()}] crewd ${what}`);
@@ -482,7 +483,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}'), covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)), rule: this.fileRule(d.bot) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.customRule ? { customRule: d.customRule } : {}), ...(d.create ? { yes: `Yes, ${d.create.bot ? 'give' : 'bring'} ${String(d.create.name).split(' ').pop()} ${d.create.bot ? 'the job' : 'on'}`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.customRule ? { customRule: d.customRule } : {}), ...(d.create ? { yes: d.goal ? 'Yes, start my search' : `Yes, ${d.create.bot ? 'give' : 'bring'} ${String(d.create.name).split(' ').pop()} ${d.create.bot ? 'the job' : 'on'}`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -523,6 +524,7 @@ export class Crew {
       house: { google: this.connections.houseGoogle(), steps: this.connections.houseSteps() },
       desktops: { ready: desktopMissing().length === 0 },
       routines: this.routines(),
+      jobs: jobs.view(this.db), // the goal's board, or null
       /** The person's pick for the crew's share of their AI, and whether today's is used up. Never a number. */
       share: { choice: person.share ?? 'light', used: this.overShare(), week: this.week() },
       money: { cap: this.moneyCap(), spent: this.spentThisMonth() },
@@ -859,7 +861,7 @@ export class Crew {
       return;
     }
     if (r.watch || r.mailwatch) return this.check(r, why);
-    const { task } = this.addTask(r.bot, note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body, why === 'now' ? 'routine.now' : 'routine', r);
+    const { task } = this.addTask(r.bot, (note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body) + (r.id === jobs.goal(this.db)?.routine ? jobs.seen(this.db) : ''), why === 'now' ? 'routine.now' : 'routine', r);
     this.db.tx(() => { this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id); this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task }); });
   }
 
@@ -2052,6 +2054,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       + 'It only reads: the file is never run, nothing is written and the network is never reached.',
       (p) => inspectBinary(disk.botDir(this.cfg, botId), String(p.path ?? ''), String(p.what ?? 'type'))));
     if (botId !== CHIEF) {
+      const g = jobs.goal(this.db); // the job search's finder and writer have one tool each, and only theirs
+      if (g?.rae === botId) own.push(tool('crew_role', 'Add ONE role you read yourself to the person\'s Found list. crewd opens `url`, so `pay` must be word for word what the posting shows (empty when it shows none), and each `fit` quotes (`cv`) the CV line that shows it. A role already on the board is not added twice.', (p) => this.foundRole(p)));
+      if (g?.will === botId) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
@@ -2135,6 +2140,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
+      tool('crew_goal', 'Offer the person a job search goal card, once they have told you the roles they want, where, a pay floor if they want one, and pasted their CV in full. Ask only those. Nothing starts before their yes.', (p) => this.offerGoal(p)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
@@ -2178,6 +2184,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       disk.writeSoul(this.cfg, d.soul.bot, d.soul.text, 'Personality changed, as Chief suggested');
       this.db.event('soul.changed', d.soul.bot, { by: CHIEF, prev });
     } else if (d.routine) this.addRoutine(d.routine, CHIEF);
+    else if (d.goal) this.startGoal(d);
     else if (d.create) this.create(d.create);
     else if (d.draft) this.db.event('draft.approved', botId, { ...receipt(d.draft, d.preview), task: d.task });
   }
@@ -2198,6 +2205,69 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     // The first job is Chief's hand-on, so its result comes back here in Chief's chat.
     this.say(CHIEF, 'bot', `${c.bot ? `From now on, ${c.name} ${c.role?.replace(/^./, (x) => x.toLowerCase())}.` : `${c.name} has joined the crew.`}${c.first?.trim() ? ` ${c.name} is starting on it now; I'll bring the result back here.` : ''}`, null);
     if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined);
+  }
+
+  /** Chief's goal card: the hire card for the finder, whose job and won't-do list are crewd's own words; the writer joins on the yes. */
+  private offerGoal(p: Row) {
+    if (this.activeTask(CHIEF)?.origin !== 'person') throw fail('Only a conversation with the person can start a job search.');
+    if (jobs.goal(this.db)) throw fail('There is a job search already. It is under Your goal.');
+    const title = needText(p.title, 80, 'say the roles they want'), places = needText(p.places, 120, 'say where they would work'), floor = clean(p.floor, 80), cv = String(p.cv ?? '').replace(/\r/g, '').trim();
+    if (cv.length < 80 || cv.length > 12_000) throw fail('Ask them to paste their CV in full (up to 12,000 characters).');
+    const rae = this.bots().find((b) => b.template === 'scout'), job = { does: `Looks every morning for ${title} (${places}) and adds each new fitting role to the person's board, with its source.`, aim: 'The person sees only roles that really fit, with the pay as the posting says it and what their CV is missing.', gets: "The person's roles, places and CV.", how: 'Reads public postings and company career pages. Adds a role only with crew_role. Never claims a skill the CV does not show. Never applies, signs in, sends or fills a form.', great: 'Quiet on a day with nothing new.' };
+    return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, cv },
+      create: { bot: rae?.id, name: rae?.display ?? 'Research Rae', role: `Looks every morning for ${title}`, job, will_do: [`Look every morning at public postings and company career pages for ${title} (${places})`, 'Tell you only when a new role fits', "Show each role's pay as the posting says it, and what your CV is missing", 'Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'], wont_do: jobs.WONT, first_step: 'Open Your goal when Rae tells you a role fits.', first_job: 'Look for the first roles now' },
+      preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\nPay floor: ${floor}` : ''}` } });
+  }
+
+  /** The person's yes on the goal card: the finder and the writer, each with its job and its won't-do list, the daily quiet look, and a first look now. */
+  private startGoal({ goal: g, create: c }: Row) {
+    const pick = (template: string) => this.bots().find((b) => b.template === template) ?? this.recruit(template, undefined, CHIEF), rae = pick('scout'), will = pick('scribe');
+    this.create({ ...c, bot: rae.id, name: rae.display, first: undefined, first_job: undefined });
+    this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', wont_do: jobs.WONT, job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers.', aim: 'A draft the person checks, copies and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application. Never applies or sends.', great: 'Nothing invented, nothing sent.' } });
+    const row = this.addRoutine({ bot: rae.id, schedule: 'every day 8:00', task: jobs.findTask(g), name: 'Look for new roles', quiet: true }, 'goal');
+    jobs.setGoal(this.db, { ...g, rae: rae.id, will: will.id, routine: row.id, since: Date.now() });
+    this.say(CHIEF, 'bot', `${rae.display} looks every morning at 8:00 and tells you only when a new role fits. Your board is under Your goal.`, null);
+    void this.fire(row, 'now');
+  }
+
+  /** The finder adds a role to Found. crewd opens the posting itself: the pay must be on its page, and every claim of fit must quote the CV. */
+  private async foundRole(p: Row) {
+    const g = jobs.goal(this.db)!, url = String(p.url ?? '').trim(), co = needText(p.company, 80, 'name the company'), title = needText(p.title, 120, 'name the role'), pay = clean(p.pay, 120);
+    if (!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])\S+$/.test(url) || url.length > 500) throw fail("give the posting's own https address");
+    const page = await readPage(url).catch(() => null);
+    if (!page || page.status >= 400) throw fail('I could not open that posting, so it is not added. Add only postings you read yourself.');
+    if (pay && !jobs.norm(page.text).includes(jobs.norm(pay))) throw fail('The posting does not show that pay. Copy it word for word, or leave pay empty when the posting shows none.');
+    const fit = (Array.isArray(p.fit) ? p.fit : []).map((f: Row) => ({ says: clean(f?.says, 200), cv: clean(f?.cv, 200) })).filter((f) => f.says);
+    if (!fit.length) throw fail('say why it fits, each reason with the CV line that shows it');
+    const stray = fit.find((f) => !jobs.inCv(g.cv, f.cv, true));
+    if (stray) throw fail(`“${short(stray.cv, 60)}” is not in the person's CV. Say only what their CV shows.`);
+    const out = jobs.add(this.db, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url });
+    return out.dup ? { note: 'already on the board; not added again' } : { added: out.id };
+  }
+
+  /** The writer's draft for one role as a draft card. The CV lines are checked against the person's own; the crew never answers what only they can. */
+  private application(botId: string, p: Row) {
+    const g = jobs.goal(this.db)!, r = jobs.role(this.db, Number(p.role));
+    if (!r || !['found', 'drafted'].includes(r.stage)) throw fail('that role is not waiting for a draft');
+    const cv = (Array.isArray(p.cv) ? p.cv : []).map((l: unknown) => String(l).trim()).filter(Boolean), stray = cv.find((l: string) => !jobs.inCv(g.cv, l));
+    if (!cv.length || stray) throw fail(stray ? `“${short(stray, 60)}” is not a line of the person's CV. Copy their lines exactly; never add one.` : 'choose the CV lines that fit this role');
+    const answers = (Array.isArray(p.answers) ? p.answers : []).map((a: Row) => ({ ask: clean(a?.ask, 200), answer: String(a?.answer ?? '').trim().slice(0, 1500) })).filter((a) => a.ask && a.answer), own = answers.find((a) => jobs.ONLY_YOU.test(a.ask));
+    if (own) throw fail(`“${own.ask}” is only for the person to answer. Put it in yours and leave it unanswered.`);
+    const yours = [...new Set([...jobs.YOURS, ...(Array.isArray(p.yours) ? p.yours : []).map((q: unknown) => clean(q, 160)).filter(Boolean)])].slice(0, 12), text = `Your CV for this role\n${cv.map((l: string) => `- ${l}`).join('\n')}\n\n${answers.map((a) => `${a.ask}\n${a.answer}`).join('\n\n')}`.trim(), rel = `files/application-${r.id}.md`;
+    mkdirSync(join(disk.botDir(this.cfg, botId), 'files'), { recursive: true });
+    writeFileSync(disk.insideBot(this.cfg, botId, rel), `${text}\n`);
+    this.db.run("UPDATE roles SET stage = 'drafted' WHERE id = ? AND stage = 'found'", r.id);
+    return this.propose(botId, `${this.bot(botId)!.display} drafted your application to ${r.co}.`, { draft: { channel: 'message', to: `${r.co} application form`, why: '', path: rel, sha: sha(text), link: r.url, role: r.id, yours }, preview: { body: text } });
+  }
+
+  /** Draft my application: the writer's task for one role, from the person's tap. */
+  draftRole(id: number) {
+    const g = jobs.goal(this.db), r = jobs.role(this.db, id);
+    if (!g || !r || !['found', 'drafted'].includes(r.stage)) throw fail('that role is not waiting for a draft', 404);
+    if (r.task && this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.task)) throw fail('the draft is already being written', 409);
+    const { task } = this.addTask(g.will, jobs.draftTask(g, r), 'person', undefined, `Draft my application to ${r.co} for ${r.title}.`, [], { title: `Application to ${r.co}` });
+    this.db.run('UPDATE roles SET task = ? WHERE id = ?', task, id);
+    return { task };
   }
 
   /** A helper needs one of the person's apps: an in-chat Connect card, answered once it is connected (or Not now). */

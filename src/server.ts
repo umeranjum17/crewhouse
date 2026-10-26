@@ -15,6 +15,7 @@ import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routin
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
 import { MailSend } from './mail-send.ts';
+import * as jobs from './jobs.ts';
 
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
   `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` + (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
@@ -426,6 +427,9 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       // screen away from home name the time zone (and only then).
       return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone };
     }
+    // The board: only the person's own tap moves a role past Drafted (crewd's tools cannot).
+    if ((r = p.match(/^\/api\/jobs\/(\d+)$/)) && m === 'POST') { jobs.move(db, Number(r[1]), String(body.stage)); return { ok: true }; }
+    if ((r = p.match(/^\/api\/jobs\/(\d+)\/draft$/)) && m === 'POST') return crew.draftRole(Number(r[1]));
     if (m === 'POST' && p === '/api/routines') { const row = crew.addRoutine(body, 'person'); return crew.routines().find((x) => x.id === row.id); }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'PUT') { crew.updateRoutine(Number(r[1]), body); return { ok: true }; }
     if ((r = p.match(/^\/api\/routines\/(\d+)$/)) && m === 'DELETE') { crew.deleteRoutine(Number(r[1])); return { ok: true }; }

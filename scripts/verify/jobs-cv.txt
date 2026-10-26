@@ -1,0 +1,5 @@
+Umer Anjum
+Led a team of four building a payments dashboard in React and TypeScript
+Cut page load time by 40 percent on the checkout flow
+Wrote the Node.js API behind a mobile banking app
+BSc Computer Science, 2016

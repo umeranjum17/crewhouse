@@ -18,6 +18,7 @@ import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, t
 import { remember, resume } from './resume.ts';
 import { nextRun, parseSchedule } from '../../src/routines.ts';
 import * as K from './kept.ts';
+import { Goal } from './goal.tsx';
 
 /** The kept week (web/src/kept.ts): what this browser last heard from the computer, shown read-only while it can't be
  *  reached. Demo keeps nothing. */
@@ -29,7 +30,7 @@ const keepWeek = (f: (k: K.Kept) => K.Kept) => { if (!demo) week = K.writeKept(f
 const REMOVED = 'crewhouse.removed';
 const removed = (() => { try { return sessionStorage.getItem(REMOVED) === '1'; } catch { return false; } })();
 const clearRemoved = () => { try { sessionStorage.removeItem(REMOVED); } catch { /* nothing kept */ } };
-type View = 'home' | 'chief' | 'jobs' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
+type View = 'home' | 'chief' | 'jobs' | 'goal' | 'room' | 'crew' | 'add' | 'helper' | 'things' | 'routines' | 'settings' | 'ai' | 'apps' | 'ask' | 'share' | 'pair' | 'computer';
 /** The cloud's screens wait for BYOKit's cloud kit: a build made with CREWHOUSE_CLOUD=1 shows them. */
 const cloudOn = process.env.CREWHOUSE_CLOUD !== '0';
 const VERSION = process.env.CREWHOUSE_VERSION ?? '';
@@ -52,7 +53,7 @@ function parseRoute(): Route {
   if (a === 'settings' && ['you', 'memory', 'rules', 'accounts', 'phones'].includes(b ?? '')) return { view: 'settings', tab: b };
   if (a === 'computer' && cloudOn) return { view: 'computer' };
   if (a === 'skills') return { view: 'apps' };
-  return { view: (['chief', 'jobs', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
+  return { view: (['chief', 'jobs', 'goal', 'room', 'crew', 'things', 'routines', 'settings', 'apps'].includes(a) ? a : 'home') as View };
 }
 const go = (hash: string) => { location.hash = hash; };
 let moved = false; // this session has navigated inside the app, so Back has somewhere to go back to
@@ -71,7 +72,7 @@ const chiefWord = (live: A.OfficeView, out?: boolean, offline?: boolean) => out 
 /** Which chat each composer writes into: its held draft lives in web/src/draft.ts. */
 const typeInto = (id: string) => ({ chat: id });
 
-type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
+export type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void; night: boolean; offline: boolean; accounts: Json[] | null };
 
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in.
  *  The sign-in wait is the thread card's own test (AccountCard: no account ready to think with), once accounts are known. */
@@ -2153,7 +2154,7 @@ const PLACES: [string, string, IconName, View][] = [['#/', 'Home', 'home', 'home
 /** The computer side menu's lower places, quieter than the four above. */
 const MORE: [string, string, IconName, View][] = [['#/things', 'Your things', 'copy', 'things'], ['#/routines', 'Routines', 'clock', 'routines'], ['#/apps', 'Apps', 'plus', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
 /** Which place a screen belongs to, so its tab reads as the one you are in. */
-const placeOf = (r: Route): View => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'add' || r.view === 'room' ? 'crew' : r.view === 'ai' || r.view === 'computer' ? 'settings' : r.view;
+const placeOf = (r: Route): View => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'add' || r.view === 'room' ? 'crew' : r.view === 'ai' || r.view === 'computer' ? 'settings' : r.view === 'goal' ? 'jobs' : r.view;
 
 /** The side menu's crew: every helper with the word the office uses for them (A.roster), one line each. Only Chief
  *  says "Needs you"; a crew row never asks the person. */
@@ -2187,6 +2188,7 @@ function Jobs({ state, live }: Ctx) {
     {!live.counts.needs && <Empty>Nothing needs you.</Empty>}
     <div className="st-label"><span>At work</span></div>
     {busy.length ? <div className="st-crew">{busy.map((c) => <CrewCard key={c.id} c={c} live={live} job={jobs.get(c.id)} />)}</div> : <Empty>Nobody is on a job right now.</Empty>}
+    {state.jobs && <a className="st-room" href="#/goal"><span className="grow"><b className="semi">Your goal</b><span>{state.jobs.roles.length} {state.jobs.roles.length === 1 ? 'role' : 'roles'} on your board</span></span><Icon name="next" /></a>}
     <a className="st-room" href="#/things"><span className="grow"><b className="semi">Your things</b><span>Finished jobs and their files</span></span><Icon name="next" /></a>
   </div>;
 }
@@ -2314,6 +2316,7 @@ function App() {
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'jobs' && <Jobs {...ctx} />}
+          {v.view === 'goal' && <Goal {...ctx} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}

@@ -40,7 +40,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; draftSubject?: string; draftLink?: string; draftWhy?: string;
+  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; yours?: string[]; draftSubject?: string; draftLink?: string; draftWhy?: string;
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
@@ -988,7 +988,7 @@ export function card(a: Json, state: Json): Card {
         campaign: { ready: !!parts.length && parts.every((t: Json) => ['done', 'failed', 'unsure'].includes(t.state)) && !state.bots.some((b: Json) => b.task?.root === task.root), poster },
         choices: [{ label: 'Approve', body: { answer: 'allow' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
     }
-    const head = `${name} wrote your ${channel}`;
+    const head = d.draft.role ? `${name} drafted your application` : `${name} wrote your ${channel}`;
     // A draft is words to send, not a document: heading and quote marks are stripped, every word kept — the person
     // would otherwise post or mail the marks themselves. A "#hashtag" a post opens with is not a heading.
     // A model that files the subject line inside the body too would show it twice (the card's subject, then the
@@ -999,7 +999,8 @@ export function card(a: Json, state: Json): Card {
     if (subject && /^subject:/i.test(first) && first.replace(/^subject:\s*/i, '').trim().toLowerCase() === subject.toLowerCase()) body = rest.join('\n').trim();
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
-      choices: [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+      ...(d.draft.yours?.length ? { yours: d.draft.yours.map((q: string) => plain(q)) } : {}),
+      choices: d.draft.role ? [{ label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, will/won't do, the person's first step and the first job; nothing changes until the yes.
   if (a.kind === 'propose' && d.hire) {
@@ -2416,3 +2417,20 @@ const TAGS: Partial<Record<Kind, string>> = { scout: 'Finds things out', scribe:
   frame: 'Fills production layouts', motion: 'Tunes motion timing', prototype: 'Builds quick prototypes' };
 export const tagOf = (h: Helper) => TAGS[h.kind] ?? h.role.split(/[.,:;]| and /)[0].trim();
 export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v).group;
+
+/** Your goal: the job-search board in plain words. The crew moves a role only into Found and Drafted; the other columns move on the person's tap. */
+const GOAL_COLS: [string, string, string][] = [['found', 'Found', 'The crew adds these'], ['drafted', 'Drafted', 'The crew drafts; you check'], ['applied', 'Applied', 'Only you move a role here'], ['interview', 'Interview', 'Only you move a role here'], ['offer', 'Offer', 'Only you move a role here']];
+export const GOAL_RULES = { short: 'Applying is always yours. The crew finds roles and drafts; you check, copy and apply.',
+  only: ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything'],
+  asks: ['Declarations you sign', 'Your right to work in a country', 'Visa and sponsorship', 'Pay you expect, and your notice period', 'Consent: your data, background checks, references'] };
+export type GoalRole = { id: number; co: string; title: string; place: string; pay: string; fit: string[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; next?: [string, string] };
+export function goal(state: Json) {
+  const j = state?.jobs;
+  if (!j) return null;
+  const roles: GoalRole[] = j.roles.map((r: Json) => ({ id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'Pay not in the posting', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: (() => { try { return new URL(r.url).hostname; } catch { return ''; } })(), url: r.url,
+    checked: new Date(r.checked_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), stage: r.stage, drafting: !!r.drafting,
+    next: r.stage === 'drafted' ? ['applied', 'I applied'] : r.stage === 'applied' ? ['interview', 'I have an interview'] : r.stage === 'interview' ? ['offer', 'I have an offer'] : undefined }));
+  return { title: plain(j.goal.title), places: plain(j.goal.places), floor: plain(j.goal.floor),
+    cols: GOAL_COLS.map(([key, name, who]) => ({ key, name, who, roles: roles.filter((r) => r.stage === key) })),
+    own: ['Every morning at 8:00 the crew looks for new roles and tells you only when one fits.', 'Seven days after you tell it you applied, the crew drafts a follow-up for you to send.'] };
+}

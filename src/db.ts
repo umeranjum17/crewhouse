@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS reads (member INTEGER, bot TEXT, seen INTEGER, PRIMAR
 CREATE TABLE IF NOT EXISTS usage (member INTEGER, day TEXT, tokens INTEGER, PRIMARY KEY (member, day));
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at INTEGER, kind TEXT, bot TEXT, data TEXT);
 CREATE TABLE IF NOT EXISTS cases (thread TEXT PRIMARY KEY, facts TEXT, updated_at INTEGER);
+-- The jobs board: one row per role. The crew writes only 'found' and 'drafted'; the person moves a role on from there.
+CREATE TABLE IF NOT EXISTS roles (
+  id INTEGER PRIMARY KEY, key TEXT UNIQUE, co TEXT, title TEXT, place TEXT, pay TEXT, fit TEXT, gap TEXT, url TEXT, stage TEXT DEFAULT 'found',
+  found_at INTEGER, checked_at INTEGER, task INTEGER, applied_at INTEGER, follow INTEGER);
 `;
 
 /** One SQLite file. Every write that matters appends an event in the same transaction. */
