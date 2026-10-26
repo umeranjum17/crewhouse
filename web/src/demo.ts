@@ -250,6 +250,12 @@ if (variant === 'goal' || variant === 'ask-goal') {
     role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV'),
     role(3, 'drafted', 'Acme Pay', 'Senior Frontend Engineer', 'London', '£70,000 a year', ['You led four engineers on a payments dashboard'], 'Testing with Playwright is not on your CV'),
     role(4, 'applied', 'Lumen', 'Frontend Engineer', 'Remote', '£60,000 a year', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing'),
+    { ...role(5, 'interview', 'Harbour Bank', 'Frontend Engineer', 'London', '£62,000 a year', ['You built a mobile banking API in Node.js'], 'Nothing the posting asks for is missing'), prep: { at: now - 10 * min,
+      brief: [{ says: 'Harbour Bank is a UK retail bank with about 2 million customers.', url: 'https://about.harbourbank.example/who-we-are', quote: 'serving two million customers' },
+        { says: 'It runs its mobile app on React Native and ships every two weeks.', url: 'https://engineering.harbourbank.example/mobile', quote: 'we ship the app every two weeks' },
+        { says: 'Its engineers work in squads of five with their own on-call.', url: 'https://engineering.harbourbank.example/squads', quote: 'squads of five' }],
+      questions: [{ ask: 'Tell us about a time you made a slow page fast.', why: 'The role owns checkout speed; they want a measured result.' }, { ask: 'How do you decide what to test in a payments flow?', why: 'Money moves here, so they probe how you weigh risk.' }, { ask: 'Describe a disagreement with a teammate and how it ended.', why: 'Squads are small; they check you can settle things plainly.' }, { ask: 'Why Harbour Bank rather than a startup?', why: 'They want a reason that is about the work, not the logo.' }],
+      yours: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'] } },
   ] } });
   if (variant === 'goal') Object.assign(state, { asks: [{ id: 30, bot: 'scribe', task_id: null, kind: 'propose', at: now - 5 * min, member: 1, title: 'Scribe drafted your application to Acme Pay.', detail: {
     words: 'Scribe drafted your application to Acme Pay.', yes: 'Approve',

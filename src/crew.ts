@@ -2057,6 +2057,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       const g = jobs.goal(this.db); // the job search's finder and writer have one tool each, and only theirs
       if (g?.rae === botId) own.push(tool('crew_role', 'Add ONE role you read yourself to the person\'s Found list. crewd opens `url`, so `pay` must be word for word what the posting shows (empty when it shows none), and each `fit` quotes (`cv`) the CV line that shows it. A role already on the board is not added twice.', (p) => this.foundRole(p)));
       if (g?.will === botId) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
+      if (g?.will === botId) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
@@ -2260,13 +2261,33 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     return this.propose(botId, `${this.bot(botId)!.display} drafted your application to ${r.co}.`, { draft: { channel: 'message', to: `${r.co} application form`, why: '', path: rel, sha: sha(text), link: r.url, role: r.id, yours }, preview: { body: text } });
   }
 
-  /** Draft my application: the writer's task for one role, from the person's tap. */
-  draftRole(id: number) {
-    const g = jobs.goal(this.db), r = jobs.role(this.db, id);
-    if (!g || !r || !['found', 'drafted'].includes(r.stage)) throw fail('that role is not waiting for a draft', 404);
-    if (r.task && this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.task)) throw fail('the draft is already being written', 409);
-    const { task } = this.addTask(g.will, jobs.draftTask(g, r), 'person', undefined, `Draft my application to ${r.co} for ${r.title}.`, [], { title: `Application to ${r.co}` });
-    this.db.run('UPDATE roles SET task = ? WHERE id = ?', task, id);
+  /** Prep for this interview: the writer's brief and questions on a role in Interview. Every claim is read from its own page; what only the person answers stays theirs. */
+  private async prepare(botId: string, p: Row) {
+    const r = jobs.role(this.db, Number(p.role));
+    if (r?.stage !== 'interview') throw fail('that role is not in Interview');
+    const brief = [];
+    for (const c of (Array.isArray(p.brief) ? p.brief : []).slice(0, 10)) {
+      const says = clean(c?.says, 300), url = String(c?.url ?? '').trim(), quote = clean(c?.quote, 300);
+      if (!says || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])\S+$/.test(url) || url.length > 500) throw fail(`“${short(says, 60)}” needs the https page that shows it`);
+      const page = await readPage(url).catch(() => null);
+      if (!page || page.status >= 400) throw fail(`I could not open ${url}, so “${short(says, 60)}” is not added.`);
+      if (jobs.norm(quote).length < 12 || !jobs.norm(page.text).includes(jobs.norm(quote))) throw fail(`That page does not show “${short(quote, 60)}”. Copy words from the page that shows the fact, or leave the fact out.`);
+      brief.push({ says, url, quote });
+    }
+    const all = (Array.isArray(p.questions) ? p.questions : []).map((q: Row) => ({ ask: clean(q?.ask, 200), why: clean(q?.why, 240) })).filter((q) => q.ask && q.why), questions = all.filter((q) => !jobs.ONLY_YOU.test(q.ask)).slice(0, 10);
+    if (!brief.length || questions.length < 3) throw fail('give the brief (each fact with its page) and at least three likely questions, each with why');
+    jobs.setPrep(this.db, r.id, botId, { brief, questions, yours: jobs.YOURS, at: Date.now() }); // a pay, visa or consent question is never practised; its field is on the list, empty
+    return { ok: 'the prep is on the role card' };
+  }
+
+  /** The writer's task for one role, from the person's tap: Draft my application, Prep for this interview, or Practice (the answers come in this chat). */
+  draftRole(id: number, what: 'draft' | 'prep' | 'practice' = 'draft') {
+    const g = jobs.goal(this.db), r = jobs.role(this.db, id), pre = jobs.prep(this.db, id);
+    if (!g || !r || !(what === 'draft' ? ['found', 'drafted'] : ['interview']).includes(r.stage)) throw fail(`that role is not waiting for ${what === 'draft' ? 'a draft' : 'interview prep'}`, 404);
+    if (what === 'practice' ? !pre : r.task && this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.task)) throw fail(what === 'practice' ? 'prepare for this interview first' : 'the writer is on it already', 409);
+    const [body, said, title] = what === 'draft' ? [jobs.draftTask(g, r), `Draft my application to ${r.co} for ${r.title}.`, `Application to ${r.co}`] : what === 'prep' ? [jobs.prepTask(g, r), `Prep me for my ${r.co} interview.`, `Interview prep for ${r.co}`] : [jobs.practiceTask(g, r, pre), `Practice my ${r.co} interview with me.`, `Practice interview for ${r.co}`];
+    const { task } = this.addTask(g.will, body, 'person', undefined, said, [], { title });
+    if (what !== 'practice') this.db.run('UPDATE roles SET task = ? WHERE id = ?', task, id);
     return { task };
   }
 

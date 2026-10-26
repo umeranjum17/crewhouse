@@ -44,6 +44,7 @@ function parseRoute(): Route {
   // #/f/<helper>/<file>/<title>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
   if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c), title: d ? decodeURIComponent(d) : undefined };
   if (a === 'ask' && b) return { view: 'ask', id: b };
+  if (a === 'goal' && /^\d+$/.test(b ?? '')) return { view: 'goal', id: b };
   if (a === 'pair' && demo) return { view: 'pair' };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
@@ -507,6 +508,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
   const [partial, setPartial] = useState('');
   const [reading, setReading] = useState(0); // the line a call with Chief is reading aloud
+  const practice = A.practising(state, id); // the writer's chat while a role in Interview has its prep: answer by typing or the mic, nothing read aloud
   // The live line's own feed: crewd's pushed events with the moment they were heard, and which replies are streaming.
   const [heard, setHeard] = useState<Json[]>([]);
   const [writing, setWriting] = useState(new Map<number, number>());
@@ -797,7 +799,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
       <div className="dock">{answerTo && <div className="reply-to"><div className="grow"><b>Answering Chief</b><span>{answerTo}</span></div><button type="button" className="icon-btn" aria-label="Not answering" onClick={() => setAnswering(undefined)}>×</button></div>}
-        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={{ chat: id, name, lines, reading: setReading }} {...typeInto(id)} /></div>
+        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
     </div>
   );
 }
@@ -2316,7 +2318,7 @@ function App() {
           {v.view === 'home' && <Home {...ctx} />}
           {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'jobs' && <Jobs {...ctx} />}
-          {v.view === 'goal' && <Goal {...ctx} />}
+          {v.view === 'goal' && <Goal {...ctx} id={v.id} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
           {v.view === 'add' && <AddHelper {...ctx} />}

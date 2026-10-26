@@ -37,7 +37,7 @@ try {
     await wait(1200);
     if (then) { await run(then); await wait(600); }
     const m = await run(`(() => {
-      const seen = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden'; };
+      const seen = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('.sr'); };
       const texty = [...document.querySelectorAll('main *, .page *')].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));
       const small = (e) => { const cs = getComputedStyle(e); return cs.textTransform === 'uppercase' || e.closest('.st-pill, .pill, .tabbar, .tab, .count, .badge, time'); };
       const tiny = texty.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16 && !small(e)).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
