@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { qrMatrix } from '@byokit/ui-core';
 import { api, demo, mintFiles, pairable, paired, subscribe, trouble, type Json } from './api.ts';
 import * as A from './adapter.ts';
+import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
 import { AiMark, answer, AskCard, AnsweredCard, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, DoneCard, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
@@ -439,12 +440,15 @@ function PairQR({ text, label }: { text: string; label?: string }) {
     <path fill="black" d={rows.flatMap((row, y) => row.map((dark, x) => dark ? `M${x} ${y}h1v1h-1z` : '')).join('')} />
   </svg>;
 }
-/** Where no phone is paired yet: the app download as a QR plus the same link as plain text. Gone once a phone is paired. */
+/** Where no phone is paired yet: the app download as a QR plus the same link as plain text. Gone once a phone is paired.
+ *  The link is the newest phone preview the forge lists, the one stable link while it cannot be asked (download.ts). */
 function AppDownloadQR({ android }: { android?: boolean }) {
+  const [url, setUrl] = useState(APP_DOWNLOAD_URL);
+  useEffect(() => { let live = true; void appDownload().then((d) => { if (live && d) setUrl(d.url); }).catch(() => {}); return () => { live = false; }; }, []);
   return <div className="card pair" aria-label="Get the app">
-    <div className="qr"><PairQR text={A.APP_DOWNLOAD_URL} label="Scan to get the app" /></div>
+    <div className="qr"><PairQR text={url} label="Scan to get the app" /></div>
     <div className="grow"><b>{android ? 'Android phone? Get the app instead' : 'Get the app'}</b><p className="small">Scan with your phone camera to get the app</p>
-      <p className="mute small" style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.APP_DOWNLOAD_URL}</p>
+      <p className="mute small" style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{url}</p>
     </div>
   </div>;
 }

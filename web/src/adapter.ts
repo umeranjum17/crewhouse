@@ -90,8 +90,6 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   inbox?: Inbox; mailDown?: string };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
-/** The one stable download for the phone app, shown as a QR plus plain text wherever no phone is paired yet. */
-export const APP_DOWNLOAD_URL = 'https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk';
 export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
