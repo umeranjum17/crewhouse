@@ -1736,7 +1736,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? (tool === 'computer' ? 'this computer' : 'a web page');
       try { if (tool === 'browser' || tool === 'computer') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
-      const l = this.live.get(botId); if (l) l.acted = where; // held until the call returns: a click refused before it ran marks no job
+      const l = this.live.get(botId); if (l) l.acted = task ? where : undefined; // held for this call only: one the engine refused before it ran marks nothing
     }
     return r;
   }
