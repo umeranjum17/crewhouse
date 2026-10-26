@@ -47,6 +47,9 @@ for account in ${ACCOUNTS:-openrouter minimax}; do
     ax screenshot "$OUT/key-sheet-1-key-$t.png"
     fillin 'input[type=password]' stub-key-not-real
     click 'form .btn' "Sign in with $name"; ax wait "You're signed in"
+    # The page behind the sheet reads the account list a beat after the sheet does: wait for Chief's own line to say he is
+    # free to work, so the shot never shows "Needs a sign-in" behind a sheet that says the person is signed in.
+    ax wait "Hands out the jobs"
     [ -z "${AXLOG:-}" ] || ax eval "document.body.innerText.slice(0,400)"
     ax screenshot "$OUT/key-sheet-2-signed-in-$t.png"
     # Nobody is asked to pick an engine by name: the sheet names the model the crew took by itself (MiniMax's own Flash),
