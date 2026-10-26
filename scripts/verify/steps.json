@@ -554,5 +554,17 @@
       "Do the same against the computer one release ahead"
     ],
     "result": "The CLI and this checkout say Crewhouse with the package version marked -dev; the phone says App with its preview version and Host with the computer's; against the newer computer the web app and the phone say App and Host apart, and Settings says to update the app"
+  },
+  "first-run-linux": {
+    "target": { "version": "{{version}}+{{sha}}" },
+    "start": "a clean Ubuntu desktop, the released computer build's .deb, no terminal and no config file",
+    "steps": [
+      "Unpack the .deb into /opt/crewhouse and start the app the way the desktop menu does",
+      "The browser opens on Chief's chat and he asks what to call you",
+      "Type a name and pick one of the ideas he offers, and the job waits for a sign-in",
+      "Open the key sheet, go to the account's own page for a key, paste one, pick the model",
+      "The waiting job starts and his first real answer arrives in the thread"
+    ],
+    "result": "The whole path from unpacking the .deb to a first real Chief answer, timed step by step in steps.tsv"
   }
 }

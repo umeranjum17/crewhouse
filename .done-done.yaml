@@ -107,6 +107,10 @@ journeys:
     command: 'timeout -k 10 600 xvfb-run -a -s "-screen 0 1920x1200x24" node scripts/verify/pwa-shell.mjs "${PLAN:?recipe plan with outputs under DONE_DONE_EVIDENCE_ROOT}" --out "$DONE_DONE_EVIDENCE_ROOT" > "$DONE_DONE_EVIDENCE_ROOT/run.json"'
   key-sheet:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/key-sheet.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  first-run-linux:
+    timeout: 25m
+    spends: 'one live model turn on the MiniMax key file named by KEY_FILE, for the first real answer'
+    command: 'timeout -k 10 1500 bash scripts/verify/first-run-linux.sh "$DONE_DONE_EVIDENCE_ROOT" "${CREWHOUSE_DEB:?the released .deb to install}" "${KEY_FILE:?authorized MiniMax key file}"'
   home-list-preview:
     command: 'timeout -k 10 600 bash scripts/verify/home-list-preview.sh "$DONE_DONE_EVIDENCE_ROOT"'
   quiet-nudge:
