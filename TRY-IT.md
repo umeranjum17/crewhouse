@@ -4,7 +4,7 @@ A first walk through your Crewhouse personal assistant on your own computer, abo
 
 ## 1. Install and start
 
-Download the computer `.deb` from [install and run](docs/install.md#download) (about 200 MB; Ubuntu or Debian, 64-bit), open it, and press **Install** in your software centre — it brings the helpers' sandbox and screens with it. Then open **Crewhouse** from your app menu; Chief greets you on his own. Nothing to type and no terminal anywhere. A helper fetches its own tools (its web browser is the big one) the first time it needs them.
+Download the computer `.deb` from [install and run](docs/install.md#download) (about 180 MB; Ubuntu or Debian, 64-bit), open it, and press **Install** in your software centre — it brings the helpers' sandbox and screens with it. Then open **Crewhouse** from your app menu; Chief greets you on his own. Nothing to type and no terminal anywhere. A helper fetches its own tools (its web browser is the big one) the first time it needs them.
 
 Crewhouse keeps everything in one folder under your system program directory, plus your own crew folder `~/Crewhouse/`. Your own `pi`, if you have one, is never touched. From a checkout, `./crewhouse uninstall --all` removes all of it; on the installed one, your software centre removes it.
 
@@ -28,9 +28,9 @@ From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 ## 3. The phone app
 
-Install [Crewhouse phone preview .23](https://github.com/umeranjum17/crewhouse/releases/download/phone-preview/crewhouse.apk), version **1.0.0-preview.20261022.23**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
+Install [Crewhouse phone preview .25](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261024.25/CREWHOUSE-APK-1.0.0-preview.20261024.25-arm64-v8a.apk), version **1.0.0-preview.20261024.25**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
-This file is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the versioned release; see [docs/install.md](docs/install.md).
+This file is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the same release; see [docs/install.md](docs/install.md).
 
 To pair:
 
