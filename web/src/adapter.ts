@@ -1988,14 +1988,15 @@ function runOf(h: Json, reminder = false, mail = false) {
 /** The AI accounts a person can think with, in the order the app offers them: every route the engine supports,
  *  every one on the sign-in card (no front door alone). Name and billing come from the kit's own catalogue,
  *  so a new route lands with the bump; `MARKS` is only what the kit can't know — the tile colour, the tool a route
- *  needs installed (`cli`), and where that provider's own page lives (`site`, `plans`). Kept in step with crewd's
+ *  needs installed (`cli`), where that provider's own page lives (`site`, `plans`), and, for a key account, the page
+ *  where a person makes the key it asks them to paste (`keyPage`). Kept in step with crewd's
  *  own list by test/ui.test.ts. */
-const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: string; plans?: string }> = {
+const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: string; plans?: string; keyPage?: string }> = {
   chatgpt: { bg: '#10a37f', site: 'https://chatgpt.com/', plans: 'https://chatgpt.com/#pricing' },
   grok: { bg: '#1d1d1f' },
   copilot: { bg: '#24292f' },
-  openrouter: { bg: '#8b5cf6' },
-  minimax: { bg: '#e11d48', name: 'MiniMax' },
+  openrouter: { bg: '#8b5cf6', keyPage: 'https://openrouter.ai/keys' },
+  minimax: { bg: '#e11d48', name: 'MiniMax', keyPage: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
   claude: { bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
   'opencode-go': { bg: '#18181b' },
 };

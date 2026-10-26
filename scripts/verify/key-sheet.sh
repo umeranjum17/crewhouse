@@ -32,12 +32,17 @@ pick
 n=0
 for account in ${ACCOUNTS:-openrouter minimax}; do
   up
-  name=OpenRouter; [ "$account" = minimax ] && name=MiniMax
+  name=OpenRouter; key_page=https://openrouter.ai/keys
+  [ "$account" = minimax ] && { name=MiniMax; key_page=https://platform.minimax.io/user-center/basic-information/interface-key; }
   for theme in day night; do for w in 390 1280; do
     n=$((n+1)); h=844; [ "$w" = 1280 ] && h=900; t="$account-$theme-$w"
     api -X POST -d '{}' "$B/api/accounts/1/$account/logout" >/dev/null
     ax open about:blank; ax resize "$w" "$h"; ax open "$B/?r=$n&$theme#person=$P"; nap 1500
     click 'button' "^Sign in with $name"; ax wait "Paste the key from your"
+    # The sheet must name where a key comes from: a person who has never made one has nothing to paste otherwise.
+    # Read the one plain button that leaves the app for the account's own key page (its words change with the account).
+    href=$(chrome-devtools-axi eval "(()=>{const a=[...document.querySelectorAll('a.btn')].find(a=>/^https?:/.test(a.getAttribute('href')||''));return a?a.getAttribute('href'):''})()" 2>/dev/null | grep -oE 'https?://[^"\\ ]+' | head -1)
+    case "$href" in "$key_page"*) ;; *) echo "$account: the key sheet links '$href', wanted '$key_page'" >&2; exit 1;; esac
     ax screenshot "$OUT/key-sheet-1-key-$t.png"
     fillin 'input[type=password]' stub-key-not-real
     click 'form .btn' "Sign in with $name"; ax wait "Which model should"
