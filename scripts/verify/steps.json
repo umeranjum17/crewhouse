@@ -582,7 +582,9 @@
     "result": "The CLI and this checkout say Crewhouse with the package version marked -dev; the phone says App with its preview version and Host with the computer's; against the newer computer the web app and the phone say App and Host apart, and Settings says to update the app"
   },
   "first-run-linux": {
-    "target": { "version": "{{version}}+{{sha}}" },
+    "target": {
+      "version": "{{version}}+{{sha}}"
+    },
     "start": "a clean Ubuntu desktop, the released computer build's .deb, no terminal and no config file",
     "steps": [
       "Unpack the .deb into /opt/crewhouse and start the app the way the desktop menu does",
@@ -592,5 +594,17 @@
       "The waiting job starts and his first real answer arrives in the thread"
     ],
     "result": "The whole path from unpacking the .deb to a first real Chief answer, timed step by step in steps.tsv"
+  },
+  "jobs-loop": {
+    "start": "Umer on a fresh crew on the stub engine, with a local posting page; no real model, account or job site",
+    "steps": [
+      "Tell Chief the roles, places, pay floor and paste a CV; Chief shows one goal card with what the crew will do and a Won't do list",
+      "Say yes: the finder and the writer join, and the finder adds two roles from the posting page",
+      "Open Your goal from Jobs: the board with Found and Drafted columns, then open a Found role card",
+      "Tap Draft my application: the writer's draft card arrives with the only-you fields left empty",
+      "Tap I applied on the role and open Applied",
+      "Repeat the same screens in the installed app's window at phone size"
+    ],
+    "result": "The goal card lists Won't do before anything starts. The board shows each role's place, pay as the posting says it, why it fits, what is missing and its source with the date checked; Found reads as plain information. The draft card keeps declarations, right to work, visa sponsorship, salary, notice and consent empty under Only you can answer these. Only Umer's own tap moves a role to Applied, which sets a 7-day follow-up. Nothing is submitted, sent or accepted. Not a real job site or a real model."
   }
 }

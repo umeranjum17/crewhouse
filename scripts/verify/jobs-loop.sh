@@ -51,4 +51,5 @@ hash_gate role /goal "document.querySelector('.goal-chips button')?.click(); doc
 hash_gate draft "/ask/$DRAFT"
 drive apply > /dev/null
 hash_gate applied /goal "[...document.querySelectorAll('.goal-chips button')].find((b) => /^Applied/.test(b.textContent))?.click()"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" jobs-loop
 echo "jobs-loop: ok role=$ROLE"
