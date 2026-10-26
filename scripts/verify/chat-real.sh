@@ -116,7 +116,7 @@ NOTE
   }
   settle 1 || true # the inbox ask went in as the first request, before the key
   n=$(bots); press "Not now"; say $((n + 1)) 180 || true; settle 1 || true
-  stills ask1-gmail "1440x900 390x844"
+  stills ask1-gmail "1440x900"
   probe ask2-file "$OUT_PASTE" 300 || true
   n=$(bots); settle 2 || true; say $((n + 1)) 120 || true
   stills ask2-doc "1440x900"
