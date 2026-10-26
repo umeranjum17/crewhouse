@@ -190,7 +190,7 @@ interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<strin
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; owners?: Record<string, string>;
   /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
-  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number;
+  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number; acted?: string;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[];
   /** Its own computer: the engine's node on its display that every `computer` call must name. */
@@ -1649,11 +1649,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) { ok = false; text = `error: ${String(e?.message ?? e).slice(0, 300)}`; }
         // A result that reads "error: …" is a failure the model was told about, so the record says so too.
-        const failed = !ok || text.startsWith('error:'), [name, input] = this.unwrap(tool, rawInput);
+        const failed = !ok || text.startsWith('error:'), [name, input] = this.unwrap(tool, rawInput), l = this.live.get(run.bot), acted = l?.acted; if (l) l.acted = undefined;
         // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
         this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok: !failed, head: text.split('\n')[0].slice(0, 160) });
         // The trail's step, written once the call is over: a call that failed never claims the work was done.
-        const words = toolWords(name, input, !failed), note = failed && name === 'bash' ? pinnedNote(this.cfg, String(input.command ?? '').trim().split(/\s+/)[0] ?? '') : '';
+        const words = toolWords(name, input, !failed), note = failed && name === 'bash' ? pinnedNote(this.cfg, String(input.command ?? '').trim().split(/\s+/)[0] ?? '') : ''; if (acted && !failed) this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', acted, run.task ?? this.activeTask(run.bot)?.id); // only a call that ran marks the job
         if (words) this.db.event('run.tool', run.bot, { task: run.task, words: note ? `${words}. ${note}` : words });
         return text;
       },
@@ -1736,7 +1736,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? (tool === 'computer' ? 'this computer' : 'a web page');
       try { if (tool === 'browser' || tool === 'computer') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
-      this.db.run('UPDATE tasks SET acted = ?, outcome = NULL WHERE id = ?', where, task.id);
+      const l = this.live.get(botId); if (l) l.acted = where; // held until the call returns: a click refused before it ran marks no job
     }
     return r;
   }

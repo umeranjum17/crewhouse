@@ -57,6 +57,7 @@ const app = createServer(async (req, res) => {
       { name: 'search', description: 'Search pages', inputSchema: { type: 'object', properties: { q: { type: 'string' } } }, annotations: { readOnlyHint: true } },
       { name: 'create-page', description: 'Create a page', inputSchema: { type: 'object', properties: { title: { type: 'string' } } }, annotations: { title: 'create a page' } },
     ], nextCursor: 'next' } });
+    if (m.params?.name === failing) { res.writeHead(503); return res.end('not right now'); }
     // Answered as an event stream, as remote MCP servers may.
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     return res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { ...(m.params.name === 'rich' ? { structuredContent: { rows: [1, 2] }, isError: true } : {}), content: [{ type: 'text', text: `did ${m.params.name} ${JSON.stringify(m.params.arguments)}` }, ...(m.params.name === 'rich' ? [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }] : [])] } })}\n\n`);
@@ -64,6 +65,7 @@ const app = createServer(async (req, res) => {
   json({ error: 'not found' }, 404);
 });
 const google = { ticked: '', testing: false };
+let failing = ''; // a tool the app cannot answer this time
 // Made up at run time, so a scanner doesn't take them for real keys.
 const gid = (name: string) => `${name}.apps.google${'usercontent'}.com`;
 const SECRET = ['GOCSPX', 'abcdefghijklmnopqrstuvwxyz12'].join('-');
@@ -472,6 +474,15 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   assert.equal(silent.state, 'unsure');
   assert.equal(silent.lines.at(-1), "Not sure it worked: I tried something on your Mocknote, and nothing came back to confirm it. Check there before you rely on it, then tell me to try again.");
   assert.ok(silent.alerted);
+
+  // A call that fails before it ran changed nothing, so the job is not told something may have happened and no alert
+  // goes out: a refused write (Mocknote needs a title) is the same as a click the engine would not place.
+  failing = 'create-page';
+  const refused = await job('create it [tool crew_app {"tool":"mocknote_create_page","input":{"title":"Plan"}}]');
+  failing = '';
+  assert.equal(refused.state, 'done', 'a refused call leaves nothing to confirm');
+  assert.ok(!refused.alerted, 'no false alarm on the phone');
+  assert.equal(refused.acted, null, 'a failed call marks no job');
 
   // Said it worked, then acted again: the old "it worked" doesn't cover the new act.
   const again = await job(`book it ${outcome(true, 'x')} ${book}`);
