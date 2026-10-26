@@ -814,16 +814,17 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
 }
 
 // ---------- phone only: Chief on this phone, no computer ----------
-/** The first screen with no computer paired (mock C): Chief asks where he should work. On my computer is
- *  the setup/pairing, Just on this phone the phone-only floor, In my cloud the cloud set-up steps. */
+/** The first screen with no computer paired (mock C): Chief asks where he should work. On my computer goes straight to
+ *  pairing, since most people already have Crewhouse there and the computer shows the code; putting it on a computer
+ *  that has none is the one link on that screen. Just on this phone the phone-only floor, In my cloud the cloud steps. */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
-  const [at, setAt] = useState<'where' | 'put' | 'code' | 'computer' | 'cloud'>('where');
-  const back = at === 'where' ? null : () => setAt(at === 'code' ? 'put' : 'where');
+  const [at, setAt] = useState<'where' | 'pair' | 'put' | 'cloud'>('where');
+  const back = at === 'where' ? null : () => setAt(at === 'put' ? 'pair' : 'where');
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
-  if (at === 'put') return <PutChief onCode={() => setAt('code')} onHave={() => setAt('computer')} onBack={back!} />;
-  if (at === 'code' || at === 'computer') return <Pair onPaired={onPaired} onBack={back!} onPut={at === 'computer' ? () => setAt('put') : undefined} />;
-  if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('computer')} onPaired={onPaired} />;
+  if (at === 'put') return <PutChief onCode={() => setAt('pair')} onBack={back!} />;
+  if (at === 'pair') return <Pair onPaired={onPaired} onBack={back!} onPut={() => setAt('put')} />;
+  if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('pair')} onPaired={onPaired} />;
   const w = A.where(cloudOn);
   return (
     <ScrollView contentContainerStyle={[s.screen, { gap: 16, paddingTop: 48 }]}>
@@ -833,7 +834,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
       </View>
       {!!w.line && <T tone="ink2">{w.line}</T>}
       {w.rows.map((r, i) => <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={r.title}
-        onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'cloud' ? 'cloud' : 'put')}
+        onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'cloud' ? 'cloud' : 'pair')}
         style={[s.card, s.row, { gap: 12, backgroundColor: t.card, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }]}>
         <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
         <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
@@ -844,8 +845,8 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
 }
 
 /** On my computer with nothing there yet: the one line that puts Chief on a Linux computer, which prints a code that
- *  works once; Type the code opens Pair's box. Already there goes to Pair as before. */
-function PutChief({ onCode, onHave, onBack }: { onCode: () => void; onHave: () => void; onBack: () => void }) {
+ *  works once; Type the code opens Pair's box, and Back returns to it. */
+function PutChief({ onCode, onBack }: { onCode: () => void; onBack: () => void }) {
   const t = useLook();
   const p = A.PUT;
   return (
@@ -863,7 +864,6 @@ function PutChief({ onCode, onHave, onBack }: { onCode: () => void; onHave: () =
       </View>
       <Note>{p.needs}</Note>
       <T tone="mute" style={s.small}>{p.app}</T>
-      <Btn ghost label={p.have} onPress={onHave} />
     </ScrollView>
   );
 }
