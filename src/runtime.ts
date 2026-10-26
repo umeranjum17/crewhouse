@@ -39,7 +39,7 @@ export interface AgentRuntime {
   start(host: ToolHost): Promise<unknown>;
   stop(): Promise<void>;
   signInRecovery?(): string;
-  engine?(): { phase: string; words: string }; onEngine?: () => void;
+  engine?(): { phase: string; words: string; detail?: string }; onEngine?: () => void;
   /** Every account the person has (two of one provider included), by engine id; the shim keys them by accountRef. */
   accounts(): Promise<AccountRow[]>;
   signedIn(account: string): Promise<boolean>;

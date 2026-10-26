@@ -645,11 +645,12 @@ export function gettingReady(state: Json) {
     : "Getting a few of the helpers' tools ready. Everything else works meanwhile.";
 }
 /** Hello's first screen while the AI engine installs or starts (crewd's `engine`: the kit's own phase and words), or why
- *  it failed; null once it is ready, on the stand-in, or locked (the sign-in card asks for that one). */
-export function engineView(state: Json): { failed: boolean; words: string } | null {
+ *  it failed and what fixes it, with the engine's own last words behind Details; null once it is ready, on the stand-in, or
+ *  locked (the sign-in card asks for that one). */
+export function engineView(state: Json): { failed: boolean; words: string; detail: string } | null {
   const e = state.engine;
   if (!e || e.phase === 'ready' || e.phase === 'locked') return null;
-  return { failed: e.phase === 'failed' || e.phase === 'needs-update', words: String(e.words ?? '') };
+  return { failed: e.phase === 'failed' || e.phase === 'needs-update', words: String(e.words ?? ''), detail: String(e.detail ?? '') };
 }
 /** For the owner: a newer Crewhouse to download, in words. */
 export const update = (state: Json) => (state.update ? { words: `A new Crewhouse is ready (${state.update.version}). Download it and open it, and the crew carries on where it was.`, url: String(state.update.url) } : null);

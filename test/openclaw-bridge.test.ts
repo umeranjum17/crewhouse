@@ -269,19 +269,30 @@ process.exit(spawnSync('npm', args, { stdio: 'inherit' }).status ?? 1);
   } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
 });
 
-// A first open that cannot install says why on Hello, from the kit's own refusal and retained diagnosis: no npm at all,
-// then an npm that cannot reach the registry. Neither touches the network.
-test('a failed first install names its real cause: no npm, then no network', { timeout: 60_000 }, async () => {
-  const state = mkdtempSync(join(tmpdir(), 'ch-install-fail-'));
-  const npm = join(state, 'npm'), host = { gate: async () => ({ allow: true }), call: async () => '' } as never;
+// A first open that cannot start says why on Hello in one plain line and what fixes it, from the kit's own refusal and its
+// retained diagnosis, with the technical detail behind Details: no npm at all, an npm that cannot reach the registry, a
+// computer that does not let npm write, and a failure nothing in the engine's own log explains. No network, no engine, no model.
+test('a failed first start names its real cause and its one fix, and the detail behind it', { timeout: 120_000 }, async () => {
+  const state = mkdtempSync(join(tmpdir(), 'ch-install-fail-')), npm = join(state, 'npm');
+  const host = { gate: async () => ({ allow: true }), call: async () => '' } as never;
+  const start = async () => { const r = new OpenClawRuntime(state, '', { engineDir: join(state, 'engine'), npmPath: npm, authSeal: undefined }); await assert.rejects(r.start(host)); const e = r.engine() as { words: string; detail?: string }; return { words: e.words, detail: e.detail ?? '' }; };
   try {
-    const missing = new OpenClawRuntime(state, '', { engineDir: join(state, 'engine'), npmPath: npm, authSeal: undefined });
-    await assert.rejects(missing.start(host));
-    assert.deepEqual(missing.engine(), { phase: 'failed', words: "Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again." });
-    writeFileSync(npm, `#!/bin/sh\n[ "$1" = --version ] && { echo 10.9.0; exit 0; }\necho 'npm error code EAI_AGAIN' >&2\necho 'npm error request to https://registry.npmjs.org/openclaw failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org' >&2\nexit 1\n`);
+    const noNpm = await start();
+    assert.equal(noNpm.words, "Crewhouse needs npm, which comes with Node.js, to set up your crew, and this computer doesn't have it. Install Node.js, then try again.");
+    assert.ok(noNpm.detail.length > 0, 'Details keeps what the computer said');
+    const offline = "Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again.";
+    const fake = (stderr: string) => writeFileSync(npm, `#!/bin/sh\n[ "$1" = --version ] && { echo 10.9.0; exit 0; }\n${stderr}exit 1\n`);
+    fake(`echo 'npm error code EAI_AGAIN' >&2\n`);
     chmodSync(npm, 0o700);
-    const offline = new OpenClawRuntime(state, '', { engineDir: join(state, 'engine'), npmPath: npm, authSeal: undefined });
-    await assert.rejects(offline.start(host));
-    assert.deepEqual(offline.engine(), { phase: 'failed', words: "Crewhouse couldn't download what your crew needs. Check that this computer is online, then try again." });
+    const flaky = await start();
+    assert.equal(flaky.words, offline);
+    assert.match(flaky.detail, /EAI_AGAIN/, 'the engine npm\'s own words are behind Details');
+    fake(`echo "npm error EACCES: permission denied, mkdir '/srv/crewhouse'" >&2\n`);
+    const denied = await start();
+    assert.equal(denied.words, "Crewhouse isn't allowed to use its own files on this computer. Give its folder permission, then try again.");
+    assert.match(denied.detail, /EACCES/, 'Details names the folder the computer refused');
+    writeFileSync(npm, '#!/bin/sh\n[ "$1" = --version ] && { echo 10.9.0; exit 0; }\nexit 1\n');
+    const unknown = await start();
+    assert.equal(unknown.words, 'Some of the files your crew needs are missing from this computer. Install Crewhouse again to put them back.');
   } finally { unfreeze(state); rmSync(state, { recursive: true, force: true }); }
 });

@@ -96,14 +96,15 @@ function useAccounts(poll: number, tick = 0) {
   return list;
 }
 
-/** Before Chief's first chat: the AI engine installing or starting, in the kit's own words, or why it failed,
- *  with Try again. Progress is the kit's phase, never a timer. */
-function GettingReady({ view, refresh }: { view: { failed: boolean; words: string }; refresh: () => void }) {
+/** Before Chief's first chat: the AI engine installing or starting, in the kit's own words, or why it failed and what fixes
+ *  it, with the engine's own last words behind Details, and Try again. Progress is the kit's phase, never a timer. */
+function GettingReady({ view, refresh }: { view: { failed: boolean; words: string; detail: string }; refresh: () => void }) {
   return (
     <Split mid className="getting-ready" mark={<Face who="chief" size={128} />} title={view.failed ? "Your crew couldn't get ready" : 'Getting your crew ready'} lead={view.words || undefined}>
       <span role="status" aria-live="polite">{view.failed
         ? <button className="btn go big" onClick={() => attempt(async () => { await api.retryEngine(); refresh(); })}>Try again</button>
         : <span className="fr-wait"><i className="fr-spin" />Setting up…</span>}</span>
+      {view.failed && !!view.detail && <details className="fr-note"><summary>Details</summary><p className="fail-detail">{view.detail}</p></details>}
     </Split>
   );
 }
