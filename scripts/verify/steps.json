@@ -65,6 +65,16 @@
     ],
     "result": "Chief replies in his thread on {{model}} to: {{ask}}"
   },
+  "chat-asks": {
+    "start": "a Crewhouse signed in on the free MiniMax route, Chief’s thread empty",
+    "steps": [
+      "Ask Chief to go through today’s inbox and say what needs an answer; no Gmail is connected, so decline the Connect card with Not now",
+      "Paste a barbecue note and ask for a file made from it",
+      "Ask for a weekly reminder to water the plants on Sunday evening",
+      "Tap Start it on the reminder’s card"
+    ],
+    "result": "three everyday asks end on words a person can act on: the pasted note is a real document in the thread and in Made in this chat ({{doc}}), the inbox answer names only what crewd cannot do and what to do instead, and the watering reminder is scheduled only by Start it, at the cadence Chief names ({{routine}})"
+  },
   "chat-real-helper": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
     "steps": [
@@ -95,7 +105,9 @@
     "result": "The sign-in sheet names the command line sign-in and what to do about it, in plain words, at 390 and 1440, day and night"
   },
   "crew-room": {
-    "target": { "version": "{{version}}+{{sha}}" },
+    "target": {
+      "version": "{{version}}+{{sha}}"
+    },
     "start": "a fresh Crewhouse with Scout and Scribe on the crew, signed in to {{model}}",
     "steps": [
       "Ask Chief for a job that needs Scout and then Scribe, and a summary when both are back",
@@ -169,7 +181,9 @@
     "result": "The computer holds the chat and the phone's copy goes once the computer stored it"
   },
   "phone-live-control": {
-    "target": { "version": "{{sha}}" },
+    "target": {
+      "version": "{{sha}}"
+    },
     "start": "a fresh Crewhouse on the real engine, signed in to a MiniMax Flash key, with a helper (Research Rae) on the phone layout at 390 wide",
     "steps": [
       "Ask the helper to read a file and tap Yes, go ahead on its ask",
@@ -402,7 +416,9 @@
     "result": "The preview panel draws the bar and pie charts of the finished workbook, and the file's own chart parts are real"
   },
   "chief-wait": {
-    "target": { "version": "{{version}}+{{sha}}" },
+    "target": {
+      "version": "{{version}}+{{sha}}"
+    },
     "start": "a fresh Crewhouse with one helper on the crew, on {{model}}",
     "steps": [
       "Ask Chief to get a helper to read a file and bring back its reference",
@@ -412,7 +428,9 @@
     "result": "Chief's thread shows one answer, the words the helper's report brought, with no question and no work of Chief's own while the helper worked"
   },
   "handoff-lane-reset": {
-    "target": { "version": "{{version}}+{{sha}}" },
+    "target": {
+      "version": "{{version}}+{{sha}}"
+    },
     "start": "a fresh Crewhouse with one helper on the crew, on {{model}}",
     "steps": [
       "Ask Chief to get a helper to read a file and bring back its reference, and to say so plainly if it cannot",
