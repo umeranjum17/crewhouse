@@ -10,7 +10,8 @@
 # are the two the app is designed at; `resize` then `open` re-renders, as the layout
 # is pure CSS. Set CHROME_DEVTOOLS_AXI_SESSION to your task-named session first.
 # EXPAND_MORE=1 opens up to eight long replies; AFTER runs after expansion (e.g. scroll .lines).
-# WIDTHS defaults to both sizes. FULL_PAGE=1 captures document scroll only, not nested .lines on desktop.
+# WIDTHS defaults to both sizes. THEMES defaults to both themes; name one (THEMES=day) when a browser draws better one
+# shot to a browser. FULL_PAGE=1 captures document scroll only, not nested .lines on desktop.
 # A screen reached by a tap rather than a URL (Chief's thread opened from his card on Home)
 # needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
 #   THEN="$(cat <<'JS'
@@ -39,22 +40,30 @@ mkdir -p "$DEST"
 # KILL 10s later, so a hung call always ends in a loud failure, never silence.
 axi() { local out rc n=0; while :; do if out=$(timeout -k 10 120 chrome-devtools-axi "$@" 2>&1); then rc=0; else rc=$?; fi; if [ $rc -eq 0 ]; then printf '%s\n' "$out"; return 0; fi; n=$((n + 1)); echo "screens.sh: chrome-devtools-axi $* failed (exit $rc, attempt $n): $out" >&2; [ $n -ge 2 ] && return "$rc"; sleep 2; done; }
 # A run can inherit a session whose tabs have no selection (a run that died
-# mid-capture leaves them behind), and `open` then refuses: take the first
-# tab, or open one when there is none.
-pages_out=$(axi pages) || { echo "screens.sh: could not list pages" >&2; exit 1; }
-first=$(printf '%s\n' "$pages_out" | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
-if [ -n "$first" ]; then axi selectpage "$first"; else axi newpage about:blank; fi
-echo "screens.sh: capturing $SLUG with tab ${first:-new}" >&2
+# mid-capture leaves them behind), and a tab can lose it again between captures,
+# where `open` then refuses: take the first tab, or open one when there is none,
+# before every load.
+pick() {
+  local out first
+  out=$(axi pages) || { echo "screens.sh: could not list pages" >&2; exit 1; }
+  first=$(printf '%s\n' "$out" | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
+  # A blank tab is not a page a shot can be taken of: the first one is a data URL that renders.
+  if [ -n "$first" ]; then axi selectpage "$first" >/dev/null; else axi newpage "data:text/html,<title>ready</title>" >/dev/null; fi
+  PICKED=${first:-new}
+}
+pick
+echo "screens.sh: capturing $SLUG with tab $PICKED" >&2
 # The query goes before the hash: the app routes on location.hash, so "?night#/settings" would pin nothing.
 withq() { local q=$1; case "$2" in *'#'*) printf '%s?%s%s' "${2%%#*}" "$q" "#${2#*#}";; *) printf '%s?%s' "$2" "$q";; esac; }
-for theme in night day; do
+for theme in ${THEMES:-night day}; do
   for wh in ${WIDTHS:-1440x900 390x844}; do
     w=${wh%x*}; h=${wh#*x}
     u="$(withq "$([ -n "$EXTRA" ] && printf '%s&' "$EXTRA")$theme" "$URL")"
-    # The preamble holds a selected page, so emulate acts directly; one load
-    # per capture keeps renderer churn (and CDP timeouts) down.
+    # The tab is picked again before every load, so emulate acts directly; one
+    # load per capture keeps renderer churn (and CDP timeouts) down.
     echo "screens.sh: $SLUG $theme $w" >&2
     if [ "$w" -le 500 ]; then vp="${w}x${h}x3,mobile,touch"; else vp="${w}x${h}x1"; fi
+    pick
     axi emulate --viewport "$vp"
     axi open "$u"
     [ -z "${THEN:-}" ] || axi eval "$THEN"

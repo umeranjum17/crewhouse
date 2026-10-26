@@ -35,6 +35,11 @@ The unresolvable-forge pass is a second headless Chromium the driver starts with
 DevTools, never by signal. Nothing else is touched: no release is published or moved, and no account or credential is
 used.
 
+One shot to a browser: `chrome-devtools-axi` derives a bridge port from the session name, and on a host running several
+lanes two sessions can hash to one port, where the second attaches to the other lane's bridge and its shots time out.
+So each capture gets a session of its own on a port the driver picked free, and one theme per call (`screens.sh`
+`THEMES=day|night`), which is also why the four shots take a couple of minutes on a loaded box.
+
 ## Limits
 
 This is the web app's own card on a computer's browser. The installed phone app has no download card, and a paired
