@@ -119,10 +119,10 @@ NOTE
   stills ask1-gmail "1440x900 390x844"
   probe ask2-file "$OUT_PASTE" 300 || true
   n=$(bots); settle 2 || true; say $((n + 1)) 120 || true
-  stills ask2-doc "1440x900 390x844"
+  stills ask2-doc "1440x900"
   probe ask3-reminder 'Set me a weekly reminder to water the plants, Sunday evening.' 240 || true
   settle 3 || true
-  stills ask3-reminder "1440x900 390x844" # as it first appears, before anything is tapped
+  stills ask3-reminder "1440x900" # as it first appears, before anything is tapped
   press "Start it" || true
   for _ in $(seq 24); do [ "$(api /api/state | grep -c '"routines":\[{' || true)" -gt 0 ] && break; sleep 5; done
   api /api/bots/chief > "$OUT/thread-final.json"
