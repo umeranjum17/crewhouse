@@ -65,7 +65,8 @@ echo "chat-real: model $MODEL"
 # The first-day path: no name, the first request typed on Hello; it waits for the sign-in and starts by itself.
 ASK=${ASK:-'Good morning Chief. Please say hello back in one short sentence.'}
 [ "${CHAT_ASKS:-}" = 1 ] && ASK=${ASK_INBOX:-'Can you go through my inbox and tell me what came in today that needs an answer from me?'} # the first-day path's one request is the first of the three
-if [ -n "${HELPER:-}" ]; then api /api/onboard -d '{"address":""}' > /dev/null; else api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null; fi
+if [ "${CHAT_ASKS:-}" = 1 ]; then api /api/onboard -d "{\"address\":\"${CHAT_NAME:-Umer}\",\"ask\":\"$ASK\"}" > /dev/null
+elif [ -n "${HELPER:-}" ]; then api /api/onboard -d '{"address":""}' > /dev/null; else api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null; fi
 mark "first request sent"
 api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
 mark "key sheet open"
@@ -83,7 +84,8 @@ Priya has the drinks. If it rains: my place at 5, same food. Ask everyone to say
 NOTE
 )
   PROBE=$REPO/scripts/verify/chat-probe.mjs
-  probe() { node "$PROBE" "$B" "$OUT/probes/$1" "$2" 1440 900 "/?day#person=$PERSON" "$3" | tail -1; }
+  probe() { node "$PROBE" "$B" "$LAB/probes/$1" "$2" 1440 900 "/?day#person=$PERSON" "$3" | tail -1; } # outside the evidence root: live frames are not judged
+
   stills() { # stills <slug> <widths>: the thread as it stands, both themes
     local T A
     T="(async () => { location.hash = '#/chief'; for (let i = 0; i < 80 && !document.querySelector('.chat'); i++) await new Promise((r) => setTimeout(r, 100)); for (let i = 0; i < 8; i++) { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'More'); if (!b) break; b.click(); await new Promise((r) => setTimeout(r, 200)); } return !!document.querySelector('.chat'); })()"
