@@ -64,6 +64,7 @@ node -e 'const f = process.argv[1], c = JSON.parse(require("node:fs").readFileSy
 echo "chat-real: model $MODEL"
 # The first-day path: no name, the first request typed on Hello; it waits for the sign-in and starts by itself.
 ASK=${ASK:-'Good morning Chief. Please say hello back in one short sentence.'}
+[ "${CHAT_ASKS:-}" = 1 ] && ASK=${ASK_INBOX:-'Can you go through my inbox and tell me what came in today that needs an answer from me?'} # the first-day path's one request is the first of the three
 if [ -n "${HELPER:-}" ]; then api /api/onboard -d '{"address":""}' > /dev/null; else api /api/onboard -d "{\"address\":\"\",\"ask\":\"$ASK\"}" > /dev/null; fi
 mark "first request sent"
 api /api/accounts/1/$ACCOUNT/login -d '{"via":"key"}' > /dev/null
@@ -73,6 +74,66 @@ node -e 'const e = process.env.CHAT_KEY_ENV; process.stdout.write(JSON.stringify
 for _ in $(seq 120); do api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" && break; sleep 0.5; done
 api /api/accounts | grep -Eq "\"account\":\"$ACCOUNT\",[^}]*\"signedIn\":true" || { echo "chat-real: $ACCOUNT did not take the key" >&2; exit 1; }
 mark "signed in"
+# CHAT_ASKS=1: the same lab and sign-in, three everyday asks in one thread, each state captured as it happens (the
+# journey `chat-asks`). A person's inbox with no Gmail, a file made from a paste, a weekly reminder they start.
+if [ "${CHAT_ASKS:-}" = 1 ]; then
+  OUT_PASTE=$(cat <<'NOTE'
+Neighbours' barbecue, Saturday 4pm, the park on Mill Street. Bring: one side dish. Sam is bringing chairs.
+Priya has the drinks. If it rains: my place at 5, same food. Ask everyone to say how many they're bringing by Thursday.
+NOTE
+)
+  PROBE=$REPO/scripts/verify/chat-probe.mjs
+  probe() { node "$PROBE" "$B" "$OUT/probes/$1" "$2" 1440 900 "/?day#person=$PERSON" "$3" | tail -1; }
+  stills() { # stills <slug> <widths>: the thread as it stands, both themes
+    local T A
+    T="(async () => { location.hash = '#/chief'; for (let i = 0; i < 80 && !document.querySelector('.chat'); i++) await new Promise((r) => setTimeout(r, 100)); for (let i = 0; i < 8; i++) { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'More'); if (!b) break; b.click(); await new Promise((r) => setTimeout(r, 200)); } return !!document.querySelector('.chat'); })()"
+    A="(async () => { for (const l of document.querySelectorAll('.chat .lines, .lines')) l.scrollTop = l.scrollHeight * 3; await new Promise((r) => setTimeout(r, 700)); document.querySelector('.chat .lines, .lines')?.lastElementChild?.scrollIntoView({ block: 'end' }); await new Promise((r) => setTimeout(r, 600)); return 1; })()"
+    THEN="$T" AFTER="$A" WIDTHS="$2" bash "$REPO/scripts/verify/screens.sh" "$OUT" "$1" "$B/#person=$PERSON" >/dev/null
+  }
+  bots() { api /api/bots/chief | node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")); process.stdout.write(String((t.messages ?? []).filter((m) => m.author === "bot").length));'; }
+  settle() { # settle <task-id>
+    for _ in $(seq 90); do
+      api /api/bots/chief | TASK="$1" node -e 'const t = JSON.parse(require("node:fs").readFileSync(0, "utf8")), s = (t.tasks ?? []).find((x) => x.id === Number(process.env.TASK))?.state ?? ""; process.stdout.write(s)' | grep -qE '^(done|failed|unsure|needs_you)$' && return 0
+      sleep 3
+    done
+    return 1
+  }
+  say() { local n=$1 m=$2; for _ in $(seq $((m / 5))); do [ "$(bots)" -ge "$n" ] && return 0; sleep 5; done; return 1; }
+  press() { # press <label>: the one button on Chief's thread with this label
+    local first hit=absent
+    first=$(chrome-devtools-axi pages | awk -F, 'NR>1 { gsub(/ /, "", $1); if ($1 ~ /^[0-9]+$/) { print $1; exit } }')
+    if [ -n "$first" ]; then chrome-devtools-axi selectpage "$first" >/dev/null; else chrome-devtools-axi newpage about:blank >/dev/null; fi
+    chrome-devtools-axi open "$B/?day#person=$PERSON" >/dev/null 2>&1 || true
+    chrome-devtools-axi eval "() => { location.hash = '#/chief'; return 1 }" >/dev/null 2>&1 || true
+    sleep 5
+    for _ in $(seq 24); do
+      if chrome-devtools-axi eval "() => { const b = [...document.querySelectorAll('.chat button, .lines button, main button')].find((x) => x.textContent.trim() === '$1'); if (!b) return 'absent'; b.click(); return 'clicked'; }" 2>&1 | grep -q clicked; then hit=clicked; break; fi
+      sleep 5
+    done
+    echo "chat-asks: pressed \"$1\": $hit"
+  }
+  settle 1 || true # the inbox ask went in as the first request, before the key
+  n=$(bots); press "Not now"; say $((n + 1)) 180 || true; settle 1 || true
+  stills ask1-gmail "1440x900 390x844"
+  probe ask2-file "$OUT_PASTE" 300 || true
+  n=$(bots); settle 2 || true; say $((n + 1)) 120 || true
+  stills ask2-doc "1440x900 390x844"
+  probe ask3-reminder 'Set me a weekly reminder to water the plants, Sunday evening.' 240 || true
+  settle 3 || true
+  stills ask3-reminder "1440x900 390x844" # as it first appears, before anything is tapped
+  press "Start it" || true
+  for _ in $(seq 24); do [ "$(api /api/state | grep -c '"routines":\[{' || true)" -gt 0 ] && break; sleep 5; done
+  api /api/bots/chief > "$OUT/thread-final.json"
+  api /api/state > "$OUT/state-final.json"
+  WIDTHS=1440x900 bash "$REPO/scripts/verify/screens.sh" "$OUT" routines "$B/#/routines" >/dev/null
+  DOC=$(grep -o 'files/[a-z0-9-]*\.docx' "$OUT/thread-final.json" | head -1 || true)
+  ROUT=$(node -e 'const s = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")), r = (s.routines ?? [])[0]; process.stdout.write(r ? `${r.name} | ${r.schedule} | ${r.state} | ${new Date(r.next_at).toISOString()}` : "no routine")' "$OUT/state-final.json")
+  printf 'document %s\nroutine %s\n' "${DOC:-no document delivered}" "$ROUT" > "$OUT/result.txt"
+  node "$REPO/scripts/verify/steps.mjs" "$OUT" chat-asks "doc=${DOC:-no document delivered}" "routine=$ROUT"
+  OK=1
+  echo "chat-asks: three asks driven; thread and states in $OUT"
+  exit 0
+fi
 # HELPER=<template id> (HELPER_NAME) makes the journey a helper's: the template is hired on the same model, Chief is asked
 # to hand it ASK, and the wait is on the helper's own job, which must end with its words (a research helper's report).
 BOT=chief

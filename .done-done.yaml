@@ -118,6 +118,10 @@ journeys:
   chat-real:
     spends: 'a few live model calls on the MiniMax key file named by KEY_FILE'
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
+  chat-asks:
+    timeout: 40m
+    spends: 'a few live model calls on the free MiniMax M3.1 Flash, on the key file named by KEY_FILE'
+    command: 'CHAT_ASKS=1 CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 2400 bash scripts/verify/chat-real.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
   connect-apps:
     timeout: 60m
     spends: 'a few live model calls on the MiniMax key file named in ~/.config/crewhouse/connect-apps.conf, and one real read through the person''s own Composio sign-in'
