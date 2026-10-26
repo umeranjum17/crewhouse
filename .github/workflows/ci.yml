@@ -85,7 +85,9 @@ jobs:
     name: check (24, engine)
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 -> 30: the gateway files' own wall times (about 10 minutes of tests) plus npm ci, engine prepare, check and
+    # build:web ran the 15-minute budget out on PR 753 twice (GitHub reports the kill as cancelled, not failed).
+    timeout-minutes: 30
     env:
       GROUP: engine
       CREWHOUSE_ENGINE_DIR: ${{ github.workspace }}/runtime/openclaw
