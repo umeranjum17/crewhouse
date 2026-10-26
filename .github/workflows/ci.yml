@@ -5,9 +5,12 @@ on:
   push:
     branches: [main]
 
+# One group per pull request, so a second push to the same PR cancels the run it replaced instead of queueing
+# behind it. Every other run (a push to main, a dispatch) gets a group of its own: it can never be cancelled and
+# never cancels anything, because landing on main must not lose a gate to the next commit.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
