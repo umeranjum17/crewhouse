@@ -2219,3 +2219,36 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .reply-to span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 15px/20px Archivo, var(--ui); color: var(--ink); }
 .reply-to .icon-btn { width: 44px; height: 44px; color: var(--ink); font-size: 22px; }
 .line.me .chat-md blockquote { margin-bottom: 8px; padding: 2px 0 2px 10px; border-left-color: currentColor; border-radius: 0; background: none; color: inherit; opacity: .75; }
+
+/* Your goal: a role card reads as information (neutral surface, one muted rule), never as an alarm. */
+.goal-page { max-width: 1200px; }
+.goal-rules { background: var(--warm); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 12px 0; display: grid; gap: 8px; }
+.goal-page .small, .yours .small { font-size: 16px; }
+.goal-rules summary { cursor: pointer; font-weight: 600; color: var(--go); min-height: 24px; }
+.goal-chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
+.goal-chips button { border: 1px solid var(--line2); background: var(--solid); border-radius: 999px; padding: 8px 14px; min-height: 40px; font-weight: 600; white-space: nowrap; }
+.goal-chips button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.goal-board { display: grid; gap: 16px; }
+.goal-board section { display: none; }
+.goal-board section.on { display: block; }
+.goal-board h2 { margin-bottom: 0; }
+.role { background: var(--solid); border: 1px solid var(--line); border-left: 3px solid var(--line2); border-radius: 12px; margin-top: 10px; }
+.role-drafted { border-left-color: var(--go); }
+.role-applied, .role-interview, .role-offer { border-left-color: var(--ok); }
+.role-head { display: grid; gap: 2px; width: 100%; text-align: left; background: none; border: 0; padding: 12px 14px; font-size: 16px; }
+.role-head b { font-size: 17px; }
+.role-pay { color: var(--ink2); }
+.role-body { padding: 0 14px 14px; }
+.role-li { margin: 4px 0; }
+.yours { border: 1.5px dashed var(--line2); border-radius: 12px; padding: 12px; margin-top: 12px; display: grid; gap: 8px; }
+.yours-q { display: grid; gap: 4px; }
+.yours-q i { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+@media (min-width: 900px) {
+  .goal-chips { display: none; }
+  .goal-board { grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; }
+  .goal-board section, .goal-board section.on { display: block; }
+}
+.goal-page .btn { font-size: 16px; }
+.role-body .btns { flex-direction: column; align-items: stretch; }
+.role-body .btn { white-space: normal; text-align: center; }
+.goal-page > .hire-sect { margin-top: 28px; }

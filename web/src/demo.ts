@@ -242,6 +242,26 @@ const freshHire = [
   { bot: 'scribe', promise: 'Your first listing and three posts, written in your voice — you post them.', ask: 'Write my first listing and three posts', group: 'goal', needs: [], hire: 'scribe' },
   { bot: 'reel', promise: 'A 20-second video from three photos.', ask: 'Make a 20-second video from my three photos', group: 'goal', needs: [], hire: 'reel' },
 ];
+// ?demo=goal: the job-search board (applied and drafted roles included) and the writer's draft with the fields only Umer answers.
+if (variant === 'goal' || variant === 'ask-goal') {
+  const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
+  Object.assign(state, { jobs: { goal: { title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe' }, roles: [
+    role(1, 'found', 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', ['You led a payments dashboard in React and TypeScript', 'You cut checkout load time by 40 percent'], 'GraphQL is not on your CV'),
+    role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV'),
+    role(3, 'drafted', 'Acme Pay', 'Senior Frontend Engineer', 'London', '£70,000 a year', ['You led four engineers on a payments dashboard'], 'Testing with Playwright is not on your CV'),
+    role(4, 'applied', 'Lumen', 'Frontend Engineer', 'Remote', '£60,000 a year', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing'),
+  ] } });
+  if (variant === 'goal') Object.assign(state, { asks: [{ id: 30, bot: 'scribe', task_id: null, kind: 'propose', at: now - 5 * min, member: 1, title: 'Scribe drafted your application to Acme Pay.', detail: {
+    words: 'Scribe drafted your application to Acme Pay.', yes: 'Approve',
+    draft: { channel: 'message', to: 'Acme Pay application form', link: 'https://careers.acmepay.example/jobs/3', role: 3, yours: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'] },
+    preview: { body: "Your CV for this role\n- Led four engineers building a payments dashboard in React and TypeScript\n- Cut page load time by 40 percent on the checkout flow\n\nWhy Acme Pay?\nI build payments dashboards, and I would like to do it for a company that ships every week." },
+  } }] });
+  else Object.assign(state, { jobs: null, asks: [{ id: 31, bot: 'chief', task_id: null, kind: 'propose', at: now, title: 'Start looking for Frontend engineer?', detail: {
+    words: 'Start looking for Frontend engineer?', hire: 'Research Rae', hireId: 'scout', role: 'Looks every morning for Frontend engineer', yes: 'Yes, start my search',
+    first_job: 'Look for the first roles now', first_step: 'Open Your goal when Rae tells you a role fits.',
+    will_do: ['Look every morning at public postings and company career pages for Frontend engineer (London or remote)', 'Tell you only when a new role fits', "Show each role's pay as the posting says it, and what your CV is missing", 'Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'],
+    wont_do: ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'] } }] });
+}
 if (fresh) {
   Object.assign(bots[0], { last: null, unread: 0 });
   Object.assign(state, { bots: bots.slice(0, 1), room: {}, tasks: [], ideas: freshHire, asks: [], events: [], routines: state.routines.slice(0, 1) });

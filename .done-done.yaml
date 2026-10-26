@@ -58,6 +58,9 @@ journeys:
   # The same map on the screens: Settings › AI accounts and a member's page, edited in place (docs/verification/member-models.md).
   member-models-ui:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/member-models-ui.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Umer's job search from goal card to applied: the board, a role, the draft with the empty only-you fields (docs/verification/jobs-loop.md).
+  jobs-loop:
+    command: 'timeout -k 10 600 bash scripts/verify/jobs-loop.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

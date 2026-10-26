@@ -256,13 +256,13 @@ export class OpenClawRuntime implements AgentRuntime {
   async migrate(legacyAuthPath: string) { return await this.kit.migrateRetainedLogin(ME, { path: legacyAuthPath }) === 'staged'; }
   confirm(legacyAuthPath: string) { return this.kit.confirmRetainedLogin(ME, { path: legacyAuthPath }); }
 
-  /** Set the custom OpenAI-compatible provider and primary model (the tests' scripted model). */
+  /** Set the custom OpenAI-compatible provider and primary model (the tests' scripted model; its window leaves room for every tool the crew offers before compaction). */
   async configureModelProvider(baseUrl: string, apiKey: string, modelRef = 'crewhouse-stub/test') {
     await this.kit.patchConfig({
       models: { providers: { 'crewhouse-stub': {
         baseUrl, apiKey, api: 'openai-completions',
         models: [{ id: 'test', name: 'Test', reasoning: true, input: ['text', 'image'],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 48000, maxTokens: 2048,
           compat: { supportsReasoningEffort: true, supportedReasoningEfforts: ['off', 'low', 'medium', 'high'] } }],
       } } },
       agents: { defaults: { model: { primary: modelRef } } },

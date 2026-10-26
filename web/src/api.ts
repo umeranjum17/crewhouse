@@ -57,6 +57,9 @@ export const trouble = (e: any): 'offline' | 'missing' | 'failed' | 'noauth' =>
   (e?.status === 403 && e?.code === 'no-authority' ? 'noauth' : e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');
 
 export const api = {
+  /** The board: the person moves a role (applied, interview, offer, passed), or asks the writer for a draft. */
+  moveRole: (id: number, stage: string) => call('POST', `/api/jobs/${id}`, { stage }),
+  draftRole: (id: number) => call('POST', `/api/jobs/${id}/draft`),
   state: () => call('GET', '/api/state'),
   mailStatus: (to: string) => call('GET', `/api/mail?to=${encodeURIComponent(to)}`),
   mailMark: (to: string, body: Json) => call('PUT', '/api/mail', { to, ...body }),

@@ -42,6 +42,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [Chief waits for the helper's report](features/chief-waits-for-the-helpers-report.md): Run the `chief-wait` journey; Chief hands the job on, waits, and answers the person from the helper's report (`docs/verification/chief-wait.md`)
 - [Phone live control](features/phone-live-control.md): Open a working helper's chat on the phone layout; its control bar has Stop and Take control, and an ask shows Yes, go ahead (`docs/verification/phone-live-control.md`)
 - [A pinned tool that failed](features/a-pinned-tool-that-failed.md): Run the pinned-tool drive script; the helper's "What happened" shows the failed step and the newer copy an update brings in
+- [Jobs loop](features/jobs-loop.md): Run `scripts/verify/jobs-loop.sh <out>`; goal card, the board, a role, the draft with the empty only-you fields, and the applied state (`docs/verification/jobs-loop.md`)
 - [The video job](features/the-video-job.md): Run `scripts/verify/video-job.sh <repo> <out>`; a pasted link gets Chief's quality card, the pick downloads only that, with its link (`docs/verification/video-job.md`)
 - [Voice with Chief](features/voice.md): Run the `voice` journey; the mic puts what was said in the box, Talk reads Chief's reply aloud, in the installed app (`docs/verification/voice.md`)
 - [Speaking with no on-device voice pack](features/phone-mic-fallback.md): Run `scripts/verify/phone-mic-fallback.sh <out>`; on an emulator with no pack the phone's speech service opens the mic (`docs/verification/voice.md`)
