@@ -237,11 +237,10 @@
     "steps": [
       "Tap Sign in with OpenRouter on Home and the key sheet opens",
       "Paste a stub key and the kit checks it",
-      "The sheet lists the account's own live models, searchable when the list is long",
-      "Pick the free Flash model, whose id has a colon, and tap Use this model",
-      "Repeat for MiniMax, whose live list also offers Flash"
+      "The sheet says the crew thinks with the account's own model, naming it, with Pick another model",
+      "Repeat for MiniMax, which names its own Flash"
     ],
-    "result": "The sheet titled Which model should your crew use? lists the account's live models at 390 and 1280, day and night, and the pick is the model the crew uses"
+    "result": "The sheet asks for the key and then moves on by itself at 390 and 1280, day and night: no list of engine names, nothing to pick by hand, and the server reports the model a run takes as the account default"
   },
   "flash-read": {
     "start": "a fresh Crewhouse signed in to OpenRouter on MiniMax M3.1 Flash, with Scout on the crew who has written a file in its own folder",

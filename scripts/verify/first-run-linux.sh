@@ -3,7 +3,8 @@
 #   scripts/verify/first-run-linux.sh <out-dir> <deb> <minimax-key-file>
 # Downloads nothing (the .deb is given), unpacks it the way the software centre does (no root: ar + tar, same bytes
 # under /opt/crewhouse), opens it from the launcher the app-menu entry runs (launch.mjs), and drives the real first-run
-# path in a browser: Chief's greeting, the name, an idea, the MiniMax key sheet, the model, and the first real answer.
+# path in a browser: Chief's greeting, the name, his light first idea, the MiniMax key sheet (which names the model the
+# crew took by itself, with Pick another model), and the first real answer.
 # Every step is stamped in steps.tsv (seconds from the start of the unpack) with a 1440x900 frame in frames/.
 # The key is read from its file straight into the page's own paste box; it is never printed, logged or copied.
 set -uo pipefail
@@ -69,7 +70,7 @@ click "Send"
 see "Nice to meet you, Umer" 30 || exit 1
 step "name saved: Chief's pitch and three ideas"; shot "02-chief-pitch-day-1440"
 
-click "Plan this week's dinners, with a shopping list"
+click "What should I cook tonight? Three quick ideas"
 see "The crew uses your AI account" 30 || exit 1
 step "idea tapped: the job waits for a sign-in"; shot "03-job-waits-for-sign-in-day-1440"
 
@@ -82,13 +83,12 @@ KEYSET="() => { const i = document.querySelector('.sheet input.input'); i.focus(
 for _ in 1 2 3; do n=$(axi eval "() => document.querySelector('.sheet input.input') ? document.querySelector('.sheet input.input').value.length : -1" 2>/dev/null | grep -oE '[0-9]+' | head -1); [ "${n:-0}" -gt 20 ] && break; axi eval "$KEYSET" >/dev/null 2>&1; sleep 1; done
 # Paste, then Return: the sheet's own form submits. (The card behind it carries the same button words, so a label click would hit that.)
 axi press Enter >/dev/null 2>&1
-see "Which model should your crew use?" 120 || exit 1
-step "key saved: MiniMax's own model list"; shot "05-model-list-day-1440"
-
-click "MiniMax-M3.1-Flash"
-click "Use this model"
+# Nothing is picked by hand: the sheet takes the account's own model (MiniMax's Flash), names it, and offers the way out.
+see "You're signed in" 120 || exit 1
+see "It thinks with MiniMax" 30 || exit 1
+step "key saved: no model to pick, the crew takes MiniMax's Flash by itself"; shot "05-signed-in-day-1440"
 for _ in $(seq 40); do axi eval "() => document.querySelectorAll('[role=dialog]').length" 2>/dev/null | grep -q '"0"' && break; sleep 1; done
-step "model picked: signed in, the waiting job starts"; shot "06-signed-in-day-1440"
+step "the sheet is out of the way, the waiting job starts"; shot "06-job-started-day-1440"
 
 # 4. The first real answer (the stub engine's words are hidden by the app, so only a real route shows a reply).
 REPLY_SECONDS=${REPLY_SECONDS:-600}

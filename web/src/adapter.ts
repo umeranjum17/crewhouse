@@ -1408,9 +1408,11 @@ function promiseLine(state: Json, i: Json) {
 /** What a job that can't run yet would need first, in one plain line. */
 export const jobNeeds = (needs: string[]) => `Needs ${needs.join(' and ')} first.`;
 
-/** Chief's three first-run ideas: one tap is both "hello" and the first job. The middle one goes straight to
- *  Scout: her side-income ask starts in Scout's thread, never through Chief. */
+/** Chief's first-run ideas: one tap is both "hello" and the first job. The first is light on purpose — a short ask with a short
+ *  answer lands in a minute or two on a free account, so a newcomer's first real answer arrives quickly; the longer recipes wait
+ *  behind it. The Scout one goes straight to Scout: her side-income ask starts in Scout's thread, never through Chief. */
 export const FIRST_IDEAS: { icon: string; label: string; bot?: string; sub: string; face: 'chief' | 'scout' | 'scribe' | 'bunny'; who: string }[] = [
+  { icon: '🍳', label: 'What should I cook tonight? Three quick ideas', sub: 'Three ideas, a line each', face: 'bunny', who: 'Chief' },
   { icon: '🍲', label: "Plan this week's dinners, with a shopping list", sub: 'A list you can shop from', face: 'bunny', who: 'Chief' },
   { icon: '💡', label: 'Help me earn a little on the side', bot: 'scout', sub: 'Ideas that fit your week', face: 'scout', who: 'Rae' },
   { icon: '📅', label: "What's on this week?", sub: 'From your calendar', face: 'chief', who: 'Chief' },

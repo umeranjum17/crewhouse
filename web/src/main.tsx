@@ -76,7 +76,8 @@ type Ctx = { state: Json; live: A.OfficeView; tick: number; refresh: () => void;
 /** What Chief knows from the app itself, not the state: the computer out of reach, his composer, the sign-in.
  *  The sign-in wait is the thread card's own test (AccountCard: no account ready to think with), once accounts are known. */
 function chiefLocal(ctx: Pick<Ctx, 'accounts' | 'offline'>, listen = false): A.ChiefLocal {
-  const g = A.aiList(ctx.accounts).mine[0].g;
+  // Any account ready to think with counts, not just the first row: a person signed in to MiniMax alone is not signed out.
+  const rows = A.aiList(ctx.accounts).mine, g = (rows.find((r) => r.g.state === 'ready') ?? rows[0]).g;
   return { offline: ctx.offline, listen, signedOut: !!ctx.accounts && (g.state !== 'ready' || g.notIncluded) };
 }
 
@@ -1736,7 +1737,7 @@ function Settings({ state, refresh, tick, accounts, look, setLook, tab }: Ctx & 
   const act = (fn: () => Promise<unknown>, ok?: string) => attempt(async () => { await fn(); refresh(); }, ok);
   const m = state.person, display = A.displayName(m), [from, to] = (m.quiet ?? '').split('-');
   const mine = A.aiList(accounts).mine.filter((r) => r.g.state === 'ready'), on = A.apps(state).filter((a) => a.on);
-  const signingSheet = signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onClose={() => setSigning(false)} />;
+  const signingSheet = signing !== false && <SignIn ai={signing?.ai} tab={signing?.tab} onReady={() => { setSigning(false); refresh(); }} onSignedIn={refresh} onClose={() => setSigning(false)} />;
   if (tab === 'you') return <SettingsPage title="You"><You state={state} act={act} plan={A.planName(accounts)} /><Money state={state} refresh={refresh} /></SettingsPage>;
   if (tab === 'rules') return <SettingsPage title="Custom rules"><CustomRules tick={tick} /></SettingsPage>;
   if (tab === 'memory') return <SettingsPage title="What the crew remembers"><Memory tick={tick} /></SettingsPage>;
@@ -1924,7 +1925,7 @@ function AiAccount({ id, accounts, refresh }: Ctx & { id: string }) {
       <h2>{name}</h2>
       <p className="mute small">{g.state === 'signed-out' ? 'Not signed in' : `Signed in · your ${plan}`}{g.resting ? ` · ${g.resting}` : ''}</p>
       {keyed && <button className={`btn ${g.state === 'signed-out' ? 'go' : 'quiet'}`} onClick={() => setPasting(true)}>{g.state === 'signed-out' ? `Paste your ${ai.name} key` : 'Paste a new key'}</button>}
-      {pasting && <SignIn ai={{ ...ai, key: id }} tab={null} onReady={() => { setPasting(false); refresh(); }} onClose={() => setPasting(false)} />}
+      {pasting && <SignIn ai={{ ...ai, key: id }} tab={null} onReady={() => { setPasting(false); refresh(); }} onSignedIn={refresh} onClose={() => setPasting(false)} />}
       {/* The same provider can hold a second account: its own sign-in, its own name, its own line in Settings. */}
       {A.SECOND.includes(ai.key) && (more ? <SignIn ai={{ ...ai, key: more.key, name: more.name }} tab={more.tab} onReady={() => { setMore(null); refresh(); }} onClose={() => setMore(null)} />
         : <form className="card form add-account" onSubmit={(e) => { e.preventDefault(); if (second) setMore({ key: second, name: `${ai.name} · ${adding.trim().toLowerCase()}`, tab: openTab() }); }}>

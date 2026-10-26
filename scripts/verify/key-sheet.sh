@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # done-done journey `key-sheet`: the key sign-in sheet for OpenRouter and MiniMax. A person opens the account's page, pastes a
-# (stub) key, the kit checks it, the sheet lists the vendor's live models, they pick the free Flash model (its id carries a colon)
-# and the crew uses it. Real crewd and built UI; the kit on its own fake Gateway (scripts/verify/key-sheet.ts), so no model call.
+# (stub) key, the kit checks it, and the crew takes the account's own default model with nothing picked by hand: the sheet names
+# it in one line (MiniMax's Flash) and where to change it, instead of asking the person to choose an engine by name.
+# Real crewd and built UI; the kit on its own fake Gateway (scripts/verify/key-sheet.ts), so no model call.
 # Day/night at 390 and 1280. Needs chrome-devtools-axi with CHROME_DEVTOOLS_AXI_SESSION set and web/dist built.
 #   scripts/verify/key-sheet.sh "$DONE_DONE_EVIDENCE_ROOT"
 set -euo pipefail
@@ -45,20 +46,18 @@ for account in ${ACCOUNTS:-openrouter minimax}; do
     case "$href" in "$key_page"*) ;; *) echo "$account: the key sheet links '$href', wanted '$key_page'" >&2; exit 1;; esac
     ax screenshot "$OUT/key-sheet-1-key-$t.png"
     fillin 'input[type=password]' stub-key-not-real
-    click 'form .btn' "Sign in with $name"; ax wait "Which model should"
+    click 'form .btn' "Sign in with $name"; ax wait "You're signed in"
     [ -z "${AXLOG:-}" ] || ax eval "document.body.innerText.slice(0,400)"
-    ax screenshot "$OUT/key-sheet-2-models-$t.png"
-    if [ "$account" = openrouter ]; then
-      fillin 'input[aria-label="Search models"]' flash
-      ax screenshot "$OUT/key-sheet-3-search-$t.png"; want='minimax/minimax-m3.1-flash:free'; pat=free
-    else want='MiniMax-M3.1-Flash'; pat='M3.1 Flash'; fi
-    click '.model-pick .pick' "$pat"; nap 300
-    click '.btn' 'Use this model'; nap 1500
-    picked=$(api "$B/api/accounts/1/$account/model" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).picked")
-    [ "$picked" = "$want" ] || { echo "$account picked '$picked', wanted '$want'" >&2; exit 1; }
-    ax screenshot "$OUT/key-sheet-4-signed-in-$t.png"
+    ax screenshot "$OUT/key-sheet-2-signed-in-$t.png"
+    # Nobody is asked to pick an engine by name: the sheet names the model the crew took by itself (MiniMax's own Flash),
+    # and the server reports it as the account's default with nothing picked by hand.
+    want='MiniMax-M3.1-Flash'; pat='M3.1 Flash'
+    if [ "$account" = openrouter ]; then want=''; pat='the model your OpenRouter key comes with'; fi
+    ax wait "$pat"
+    said=$(api "$B/api/accounts/1/$account/model" | node -p "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); [c.picked??'', c.dflt??''].join('|')")
+    [ "$said" = "|$want" ] || { echo "$account reports '$said', wanted '|$want'" >&2; exit 1; }
   done; done
   down
 done
-ls "$OUT"/key-sheet-*.png | wc -l | grep -qx 28 || { echo "unexpected shot count" >&2; exit 1; }
+ls "$OUT"/key-sheet-*.png | wc -l | grep -qx 16 || { echo "unexpected shot count" >&2; exit 1; }
 node "$REPO/scripts/verify/steps.mjs" "$OUT" key-sheet
