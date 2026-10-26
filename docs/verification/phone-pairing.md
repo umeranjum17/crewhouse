@@ -7,7 +7,7 @@ code the computer is showing, the person says yes on the computer, and the phone
 
 `scripts/verify/phone-pair.mjs` drives the whole journey and writes the evidence:
 
-The app opens on "Where should I work?": **On my computer** opens "Put Chief on your computer" (the one-line install, [headless-host.md](headless-host.md#the-phones-one-line)); tap **Crewhouse is already on my computer** to reach Pair, or **Type the code** for the code box. On a task-owned debug APK
+The app opens on "Where should I work?": **On my computer** opens the Pair screen — the code box, and the same screen's one link for a computer that has none (**Crewhouse isn't on my computer yet**, the one-line install, [headless-host.md](headless-host.md#the-phones-one-line)). It used to open that install page first, with pairing as a grey line at its foot; the phone's first run now goes straight to pairing because that is the common case. On a task-owned debug APK
 whose native dependencies are unchanged, first configure its own `debug_http_host` for the isolated Metro.
 Then use `--prepared` without `--apk`: it preserves those settings and pairs from the visible Pair screen,
 finds Scan/Open by their exact labels, and waits for the phone's words rather than fixed startup sleeps.

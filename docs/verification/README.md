@@ -27,7 +27,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | pwa-pair | `done-done run pwa-pair` plus typed-code and push legs |
 | pair-chat (the core journey) | `done-done verify core --outcome "<claim>"` once the person approves the spend (below); `done-done verify upgrade --outcome "<claim>"` for the release path |
 | pwa-shell / pwa-offline / pwa-resume / chief-computer | `done-done run pwa-plan` with the recipe's task-owned `PLAN` |
-| phone-pairing | `done-done run phone-pair` plus typed/timed-code drivers |
+| phone-pairing (the phone's first run included) | `done-done run phone-pair` plus the typed/timed-code drivers: `LAB=<lab> node scripts/verify/phone-pair-typed.mjs --serial <emulator> --apk <release apk>` starts on the first screen, where **On my computer** now opens the code box itself, and `phone-pair-timed.mjs` times one keystroke at a time ([recipe](phone-pairing.md)) |
 | phone-chat-keep | `done-done verify phone-chat-keep --outcome "<claim>"` once the person approves the spend (below), plus approval-sheet driver |
 | phone-continue | `done-done verify phone-continue --outcome "<claim>"` once the person approves the spend (below) |
 | image | `done-done run image` (includes installed PWA) |
@@ -73,7 +73,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | ID | File | What it proves |
 |----|------|----------------|
 | herdr-setup | [herdr-setup.md](herdr-setup.md) | The helper's Herdr setup and prerequisite refusal |
-| phone-pairing | [phone-pairing.md](phone-pairing.md) | Native camera, typed and timed-code pairing on the release app |
+| phone-pairing | [phone-pairing.md](phone-pairing.md) | Native camera, typed and timed-code pairing on the release app, starting from the first screen's On my computer |
 | put-chief | [headless-host.md](headless-host.md#the-phones-one-line) | The phone's On my computer: a cloud/sandbox host is administered over SSH with a key supplied by path, uses the published relay for phone access, never joins the owner's tailnet, and is deleted after the run; `test/cloud-connect.test.ts` rejects any Tailscale invocation |
 | look-check | [look-check.md](look-check.md) | The mandatory UI-change step: each changed screen at 360 wide with the largest text, light and dark, on web and the Android app, fails on stretched pictures, clipped text, overlaps, off-screen parts and edge strips, beside its approved mock (`scripts/verify/mocks.tsv`) |
 | chat-attach | [chat-attach.md](chat-attach.md) | Chief's paperclip: a PDF or document lands in the helper's inbox under crewd's own name and shows as a one-line file card above the words, at 390/1440, the largest text and in the installed app; the phone app's + sheet, chip and big-file stream on an emulator |

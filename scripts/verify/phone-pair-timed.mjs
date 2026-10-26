@@ -46,9 +46,10 @@ for (let run = 1; run <= RUNS; run++) {
   adb('shell', 'am', 'force-stop', PKG); // a cold start, so no half-typed box from an earlier try
   adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
   await sleep(3000);
-  // phone-only chat → "Where should I work?" → Put Chief or Pair → the code box, whichever of those the app opens on
+  // phone-only chat → "Where should I work?" → On my computer (or Put Chief on an older build) → the code box
   for (let step = 0; ; step++) {
     if (step > 6) throw new Error('never reached the code box');
+    if (find(/^Pairing code$|^Type or paste the code$/)) break; // On my computer opens the box itself
     // Put Chief's "Type the code" first: its back row also reads "On my computer"
     const n = await tapWhen(/^Type the code$/, 1500).catch(() => tapWhen(/^(Use a computer instead|On my computer|Pair with a computer|Type a code)$/));
     if (/^Type (a|the) code$/.test(n.text || n.desc)) break;
