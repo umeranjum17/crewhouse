@@ -109,7 +109,7 @@ NOTE
     chrome-devtools-axi eval "() => { location.hash = '#/chief'; return 1 }" >/dev/null 2>&1 || true
     sleep 5
     for _ in $(seq 24); do
-      if chrome-devtools-axi eval "() => { const b = [...document.querySelectorAll('.chat button, .lines button, main button')].find((x) => x.textContent.trim() === '$1'); if (!b) return 'absent'; b.click(); return 'clicked'; }" 2>&1 | grep -q clicked; then hit=clicked; break; fi
+      if chrome-devtools-axi eval "() => { const re = new RegExp('^(?:$1)$'), b = [...document.querySelectorAll('.chat button, .lines button, main button')].filter((x) => re.test(x.textContent.trim())).at(-1); if (!b) return 'absent'; b.click(); return 'clicked'; }" 2>&1 | grep -q clicked; then hit=clicked; break; fi
       sleep 5
     done
     echo "chat-asks: pressed \"$1\": $hit"
@@ -123,7 +123,7 @@ NOTE
   probe ask3-reminder 'Set me a weekly reminder to water the plants, Sunday evening.' 240 || true
   settle 3 || true
   stills ask3-reminder "1440x900" # as it first appears, before anything is tapped
-  press "Start it" || true
+  press "Start it|Remind me" || true # the card the reminder arrived on, whichever word it offers
   for _ in $(seq 24); do [ "$(api /api/state | grep -c '"routines":\[{' || true)" -gt 0 ] && break; sleep 5; done
   api /api/bots/chief > "$OUT/thread-final.json"
   api /api/state > "$OUT/state-final.json"
