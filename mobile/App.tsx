@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, Share, useColorScheme, useWindowDimensions, View,} from 'react-native';
+  ActivityIndicator, Alert, AppState, BackHandler, Clipboard, Image, Keyboard, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, PixelRatio, Share, useColorScheme, useWindowDimensions, View,} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as A from '../web/src/adapter.ts';
 import { chatTokens, safeLink } from '../web/src/chat-md.ts';
@@ -254,17 +254,6 @@ function ChatText({ text, latest }: { text: string; latest?: boolean }) {
     : x.type === 'code' ? <View key={i} style={{ backgroundColor: t.soft, borderRadius: 8, padding: 10 }}><T style={{ fontSize: 14, lineHeight: 20 }}>{x.text}</T></View>
     : x.type === 'html' ? <T key={i}>{x.raw}</T> : null);
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
-}
-
-function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return <View style={{ paddingLeft: 36, gap: 4 }}>
-    <T>{l.text}</T>
-    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={open ? 'Hide details' : 'Show details'} hitSlop={6}>
-      <T style={s.b}>{open ? 'Hide details' : 'Show details'}</T>
-    </Pressable>
-    {open && <ChatText text={l.detail} latest={latest} />}
-  </View>;
 }
 
 /** An empty list, said warmly: the shared ornament and a plain line, never a blank box. */
@@ -1513,6 +1502,13 @@ const placeOf = (r: Route): Route['view'] => r.view === 'helper' ? (r.id === 'ch
 function Tabs({ place, go, state, offline }: { place: Route['view']; go: (r: Route, replace?: boolean) => void; state: Json; offline: boolean }) {
   const t = useLook();
   const asks = useOffice(state, offline, OUT).counts.needs;
+  // The keyboard's own space: while it is up the bar steps aside, so the message box and its send sit right on it.
+  const [typing, setTyping] = useState(Keyboard.isVisible());
+  useEffect(() => {
+    const on = Keyboard.addListener('keyboardDidShow', () => setTyping(true)), off = Keyboard.addListener('keyboardDidHide', () => setTyping(false));
+    return () => { on.remove(); off.remove(); };
+  }, []);
+  if (typing) return null;
   return (
     <View accessibilityRole="tablist" style={[s.tabs, { backgroundColor: t.bg, borderTopColor: t.line }]}>
       {PLACES.map(([view, label, icon]) => {
@@ -2033,7 +2029,10 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   // The computer's page when it answers; otherwise the lines this phone kept, until it does.
   const [page, setPage] = useState<Json>(() => kept.page(id));
   const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
-  const [partial, setPartial] = useState('');
+  // The reply streaming in, by its task: once the page holds that task's reply it is said, even when the link dropped
+  // its last word or its finished line, so a reconnect never leaves a second copy standing under it.
+  const [stream, setStream] = useState<{ task: number; text: string } | null>(null);
+  const partial = stream && !(page?.messages ?? []).some((x: Json) => x.author === 'bot' && x.task_id === stream.task) ? stream.text : '';
   // The live line's own feed, the same one web chat reads: crewd's pushed events with the moment
   // they were heard, and which replies are streaming. Heard is every event, not just this thread's,
   // so a job Chief passed to a helper is mirrored here too (adapter.liveLine).
@@ -2044,8 +2043,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     if (e.kind === 'reply.partial' && typeof e.data?.task === 'number') setWriting((w) => (w.has(e.data.task) ? w : new Map(w).set(e.data.task, Date.now())));
     if (typeof e.seq === 'number') setHeard((h) => [...h.slice(-300), { ...e, seen: Date.now() }]);
     if (e.bot !== id) return;
-    if (e.kind === 'reply.partial') setPartial(/\bstub [\w-]+:/.test(e.data.text) ? '' : e.data.text);
-    if (e.kind === 'message' && e.data?.author === 'bot') setPartial('');
+    if (e.kind === 'reply.partial') setStream(/\bstub [\w-]+:/.test(e.data.text) ? null : { task: e.data.task, text: e.data.text });
+    if (e.kind === 'message' && e.data?.author === 'bot') setStream(null);
   }), [id]);
   useEffect(() => { setHeard([]); setWriting(new Map()); pinned.current = true; lastY.current = 0; seen.current = 0; setNewBelow(false); }, [id]);
   // A search landing on an old line loads a window around it; once you send, the anchor goes and the thread reads to the end.
@@ -2072,7 +2071,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const ys = useRef(new Map<number, number>()); // each line's y, for landing on the matched one
   const landed = useRef(0); // the anchor we already landed on: once per line, never again on every tick
 
-  const lines = hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state);
+  // A helper's thread is its own words: Chief's hand-off says nothing there, and keeps only the files he passed on.
+  const lines = (hero ? A.trayNotes(state, A.lines(page, id, state)) : A.lines(page, id, state))
+    .flatMap((l) => id === 'chief' || l.from !== 'chief' ? [l] : l.files.length ? [{ ...l, text: '', detail: undefined }] : []);
   const phoneOffer = id === 'chief' ? A.phoneOffer(page) : null;
   // The newest finished sheet or page in Chief's thread is a Done card until the person speaks again, opens it or says Later (web Chat).
   const [laterDone, setLaterDone] = useState<string[]>([]);
@@ -2108,10 +2109,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const cards = A.cards(state).filter((c) => c.helper === id);
   const receipts = A.answeredReceipts(state).filter((r) => r.helper === id);
   const slots = A.cardSlots(lines, cards), receiptSlots = A.receiptSlots(lines, receipts);
-  // Chief's thread (J03) reads as bubbles, his face beside his lines; each job he handed a helper is one chip after the
-  // turn that handed it on (A.handChips), and a helper's ended job already chipped is not said twice.
-  const bubble = id === 'chief';
-  const hands = bubble ? A.handChips(state, lines) : null;
+  // Every thread reads as bubbles (J03), the speaker's face beside its lines; in Chief's, each job he handed a helper is
+  // one chip after the turn that handed it on (A.handChips), and a helper's ended job already chipped is not said twice.
+  const hands = id === 'chief' ? A.handChips(state, lines) : null;
   const chipped = !!ln?.task && (!!hands?.tail.some((c) => c.task === ln.task) || [...(hands?.before.values() ?? [])].some((cs) => cs.some((c) => c.task === ln.task)));
   // A quick end goes unsaid only when its reply is in the thread to say it.
   const replied = !!ln?.task && (page?.messages ?? []).some((x: Json) => x.task_id === ln.task && x.author === 'bot' && lines.some((l) => l.id === x.id));
@@ -2138,7 +2138,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
     // A send is the person's own hand reaching the newest line: re-pin so the echo and the live line show at once.
     pinned.current = true;
     setPending({ text: x || d.map((f) => f.name).join(', '), files: d.length > 0, after: page?.messages?.at(-1)?.id ?? 0, at: Date.now() });
-    setPartial('');
+    setStream(null);
     // The first words of a new install, if short, answer Chief's "What shall I call you?"; anything longer is already the first job.
     const named = id === 'chief' && !state.person.onboarded && !p.length && !d.length && A.asName(x);
     const ok = await attempt(() => named ? api.onboard(x, undefined, undefined, true) : api.post(id, x, p.map(({ type, data }) => ({ type, data })), undefined, d.map(({ name, type, data }) => ({ name, type, data }))), undefined, true);
@@ -2163,9 +2163,6 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
   const beat = motion.useBeat(360, reduce);
   let day = '';
   const dayOf = (at?: number) => { if (!at) return null; const d = A.dayLabel(at); if (d === day) return null; day = d; return <View style={s.day} accessibilityRole="header"><T tone="mute" style={s.dayText}>{d}</T></View>; };
-  // The transcript's name column: every line named, no faces, no clocks.
-  const who = (f: string) => <T style={[s.small, s.b, { width: nameCol(), color: t.ink2 }]}>{f === 'chief' ? 'Chief' : name}</T>;
-  const speaker = (l: { from: string; helper?: string }) => l.from === 'me' ? 'You' : l.from === 'chief' ? 'Chief' : A.crew(state).find((x) => x.id === l.helper)?.name ?? name;
   return (
     <View style={{ flex: 1 }}>
       {/* Home's hero and pinned ask stay in place over the thread (096); on a short screen they shrink and scroll alone. */}
@@ -2188,7 +2185,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
         </View>}
         {!page && <View style={{ gap: 12, paddingLeft: 36, paddingTop: 20 }} accessibilityLabel="Opening the chat">{['62%', '84%', '40%'].map((w) => <View key={w} style={[s.bar, { width: w as any, backgroundColor: t.soft }]} />)}</View>}
         {/* Chief's empty thread (J03b): his face, the greeting, and the starters; a tap fills the box, it never sends. */}
-        {fresh && page && bubble && <View style={{ alignItems: 'center', gap: 12, paddingTop: 24 }}>
+        {fresh && page && id === 'chief' && <View style={{ alignItems: 'center', gap: 12, paddingTop: 24 }}>
           <Face who="chief" size={96} />
           <Text style={[s.wide, s.centerText, { color: t.ink, fontSize: 28, lineHeight: 32, marginTop: 12 }]}>{hello(state.person)}</Text>
           <T tone="mute" style={[s.read, s.centerText]}>I can bring in Research Rae for research, Writer Will for writing or Video Vic for videos.</T>
@@ -2197,7 +2194,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             <Text style={[s.semi, { flex: 1, color: t.ink }]}>{i.label}</Text><Text style={{ color: t.ink, fontSize: 28, lineHeight: 30 }}>+</Text>
           </Pressable>)}
         </View>}
-        {fresh && page && !bubble && canAct && own.length > 0 && <View style={[s.chips, { justifyContent: 'center' }]}>
+        {fresh && page && id !== 'chief' && canAct && own.length > 0 && <View style={[s.chips, { justifyContent: 'center' }]}>
             {own.map((i: Json) => <Btn key={i.bot + i.label} label={`${art.STAR} ${i.label}`} onPress={() => { keepDraft(id, i.ask); setSeed((n) => n + 1); }} />)}
           </View>}
         {lines.map((l, i) => start && i === 0 && l.from === 'note' && l.text.startsWith(`${name} joined the crew`) ? null : <View key={l.id} style={{ gap: 10 }}>
@@ -2206,27 +2203,26 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
           {(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} go={go} />)}
           {l.id === mark.current && <View style={s.newDivider} accessibilityRole="header"><View style={[s.newDividerLine, { backgroundColor: t.line }]} /><T style={[s.newDividerText, { color: t.pink }]}>New</T><View style={[s.newDividerLine, { backgroundColor: t.line }]} /></View>}
           {dayOf(l.at)}<motion.Rise reduce={reduce || l.id <= (opened.current ?? Infinity)}>
-          <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={[s.line, bubble && { maxWidth: '100%' }]}>
+          <View onLayout={(e) => ys.current.set(l.id, e.nativeEvent.layout.y)} style={[s.line, { maxWidth: '100%' }]}>
             {l.from === 'note' ? <>
               {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
               {!!l.text && !l.by && !(doneBy && l.id === doneLine?.id) && (l.event ? <T tone="mute" style={[s.small, { textAlign: 'center', paddingVertical: 10 }]}>{l.text}</T> : <ChatText text={l.text} />)}
               {/* A delivered or kept file is a note too: its words, then its card. */}
               {!l.text && !!l.about && <ChatText text={l.about} />}
               {l.files.map((f) => fileCard(l, f))}
-            </> : bubble && l.from === 'me' ? <View style={{ gap: 6 }}>
+            </> : l.from === 'me' ? <View style={{ gap: 6 }}>
               {!!l.text && mine(l.text)}
               {l.files.map((f) => fileCard(l, f))}
-            </View> : <View style={bubble ? [s.row, { alignItems: 'flex-end' }] : turn()}>
-              {bubble ? <Face who={faceOf(l.helper)} size={36} /> : <T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>{speaker(l)}</T>}
+            </View> : <View style={[s.row, { alignItems: 'flex-end' }]}>
+              <Face who={l.from === 'chief' ? 'chief' : faceOf(l.helper ?? id)} size={36} />
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
                 {!!l.text && !l.by && !(doneBy && l.id === doneLine?.id) && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} />
-                  : bubble ? <View style={[s.them, { backgroundColor: t.solid, borderColor: t.line }]}><ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></View>
-                  : <ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} />)}
+                  : <View style={[s.them, { backgroundColor: t.solid, borderColor: t.line }]}><ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></View>)}
                 {l.roles?.map((r) => <RoleRow key={r.id} r={r} onDone={refresh} />)}
-                {!!l.retry && (bubble ? <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
+                {!!l.retry && <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
                   <View style={[s.tick, { borderColor: t.mute, borderWidth: 1.5 }]}><T tone="mute" style={[s.small, s.b]}>!</T></View><T style={[s.read, s.b, { textDecorationLine: 'underline' }]}>Try again</T>
-                </Pressable> : <Btn label="Try again" onPress={() => void send(l.retry!)} />)}
+                </Pressable>}
                 {l.files.map((f) => fileCard(l, f))}
                 {!l.text && !!l.about && <ChatText text={l.about} />}
                 {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
@@ -2234,12 +2230,11 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
             </View>}
           </View></motion.Rise></View>
         )}
-        {echoed && <motion.Rise reduce={reduce}>{bubble ? mine(pending.text) : <View style={s.line}><View style={turn()}><T style={[s.small, s.b, { width: nameCol(), color: t.ink2, paddingTop: 2 }]}>You</T><T style={{ flex: 1 }}>{pending.text}</T></View></View>}</motion.Rise>}
-        {!!partial && (bubble ? <View style={[s.row, { alignItems: 'flex-end' }]} accessibilityLiveRegion="polite"><Face who="chief" size={36} />
-          <View style={[s.them, { flexShrink: 1, backgroundColor: t.solid, borderColor: t.line }]}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>
-          : <View style={s.line} accessibilityLiveRegion="polite"><View style={turn()}>{who(id)}<T style={{ flex: 1 }}>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>)}
+        {echoed && <motion.Rise reduce={reduce}>{mine(pending.text)}</motion.Rise>}
+        {!!partial && <View style={[s.row, { alignItems: 'flex-end' }]} accessibilityLiveRegion="polite"><Face who={faceOf(id)} size={36} />
+          <View style={[s.them, { flexShrink: 1, backgroundColor: t.solid, borderColor: t.line }]}><T>{partial}<Text style={{ color: t.pink, opacity: reduce || beat % 2 === 0 ? 1 : 0 }}> ▍</Text></T></View></View>}
         {hands?.tail.map((c) => <HandOff key={`h${c.task}`} c={c} state={state} go={go} />)}
-        {ln && <LiveCard ln={ln} who={crewNames.find((x) => x.id === ln.helper) ?? h} chief={bubble} quiet={quiet} chipped={chipped} replied={replied}
+        {ln && <LiveCard ln={ln} who={crewNames.find((x) => x.id === ln.helper) ?? h} chief={id === 'chief'} quiet={quiet} chipped={chipped} replied={replied}
           stuck={ln.took === undefined ? stuck.find((x) => x.id === ln.helper) : undefined} {...stuckProps} />}
         {stuck.filter((x) => !ln || ln.took !== undefined || x.id !== ln.helper).map((x) => <JobCard key={`q${x.id}`} who={x} title={x.name} word={A.WORDS.needs} chief><Stuck h={x} ink={INK} {...stuckProps} /></JobCard>)}
         {canAct && id === 'chief' && A.firstChips(lines, state) && <View style={[s.chips, { justifyContent: 'center' }]}>

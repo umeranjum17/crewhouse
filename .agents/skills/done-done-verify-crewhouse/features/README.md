@@ -18,4 +18,5 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [Voice with Chief](voice.md): Tap the mic in Chief's box and speak, the words wait in the box; tap Talk, Chief's reply is read aloud with its line marked
 - [Speaking with no on-device voice pack](phone-mic-fallback.md): Tap the mic on the Android app with no speech pack; the phone's speech service opens the mic
 - [The phone's first run and typed pairing](phone-first-run.md): A clean install's first screen → On my computer opens the code box → the two words on the computer → You're in → Home, then a message gets Chief's answer
+- [The phone's chat with the keyboard up](phone-chat-keyboard.md): Open Chief on the Android app, add a PDF, tap the box; the box and send sit on the keyboard, one reply per message, Chief's face on the launcher
 - [Chief on this phone with a MiniMax key](phone-only-minimax.md): Use this phone only, pick MiniMax, paste the key, pick the model; the chat names it

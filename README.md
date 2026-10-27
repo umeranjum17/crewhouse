@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/icon-512.png" width="88" alt="Crewhouse logo: a helmet with two eyes" />
+  <img src="web/icon-512.png" width="88" alt="Crewhouse logo: Chief, a blue face in a captain's cap" />
 </p>
 
 <h1 align="center">Crewhouse</h1>

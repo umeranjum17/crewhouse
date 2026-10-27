@@ -1,5 +1,5 @@
-// Draws Crewhouse's icons from the helmet in web/src/art.ts: native/store and desktop exports, the maskable icon, the
-// favicon (his head) and notification glyph (his head in white). It also renders the phone's faces into
+// Draws Crewhouse's icons from Chief's Geo face in web/src/art.ts: native/store and desktop exports, the maskable icon,
+// the favicon and the Android themed layer; the notification glyph is still the helmet's head in white. It also renders the phone's faces into
 // mobile/assets/pals/ from the Geo faces: Chief and every look in each face mode, required from mobile/src/faces.ts
 // (written here too). Run after changing either (`node scripts/icons.mjs`; the PNGs need ImageMagick's `magick`).
 // The outputs are committed.
@@ -15,25 +15,29 @@ const BG = '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offse
 const at = (art, x, y, w, h = w) => art.replace('<svg ', `<svg x="${x}" y="${y}" width="${w}" height="${h}" `);
 const svg = (body, bg = '') => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">${bg}${body}</svg>\n`;
 const solid = `${BG}<rect width="1024" height="1024" fill="url(#g)"/>`;
-// The helmet, light on the dark canvas: whole for the icon, a tighter crop for the favicon.
-const whole = (h, cx = 512, cy = 512) => at(helmetSvg(30, 'here', { night: true, cw: 6, ch: 15 }), cx - h * .4, cy - h / 2, h * .8, h);
-const head = (size, cx = 512, cy = 512) => at(helmetSvg(24, 'here', { night: true, cw: 8, ch: 16 }), cx - size / 2, cy - size / 2, size);
+// Chief's Geo face without its black disc, on the dark canvas. Cap to chin it is centred at (50, 54.5) of its 100 box and
+// reaches 33.3 from there, so a box of `b` px needs a safe circle of .333b px.
+const CHIEF = critter('chief').replace(/<circle cx="50" cy="50" r="50"[^>]*\/>/, '');
+const chief = (b, art = CHIEF) => at(art, 512 - b * .5, 512 - b * .545, b);
+/** The themed (monochrome) layer: the face in white with its eyes, smile and cap band cut out. Android reads the alpha. */
+const MONO = CHIEF.replace(/#0B0B0B/g, '#000').replace(/#[0-9A-F]{6}/gi, '#fff')
+  .replace(/(<svg[^>]*>)([\s\S]*)<\/svg>/, '$1<mask id="m">$2</mask><rect width="100" height="100" fill="#fff" mask="url(#m)"/></svg>');
 /** Alpha-only: his head in white, which is all a status bar shows. */
 const GLYPH = helmetSvg(30, 'here', { night: true, ink: '#fff', eye: '#fff', scan: '#fff', cw: 6, ch: 15 });
 const mobile = '../mobile/assets/';
 const out = {
-  // The app icon: the helmet whole on the dark canvas. Rounded for browsers; launchers mask the PNGs themselves.
-  'icon.svg': svg(whole(760, 512, 520), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
+  // The app icon: Chief on the dark canvas. Rounded for browsers; launchers mask the PNGs themselves.
+  'icon.svg': svg(chief(1150), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
   // Maskable: full-bleed, with Chief inside the 80% safe circle.
-  'icon-maskable.svg': svg(whole(560, 512, 512), solid),
-  // The favicon: his head, which is what survives at 16–48 px.
-  'favicon.svg': svg(head(900), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
+  'icon-maskable.svg': svg(chief(1100), solid),
+  // The favicon: Chief filling the tile, which is what survives at 16–48 px.
+  'favicon.svg': svg(chief(1450), `${BG}<rect width="1024" height="1024" rx="236" fill="url(#g)"/>`),
   // Native platforms supply their own mask; no rounded corners or alpha in the iOS/store master.
-  [mobile + 'icon.svg']: svg(whole(760, 512, 520), solid),
-  // Android's 108 dp canvas has a 66 dp safe circle. These layers keep all of Chief inside it.
-  [mobile + 'android-icon-foreground.svg']: svg(whole(540)),
+  [mobile + 'icon.svg']: svg(chief(1150), solid),
+  // Android's 108 dp canvas has a 66 dp safe circle (625 px). These layers keep all of Chief inside it.
+  [mobile + 'android-icon-foreground.svg']: svg(chief(860)),
   [mobile + 'android-icon-background.svg']: svg('', solid),
-  [mobile + 'android-icon-monochrome.svg']: svg(at(GLYPH, 212, 212, 600)),
+  [mobile + 'android-icon-monochrome.svg']: svg(chief(860, MONO)),
   // The notification glyph: white on transparent (Android reads only the alpha).
   'notify.svg': svg(at(GLYPH, 112, 112, 800)),
 };
