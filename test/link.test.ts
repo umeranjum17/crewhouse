@@ -227,6 +227,37 @@ test('an unmarked old phone reads only the update notice; a marked current phone
   } finally { live.prepare('DELETE FROM asks WHERE id = ?').run(ask); live.close(); phone.link.stop(); await http('DELETE', `/api/phones/${phone.link.grant.device.id}`); }
 });
 
+test('one message gives one reply, even when the link drops after the computer took it and before its answer reached the phone', async () => {
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
+  // The phone's line runs through a pipe that, once armed, passes the phone's next words on and then cuts both ends at
+  // the first byte the computer sends back after them.
+  let armed = false, sent = false, cuts = 0;
+  const pipe = createServer((phone) => {
+    const host = connect(linkPort, '127.0.0.1');
+    phone.on('data', (b) => { host.write(b); if (armed) { armed = false; sent = true; } });
+    host.on('data', (b) => { if (sent) { sent = false; cuts++; phone.destroy(); host.destroy(); } else phone.write(b); });
+    phone.on('error', () => host.destroy()); host.on('error', () => phone.destroy());
+    phone.on('close', () => host.destroy()); host.on('close', () => phone.destroy());
+  });
+  await new Promise<void>((r) => pipe.listen(0, '127.0.0.1', r));
+  const grant = await pairPhone((await http('POST', '/api/phones/pair', { role: 'control' })).body.qr, 'Redial check');
+  const phone = open({ ...grant, urls: grant.urls.map((u) => u.replace(`:${linkPort}`, `:${(pipe.address() as AddressInfo).port}`)) });
+  const live = new DatabaseSync(join(root, 'state', 'crew.db'), { timeout: 3000 });
+  try {
+    await until(async () => phone.status() === 'online');
+    const after = (live.prepare('SELECT MAX(id) AS id FROM messages').get()!.id as number) ?? 0;
+    armed = true;
+    assert.equal((await phone.req('POST', '/api/bots/chief/messages', { text: 'one reply please' })).status, 200, 'the phone redials and hears the answer');
+    assert.equal(cuts, 1, 'the link did drop between the message and its answer');
+    const said = (author: string) => live.prepare("SELECT task_id FROM messages WHERE bot = 'chief' AND author = ? AND id > ?").all(author, after);
+    const replies = await until(async () => { const r = said('bot'); return r.length ? r : undefined; }, 20_000);
+    await until(async () => (await http('GET', '/api/bots/chief')).body.tasks.every((t: any) => !['queued', 'working'].includes(t.state)), 20_000);
+    assert.equal(said('person').length, 1, 'the computer kept the message once');
+    assert.equal(said('bot').length, 1, 'and Chief answered it once');
+    assert.equal(replies[0].task_id, said('person')[0].task_id);
+  } finally { live.close(); phone.link.stop(); pipe.close(); await http('DELETE', `/api/phones/${grant.device.id}`); }
+});
+
 test('pairing with a yes at the computer, grants, approvals from the phone, and removal', { skip: !sandboxReady() && 'bubblewrap is not usable here' }, async () => {
   await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
   assert.equal(statSync(join(root, 'state', 'link.key')).mode & 0o777, 0o600, 'the link key is private to the owner');
