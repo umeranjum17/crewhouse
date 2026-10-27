@@ -260,6 +260,18 @@ function ChatText({ text, latest, calm }: { text: string; latest?: boolean; calm
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
 }
 
+/** Chief's short line with the full report folded under Show details (main's ChiefAsk), inside his calm bubble. */
+function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <View style={{ gap: 6 }}>
+    <ChatText text={l.text} calm />
+    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={open ? 'Hide details' : 'Show details'} hitSlop={6}>
+      <T style={s.b}>{open ? 'Hide details' : 'Show details'}</T>
+    </Pressable>
+    {open && <ChatText text={l.detail} latest={latest} calm />}
+  </View>;
+}
+
 /** An empty list, said warmly: the shared ornament and a plain line, never a blank box. */
 function Empty({ children }: { children: ReactNode }) {
   return <Card style={{ alignItems: 'center', paddingVertical: 22 }}><T tone="mute" style={s.small}>{art.ORNAMENT}</T><T tone="ink2" style={s.centerText}>{children}</T></Card>;
@@ -2165,7 +2177,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
                 {/* A helper speaking in Chief's thread: its small face and name over its own bubble (calm .line.relay). */}
                 {!!l.helper && !l.by && <View style={[s.row, { gap: 6, marginLeft: 4 }]}><Face who={faceOf(l.helper)} size={20} /><Text style={[s.relayName, { color: t.quiet }]}>{crewNames.find((c) => c.id === l.helper)?.name ?? name}</Text></View>}
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-                {!!l.text && !l.by && <View style={[s.them, { backgroundColor: t.bubble }]}><ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} calm /></View>}
+                {!!l.text && !l.by && <View style={[s.them, { backgroundColor: t.bubble }]}>{l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} />
+                  : <ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} calm />}</View>}
                 {!!l.roles?.length && <View style={[s.roles, { backgroundColor: t.bubble }]}>{l.roles.map((r, i) => <RoleRow key={r.id} r={r} first={!i} onDone={refresh} />)}</View>}
                 {!!l.retry && <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
                   <View style={[s.tick, { borderColor: t.mute, borderWidth: 1.5 }]}><T tone="mute" style={[s.small, s.b]}>!</T></View><T style={[s.read, s.b, { textDecorationLine: 'underline' }]}>Try again</T>
