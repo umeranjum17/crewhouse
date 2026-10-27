@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as A from '../web/src/adapter.ts';
+import { PATH_NOTE, path } from '../web/src/career.ts';
 import type { Json } from '../web/src/api.ts';
 import { effectOf, coversOf, type Seen } from '../src/policy.ts';
 
@@ -120,8 +121,9 @@ function offenders(strings: string[]): string[] {
 
 // --- the surfaces ---
 const root = join(import.meta.dirname, '..');
-// demo.ts holds `?demo` sample content (realistic answers, sample souls), not UI copy: skip it.
-const screenFiles = readdirSync(join(root, 'web', 'src')).filter((f) => /\.tsx?$/.test(f) && !['adapter.ts', 'demo.ts'].includes(f))
+// demo.ts holds `?demo` sample content (realistic answers, sample souls), not UI copy: skip it. career.ts holds the
+// sources' own words, quoted verbatim; its plain copy (titles, lines, notes, what each claim says) is checked below.
+const screenFiles = readdirSync(join(root, 'web', 'src')).filter((f) => /\.tsx?$/.test(f) && !['adapter.ts', 'demo.ts', 'career.ts'].includes(f))
   .map((f) => join(root, 'web', 'src', f)).concat(join(root, 'mobile', 'App.tsx'));
 
 test('a list in a chat preview reads as sentences, with no dash marker', () => {
@@ -222,6 +224,8 @@ test('every string the app shows keeps to the plain-words rule', () => {
     ...state.asks.flatMap((a: Json) => collect(A.card(a, state))),
   ];
   for (const b of state.bots) texts.push(...collect(A.helper(b, state.events, state.bots, state.tasks, state.asks)));
+  // The career plan's own copy: everything but the quoted source words, their page names and dates.
+  texts.push(...PATH_NOTE, ...path().flatMap((s) => [s.name, s.line, s.note ?? '', ...s.items.flatMap((i) => [i.title, i.line, i.note ?? '', ...i.claims.map((c) => c.says)])]));
   // The screens' own literal copy.
   for (const f of screenFiles) texts.push(...prose(readFileSync(f, 'utf8')));
   // A template's role, beside its helper on the crew and gallery.

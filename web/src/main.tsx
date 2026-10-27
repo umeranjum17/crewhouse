@@ -44,7 +44,7 @@ function parseRoute(): Route {
   // #/f/<helper>/<file>/<title>: the chat that delivered it, with the workbook open beside it (web/src/parts.tsx).
   if (a === 'f' && b && c) return { view: 'helper', id: b, tab: 'chat', file: decodeURIComponent(c), title: d ? decodeURIComponent(d) : undefined };
   if (a === 'ask' && b) return { view: 'ask', id: b };
-  if (a === 'goal' && /^\d+$/.test(b ?? '')) return { view: 'goal', id: b };
+  if (a === 'goal' && /^(\d+|path)$/.test(b ?? '')) return { view: 'goal', id: b };
   if (a === 'pair' && demo) return { view: 'pair' };
   if (a === 'chief' && ANCHOR.test(b ?? '')) return { view: 'chief', m: b };
   if (a === 'things' && /^t\d+$/.test(b ?? '')) return { view: 'things', id: b };
@@ -898,7 +898,8 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
       {tab === 'chat' && h && <>
         <div className="sticky-top">
           <PillHead who={h} name={h.name} href={`#/h/${id}/details`} label={`${name}'s profile`} />
-          {state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <a className="link st-board-link" href="#/goal">Open the board ›</a>}
+          {state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <div className="st-board-links"><a className="link st-board-link" href="#/goal">Open the board ›</a>
+            {state.goals.some((g: Json) => g.goal.will && [g.goal.will, g.goal.rae].includes(id)) && <a className="link st-board-link" href="#/goal/path">Your path to the US ›</a>}</div>}
           {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
