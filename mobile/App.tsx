@@ -1677,18 +1677,18 @@ function MailSetup({ c, canAct, done }: { c: A.Card; canAct: boolean; done: () =
 }
 /** A helper offer is a Stack card in the new helper's colour (web/src/parts.tsx AskCard, `stack-ask`): ink on colour, in light and night. */
 function HireCard({ c, yes, deny, act, oops }: { c: A.Card; yes?: A.Card['choices'][number]; deny?: A.Card['choices'][number]; act: (body: Json) => void; oops: boolean }) {
-  const h = c.hire!, sect = (w: string) => <Text style={[s.read, s.b, { color: INK, opacity: 0.7, letterSpacing: 1 }]}>{w}</Text>;
+  const t = useLook(), INK = t.ink, h = c.hire!, sect = (w: string) => <Text style={[s.read, s.b, { color: INK, opacity: 0.7, letterSpacing: 1 }]}>{w}</Text>;
   const list = (ls: string[], no = false) => ls.map((l, i) => <View key={`${no}${i}`} style={[s.row, { gap: 10, alignItems: 'flex-start' }]}>
-    <View style={[s.tick, { borderColor: INK, backgroundColor: no ? 'transparent' : INK }]}>{!no && <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14, ...fw('900') }}>✓</Text>}</View>
+    <View style={[s.tick, { borderColor: INK, backgroundColor: no ? 'transparent' : INK }]}>{!no && <Text style={{ color: t.bg, fontSize: 12, lineHeight: 14, ...fw('900') }}>✓</Text>}</View>
     <Text style={[s.read, s.b, { flex: 1, color: INK }]}>{l}</Text></View>);
   const btn = (x: NonNullable<typeof yes>, go: boolean) => <Pressable key={x.label} onPress={() => act(x.body)} accessibilityRole="button" accessibilityLabel={x.label}
-    style={({ pressed }) => [s.liveBtn, { paddingHorizontal: 20, flexGrow: go ? 1 : 0, backgroundColor: go ? INK : 'rgba(0,0,0,0.1)' }, pressed && { opacity: 0.8 }]}>
-    <Text style={[s.read, { color: go ? '#fff' : INK, ...fw('700') }]}>{x.label}</Text></Pressable>;
-  return <View style={[s.live, { flex: 0, width: '100%', gap: 16, padding: 20, borderRadius: 30, backgroundColor: art.colourOf(h.kind) }]}>
+    style={({ pressed }) => [s.liveBtn, { paddingHorizontal: 20, flexGrow: go ? 1 : 0, backgroundColor: go ? INK : t.bubble2 }, pressed && { opacity: 0.8 }]}>
+    <Text style={[s.read, { color: go ? t.bg : INK, ...fw('700') }]}>{x.label}</Text></Pressable>;
+  return <View style={[s.live, { flex: 0, width: '100%', gap: 14, padding: 18, borderRadius: 22, backgroundColor: t.bubble }]}>
     <View style={[s.row, { gap: 12 }]}>
-      <Face who={{ kind: h.kind, name: h.name }} size={64} />
+      <Face who={{ kind: h.kind, name: h.name }} size={52} />
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        <Text style={{ fontSize: 26, lineHeight: 28, color: INK, ...fw('800') }}>{h.name}</Text>
+        <Text style={{ fontSize: 22, lineHeight: 26, color: INK, ...fw('700') }}>{h.name}</Text>
         {!!h.role && <Text style={[s.read, s.b, { color: INK }]}>{h.role}</Text>}
       </View>
     </View>
