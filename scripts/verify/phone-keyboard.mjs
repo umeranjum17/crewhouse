@@ -51,9 +51,9 @@ try {
     tap(file);
     for (const end = Date.now() + 20000; !nodes().some((n) => n.pkg === PKG && n.text === FILE); await sleep(600)) if (Date.now() > end) throw new Error('the file chip never showed'); // back in the app
     tap(await waitFor(/^Tell Chief anything/));
-    A('shell', 'input', 'keycombination', '113', '29'); A('shell', 'input', 'keyevent', '67'); // a kept draft goes first
+    for (const end = Date.now() + 10000; !imeUp() && Date.now() < end;) await sleep(400); // keys sent before it is up get lost
+    A('shell', 'input', 'keyevent', '123', ...Array(40).fill('67')); // a kept draft goes first: end, then deletes (a ctrl+a's Ctrl can stick to the next key)
     A('shell', 'input', 'text', 'This%sis%smy%sresume');
-    for (const end = Date.now() + 10000; !imeUp() && Date.now() < end;) await sleep(400);
     await sleep(800); // the keyboard's slide-in settles
     const all = nodes(), app = all.filter((n) => n.pkg === PKG), ime = all.filter((n) => /inputmethod/.test(n.pkg));
     // Where the keyboard starts: its window's frame top plus the content inset it gives the app.

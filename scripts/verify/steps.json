@@ -538,6 +538,17 @@
     ],
     "result": "Home's Your goal row counts the two roles on the board; the board shows each stage with its count; the drafted role shows its pay, fit, what is missing and the draft with Fill it in for me; the Submit card shows the site, what was filled from the CV and draft, and Umer's own questions blank, with one Submit; his tap sends the form with his answers and the role moves to Applied; the role in Interview offers Open your interview prep, which shows the brief with its sources, the likely questions and the only-you fields. Each in day and night at 390 wide; no other screen offers to submit"
   },
+  "phone-calm": {
+    "start": "the release app on an Android emulator at 390 wide, paired to a stub-engine crewd where Rae and Will are at work and Chief asks to bring Invoice Ivy on",
+    "steps": [
+      "Open the app on Home, by day and then by night",
+      "Tap Chief's row, then go back and tap Writer Will's row",
+      "In Chief's box, type with the keyboard up",
+      "Type hi in Chief's box and tap Send",
+      "Say yes to Chief's goal card and go back to Home"
+    ],
+    "result": "Home is one chat list (Chief first with his count, each helper's last line, The crew); each thread has the pill head, soft bubbles, the amber own line and the pill composer; the box and its send stay above the keyboard; the sent hi gets Chief's reply under it; Home then carries the Your goal row"
+  },
   "phone-mic-fallback": {
     "start": "the release app on an Android emulator paired to a stub-engine crewd, Home open, no on-device speech pack for the phone's language",
     "steps": [
