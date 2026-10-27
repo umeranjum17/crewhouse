@@ -195,13 +195,13 @@
   },
   "phone-link-stall": {
     "target": { "version": "{{sha}}" },
-    "start": "A fresh isolated Crewhouse on the stub engine, with a task-owned Android emulator, release APK, and installed PWA",
+    "start": "A fresh isolated Crewhouse on the stub engine, with a task-owned Android emulator and release APK",
     "steps": [
       "Pair the Android app to the isolated computer and open Home with Scout running a held task",
-      "Hold the computer's event loop synchronously until the link's TCP accept queue grows; the phone and PWA still show Scout at work and no cannot-reach banner",
-      "Let the computer resume; both clients reconnect by themselves, and Chief's thread loads over the PWA link"
+      "Hold the computer's event loop synchronously until the link's TCP accept queue grows; the phone still shows Scout at work and no cannot-reach banner",
+      "Let the computer resume; the phone reconnects by itself and Chief's thread loads"
     ],
-    "result": "The real paired Android app and installed PWA keep running work visible through a brief link stall, avoid a transient cannot-reach banner, and reconnect automatically; the isolated server's accept queue records the event-loop starvation"
+    "result": "The real paired Android app keeps running work visible through a brief link stall, avoids a transient cannot-reach banner, and reconnects automatically; the isolated server's accept queue records the event-loop starvation. Installed-PWA capture is a known proof gap."
   },
   "phone-download": {
     "start": "a fresh Crewhouse on the stub engine, a new person, no phone paired yet",

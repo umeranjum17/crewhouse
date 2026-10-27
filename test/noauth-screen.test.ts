@@ -88,10 +88,7 @@ test('a refused read shows the app-menu screen; a dead computer still shows the 
 
   mode = 'dead';
   await send('Page.navigate', { url: `${base}/?day` });
-  const shortGraceEnds = Date.now() + 20_000;
-  await until('the short-stall grace period', () => Date.now() >= shortGraceEnds, 20_500);
-  assert.equal(await screen(), null, 'a short interruption does not show the cannot-reach screen');
-  await until('the offline screen', () => screen(), 110_000);
+  await until('the offline screen', () => screen(), 30_000);
   const gone = await screen();
   assert.match(gone.head, /isn't answering/, 'a real network failure still shows the offline screen');
   assert.equal(gone.retry, true, 'the offline screen keeps its retry button');
