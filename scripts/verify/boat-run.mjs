@@ -77,12 +77,12 @@ const acts = {
     const r = await p.exec(mine, ['sh', '-c', 'journalctl --no-pager -n 80 -u byokit-crewhouse 2>&1; journalctl --no-pager -n 80 --user-unit byokit-crewhouse 2>&1; ls -la /home/user/crewhouse /home/user/crewhouse/.byokit/* 2>&1 | tail -20'], { root: true, timeoutMs: 30_000 });
     return { code: r.code, out: r.stdout.split('\n') };
   },
-  // Chief's thread and the engine's model calls on the computer, read-only from crew.db and the journal: the run's transcript.
+  // Chief's thread and the engine's model calls on the computer, read-only from crew.db and the engine's own logs (not the journal).
   thread: async () => {
     if (!mine) return { none: true };
     const js = 'const d=new (require("node:sqlite").DatabaseSync)("/home/user/.local/state/crewhouse/crew.db",{readOnly:true});'
       + 'for(const r of d.prepare("select at,bot,author,text from messages order by id").all())console.log(new Date(r.at).toISOString(),r.bot,r.author,JSON.stringify(r.text))';
-    const r = await p.exec(mine, ['sh', '-c', `/home/user/crewhouse/crewhouse/node/bin/node -e '${js}' 2>&1; { journalctl --no-pager -o short-iso-precise -u byokit-crewhouse; journalctl --no-pager -o short-iso-precise --user-unit byokit-crewhouse; } 2>&1 | grep -E 'model-fetch|status=|node.invoke|node-connect|pairing auto-approved' | tail -60`], { root: true, timeoutMs: 30_000 });
+    const r = await p.exec(mine, ['sh', '-c', `/home/user/crewhouse/crewhouse/node/bin/node -e '${js}' 2>&1; cat /home/user/.local/state/crewhouse/logs/openclaw*.log 2>&1 | grep -hE 'model-fetch|status=|node.invoke|node-connect|pairing auto-approved' | tail -60`], { root: true, timeoutMs: 30_000 });
     return { code: r.code, out: r.stdout.split('\n') };
   },
   cost: async () => mine ? p.usage(mine, started.toISOString()) : { none: true },
