@@ -3,7 +3,7 @@
 import type { Row, Store } from './db.ts';
 
 export const STAGES = ['found', 'drafted', 'applied', 'interview', 'offer'];
-export type Goal = { title: string; places: string; floor: string; cv: string; rae: string; will: string; routine: number; since: number };
+export type Goal = { title: string; places: string; floor: string; focus?: string; cv: string; rae: string; will: string; routine: number; since: number };
 
 /** What the form asks that only the person answers: declarations, right to work, sponsorship, pay, notice, consent. Never guessed. */
 export const YOURS = ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'];
@@ -97,8 +97,8 @@ export function setPrep(db: Store, id: number, bot: string, p: object) {
 }
 
 /** The finder's daily job, with the roles already seen added at each run. */
-export const findTask = (g: Pick<Goal, 'title' | 'places' | 'floor' | 'cv'>) => `Look for new roles for the person. They want: ${g.title}. Places: ${g.places}.${g.floor ? ` Pay floor: ${g.floor}.` : ''}
-Search public job postings and company career pages with your web tools, and read each posting yourself before you add it. For each NEW role that fits, call crew_role once: company, title, place, url (the posting's own page), pay (copied word for word from the posting, or empty when it shows none), fit (each says why it fits and quotes the CV line that shows it in cv) and missing (what the posting asks for that the CV does not show, said plainly).
+export const findTask = (g: Pick<Goal, 'title' | 'places' | 'floor' | 'cv' | 'focus'>) => `Look for new roles for the person. They want: ${g.title}. Places: ${g.places}.${g.floor ? ` Pay floor: ${g.floor}.` : ''}${g.focus ? ` Favour: ${g.focus}.` : ''}
+Search public job postings and company career pages with your web tools, and read each posting yourself before you add it. Before each search, call crew_report with what you are looking for, in a few words (for example: Searching remote AI engineering roles). For each NEW role that fits, call crew_role once: company, title, place, url (the posting's own page), pay (copied word for word from the posting, or empty when it shows none), fit (each says why it fits and quotes the CV line that shows it in cv) and missing (what the posting asks for that the CV does not show, said plainly).
 Never claim a skill, a year or a result the CV does not show. Skip roles below the pay floor. You never apply, sign in, send or fill in a form. If nothing new fits, reply exactly ALL-CLEAR; otherwise reply with one line: how many roles you added.
 Their CV, line by line:
 ${g.cv}`;

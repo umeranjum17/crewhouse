@@ -64,6 +64,8 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   const tools = (b: string) => JSON.parse(readFileSync(join(disk.botDir(cfg, b), 'bot.json'), 'utf8')).tools;
   assert.ok(!tools(g.rae).includes('browser') && tools(g.will).includes('browser'), 'the finder has no browser; the writer fills forms in its own');
   await until('the first look is done', () => db.get("SELECT 1 FROM tasks WHERE bot = ? AND state NOT IN ('queued','working')", g.rae));
+  assert.equal(db.get('SELECT origin FROM tasks WHERE routine = ?', g.routine)!.origin, 'chief', 'the first look is Chief\'s hand-on: his chip and live steps follow it');
+  await until('the empty look is said in Chief\'s chat', () => db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text LIKE '%found nothing new that fits yet%'"));
 
   // The finder: the pay must be on the page, the fit must quote the CV, the page must open.
   const good = { company: 'Acme', title: 'Frontend Engineer', place: 'London', url: `${web.base}/job/1`, pay: '£55,000 to £65,000 a year', missing: 'GraphQL is not on your CV', fit: [{ says: 'You led a payments dashboard in React', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }] };
@@ -72,7 +74,17 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   await find({ ...good, url: `${web.base}/gone` });
   await find({ ...good, fit: [{ says: 'You know Rust', cv: 'Shipped a Rust compiler' }] });
   assert.equal(db.get('SELECT COUNT(*) AS n FROM roles')!.n, 0, 'a made-up pay, a dead link and an invented skill add nothing');
-  await find(good);
+  // A look that adds a role reports in Chief's own chat: progress as it goes, then the role on its own line, its card there.
+  db.run('UPDATE routines SET body = ?, next_at = 0 WHERE id = ?', `look ${call('crew_role', good)}`, g.routine);
+  crew.schedule();
+  const ended = () => db.get("SELECT * FROM tasks WHERE routine = ? AND origin = 'routine' AND state = 'done'", g.routine);
+  await until('the daily look is done', ended);
+  const look = ended()!;
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'task.progress' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.text') = '1 found: Frontend Engineer at Acme'", look.id), 'each role found is a step on the live line');
+  const told = A.lines(crew.botPage('chief'), 'chief', crew.snapshot() as Json).find((l) => l.roles);
+  assert.match(told!.text, /found a role that fits:\nFrontend Engineer at Acme\nTap one/);
+  assert.deepEqual(told!.roles!.map((r) => [r.co, r.stage]), [['Acme', 'found']], 'the role is its card in Chief\'s chat');
+  assert.doesNotMatch(A.besideRoles(told!), /at Acme/);
   await find({ ...good, url: `${web.base}/job/1/` });
   assert.equal(db.get('SELECT COUNT(*) AS n FROM roles')!.n, 1, 'the same posting is not added twice');
   const role = db.get('SELECT * FROM roles')!;

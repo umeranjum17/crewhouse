@@ -18,7 +18,7 @@ import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, t
 import { remember, resume } from './resume.ts';
 import { nextRun, parseSchedule } from '../../src/routines.ts';
 import * as K from './kept.ts';
-import { Goal } from './goal.tsx';
+import { Goal, RoleCard } from './goal.tsx';
 
 /** The kept week (web/src/kept.ts): what this browser last heard from the computer, shown read-only while it can't be
  *  reached. Demo keeps nothing. */
@@ -730,7 +730,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
           const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
             : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
-            : l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+            : l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></div>}
+            {l.roles?.map((r) => <RoleCard key={r.id} r={r} refresh={refresh} />)}
             {l.files.map((f) => f === doneFile && doneBy ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} settle={(later) => keep(f, later)} />
               : <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved

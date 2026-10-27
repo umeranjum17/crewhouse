@@ -4,7 +4,7 @@ import * as A from './adapter.ts';
 import { api } from './api.ts';
 import type { Ctx } from './main.tsx';
 
-function RoleCard({ r, refresh }: { r: A.GoalRole; refresh: () => void }) {
+export function RoleCard({ r, refresh }: { r: A.GoalRole; refresh: () => void }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<unknown>) => { setBusy(true); try { await f(); refresh(); } finally { setBusy(false); } };
   return <div className={`role role-${r.stage}`}>

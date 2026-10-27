@@ -91,7 +91,9 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** The last line of a job that ended stopped or failed: Try again re-posts the person's own ask for that job. */
   retry?: string;
   /** Chief's Mail watch alert (`inboxOf`), and crewd's cause when Mail watch could not read Gmail. */
-  inbox?: Inbox; mailDown?: string };
+  inbox?: Inbox; mailDown?: string;
+  /** The roles a look for roles added, each its card in Chief's chat (A.rolesIn). */
+  roles?: GoalRole[] };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
@@ -1739,8 +1741,16 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     const inbox = m.author === 'bot' && watched.has(Number(m.task_id)) ? inboxOf(chatWords(text)) : undefined;
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}), ...(inbox ? { inbox } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
-  }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)) })).filter((l: Line) => l.text || l.files.length);
+  }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)), ...(bot === 'chief' && l.from === 'them' ? rolesIn(state, l.text) : {}) })).filter((l: Line) => l.text || l.files.length);
 }
+/** A look's result in Chief's chat names each role it added on a line of its own ("<title> at <company>", crewd's words):
+ *  on the web each is that role's own card under the line; the phone reads the names. */
+const roleLine = (r: GoalRole) => `${r.title} at ${r.co}`;
+function rolesIn(state: Json, text: string) {
+  const all = goal(state)?.cols.flatMap((c) => c.roles) ?? [], roles = text.split('\n').flatMap((x) => all.filter((r) => roleLine(r) === x.trim()));
+  return roles.length ? { roles } : {};
+}
+export const besideRoles = (l: Line) => l.text.split('\n').filter((x) => !l.roles?.some((r) => roleLine(r) === x.trim())).join('\n');
 
 /** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in Your things — only from a
  *  done task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread

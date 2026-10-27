@@ -850,7 +850,7 @@ export class Crew {
   }
 
   /** Fire one routine. A branch that finishes on its own promise returns it, so a manual run answers from the record. */
-  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake' | 'event', note?: string): void | Promise<unknown> {
+  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake' | 'event', note?: string, origin = why === 'now' ? 'routine.now' : 'routine'): void | Promise<unknown> {
     const now = Date.now();
     // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
     if (r.kind === 'digest') return this.connections.connected('calendar')
@@ -874,7 +874,7 @@ export class Crew {
       return;
     }
     if (r.watch || r.mailwatch) return this.check(r, why);
-    const { task } = this.addTask(r.bot, (note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body) + (r.id === jobs.goal(this.db)?.routine ? jobs.seen(this.db) : ''), why === 'now' ? 'routine.now' : 'routine', r);
+    const { task } = this.addTask(r.bot, (note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body) + (r.id === jobs.goal(this.db)?.routine ? jobs.seen(this.db) : ''), origin, r);
     this.db.tx(() => { this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id); this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task }); });
   }
 
@@ -1598,9 +1598,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      const mine = task.origin === CHIEF && !this.teamJob(task);
-      wants = mine && b.template === 'scout' && !clear && !!text;
-      if (!wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear))) {
+      // A look for roles reports in Chief's chat in crewd's own words: one line per role it added, each its card there.
+      const mine = task.origin === CHIEF && !this.teamJob(task), look = !!task.routine && task.routine === jobs.goal(this.db)?.routine, found = look ? this.db.all('SELECT co, title FROM roles WHERE found_at >= ? ORDER BY id', task.created_at) : [];
+      wants = mine && !look && b.template === 'scout' && !clear && !!text;
+      if (look && (mine || found.length)) this.say(CHIEF, 'bot', found.length ? `${b.display} found ${found.length === 1 ? 'a role' : `${found.length} roles`} that fit${found.length === 1 ? 's' : ''}:\n${found.map((r) => `${r.title} at ${r.co}`).join('\n')}\nTap one for why it fits and what your CV is missing, or to draft your application.` : `${b.display} looked and found nothing new that fits yet, and looks again every morning at 8:00.`, task.id);
+      else if (!look && !wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear))) {
         this.say(CHIEF, 'bot', this.relayLine(task, text), task.id);
       }
     });
@@ -2192,7 +2194,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
-      tool('crew_goal', 'Offer the person a job search goal card as soon as they want a job and you have their CV in full (pasted, or an attached file\'s text in their message). Roles, places and a pay floor come from their words and what you know of them; ask only what neither says. Nothing starts before their yes.', (p) => this.offerGoal(p)),
+      tool('crew_goal', 'Offer the person a job search goal card as soon as they want a job and you have their CV in full (pasted, or an attached file\'s text in their message). Roles, places, a pay floor and `focus` (what to favour: their saved job-search strategy, such as remote-first or companies that hire fast) come from their words and what you know of them; ask only what neither says. Nothing starts before their yes.', (p) => this.offerGoal(p)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
@@ -2263,12 +2265,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private offerGoal(p: Row) {
     if (this.activeTask(CHIEF)?.origin !== 'person') throw fail('Only a conversation with the person can start a job search.');
     if (jobs.goal(this.db)) throw fail('There is a job search already. It is under Your goal.');
-    const title = needText(p.title, 80, 'say the roles they want'), places = needText(p.places, 120, 'say where they would work'), floor = clean(p.floor, 80), cv = String(p.cv ?? '').replace(/\r/g, '').trim();
+    const title = needText(p.title, 80, 'say the roles they want'), places = needText(p.places, 120, 'say where they would work'), floor = clean(p.floor, 80), focus = clean(p.focus, 160), cv = String(p.cv ?? '').replace(/\r/g, '').trim();
     if (cv.length < 80 || cv.length > 12_000) throw fail('Ask them to paste their CV in full (up to 12,000 characters).');
     const rae = this.bots().find((b) => b.template === 'scout'), job = { does: `Looks every morning for ${title} (${places}) and adds each new fitting role to the person's board, with its source.`, aim: 'The person sees only roles that really fit, with the pay as the posting says it and what their CV is missing.', gets: "The person's roles, places and CV.", how: 'Reads public postings and company career pages. Adds a role only with crew_role. Never claims a skill the CV does not show. Never applies, signs in, sends or fills a form.', great: 'Quiet on a day with nothing new.' };
-    return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, cv },
+    return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, focus, cv },
       create: { bot: rae?.id, name: rae?.display ?? 'Research Rae', role: `Looks every morning for ${title}`, job, will_do: [`Look every morning at public postings and company career pages for ${title} (${places})`, 'Tell you only when a new role fits', "Show each role's pay as the posting says it, and what your CV is missing", 'Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'], wont_do: jobs.WONT, first_step: 'Open Your goal when Rae tells you a role fits.', first_job: 'Look for the first roles now' },
-      preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\nPay floor: ${floor}` : ''}` } });
+      preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\nPay floor: ${floor}` : ''}${focus ? `\nFavour: ${focus}` : ''}` } });
   }
 
   /** The person's yes on the goal card: the finder and the writer, each with its job and its won't-do list, the daily quiet look, and a first look now. */
@@ -2279,8 +2281,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers; on their tap, fills the posting\'s form with them.', aim: 'A draft and a filled form the person checks and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application and crew_form. Never presses Submit or sends.', great: 'Nothing invented, nothing sent.' } });
     const row = this.addRoutine({ bot: rae.id, schedule: 'every day 8:00', task: jobs.findTask(g), name: 'Look for new roles', quiet: true }, 'goal');
     jobs.setGoal(this.db, { ...g, rae: rae.id, will: will.id, routine: row.id, since: Date.now() });
-    this.say(CHIEF, 'bot', `${rae.display} looks every morning at 8:00 and tells you only when a new role fits. Your board is under Your goal.`, null);
-    void this.fire(row, 'now');
+    this.say(CHIEF, 'bot', `${rae.display} is looking now, and then every morning at 8:00, telling you only when a new role fits. I'll bring what ${rae.display} finds back here; your board is under Your goal.`, null);
+    void this.fire(row, 'now', undefined, CHIEF); // the first look is Chief's hand-on: its chip, live steps and result are in his chat
   }
 
   /** The finder adds a role to Found. crewd opens the posting itself: the pay must be on its page, and every claim of fit must quote the CV. */
@@ -2294,7 +2296,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!fit.length) throw fail('say why it fits, each reason with the CV line that shows it');
     const stray = fit.find((f) => !jobs.inCv(g.cv, f.cv, true));
     if (stray) throw fail(`“${short(stray.cv, 60)}” is not in the person's CV. Say only what their CV shows.`);
-    const out = jobs.add(this.db, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url });
+    const out = jobs.add(this.db, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url }), look = this.activeTask(g.rae); if (!out.dup && look) this.db.event('task.progress', g.rae, { task: look.id, text: `${this.db.get('SELECT COUNT(*) AS n FROM roles WHERE found_at >= ?', look.created_at)!.n} found: ${title} at ${co}` });
     return out.dup ? { note: 'already on the board; not added again' } : { added: out.id };
   }
 
