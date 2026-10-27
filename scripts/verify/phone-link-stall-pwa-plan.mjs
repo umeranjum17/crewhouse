@@ -12,6 +12,7 @@ const base = JSON.parse(execFileSync(process.execPath, ['scripts/verify/pair-pla
 const q = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 const cli = `LAB=${q(lab)} ${q(`${import.meta.dirname}/pair-lab.sh`)} cli`;
 const pairCode = `(() => { const t = document.querySelector('.pair-code'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, {{out}}); t.dispatchEvent(new Event('input', { bubbles: true })); return t.value.length; })()`;
+const atWorkAfterPaint = `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(document.body.innerText.includes('At work') && !document.body.innerText.includes("Can't reach the home computer")))))`;
 const pendingWords = `$(LAB=${q(lab)} ${q(`${import.meta.dirname}/pair-lab.sh`)} cli phones pending | tail -1 | sed 's/.*: //')`;
 const steps = base.steps.slice(0, base.steps.findIndex((step) => step.name === 'standalone') + 1);
 steps.forEach((step) => { delete step.xshot; }); // Setup UI is not part of the outcome evidence set.
@@ -30,7 +31,7 @@ steps.push(
 const sizes = [{ tag: 'phone', w: 390, h: 844, mobile: true }, { tag: 'desk', w: 1440, h: 900, mobile: false }];
 for (const look of ['light', 'dark']) for (const size of sizes) {
   steps.push({ name: `before-${look}-${size.tag}`, scheme: look === 'light' ? 'light' : 'dark', w: size.w, h: size.h, dpr: size.mobile ? 2 : 1, mobile: size.mobile,
-    wait: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-before-${look}-${size.w}.png` });
+    wait: atWorkAfterPaint, eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-before-${look}-${size.w}.png` });
 }
 const queue = `${lab}/link-queue.txt`, done = `${lab}/link-resumed.txt`, failed = `${lab}/link-stall-failed.txt`, log = `${lab}/link-stall.log`;
 steps.push(
@@ -39,7 +40,7 @@ steps.push(
 );
 for (const look of ['light', 'dark']) for (const size of sizes) {
   steps.push({ name: `during-${look}-${size.tag}`, scheme: look === 'light' ? 'light' : 'dark', w: size.w, h: size.h, dpr: size.mobile ? 2 : 1, mobile: size.mobile,
-    wait: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-during-${look}-${size.w}.png` });
+    wait: atWorkAfterPaint, eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-during-${look}-${size.w}.png` });
 }
 steps.push(
   { name: 'stall-resume', run: `node scripts/verify/wait-link-stall.mjs ${q(done)} ${q(failed)}` },
@@ -51,7 +52,7 @@ steps.push(
 );
 for (const look of ['light', 'dark']) for (const size of sizes) {
   steps.push({ name: `after-${look}-${size.tag}`, scheme: look === 'light' ? 'light' : 'dark', w: size.w, h: size.h, dpr: size.mobile ? 2 : 1, mobile: size.mobile,
-    wait: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-after-${look}-${size.w}.png` });
+    wait: atWorkAfterPaint, eval: "document.body.innerText.includes('At work') && !document.body.innerText.includes(\"Can't reach the home computer\")", out: `${out}/shots/pwa-after-${look}-${size.w}.png` });
 }
 base.bin = '/usr/bin/google-chrome-stable';
 base.steps = steps;
