@@ -640,6 +640,17 @@
     ],
     "result": "The goal card lists Won't do before anything starts. The board shows each role's place, pay as the posting says it, why it fits, what is missing and its source with the date checked; Found reads as plain information. The draft card keeps declarations, right to work, visa sponsorship, salary, notice and consent empty under Only you can answer these. Only Umer's own tap moves a role to Applied, which sets a 7-day follow-up. Nothing is submitted, sent or accepted. Not a real job site or a real model."
   },
+  "jobs-rank": {
+    "start": "Umer with an AI-engineering job search on the stub engine; the finder's words are scripted but its search is real: it reads live AI and machine-learning engineering postings from public Greenhouse boards; no real model or account",
+    "steps": [
+      "Tell Chief the roles, places and what to favour (remote first, gateway companies, fast hiring) and paste a CV; say yes on the goal card",
+      "The finder reads the postings and adds each to Found with the signals its page shows (remote, gateway company, fast process, sponsorship), each a quote copied from that page; crewd opens every page and refuses a quote the page does not show",
+      "Open Your goal: the Found column lists the roles in the strategy's order, each row with its one-line reason in the page's own words",
+      "Open the first role: Why it ranks here lists each reason with the site it was read from",
+      "Repeat the same screens in the installed app's window at phone size"
+    ],
+    "result": "Roles that show remote work sit above the rest, then gateway companies, fast processes and sponsorship, and a role whose page shows none sits last with the line 'No ranking reason found on its page.' Every reason is words from the posting's page with a link to it; none is the helper's own description of a company. The script re-reads every cited page and checks the order on its own. Nothing is applied for or sent. Not a real model."
+  },
   "jobs-prep": {
     "start": "Umer with a job search on the stub engine: a role he moved to Interview himself, and a local company page; no real model, account or job site",
     "steps": [

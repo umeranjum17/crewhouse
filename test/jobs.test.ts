@@ -20,7 +20,7 @@ Wrote the Node.js API behind a mobile banking app
 BSc Computer Science, 2016`;
 
 async function posting() {
-  const srv = createServer((req, res) => { res.setHeader('content-type', 'text/html'); res.end(req.url === '/gone' ? 'nope' : '<h1>Frontend Engineer</h1><p>Salary: £55,000 to £65,000 a year. React, TypeScript, GraphQL.</p>'); if (req.url === '/gone') res.statusCode = 404; });
+  const srv = createServer((req, res) => { res.setHeader('content-type', 'text/html'); res.end(req.url === '/gone' ? 'nope' : req.url?.startsWith('/says/') ? `<h1>Role</h1><p>${decodeURIComponent(req.url.slice(6))}</p>` : '<h1>Frontend Engineer</h1><p>Salary: £55,000 to £65,000 a year. React, TypeScript, GraphQL.</p>'); if (req.url === '/gone') res.statusCode = 404; });
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   after(() => { srv.closeAllConnections(); srv.close(); });
   return { base: `http://127.0.0.1:${(srv.address() as { port: number }).port}`, close: () => srv.close() };
@@ -207,5 +207,47 @@ test('a goal that is not a job search: its own stages, a quiet daily search that
   jobs.move(db, rows[1].id, 'passed');
   jobs.move(db, rows[0].id, 'passed');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', a.id)!.n, 0, 'passing on an option drops its reminder');
+  done();
+});
+
+test('roles are ranked by the person\'s strategy, each with the page\'s own words as its reason', async () => {
+  const { db, crew, done } = setup();
+  const web = await posting(), says = (text: string) => `${web.base}/says/${encodeURIComponent(text)}`;
+  crew.onboard('Umer');
+  await settled(db, (await crew.post('chief', `Find me roles ${call('crew_goal', { title: 'AI engineer', places: 'Remote', focus: 'remote first, gateway companies, fast hiring', cv: CV })}`))!.task);
+  await crew.answer(db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
+  const g = jobs.goal(db)!;
+  await until('the first look is done', () => db.get("SELECT 1 FROM tasks WHERE bot = ? AND state NOT IN ('queued','working')", g.rae));
+  const fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
+  const role = (title: string, page: string, signals?: object[]) => call('crew_role', { company: title, title, place: 'Anywhere', url: says(page), pay: '', missing: 'None', fit, signals });
+  const add = async (title: string, page: string, signals?: object[]) => { await settled(db, (await crew.post(g.rae, `look ${role(title, page, signals)}`))!.task); };
+  const onBoard = () => jobs.view(db)!.roles.map((r) => r.title), cards = () => A.goals(crew.snapshot() as Json)[0].cols[0].roles as A.GoalRole[];
+  const remote = 'Fully remote within the US', brand = 'Offices in New York, London and Dublin', quick = 'Offer within two weeks of the first call', visa = 'We sponsor work visas';
+  const every = ['remote', 'gateway', 'fast', 'sponsor'].map((kind) => ({ kind, quote: { remote, gateway: brand, fast: quick, sponsor: visa }[kind] }));
+  // One look Chief handed on, finding them oldest first, so only the strategy puts them in this order.
+  db.run('UPDATE routines SET body = ? WHERE id = ?', ['look', role('Shop', 'Hybrid in one office'), role('Visas', `${visa} for engineers`, [{ kind: 'sponsor', quote: visa }]), role('Fast', `${quick} for every role`, [{ kind: 'fast', quote: quick }]),
+    role('Brand', `${brand} and more`, [{ kind: 'gateway', quote: brand }]), role('Remote', `${remote} for this role`, [{ kind: 'remote', quote: remote }]), role('Everything', `${remote}. ${brand}. ${quick}. ${visa}.`, every)].join(' '), g.routine);
+  await (crew as any).fire(db.get('SELECT * FROM routines WHERE id = ?', g.routine), 'now', undefined, 'chief');
+  await until('the look is told in Chief\'s chat', () => A.lines(crew.botPage('chief'), 'chief', crew.snapshot() as Json).find((l) => l.roles?.length));
+  const told = A.lines(crew.botPage('chief'), 'chief', crew.snapshot() as Json).find((l) => l.roles)!;
+  const order = ['Everything', 'Remote', 'Brand', 'Fast', 'Visas', 'Shop'];
+  assert.deepEqual(onBoard(), order, 'remote first, then a gateway company, a fast process, sponsorship; a page with none last');
+  assert.deepEqual(told.text.split('\n').slice(1, 7).map((x) => x.replace(/ at .*/, '')), order.map((x) => x), 'Chief\'s chat lists them in the same order');
+  assert.deepEqual(told.roles!.map((r) => r.title), order, 'and so do their cards');
+  // The reason on each row is the page's words, never the helper's description of the company.
+  assert.equal(cards()[0].why, `Remote: “${remote}” · Gateway company: “${brand}” · Fast process: “${quick}” · Sponsorship history: “${visa}”`);
+  assert.deepEqual(cards()[2].signals, [{ label: 'Gateway company', quote: brand, host: 'the company\'s website', url: says(`${brand} and more`) }]);
+  assert.equal(cards().at(-1)!.why, 'No ranking reason found on its page.');
+  // A signal its page does not show, a "no", a quote that says something else, a dead link and an unknown kind add nothing.
+  const before = onBoard().length;
+  await add('Invented', 'Hybrid in one office, invented', [{ kind: 'remote', quote: remote }]);
+  await add('Negated', 'Not remote. Office in Leeds', [{ kind: 'remote', quote: 'Not remote. Office in Leeds' }]);
+  await add('Unvisa', 'We do not sponsor visas here', [{ kind: 'sponsor', quote: 'We do not sponsor visas here' }]);
+  await add('Mislabelled', `Mislabelled: ${brand}`, [{ kind: 'remote', quote: `Mislabelled: ${brand}` }]);
+  await add('Dead', 'Hybrid in one office, dead', [{ kind: 'gateway', quote: brand, url: `${web.base}/gone` }]);
+  await add('Odd', `Odd: ${brand}`, [{ kind: 'prestige', quote: `Odd: ${brand}` }]);
+  assert.equal(onBoard().length, before, 'a claim its page does not back is never added');
+  await add('Invented', 'Hybrid in one office, invented');
+  assert.deepEqual(onBoard().slice(-2), ['Invented', 'Shop'], 'the same role without the claim is added, among the roles that show nothing (newest first)');
   done();
 });

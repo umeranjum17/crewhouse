@@ -1835,6 +1835,7 @@ function RoleRow({ r, first, onDone }: { r: A.GoalRole; first: boolean; onDone: 
     <Text style={[s.text, { ...fw('600'), fontSize: 16, color: t.ink }]}>{r.title}</Text>
     <Text style={[s.text, { fontSize: 16, color: t.quiet }]}>{r.co} · {r.place}</Text>
     <Text style={[s.text, { fontSize: 16, color: t.ink2 }]}>{r.pay}</Text>
+    <Text numberOfLines={2} style={[s.text, { fontSize: 16, color: t.ink2 }]}>{r.why}</Text>
     {r.fit.map((f, i) => <Text key={i} style={[s.text, { color: t.quiet }]}>{f}</Text>)}
     {r.stage === 'found' && <Pressable disabled={r.drafting || busy} onPress={() => { setBusy(true); void api.draftRole(r.id).then(onDone).finally(() => setBusy(false)); }} accessibilityRole="button"
       style={({ pressed }) => [s.smallBtn, { alignSelf: 'flex-start', marginTop: 6, backgroundColor: t.bubble2 }, pressed && { opacity: 0.8 }]}>
@@ -2401,6 +2402,7 @@ function Goal(ctx: Ctx) {
     {c.roles.length ? c.roles.map((r: A.GoalRole) => <Pressable key={r.id} onPress={() => go({ view: 'goal', id: String(r.id) })} accessibilityRole="button" accessibilityLabel={`${r.title} at ${r.co}`}
       style={({ pressed }) => [{ backgroundColor: t.solid, borderColor: t.line, borderWidth: 1, borderLeftWidth: 3, borderLeftColor: edge, borderRadius: 12, padding: 14, gap: 2 }, pressed && { opacity: 0.6 }]}>
       <T style={[s.read, s.b]}>{r.title}</T><T style={s.read}>{r.co} · {r.place}</T><T tone="ink2" style={s.read}>{r.pay}</T>
+      <T tone="mute" style={s.read} lines={2}>{r.why}</T>
     </Pressable>) : <T tone="mute" style={s.read}>Nothing here yet.</T>}
     <Sect>On its own</Sect><Line>{`Every morning at 8:00 the crew looks for what fits and adds it to ${g.cols[0].name}, quietly. It never pages you.`}</Line>
   </Page>;
@@ -2417,6 +2419,7 @@ function Role(ctx: Ctx & { id: string }) {
   const run = async (f: () => Promise<unknown>) => { setBusy(true); await attempt(f); refresh(); setBusy(false); };
   return <Page title={r.title} back={['Your goal', ctx.back]}>
     <T style={s.read}>{r.co} · {r.place}</T><T tone="ink2" style={s.read}>{r.pay}</T>
+    {!!r.signals.length && <><Sect>Why it ranks here</Sect>{r.signals.map((x) => <View key={x.label} style={{ gap: 2 }}><Line>{`${x.label}: “${x.quote}”`}</Line><Pressable onPress={() => void Linking.openURL(x.url)} accessibilityRole="link" hitSlop={6}><T tone="mute" style={s.read}>Source: <Text style={{ textDecorationLine: 'underline' }}>{x.host}</Text></T></Pressable></View>)}</>}
     <Sect>Why it fits</Sect>{r.fit.map((f, i) => <Line key={i}>{f}</Line>)}
     {!!r.gap && <><Sect>What is missing</Sect><Line>{r.gap}</Line></>}
     <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}><T tone="mute" style={s.read}>From</T><Pressable onPress={() => void Linking.openURL(r.url)} accessibilityRole="link" hitSlop={8}><T style={[s.read, { textDecorationLine: 'underline' }]}>{r.source}</T></Pressable><T tone="mute" style={s.read}>, checked {r.checked}</T></View>

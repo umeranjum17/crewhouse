@@ -245,13 +245,14 @@ const freshHire = [
 ];
 // ?demo=goal: the job-search board (applied and drafted roles included) with the writer's draft, and a second goal, a flat to rent, with stage names of its own and two reminders.
 // A goal role as crewd lists it, for the households that show roles (goal, thread).
-const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
+const LABELS: Record<string, string> = { remote: 'Remote', gateway: 'Gateway company', fast: 'Fast process', sponsor: 'Sponsorship history' };
+const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string, signals: string[][] = []) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, signals: signals.map(([kind, quote]) => ({ kind, label: LABELS[kind], quote, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}` })), url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
 const stages = (names: string[]) => names.map((name) => ({ key: name.toLowerCase().replace(/ /g, '-'), name }));
 if (variant === 'goal' || variant === 'ask-goal') {
   const wont = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
   Object.assign(state, { goals: [{ goal: { id: 1, title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe', stages: stages(['Found', 'Drafted', 'Applied', 'Interview', 'Offer']), crew: 2, wont, asks: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period'] }, roles: [
-    role(1, 'found', 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', ['You led a payments dashboard in React and TypeScript', 'You cut checkout load time by 40 percent'], 'GraphQL is not on your CV'),
-    role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV'),
+    role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV', [['remote', 'Fully remote within the UK'], ['fast', 'Two interviews, offer within two weeks']]),
+    role(1, 'found', 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', ['You led a payments dashboard in React and TypeScript', 'You cut checkout load time by 40 percent'], 'GraphQL is not on your CV', [['gateway', 'Offices in London, New York and Dublin']]),
     role(3, 'drafted', 'Acme Pay', 'Senior Frontend Engineer', 'London', '£70,000 a year', ['You led four engineers on a payments dashboard'], 'Testing with Playwright is not on your CV'),
     role(4, 'applied', 'Lumen', 'Frontend Engineer', 'Remote', '£60,000 a year', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing'),
     { ...role(5, 'interview', 'Harbour Bank', 'Frontend Engineer', 'London', '£62,000 a year', ['You built a mobile banking API in Node.js'], 'Nothing the posting asks for is missing'), prep: { at: now - 10 * min,
@@ -369,8 +370,8 @@ if (variant === 'thread') {
     ev(41, 2, 'task.progress', 'scout', { task: 48, text: 'Search the boards for frontend roles in London' }),
     ev(42, 1, 'task.progress', 'scout', { task: 48, text: 'Checking Wise and Monzo against your resume' }));
   Object.assign(state, { goals: [{ goal: { id: 1, title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe', stages: stages(['Found', 'Drafted', 'Applied', 'Interview', 'Offer']), crew: 2, wont: [], asks: [] }, roles: [
-    role(1, 'found', 'Monzo', 'Frontend Engineer', 'London', '£60,000 to £70,000 a year', ['You led a payments dashboard in React and TypeScript'], 'GraphQL is not on your CV'),
-    role(2, 'found', 'Wise', 'Senior React Developer', 'Remote (UK)', 'Pay not in the posting', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing'),
+    role(2, 'found', 'Wise', 'Senior React Developer', 'Remote (UK)', 'Pay not in the posting', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing', [['remote', 'This role is fully remote'], ['sponsor', 'We sponsor visas for engineers']]),
+    role(1, 'found', 'Monzo', 'Frontend Engineer', 'London', '£60,000 to £70,000 a year', ['You led a payments dashboard in React and TypeScript'], 'GraphQL is not on your CV', [['gateway', 'Used by millions of customers across Europe']]),
     role(3, 'found', 'Deliveroo', 'UI Engineer', 'London', '£58,000 a year', ['You cut checkout load time by 40 percent'], 'Design-system experience is not on your CV'),
   ] }] });
   pages.chief = { messages: [
@@ -380,7 +381,7 @@ if (variant === 'thread') {
     { id: 4, author: 'person', at: now - 30 * min, text: 'Make my resume from that.' },
     { id: 5, author: 'bot', at: now - 28 * min, text: 'Here it is. One page, your newest work first.' },
     { id: 6, author: 'system', at: now - 28 * min, text: 'Delivered files/resume.docx: The Resume is ready: 4 sections' },
-    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\nFrontend Engineer at Monzo\nSenior React Developer at Wise\nUI Engineer at Deliveroo' },
+    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\nSenior React Developer at Wise\nFrontend Engineer at Monzo\nUI Engineer at Deliveroo' },
   ] };
   Object.assign(bots.find((b) => b.id === 'chief')!, { firstUnread: 7 });
 }
