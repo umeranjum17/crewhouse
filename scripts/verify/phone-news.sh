@@ -42,6 +42,7 @@ shade() { adb -s $SER shell cmd statusbar expand-notifications; sleep 2; $P shot
 opens() { $P tap "$1"; for _ in $(seq 30); do $P texts | grep -q "$2" && break; sleep 1; done; $P texts | grep -q "$2" || { echo "the tap did not open: $2" >&2; exit 1; }; sleep 1; $P shot "$OUT/$3"; }
 away() { adb -s $SER shell input keyevent HOME; sleep 2; }
 pid() { adb -s $SER shell pidof $PKG | tr -d '\r'; }
+shown() { adb -s $SER shell dumpsys activity activities | grep -E 'ResumedActivity' | grep -q "$PKG"; } # on screen, not just in recents
 
 # 1. In the background: the ongoing line says it is connected, and Chief's reply opens his chat.
 away
@@ -56,7 +57,7 @@ away
 was=$(pid); adb -s $SER shell kill -9 "$was"
 for _ in $(seq 90); do now=$(pid); [ -n "$now" ] && [ "$now" != "$was" ] && break; sleep 2; done
 [ -n "$now" ] && [ "$now" != "$was" ] || { echo "the link service did not come back after the kill" >&2; exit 1; }
-adb -s $SER shell dumpsys activity activities | grep -q "$PKG/.MainActivity" && { echo "the app's screen is open: not a closed app" >&2; exit 1; }
+shown && { echo "the app's screen is open: not a closed app" >&2; exit 1; }
 sleep 5; posted 'Crewhouse is connected'
 say 'I need someone to sort out my invoices'
 posted 'Invoice Ivy'
@@ -75,7 +76,7 @@ adb -s $SER reboot; adb -s $SER wait-for-device; booted
 adb -s $SER root >/dev/null; adb -s $SER wait-for-device; booted
 for port in $LINK_PORT ${RELAY##*:}; do adb -s $SER reverse tcp:$port tcp:$port >/dev/null; done
 posted 'Crewhouse is connected'
-adb -s $SER shell dumpsys activity activities | grep -q "$PKG/.MainActivity" && { echo "the app's screen opened after the reboot" >&2; exit 1; }
+shown && { echo "the app's screen opened after the reboot" >&2; exit 1; }
 say hi
 posted 'What would you like to work on?'
 shade news-after-reboot-dark-shade.png
