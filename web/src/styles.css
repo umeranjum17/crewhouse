@@ -1544,7 +1544,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .st-helper-chat .small, .st-profile .small { font-size: 16px; }
 .st-helper-chat .wb-thumb, .st-profile .wb-thumb { display: none; }
 .st-helper-chat .wb-card, .st-profile .wb-card { border-radius: 20px; padding: 14px; background: var(--solid); }
-.st-helper-chat .wb-card .wb-ic[class], .st-profile .wb-card .wb-ic[class] { background: var(--helper-colour); color: #0B0B0B; width: 44px; height: 44px; border-radius: 14px; font-size: 14px; }
+.st-helper-chat .wb-card .wb-ic[class], .st-profile .wb-card .wb-ic[class] { background: var(--helper-colour); color: #0B0B0B; width: 44px; height: 44px; border-radius: 14px; font-size: 11px; letter-spacing: .02em; }
 .st-helper-chat .wb-card .wb-what > b, .st-profile .wb-card .wb-what > b { font-size: 16px; }
 .st-helper-chat .time, .st-profile .time, .st-profile .step, .st-profile .step time, .st-helper-chat .chat-more, .st-helper-chat .chat-intro > span, .st-helper-chat .chip { font-size: 16px; }
 .st-helper-chat .wb-what .small, .st-profile .wb-what .small { white-space: normal; overflow: visible; }
