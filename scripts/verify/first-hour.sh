@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The captain's first hour (docs/verification/jobs-loop.md): the release app on a task-owned emulator, paired to a crewd on
 # the real pinned OpenClaw engine with the scripted local model first-hour-model.ts (fixed words, no AI account). Umer
-# sends his CV PDF with "find me good stuff", taps Start and watches Rae's look land in Chief's chat; then Rae's chat.
+# sends his CV PDF with "find me good stuff", taps Start and watches Rae's look land in Chief's chat; says hi with the keyboard
+# up (one reply, the box above the keys); then Rae's chat, and from the background a notification that opens Chief's chat.
 #   bash scripts/verify/first-hour.sh <out-dir> [release-x86_64.apk]   (Android SDK, chromium, pdftotext, the network)
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)

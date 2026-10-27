@@ -28,6 +28,7 @@ const stub = await startModelStub(undefined, (body, text) => {
     if (cv) return { text: call('crew_goal', { title: 'Software engineering roles in AI', places: 'Remote first', focus: 'companies that hire fast, as a way into AI', cv }),
       reply: 'I read your CV. Here is the search I would run from it: tap Start and Research Rae begins looking right away.' };
     if (/The person says: (hi|hello|hey)\b/i.test(text)) return { reply: 'Hi Umer. What can the crew do for you today?' };
+    if (/The person says: any news\b/i.test(text)) return { reply: `Rae found ${roles.length} roles for you, Umer. They are in my chat.` };
     return { reply: 'On it.' };
   }
   if (/Look for new options for the person's goal/.test(text)) return { reply: `Added ${roles.length} roles.`, text: [call('crew_report', { text: 'Searching remote AI engineering roles' }),
