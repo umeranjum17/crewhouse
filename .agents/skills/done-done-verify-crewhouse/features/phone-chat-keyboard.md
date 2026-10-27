@@ -19,8 +19,12 @@ Chief's face (the blue circle in a captain's cap), round and themed too.
    screen's own layout that send, box and chip sit above the keyboard and the bar is gone; it writes a still per
    case and `keyboard.json`, and exits non-zero on any miss.
 3. One reply: `test/link.test.ts` ("one message gives one reply…") cuts the link between a message and its answer
-   and counts the computer's messages. The phone side (a streamed bubble left standing when the finishing line was
-   lost) needs the real engine's streamed words: `scripts/verify/native-delegation.ts --scripted` with its events.
+   and counts the computer's messages. On the phone, `node scripts/verify/phone-reconnect-reply.mjs --serial <emulator>
+   --apk <app.apk> --lab <empty scratch dir> --out <dir>` runs the real engine (`native-delegation.ts` with
+   `LAB_HI_REPLY`, which streams Chief's first sentence and the rest 8 s later) and the repo's relay, pairs the
+   emulator, says Hi, cuts the phone's link (direct and relay) while Chief's first words are on screen, and counts his
+   reply on screen after the reconnect, a tab switch and backgrounding; it exits 1 unless each count is one. Main
+   before #762 shows two: the finished reply and the streamed "Hi Umer. ▍" left standing.
 4. Icon: `aapt2 dump resources <apk> | grep -A6 mipmap/ic_launcher` lists the five densities, `_round`, and the
    adaptive XML's `monochrome` layer (release builds rename the files, so read the resource table, not the zip).
    Go Home (`input keyevent 3`), swipe up for the drawer and capture it. Installed web app: open the lab in the
@@ -32,3 +36,4 @@ Chief's face (the blue circle in a captain's cap), round and themed too.
   means to ship.
 - The stub engine does not stream, so a lingering streamed bubble only shows on the real engine
   (`scripts/verify/native-delegation.ts --scripted`).
+- A paired emulator reaches crewd by the relay as well as the direct link, so a cut has to drop both.

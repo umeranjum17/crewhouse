@@ -4,18 +4,22 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { OpenClawRuntime } from '../../src/openclaw/runtime.ts';
 import { join } from 'node:path';
+import { createServer as createHttp, request as httpRequest } from 'node:http';
 const [scratch, ready, mode, keyFile] = process.argv.slice(2);
 if (!scratch || !ready || !['--scripted', '--key-file'].includes(mode)) throw Error('Choose --scripted or --key-file <dedicated key path>');
 for (const p of ['home', 'tmp', 'state', 'crew', 'tools']) mkdirSync(join(scratch, p), { recursive: true });
-Object.assign(process.env, { HOME: join(scratch, 'home'), TMPDIR: join(scratch, 'tmp'), CREWHOUSE_RUN_MODE: 'test', CREWHOUSE_RUN_HOME: join(scratch, 'home'), CREWHOUSE_STATE_DIR: join(scratch, 'state'), CREWHOUSE_CREW_DIR: join(scratch, 'crew'), CREWHOUSE_TOOLS_DIR: join(scratch, 'tools'), CREWHOUSE_GOOGLE_CLIENT: join(scratch, 'absent-google.json'), CREWHOUSE_PORT: mode === '--key-file' ? process.argv[6] || '0' : '0', CREWHOUSE_LINK_PORT: '0', XDG_STATE_HOME: join(scratch, 'home/state'), XDG_CONFIG_HOME: join(scratch, 'home/config'), XDG_CACHE_HOME: join(scratch, 'home/cache'), XDG_DATA_HOME: join(scratch, 'home/data'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${scratch}/no-bus` });
+Object.assign(process.env, { HOME: join(scratch, 'home'), TMPDIR: join(scratch, 'tmp'), CREWHOUSE_RUN_MODE: 'test', CREWHOUSE_RUN_HOME: join(scratch, 'home'), CREWHOUSE_STATE_DIR: join(scratch, 'state'), CREWHOUSE_CREW_DIR: join(scratch, 'crew'), CREWHOUSE_TOOLS_DIR: join(scratch, 'tools'), CREWHOUSE_GOOGLE_CLIENT: join(scratch, 'absent-google.json'), CREWHOUSE_PORT: mode === '--key-file' ? process.argv[6] || '0' : '0', CREWHOUSE_LINK_PORT: process.env.LAB_LINK_PORT ?? '0', XDG_STATE_HOME: join(scratch, 'home/state'), XDG_CONFIG_HOME: join(scratch, 'home/config'), XDG_CACHE_HOME: join(scratch, 'home/cache'), XDG_DATA_HOME: join(scratch, 'home/data'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${scratch}/no-bus` });
 for (const key of ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[key];
 let helperId = '', helperName = '';
+const HI = process.env.LAB_HI_REPLY;
 let stub: Awaited<ReturnType<typeof import('../../test/openclaw-stub.ts')['startModelStub']>> | undefined;
 if (mode === '--scripted') {
   const { startModelStub } = await import('../../test/openclaw-stub.ts');
   stub = await startModelStub(undefined, (body, text) => {
     const system = body.messages.filter((m: any) => m.role === 'system').map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
     // Legwork: a spawned child answers its one item after its tool calls; Chief spawns, then answers when the reports are in.
+    // LAB_HI_REPLY (phone-reconnect-reply.mjs): Chief answers a bare "Hi" with these words, streamed in two parts below.
+    if (HI && system.includes('Your id in Crewhouse is chief.') && /^Hi[.!]?$/.test(text.trim())) return { reply: HI };
     const item = /\bitem=(\w+)/.exec(text)?.[1];
     if (item) return { text, reply: `LEGWORK-DONE ${item}` };
     const reports = [...new Set(JSON.stringify(body.messages.filter((m: any) => m.role !== 'system')).match(/LEGWORK-DONE \w+/g) ?? [])];
@@ -45,7 +49,22 @@ if (mode === '--scripted') {
       `[tool sessions_send ${JSON.stringify({ sessionKey: key, message: `Read the file and report what it says. ${fail}${outcome}[tool crew_profile {"text":"forbidden helper change"}] [tool crew_read {"path":"facts.txt"}]`, timeoutSeconds: 0 })}] ` +
       `[tool crew_read {"path":"files/facts.txt"}]` };
   });
-  process.env.CREWHOUSE_ENGINE_BASE_URL = stub.url; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';
+  let base = stub.url;
+  if (HI) { // the first sentence of Chief's "Hi" reply streams at once and the rest 8 s later, so a link cut can land between them
+    const up = new URL(stub.url), [first] = HI.split(/(?<=\.) /), quoted = JSON.stringify(HI);
+    const slow = createHttp((req, res) => req.pipe(httpRequest({ host: up.hostname, port: up.port, path: req.url, method: req.method, headers: req.headers }, async (u) => {
+      let text = ''; for await (const c of u) text += c;
+      res.writeHead(u.statusCode ?? 500, u.headers);
+      const at = text.indexOf(quoted), cut = text.lastIndexOf('data: ', at);
+      if (at < 0) return void res.end(text);
+      const line = text.slice(cut, text.indexOf('\n\n', at) + 2);
+      res.write(text.slice(0, cut) + line.replace(quoted, JSON.stringify(first)));
+      setTimeout(() => res.end(line.replace('"role":"assistant",', '').replace(quoted, JSON.stringify(HI.slice(first.length))) + text.slice(cut + line.length)), 8000);
+    })));
+    await new Promise<void>((resolve) => slow.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${(slow.address() as { port: number }).port}${up.pathname}`;
+  }
+  process.env.CREWHOUSE_ENGINE_BASE_URL = base; process.env.CREWHOUSE_ENGINE_API_KEY = 'native-fixture-only';
   const legacy = join(scratch, 'state/people/1/engine/auth.json'); mkdirSync(join(legacy, '..'), { recursive: true });
   if (!existsSync(join(scratch, 'state/crew.db'))) writeFileSync(legacy, (await import('../../test/migrate-house.ts')).legacyAuth()); // a rebooted lab keeps its household
 }
