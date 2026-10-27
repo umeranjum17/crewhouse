@@ -755,3 +755,30 @@ test('the demo banner stacks its Pair button under its words at 360 wide and the
   assert.equal(m.stacked, true, 'the Pair button sits under the words at this size');
   assert.ok(m.card! < 400, `the banner stays short: ${Math.round(m.card!)}px, against main's 562px at this size`);
 });
+
+test('your path to the US opens from the goal: four stages that open on a tap, each claim with its page and date, nothing to fill in, phone and computer, day and night', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.send('Page.enable'); await b.send('Runtime.enable');
+  for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
+    const at = `${theme} ${width}`;
+    await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
+    await b.open(`demo=goal&${theme}#/goal`);
+    await until('the path link on the goal', () => b.run("!!document.querySelector('a.path-link[href=\"#/goal/path\"]')"), 30_000);
+    await b.run("document.querySelector('a.path-link').click()");
+    await until('the four stages', () => b.run("document.querySelectorAll('.path-stages > li').length === 4"), 30_000);
+    assert.equal(await b.run("document.querySelectorAll('.path-item').length"), 0, `${at}: the stages start closed`);
+    assert.match(await b.run("document.querySelector('.goal-rules').textContent"), /not legal advice/, `${at}: says it is information`);
+    await b.run("document.querySelector('.path-head').click()");
+    await until('the first stage', () => b.run("document.querySelector('.path-head').getAttribute('aria-expanded') === 'true' && document.querySelectorAll('.path-item').length > 0"), 30_000);
+    await b.run("document.querySelector('.path-item summary').click()");
+    await until('an item', () => b.run("document.querySelector('.path-item').open && !!document.querySelector('.path-claim a')"), 30_000);
+    const m = await b.run(`(() => {
+      const claim = document.querySelector('.path-claim'), a = claim.querySelector('a'), page = document.querySelector('.path-page');
+      const small = [...page.querySelectorAll('*')].filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 16).map((e) => e.className || e.tagName);
+      const tight = [...page.querySelectorAll('button, summary')].filter((e) => e.getBoundingClientRect().height < 44).length;
+      return { href: a.href, when: /(updated|checked|current as of) \\d{1,2} [A-Z][a-z]{2} \\d{4}/.test(claim.textContent), asks: page.querySelectorAll('input, textarea, select').length,
+        wide: document.documentElement.scrollWidth > innerWidth, small, tight, says: claim.querySelector('p').textContent.length > 12 }; })()`);
+    assert.match(m.href, /^https:\/\//, `${at}: a claim links to its page`);
+    assert.deepEqual({ ...m, href: '' }, { href: '', when: true, asks: 0, wide: false, small: [], tight: 0, says: true }, `${at}: dated, nothing to fill in, no sideways scroll, text 16px or more, rows 44px tall`);
+  }
+});

@@ -20,3 +20,4 @@ The repo's maintained verification map; a proof that drives one entry point is i
 - [The phone's first run and typed pairing](phone-first-run.md): A clean install's first screen → On my computer opens the code box → the two words on the computer → You're in → Home, then a message gets Chief's answer
 - [The phone's chat with the keyboard up](phone-chat-keyboard.md): Open Chief on the Android app, add a PDF, tap the box; the box and send sit on the keyboard, one reply per message, Chief's face on the launcher
 - [Chief on this phone with a MiniMax key](phone-only-minimax.md): Use this phone only, pick MiniMax, paste the key, pick the model; the chat names it
+- [Your path to the US](career-path.md): Open Your goal, tap Your path to the US; four stages open to cited claims, each with its page and date, no questions about the person

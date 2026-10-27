@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import * as A from './adapter.ts';
 import { api } from './api.ts';
+import { Career } from './career.tsx';
 import type { Ctx } from './main.tsx';
 
 /** A reminder is the person's: change its time or dismiss it. */
@@ -80,6 +81,7 @@ function Prep({ state, refresh, id }: Ctx & { id: string }) {
 export function Goal(ctx: Ctx & { id?: string }) {
   const { state, refresh } = ctx, all = A.goals(state), [pick, setPick] = useState(0), [sel, setSel] = useState('');
   const g = all[pick] ?? all[0];
+  if (ctx.id === 'path') return <Career />;
   if (ctx.id) return <Prep {...ctx} id={ctx.id} />;
   if (!g) return <div className="page stack rest-screen"><h1>Your goal</h1><p className="st-line">Tell Chief what you are looking for and where. He shows you one card before anything starts.</p><a className="btn go" href="#/chief">Tell Chief</a></div>;
   const col = g.cols.some((c: { key: string }) => c.key === sel) ? sel : g.cols[0].key;
@@ -92,6 +94,7 @@ export function Goal(ctx: Ctx & { id?: string }) {
         <div className="hire-sect">The crew will not</div>{g.wont.map((l: string) => <p key={l} className="role-li">{l}</p>)}
         {!!g.asks.length && <><div className="hire-sect">The crew asks you. It never guesses these</div>{g.asks.map((l: string) => <p key={l} className="role-li">{l}</p>)}</>}
       </details></div>
+    {g.will && <a className="path-link" href="#/goal/path"><b>Your path to the US</b><span className="mute">From this job to a gateway employer to a US role. Every line names its source.</span></a>}
     <div className="goal-chips" role="tablist">{g.cols.map((c: { key: string; name: string; roles: unknown[] }) => <button key={c.key} role="tab" aria-selected={col === c.key} className={col === c.key ? 'on' : ''} onClick={(e) => { setSel(c.key); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest' }); }}>{c.name} {c.roles.length}</button>)}</div>
     <div className="goal-board">{g.cols.map((c: { key: string; name: string; who: string; roles: A.GoalRole[] }) => <section key={c.key} className={col === c.key ? 'on' : ''} aria-label={c.name}>
       <h2>{c.name} <span className="mute">{c.roles.length}</span></h2><p className="mute small">{c.who}</p>

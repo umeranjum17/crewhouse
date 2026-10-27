@@ -753,5 +753,16 @@
       "Open Chief in the three panes on a 1280 computer, day and night"
     ],
     "result": "Chief's chat, Home and the desktop shell as that commit draws them, each capture named the same at the head and at the base"
+  },
+  "career-path": {
+    "start": "Umer's demo household with a job-search goal on the web app, no account, no network",
+    "steps": [
+      "Open Your goal; the row Your path to the US sits above the stages",
+      "Tap it: four closed stages under a note that this is information, not legal advice",
+      "Tap Know the routes, then the L-1 row: each claim shows the page's own words, the page and the date it shows",
+      "Open Check who really sponsors and a row under it",
+      "Open the same screens in the installed app's window at phone size"
+    ],
+    "result": "Every claim names its page, who published it and the date of that page; nothing on the screen asks for citizenship, visa status, pay or notice, and no shot has clipped text, text under 16px or sideways scroll. Quotes were checked against the live pages by scripts/check-career-sources.mjs. This is not legal advice and not a check of any employer's current sponsoring."
   }
 }

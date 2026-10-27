@@ -40,6 +40,7 @@ import { useOffice } from './src/office';
 import { canHear, hear, stayOn, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { readLink } from '../web/src/typed.ts';
+import { PATH_NOTE, path } from '../web/src/career.ts';
 import { connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
 import { startNews, stopNews } from './src/news';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
@@ -1516,7 +1517,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
       <View style={[{ flex: 1 }, edge && { [edge === 'left' ? 'paddingLeft' : 'paddingRight']: BUBBLE_DP }]}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} />}
-        {route.view === 'goal' && (route.tab === 'prep' ? <Prep key={stack.length} {...ctx} id={route.id!} /> : route.id ? <Role key={stack.length} {...ctx} id={route.id} /> : <Goal {...ctx} />)}
+        {route.view === 'goal' && (route.tab === 'path' ? <Career {...ctx} /> : route.tab === 'prep' ? <Prep key={stack.length} {...ctx} id={route.id!} /> : route.id ? <Role key={stack.length} {...ctx} id={route.id} /> : <Goal {...ctx} />)}
         {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage key={stack.length} {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
@@ -2368,6 +2369,36 @@ function Yours({ list, foot }: { list: string[]; foot: string }) {
   </View>;
 }
 
+/** Your path to the US (web/src/career.tsx): four stages, a tap opens one, an item opens its cited claims. Information
+ *  only: it asks for nothing and keeps nothing; each claim names its page, opened from the phone's own browser. */
+function Career(ctx: Ctx) {
+  const t = useLook(), plan = path(), [open, setOpen] = useState(''), [item, setItem] = useState('');
+  return <Page title="Your path to the US" lead="From a job like yours, to a gateway employer, to a US role. This is information, not legal advice." back={['Your goal', ctx.back]}>
+    {plan.map((st, n) => <View key={st.key} style={{ borderWidth: 1, borderColor: open === st.key ? t.ink : t.line, borderRadius: 12, backgroundColor: t.solid, overflow: 'hidden' }}>
+      <Pressable onPress={() => setOpen(open === st.key ? '' : st.key)} accessibilityRole="button" accessibilityState={{ expanded: open === st.key }} accessibilityLabel={`Stage ${n + 1}, ${st.name}`}
+        style={{ flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 56, padding: 12 }}>
+        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.ink, alignItems: 'center', justifyContent: 'center' }}><Text style={[s.read, { color: t.bg, ...fw('700') }]}>{n + 1}</Text></View>
+        <View style={{ flex: 1 }}><T style={[s.read, s.b]}>{st.name}</T><T tone="mute" style={s.read}>{st.line}</T></View>
+      </Pressable>
+      {open === st.key && <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+        {st.items.map((it) => { const k = st.key + it.title, on = item === k;
+          return <View key={k} style={{ borderTopWidth: 1, borderTopColor: t.line, paddingTop: 8, gap: 6 }}>
+            <Pressable onPress={() => setItem(on ? '' : k)} accessibilityRole="button" accessibilityState={{ expanded: on }} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <T style={[s.read, s.b]}>{it.title}</T><T tone="mute" style={s.read}>{it.line}</T></Pressable>
+            {on && it.claims.map((c, i) => <View key={i} style={{ gap: 2, paddingTop: 4 }}>
+              <Line>{c.says}</Line>
+              <T tone="mute" style={s.read}>{c.row ? c.quote : `“${c.quote}”`}</T>
+              <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}><T tone="mute" style={s.read}>{c.by}:</T><Pressable onPress={() => void Linking.openURL(c.url)} accessibilityRole="link" hitSlop={8}><T style={[s.read, { textDecorationLine: 'underline' }]}>{c.page}</T></Pressable><T tone="mute" style={s.read}>, {c.when}</T></View>
+            </View>)}
+            {on && !!it.note && <View style={{ backgroundColor: t.soft, borderRadius: 10, padding: 12 }}><Line>{it.note}</Line></View>}
+          </View>; })}
+        {!!st.note && <View style={{ backgroundColor: t.soft, borderRadius: 10, padding: 12 }}><Line>{st.note}</Line></View>}
+      </View>}
+    </View>)}
+    <View style={{ backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderRadius: 12, padding: 14, gap: 6 }}>{PATH_NOTE.map((l) => <Line key={l}>{l}</Line>)}</View>
+  </Page>;
+}
+
 /** A role and the goal whose board it is on. */
 const roleIn = (state: Json, id: string) => { for (const g of A.goals(state)) for (const c of g.cols) { const r = c.roles.find((x: A.GoalRole) => String(x.id) === id); if (r) return { g, r: r as A.GoalRole }; } return {}; };
 /** Pills over a row of choices: a goal or a stage, the one shown filled. */
@@ -2397,6 +2428,8 @@ function Goal(ctx: Ctx) {
       {rules && <><Sect>The crew will not</Sect>{g.wont.map((l: string) => <Line key={l}>{l}</Line>)}
         {!!g.asks.length && <><Sect>The crew asks you. It never guesses these</Sect>{g.asks.map((l: string) => <Line key={l}>{l}</Line>)}</>}</>}
     </View>
+    {g.will && <Pressable onPress={() => go({ view: 'goal', tab: 'path' })} accessibilityRole="button" style={({ pressed }) => [{ backgroundColor: t.solid, borderColor: t.line, borderWidth: 1, borderRadius: 12, padding: 14, gap: 2, minHeight: 56 }, pressed && { opacity: 0.6 }]}>
+      <T style={[s.read, s.b]}>Your path to the US</T><T tone="mute" style={s.read}>From this job to a gateway employer to a US role. Every line names its source.</T></Pressable>}
     <Pills items={g.cols.map((x: Json) => ({ key: x.key, label: `${x.name} ${x.roles.length}`, a11y: `${x.name}, ${x.roles.length}` }))} on={c.key} set={setCol} />
     <T style={s.h2}>{c.name}</T><T tone="mute" style={s.read}>{c.who}</T>
     {c.roles.length ? c.roles.map((r: A.GoalRole) => <Pressable key={r.id} onPress={() => go({ view: 'goal', id: String(r.id) })} accessibilityRole="button" accessibilityLabel={`${r.title} at ${r.co}`}
