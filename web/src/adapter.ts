@@ -2314,10 +2314,12 @@ export const WAIT_CHIEF = 'Waiting for Chief';
 export const NO_JOB = 'No job right now';
 export const chiefHas = (view: OfficeView) => `Chief has ${view.counts.needs} thing${view.counts.needs === 1 ? '' : 's'} for you`;
 
-/** The office while the home computer is out of reach: nobody claims to be busy or waiting, and nothing asks. */
+/** The office while the home computer is out of reach: preserve known running work, and hide stale asks and idle details. */
 export function officeAway(view: OfficeView, line = 'Out of reach for now'): OfficeView {
-  const crew = view.crew.map((c) => ({ ...c, mood: 'rest' as Mood, ring: '' as const, seat: 'waiting' as const, ask: undefined, status: line, step: '', steps: [] }));
-  return { ...view, chief: { ...view.chief, mood: 'rest', line }, lead: 'free', crew, needs: [], counts: { ...tally(crew, [], view.done) } };
+  const crew = view.crew.map((c) => c.seat === 'working' ? { ...c, ask: undefined } :
+    ({ ...c, mood: 'rest' as Mood, ring: '' as const, seat: 'waiting' as const, ask: undefined, status: line, step: '', steps: [] }));
+  const working = view.lead === 'working';
+  return { ...view, chief: working ? view.chief : { ...view.chief, mood: 'rest', line }, lead: working ? 'working' : 'free', crew, needs: [], counts: { ...tally(crew, [], view.done) } };
 }
 
 /** The office between refreshes: crewd's debounced snapshot stays the source of truth, and each live event only

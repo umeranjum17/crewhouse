@@ -14,7 +14,7 @@ free() { node -e 'require("node:net").createServer().listen(0,"127.0.0.1",functi
 # crewd leads a group of its own (setsid), drained by `down` before the lab may go.
 mask() { exec ${SETSID:-} env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB/tmp" XDG_STATE_HOME="$LAB/home/.local/state" \
   XDG_DATA_HOME="$LAB/home/.local/share" XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
-  XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" "$@"; }
+  XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" NODE_OPTIONS="${LAB_NODE_OPTIONS:-}" "$@"; }
 wait_for() { for _ in $(seq 300); do if eval "$1" >/dev/null 2>&1; then return 0; fi; sleep 0.2; done; echo "timed out: $1" >&2; return 1; }
 case "${1:-}" in
   up)

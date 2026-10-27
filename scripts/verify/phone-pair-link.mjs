@@ -17,7 +17,7 @@ if (!SERIAL || !APK || !OUT || !LAB) { console.error('usage: LAB=<lab> phone-pai
 const BROWSER = opt('browser', 'com.android.chrome'), PKG = 'dev.crewhouse.app';
 const env = Object.fromEntries(readFileSync(join(LAB, 'env'), 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
 const KEY = readFileSync(join(LAB, 'state', 'person.key'), 'utf8').trim();
-const A = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
+const A = (...a) => execFileSync('adb', [...(process.env.ADB_SERVER_PORT ? ['-P', process.env.ADB_SERVER_PORT] : []), '-s', SERIAL, ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const api = async (method, path, body) => {
   const r = await fetch(`${env.B}${path}`, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${KEY}` }, body: body && JSON.stringify(body) });
