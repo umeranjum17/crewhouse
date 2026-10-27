@@ -39,21 +39,26 @@ try {
     const name = `${width}-${night ? 'night' : 'day'}`;
     A('shell', 'wm', 'density', String(Math.round((px / width) * 160)));
     A('shell', 'cmd', 'uimode', 'night', night ? 'yes' : 'no');
-    A('shell', 'am', 'force-stop', PKG); A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
+    A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
+    await sleep(1500); // the screen redraws at its new size
     tap(await waitFor(/^Chief$/, 60000)); // the bar's Chief
+    for (let x; (x = find(new RegExp(`^Remove ${FILE}$`)));) { tap(x); await sleep(600); } // one file per case
     tap(await waitFor(/^Add a photo or a document$/));
     tap(await waitFor(/^A document: PDF, Word, Excel or text$/));
     // The system picker: the file in Recent or Downloads.
     let file = await waitFor(new RegExp(`^${FILE}$|^Downloads$|^Show roots$`));
     if (file.text !== FILE) { if (file.desc === 'Show roots') { tap(file); file = await waitFor(/^Downloads$/); } tap(file); file = await waitFor(new RegExp(`^${FILE}$`)); }
     tap(file);
-    await waitFor(new RegExp(`^${FILE}$`)); // the chip, back in the app
+    for (const end = Date.now() + 20000; !nodes().some((n) => n.pkg === PKG && n.text === FILE); await sleep(600)) if (Date.now() > end) throw new Error('the file chip never showed'); // back in the app
     tap(await waitFor(/^Tell Chief anything/));
+    A('shell', 'input', 'keycombination', '113', '29'); A('shell', 'input', 'keyevent', '67'); // a kept draft goes first
     A('shell', 'input', 'text', 'This%sis%smy%sresume');
     for (const end = Date.now() + 10000; !imeUp() && Date.now() < end;) await sleep(400);
     await sleep(800); // the keyboard's slide-in settles
     const all = nodes(), app = all.filter((n) => n.pkg === PKG), ime = all.filter((n) => /inputmethod/.test(n.pkg));
-    const top = Math.min(...ime.map((n) => n.b[1]));
+    // Where the keyboard starts: its window's frame top plus the content inset it gives the app.
+    const win = A('shell', 'dumpsys', 'window', 'InputMethod');
+    const top = Number(win.match(/ frame=\[\d+,(\d+)\]/)[1]) + Number(win.match(/mGivenContentInsets=\[\d+,(\d+)\]/)[1]);
     const send = find(/^Send$/, app), field = app.find((n) => /This is my resume/.test(n.text)), chip = find(new RegExp(`^${FILE}$`), app);
     const r = { name, width, night, keyboardTop: top, send: send?.b, field: field?.b, chip: chip?.b, bar: app.filter((n) => /^(Home|Crew)$/.test(n.text)).map((n) => n.b) };
     r.ok = ime.length > 0 && !!send && !!field && !!chip && send.b[3] <= top && field.b[3] <= top && chip.b[3] <= field.b[1] && chip.b[1] > 0 && r.bar.length === 0;
