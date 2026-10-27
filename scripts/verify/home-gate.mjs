@@ -2,6 +2,8 @@
 // no text under 16px outside caps labels, pills and tab labels; no clipped text; no horizontal scroll.
 //   node scripts/verify/home-gate.mjs <repo> <url-with-#hash> <out-dir> <slug> [then-js]
 // Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
+// GATE_SCOPE=<selector> gates the text under it instead of main and .page (a file panel sits outside both).
+// GATE_DOWNLOADS=<dir> keeps whatever the page saves (a PDF or Word file) in that folder.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,6 +29,7 @@ try {
   const send = (method, params = {}) => new Promise((r, j) => { const n = ++id; waiting.set(n, (d) => d.error ? j(new Error(`${method}: ${d.error.message}`)) : r(d.result)); ws.send(JSON.stringify({ id: n, method, params })); });
   const run = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'eval failed'); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable');
+  if (process.env.GATE_DOWNLOADS) await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: process.env.GATE_DOWNLOADS }); // a file the page saves lands there
   const gate = {}; let bad = false;
   const [base, hash] = url.split('#');
   for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
@@ -38,7 +41,7 @@ try {
     if (then) { await run(then); await wait(600); }
     const m = await run(`(() => {
       const seen = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('.sr'); };
-      const texty = [...document.querySelectorAll('main *, .page *')].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));
+      const texty = [...document.querySelectorAll(${JSON.stringify(process.env.GATE_SCOPE ?? 'main *, .page *')})].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));
       const small = (e) => { const cs = getComputedStyle(e); return cs.textTransform === 'uppercase' || e.closest('.st-pill, .pill, .tabbar, .tab, .count, .badge, time, [aria-hidden="true"]'); };
       const tiny = texty.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16 && !small(e)).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const clipped = texty.filter((e) => { const cs = getComputedStyle(e); return (e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'visible' && cs.overflowX !== 'auto') || (e.scrollHeight > e.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !/clamp/.test(e.className)); }).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));

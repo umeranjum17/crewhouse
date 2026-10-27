@@ -2,6 +2,7 @@
 // adds to the first, a writer may draft into the second) and the person moves everything after. Everything that leaves their hands
 // (apply, send, sign, agree, buy, publish) stays theirs. The job search is the first goal; a flat or a university place is the same parts.
 import type { Row, Store } from './db.ts';
+import type { BlockSpec } from './documents.ts';
 
 export const JOB_STAGES = ['Found', 'Drafted', 'Applied', 'Interview', 'Offer'];
 export type Goal = { id: number; title: string; places: string; floor: string; focus?: string; brief: string; rae: string; will: string; routine: number; since: number;
@@ -157,3 +158,34 @@ A question about pay, notice, visa, right to work or consent is theirs alone to 
 Their CV, line by line:
 ${g.brief}
 Start now with question 1.`;
+
+/** The resume: Chief's sections of the person's own lines, with crewd's record of when they wrote each part (`from`). */
+export const RESUME = 'files/resume.docx';
+export type Section = { heading: string; lines: string[]; from: number[]; edited?: boolean };
+const PRIVATE = /^\s*private\s*:|\(\s*private\s*\)/i, HEADS = /^(summary|profile|about me|experience|work experience|work history|employment|education|skills|projects|certifications?|licen[cs]es|languages|links|contact|awards|publications|volunteering|interests)$/i;
+export const resume = (db: Store): { sections: Section[] } | null => JSON.parse(db.get("SELECT value FROM settings WHERE key = 'jobs.resume'")?.value ?? 'null');
+export const setResume = (db: Store, sections: Section[]) => db.run("INSERT INTO settings (key, value) VALUES ('jobs.resume', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify({ sections }));
+const sections = (v: unknown) => (Array.isArray(v) ? v : []).slice(0, 20).map((s: Row) => ({ heading: String(s?.heading ?? '').replace(/\s+/g, ' ').trim().slice(0, 80),
+  lines: (Array.isArray(s?.lines) ? s.lines : []).map((l: unknown) => String(l ?? '').replace(/\s+/g, ' ').trim().slice(0, 400)).filter(Boolean).slice(0, 40) }));
+
+/** Chief's resume, checked against what the person wrote in his chat: every line is a piece of one of their lines (case and
+ *  punctuation aside) and never one they marked private ("private:" or "(private)"); a heading is a plain section name or their words. */
+export function traced(said: { at: number; text: string }[], v: unknown): Section[] {
+  const own = said.flatMap((m) => String(m.text).split('[tool ')[0].split('\n').map((l) => ({ at: m.at, l: ` ${norm(l)} `, hidden: PRIVATE.test(l) }))), out = sections(v).filter((s) => s.lines.length);
+  if (!out.length) throw fail('give the sections of their resume, each with their own lines');
+  return out.map((s) => {
+    const from = new Set<number>(), find = (line: string) => {
+      const hits = own.filter((o) => norm(line) && o.l.includes(` ${norm(line)} `)), open = hits.filter((o) => !o.hidden);
+      if (!open.length) throw fail(hits.length ? `“${line.slice(0, 60)}” is something they marked private, so it stays out.` : `“${line.slice(0, 60)}” is not in what they told you. Use their own words, or ask them for it.`);
+      open.forEach((o) => from.add(o.at));
+    };
+    if (s.heading && !HEADS.test(s.heading)) find(s.heading);
+    s.lines.forEach(find);
+    return { ...s, from: [...from].sort((a, b) => a - b) };
+  });
+}
+/** The person's own edit, as typed: nothing is checked against the chat, and a section whose words changed says they edited it. */
+export const edited = (was: Section[], v: unknown): Section[] => sections(v).map((s, i) => ({ ...s, from: was[i]?.from ?? [],
+  edited: !!was[i]?.edited || was[i]?.heading !== s.heading || was[i]?.lines.join('\n') !== s.lines.join('\n') })).filter((s) => s.lines.length);
+/** The document's blocks: their name as its title, the other top lines under it, then each section's heading over its lines. */
+export const blocks = (all: Section[]) => all.flatMap((s, i): BlockSpec[] => s.heading ? [{ heading: s.heading, level: 2 }, { bullets: s.lines }] : s.lines.map((text, j) => i || j ? { text } : { heading: text, level: 1 }));

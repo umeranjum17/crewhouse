@@ -70,7 +70,9 @@ export type Chart = { type: 'bar' | 'line' | 'pie'; title: string; labels: strin
 export type Workbook = { name: string; sheets: Sheet[] };
 /** One part of a delivered document, read back by crewd: a heading, a paragraph, a bullet, or a table. */
 export type DocPart = { kind: 'heading' | 'p' | 'li' | 'table'; text?: string; bold?: boolean; items?: string[]; head?: string[]; rows?: string[][] };
-export type DocView = { name: string; parts: DocPart[] };
+/** One part of the person's resume as crewd keeps it: its lines, when they wrote them, and whether they edited it since. */
+export type ResumePart = { heading: string; lines: string[]; from: number[]; edited: boolean };
+export type DocView = { name: string; parts: DocPart[]; resume?: ResumePart[] };
 /** One slide of a delivered deck, read back by crewd: its title and its lines. */
 export type DeckSlide = { title: string; lines: string[] };
 export type DeckView = { name: string; slides: DeckSlide[] };
@@ -404,7 +406,15 @@ export function document(json: Json, name: string): DocView {
       if (!text) return null;
       return { kind, text, ...(p?.bold === true ? { bold: true } : {}) };
     }).filter((p: DocPart | null): p is DocPart => p !== null),
+    ...(Array.isArray(json?.resume?.sections) ? { resume: json.resume.sections.slice(0, 20).map((r: Json): ResumePart => ({ heading: words(r?.heading),
+      lines: (Array.isArray(r?.lines) ? r.lines : []).slice(0, 40).map(words), from: (Array.isArray(r?.from) ? r.from : []).filter(Number.isFinite), edited: r?.edited === true })) } : {}),
   };
+}
+
+/** Where a part of the resume came from, in crewd's own record: the days they wrote it to Chief, and their own edit. */
+export function resumeFrom(r: ResumePart) {
+  const days = [...new Set(r.from.map((t) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })))], told = days.length ? `what you told Chief on ${days.join(', ')}` : '';
+  return r.edited ? `Edited by you${told ? `, from ${told}` : ''}` : told ? `From ${told}` : '';
 }
 
 /** A delivered page's own text is content, not bot chatter; the renderer escapes markup. */

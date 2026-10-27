@@ -828,6 +828,14 @@ details.card[open] > summary { margin-bottom: 10px; }
 .doc-rows ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
 .doc-rows a { text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .doc-rows .wb-grid { margin: 4px 0; max-width: none; }
+.wb-saves { display: flex; flex: none; gap: 8px; }
+.resume-part { display: grid; gap: 8px; }
+.resume-part h2 { margin: 0; font: 800 26px/1.15 var(--ui); font-stretch: 112%; color: var(--ink); }
+.doc-rows .resume-from { font-size: 16px; color: var(--mute); }
+.resume-edit label { display: grid; gap: 6px; }
+.resume-edit textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 12px; background: var(--bg); color: var(--ink); font: 400 16px/1.5 var(--ui); resize: vertical; field-sizing: content; }
+.resume-go, .resume-edit-go { display: flex; gap: 8px; justify-self: start; }
+.resume-go .btn, .btn.resume-edit-go { font-size: 16px; min-height: 44px; }
 /* A deck: one frame per slide, title over its lines, in the same panel a document opens in. */
 .wb-rows.slide-rows { background: transparent; border: 0; padding: 4px 2px 24px; gap: 14px; }
 .slide-frame { background: var(--solid); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px; display: grid; gap: 10px; max-width: 72ch; }

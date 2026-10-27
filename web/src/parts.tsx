@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -512,6 +512,35 @@ function DocBody({ doc }: { doc: DocView }) {
   </div>;
 }
 
+/** The person's resume: each part over crewd's note of where it came from, and Edit, which saves their own words into the
+ *  same file, so what Save as PDF or Word hands over is what this shows. One box per part, one line per line. */
+function ResumeBody({ parts, save }: { parts: ResumePart[]; save: (p: { heading: string; lines: string[] }[]) => Promise<boolean> }) {
+  const [draft, setDraft] = useState<string[] | null>(null), [busy, setBusy] = useState(false);
+  if (draft) return <form className="wb-rows doc-rows resume-edit" onSubmit={(e) => { e.preventDefault(); setBusy(true);
+    void save(parts.map((r, i) => ({ heading: r.heading, lines: draft[i].split('\n') }))).then((ok) => { setBusy(false); if (ok) setDraft(null); }); }}>
+    {parts.map((r, i) => <label key={i}><span className="label">{r.heading || 'Your name and contact'}</span>
+      <textarea value={draft[i]} rows={Math.max(2, draft[i].split('\n').length + 1)} onChange={(e) => setDraft(draft.map((d, j) => (j === i ? e.target.value : d)))} /></label>)}
+    <div className="resume-go"><button className="btn go" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button><button type="button" className="btn" onClick={() => setDraft(null)}>Cancel</button></div>
+  </form>;
+  return <div className="wb-rows doc-rows">
+    {parts.map((r, i) => <section key={i} className="resume-part">
+      {r.heading ? <><h3>{r.heading}</h3><ul>{r.lines.map((l, j) => <li key={j}><DocText text={l} /></li>)}</ul></>
+        : r.lines.map((l, j) => i || j ? <p key={j}><DocText text={l} /></p> : <h2 key={j}>{l}</h2>)}
+      {resumeFrom(r) && <p className="resume-from">{resumeFrom(r)}</p>}
+    </section>)}
+    <button type="button" className="btn resume-edit-go" onClick={() => setDraft(parts.map((r) => r.lines.join('\n')))}>Edit</button>
+  </div>;
+}
+
+/** Save a delivered document as PDF or Word: crewd hands over the bytes, over the link too, and the browser saves them. */
+const saveAs = (bot: string, path: string, as: 'pdf' | 'docx') => attempt(async () => {
+  const j = await api.saveAs(bot, path, as), a = window.document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([Uint8Array.from(atob(j.data), (c) => c.charCodeAt(0))], { type: j.type }));
+  a.download = j.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+});
+
 /** The body of a deck preview: one frame per slide, its title and its lines, read-only. */
 function SlideBody({ deck }: { deck: DeckView }) {
   return <div className="wb-rows slide-rows">
@@ -526,19 +555,23 @@ function SlideBody({ deck }: { deck: DeckView }) {
  * A finished file read-only: a workbook is sheet tabs over a table; a document is its headings, paragraphs, lists and
  * tables; a deck is one frame per slide. On a desk it is a panel beside the chat it came from, or, opened from Your
  * things (`wide`), the whole page with what it is beside it; on a phone it is the whole screen above the tabs. `inline`
- * is Your things' peek at its newest file. Reading edits nothing, and Download hands over the file itself.
+ * is Your things' peek at its newest file. Reading edits nothing, and Download hands over the file itself; a document
+ * saves as PDF or Word instead. The person's resume is the one file they edit here (ResumeBody).
  */
 export function PreviewPanel({ bot, path, title, onClose, inline, wide, who, made, summary }: { bot: string; path: string; title?: string; onClose: () => void; inline?: boolean; wide?: boolean; who?: Maker; made?: string; summary?: string }) {
   const box = useRef<HTMLDivElement>(null), none = useRef(null);
   const [tab, setTab] = useState(0);
   useDialogOwn(inline ? none : box, onClose);
   const f = fileView(bot, path, undefined, undefined, title);
-  const { book, doc, deck, text } = usePreview(f);
+  const read = usePreview(f), [mine, setMine] = useState<DocView | null>(null), { book, deck, text } = read, doc = mine ?? read.doc;
   const sheets = book?.sheets ?? [];
   const s = sheets[Math.min(tab, Math.max(0, sheets.length - 1))];
   const about = aboutFile(f, book, doc, deck), t = fileTarget(f);
   const chip = <span className={`wb-ic wb-${f.kind}`} style={tint(who)} aria-hidden>{t?.chip.slice(0, 4)}</span>;
-  const download = <a className={`btn wb-down${inline ? '' : ' go'}`} href={f.url} target="_blank" rel="noreferrer" download><Icon name="download" size={20} />Download</a>;
+  const download = /\.docx$/i.test(path) ? <span className="wb-saves">{(['pdf', 'docx'] as const).map((as) => <button key={as} type="button" className={`btn wb-down${inline || as === 'docx' ? '' : ' go'}`}
+    onClick={() => void saveAs(bot, path, as)} aria-label={`Save as ${as === 'pdf' ? 'PDF' : 'Word'}`}><Icon name="download" size={20} />{as === 'pdf' ? 'PDF' : 'Word'}</button>)}</span>
+    : <a className={`btn wb-down${inline ? '' : ' go'}`} href={f.url} target="_blank" rel="noreferrer" download><Icon name="download" size={20} />Download</a>;
+  const edit = (sections: { heading: string; lines: string[] }[]) => attempt(async () => { const j = await api.resume(sections); previews.set(f.url, Promise.resolve(j)); setMine(docView(j, f.name)); }, 'Saved.');
   const ask = async (words: string) => {
     const ok = await attempt(() => api.post('chief', `${words}\n\n(About “${f.name}”${who ? `, made by ${nameOf(who)}` : ''}.)`), undefined, true);
     if (ok) location.hash = '#/chief';
@@ -550,7 +583,7 @@ export function PreviewPanel({ bot, path, title, onClose, inline, wide, who, mad
         {inline ? <a className="wb-file" href={t?.href}>{chip}<span className="grow wb-what"><b>{f.name}</b><span>{[about, made].filter(Boolean).join(' · ')}</span></span><Icon name="next" size={20} /></a>
           : <header className="wb-head">
             <button className="wb-close" onClick={onClose} aria-label="Close file"><Icon name="back" size={20} /></button>
-            {chip}<span className="grow wb-what"><b>{f.name}</b><span>{who ? `By ${nameOf(who)}` : about}<span className="wb-ro"> · read-only</span></span></span>
+            {chip}<span className="grow wb-what"><b>{f.name}</b><span>{who ? `By ${nameOf(who)}` : about}{!doc?.resume && <span className="wb-ro"> · read-only</span>}</span></span>
             {download}
           </header>}
         <div className="wb-content"><div className="wb-reading">
@@ -560,7 +593,7 @@ export function PreviewPanel({ bot, path, title, onClose, inline, wide, who, mad
             {sheets.map((x, i) => <button key={`${x.name}-${i}`} aria-pressed={x === s} className={`wb-tab${x === s ? ' on' : ''}`} onClick={() => setTab(i)}>{x.name}</button>)}
           </nav>}
           {s && <SheetTable s={s} />}
-          {doc && doc.parts.length > 0 && <DocBody doc={doc} />}
+          {doc?.resume ? <ResumeBody parts={doc.resume} save={edit} /> : doc && doc.parts.length > 0 && <DocBody doc={doc} />}
           {deck && <SlideBody deck={deck} />}
           {text !== null && <div className="wb-rows doc-rows"><div className="chat-md">{mdBlocks(chatTokens(text))}</div></div>}
           {summary && !inline && <p className="wb-note"><Icon name="lock" size={20} /><span>{summary}</span></p>}

@@ -89,6 +89,9 @@ journeys:
   # loopback library card on the stub engine; the app shows the ask card, answered once. Nothing is sent, paid or accepted.
   chief-screen:
     command: 'bash scripts/verify/chief-screen.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The resume: Chief makes it from Umer's own words only, he edits it, and the app saves it as PDF and Word (docs/verification/resume.md).
+  resume:
+    command: 'timeout -k 10 900 bash scripts/verify/resume.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
