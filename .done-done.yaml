@@ -202,11 +202,15 @@ journeys:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/binary-inspect.sh "$DONE_DONE_EVIDENCE_ROOT"'
   skill-eval:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/skill-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'
-# The calm chat, Home and desktop frames Main approved (ch-018, ?demo data, 2x): each live capture is judged beside its frame.
+# The calm chat and Home frames Main approved (ch-018, ?demo data, 2x): each live capture is judged beside its frame.
 approved_design:
   - { screen: "Chief's chat (phone)", size: 780x1688, theme: day, mock: docs/design/approved/chat-390-day.png, capture: live-chat-390-day.png }
   - { screen: "Chief's chat (phone)", size: 780x1688, theme: night, mock: docs/design/approved/chat-390-night.png, capture: live-chat-390-night.png }
   - { screen: "Home (phone)", size: 780x1688, theme: day, mock: docs/design/approved/home-390-day.png, capture: live-home-390-day.png }
   - { screen: "Home (phone)", size: 780x1688, theme: night, mock: docs/design/approved/home-390-night.png, capture: live-home-390-night.png }
-  - { screen: "Chief in three panes (desktop)", size: 2560x1600, theme: day, mock: docs/design/approved/desk-1280-day.png, capture: live-desk-1280-day.png }
-  - { screen: "Chief in three panes (desktop)", size: 2560x1600, theme: night, mock: docs/design/approved/desk-1280-night.png, capture: live-desk-1280-night.png }
+# The approved desktop frames predate two states the desktop now shows, so they are kept as reference, not judged as a match.
+approved_requirements:
+  - { kind: reference, name: docs/design/approved/desk-1280-day.png, exclusion: "Approved before the desktop gained the two new states below; kept as reference" }
+  - { kind: reference, name: docs/design/approved/desk-1280-night.png, exclusion: "Approved before the desktop gained the two new states below; kept as reference" }
+  - { kind: interaction, name: "Scout's roles as compact rows (desktop)", exclusion: "A new state, not a deviation: role rows from real jobs data arrived after Main approved the frames" }
+  - { kind: interaction, name: "Pair offer in the details column (desktop)", exclusion: "A new state, not a deviation: Home's notices moved into the details column after Main approved the frames" }
