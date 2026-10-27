@@ -19,11 +19,12 @@ Chief's face (the blue circle in a captain's cap), round and themed too.
    screen's own layout that send, box and chip sit above the keyboard and the bar is gone; it writes a still per
    case and `keyboard.json`, and exits non-zero on any miss.
 3. One reply: `test/link.test.ts` ("one message gives one reply…") cuts the link between a message and its answer
-   and counts the computer's messages. On the phone, freeze the lab crewd (`kill -STOP <its pid>`) on Chief's first
-   streamed words until the app shows Reconnecting, resume it, and check the thread holds the reply once.
-4. Icon: `adb shell cmd package resolve-activity` is not enough; go Home (`input keyevent 3`), open the app drawer
-   and capture the launcher; for the themed icon, turn on Wallpaper & style › Themed icons on an emulator image
-   that has it.
+   and counts the computer's messages. The phone side (a streamed bubble left standing when the finishing line was
+   lost) needs the real engine's streamed words: `scripts/verify/native-delegation.ts --scripted` with its events.
+4. Icon: `aapt2 dump resources <apk> | grep -A6 mipmap/ic_launcher` lists the five densities, `_round`, and the
+   adaptive XML's `monochrome` layer (release builds rename the files, so read the resource table, not the zip).
+   Go Home (`input keyevent 3`), swipe up for the drawer and capture it. Installed web app: open the lab in the
+   emulator's Chrome with `#person=<key>` (`adb reverse tcp:<port> tcp:<port>`), menu › Add to Home screen.
 
 ## Pitfalls
 
