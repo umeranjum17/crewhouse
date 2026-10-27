@@ -3,7 +3,7 @@
 # the writer's real browser (the pinned playwright-axi). The model's turns are scripted; the gate, crewd's reading of the
 # page and its press of Submit are real. Captures the draft card (Fill it in for me), the form card (what was filled from
 # the CV and draft, the questions only Umer answers left blank, Submit), then, on the local posting only, the board after
-# his Submit, and the reading pack the writer delivers beside the card. Each at 390 and 1280, day and night, through home-gate.mjs, plus the form card in the installed app (a real
+# his Submit. Each at 390 and 1280, day and night, through home-gate.mjs, plus the form card in the installed app (a real
 # Chromium install from Settings, under xvfb-run) at 390.
 #
 #   BROWSER_TOOLS=<tools-dir> scripts/verify/jobs-apply.sh <out-dir>                          the local posting and its form
@@ -60,9 +60,6 @@ get() { curl -fsS -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B$1"; }
 get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.stringify(JSON.parse(s).asks.find((a)=>a.detail?.form)?.detail.form,null,1)))' > "$OUT/form-card.json"
 get /api/events | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).filter((e)=>/^run\.(call|tool)$|^message$/.test(e.kind)).map((e)=>JSON.stringify(e)).join("\n")))' > "$OUT/writer-calls.jsonl"
 hash_gate form "/ask/$FORM"
-# The reading pack beside it, opened from the writer's thread: crewd's .docx of the checked facts, read back.
-WILL=$(get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).goals[0].goal.will))')
-hash_gate pack "/h/$WILL" "[...document.querySelectorAll('a.wb-card')].find((a) => /Reading pack/i.test(a.getAttribute('aria-label')))?.click(); await new Promise((r) => setTimeout(r, 1500));"
 # The installed app: Chromium's own install from Settings, then the form card in its window at phone size.
 mkdir -p "$LAB/pwa" "$OUT/pwa"
 cat > "$LAB/pwa/plan.json" <<JSON

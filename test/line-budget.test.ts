@@ -87,16 +87,13 @@ import { join } from 'node:path';
 // its own browser with only the person's CV and approved draft lines (the gate reads each field's label from crewd's snapshot),
 // crew_form reads the page into one card of what was filled and what only the person answers, and crewd alone presses the
 // form's Submit on their tap and checks the page took it; the kept page closes when crewd stops or the card is turned down; Ashby's question-above-control forms read the same way. Owner-directed in the brief ("trim or raise"); no trim paired.
-// Raised 7931 -> 7940 for the reading pack (ch-018-journey, +9 net): crew_prep from Drafted on, each fact's part, and the
-// .docx crewd writes from the checked facts alone, saying "Not stated" where no page spoke to a part; crewd's page reader also
-// keeps a script-drawn page's own description (an Ashby posting), so its facts can be checked. Owner-directed (Firstmate).
-// Raised 7940 -> 7963 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
+// Raised 7931 -> 7954 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
 // Chief's message (poppler's pdftotext, else the documents tool), gives the helper he hands the job to its own copy and text
 // at files/from-chief/, refuses a hand-off that does not say where; the stub's delegate refuses as the engine's gate does.
 // Owner-directed (Firstmate: the captain's preview-27 run, the critical path).
-// Raised 7963 -> 7965 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
+// Raised 7954 -> 7956 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
 // role found is a step on his live line, and the look ends in his chat in crewd's own words, one line per role. Same direction.
-const BUDGET = 7965;
+const BUDGET = 7956;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

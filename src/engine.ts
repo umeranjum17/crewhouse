@@ -32,7 +32,7 @@ export const PARAMETERS = {
   crew_role: Type.Object({ goal: Type.Optional(Type.Number()), company: Type.String(), title: Type.String(), place: Type.String(), url: Type.String(), pay: Type.Optional(Type.String()), fit: Type.Array(Type.Object({ says: Type.String(), cv: Type.String() })), missing: Type.String() }),
   crew_application: Type.Object({ role: Type.Number(), cv: Type.Array(Type.String()), answers: Type.Array(Type.Object({ ask: Type.String(), answer: Type.String() })), yours: Type.Optional(Type.Array(Type.String())) }),
   crew_form: Type.Object({ role: Type.Number(), stop: Type.Optional(Type.String()) }),
-  crew_prep: Type.Object({ role: Type.Number(), brief: Type.Array(Type.Object({ says: Type.String(), part: Type.Optional(Type.String({ enum: ['company', 'role', 'loop'] })), url: Type.String(), quote: Type.String() })), questions: Type.Array(Type.Object({ ask: Type.String(), why: Type.String() })) }),
+  crew_prep: Type.Object({ role: Type.Number(), brief: Type.Array(Type.Object({ says: Type.String(), url: Type.String(), quote: Type.String() })), questions: Type.Array(Type.Object({ ask: Type.String(), why: Type.String() })) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_case: Type.Object({ thread: Type.String(), facts: Type.String({ maxLength: 600 }) }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
 }, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
 
@@ -104,8 +104,8 @@ export async function readPage(url: string, signal?: AbortSignal, may?: (u: URL)
     if (!may || res.status < 300 || res.status >= 400 || !to || hops >= 5) break;
     u = new URL(to, u);
   }
-  const body = await res.text(), about = /<meta (?:name|property)="(?:og:)?description" content="([^"]*)"/i.exec(body)?.[1] ?? ''; // a page drawn by script (Ashby) keeps its words there
-  return { status: res.status, text: (/html/.test(res.headers.get('content-type') ?? '') ? plain(`${about} ${body}`) : body).slice(0, 20_000) };
+  const body = await res.text();
+  return { status: res.status, text: (/html/.test(res.headers.get('content-type') ?? '') ? plain(body) : body).slice(0, 20_000) };
 }
 
 /** crewd's own checked web tools: every hop stays on the helper's list (a fenced helper's only way to the web). */

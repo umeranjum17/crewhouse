@@ -122,19 +122,6 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   assert.deepEqual(A.needsYou(crew.snapshot() as Json).map((c) => [c.id, c.helper]), [[form.id, 'chief']], 'the card waits on Home and in Chief\'s thread, as the draft did');
   assert.equal(db.get('SELECT stage FROM roles')!.stage, 'drafted', 'nothing moves before the person taps');
 
-  // The reading pack beside the card: crewd writes it from the checked facts alone, and says so where no page spoke to a part.
-  const prep = async (input: object) => { const id = (await crew.post(g.will, `prep ${call('crew_prep', input)}`))!.task; await settled(db, id); };
-  const fact = { says: 'Acme pays a salary.', url: `${web.base}/about`, quote: 'Salary: £55,000 to £65,000 a year' };
-  const qs = [{ ask: 'Tell us about a dashboard you led.', why: 'The role owns one.' }, { ask: 'How do you test a checkout?', why: 'Money moves there.' }, { ask: 'What went wrong on your last project?', why: 'They check how you own a miss.' }];
-  const asks = db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n;
-  await prep({ role: role.id, brief: [{ ...fact, part: 'role', says: 'The role is React and TypeScript.', quote: 'React, TypeScript, GraphQL' }], questions: qs });
-  const pk = JSON.parse(db.get("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? ORDER BY seq DESC", g.will)!.data).path;
-  const words = JSON.stringify(await crew.documentView(g.will, pk));
-  assert.match(words, /Acme and what it sells[^]*Not stated[^]*The role, day to day[^]*React and TypeScript\. Source: http[^]*The interview loop and topics[^]*Not stated[^]*Test yourself[^]*How do you test a checkout\?/);
-  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, asks, 'the pack raises no card of its own');
-  const handed = crew.botPage('chief').messages.find((m: Json) => /made your reading pack for Acme/.test(m.text));
-  assert.deepEqual(handed?.files.map((f: Json) => f.path), [pk], 'the pack is handed back in Chief\'s chat, its card beside the role\'s');
-
   // Only the person's tap sends it, with their own answers; the page saying so moves the role to Applied.
   assert.throws(() => jobs.move(db, role.id, 'sideways'), /interview/);
   const at = Date.now(), answers = { Email: 'umer@example.com', 'Will you now or in the future require visa sponsorship?': 'No', 'Expected salary': '£60,000', 'I consent to Acme keeping my data': true, 'Are you authorized to work in the country where the job is located?': 'Yes' };
@@ -152,15 +139,18 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   assert.equal(jobs.view(db)!.roles[0].stage, 'interview');
 
   // Interview prep: the brief's every fact is read from its page; what only the person answers is listed, never answered.
+  assert.throws(() => crew.draftRole(role.id, 'practice'), /prepare for this interview first/);
   const open = () => db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, before = open();
   const pt = crew.draftRole(role.id, 'prep').task;
   await settled(db, pt);
   assert.match(task(db, pt).body, /crew_prep/);
-  const was = jobs.prep(db, role.id);
+  const prep = async (input: object) => { const id = (await crew.post(g.will, `prep ${call('crew_prep', input)}`))!.task; await settled(db, id); };
+  const fact = { says: 'Acme pays a salary.', url: `${web.base}/about`, quote: 'Salary: £55,000 to £65,000 a year' };
+  const qs = [{ ask: 'Tell us about a dashboard you led.', why: 'The role owns one.' }, { ask: 'How do you test a checkout?', why: 'Money moves there.' }, { ask: 'What went wrong on your last project?', why: 'They check how you own a miss.' }];
   await prep({ role: role.id, brief: [{ ...fact, quote: 'Acme has four thousand staff worldwide' }], questions: qs });
   await prep({ role: role.id, brief: [{ ...fact, url: `${web.base}/gone` }], questions: qs });
   await prep({ role: role.id, brief: [fact], questions: qs.slice(0, 2) });
-  assert.deepEqual(jobs.prep(db, role.id), was, 'a fact its page does not show, a dead link and too few questions change no prep');
+  assert.equal(jobs.prep(db, role.id), null, 'a fact its page does not show, a dead link and too few questions make no prep');
   await prep({ role: role.id, brief: [fact], questions: [...qs, { ask: 'What is your expected salary?', why: 'Asked early.' }] });
   const p = jobs.prep(db, role.id);
   assert.equal(p.brief[0].url, fact.url, 'every fact keeps the page it was read from');
