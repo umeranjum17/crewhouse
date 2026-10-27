@@ -1,6 +1,7 @@
 # The phone's message box at the largest text
 
-The phone's composer (`mobile/App.tsx` `Composer`) is one row: `+`, the words, the mic (Chief's box only) and send.
+The phone's composer (`mobile/App.tsx` `Composer`) is one row. In a chat thread (calm) it is a round `+`, then one pill with
+the words, the mic (Chief's box only) and a round send; elsewhere one bordered row of `+`, the words and send.
 Android's font scale scales every word but not the buttons, so at the largest text the placeholder ("Ask Chief
 anything") wraps onto two lines and the field squashes. The fix is the switch the phone's head already makes
 (`PhoneHead`): when `width / fontScale < 360` the field takes the whole row (`flexBasis: '100%'`) and the buttons
@@ -12,9 +13,8 @@ wrap to their own row under it; at normal text nothing changes.
    engine, the release APK installed and paired (see [phone-pairing.md](phone-pairing.md)); a helper (Reel) recruited.
 2. `adb -s <serial> shell wm density 480; adb -s <serial> shell settings put system font_scale 2.0; adb -s <serial>
    shell cmd uimode night no|yes`, then a cold start (`am force-stop` + `monkey`) so the app opens on Home.
-3. Chief's chat opens from Chief's card on Home (`phone-ui.mjs tap '^Chief'`). A helper's chat opens from its card on
-   Home, which shows its desk sheet first, then the sheet's button: `tap '^Reel$'`, `tap "^Open Reel's chat$"`. Take
-   the shot only once the sheet is gone: a modal's scrim makes `look-check.mjs` read the screen as the wrong look.
+3. Chief's chat opens from his row in Home's chat list (`phone-ui.mjs tap '^Chief'`); a helper's chat opens from its
+   own row (`tap '^Reel'`).
 
 ## Prove it
 
@@ -27,7 +27,7 @@ wrap to their own row under it; at normal text nothing changes.
   and count the bands of dark rows: two text bands before, one after.
 - `SERIAL=<serial> look-check.mjs android --out <dir> chief-chat` — the field and the buttons, day and night, at
   360dp and the largest text. The helper's chat needs the taps above:
-  `--then '^Reel$>>^Open Reel.s chat$' helper-chat`.
+  `--then '^Reel' helper-chat`.
 - Keep the emulator awake first (`adb shell svc power stayon true`): a sleeping display screenshots black, which
   `look-check` reads as the night look and the run then never settles.
 

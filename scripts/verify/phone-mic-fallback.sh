@@ -32,6 +32,8 @@ node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK"
 adb -s $SER shell pm grant dev.crewhouse.app android.permission.RECORD_AUDIO
 adb -s $SER logcat -c
 P="node $REPO/scripts/verify/phone-ui.mjs"
+$P tap '^Chief$' # Chief's mic is in his thread's box; Home is the chat list
+for _ in $(seq 20); do $P texts | grep -q 'Speak to Chief' && break; sleep 1; done
 $P tap 'Speak to Chief'
 for _ in $(seq 30); do adb -s $SER logcat -d | grep -q 'RecognitionService#onStartOfSpeech' && break; sleep 1; done
 $P texts | grep -q 'Stop listening' || { echo "the mic did not open a listener" >&2; exit 1; }

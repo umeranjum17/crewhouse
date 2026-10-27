@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/voice.md`.
 
 ## How to get to it (user POV)
 
-On the Android app's Home, tap the mic in Chief's box on a phone whose on-device speech pack is missing: the phone's
+On the Android app, open Chief's thread from Home and tap the mic in his box on a phone whose on-device speech pack is missing: the phone's
 speech service opens the mic (the mic becomes a stop button) instead of the "can't hear yet" toast.
 
 ## Driving it
