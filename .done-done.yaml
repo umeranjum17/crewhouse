@@ -68,6 +68,10 @@ journeys:
   goal-parts:
     timeout: 20m
     command: 'timeout -k 10 1100 bash scripts/verify/goal-parts.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Chief on his own screen (docs/verification/chief-computer.md): a pre-0.1.8 Chief gains the computer grant on upgrade, then renews a
+  # loopback library card on the stub engine; the app shows the ask card, answered once. Nothing is sent, paid or accepted.
+  chief-screen:
+    command: 'bash scripts/verify/chief-screen.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
