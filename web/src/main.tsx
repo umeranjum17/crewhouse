@@ -209,11 +209,13 @@ function ChiefHead({ ctx }: { ctx: Ctx }) {
 /** The desk's right column beside Chief's chat (J03): the question that matters most (not one his thread already shows),
  *  with its exact lines and buttons, then what was made in this chat and what else the crew did today. The job the
  *  thread follows is its live card, never repeated here. */
-function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; refresh: () => void }) {
+function ChiefRail({ ctx }: { ctx: Ctx }) {
+  const { state, live, refresh } = ctx;
   const ask = live.needs.find((c) => c.helper !== 'chief'); // Needs you's own order; Chief's own asks already sit inline in his thread beside it, never twice on one screen
   const who = ask ? A.crew(state).find((h) => h.id === (ask.by ?? ask.helper)) : undefined;
   const crew = A.crew(state), today = A.alsoToday(state);
   return <>
+    <HomeNotices ctx={ctx} desk />
     {ask && <section className="home-section desk-ask" aria-label="Needs you">
       <div className="section-head"><span className="label">{ask.head}</span><span className="m-needs" data-n="1"><i />Needs you</span></div>
       <AskCard c={ask} who={who} onDone={refresh} />
@@ -277,13 +279,30 @@ function PlacesMenu({ goal, onClose }: { goal: boolean; onClose: () => void }) {
   </div>;
 }
 
+/** Home's notices, only while they matter: the demo's way out, the account and setup cards, the closed-app news offer,
+ *  a resting account, getting ready and an update. On a phone they head Home; on a computer, whose Home is Chief's
+ *  thread in the panes, they head the details column (`desk`: the account card is already in his thread). */
+function HomeNotices({ ctx, desk }: { ctx: Ctx; desk?: boolean }) {
+  const { state, refresh, tick, accounts } = ctx, held = (state.tasks as Json[]).some((t) => t.state === 'paused');
+  return <>
+    {demo && <PairRow />}
+    {!desk && <AccountCard accounts={accounts} onReady={refresh} />}{/* the desk's Chief thread carries it in the chat */}
+    <SetupRow state={state} accounts={accounts} tick={tick} />
+    <NewsOffer tick={tick} />
+    {A.resting(state) && <div className="card nudge st-rest"><Icon name="clock" size={22} /><span className="grow"><b className="semi">{A.resting(state)}.</b>
+      <span>{held ? 'What waits picks up by itself then.' : "I'll pick things back up then."} Nothing moves to another AI without you.</span></span></div>}
+    {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
+    {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+  </>;
+}
+
 /** Home (calm, after Messages): your initial for settings and a round + to hire across the top, the account and setup
  *  notices only while they matter, then the chat list, then the jobs to hand Chief. A floating pill searches the list
  *  and the round button beside it opens every other place. Every ask is Chief's, counted on his row. */
 function Home(ctx: Ctx) {
-  const { state, refresh, tick, accounts } = ctx;
+  const { state, refresh } = ctx;
   const [q, setQ] = useState(''), [menu, setMenu] = useState(false);
-  const me = A.displayName(state.person), held = (state.tasks as Json[]).some((t) => t.state === 'paused');
+  const me = A.displayName(state.person);
   return (
     <div className="page calm-home">
       <header className="cl-head">
@@ -291,14 +310,7 @@ function Home(ctx: Ctx) {
         <span className="grow" />
         <a className="round-btn" href="#/crew/add" aria-label="Bring a helper on"><Icon name="plus" size={22} /></a>
       </header>
-      {demo && <PairRow />}
-      <AccountCard accounts={accounts} onReady={refresh} />
-      <SetupRow state={state} accounts={accounts} tick={tick} />
-      <NewsOffer tick={tick} />
-      {A.resting(state) && <div className="card nudge st-rest"><Icon name="clock" size={22} /><span className="grow"><b className="semi">{A.resting(state)}.</b>
-        <span>{held ? 'What waits picks up by itself then.' : "I'll pick things back up then."} Nothing moves to another AI without you.</span></span></div>}
-      {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
-      {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+      <HomeNotices ctx={ctx} />
       <ChatRows ctx={ctx} q={q} />
       {!q && <GoalRow state={state} />}
       {!q && <JobList state={state} refresh={refresh} />}
@@ -313,8 +325,7 @@ function Home(ctx: Ctx) {
 
 /** Chief's thread: his bar, the pinned Needs you and his chat, with (on a desk) the side column of who is on what. */
 function ChiefPage(ctx: Ctx & { m?: string }) {
-  const { state, live, refresh } = ctx;
-  return <div className="page chat-page home-chat"><div className="home-top"><ChiefHead ctx={ctx} /></div><Chat {...ctx} id="chief" hero m={ctx.m} rail={<ChiefRail state={state} live={live} refresh={refresh} />} /></div>;
+  return <div className="page chat-page home-chat"><div className="home-top"><ChiefHead ctx={ctx} /></div><Chat {...ctx} id="chief" hero m={ctx.m} rail={<ChiefRail ctx={ctx} />} /></div>;
 }
 
 /** The standing "hand me a job" list (docs/ui-contract.md, `ideas[]`): what the crew offers to do end to end, money back
