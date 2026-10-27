@@ -30,10 +30,11 @@ await on(/Yes, start my search/); await sleep(1500); shot('04-goal-card.png'); /
 // Above it, Chief's reading of the PDF: drag the chat back down until it shows (four drags at most).
 for (let i = 0; !/I read your CV/.test(texts()); i++) { if (i === 4) throw new Error('Chief never said he read the CV'); A('shell', 'input', 'swipe', '540', '800', '540', '1700', '400'); await sleep(900); }
 shot('05-cv-read.png');
-ui('reveal', '^Yes, start my search'); await sleep(800); shot('06-goal-card-open.png');
+for (let i = 0; !/Yes, start my search/.test(texts()); i++) { if (i === 4) throw new Error('the goal card\'s yes never came back'); A('shell', 'input', 'swipe', '540', '1700', '540', '800', '400'); await sleep(900); }
+shot('06-goal-card-open.png');
 ui('tap', '^(Start|Yes|Hire)'); // the goal card's yes: nothing starts before it
-await on(/is looking now/); await sleep(1200); shot('07-dispatched.png');
-await on(/found: /, 180_000); await sleep(800); shot('08-progress.png');
+// The look is quick on the scripted model: its live steps may be past before a dump, so the later state counts too.
+await on(/is looking now|found: |roles? that fits?:/); await sleep(1200); shot('07-dispatched.png');
 await on(/roles? that fits?:/, 240_000); await sleep(1500); shot('09-results.png');
 ui('reveal', 'Draft my application'); await sleep(800); shot('10-role-cards.png');
 const s = await api('/api/state');
