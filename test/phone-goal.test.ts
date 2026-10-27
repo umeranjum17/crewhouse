@@ -49,5 +49,19 @@ test('the phone board maps crewd roles to their stages, and a role offers only t
   // The writer's draft waits on its role: what only the person answers is listed and blank, and its yes copies, never submits.
   const draft = A.cards(state).find((c) => state.asks.find((a: { id: number }) => a.id === c.id)?.detail?.draft?.role === north.id)!;
   assert.ok(draft.yours?.includes('Expected salary') && draft.yours.includes('Your right to work'));
-  assert.deepEqual(draft.choices.map((c) => c.label), ['Copy and open the form', 'Not now']);
+  assert.deepEqual(draft.choices.map((c) => c.label), ['Fill it in for me', 'Copy and open the form', 'Not now']);
+  assert.ok(!draft.choices.some((c) => /submit/i.test(c.label)), 'the draft never submits');
+
+  // The filled form, as crewd raises it (test/jobs.test.ts makes it on a real page): Submit is on this card alone,
+  // only while the page has one and nothing stopped the writer; what only the person answers comes blank.
+  const ask = state.asks.find((a: { id: number }) => a.id === draft.id), filled = [{ label: 'First Name', value: 'Umer' }];
+  const fields = [{ label: 'Email', kind: 'text', yours: false }, { label: 'Expected salary', kind: 'text', yours: true }, { label: 'Will you need sponsorship?', kind: 'pick', options: ['Yes', 'No'], yours: true }];
+  const formCard = (form: object) => A.cards({ ...state, asks: [{ ...ask, id: 99, detail: { form: { role: north.id, url: `${base}/job/1`, site: 'northwind.example', page: 'Apply', filled, fields, ...form } } }] })[0];
+  const ready = formCard({ submit: 'Submit application' });
+  assert.deepEqual(ready.choices.map((c) => [c.label, c.body]), [['Submit', { answer: 'allow', scope: 'once' }], ['Not now', { answer: 'deny' }]]);
+  assert.deepEqual(ready.form!.filled, filled);
+  assert.deepEqual(ready.form!.fields.filter((f) => f.yours).map((f) => f.label), ['Expected salary', 'Will you need sponsorship?']);
+  assert.ok(ready.form!.fields.every((f) => !('value' in f)), 'no field carries an answer the crew made up');
+  for (const stop of [{ submit: 'Submit application', stop: 'a captcha' }, { next: 'Continue' }, {}])
+    assert.deepEqual(formCard(stop).choices.map((c) => c.label), ['Not now'], 'no Submit unless the page has one and nothing stopped');
 });

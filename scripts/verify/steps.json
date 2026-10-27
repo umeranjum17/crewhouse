@@ -527,14 +527,16 @@
     "result": "With the app in the background, killed, or not opened since a reboot, Chief's reply, the hire card and the helper's finished job each show as a notification under the ongoing 'Crewhouse is connected' line; a tap opens that chat or card"
   },
   "phone-goal": {
-    "start": "the phone app paired to a fresh crew on the stub engine, where Umer's job search has a Found role and a Drafted role whose draft waits on him",
+    "start": "the phone app paired to a fresh crew on the stub engine, where Umer's job search has a Found role and a Drafted role whose draft waits on him, its posting a local page with an application form",
     "steps": [
       "Open the phone app on Home and read the Your goal row",
       "Tap Your goal: the board opens on Found",
       "Tap Drafted, then the Northwind role: its fit, what is missing, and the writer's draft with the fields only Umer answers left blank",
+      "Say Fill it in for me and let the writer fill the form in its own browser; the role shows the Submit card",
+      "On the card, type the expected salary, pick No for sponsorship, and tap Submit",
       "On the computer, move Northwind to Interview and let the writer prepare; on the phone open Interview, the role, then Open your interview prep"
     ],
-    "result": "Home's Your goal row counts the two roles on the board; the board shows each stage with its count; the drafted role shows its pay, fit, what is missing and the draft with Copy and open the form; the role in Interview offers Open your interview prep, which shows the brief with its sources, the likely questions and the only-you fields. Each in day and night at 390 wide; no screen offers to submit"
+    "result": "Home's Your goal row counts the two roles on the board; the board shows each stage with its count; the drafted role shows its pay, fit, what is missing and the draft with Fill it in for me; the Submit card shows the site, what was filled from the CV and draft, and Umer's own questions blank, with one Submit; his tap sends the form with his answers and the role moves to Applied; the role in Interview offers Open your interview prep, which shows the brief with its sources, the likely questions and the only-you fields. Each in day and night at 390 wide; no other screen offers to submit"
   },
   "phone-mic-fallback": {
     "start": "the release app on an Android emulator paired to a stub-engine crewd, Home open, no on-device speech pack for the phone's language",

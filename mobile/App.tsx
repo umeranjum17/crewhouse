@@ -2453,14 +2453,15 @@ function Goal(ctx: Ctx) {
 function Role(ctx: Ctx & { id: string }) {
   const { state, go, refresh, canAct } = ctx, g = A.goal(state), r = g?.cols.flatMap((c) => c.roles).find((x) => String(x.id) === ctx.id), [busy, setBusy] = useState(false);
   if (!g || !r) return <Page title="Your goal" back={['Your goal', ctx.back]}><Line>This role is no longer on your board.</Line></Page>;
-  const draft = A.cards(state).find((c) => state.asks.find((a: Json) => a.id === c.id)?.detail?.draft?.role === r.id);
+  // The writer's draft and, once filled, the form's Submit card wait on this role: the person answers them here.
+  const asks = A.cards(state).filter((c) => { const d = state.asks.find((a: Json) => a.id === c.id)?.detail; return (d?.draft ?? d?.form)?.role === r.id; });
   const run = async (f: () => Promise<unknown>) => { setBusy(true); await attempt(f); refresh(); setBusy(false); };
   return <Page title={r.title} back={['Your goal', ctx.back]}>
     <T style={s.read}>{r.co} · {r.place}</T><T tone="ink2" style={s.read}>{r.pay}</T>
     <Sect>Why it fits</Sect>{r.fit.map((f, i) => <Line key={i}>{f}</Line>)}
     {!!r.gap && <><Sect>What is missing</Sect><Line>{r.gap}</Line></>}
     <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}><T tone="mute" style={s.read}>From</T><Pressable onPress={() => void Linking.openURL(r.url)} accessibilityRole="link" hitSlop={8}><T style={[s.read, { textDecorationLine: 'underline' }]}>{r.source}</T></Pressable><T tone="mute" style={s.read}>, checked {r.checked}</T></View>
-    {draft && <AskCard c={draft} who={A.crew(state).find((h) => h.id === draft.helper)} state={state} onDone={refresh} canAct={canAct} offline={ctx.offline} open={ctx.open} />}
+    {asks.map((c) => <AskCard key={c.id} c={c} who={A.crew(state).find((h) => h.id === c.helper)} state={state} onDone={refresh} canAct={canAct} offline={ctx.offline} open={ctx.open} />)}
     {canAct && <View style={{ gap: 8 }}>{roleActions(r).map((a) => <Btn key={a.label} big go={a.kind !== 'move' || a.go} ghost={a.kind === 'move' && !a.go} label={a.label} disabled={busy || ('busy' in a && a.busy)}
       onPress={() => a.kind === 'open-prep' ? go({ view: 'goal', id: ctx.id, tab: 'prep' }) : void run(() => a.kind === 'move' ? api.moveRole(r.id, a.stage) : a.kind === 'draft' ? api.draftRole(r.id) : api.prepRole(r.id))} />)}</View>}
   </Page>;
