@@ -81,7 +81,9 @@ import { join } from 'node:path';
 // page-by-page check of each fact, the prep store on the board, the prep and practice taps and two scripted stub lines. Owner-directed in the brief; no trim paired.
 // Raised 7722 -> 7773 for the one-link phone pairing (ch-pair-link, +51 net): the standing link's page and its
 // secret key (src/link.ts, src/pair-page.ts). Raised in the brief; no trim paired.
-const BUDGET = 7773;
+// Raised 7773 -> 7803 for the reusable long-goal parts (ch-goal-parts): stage names per goal, goal-scoped finder and reminders (src/jobs.ts, crew.ts).
+// Owner-directed in the brief; no trim paired.
+const BUDGET = 7803;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

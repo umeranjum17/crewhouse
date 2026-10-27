@@ -17,21 +17,21 @@ if (step === 'goal') {
 } else if (step === 'board') {
   const ask = (await state()).asks.find((a) => a.kind === 'propose');
   await api('POST', `/api/asks/${ask.id}/answer`, { answer: 'allow', scope: 'once' });
-  const { goal } = (await until('the board', async () => (await state()).jobs)), rae = goal.rae, will = goal.will;
+  const { goal } = (await until('the board', async () => (await state()).goals[0])), rae = goal.rae, will = goal.will;
   const role = (n, co, title, place, pay, says, cv, missing) => ({ company: co, title, place, url: `${posting}/job/${n}`, pay, missing, fit: [{ says, cv }] });
   const lines = CV.split('\n');
   for (const r of [role(1, 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', 'You led a payments dashboard in React and TypeScript', lines[1], 'GraphQL is not on your CV'),
     role(2, 'Fernhill', 'UI Engineer', 'Remote (UK)', '', 'You wrote the Node.js API behind a banking app', lines[3], 'Design-system experience is not on your CV')]) {
     await api('POST', `/api/bots/${rae}/messages`, { text: `Found one ${tool('crew_role', r)}` });
-    await until(`${r.company} on the board`, async () => (await state()).jobs.roles.some((x) => x.co === r.company));
+    await until(`${r.company} on the board`, async () => (await state()).goals[0].roles.some((x) => x.co === r.company));
   }
-  const first = (await state()).jobs.roles.find((x) => x.co === 'Northwind');
+  const first = (await state()).goals[0].roles.find((x) => x.co === 'Northwind');
   await api('POST', `/api/jobs/${first.id}/draft`);
   await api('POST', `/api/bots/${will}/messages`, { text: `Drafted ${tool('crew_application', { role: first.id, cv: [lines[1], lines[2]], answers: [{ ask: 'Why Northwind?', answer: 'I build payments dashboards, and I would like to do it for a team that ships every week.' }] })}` });
   const draft = await until('the draft card', async () => (await state()).asks.find((a) => a.detail?.draft));
   console.log(JSON.stringify({ role: first.id, ask: draft.id }));
 } else if (step === 'apply') {
-  const roles = (await state()).jobs.roles, r = roles.find((x) => x.stage === 'drafted') ?? roles[0];
+  const roles = (await state()).goals[0].roles, r = roles.find((x) => x.stage === 'drafted') ?? roles[0];
   await api('POST', `/api/jobs/${r.id}`, { stage: 'applied' });
   console.log(r.id);
 }
