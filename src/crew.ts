@@ -2142,8 +2142,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
       tool('crew_goal', 'Offer the person a job search goal card, once they have told you the roles they want, where, a pay floor if they want one, and pasted their CV in full. Ask only those. Nothing starts before their yes.', (p) => this.offerGoal(p)),
-      tool('crew_resume', 'Make or remake the person\'s resume, a real document they edit and save as PDF or Word. `sections`: [{heading?, lines}], the first without a heading: their name, then contact lines. First ask for what is missing (their CV lines, LinkedIn and GitHub pasted here, the roles they want). '
-        + 'Every line is their own words from this chat, copied exactly (a piece of one of their lines is fine): crewd refuses any other line, and anything they marked private. Never write a date, employer, degree, certificate or number they did not give.', (p) => this.makeResume(p.sections)),
+      tool('crew_resume', 'Make the person\'s resume, which they edit and save as PDF or Word: `sections` [{heading?, lines}], the first without a heading (name, contact). Every line is a piece of one of their own lines in this chat, never one they marked private; crewd refuses any other.', (p) => this.makeResume(p.sections)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }

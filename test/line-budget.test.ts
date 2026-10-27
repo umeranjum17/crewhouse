@@ -83,7 +83,10 @@ import { join } from 'node:path';
 // secret key (src/link.ts, src/pair-page.ts). Raised in the brief; no trim paired.
 // Raised 7773 -> 7807 for the reusable long-goal parts (ch-goal-parts): stage names per goal, goal-scoped finder and reminders (src/jobs.ts, crew.ts).
 // Owner-directed in the brief; no trim paired.
-const BUDGET = 7807;
+// Raised 7807 -> 7907 for the resume (ch-018-resume, +100 net): Chief's crew_resume with crewd's line-by-line check against
+// the person's own words, the kept record of where each part came from, the person's edit, and the PDF writer (no new
+// dependency) behind Save as PDF for every delivered document. No trim paired; nothing was packed.
+const BUDGET = 7907;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
