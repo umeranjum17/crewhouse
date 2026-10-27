@@ -516,6 +516,16 @@
     ],
     "result": "With MiniMax signed in, Home's Your AI accounts row shows the MiniMax mark and says MiniMax is signed in on the home computer; with nothing signed in it shows a plain key, no account's mark, and says You sign in on the home computer, in Settings"
   },
+  "phone-news": {
+    "start": "the release app on an Android emulator paired to a stub-engine crewd with its scripted replies, first run",
+    "steps": [
+      "Pair the phone and say Allow to the notification question",
+      "Go to the phone's Home screen; ask Chief something from the computer, then tap his reply's notification",
+      "Leave the app; the phone kills its process; ask Chief for a helper, tap the card's notification, say yes at the computer, tap the finished job's notification",
+      "Restart the phone, open nothing, ask Chief again"
+    ],
+    "result": "With the app in the background, killed, or not opened since a reboot, Chief's reply, the hire card and the helper's finished job each show as a notification under the ongoing 'Crewhouse is connected' line; a tap opens that chat or card"
+  },
   "phone-mic-fallback": {
     "start": "the release app on an Android emulator paired to a stub-engine crewd, Home open, no on-device speech pack for the phone's language",
     "steps": [

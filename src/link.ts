@@ -306,14 +306,14 @@ export class Link {
     s.onEnd = () => desk.release(watcher);
   }
 
-  /** Tell the person's phones there is news. Content-free: the words stay on this computer until the phone asks. In their
-   *  quiet hours the push is held (kept in the store, so a restart keeps it) and `sendHeld` sends one when they end. */
-  private async tell(id: string) {
+  /** Tell the person's phones there is news: the event itself over the link (an Android phone's link service shows it), and a
+   *  content-free push (a browser's through the person's relay, which holds its key). Quiet hours hold it, kept in the store, until `sendHeld`. */
+  private async tell(id: string, e?: object) {
     if (!this.notify().on) return; // Chief's profile: "Tell me when Chief finishes or needs me" is off
     if (this.quiet()) return void this.db.run("INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", 'push.held.1');
+    this.host.broadcast({ kind: 'news', data: { id, e } });
     const to = [...this.host.devices().map((g) => g.id), WEB_DEVICE], phones = to.map((d) => [d, this.setting(`phone.push.${d}`)]).filter(([, t]) => isExpoToken(t));
     if (phones.length) await this.expo(id, phones as [string, string][]).catch((e) => console.error('push:', e.message));
-    // A browser's Web Push address is kept on the person's relay, which holds the key for it.
     if (this.client && this.relayStatus === 'online') await this.client.notify({ id, title: NEWS, to }).catch((e) => console.error('push:', e.message));
   }
 
@@ -341,7 +341,7 @@ export class Link {
   private news(e: { seq: number; kind: string; data: any; bot: string | null }) {
     let news = e.kind === 'ask.opened' || e.kind === 'alert' || (e.kind === 'message' && e.bot === 'chief' && e.data.author === 'bot');
     if (e.kind === 'task.done') { const t = this.db.get('SELECT bot, result FROM tasks WHERE id = ?', e.data.task); news = !!t && t.bot !== 'chief' && t.result !== 'All clear'; }
-    if (news) void this.tell(`e${e.seq}`);
+    if (news) void this.tell(`e${e.seq}`, e);
   }
 
   /** Settings, Phones: how phones reach this computer, and any phone waiting for a yes (docs/ui-contract.md). */
@@ -440,14 +440,14 @@ export class Link {
       const peer = !(process.env.CREWHOUSE_HEADLESS === '1' && process.env.CREWHOUSE_RELAY_PUBLIC) && typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
       return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
     }
-    // Its push address: an Expo token (kept here; crewd sends through Expo), `{missing}` when this app build has no push
-    // credential, `{off}` when the person said no to notifications; a browser's Web Push address goes to the relay.
+    // Its push address: an Expo token (kept here; crewd sends through Expo), `{local}` for an Android phone showing the link's news itself,
+    // `{missing}` (an old build with no push credential), `{off}` when the person said no; a browser's Web Push address goes to the relay.
     if (op === 'POST /api/push') {
       const sub = body as any;
       // A browser asks for the mailbox's public Web Push key first (the kit's own device flow: it is what a device
       // needs to subscribe its own address). `null` without a relay, said plainly; `online` is the mailbox's own state.
       if (sub?.key === true) return { status: 200, body: { ok: true, vapid: this.client?.vapidKey ?? null, online: this.relayStatus === 'online' } };
-      const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.missing === true ? 'missing' : sub?.off === true && !webAddress(sub?.web) ? 'off' : '';
+      const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.local === true ? 'local' : sub?.missing === true ? 'missing' : sub?.off === true && !webAddress(sub?.web) ? 'off' : '';
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
       // Off with a browser address: drop this device's own address at the relay (as the computer's own browser does,
       // setWebPush), so off really means no pushes.

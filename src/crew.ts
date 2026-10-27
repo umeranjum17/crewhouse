@@ -946,7 +946,7 @@ export class Crew {
       : !down && was >= 2 ? `The page for “${r.name}” opens again. I'm back to keeping an eye on it.` : '';
     if (!line) return;
     this.say(r.bot, 'bot', line, null);
-    this.alert();
+    this.alert(r.bot);
   }
 
   /** Chief's "while you were away" for the person: what finished, what needs them, what is coming up. No model call. */
@@ -1232,18 +1232,18 @@ export class Crew {
    *  confirm it worked (`unsure`) says so the same way: not sure is never reported as done. */
   private failedLine(task: Row, result: string, unsure = false) {
     const b = this.bot(task.bot)?.display ?? task.bot, r = task.routine && this.db.get('SELECT * FROM routines WHERE id = ?', task.routine), job = `${task.bot === CHIEF ? '' : `${b}'s `}“${short(task.title, 60)}”`, on = 'Anything made so far is kept, and your next message carries on.';
-    if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, task.bot === CHIEF ? task.id : null), result === HUNG && this.alert();
+    if (result === STOPPED || result === HUNG) return void this.say(CHIEF, 'bot', result === HUNG ? `${job} stalled, so I stopped it. ${on}` : `I stopped ${job}, as you asked. ${on}`, task.bot === CHIEF ? task.id : null), result === HUNG && this.alert(CHIEF);
     if (r) {
       if (unsure) return void this.say(CHIEF, 'bot', `${b} isn't sure “${r.name}” worked. ${result}`, null);
       const again = r.state === 'on' && r.next_at ? ` It will try again ${clock(r.next_at)}.` : '';
       return void this.say(CHIEF, 'bot', `${b} couldn't finish “${r.name}”. ${result}${again}`, null);
     }
     this.say(task.bot, 'bot', unsure ? `${UNSURE} ${result}` : result, task.id);
-    this.alert();
+    this.alert(task.bot);
   }
 
   /** A line in a helper's chat that the person should hear about even with the app closed: the phone gets a push. */
-  private alert() { this.db.event('alert', null); }
+  private alert(bot: string) { this.db.event('alert', bot); } // the chat whose line says what went wrong
 
   private prompt(task: Row) {
     const who = task.origin === 'person' ? this.called() : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin, r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine), routine = r?.name;

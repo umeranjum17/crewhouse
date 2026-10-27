@@ -4,16 +4,18 @@
 // the code box (an older build stops on "Put Chief on your computer" and needs Type the code; without the cloud flag the
 // first screen reads Pair with my computer),
 // the relay code (`phones code`'s last line: `input text` drops pieces of the relay code on a slow
-// emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports.
+// emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports. The
+// notification permission is granted up front, or with --ask each first-run question (notifications, then on Android
+// running in the background) is captured to its <png> and answered Allow.
 //
-//   LAB=<lab> node scripts/verify/phone-pair-typed.mjs --serial <emulator> [--apk app.apk]
+//   LAB=<lab> node scripts/verify/phone-pair-typed.mjs --serial <emulator> [--apk app.apk] [--ask first.png,second.png]
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
-const SERIAL = opt('serial', null), APK = opt('apk', null), LAB = process.env.LAB;
+const SERIAL = opt('serial', null), APK = opt('apk', null), ASK = opt('ask', null), LAB = process.env.LAB;
 if (!SERIAL || !LAB) { console.error('usage: LAB=<lab> phone-pair-typed.mjs --serial <emulator> [--apk a]'); process.exit(2); }
 const env = Object.fromEntries(readFileSync(join(LAB, 'env'), 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
 const KEY = readFileSync(join(LAB, 'state', 'person.key'), 'utf8').trim();
@@ -36,7 +38,9 @@ const waitFor = async (re, ms) => { const t = Date.now(); while (Date.now() - t 
 
 if (APK) { try { A('uninstall', PKG); } catch { /* none */ } A('install', '-g', APK); }
 A('shell', 'pm', 'clear', PKG);
-A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); // pm clear takes it; its prompt would cover the app
+if (!ASK) A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); // pm clear takes it; its prompt would cover the app
+// The first-run question: `install -g` and an earlier run leave the permission granted, which `pm clear` keeps.
+else { A('shell', 'pm', 'revoke', PKG, 'android.permission.POST_NOTIFICATIONS'); A('shell', 'pm', 'clear-permission-flags', PKG, 'android.permission.POST_NOTIFICATIONS', 'user-set', 'user-fixed'); }
 for (const port of [env.LINK_PORT, env.RELAY.split(':').pop()]) A('reverse', `tcp:${port}`, `tcp:${port}`);
 await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past Hello, so the phone opens on Home
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
@@ -53,6 +57,10 @@ for (let t = 0; t < 120 && !pending.length; t++) { pending = await api('GET', '/
 if (!pending.length) throw new Error('the phone never reached the computer');
 await api('POST', '/api/phones/answer', { id: pending[0].id, yes: true });
 await sleep(4000);
+for (const [i, png] of (ASK ? ASK.split(',') : []).entries()) {
+  await waitFor(/^Allow$/, i ? 15000 : 30000); await sleep(500);
+  writeFileSync(png, execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 27 })); tap(/^Allow$/); await sleep(1500);
+}
 try { tap(/Open Crewhouse/); } catch { /* already in */ }
 await waitFor(/^Settings$/, 30000);
 console.log(`paired by the typed code as ${pending[0].name}; the app is on Home`);

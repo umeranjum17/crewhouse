@@ -2,6 +2,10 @@
   <!-- One still of the screen for "Hand my screen to…" (CrewhouseScreenModule.kt): the phone asks every time. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <!-- The link to the computer, kept while the app is closed, and back after a reboot (LinkService.kt). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
   <!-- Speaking to Chief (CrewhouseVoiceModule.kt) asks whether the phone has a speech service to fall back on. -->
   <queries>
     <intent><action android:name="android.speech.RecognitionService" /></intent>
@@ -31,6 +35,16 @@
       android:name="expo.modules.crewhousenet.ScreenFrameService"
       android:foregroundServiceType="mediaProjection"
       android:exported="false" />
+    <service
+      android:name="expo.modules.crewhousenet.LinkService"
+      android:foregroundServiceType="remoteMessaging"
+      android:exported="false" />
+    <receiver android:name="expo.modules.crewhousenet.LinkStarter" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
     <!-- "Write it here" (CrewhouseAccessibilityService.kt): the box the person is typing in, only when they ask. -->
     <service
       android:name="expo.modules.crewhousenet.CrewhouseAccessibilityService"

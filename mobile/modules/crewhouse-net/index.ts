@@ -2,8 +2,15 @@
 import { Dictation, DictateError, systemEngine, type DictationHandle } from '@byokit/dictation';
 import { requireOptionalNativeModule } from 'expo';
 
-const net = requireOptionalNativeModule<{ addresses(): Promise<string[]> }>('CrewhouseNet');
+const net = requireOptionalNativeModule<{ addresses(): Promise<string[]>; keepLink(on: boolean): void; stayOn(): boolean; linkWords(words: string): void;
+  addListener(event: 'network', fn: () => void): { remove(): void } }>('CrewhouseNet');
 export const addresses = (): Promise<string[]> => net?.addresses().catch(() => []) ?? Promise.resolve([]);
+// The link service (LinkService.kt, Android; elsewhere nothing happens): on while paired, its ongoing line, and the phone
+// joining a network, to dial again at once.
+export const keepLink = (on: boolean) => net?.keepLink(on);
+export const stayOn = () => net?.stayOn() ?? false;
+export const linkWords = (words: string) => net?.linkWords(words);
+export const onNetwork = (fn: () => void) => { const s = net?.addListener('network', fn); return () => s?.remove(); };
 
 // Speaking to Chief through @byokit/dictation, on this phone's own recognizer (Android 12+ with its pack installed), else the system speech service (elsewhere
 // no mic is shown): CrewhouseVoice is the system engine the kit asks its app to inject, on the phone only.

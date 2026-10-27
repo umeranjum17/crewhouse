@@ -17,4 +17,6 @@ android {
 dependencies {
   // ByokitAccessibility: the service hands itself to @byokit/overlay.
   implementation project(':byokit-overlay')
+  // LinkService runs the app's link code as a headless JS task.
+  implementation 'com.facebook.react:react-android'
 }
