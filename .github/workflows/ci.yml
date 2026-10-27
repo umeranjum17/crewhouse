@@ -66,7 +66,7 @@ jobs:
       # Private desktops, capture libraries and the sandboxed shell; cookie isolation must run, not skip.
       # Only Ubuntu supplies our packages; unrelated runner repositories must not delay the test budget.
       - run: sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-      - run: sudo apt-get install -y -qq xvfb bubblewrap libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: sudo apt-get install -y -qq xvfb bubblewrap poppler-utils libpipewire-0.3-0t64 libxkbcommon0 libevdev2 libxcursor1 libx11-6 libwayland-client0 libstdc++6 && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # The pinned engine install, keyed on the lockfile that pins the kit; prepare reuses a matching one.
       - uses: actions/cache@v4
         with:

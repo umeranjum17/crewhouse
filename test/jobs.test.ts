@@ -2,12 +2,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setup, settled, until, task } from './lab.ts';
 import { after } from 'node:test';
 import * as jobs from '../src/jobs.ts';
 import * as disk from '../src/bots.ts';
+import * as kit from '../src/tools.ts';
+import * as A from '../web/src/adapter.ts';
+import type { Json } from '../web/src/api.ts';
 
 const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
 const CV = `Umer Anjum
@@ -23,9 +26,27 @@ async function posting() {
   return { base: `http://127.0.0.1:${(srv.address() as { port: number }).port}`, close: () => srv.close() };
 }
 
+// The browser AXI as a pinned install leaves it, serving one application form; its state (what is typed, what was sent) is a file in the bot's folder.
+const FORM = `const fs = process.getBuiltinModule('fs'), f = process.cwd() + '/form.json', [cmd, ref, val] = process.argv.slice(2);
+const s = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : { url: 'about:blank', v: {} };
+const F = [['e2', 'textbox', 'First Name'], ['e3', 'textbox', 'Email'], ['e4', 'textbox', 'Why do you want to work at Acme?'], ['e5', 'group', 'Resume/CV'], ['e6', 'button', 'Attach', 1],
+  ['e7', 'combobox', 'Will you now or in the future require visa sponsorship?'], ['e8', 'option', 'Yes', 1], ['e9', 'option', 'No', 1], ['e10', 'textbox', 'Expected salary'], ['e11', 'checkbox', 'I consent to Acme keeping my data'],
+  ['e13', 'generic', 'Are you authorized to work in the country where the job is located?'], ['e14', 'button', 'Yes', 1], ['e15', 'button', 'No', 1], ['e12', 'button', 'Submit application']];
+if (cmd === 'goto') s.url = ref;
+if (/^(fill|select)$/.test(cmd)) s.v[ref] = val;
+if (cmd === 'check' || cmd === 'click') s.v[ref] = true;
+if (cmd === 'click' && ref === 'e12') { delete s.v.e12; s.sent = s.v; s.url += '/thanks'; }
+fs.writeFileSync(f, JSON.stringify(s));
+const form = !s.url.endsWith('/thanks') && s.url !== 'about:blank';
+console.log('page: {url: ' + s.url + ', title: "Apply for Frontend Engineer"}');
+if (form) for (const [r, role, label, sub] of F) console.log((sub ? '  ' : '') + (role === 'generic' ? '- generic [ref=' + r + ']: ' + label : '- ' + role + ' "' + label + '" [ref=' + r + ']') + (s.v[r] ? ': ' + s.v[r] : ''));
+else if (s.sent) console.log('- heading "Thanks for applying" [ref=e1]');`;
+
 test('goal card, guarded finding, drafting, and a board only the person moves', async () => {
   const { cfg, db, crew, done } = setup();
-  const web = await posting();
+  const web = await posting(), axi = join(cfg.toolsDir, 'browser', 'node_modules', 'playwright-axi', 'bin', 'playwright-axi.js');
+  mkdirSync(join(axi, '..'), { recursive: true }); mkdirSync(kit.toolBin(cfg), { recursive: true });
+  writeFileSync(axi, FORM); symlinkSync(axi, join(kit.toolBin(cfg), 'playwright-axi'));
   crew.onboard('Umer');
   const t = (await crew.post('chief', `Find me roles ${call('crew_goal', { title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', cv: CV })}`))!.task;
   await settled(db, t);
@@ -40,8 +61,11 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   assert.ok(g.rae && g.will && g.rae !== g.will, 'the finder and the writer are on the job');
   const daily = db.get('SELECT * FROM routines WHERE id = ?', g.routine);
   assert.equal(daily!.quiet, 1, 'the daily look is a quiet routine');
-  for (const b of [g.rae, g.will]) assert.ok(!JSON.parse(readFileSync(join(disk.botDir(cfg, b), 'bot.json'), 'utf8')).apps?.includes?.('browser'), `${b} cannot press submit`);
+  const tools = (b: string) => JSON.parse(readFileSync(join(disk.botDir(cfg, b), 'bot.json'), 'utf8')).tools;
+  assert.ok(!tools(g.rae).includes('browser') && tools(g.will).includes('browser'), 'the finder has no browser; the writer fills forms in its own');
   await until('the first look is done', () => db.get("SELECT 1 FROM tasks WHERE bot = ? AND state NOT IN ('queued','working')", g.rae));
+  assert.equal(db.get('SELECT origin FROM tasks WHERE routine = ?', g.routine)!.origin, 'chief', 'the first look is Chief\'s hand-on: his chip and live steps follow it');
+  await until('the empty look is said in Chief\'s chat', () => db.get("SELECT 1 FROM messages WHERE bot = 'chief' AND text LIKE '%found nothing new that fits yet%'"));
 
   // The finder: the pay must be on the page, the fit must quote the CV, the page must open.
   const good = { company: 'Acme', title: 'Frontend Engineer', place: 'London', url: `${web.base}/job/1`, pay: '£55,000 to £65,000 a year', missing: 'GraphQL is not on your CV', fit: [{ says: 'You led a payments dashboard in React', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }] };
@@ -50,7 +74,17 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   await find({ ...good, url: `${web.base}/gone` });
   await find({ ...good, fit: [{ says: 'You know Rust', cv: 'Shipped a Rust compiler' }] });
   assert.equal(db.get('SELECT COUNT(*) AS n FROM roles')!.n, 0, 'a made-up pay, a dead link and an invented skill add nothing');
-  await find(good);
+  // A look Chief hands on that adds a role reports in his own chat: progress as it goes, then the role on its own line, its card there.
+  db.run('UPDATE routines SET body = ? WHERE id = ?', `look ${call('crew_role', good)}`, g.routine);
+  await (crew as any).fire(db.get('SELECT * FROM routines WHERE id = ?', g.routine), 'now', undefined, 'chief');
+  const ended = () => db.get("SELECT * FROM tasks WHERE routine = ? AND origin = 'chief' AND state = 'done' ORDER BY id DESC", g.routine);
+  await until('the look is done', () => ended()?.id > db.get('SELECT MIN(id) AS id FROM tasks WHERE routine = ?', g.routine)!.id);
+  const look = ended()!;
+  assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'task.progress' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.text') = '1 found: Frontend Engineer at Acme'", look.id), 'each role found is a step on the live line');
+  const told = A.lines(crew.botPage('chief'), 'chief', crew.snapshot() as Json).find((l) => l.roles);
+  assert.match(told!.text, /found a role that fits:\nFrontend Engineer at Acme\nTap one/);
+  assert.deepEqual(told!.roles!.map((r) => [r.co, r.stage]), [['Acme', 'found']], 'the role is its card in Chief\'s chat');
+  assert.doesNotMatch(A.besideRoles(told!), /at Acme/);
   await find({ ...good, url: `${web.base}/job/1/` });
   assert.equal(db.get('SELECT COUNT(*) AS n FROM roles')!.n, 1, 'the same posting is not added twice');
   const role = db.get('SELECT * FROM roles')!;
@@ -72,14 +106,33 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   assert.doesNotMatch(dd.preview.body, /60,000/);
   assert.equal(db.get('SELECT stage FROM roles')!.stage, 'drafted');
 
-  // Only the person moves it on; the crew's tools cannot, and there is nothing to call.
+  // Fill it in for me: the writer types only the person's own lines in its browser; everything else, and Submit, is theirs.
+  await crew.answer(draft!.id, { answer: 'allow', scope: 'once', fill: true });
+  await settled(db, db.get('SELECT task FROM roles')!.task);
+  const page = () => JSON.parse(readFileSync(join(disk.botDir(cfg, g.will), 'form.json'), 'utf8'));
+  const fill = (ref: string, v: string) => call('browser', { args: ['fill', ref, v] });
+  const ft = (await crew.post(g.will, `fill ${call('browser', { args: ['goto', `${web.base}/job/1`] })} ${call('browser', { args: ['click', 'e12'] })} ${call('browser', { args: ['click', 'e11'] })} ${call('browser', { args: ['click', 'e14'] })} ${fill('e2', 'Umer')} ${fill('e3', 'umer@example.com')} ${fill('e7', 'No')} ${fill('e10', '£60,000')} ${fill('e4', 'I build payments dashboards.')} ${call('browser', { args: ['click', 'e12'] })} ${call('browser', { args: ['check', 'e11'] })} ${call('crew_form', { role: role.id })}`))!.task;
+  await settled(db, ft);
+  assert.deepEqual(page().v, { e2: 'Umer', e4: 'I build payments dashboards.' }, 'an unsourced email, the visa and pay questions and the consent tick stay empty');
+  assert.equal(page().sent, undefined, 'the writer cannot press Submit');
+  const form = db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open' AND detail LIKE '%\"form\"%'")!, fd = JSON.parse(form.detail).form;
+  assert.deepEqual(fd.filled.map((x: { label: string }) => x.label), ['First Name', 'Why do you want to work at Acme?']);
+  assert.deepEqual(fd.fields.map((x: jobs.Field) => [x.label, x.kind, x.yours]), [['Email', 'text', false], ['Resume/CV', 'file', true], ['Will you now or in the future require visa sponsorship?', 'pick', true], ['Expected salary', 'text', true], ['I consent to Acme keeping my data', 'tick', true], ['Are you authorized to work in the country where the job is located?', 'pick', true]]);
+  assert.equal(fd.submit, 'Submit application');
+  assert.deepEqual(A.needsYou(crew.snapshot() as Json).map((c) => [c.id, c.helper]), [[form.id, 'chief']], 'the card waits on Home and in Chief\'s thread, as the draft did');
+  assert.equal(db.get('SELECT stage FROM roles')!.stage, 'drafted', 'nothing moves before the person taps');
+
+  // Only the person's tap sends it, with their own answers; the page saying so moves the role to Applied.
   assert.throws(() => jobs.move(db, role.id, 'sideways'), /interview/);
-  jobs.move(db, role.id, 'applied', 1_000);
+  const at = Date.now(), answers = { Email: 'umer@example.com', 'Will you now or in the future require visa sponsorship?': 'No', 'Expected salary': '£60,000', 'I consent to Acme keeping my data': true, 'Are you authorized to work in the country where the job is located?': 'Yes' };
+  await crew.answer(form.id, { answer: 'allow', scope: 'once', fields: answers });
+  assert.match(db.get('SELECT answer FROM asks WHERE id = ?', form.id)!.answer, /^Sent from/);
+  assert.deepEqual(page().sent, { e2: 'Umer', e4: 'I build payments dashboards.', e3: 'umer@example.com', e7: 'No', e10: '£60,000', e11: true, e14: true });
   const r = db.get('SELECT * FROM roles')!;
   assert.equal(r.stage, 'applied');
   const follow = db.get('SELECT * FROM routines WHERE id = ?', r.follow)!;
   assert.equal(follow.bot, g.will);
-  assert.equal(follow.next_at, 1_000 + jobs.WEEK, 'a follow-up draft in 7 days');
+  assert.ok(follow.next_at >= at + jobs.WEEK, 'a follow-up draft in 7 days');
   assert.equal(follow.kind, 'once');
   jobs.move(db, role.id, 'interview');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', r.follow)!.n, 0, 'moving on takes the follow-up away');
@@ -135,6 +188,10 @@ test('a goal that is not a job search: its own stages, a quiet daily search that
   const rows = db.all('SELECT * FROM roles WHERE goal = ?', g.id);
   assert.equal(rows.length, 2, 'the same option is not added twice');
   assert.ok(rows.every((r) => r.stage === 'found'), 'the crew writes only the first stage');
+  db.run('UPDATE routines SET body = ?, next_at = 0 WHERE id = ?', `look ${call('crew_role', { company: 'Foxtons', title: 'Two-bed 3', place: 'Hackney', url: `${web.base}/job/3`, pay: '', missing: 'No garden', fit: [{ says: 'Two bedrooms', cv: 'A two-bedroom flat to rent in Hackney or Walthamstow' }] })}`, g.routine);
+  crew.schedule();
+  await until('the daily search is done', () => db.get("SELECT 1 FROM tasks WHERE routine = ? AND origin = 'routine' AND state = 'done'", g.routine));
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM roles WHERE goal = ?', g.id)!.n, 3, 'it adds to the board');
   assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND task_id = ?", db.get('SELECT last_task FROM routines WHERE id = ?', g.routine)!.last_task)!.n, 0, 'the daily search never speaks in Chief\'s thread');
   assert.deepEqual(jobs.view(db)!.goal.stages.map((s) => s.name), stages);
   assert.throws(() => jobs.move(db, rows[0].id, 'applied'), /viewing-booked/, 'only this goal\'s stages exist');

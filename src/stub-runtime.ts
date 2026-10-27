@@ -104,7 +104,9 @@ export class StubRuntime implements AgentRuntime {
       // Chief's native hand-off, as the engine makes it: the helper's turn runs on that session key through the host's
       // own delegate while Chief waits, and Chief answers the person from its report.
       if (name === 'sessions_send' && this.host.delegate) {
-        const key = String(input.sessionKey), brief = String(input.message ?? ''), ref = await this.host.delegate(spec, key.split(':').pop()!, key, brief), end = await this.run({ ...spec, ...ref, message: brief }, (e) => this.host?.event?.(ref, e));
+        const key = String(input.sessionKey), brief = String(input.message ?? ''), ref = await this.host.delegate(spec, key.split(':').pop()!, key, brief).catch((e: Error) => void (result = e.message));
+        if (!ref) continue; // refused, as the engine's gate refuses it: the model reads why
+        const end = await this.run({ ...spec, ...ref, message: brief }, (e) => this.host?.event?.(ref, e));
         this.host.end?.(ref, end); report = end.ok ? end.text : ''; continue;
       }
       on({ type: 'tool', name, phase: 'start' });

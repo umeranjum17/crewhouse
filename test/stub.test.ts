@@ -794,6 +794,31 @@ test('Forget this file: the person takes a document back out of the helper\'s fo
   assert.equal(noKey.status, 403, 'the person\'s authority is the only way to forget a file');
 });
 
+test('a CV sent to Chief goes with the job to the helper he hands it to, read into text', async () => {
+  await ready();
+  await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
+  // A real one-page PDF, as a phone sends it (crewd reads it with poppler's pdftotext, else the documents tool).
+  const s = 'BT /F1 12 Tf 72 720 Td (Umer Farooq - Forward Deployed Engineer - built LLM agents in production) Tj ET', objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>', `<< /Length ${s.length} >>\nstream\n${s}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let pdf = '%PDF-1.4\n'; const at = objs.map((o, i) => { const n = pdf.length; pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; return n; }), x = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${at.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF\n`;
+  const send = (message: string) => `[tool sessions_send ${JSON.stringify({ sessionKey: 'agent:m1:crewhouse:scout', message, timeoutSeconds: 0 })}]`;
+  const t = (await api('POST', '/api/bots/chief/messages', { text: `This is my resume find me good stuff ${send('Find him roles.')} ${send('Find him roles. Umer_Farooq_OpenAI_FDE_Resume.pdf is in your files/from-chief/Umer_Farooq_OpenAI_FDE_Resume.pdf.')}`,
+    files: [{ type: 'application/pdf', data: Buffer.from(pdf).toString('base64'), name: 'Umer_Farooq_OpenAI_FDE_Resume.pdf' }] })).body.task;
+  await done('chief', t);
+  const db = openDb();
+  try {
+    const body = String(db.prepare('SELECT body FROM tasks WHERE id = ?').get(t)!.body), jobs = db.prepare("SELECT body FROM tasks WHERE bot = 'scout' AND parent = ?").all(t) as { body: string }[];
+    const read = spawnSync('pdftotext', ['-v']).status === 0; // CI installs poppler-utils; the packaged app recommends it
+    if (read) assert.match(body, /\[Umer_Farooq_OpenAI_FDE_Resume\.pdf, as text\]\nUmer Farooq - Forward Deployed Engineer/, 'Chief reads the CV itself, never asks for it pasted');
+    assert.match(body, /Put in the message: "Umer_Farooq_OpenAI_FDE_Resume\.pdf is in your files\/from-chief\/Umer_Farooq_OpenAI_FDE_Resume\.pdf/);
+    assert.equal(jobs.length, 1, 'a hand-off that does not say where the file is is refused; the one that does goes');
+    const copy = join(root, 'crew', 'bots', 'scout', 'files', 'from-chief', 'Umer_Farooq_OpenAI_FDE_Resume.pdf');
+    assert.ok(readFileSync(copy).equals(Buffer.from(pdf)), 'the helper has its own copy of the file');
+    if (read) assert.match(readFileSync(`${copy}.txt`, 'utf8'), /built LLM agents in production/, 'and its words beside it');
+  } finally { db.close(); }
+});
+
 test('raw /files/ only opens delivered files, and only for the person', async () => {
   await ready();
   await api('POST', '/api/recruit', { template: 'reel', name: 'Reel' });

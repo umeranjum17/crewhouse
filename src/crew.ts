@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { appDir, assertSafeConfig, CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
@@ -163,6 +163,16 @@ export function checkPhotos(photos: unknown): Photo[] {
   });
 }
 
+/** A document's words, read once by crewd so Chief and the helper it hands the job to can read a PDF CV: poppler's
+ *  pdftotext, else the documents tool's markitdown; empty when neither can. */
+function docText(cfg: Config, p: Pick<Photo, 'bytes' | 'ext'>) {
+  const run = (bin: string, args: string[]) => new Promise<string>((ok) => { execFile(bin, args, { timeout: 30_000, maxBuffer: 4 << 20 }, (e, out) => ok(e ? '' : out)).stdin?.end(p.bytes); });
+  return (/^(txt|md|csv)$/.test(p.ext) ? Promise.resolve(p.bytes.toString('utf8')) : (p.ext === 'pdf' ? run('pdftotext', ['-layout', '-', '-']) : Promise.resolve('')).then((t) => t.trim() ? t : run(join(toolBin(cfg), 'markitdown'), ['-x', p.ext])))
+    .then((t) => t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 12_000));
+}
+/** Where a helper finds a file the person gave Chief, once Chief hands it the job. */
+const fromChief = (p: Pick<Photo, 'ext' | 'name'>, i: number) => `files/from-chief/${(p.name ?? `file-${i + 1}.${p.ext}`).replace(/[^\w.-]+/g, '_')}`;
+
 /** No routine faster than every MIN_EVERY minutes: a check each minute would use up the person's AI in an afternoon. */
 function paced(when: ReturnType<typeof parseSchedule>) {
   if ('every' in when && when.every < MIN_EVERY) throw fail(`A routine runs at most every ${MIN_EVERY} minutes, so your AI stays free for you. Try “every ${MIN_EVERY} minutes”.`);
@@ -194,6 +204,8 @@ interface Live { key: string; task: number; account: string; model?: string; gra
   shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number; actedFor?: string;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[];
+  /** A filled application form waits on the person's Submit card: its headless page stays up when the run ends. */
+  keep?: boolean;
   /** Its own computer: the engine's node on its display that every `computer` call must name. */
   node?: string }
 
@@ -389,7 +401,8 @@ export class Crew {
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); }
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
-    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop()]);
+    const w = jobs.goal(this.db)?.will, form = w ? this.browserOf(w) : undefined; // a filled form's kept headless page goes with crewd
+    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop(), form && !form.onScreen && form.run(['close'])]);
   }
 
   // ---- reads ----
@@ -483,7 +496,7 @@ export class Crew {
     const d = JSON.parse(detail || '{}'), covers = d.key ? coversOf(d.key) : null;
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)), rule: this.fileRule(d.bot) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
-    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.customRule ? { customRule: d.customRule } : {}), ...(d.create ? { yes: d.goal ? 'Yes, start my search' : `Yes, ${d.create.bot ? 'give' : 'bring'} ${String(d.create.name).split(' ').pop()} ${d.create.bot ? 'the job' : 'on'}`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
+    if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.customRule ? { customRule: d.customRule } : {}), ...(d.create ? { yes: d.goal ? 'Yes, start my search' : `Yes, ${d.create.bot ? 'give' : 'bring'} ${String(d.create.name).split(' ').pop()} ${d.create.bot ? 'the job' : 'on'}`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.form ? { form: d.form } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
     return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
@@ -837,7 +850,7 @@ export class Crew {
   }
 
   /** Fire one routine. A branch that finishes on its own promise returns it, so a manual run answers from the record. */
-  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake' | 'event', note?: string): void | Promise<unknown> {
+  private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake' | 'event', note?: string, origin = why === 'now' ? 'routine.now' : 'routine'): void | Promise<unknown> {
     const now = Date.now();
     // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
     if (r.kind === 'digest') return this.connections.connected('calendar')
@@ -861,7 +874,7 @@ export class Crew {
       return;
     }
     if (r.watch || r.mailwatch) return this.check(r, why);
-    const { task } = this.addTask(r.bot, (note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body) + jobs.seen(this.db, r.id), why === 'now' ? 'routine.now' : 'routine', r);
+    const { task } = this.addTask(r.bot, (note ? `${r.body}\n\n[Crewhouse] ${note}` : r.body) + jobs.seen(this.db, r.id), origin, r);
     this.db.tx(() => { this.db.run('UPDATE routines SET last_at = ?, last_task = ? WHERE id = ?', now, task, r.id); this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task }); });
   }
 
@@ -1097,7 +1110,10 @@ export class Crew {
       return;
     }
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
-    return this.addTask(botId, words, 'person', undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
+    // Chief reads an attached document's words here, and a helper it hands the job to gets its own copy, named in the hand-off.
+    const docs = botId === CHIEF ? pics.map((p, i) => ({ p, i })).filter(({ p }) => p.photo === false) : [], read = await Promise.all(docs.map(({ p }) => docText(this.cfg, p)));
+    const body = words + docs.map(({ p }, n) => `\n\n[${p.name ?? 'Their file'}${read[n] ? `, as text]\n${read[n]}` : ']'}\nHanding this job to a helper? Put in the message: "${p.name ?? 'Their file'} is in your ${fromChief(p, n)}${read[n] ? `, and its text in ${fromChief(p, n)}.txt` : ''}."`).join('');
+    return this.addTask(botId, body, 'person', undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
   }
 
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
@@ -1379,20 +1395,16 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       const d = await this.desktops.ensure(bot.id, space);
       l.node = await this.runtime.computer(bot.id, { DISPLAY: d.display, XAUTHORITY: d.xauth }).catch((e) => { console.error(`${bot.id}'s computer:`, e); return undefined; });
     }
-    const axi = g.axi.browser;
-    if (axi) {
-      // With its own computer, the browser tool drives the visible Chromium crewd keeps on the bot's display.
-      const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub';
-      if (onScreen) await this.desktops.ensure(bot.id, space);
-      // Its own HOME and XDG folders (the playwright daemon's state lives there), never the person's.
-      const env = axiEnv(join(this.cfg.stateDir, 'homes', bot.id), { ...axi.env, PLAYWRIGHT_CLI_SESSION: bot.id }), run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
-      // The browser starts on first use. ponytail: a crewd that dies leaves a headless browser up until that bot's next
-      // task reopens it; an idle timeout when the engine has one.
+    const b = this.browserOf(bot.id);
+    if (b) {
+      if (b.onScreen) await this.desktops.ensure(bot.id, space);
+      // ponytail: a crewd that dies leaves a headless browser up until that bot's next task reopens it; an idle timeout when the engine has one.
       let started: Promise<string> | undefined;
-      const start = async () => { const cdp = onScreen ? (await this.desktops.ensure(bot.id, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); };
+      const { run, start, onScreen } = b;
       l.browser = {
         run,
-        end: () => { if (started) void run([onScreen ? 'detach' : 'close']); },
+        // A filled form waiting on the person's Submit keeps its headless page (`keep`); a screen's browser always lets go.
+        end: () => { if (started && (onScreen || !l.keep)) void run([onScreen ? 'detach' : 'close']); },
         release: () => { if (started && onScreen) { started = undefined; void run(['detach']); } },
       };
       l.browserTool = tool('browser', 'Your own browser (playwright-axi): goto <url>, snapshot, find <text>, click <ref>, fill <ref> <text>, press <key>, go-back. After a confirmed action, capture its real result with screenshot --filename=files/photos/<name>.png, then crew_deliver that file. Never draw a substitute.',
@@ -1408,6 +1420,16 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     }
     this.live.set(bot.id, l);
     return l;
+  }
+
+  /** The bot's own browser AXI: its screen's Chromium when it has a computer, else its own profile, in its own HOME and XDG
+   *  folders (the playwright daemon's state lives there), never the person's. Its runs drive it; crewd does on the person's Submit. */
+  private browserOf(botId: string) {
+    const space = disk.botDir(this.cfg, botId), g = resolveGrants(this.cfg, disk.botConfig(this.cfg, botId).tools ?? [], { 'bot.dir': space, 'bot.id': botId }), axi = g.axi.browser;
+    if (!axi) return undefined;
+    const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub', env = axiEnv(join(this.cfg.stateDir, 'homes', botId), { ...axi.env, PLAYWRIGHT_CLI_SESSION: botId }), run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
+    // `look` is crewd's own whole read of the page (a long application form runs past the model's cap).
+    return { onScreen, run, look: () => runAxi(axi.script, ['snapshot', '--full'], space, env, undefined, 1 << 20), start: async () => { const cdp = onScreen ? (await this.desktops.ensure(botId, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); } };
   }
 
   private close(botId: string) {
@@ -1576,9 +1598,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      const mine = task.origin === CHIEF && !this.teamJob(task);
-      wants = mine && b.template === 'scout' && !clear && !!text;
-      if (!wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear && !jobs.goals(this.db).some((g) => g.routine === task.routine)))) { // a goal's daily search reports on its board, never in Chief's thread
+      // A goal's first look is Chief's hand-on, said in his chat one line per item, each its card there (its daily search stays on its board).
+      const mine = task.origin === CHIEF && !this.teamJob(task), g = jobs.goals(this.db).find((x) => x.routine === task.routine), what = g?.will ? 'role' : 'option', found = g && mine ? this.db.all('SELECT co, title FROM roles WHERE goal = ? AND found_at >= ? ORDER BY id', g.id, task.created_at) : [];
+      wants = mine && !g && b.template === 'scout' && !clear && !!text;
+      if (g && mine) this.say(CHIEF, 'bot', found.length ? `${b.display} found ${found.length === 1 ? `a ${what}` : `${found.length} ${what}s`} that fit${found.length === 1 ? 's' : ''}:\n${found.map((r) => `${r.title} at ${r.co}`).join('\n')}\nTap one for why it fits${g.will ? ' and what your CV is missing, or to draft your application' : ''}.` : `${b.display} looked and found nothing new that fits yet, and looks again every morning at 8:00.`, task.id);
+      else if (!g && !wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear))) {
         this.say(CHIEF, 'bot', this.relayLine(task, text), task.id);
       }
     });
@@ -1600,7 +1624,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         const root = own(parent), brain = this.live.get(parent.bot)!;
         if (this.db.get('SELECT 1 FROM routines WHERE id = ? AND mailwatch = 1', root.routine ?? 0)) throw new Error('Automatic inbox triage is read-only and cannot delegate.');
         if (parent.bot !== CHIEF || bot === CHIEF || !this.bot(bot) || this.activeTask(bot) || this.starting.has(bot) || this.held.has(bot) || this.live.size + this.starting.size >= this.cfg.maxConcurrent) throw new Error('That helper is busy or unavailable. Choose another helper or wait.');
-        const ask = brief.trim() || root.body, id = this.addTask(bot, ask, CHIEF, undefined, ask, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
+        const ask = brief.trim() || root.body, given = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') = 1 AND json_extract(data, '$.photo') IS NULL", CHIEF, root.id).map((e) => JSON.parse(e.data));
+        // The person's files on Chief's job go with it: the helper's own copy and its words, at the path the hand-off names.
+        const at = given.map((d, i) => fromChief({ ext: extname(d.path).slice(1), name: d.name }, i));
+        if (given.length && !ask.includes('files/from-chief/')) throw new Error(`Put where the person's files are in the message, then send it again: ${at.map((a, i) => `${given[i].name ?? 'Their file'} is in your ${a}`).join('; ')}.`);
+        for (const [i, d] of given.entries()) {
+          const bytes = readFileSync(join(disk.botDir(this.cfg, CHIEF), d.path)), ext = extname(d.path).slice(1), to = disk.insideBot(this.cfg, bot, at[i]), text = await docText(this.cfg, { bytes, ext });
+          mkdirSync(dirname(to), { recursive: true }); writeFileSync(to, bytes); if (text) writeFileSync(`${to}.txt`, text);
+        }
+        const id = this.addTask(bot, ask, CHIEF, undefined, ask, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
         this.db.run('UPDATE tasks SET session = ? WHERE id = ?', key, id); task.session = key; this.setTask(task, 'working');
         this.starting.add(bot);
         try {
@@ -1734,7 +1766,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (input.node !== l?.node) return { block: true, terminate: false, reason: `Name your own computer on every call: node "${l?.node}".` };
       if (!COMPUTER_LOOKS.has(String(input.action))) { l?.browser?.release(); s.page = (await this.desktops.pages(botId, true))[0] ?? s.page; }
     }
-    const e = effectOf(tool, input, s), r = await this.decide(botId, tool, input, e), task = !r && acts(tool, input, e) && this.activeTask(botId);
+    const e = effectOf(tool, input, s), r = await this.decide(botId, tool, input, e), task = !r && !(tool === 'browser' && this.applying(botId)) && acts(tool, input, e) && this.activeTask(botId);
     if (task) {
       let where = s.apps?.[tool] ? `your ${s.apps[tool].app}` : tool === 'calendar' ? 'your Google Calendar' : s.run?.[tool]?.name ?? (tool === 'computer' ? 'this computer' : 'a web page');
       try { if (tool === 'browser' || tool === 'computer') where = new URL(s.page ?? '').hostname.replace(/^www\./, '') || where; } catch { /* no page yet */ }
@@ -1755,6 +1787,21 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     // The engine's own tools never call back into crewd, so their step is written here; every tool the crew runs is
     // written once the call is over, with the truth of how it went.
     if (BUILTINS.has(tool)) { const words = toolWords(tool, input); if (words) this.db.event('run.tool', botId, { task: task?.id, words }); }
+    // On an application form the writer types the person's own lines, by their field's label as the page writes it, and nothing else.
+    const job = (tool === 'browser' || tool === 'computer') && e.kind !== 'refuse' && this.applying(botId);
+    if (job) {
+      const args = (tool === 'browser' && Array.isArray(input.args) ? input.args : [input.action]).map(String), [cmd = '', ref = '', value = ''] = args, l = this.live.get(botId);
+      if ((tool === 'computer' ? !COMPUTER_LOOKS.has(cmd) : acts(tool, { args: [cmd] }, e)) && cmd !== 'fill' && (tool === 'computer' || l?.fills?.length || !/^(click|dblclick)$/.test(cmd)))
+        return { block: true, reason: "On an application form you fill text lines and nothing else: ticks, picks, files and every button after your first line are the person's. Call crew_form when you are done." };
+      if (tool === 'browser' && acts(tool, { args: [cmd] }, e)) {
+        if (l?.browser) l.snapshot = await this.browserOf(botId)?.look() ?? l.snapshot;
+        const r = ref.replace(/^@/, ''), at = (l?.snapshot ?? '').split('\n').find((x) => x.includes(`[ref=${r}]`)) ?? '', label = pressOf(at, r)?.label ?? '';
+        // crewd's own name for it: an answer button ("Yes" under a question) or a box named only by its placeholder is the person's.
+        const named = Object.entries(jobs.formOf(l?.snapshot ?? '', []).refs).find(([, x]) => x === r)?.[0] ?? label;
+        if (!label || jobs.ONLY_YOU.test(named) || named !== label || (cmd === 'fill' ? args.length > 3 : !/^\s*- (button|link) /.test(at) || /submit|send|accept|agree/i.test(label))) return { block: true, reason: !label ? 'Use a ref from a fresh snapshot.' : cmd === 'fill' ? `“${label}” is the person's to answer: leave it empty.` : 'Before your first line you may only open the form (a button or link); ticks, picks and Submit are the person\'s. Call crew_form.' };
+        if (cmd === 'fill' && !jobs.sourced(job.body, value)) return { block: true, reason: `Only words from their CV or the approved draft go in the form, as written: leave “${label}” empty for them.` };
+      }
+    }
     // Lines the helper types on a page nobody has approved yet (an unsigned register's form) are remembered for the
     // card of the press that sends them; a new page starts a new form.
     if (tool === 'browser' && e.kind === 'safe') {
@@ -1886,7 +1933,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string }, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string; fill?: boolean; fields?: unknown }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
@@ -1910,14 +1957,19 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         detail.draft = { ...detail.draft, sha: sha(text), edited: true }; detail.preview = { ...detail.preview, body: text }; // the receipt quotes their words, not the helper's
       }
     }
+    // An application: Fill it in starts the writer on the posting's form with the words approved here; a filled form's
+    // Submit is the one press, made by crewd on this tap (a line that can't go in throws, and the card stays open).
+    if (ask.kind === 'propose' && body.answer === 'allow' && body.fill && detail.draft?.role) this.draftRole(detail.draft.role, 'fill', String(detail.preview?.body ?? ''));
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
+    const sent = ask.kind !== 'propose' || body.answer !== 'allow' ? '' : detail.form ? await this.submitForm(ask.bot, detail.form, body.fields) : body.fill && detail.draft?.role ? 'filling in the form' : '';
     const picks = ask.kind === 'style' || ask.kind === 'video', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
     if (picks && body.answer === 'allow' && !picked) throw fail(`pick one of the ${ask.kind === 'style' ? 'styles' : 'choices'} on the card`);
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
+    if (ask.kind === 'propose' && body.answer === 'deny' && detail.form && !this.browserOf(ask.bot)?.onScreen) void this.browserOf(ask.bot)?.run(['close']);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
@@ -2057,6 +2109,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       const gs = jobs.goals(this.db); // a goal's finder and writer have one tool each, and only theirs
       if (gs.some((g) => g.rae === botId)) own.push(tool('crew_role', "Add ONE option you read yourself to the person's first list. crewd opens `url`, so `pay` must be word for word what the page shows (empty when it shows none), and each `fit` quotes (`cv`) the line of their brief that shows it. Pass `goal` when you look for more than one goal. One already on the board is not added twice.", (p) => this.foundRole(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
+      if (gs.some((g) => g.will === botId)) own.push(tool('crew_form', 'You filled what you can on an application form: crewd reads the page and puts it on ONE card where only the person answers the rest and presses Submit. `role`: its id. `stop`: why the form cannot be finished here, only when one applies.', (p) => this.formReady(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
@@ -2141,7 +2194,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
-      tool('crew_goal', 'Offer the person a job search goal card, once they have told you the roles they want, where, a pay floor if they want one, and pasted their CV in full. Ask only those. Nothing starts before their yes.', (p) => this.offerGoal(p)),
+      tool('crew_goal', 'Offer the person a job search goal card as soon as they want a job and you have their CV in full (pasted, or an attached file\'s text in their message). Roles, places, a pay floor and `focus` (what to favour: their saved job-search strategy, such as remote-first or companies that hire fast) come from their words and what you know of them; ask only what neither says. Nothing starts before their yes.', (p) => this.offerGoal(p)),
       tool('crew_resume', 'Make the person\'s resume, which they edit and save as PDF or Word: `sections` [{heading?, lines}], the first without a heading (name, contact). Every line is a piece of one of their own lines in this chat, never one they marked private; crewd refuses any other.', (p) => this.makeResume(p.sections)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
@@ -2212,14 +2265,14 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** Chief's goal card: the hire card for the finder, whose job and won't-do list are crewd's own words; the writer of a job search joins on the yes. */
   private offerGoal(p: Row) {
     if (this.activeTask(CHIEF)?.origin !== 'person') throw fail('Only a conversation with the person can start a goal.');
-    const title = needText(p.title, 80, 'say what they are looking for'), places = needText(p.places, 120, 'say where, and any limit'), floor = clean(p.floor, 80), brief = String(p.brief ?? p.cv ?? '').replace(/\r/g, '').trim(), stages = p.stages === undefined ? null : jobs.namesOf(p.stages);
+    const title = needText(p.title, 80, 'say what they are looking for'), places = needText(p.places, 120, 'say where, and any limit'), floor = clean(p.floor, 80), focus = clean(p.focus, 160), brief = String(p.brief ?? p.cv ?? '').replace(/\r/g, '').trim(), stages = p.stages === undefined ? null : jobs.namesOf(p.stages);
     if (jobs.goals(this.db).some((g) => jobs.norm(g.title) === jobs.norm(title))) throw fail('There is a goal like that already. It is under Your goal.');
     if (p.stages !== undefined && !stages) throw fail('Name 2 to 8 different stages. The first is where the crew puts what it finds.');
     if (brief.length < 40 || brief.length > 12_000) throw fail('Ask them to say what they want in full (a job search: their CV pasted in full), up to 12,000 characters.');
     const rae = this.bots().find((b) => b.template === 'scout'), job = { does: "Looks every morning for what the person's goals ask for and adds each new fitting option to its board, with its source.", aim: 'The person sees only options that really fit, with the figure as the page says it and what their brief does not show.', gets: "The person's goals, places and brief.", how: 'Reads public pages. Adds an option only with crew_role. Never claims anything the brief does not show. Never applies, signs in, sends or fills a form.', great: 'Quiet on a day with nothing new.' };
-    return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, brief, ...(stages ? { stages } : {}) },
+    return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, focus, brief, ...(stages ? { stages } : {}) },
       create: { bot: rae?.id, name: rae?.display ?? 'Research Rae', role: `Looks every morning for ${title}`, job, will_do: [`Look every morning at ${stages ? 'public pages' : jobs.JOB_SOURCES} for ${title} (${places})`, `Add what fits to ${stages ? stages[0] : 'Found'} without pinging you`, "Show each option's figure as the page says it, and what your brief does not show", ...(stages ? [`Leave every move after ${stages[0]} to you`] : ['Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'])], wont_do: stages ? jobs.GENERAL_WONT : jobs.WONT, first_step: 'Open Your goal to see what the crew found.', first_job: 'Look for the first options now' },
-      preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\n${stages ? 'Limit' : 'Pay floor'}: ${floor}` : ''}${stages ? `\nStages: ${stages.join(', ')}` : ''}` } });
+      preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\n${stages ? 'Limit' : 'Pay floor'}: ${floor}` : ''}${focus ? `\nFavour: ${focus}` : ''}${stages ? `\nStages: ${stages.join(', ')}` : ''}` } });
   }
 
   /** crew_resume: the person's resume from their own words in Chief's chat, kept with when they wrote each part, as a real .docx. */
@@ -2247,12 +2300,12 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private startGoal({ goal: g, create: c }: Row) {
     const pick = (template: string) => this.bots().find((b) => b.template === template) ?? this.recruit(template, undefined, CHIEF), rae = pick('scout'), id = jobs.nextId(this.db), job = !g.stages, will = job ? pick('scribe') : null;
     if (!jobs.goals(this.db).some((x) => x.rae === rae.id)) this.create({ ...c, bot: rae.id, name: rae.display, first: undefined, first_job: undefined });
-    if (will && !jobs.goals(this.db).some((x) => x.will === will.id)) this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', wont_do: jobs.WONT, job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers.', aim: 'A draft the person checks, copies and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application. Never applies or sends.', great: 'Nothing invented, nothing sent.' } });
-    const full = { id, title: g.title, places: g.places, floor: g.floor, brief: g.brief ?? g.cv, sources: job ? jobs.JOB_SOURCES : 'public listings and official pages' },
+    if (will && !jobs.goals(this.db).some((x) => x.will === will.id)) this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers; on their tap, fills the posting\'s form with them.', aim: 'A draft and a filled form the person checks and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application and crew_form. Never presses Submit or sends.', great: 'Nothing invented, nothing sent.' } }); // it keeps its browser (no won't-do switch-off): on a form the gate lets it type only the person's own lines, and only their Submit sends
+    const full = { id, title: g.title, places: g.places, floor: g.floor, focus: g.focus, brief: g.brief ?? g.cv, sources: job ? jobs.JOB_SOURCES : 'public listings and official pages' },
       row = this.addRoutine({ bot: rae.id, schedule: 'every day 8:00', task: jobs.findTask(full), name: `Look for ${short(g.title, 40)}`, quiet: true }, 'goal');
     jobs.addGoal(this.db, { ...full, rae: rae.id, will: will?.id ?? '', routine: row.id, since: Date.now(), stages: g.stages ?? jobs.JOB_STAGES, crew: job ? 2 : 1, follow: job ? 'applied' : '', wont: job ? jobs.WONT : jobs.GENERAL_WONT, asks: job ? jobs.YOURS : [] });
-    this.say(CHIEF, 'bot', `${rae.display} looks every morning at 8:00 and adds what fits to your board, quietly. It is under Your goal.`, null);
-    void this.fire(row, 'now');
+    this.say(CHIEF, 'bot', `${rae.display} is looking now, and then every morning at 8:00 adds what fits to your board, quietly. I'll bring this first look back here; your board is under Your goal.`, null);
+    void this.fire(row, 'now', undefined, CHIEF); // the first look is Chief's hand-on: its chip, live steps and result are in his chat
   }
 
   /** The finder adds an option to its goal's first stage. crewd opens the page itself: the figure must be on it, and every claim of fit must quote the brief. */
@@ -2268,7 +2321,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!fit.length) throw fail('say why it fits, each reason with the line of their brief that shows it');
     const stray = fit.find((f) => !jobs.inCv(g.brief, f.cv, true));
     if (stray) throw fail(`“${short(stray.cv, 60)}” is not in the person's brief. Say only what their brief shows.`);
-    const out = jobs.add(this.db, g.id, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url });
+    const out = jobs.add(this.db, g.id, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url }), look = this.activeTask(g.rae); if (!out.dup && look) this.db.event('task.progress', g.rae, { task: look.id, text: `${this.db.get('SELECT COUNT(*) AS n FROM roles WHERE goal = ? AND found_at >= ?', g.id, look.created_at)!.n} found: ${title} at ${co}` });
     return out.dup ? { note: 'already on the board; not added again' } : { added: out.id };
   }
 
@@ -2306,12 +2359,61 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     return { ok: 'the prep is on the role card' };
   }
 
+  /** The goal's writer in its browser: the CV and the drafts the person sent on with Fill it in are all it may type. */
+  private applying(botId: string) {
+    const g = jobs.goals(this.db).find((x) => x.will === botId);
+    return g ? { body: [g.brief, ...this.db.all("SELECT value FROM settings WHERE key LIKE 'jobs.draft.%'").map((r) => String(JSON.parse(r.value)))].join('\n') } : undefined;
+  }
+
+  /** The writer filled what it can: ONE card read by crewd from the page itself (what was filled, what is left, the form's own
+   *  Submit). The helper never presses it; the person's tap does, through crewd (`submitForm`). */
+  private async formReady(botId: string, p: Row) {
+    const r = jobs.role(this.db, Number(p.role)), l = this.live.get(botId);
+    if (!this.applying(botId) || r?.stage !== 'drafted' || !this.db.get('SELECT 1 FROM settings WHERE key = ?', `jobs.draft.${r.id}`)) throw fail('call crew_form for the role whose form the person asked you to fill');
+    if (!l?.browser || !l.page) throw fail('open the application form in your browser first');
+    const snap = await this.browserOf(botId)!.look(), url = /^page: \{url: ([^,}\s]+)/m.exec(snap)?.[1] ?? l.page, form = jobs.formOf(snap, (l.fills ?? []).map((f) => f.label)), file = form.fields.find((x) => x.kind === 'file' && x.label.endsWith('*'));
+    l.keep = true;
+    this.propose(botId, `${this.bot(botId)!.display} filled in your application to ${r.co}.`, { form: { role: r.id, url, site: this.siteName(url, snap), page: (/title: "((?:[^"\\]|\\.)*)"/.exec(snap)?.[1] ?? '').slice(0, 120), filled: l.fills ?? [], fields: form.fields, submit: form.submit, next: form.next, stop: clean(p.stop, 200) || (file ? `it needs a file for “${file.label.replace(/\*$/, '')}”, which the crew can't attach. Open the form, attach it and press Submit there yourself` : '') } });
+    return { note: "The form is on the person's card. Only they press Submit, from their own device. Reply with one line." };
+  }
+
+  /** The person's Submit on a filled form: crewd, never the helper, puts in the lines the card showed and their answers, then
+   *  presses the form's own button once. A line that can't go in stops it before the press (the card stays open); after the
+   *  press the page itself says whether it went (a new page, or the form gone), and only then is the role Applied. */
+  private async submitForm(botId: string, f: Row, given: unknown) {
+    const who = this.bot(botId)?.display ?? 'The writer', b = this.browserOf(botId), said = (given && typeof given === 'object' ? given : {}) as Row;
+    if (!b) throw fail(`${who} has no browser now: turn it on in its Tools, then press Submit again.`, 409);
+    if (this.busy.has(botId)) throw fail(`${who} is using its browser right now. Press Submit again when it is done.`, 409);
+    const look = b.look, urlOf = (out: string) => /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1], put = async (args: string[]) => !/^error/m.test(await b.run(args));
+    let snap = await look();
+    if (urlOf(snap) !== f.url) { await b.start(); await b.run(['goto', f.url]); snap = await look(); }
+    const { refs } = jobs.formOf(snap, []);
+    // A dropdown: the page's own <select>, else type the answer and press the option of that name (never Enter, which may send the form).
+    const pick = async (ref: string, v: string) => { if (await put(['select', ref, v])) return true; const o = await put(['fill', ref, v]) && jobs.formOf(await look(), []).refs[`option\n${v}`]; return !!o && put(['click', o]); };
+    for (const [label, v, kind] of [...f.filled.map((x: Row) => [x.label, x.value, 'text']), ...f.fields.map((x: jobs.Field) => [x.label, said[x.label], x.kind])]) {
+      if (v === undefined || v === null || v === '' || v === false || kind === 'file') continue;
+      const radio = refs[`${label}\n${v}`], ref = radio ?? refs[label];
+      if (!ref) throw fail(`“${label}” isn't on the form at ${f.site} now, so nothing was sent.`, 409);
+      if (!(kind === 'tick' || radio ? await put(['check', ref]) || (!!radio && await put(['click', ref])) : kind === 'pick' ? await pick(ref, String(v)) : await put(['fill', ref, String(v)]))) throw fail(`“${label}” wouldn't take that on ${f.site}, so nothing was sent.`, 409);
+    }
+    if (f.stop || !f.submit || !refs[f.submit]) throw fail(`The form at ${f.site} has no Submit button I can find, so nothing was sent.`, 409);
+    let went = await put(['click', refs[f.submit]]);
+    for (let i = 0; went && i < 20; i++, await new Promise((r) => setTimeout(r, 500))) { const now = await look(); if (urlOf(now) !== f.url || jobs.formOf(now, []).submit !== f.submit) break; if (i === 19) went = false; }
+    if (!b.onScreen) void b.run(['close']);
+    this.db.event('role.submitted', botId, { role: f.role, site: f.site, confirmed: went });
+    if (!went) return `Pressed Submit on ${f.site}, but the page didn't show that it went. Look for their email before you apply again`;
+    jobs.move(this.db, f.role, 'applied');
+    return `Sent from ${f.site}`;
+  }
+
   /** The writer's task for one role, from the person's tap: Draft my application, Prep for this interview, or Practice (the answers come in this chat). */
-  draftRole(id: number, what: 'draft' | 'prep' | 'practice' = 'draft') {
+  draftRole(id: number, what: 'draft' | 'prep' | 'practice' | 'fill' = 'draft', draft = '') {
     const r = jobs.role(this.db, id), g = r && jobs.goal(this.db, r.goal), pre = r && jobs.prep(this.db, id);
-    if (!r || !g?.will || !(what === 'draft' ? [jobs.key(g.stages[0]), jobs.key(g.stages[1])] : ['interview']).includes(r.stage)) throw fail(`that role is not waiting for ${what === 'draft' ? 'a draft' : 'interview prep'}`, 404);
+    if (!r || !g?.will || !(what === 'draft' ? [jobs.key(g.stages[0]), jobs.key(g.stages[1])] : what === 'fill' ? [jobs.key(g.stages[1])] : ['interview']).includes(r.stage)) throw fail(`that role is not waiting for ${what === 'draft' ? 'a draft' : what === 'fill' ? 'its form' : 'interview prep'}`, 404);
+    if (what === 'fill' && !this.browserOf(g.will)) throw fail(`${this.bot(g.will)?.display ?? 'The writer'} needs its browser for this: turn it on in its Tools.`, 409);
+    if (what === 'fill') this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', `jobs.draft.${id}`, JSON.stringify(draft));
     if (what === 'practice' ? !pre : r.task && this.db.get("SELECT 1 FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.task)) throw fail(what === 'practice' ? 'prepare for this interview first' : 'the writer is on it already', 409);
-    const [body, said, title] = what === 'draft' ? [jobs.draftTask(g, r), `Draft my application to ${r.co} for ${r.title}.`, `Application to ${r.co}`] : what === 'prep' ? [jobs.prepTask(g, r), `Prep me for my ${r.co} interview.`, `Interview prep for ${r.co}`] : [jobs.practiceTask(g, r, pre), `Practice my ${r.co} interview with me.`, `Practice interview for ${r.co}`];
+    const [body, said, title] = what === 'draft' ? [jobs.draftTask(g, r), `Draft my application to ${r.co} for ${r.title}.`, `Application to ${r.co}`] : what === 'fill' ? [jobs.fillTask(g, r, draft), `Fill in my application to ${r.co}.`, `Application form for ${r.co}`] : what === 'prep' ? [jobs.prepTask(g, r), `Prep me for my ${r.co} interview.`, `Interview prep for ${r.co}`] : [jobs.practiceTask(g, r, pre), `Practice my ${r.co} interview with me.`, `Practice interview for ${r.co}`];
     const { task } = this.addTask(g.will, body, 'person', undefined, said, [], { title });
     if (what !== 'practice') this.db.run('UPDATE roles SET task = ? WHERE id = ?', task, id);
     return { task };

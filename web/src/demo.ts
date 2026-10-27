@@ -244,9 +244,11 @@ const freshHire = [
   { bot: 'reel', promise: 'A 20-second video from three photos.', ask: 'Make a 20-second video from my three photos', group: 'goal', needs: [], hire: 'reel' },
 ];
 // ?demo=goal: the job-search board (applied and drafted roles included) with the writer's draft, and a second goal, a flat to rent, with stage names of its own and two reminders.
+// A goal role as crewd lists it, for the households that show roles (goal, thread).
+const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
+const stages = (names: string[]) => names.map((name) => ({ key: name.toLowerCase().replace(/ /g, '-'), name }));
 if (variant === 'goal' || variant === 'ask-goal') {
-  const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
-  const stages = (names: string[]) => names.map((name) => ({ key: name.toLowerCase().replace(/ /g, '-'), name })), wont = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
+  const wont = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
   Object.assign(state, { goals: [{ goal: { id: 1, title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe', stages: stages(['Found', 'Drafted', 'Applied', 'Interview', 'Offer']), crew: 2, wont, asks: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period'] }, roles: [
     role(1, 'found', 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', ['You led a payments dashboard in React and TypeScript', 'You cut checkout load time by 40 percent'], 'GraphQL is not on your CV'),
     role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV'),
@@ -366,14 +368,19 @@ if (variant === 'thread') {
   events.push(ev(40, 3, 'task.created', 'scout', { task: 48, title: job.title, origin: 'chief' }), ev(40.5, 2.8, 'run.admitted', 'scout', { task: 48 }),
     ev(41, 2, 'task.progress', 'scout', { task: 48, text: 'Search the boards for frontend roles in London' }),
     ev(42, 1, 'task.progress', 'scout', { task: 48, text: 'Checking Wise and Monzo against your resume' }));
+  Object.assign(state, { goals: [{ goal: { id: 1, title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe', stages: stages(['Found', 'Drafted', 'Applied', 'Interview', 'Offer']), crew: 2, wont: [], asks: [] }, roles: [
+    role(1, 'found', 'Monzo', 'Frontend Engineer', 'London', '£60,000 to £70,000 a year', ['You led a payments dashboard in React and TypeScript'], 'GraphQL is not on your CV'),
+    role(2, 'found', 'Wise', 'Senior React Developer', 'Remote (UK)', 'Pay not in the posting', ['React and TypeScript, every day'], 'Nothing the posting asks for is missing'),
+    role(3, 'found', 'Deliveroo', 'UI Engineer', 'London', '£58,000 a year', ['You cut checkout load time by 40 percent'], 'Design-system experience is not on your CV'),
+  ] }] });
   pages.chief = { messages: [
     { id: 1, author: 'bot', recap: true, at: now - 50 * min, text: 'Good morning, Umer. While you were away:\n- Scout found 3 new roles that match\n- Scribe finished your resume\n- Nothing needs you right now' },
     { id: 2, author: 'person', at: now - 40 * min, text: 'Add that I am AWS certified.' },
-    { id: 3, author: 'bot', at: now - 39 * min, text: 'Added. It sits under Certifications: AWS Certified Developer, Associate.' },
+    { id: 3, author: 'bot', at: now - 39 * min, text: 'Added. It sits under Certifications:\n- AWS Certified Developer, Associate · [aws.amazon.com](https://aws.amazon.com/certification/)' },
     { id: 4, author: 'person', at: now - 30 * min, text: 'Make my resume from that.' },
     { id: 5, author: 'bot', at: now - 28 * min, text: 'Here it is. One page, your newest work first.' },
     { id: 6, author: 'system', at: now - 28 * min, text: 'Delivered files/resume.docx: The Resume is ready: 4 sections' },
-    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\n- **Frontend engineer**, Monzo · London · [monzo.com](https://monzo.com/careers)\n- **Senior React developer**, Wise · Remote · [wise.jobs](https://wise.jobs)\n- **UI engineer**, Deliveroo · London · [careers.deliveroo.co.uk](https://careers.deliveroo.co.uk)\n\nScout is checking two more now.' },
+    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\nFrontend Engineer at Monzo\nSenior React Developer at Wise\nUI Engineer at Deliveroo' },
   ] };
   Object.assign(bots.find((b) => b.id === 'chief')!, { firstUnread: 7 });
 }

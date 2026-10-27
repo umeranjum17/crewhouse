@@ -619,6 +619,28 @@
     ],
     "result": "The prep reads as one page: every company fact shows the site it was read from as a link, each likely question says why it is asked, and the pay, visa, right-to-work, notice and consent fields are listed empty under Only you can answer these. The practice happens in the writer's chat, answered by typing or the mic; the reply gives what landed, what to tighten and an invitation to try again. Nothing is sent, filled in or signed, and no interviewer audio plays. Not a real company site or a real model."
   },
+  "jobs-apply": {
+    "start": "Umer with a job search on the stub engine: a role on the board and the writer's draft for it, and the writer's own browser (the pinned playwright-axi) on the posting's application form; the model's turns are scripted",
+    "steps": [
+      "Open the writer's draft card: it offers Fill it in for me, Copy and open the form, and Not now",
+      "Tap Fill it in for me: the writer opens the posting's form in its own browser and types only lines from his CV and the approved draft; crewd refuses an email that is not in them, the visa and pay questions and the consent tick",
+      "Open the card it raises: the site and page, what was filled from the CV and draft, the questions only he answers left blank (visa sponsorship, expected salary, consent), the CV upload he attaches himself, and a Submit button",
+  "Answer his questions on the card and press Submit (local posting only): crewd puts the lines in, presses the form's own Submit once, and the role moves to Applied when the page says it went",
+      "Repeat the same screens in the installed app's window at phone size"
+    ],
+    "result": "The writer never presses Submit and never answers for him: the card is the one place the application can be sent from, by his tap. On a real posting the run stops at the card and nothing is sent. Not a real model."
+  },
+  "phone-apply": {
+    "start": "The release app on an Android emulator paired to a stub-engine crewd: Umer's job search with a role drafted for a local posting, and the writer's own browser (the pinned playwright-axi); the model's turn is scripted",
+    "steps": [
+      "On Home, tap Chief has 1 thing for you: the writer's draft opens in Chief's thread with Fill it in for me",
+      "Tap Fill it in for me: the writer fills only lines from his CV and the draft on the posting's form",
+      "The card that follows in Chief's thread: the page, what was filled, his own questions blank, Submit",
+      "Answer them on the phone (No to sponsorship, an expected salary, the consent switch, his email) and tap Submit",
+      "Read the thread's receipt: Sent from Northwind Careers"
+    ],
+    "result": "His tap on the phone is the only press of Submit: the posting receives his answers and the role is Applied. Not a real model; the posting is a local page."
+  },
   "phone-pair-link": {
     "start": "the real app on an emulator, with the link the computer prints open in the phone's browser and the app not installed yet",
     "steps": [
@@ -641,6 +663,18 @@
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The flat board shows Found, Shortlisted, Viewing booked, Offer made and Signed, with only Found filled by the crew and each card naming its page and the date checked. The second search adds no duplicate and leaves Chief's thread quiet. A made-up stage is refused and only Umer's tap moves an option on. A reminder on an option is quiet: one line in Chief's thread when it goes off, no ask, and Dismiss removes it. The job search keeps its own stages beside it. Not a real listing site or a real model."
+  },
+  "first-hour": {
+    "start": "The release app on an Android emulator paired to a crewd on the real pinned OpenClaw engine, whose model is a scripted local provider (fixed words, no AI account); Umer's job-search strategy is in his profile and his CV is a PDF in the phone's Downloads; the roles are real public postings",
+    "steps": [
+      "First, on Home: tap the plus, pick A document: PDF and choose Umer_CV.pdf from the phone's files, type This is my resume find me good stuff and send",
+      "Read Chief's reply that he read the CV and the goal card he raises from it: the roles, Remote first and Favour with his strategy; tap Yes, start my search",
+      "Watch Chief's chat: Research Rae is looking now, then each step live (Searching remote AI engineering roles, 1 found, 2 found; quick on the scripted model)",
+      "Read the look's end in Chief's chat: each role on a line of its own as its card, with why it fits and Draft my application",
+      "Go back and open Research Rae's chat",
+      "Repeat Chief's chat with the roles in a browser at phone and computer widths, day and night, and in the installed app's window"
+    ],
+    "result": "His CV reaches the finder through Chief's goal, the look runs as Chief's own hand-on, and its roles land in Chief's chat as cards, with nothing sent anywhere. Not a real model: the words are scripted; the PDF reading, the goal card, the gate, each posting's page and the chat are real."
   },
   "chief-screen": {
     "start": "A Chief from before the computer grant, on the stub engine, with a loopback library site signed in",

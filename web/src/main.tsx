@@ -18,7 +18,7 @@ import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, t
 import { remember, resume } from './resume.ts';
 import { nextRun, parseSchedule } from '../../src/routines.ts';
 import * as K from './kept.ts';
-import { Goal } from './goal.tsx';
+import { Goal, RoleCard } from './goal.tsx';
 
 /** The kept week (web/src/kept.ts): what this browser last heard from the computer, shown read-only while it can't be
  *  reached. Demo keeps nothing. */
@@ -248,7 +248,7 @@ const Empty = ({ children }: { children: ReactNode }) => <div className="frame-e
 /** The chat list (calm, Home on a phone and the computer's left pane): Chief first, then each helper by what is going on,
  *  then the crew room — face, name, when, their last line (or what they are doing now) and an unread dot. Chief alone
  *  carries a count: what waits on the person's yes. `q` narrows it by name and last line. */
-function ChatRows({ ctx, q = '', on }: { ctx: Ctx; q?: string; on?: string }) {
+function ChatRows({ ctx, q = '', on, children }: { ctx: Ctx; q?: string; on?: string; children?: ReactNode }) {
   const { state, live } = ctx, out = chiefLocal(ctx).signedOut && !ctx.offline;
   const unread = (id: string) => state.bots.find((b: Json) => b.id === id)?.unread ?? 0;
   const rows = A.chats(state, { signedOut: out }).filter((c) => c.id !== 'room' || live.crew.length > 0)
@@ -263,7 +263,7 @@ function ChatRows({ ctx, q = '', on }: { ctx: Ctx; q?: string; on?: string }) {
         <span className="cl-bottom"><span className={`clamp1 cl-line${c.working && !n ? ' working' : ''}`}>{c.working && !n && <i aria-hidden />}{line}</span>
           {n > 0 ? <span className="cl-count" aria-label={`${n} waiting on you`}>{A.unreadBadge(n)}</span> : dot && <span className="cl-dot" aria-label="Unread" />}</span></span>
     </a></li>;
-  })}</ul>;
+  })}{children && <li>{children}</li>}</ul>;
 }
 
 /** The goal board's row under the chats (phone Home and the computer's left pane): its title and how many roles are on it. */
@@ -311,8 +311,7 @@ function Home(ctx: Ctx) {
         <a className="round-btn" href="#/crew/add" aria-label="Bring a helper on"><Icon name="plus" size={22} /></a>
       </header>
       <HomeNotices ctx={ctx} />
-      <ChatRows ctx={ctx} q={q} />
-      {!q && <GoalRow state={state} />}
+      <ChatRows ctx={ctx} q={q}>{!q && <GoalRow state={state} />}</ChatRows>
       {!q && <JobList state={state} refresh={refresh} />}
       <div className="cl-dock">
         <button type="button" className="round-btn" aria-label="Places" aria-expanded={menu} onClick={() => setMenu(true)}><Icon name="apps" size={22} /></button>
@@ -692,7 +691,8 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
           const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
             : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
-            : l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+            : l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></div>}
+            {l.roles?.map((r) => <RoleCard key={r.id} r={r} refresh={refresh} />)}
             {l.files.map((f) => <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved
             ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
@@ -2212,8 +2212,7 @@ function App() {
           <div className="side-top"><a href="#/" className="brand"><Face who="chief" size={28} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
             <a className="round-btn" href="#/crew/add" aria-label="Bring a helper on"><Icon name="plus" size={20} /></a></div>
           <label className="search-pill"><Icon name="search" size={18} /><input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search" aria-label="Search your chats" /></label>
-          <ChatRows ctx={ctx} q={find} on={v.view === 'helper' ? v.id : v.view === 'chief' || v.view === 'home' ? 'chief' : v.view === 'room' ? 'room' : undefined} />
-          {!find && <GoalRow state={ctx.state} />}
+          <ChatRows ctx={ctx} q={find} on={v.view === 'helper' ? v.id : v.view === 'chief' || v.view === 'home' ? 'chief' : v.view === 'room' ? 'room' : undefined}>{!find && <GoalRow state={ctx.state} />}</ChatRows>
           <nav className="side-more" aria-label="More">{MORE.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}><Icon name={i} size={20} />{l}</a>)}</nav>
           <a href="#/settings" className="side-me" aria-label={`Settings${me ? `, ${me}` : ''}`}>
             <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{(A.meter(ctx.state) || quiet) && <span className="clamp1">{A.meter(ctx.state) || quiet}</span>}</span>

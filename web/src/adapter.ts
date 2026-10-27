@@ -40,7 +40,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; yours?: string[]; draftSubject?: string; draftLink?: string; draftWhy?: string;
+  status: string; evidence?: 'lines' | 'draft' | 'form'; draftTo?: string; yours?: string[]; draftSubject?: string; draftLink?: string; draftWhy?: string;
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
@@ -50,7 +50,11 @@ export type Card = {
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
+  /** An application form the writer filled on the posting's own site, read by crewd from the page: what went in, the
+   *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
+  form?: FormView;
 };
+export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean }[]; note?: string };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password', style: 'Pick a style' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
@@ -89,7 +93,9 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   /** The last line of a job that ended stopped or failed: Try again re-posts the person's own ask for that job. */
   retry?: string;
   /** Chief's Mail watch alert (`inboxOf`), and crewd's cause when Mail watch could not read Gmail. */
-  inbox?: Inbox; mailDown?: string };
+  inbox?: Inbox; mailDown?: string;
+  /** The roles a look for roles added, each its card in Chief's chat (A.rolesIn). */
+  roles?: GoalRole[] };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
@@ -531,7 +537,7 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
  *  crewd's reason; the last job that ended badly today says so until a newer one starts. */
 export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = [], gone: Set<string> = new Set()): Helper {
   const own = asks.filter((a) => a.bot === b.id);
-  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft);
+  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft || a.detail?.form);
   const needs = b.task?.state === 'needs_you' && !chiefDraft;
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
@@ -886,7 +892,7 @@ export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) 
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json, c: Card) => {
     const d = a.detail ?? {};
-    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return d.draft ? 1 : c.helper === 'chief' ? 2 : 3;
+    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return d.draft || d.form ? 1 : c.helper === 'chief' ? 2 : 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
@@ -926,7 +932,7 @@ export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.r
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, by: a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.kind === 'propose' && (d.draft || d.form) ? 'chief' : a.bot, by: a.bot, at: a.at, reply: false };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
@@ -989,6 +995,13 @@ export function card(a: Json, state: Json): Card {
     choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
     return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
+  if (a.kind === 'propose' && d.form) {
+    // Submit is the person's own press, made by crewd on this tap; the helper never has it. No Submit button on the page: no Submit here.
+    const f = d.form, note = f.stop ? `${name} stopped here: ${plain(f.stop).replace(/[^.!?]$/, '$&.')}` : !f.submit ? (f.next ? `This form goes on past this page (its button says “${plain(f.next)}”). Finish it on the site yourself.` : "I couldn't find this form's Submit button. Finish it on the site yourself.") : undefined;
+    return { ...base, kind: 'ok', status: 'Nothing is sent until you press Submit', head: `${name} filled in your application`, words: plain(a.title), evidence: 'form',
+      form: { site: plain(f.site), page: plain(f.page ?? ''), url: String(f.url), filled: (f.filled ?? []).map((x: Json) => ({ label: plain(x.label), value: plain(x.value) })), fields: (f.fields ?? []).map((x: Json) => ({ ...x, key: String(x.label), label: plain(x.label).replace(/\s*\*$/, '') })), ...(note ? { note } : {}) },
+      choices: [...(f.submit && !f.stop ? [{ label: 'Submit', body: { answer: 'allow', scope: 'once' }, primary: true }] : []), { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.draft) {
     // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
     const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
@@ -1012,7 +1025,7 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       ...(d.draft.yours?.length ? { yours: d.draft.yours.map((q: string) => plain(q)) } : {}),
-      choices: d.draft.role ? [{ label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+      choices: d.draft.role ? [{ label: 'Fill it in for me', body: { answer: 'allow', scope: 'once', fill: true }, primary: true }, { label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' } }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, will/won't do, the person's first step and the first job; nothing changes until the yes.
   if (a.kind === 'propose' && d.hire) {
@@ -1108,7 +1121,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
-      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
     const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
@@ -1438,7 +1451,7 @@ export const howItWorks = ['Your helpers live on this computer, and think with a
 export const asName = (t: string) => t.trim().length <= 40 && t.trim().split(/\s+/).length <= 4;
 /** Chief's pitch is the newest line of a thread where the person has only given their name: then he offers the first ideas. */
 export const firstChips = (lines: Line[], state: Json) =>
-  !!state.person?.onboarded && !(state.tasks ?? []).length && lines.filter((l) => l.from === 'me').length === 1 && lines.at(-1)?.from === 'them';
+  !!state.person?.onboarded && !(state.tasks ?? []).length && !(state.asks ?? []).some((a: Json) => a.state === 'open') && lines.filter((l) => l.from === 'me').length === 1 && lines.at(-1)?.from === 'them';
 
 /** The starters Chief offers right after the name: useful from the first tap, and never one that dead-ends in a connection. With Google
  *  not set up yet, the calendar starter sits out; a party plan takes its place. */
@@ -1740,8 +1753,16 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
     const inbox = m.author === 'bot' && watched.has(Number(m.task_id)) ? inboxOf(chatWords(text)) : undefined;
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}), ...(inbox ? { inbox } : {}),
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
-  }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)) })).filter((l: Line) => l.text || l.files.length);
+  }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)), ...(bot === 'chief' && l.from === 'them' ? rolesIn(state, l.text) : {}) })).filter((l: Line) => l.text || l.files.length);
 }
+/** A look's result in Chief's chat names each role it added on a line of its own ("<title> at <company>", crewd's words):
+ *  on the web each is that role's own card under the line; the phone reads the names. */
+const roleLine = (r: GoalRole) => `${r.title} at ${r.co}`;
+function rolesIn(state: Json, text: string) {
+  const all: GoalRole[] = goals(state).flatMap((g: Json) => g.cols.flatMap((c: Json) => c.roles)), roles = text.split('\n').flatMap((x) => all.filter((r) => roleLine(r) === x.trim()));
+  return roles.length ? { roles } : {};
+}
+export const besideRoles = (l: Line) => l.text.split('\n').filter((x) => !l.roles?.some((r) => roleLine(r) === x.trim())).join('\n');
 
 /** Chief's thread (B1): one plain notice where a helper's finished job, with a file, landed in Your things — only from a
  *  done task that delivered files, placed by its time among the dated lines it falls after; nothing before the thread
