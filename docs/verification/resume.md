@@ -15,7 +15,7 @@ Umer pastes his CV, LinkedIn and GitHub lines into Chief's chat and asks for a r
 
 ## Pinned by
 
-`test/resume.test.ts` (the guard's three refusals, the source record, the PDF and Word round trip over HTTP, edit-then-export).
+`test/resume-document.test.ts` (the guard's three refusals, the source record, the PDF and Word round trip over HTTP, edit-then-export).
 
 ## Not built yet
 
