@@ -79,7 +79,9 @@ import { join } from 'node:path';
 // writer's guarded tools and the person-only moves. Owner-directed in the brief; no trim paired, nothing working is cut to fit.
 // Raised 7680 -> 7722 for the interview-prep slice (ch-jobs-crew-prep, +42 net): the writer's crew_prep tool with crewd's
 // page-by-page check of each fact, the prep store on the board, the prep and practice taps and two scripted stub lines. Owner-directed in the brief; no trim paired.
-const BUDGET = 7722;
+// Raised 7722 -> 7739 for the one-link phone pairing (ch-pair-link, +50 net over the 7689 base): the standing link's page and its
+// secret key (src/link.ts, src/pair-page.ts). Raised in the brief; no trim paired.
+const BUDGET = 7739;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

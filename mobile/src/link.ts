@@ -2,7 +2,7 @@
 // web/src/api.ts calls through. Each call is one request, `METHOD /path`, answered like HTTP (src/link.ts).
 import { DeviceLink, LINK_WORDS, LinkError, hostId, pairWithCode, pairWithOffer, secureDeviceStore, migrateGrant, unb64url, type DeviceGrant, type LinkStatus } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
-import { NO_COMPUTER, NO_RELAY, readTyped } from '../../web/src/typed.ts';
+import { NO_COMPUTER, NO_LINK, NO_RELAY, OLD_LINK, readLink, readTyped } from '../../web/src/typed.ts';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
@@ -52,6 +52,20 @@ export async function pair(scanned: string, onWords: (w: string) => void): Promi
   const g = await pairWithOffer(scanned, { name, onWords });
   await store.save(g);
   return g;
+}
+
+/** A link instead of a code: tapped (`crewhouse://pair?code=`), scanned or pasted. The standing page link has no ticket in
+ *  it, so the computer is asked for one now; this phone is the only place it is ever seen. */
+export async function pairLink(text: string, onWords: (w: string) => void): Promise<Grant> {
+  const l = readLink(text);
+  let offer = l?.kind === 'offer' ? l.text : text;
+  if (l?.kind === 'page') {
+    const r = await fetch(`${l.url}/ticket`, { signal: AbortSignal.timeout(10_000) }).catch((e) => { throw new Error(NO_LINK, { cause: e }); });
+    if (r.status === 404) throw new Error(OLD_LINK);
+    offer = (await r.json().catch(() => null))?.offer;
+    if (typeof offer !== 'string') throw new Error(NO_LINK);
+  }
+  return pair(offer, onWords);
 }
 
 /** Typed instead of scanned: one box takes any code, and the person never types an address. The computer's 12-letter

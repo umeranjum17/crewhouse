@@ -79,6 +79,21 @@ ended on "Couldn't find your computer on this Wi-Fi…" about 3 s after Pair.
 Failure proof: a wrong code ("doesn't match"), and the phone off the computer's Wi-Fi ("Couldn't find
 your computer on this Wi-Fi…").
 
+## One link
+
+`./crewhouse link` (and Settings › Phones, the desktop app's Add a phone card) shows one standing link,
+`http://<tailnet address>:<link port>/pair/<key>`. The key is a random secret kept in the settings table
+(`link.pairkey`), not a ticket: opening the page mints a fresh ticket (the kit's two-minute cap, ours is `PAIR_MS`) and
+`/pair/<key>/ticket` returns another for the page's refresh. Everything else, a wrong key included, answers 404,
+because a bot's sandboxed shell shares the host's loopback and must not be able to mint a ticket. The page's button
+is a `crewhouse://pair?code=` link (an `intent://` link on Android that falls back to `?install=1`, the install
+branch, when no app answers). The app takes the tapped link in release builds and Paste a link on its first screen
+(`readLink` in `web/src/typed.ts`), fetches `<link>/ticket`, and pairs through the camera's own handler. The limit,
+said plainly: the link works from any device that holds it and nothing joins until the person at the computer says yes
+to the two words; `./crewhouse link new` replaces the key. Prove it with `scripts/verify/phone-pair-link.mjs`
+(`features/phone-pair-by-link.md`); `LAB_LINK_HOST=` makes the lab listen on this computer's Tailscale address, so the
+emulator's browser opens the page there.
+
 ## The computer is gone: the out-of-touch screen is never a dead end
 
 A phone paired to a computer that no longer answers (stopped, deleted, asleep with nothing kept)

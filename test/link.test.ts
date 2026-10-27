@@ -11,7 +11,7 @@ import { temp } from './tmp.ts';
 import { DeviceLink, pairWithCode, pairWithOffer, type DeviceGrant, type LinkStatus, parseOffer } from '@byokit/pair';
 import { findHost } from '@byokit/relay/device';
 import { startRelay } from '../relay/main.ts';
-import { readTyped } from '../web/src/typed.ts';
+import { readLink, readTyped } from '../web/src/typed.ts';
 import { Link, NEWS } from '../src/link.ts';
 import { sandboxReady } from '../src/engine.ts';
 import { Store } from '../src/db.ts';
@@ -396,6 +396,71 @@ test('the short typed code and exact local CLI words pair once', async () => {
   });
   assert.equal(lan, 403, 'a LAN-addressed request cannot approve');
   assert.match(cli('code'), /Works once; expires/);
+});
+
+test('the standing link opens a page that mints a fresh ticket each time, and stays good after phones use it', async () => {
+  await until(async () => (await http('GET', '/api/state').catch(() => null))?.status === 200);
+  const link: string = (await http('GET', '/api/phones/link')).body.pairLink;
+  assert.match(link, new RegExp(`^http://127\\.0\\.0\\.1:${linkPort}/pair/[\\w-]{22}$`), 'one link: this computer\'s address and a standing key');
+  const visit = async (url = link, ua = 'Mozilla/5.0 (iPhone)') => { const r = await fetch(url, { headers: { 'user-agent': ua } }); return { status: r.status, type: r.headers.get('content-type'), cache: r.headers.get('cache-control'), text: await r.text() }; };
+  const ticket = (page: string) => readLink(page.match(/id="go" class="btn" href="([^"]+)"/)![1].replace(/&amp;/g, '&'));
+
+  // The page says what it is and its one button hands the app a ticket; opening it again mints another.
+  const a = await visit(), b = await visit();
+  assert.equal(a.status, 200);
+  assert.match(a.type!, /^text\/html/);
+  assert.equal(a.cache, 'no-store', 'a ticket is never cached');
+  assert.match(a.text, /Add this phone to Crewhouse/);
+  assert.match(a.text, /Open Crewhouse and join/);
+  const first = ticket(a.text), second = ticket(b.text);
+  assert.equal(first?.kind, 'offer');
+  assert.notDeepEqual(first, second, 'every open mints a fresh ticket');
+  assert.ok(parseOffer((first as any).text).expires > Date.now(), 'and it is live now');
+
+  // The app is not installed: the download comes first, and says to come back. Android Chrome falls back to this same page.
+  assert.match(a.text, /id="install" class="card" hidden/, 'the install step stays folded while the app may be there');
+  const install = await visit(`${link}?install=1`);
+  assert.doesNotMatch(install.text, /id="install" class="card" hidden/);
+  assert.match(install.text, /Crewhouse is not on this phone yet/);
+  assert.match(install.text, /releases\/download\/.+\.apk/, 'the app download');
+  assert.match(install.text, /Come back to this page and tap/);
+  const android = await visit(link, 'Mozilla/5.0 (Linux; Android 16) Chrome/140');
+  const intent = android.text.match(/id="go" class="btn" href="(intent:[^"]+)"/)![1];
+  assert.match(intent, /^intent:\/\/pair\?code=.+#Intent;scheme=crewhouse;package=dev\.crewhouse\.app;S\.browser_fallback_url=.+;end$/);
+  assert.equal(decodeURIComponent(intent.match(/browser_fallback_url=([^;]+)/)![1]), `${link}?install=1`, 'no app: the phone comes back here with the download first');
+
+  // The ticket pairs, once, with the person's yes; the link then opens again for the next phone, and the app's ticket route.
+  const grant = await pairPhone((first as any).text, 'Tapped phone');
+  assert.equal(grant.device.role, 'control');
+  await assert.rejects(pairWithOffer((first as any).text, { name: 'Replay', onWords: () => {} }), /used|run out|expired|match|isn't/i, 'a ticket works once');
+  const viaApp = readLink(link);
+  assert.deepEqual(viaApp, { kind: 'page', url: link }, 'the phone app reads the page link and asks for its own ticket');
+  const json = await visit(`${link}/ticket`);
+  assert.match(json.type!, /^application\/json/);
+  const offer = JSON.parse(json.text).offer as string;
+  assert.notEqual(offer, (second as any).text);
+  const grant2 = await pairPhone(offer, 'Pasted phone');
+  assert.notEqual(grant2.device.id, grant.device.id);
+  assert.ok(ticket((await visit()).text), 'the link still opens after two phones used it');
+
+  // Only the key opens it: not another key, not the bare path, not a POST, and no ticket anywhere crewd shows the person.
+  assert.equal((await visit(link.replace(/[^/]+$/, 'A'.repeat(22)))).status, 404);
+  assert.equal((await visit(`http://127.0.0.1:${linkPort}/pair/`)).status, 404);
+  assert.equal((await fetch(link, { method: 'POST' })).status, 404);
+  assert.equal((await fetch(`${link}/other`)).status, 404);
+  assert.doesNotMatch(JSON.stringify((await http('GET', '/api/phones/link')).body), /byokit-link/i, 'a ticket is not in the status the app reads');
+  const paired = open(grant2);
+  assert.equal((await paired.req('GET', '/api/phones/link')).status, 403, 'a phone cannot read the link');
+  assert.equal((await paired.req('POST', '/api/phones/link')).status, 403, 'or replace it');
+  paired.link.stop();
+
+  // A new link replaces the old one: the old stops opening, the new one works.
+  const renewed: string = (await http('POST', '/api/phones/link', {})).body.pairLink;
+  assert.notEqual(renewed, link);
+  assert.equal((await visit()).status, 404, 'the old link no longer opens');
+  assert.ok(ticket((await visit(renewed)).text));
+  assert.equal((await http('POST', '/api/phones/link', {}, {})).status, 403, 'only this computer can replace it');
+  for (const g of [grant, grant2]) await http('DELETE', `/api/phones/${g.device.id}`);
 });
 
 test('the relay address: local dial, public offers and typed phone pairing, with no hosted default', async (t) => {

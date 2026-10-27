@@ -66,6 +66,7 @@ Sign-in uses BYOKit's existing account wizard on the host; an AI key never moves
 | `./crewhouse open` | Reopens Crewhouse in your browser |
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
+| `./crewhouse link [new]` | Prints the one link that adds a phone: open it on a phone with Tailscale on and the app opens and asks to join (the page offers the app first if it is not installed). It does not run out; `new` replaces it |
 | `./crewhouse phones code \| pending \| approve '<two words>'` | Pairs a phone or the installed web app from the terminal; `code` also prints a relay code to use away from home |
 | `./crewhouse phones web [off]` | Serves the installed web app at this computer's Tailscale https address and prints it |
 | `./crewhouse uninstall [--all] [--yes]` | Removes what Crewhouse installed |
@@ -88,7 +89,7 @@ Existing shared installs must first update through the one-person migration rele
 
 The phone app (Android) is in preview. Debug-signed APKs are on the [releases page](https://github.com/umeranjum17/crewhouse/releases). Pair it under Settings, Phones on the computer ([TRY-IT.md](../TRY-IT.md#3-the-phone-app)), or ask Chief to add your phone. Every paired phone uses your crew; you can also add one that only watches. Quiet hours hold notifications across a restart and send one when they end. To reach the computer away from home, use Tailscale or [run your own relay](../relay/README.md). There's no built-in one.
 
-The app pairs with the computer by QR code or a typed code, over the home Wi-Fi, over Tailscale, or through a relay you run yourself. Its notifications only ever say "Crewhouse has news". The words themselves come over the encrypted link.
+The app pairs with the computer by a link (`./crewhouse link`: open it on the phone, or tap **Paste a link** on the app's first screen), a QR code or a typed code, over the home Wi-Fi, over Tailscale, or through a relay you run yourself. Its notifications only ever say "Crewhouse has news". The words themselves come over the encrypted link.
 
 Keep the phone app up to date alongside the computer. An older preview shows “Get the latest Crewhouse app to keep chatting.” Open Chief’s chat and tap the sentence to download the current preview.
 

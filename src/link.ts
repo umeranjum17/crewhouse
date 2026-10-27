@@ -1,6 +1,6 @@
 // @byokit/pair owns encrypted pairing and grants. Crewhouse owns bind policy and person authority:
 // loopback and Tailscale, with temporary LAN access for desktop pairing only.
-import { execFile } from 'node:child_process'; import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process'; import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
@@ -12,6 +12,7 @@ import { advertise, routes, tailscaleState as kitTailscaleState, isPeer, type Bo
 import { RelayClient, isExpoToken, linkUrl, type RelayStatus, type WebSubscription } from '@byokit/relay';
 import { bindPhoneKey, phoneReceipt, replacePhoneKey } from '@byokit/cloud';
 import { relayOrigin, type Config } from './config.ts';
+import { pairHtml } from './pair-page.ts';
 import type { Store } from './db.ts';
 import type { Watcher } from './desktop.ts';
 
@@ -180,7 +181,7 @@ export class Link {
     const want = new Set(this.hosts()), before = [...this.servers.keys()].join(', ');
     for (const [host, s] of this.servers) if (!want.has(host)) { s.close(); this.servers.delete(host); }
     await Promise.all([...want].filter((h) => !this.servers.has(h)).map((host) => new Promise<void>((resolve) => {
-      const s = createServer((req, res) => this.page(req, res));
+      const s = createServer((req, res) => req.url?.startsWith('/pair/') ? this.pairPage(req, res) : this.page(req, res));
       s.on('upgrade', (req, socket, head) => {
         if (!req.url?.startsWith('/link')) return socket.destroy();
         this.wss.handleUpgrade(req, socket, head, (ws) => this.wss.emit('connection', ws));
@@ -348,7 +349,7 @@ export class Link {
     // `push: 'missing'`: this app build, or Expo, has no Android push credential yet (README, "Phone notifications").
     const missing = this.setting('push.refused') || this.host?.devices().some((g) => this.setting(`phone.push.${g.id}`) === 'missing');
     return { on: this.cfg.linkPort > 0, lan: this.lan, pinned: !!this.cfg.linkHost, hosts: [...this.servers.keys()], tailscale: routes(this.ifaces(), this.tailnetIPs).tailscale.length > 0, anywhere: this.anywhere,
-      web: this.web, relay: this.relay, relayPublic: this.relayPublic, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
+      pairLink: this.pairLink(), web: this.web, relay: this.relay, relayPublic: this.relayPublic, relayStatus: this.relayStatus, vapid: this.client?.vapidKey ?? null, push: missing ? 'missing' : 'ready',
       asking: [...this.asking.values()].map(({ id, name, words, role, offer }) => ({ id, name, words, role, offer })) };
   }
 
@@ -368,6 +369,28 @@ export class Link {
     if (first && this.first?.token !== token) throw Object.assign(new Error('another first-phone code replaced this one'), { status: 409 });
     if (first) this.first!.expires = expires;
     return { qr: text, typed: typed ? `${typed.short}-${typed.code}@${typed.relay}` : this.host.code({ role, meta }).code, expires, urls };
+  }
+
+  /** The one link for the person's own devices: the link port's address (Tailscale's when this computer has one) and a
+   *  standing key. It names this computer and a purpose and is not a ticket; its page mints a ticket each time it opens. */
+  pairLink(): string {
+    const ips = this.servers.size ? phoneAddresses([...this.servers.keys()], this.ifaces(), this.tailnetIPs) : [], ip = ips.find((a) => this.tailnetIPs.includes(a)) ?? ips[0];
+    return ip ? `http://${ip}:${this.cfg.linkPort}/pair/${this.pairKey()}` : '';
+  }
+  private pairKey(): string { let k = this.setting('link.pairkey'); if (!k) this.put('link.pairkey', k = randomBytes(16).toString('base64url')); return k; }
+  /** A new key: the old link stops opening (for a link that reached someone it should not have). */
+  renewPairLink() { this.db.run("DELETE FROM settings WHERE key = 'link.pairkey'"); return this.status(); }
+
+  /** `/pair/<key>` is the link's page and `/pair/<key>/ticket` a ticket for the app, as JSON. Each open mints a fresh
+   *  ticket, which only the phone that opened it sees; the key alone opens either, so a bot's shell on this computer's
+   *  loopback gets nothing. The person at the computer still says yes to the two words. */
+  private pairPage(req: IncomingMessage, res: ServerResponse) {
+    const [path, query = ''] = req.url!.split('?'), [, , key = '', rest] = path.split('/'), want = Buffer.from(this.pairKey()), got = Buffer.from(key), here = req.headers.host ?? '';
+    if (req.method !== 'GET' || got.length !== want.length || !timingSafeEqual(got, want) || (rest && rest !== 'ticket') || !/^[\w.:\-[\]]+$/.test(here)) return void res.writeHead(404).end();
+    const offer = this.host.offer({ role: 'control', urls: this.urls() }).text, code = encodeURIComponent(offer), back = encodeURIComponent(`http://${here}/pair/${key}?install=1`),
+      href = /Android/.test(req.headers['user-agent'] ?? '') ? `intent://pair?code=${code}#Intent;scheme=crewhouse;package=dev.crewhouse.app;S.browser_fallback_url=${back};end` : `crewhouse://pair?code=${code}`;
+    res.writeHead(200, { 'content-type': rest ? 'application/json' : 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https://api.github.com; frame-ancestors 'none'" });
+    res.end(rest ? JSON.stringify({ offer, href }) : pairHtml(href, `/pair/${key}/ticket`, query.includes('install=1')));
   }
 
   /** Codes to type instead of scanning, through the relay: its short code (which computer) and link's pairing code. */

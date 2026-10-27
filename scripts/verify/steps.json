@@ -618,5 +618,16 @@
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The prep reads as one page: every company fact shows the site it was read from as a link, each likely question says why it is asked, and the pay, visa, right-to-work, notice and consent fields are listed empty under Only you can answer these. The practice happens in the writer's chat, answered by typing or the mic; the reply gives what landed, what to tighten and an invitation to try again. Nothing is sent, filled in or signed, and no interviewer audio plays. Not a real company site or a real model."
+  },
+  "phone-pair-link": {
+    "start": "the real app on an emulator, with the link the computer prints open in the phone's browser and the app not installed yet",
+    "steps": [
+      "Open the link on the phone and tap Open Crewhouse and join",
+      "Read that the app is not on this phone yet, and install it",
+      "Open the same link again and tap Open Crewhouse and join",
+      "Confirm at the computer that the two words match",
+      "Clear the app, tap Paste a link on the first screen, paste the same link and tap Join"
+    ],
+    "result": "The app opens from the tapped link and again from the pasted link, each lands on Home, and the computer lists the phone as paired"
   }
 }

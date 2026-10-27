@@ -1487,12 +1487,13 @@ function PairCodeCard({ offer, left, typed, link, title, sub, onAway, onNew, onC
 }) {
   return (
     <div className="card pair" aria-label={title}>
-      {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
+      {left > 0 || link.pairLink ? <div className="qr"><PairQR text={link.pairLink || offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
       <div className="grow">
         <b>{title}</b>
         {sub}
         <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
-        <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
+        {link.pairLink ? <p className="small">Or send the phone this link. It keeps working, so use it again any time:<b style={{ display: 'block', margin: '6px 0', overflowWrap: 'anywhere', userSelect: 'all' }}>{link.pairLink}</b><button className="btn" onClick={() => void navigator.clipboard?.writeText(link.pairLink).then(() => toast('Link copied'), () => {})}>Copy the link</button></p>
+          : <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>}
         {left > 0 && <p className="small">Can’t scan? {link.web ? <>Open <b style={{ overflowWrap: 'anywhere' }}>{new URL(link.web).host}</b> on the phone and type this code: </> : "With the phone on this computer's Wi‑Fi, type this code in the phone app: "}<b className="pair-typed">{offer.typed}</b></p>}
         {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
           : <button className="link inline small" onClick={onAway}>Show a code for a phone away from home</button>)}

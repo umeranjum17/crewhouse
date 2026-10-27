@@ -1,7 +1,7 @@
 import { LINK_WORDS } from '@byokit/pair';
-import { MISSING, NO_COMPUTER, NO_RELAY, TYPO } from '../../web/src/typed.ts';
+import { MISSING, NO_COMPUTER, NO_LINK, NO_RELAY, OLD_LINK, TYPO } from '../../web/src/typed.ts';
 
-const SAID = new Set<string>([...Object.values(LINK_WORDS), NO_COMPUTER, NO_RELAY, TYPO, MISSING]);
+const SAID = new Set<string>([...Object.values(LINK_WORDS), NO_COMPUTER, NO_RELAY, NO_LINK, OLD_LINK, TYPO, MISSING]);
 
 /** One plain line for a pairing failure, and the retry is the action — never the machinery's own words.
  *  The link's own sentences already say which mistake it was (the computer said no, the code didn't match, that
