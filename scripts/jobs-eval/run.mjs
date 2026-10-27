@@ -69,7 +69,9 @@ async function helper() {
   if (!kestrel) throw new Error('the seeded board is missing: run the seed step first');
   const real = o.engine !== 'stub', ms = Number(o.wait ?? 900) * 1000, out = { arm: 'helper', engine: real ? 'openclaw' : 'stub', cases: {} };
   if (real) {
-    const row = await until('Claude to read as signed in', async () => (await api('GET', '/api/accounts')).find((a) => a.provider === 'claude' && a.signedIn && !a.restingUntil), 120_000);
+    let seen;
+    const row = await until('Claude to read as signed in', async () => (seen = (await api('GET', '/api/accounts')).find((a) => a.provider === 'claude'))?.signedIn && !seen.restingUntil && seen, 120_000)
+      .catch((e) => { throw new Error(`${e.message}; crewd's last view of that account: ${JSON.stringify(seen)}`); });
     const m = await api('GET', '/api/accounts/1/claude/model'), model = o.model || m.dflt || m.models[0]?.id;
     await api('PUT', '/api/accounts/1/claude/model', { model });
     out.model = { account: 'claude', id: model, plan: row.plan ?? null, offered: m.models.map((x) => x.id) };
