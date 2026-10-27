@@ -90,6 +90,6 @@ ui tap '^Interview 1$' >/dev/null; see ' Northwind · London$'
 ui tap '^Frontend Engineer at Northwind$' >/dev/null
 shot prep-entry ' Open your interview prep$'
 ui tap '^Open your interview prep$' >/dev/null
-shot prep ' Questions you may be asked$'
+shot prep ' QUESTIONS YOU MAY BE ASKED$'
 node "$VERIFY_DIR/steps.mjs" "$OUT" phone-goal
 echo "phone-goal: Home's goal row, the board, a drafted role with its draft, the Submit card and his Submit, the prep entry and the prep, day and night"
