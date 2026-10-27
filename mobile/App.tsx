@@ -41,7 +41,8 @@ import { glowOf } from '../web/src/office.tsx';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { readLink } from '../web/src/typed.ts';
-import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
+import { connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
+import { startNews, stopNews } from './src/news';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
 import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
@@ -113,6 +114,8 @@ export default function App() {
   const [phone, setPhone] = useState<boolean | null>(null);
   const leavePhone = () => { void setPhoneMode(false); setPhone(false); };
   useEffect(() => { loadGrant().then(setGrant).catch(() => setGrant(null)); }, []);
+  // Android keeps the link while the app is closed, for news (src/news.ts): on while paired, off once unpaired.
+  useEffect(() => { if (grant) startNews(); else if (grant === null) stopNews(); }, [grant?.secretKey, grant === null]);
   useEffect(() => { phoneMode().then(setPhone).catch(() => setPhone(false)); }, []);
   return (
     <Theme.Provider value={t}>
@@ -694,13 +697,12 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 }
 
 // ---------- pairing ----------
-/** What this phone knows about its own news: allowed and working (on), said no (off), or this build can't push at all
- *  (missing — the phone still shows everything the moment the app is opened). */
+/** What this phone knows about its own news: allowed and working (on), said no (off), or an iPhone build that can't push
+ *  (missing — the phone still shows everything the moment the app is opened). Android shows the link's news itself. */
 async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
-  // No push credential in this build: never ask, so "You're in" carries no permission dialog and no line.
-  if (ask && !(await canPush().catch(() => true))) return 'missing';
   const { status } = ask ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
   if (status !== 'granted') return 'off';
+  if (Platform.OS === 'android') return 'on';
   const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data, (e) => (noPushCredential(e) ? '' : undefined));
   return token === '' ? 'missing' : 'on';
 }
@@ -753,8 +755,7 @@ function Pair({ onPaired, onBack, onPut, paste, link }: { onPaired: (g: Grant) =
     Linking.clearInitialURL();
     void tryCode(tapped);
   }, [tapped]);
-  // The pairing success asks for the news permission once, but only where push can work: on a build with no
-  // push credential nothing is asked and "You're in" carries no notification line at all.
+  // The pairing success, this phone's first run with its computer, asks for the news permission.
   useEffect(() => { if (!done) return; void pushState(true).catch(() => {}); }, [!!done]);
   if (done) {
     return (
@@ -1400,10 +1401,25 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     setAsked(Linking.getLinkingURL());
     const sub = Linking.addEventListener('url', (e) => setAsked(e.url));
     const off = onChip(setAsked); // the status bar's actions open the same addresses
-    return () => { sub.remove(); off(); };
+    // A tapped notification (src/news.ts) opens its address too; the one that opened the app is read on mount.
+    const tapped = (r: Notifications.NotificationResponse | null) => {
+      const url = r?.notification.request.content.data?.url;
+      if (typeof url === 'string') { setAsked(url); Notifications.clearLastNotificationResponse(); }
+    };
+    tapped(Notifications.getLastNotificationResponse());
+    const tap = Notifications.addNotificationResponseReceivedListener(tapped);
+    return () => { sub.remove(); off(); tap.remove(); };
   }, []);
   useEffect(() => {
     if (asked && /^crewhouse:\/\/needs\/?$/.test(asked)) { setAsked(null); Linking.clearInitialURL(); go({ view: 'home' }, true); return; } // Home leads with what needs you
+    // A notification's chat, or its card while it still waits (one answered elsewhere leaves Home to show what's left).
+    const news = asked && state && /^crewhouse:\/\/(?:chat\?bot=([a-z0-9-]+)|card\?id=(\d+))$/.exec(asked);
+    if (news) {
+      setAsked(null);
+      const c = news[2] ? A.cards(state).find((x) => x.id === +news[2]) : undefined;
+      if (c) { if (c.kind === 'unlock') go({ view: 'chief' }); else setSheet(c); } else go(news[1] === 'chief' ? { view: 'chief' } : news[1] ? { view: 'helper', id: news[1] } : { view: 'home' }, !news[1]);
+      return;
+    }
     // The bubble's panel: Settings (a button waiting on an app), or a helper's own screen to take the wheel or watch.
     const to = asked && (/^crewhouse:\/\/settings\/?$/.test(asked) ? { view: 'phone' as const } : /^crewhouse:\/\/screen\?bot=([a-z0-9-]+)(&watch=1)?$/.exec(asked));
     if (to) { setAsked(null); Linking.clearInitialURL(); go(Array.isArray(to) ? { view: 'helper', id: to[1], tab: to[2] ? 'watch' : 'screen' } : to); return; }
@@ -2907,7 +2923,7 @@ function Versions({ state, hint = true }: { state: Json; hint?: boolean }) {
 }
 function ThisPhone({ state, grant, status, person, writer, refresh, go, back, onForget, onClear }: { state: Json; grant: Grant; status: Status; person: Json; writer: boolean; refresh: () => void; go: Ctx['go']; back: [string, () => void]; onForget: () => void; onClear: () => void }) {
   const t = useLook();
-  // This phone knows its own news state: allowed and working, said no, or this build can't push at all.
+  // This phone knows its own news state: allowed and working, said no, or an iPhone build that can't push at all.
   const [push, setPush] = useState<'on' | 'off' | 'missing' | null>(null);
   useEffect(() => { void pushState().then(setPush).catch(() => {}); }, []);
   const quiet = /^(\d\d):(\d\d)-(\d\d):(\d\d)$/.exec(String(person?.quiet ?? ''));
@@ -2937,7 +2953,7 @@ function ThisPhone({ state, grant, status, person, writer, refresh, go, back, on
           </View>
         </View>
         <View style={[s.listRow, line, { minHeight: 80 }]}>
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>News when the app is closed</T><T tone="ink2">{push === 'missing' ? PUSH_WORDS.missing : push === 'off' ? 'Off for Crewhouse on this phone' : 'Content-free: it only says something happened'}</T></View>
+          <View style={{ flex: 1 }}><T style={s.rowTitle}>News when the app is closed</T><T tone="ink2">{push === 'missing' ? PUSH_WORDS.missing : push === 'off' ? 'Off for Crewhouse on this phone' : Platform.OS === 'android' ? "Chief's replies, finished jobs and what needs your yes" : 'Content-free: it only says something happened'}</T></View>
           {sw(push === 'on', 'News when the app is closed', () => void news(), push === null || push === 'missing')}
         </View>
         <View style={[s.listRow, line, { minHeight: 80 }]}>

@@ -25,7 +25,7 @@ test('the installed web app subscribes a browser push address through the relay 
   const calls: any[] = [];
   const link = Object.assign(new Link({} as any, db, async () => null) as any, {
     client: { vapidKey: 'BFx-key', subscribe: async (d: string, s: any) => calls.push(['subscribe', d, s]), unsubscribe: async (d: string) => calls.push(['unsubscribe', d]), notify: async (n: any) => { calls.push(['notify', n]); return {}; } },
-    relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }] },
+    relayStatus: 'online', host: { devices: () => [{ id: 'pixel' }], broadcast: () => {} },
   });
   assert.equal(link.status().vapid, 'BFx-key');
   const web = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
@@ -51,7 +51,7 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
   after(() => expo.close());
   const db = new Store(temp('crewhouse-push'));
   const devices = [{ id: 'pixel' }, { id: 'moto' }, { id: 'ipad' }];
-  const link = Object.assign(new Link({} as any, db, async () => null) as any, { host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push` });
+  const link = Object.assign(new Link({} as any, db, async () => null) as any, { host: { devices: () => devices, broadcast: () => {} }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push` });
   const phone = (id: string, body: unknown) => link.request('POST /api/push', { ...body as object, build: 'p9b' }, { id, role: 'control' });
   assert.equal((await phone('pixel', { expo: 'ExponentPushToken[pixel-1]' })).status, 200);
   assert.equal((await phone('moto', { expo: 'ExponentPushToken[moto-1]' })).status, 200);
@@ -81,6 +81,10 @@ test('push through a stubbed Expo: exactly one content-free push per paired phon
   assert.equal(link.status().push, 'missing');
   await phone('ipad', { off: true });
   assert.equal(link.status().push, 'ready');
+  // An Android phone shows the link's news itself: no token, no credential, and its notifications read as on.
+  await phone('ipad', { local: true });
+  assert.equal(link.status().push, 'ready');
+  assert.equal(db.get("SELECT value FROM settings WHERE key = 'phone.push.ipad'")!.value, 'local');
   db.close();
 });
 
@@ -100,14 +104,15 @@ test('questions, finished helper jobs and Chief lines push only content-free new
   const db = new Store(temp('crewhouse-news'));
   t.after(() => db.close());
   const devices = ['pixel', 'moto'].map((id) => ({ id }));
+  const heard: any[] = []; // what a listening phone's link hears
   const link = Object.assign(new Link({} as any, db, async () => null) as any, {
-    host: { devices: () => devices }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
+    host: { devices: () => devices, broadcast: (e: any) => heard.push(e) }, pushUrl: `http://127.0.0.1:${(expo.address() as AddressInfo).port}/push`,
   });
   for (const d of devices) await link.request('POST /api/push', { expo: `ExponentPushToken[${d.id}]`, build: 'p9b' }, d);
   // news() is fire-and-forget: retain the real sends so silence and exact counts can be checked without a sleep.
   const pending: Promise<void>[] = [];
   const tell = link.tell.bind(link);
-  link.tell = (id: string) => { const send = tell(id); pending.push(send); return send; };
+  link.tell = (id: string, e?: object) => { const send = tell(id, e); pending.push(send); return send; };
   db.run("INSERT INTO asks (id, bot, member, title, detail) VALUES (1, 'scout', 1, 'Private question', 'Private detail')");
   db.run("INSERT INTO tasks (id, bot, member, state, result) VALUES (1, 'scout', 1, 'done', 'Private finished work')");
   db.run("INSERT INTO messages (id, bot, member, author, text) VALUES (1, 'chief', 1, 'bot', 'Private Chief line')");
@@ -120,11 +125,13 @@ test('questions, finished helper jobs and Chief lines push only content-free new
     await Promise.all(pending);
     assert.equal(got.length, i + 1, `${event.kind} sends exactly one batch`);
     assert.deepEqual(got[i], devices.map((d) => ({ to: `ExponentPushToken[${d.id}]`, title: NEWS, sound: 'default', collapseId: `e${i + 1}` })));
+    assert.deepEqual(heard.at(-1), { kind: 'news', data: { id: `e${i + 1}`, e: { seq: i + 1, ...event } } }, 'the link carries the event itself, for the phone to word');
   }
   db.run("INSERT INTO tasks (id, bot, member, state, result, routine) VALUES (2, 'chief', 1, 'done', 'All clear', 1), (3, 'chief', 1, 'done', 'Private Chief result', NULL), (4, 'scout', 1, 'done', 'All clear', 2)");
   for (const task of [2, 3, 4]) link.news({ seq: task + 2, kind: 'task.done', bot: task === 4 ? 'scout' : 'chief', data: { task } });
   await Promise.all(pending);
   assert.equal(got.length, 3, 'All clear routines and Chief task completion give no push');
+  assert.equal(heard.length, 3, 'nor any news over the link');
 });
 
 test('a paired phone renews the Add-a-phone code it is looking at; the rest of phone admin stays on the computer', async () => {
@@ -664,6 +671,9 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
       live.prepare('UPDATE people SET quiet = NULL WHERE id = 1').run();
       await until(async () => pushes.length > 0, 40_000);
       assert.deepEqual(pushes.flat().map((p) => [p.to, p.title]), [['ExponentPushToken[kept]', NEWS]], 'only the retained phone gets content-free held news');
+      const news = () => a.events.filter((e) => e.kind === 'news');
+      await until(async () => news().length > 0);
+      assert.deepEqual(news().map((n) => [n.data.id, n.data.e]), [[pushes[0][0].collapseId, undefined]], 'its link hears the held news too, with no event to word');
       await until(async () => !live.prepare("SELECT 1 FROM settings WHERE key = 'push.held.1'").get());
       await a.req('POST', '/api/bots/chief/messages', { text: 'hello after upgrade' });
       await until(async () => pushes.length >= 2);
@@ -680,6 +690,11 @@ test('phones, push and quiet hold survive a restart after the P1 migration', asy
       await a.req('POST', '/api/bots/chief/messages', { text: 'tell me again' });
       await until(async () => replies().length > said + 1 && told().includes(replies()[said + 1]));
       assert.ok(!told().includes(replies()[said]), 'switched off, Chief’s reply pushes nothing');
+      await until(async () => news().some((n) => n.data.id === replies()[said + 1]));
+      const linked = news().map((n) => n.data.id);
+      assert.ok(linked.includes(replies()[said + 1]) && !linked.includes(replies()[said]), 'and the link carries the same news, and only that');
+      const reply = news().find((n) => n.data.id === replies()[said + 1])!.data.e;
+      assert.deepEqual([reply.kind, reply.bot, reply.data.author, typeof reply.data.text], ['message', 'chief', 'bot', 'string'], 'Chief’s reply itself, for the phone to show');
     } finally { live.close(); }
     assert.equal((await http('PUT', '/api/people/42', { name: 'Umer' })).status, 200, 'legacy route shape edits only the person');
     const snapshot = (await a.req('GET', '/api/state')).body;

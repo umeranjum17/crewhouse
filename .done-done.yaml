@@ -120,6 +120,9 @@ journeys:
     command: 'timeout -k 10 900 bash scripts/verify/video-job.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   phone-mic-fallback:
     command: 'FM_MEM_GATE=~/firstmate/config/fm-mem-gate.sh timeout -k 10 1800 bash scripts/verify/phone-mic-fallback.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # News with the app closed: backgrounded, killed and after a reboot, on its own emulator (phone-news.md).
+  phone-news:
+    command: 'FM_MEM_GATE=~/firstmate/config/fm-mem-gate.sh timeout -k 10 2400 bash scripts/verify/phone-news.sh "$DONE_DONE_EVIDENCE_ROOT"'
   voice:
     command: 'timeout -k 10 600 bash scripts/verify/voice.sh "$DONE_DONE_EVIDENCE_ROOT"'
   image:

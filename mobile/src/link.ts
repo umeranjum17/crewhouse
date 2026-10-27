@@ -7,6 +7,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { browse, scan, type BrowseService } from '@byokit/discover';
 import * as K from '../../web/src/kept.ts';
 import { knock } from '../../web/src/adapter.ts';
@@ -167,23 +168,10 @@ export function connect(grant: Grant, onEvent: (e: any) => void, onStatus: (s: S
   return { link: o.link, call: o.call, learn: o.learn, facts: o.facts, push: o.push, release };
 }
 
-/** True when this failure is a build with no Android push credential (README, "Phone notifications"): the same
- *  Firebase words the Expo-token fetch fails with on such a build. */
+/** True when this failure is a build with no push credential: the words the Expo-token fetch fails with on such a build. */
 export const noPushCredential = (e: unknown) => {
   const err = e as Error & { code?: string };
   return err?.code === 'ERR_NOTIFICATIONS_NO_EXPERIENCE_ID' || /firebase|fcm|google-services/i.test(String(err?.message ?? ''));
-};
-/** Whether this build can push at all, without asking the person: the native device token needs no permission,
- *  only the credential. False means asking would be pointless. Anything else that goes wrong (a simulator, a
- *  transient failure) throws, and the caller carries on as today. */
-export async function canPush(): Promise<boolean> {
-  try {
-    await Notifications.getDevicePushTokenAsync();
-    return true;
-  } catch (e) {
-    if (noPushCredential(e)) return false;
-    throw e;
-  }
 };
 
 /** One link frame carries about 1 MB: a bigger body (documents, as base64) rides a stream in pieces instead, its JSON as
@@ -235,21 +223,15 @@ function open(grant: Grant, onEvent: (e: any) => void, onStatus: (s: Status) => 
       void SecureStore.setItemAsync(SAID, JSON.stringify(said));
     }).catch(() => {});
   };
-  /** Where to push this phone "Crewhouse has news": its Expo push token once the person allows notifications (asked once
-   *  per launch), `{off}` if they said no, `{missing}` when this app build has no Android push credential yet (README,
-   *  "Phone notifications"), so the computer's Settings says so instead of pushes going nowhere. A network hiccup says
-   *  nothing and tries again on the next reconnect. */
+  /** Where to push this phone "Crewhouse has news", once the person allows notifications (asked once per launch): an
+   *  Android phone shows the link's news itself (`{local}`, src/news.ts), an iPhone gives its Expo push token; `{off}` if
+   *  they said no, `{missing}` when an iPhone build can't get a token, so the computer's Settings says so instead of
+   *  pushes going nowhere. A network hiccup says nothing and tries again on the next reconnect. */
   const push = async () => {
-    await Notifications.setNotificationChannelAsync('default', { name: 'Crewhouse', importance: Notifications.AndroidImportance.DEFAULT });
-    // No push credential in this build: say `{missing}` without ever asking the person — the pairing success
-    // skips its ask on the same answer (`canPush` above, App.tsx `pushState`).
-    if (!(await canPush().catch(() => true))) {
-      await call('POST', '/api/push', { missing: true });
-      return;
-    }
     const { status } = asked ? await Notifications.getPermissionsAsync() : await Notifications.requestPermissionsAsync();
     asked = true;
     if (status !== 'granted') return call('POST', '/api/push', { off: true });
+    if (Platform.OS === 'android') return call('POST', '/api/push', { local: true });
     const token = await Notifications.getExpoPushTokenAsync().then((t) => t.data, (e) => (noPushCredential(e) ? '' : undefined));
     if (token !== undefined) await call('POST', '/api/push', token ? { expo: token } : { missing: true });
   };
