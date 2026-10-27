@@ -7,7 +7,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import * as A from '../../web/src/adapter.ts';
-import { writeSteps } from './steps.mjs';
 
 const LAB = process.env.LAB, SERIAL = process.env.SERIAL, OUT = process.env.OUT;
 if (!LAB || !SERIAL || !OUT) throw new Error('set LAB, SERIAL and OUT for the owned lab and emulator');
@@ -90,4 +89,3 @@ for (const [theme, night] of [['light', 'no'], ['dark', 'yes']]) {
   ws.close();
   console.log(`${theme}: ${stallMs}ms event-loop stall; accept queue reached ${queue}; phone automatically reconnected with Scout at work`);
 }
-writeSteps(OUT, 'phone-link-stall');

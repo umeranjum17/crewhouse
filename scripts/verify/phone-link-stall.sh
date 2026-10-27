@@ -22,6 +22,7 @@ trap cleanup EXIT
 bash scripts/verify/pair-lab.sh up "$ROOT" > "$OUT/lab.log" 2>&1
 LAB="$LAB" node scripts/verify/phone-pair-link.mjs --serial "$SERIAL" --apk "$APK" --out "$LAB/pair" > "$LAB/pair.log" 2>&1
 LAB="$LAB" SERIAL="$SERIAL" OUT="$OUT" node scripts/verify/phone-link-stall.mjs
+node scripts/verify/steps.mjs "$OUT" phone-link-stall
 mkdir -p "$OUT/pwa/shots" "$OUT/pwa/motion"
 node scripts/verify/phone-link-stall-pwa-plan.mjs "$LAB" "$OUT/pwa" > "$LAB/pwa-plan.json"
 "${FM_MEM_GATE:-$HOME/firstmate/config/fm-mem-gate.sh}" xvfb-run -a -s '-screen 0 1920x1200x24' node scripts/verify/pwa-shell.mjs "$LAB/pwa-plan.json" > "$OUT/pwa-run.json"
