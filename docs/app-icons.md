@@ -1,6 +1,6 @@
 # App icon exports
 
-`node scripts/icons.mjs` draws the committed exports from `web/src/art.ts` with ImageMagick. Chief's artwork and Pocket Pals palette are shared across platforms; small desktop/favicon sizes use his existing simplified face. Native launchers supply their own corners, so the native and store masters have a full opaque background.
+`node scripts/icons.mjs` draws the committed exports from `web/src/art.ts` with ImageMagick. Every launcher, store, desktop, PWA and favicon export is Chief's Geo face (`critter('chief')`, the blue circle in a captain's cap) without its black disc, on the dark canvas; the Android themed layer is the same face in white with its eyes, smile and cap band cut out. The notification glyph and the phone bubble still draw the old helmet. Native launchers supply their own corners, so the native and store masters have a full opaque background.
 
 | Surface | Assets | Wiring |
 | --- | --- | --- |
