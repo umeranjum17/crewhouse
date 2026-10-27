@@ -80,7 +80,7 @@ for t in day night; do
   for w in 390 1280; do
     echo "chief-profile$T/h/chief/details$T$t$T$w$T!!document.querySelector('.st-profile-hero')"
     echo "settings$T/settings$T$t$T$w$T!!document.querySelector('.settings')"
-    echo "home$T/$T$t$T$w$T!!document.querySelector('.stack-home')"
+    echo "home$T/$T$t$T$w$T!!document.querySelector('.chat-list')"
   done
   echo "hire-card$T/chief$T$t${T}390$T!!document.querySelector('.hire-name')$T$LAST$NAMES"
 done | shots design

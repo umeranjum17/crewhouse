@@ -55,7 +55,7 @@ sql "UPDATE tasks SET created_at = created_at - ?, updated_at = updated_at - ? W
 for _ in $(seq 40); do [ "$(nudges)" != 0 ] && break; sleep 0.5; done
 [ "$(nudges)" = 1 ] || { echo "quiet-nudge-pwa: expected one nudge, saw $(nudges)" >&2; exit 1; }
 # The paired app's own thread shows it: Chief's page read over the link.
-THEN="(async () => { for (let i = 0; i < 80 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 80 && !/has been quiet for a while/.test(document.body.innerText); i++) await new Promise((r) => setTimeout(r, 100)); return /has been quiet for a while/.test(document.body.innerText); })()" \
+THEN="(async () => { for (let i = 0; i < 80 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 80 && !/has been quiet for a while/.test(document.body.innerText); i++) await new Promise((r) => setTimeout(r, 100)); return /has been quiet for a while/.test(document.body.innerText); })()" \
   WIDTHS=390x844 bash scripts/verify/screens.sh "$OUT/quiet-nudge-pwa" chief "${WEB}#/"
 node scripts/verify/steps.mjs "$OUT" quiet-nudge-pwa
 echo "quiet-nudge-pwa: the paired 390 app showed Chief's one line; captures in $OUT/quiet-nudge-pwa"

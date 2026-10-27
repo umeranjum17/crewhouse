@@ -38,15 +38,15 @@ try {
   // The app takes the key from the hash and then routes on it: go Home only once the key is taken.
   await until('the key taken', () => run(`!location.hash.startsWith('#person')`));
   await run(`location.hash = '#/'`);
-  await until('Home with a working face', () => run(`!!document.querySelector('.stack-home .face[data-motion="work"] img')`));
-  const clip = await run(`(async () => { await document.fonts.ready; const e = document.querySelector('.stack-home .face[data-motion="work"]'); e.scrollIntoView({ block: 'center' }); await new Promise(requestAnimationFrame); const r = e.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height, scale: 3 }; })()`);
-  const who = await run(`document.querySelector('.stack-home .face[data-motion="work"] img')?.alt ?? ''`);
+  await until('Home with a working face', () => run(`!!document.querySelector('.chat-list .face[data-motion="work"] img')`));
+  const clip = await run(`(async () => { await document.fonts.ready; const e = document.querySelector('.chat-list .face[data-motion="work"]'); e.scrollIntoView({ block: 'center' }); await new Promise(requestAnimationFrame); const r = e.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height, scale: 3 }; })()`);
+  const who = await run(`document.querySelector('.chat-list .face[data-motion="work"] img')?.alt ?? ''`);
   const shoot = async (tag, n, every) => { const shots = []; for (let i = 0; i < n; i++) { const { data } = await send('Page.captureScreenshot', { clip }); shots.push(data); writeFileSync(join(out, `${tag}-${String(i).padStart(2, '0')}.png`), Buffer.from(data, 'base64')); await sleep(every); } return shots; };
   const moving = await shoot('work', 30, 100);
-  const motions = await run(`[...document.querySelectorAll('.stack-home .face')].map((e) => e.dataset.motion)`);
+  const motions = await run(`[...document.querySelectorAll('.chat-list .face')].map((e) => e.dataset.motion)`);
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-  await until('every face still', () => run(`[...document.querySelectorAll('.stack-home .face')].every((e) => e.dataset.motion === 'still')`), 5000);
-  await run(`Promise.all([...document.querySelectorAll('.stack-home .face img')].map((i) => i.decode()))`);
+  await until('every face still', () => run(`[...document.querySelectorAll('.chat-list .face')].every((e) => e.dataset.motion === 'still')`), 5000);
+  await run(`Promise.all([...document.querySelectorAll('.chat-list .face img')].map((i) => i.decode()))`);
   await sleep(300);
   const still = await shoot('reduced', 15, 100);
   const page2 = await send('Page.captureScreenshot', {});

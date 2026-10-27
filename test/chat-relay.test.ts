@@ -56,7 +56,7 @@ test('helper relays in Chief carry long and bullet-only answers', { skip: !bin &
   if (evidence) mkdirSync(evidence, { recursive: true });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await send('Page.navigate', { url: `${base}/?day#person=${readFileSync(join(cfg.stateDir, 'person.key'), 'utf8')}` });
-  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await until('Home', () => run("!!document.querySelector('.chat-list')"), 30_000);
   await run('location.hash = "#/chief"');
   await until('Chief\'s box and opening overlay gone', () => run("!!document.querySelector('.chat .dock textarea') && !document.querySelector('.splash')"), 30_000);
   const relays: string[] = [];

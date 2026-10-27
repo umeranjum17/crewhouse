@@ -11,6 +11,7 @@
 // ?demo=ownerdefault (just after Hello: the stored name is still 'Owner', only the address is set).
 // ?demo=crew1, crew5, crew12, crew30 (the office at that many helpers).
 // ?demo=live (Scout part way down Saturday's dinner plan, live under Chief's thread).
+// ?demo=thread (a calm morning in Chief's thread: the recap, the resume as a document, new roles, Scout still looking).
 // ?demo=building (Scribe mid-build: the question answered, the workbook not yet delivered).
 // ?demo=longthread (a signed-out thread long enough to scroll, for the thread-clear regression test).
 // &slowaccounts holds the accounts answer 3 s (the real engine's sign-in check is that slow).
@@ -353,6 +354,28 @@ if (variant === 'live') {
   const [hi, saturday, , weekday, pip] = pages.chief.messages;
   pages.chief.messages = [[hi, 14], [weekday, 12], [pip, 10], [saturday, 2.5], [{ id: 6, author: 'chief', text: 'Of course. Scout is on it now.' }, 2.4]]
     .map(([m, ago]) => ({ ...m, at: now - ago * min }));
+}
+// ?demo=thread: a morning in Chief's thread — the quiet recap, two asks of the person's own, the resume as a document,
+// the new roles in one list (NEW from there), and Scout still looking.
+if (variant === 'thread') {
+  state.asks = [];
+  const job = task(48, 'scout', 'More frontend roles in London', 'working', { origin: 'chief', created_at: now - 3 * min,
+    body: 'Umer said Go to:\n1. Search the boards for frontend roles in London\n2. Check each one against the resume\n3. Send the best ones' });
+  Object.assign(bots.find((b) => b.id === 'scout')!, { task: job, step: { kind: 'task.progress', at: now - min, data: { text: 'Checking Wise and Monzo against your resume' } } });
+  state.tasks.unshift(job);
+  events.push(ev(40, 3, 'task.created', 'scout', { task: 48, title: job.title, origin: 'chief' }), ev(40.5, 2.8, 'run.admitted', 'scout', { task: 48 }),
+    ev(41, 2, 'task.progress', 'scout', { task: 48, text: 'Search the boards for frontend roles in London' }),
+    ev(42, 1, 'task.progress', 'scout', { task: 48, text: 'Checking Wise and Monzo against your resume' }));
+  pages.chief = { messages: [
+    { id: 1, author: 'bot', recap: true, at: now - 50 * min, text: 'Good morning, Umer. While you were away:\n- Scout found 3 new roles that match\n- Scribe finished your resume\n- Nothing needs you right now' },
+    { id: 2, author: 'person', at: now - 40 * min, text: 'Add that I am AWS certified.' },
+    { id: 3, author: 'bot', at: now - 39 * min, text: 'Added. It sits under Certifications: AWS Certified Developer, Associate.' },
+    { id: 4, author: 'person', at: now - 30 * min, text: 'Make my resume from that.' },
+    { id: 5, author: 'bot', at: now - 28 * min, text: 'Here it is. One page, your newest work first.' },
+    { id: 6, author: 'system', at: now - 28 * min, text: 'Delivered files/resume.docx: The Resume is ready: 4 sections' },
+    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\n- **Frontend engineer**, Monzo · London · [monzo.com](https://monzo.com/careers)\n- **Senior React developer**, Wise · Remote · [wise.jobs](https://wise.jobs)\n- **UI engineer**, Deliveroo · London · [careers.deliveroo.co.uk](https://careers.deliveroo.co.uk)\n\nScout is checking two more now.' },
+  ] };
+  Object.assign(bots.find((b) => b.id === 'chief')!, { firstUnread: 7 });
 }
 // ?demo=longthread: a signed-out thread long enough to scroll, for the thread-clear regression test:
 // every provider button and every line must clear the bars and the composer at any scroll position.

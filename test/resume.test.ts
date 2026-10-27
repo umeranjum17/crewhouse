@@ -115,8 +115,10 @@ test('a cold relaunch reopens the last place, a named link wins, and a thread th
     const a=luminance(getComputedStyle(e).color),b=luminance(getComputedStyle(e.closest('.ev')).backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
   assert.ok(contrast >= 4.5, `the draft subject is readable on its paper in night mode: ${contrast}`);
   await run("location.hash = '#/'");
-  await until('the same draft author on Home', () => run("!!document.querySelector('.st-asks img[alt=Scout]')"));
+  await until('Chief carries the draft on Home', () => run("!!document.querySelector('.chat-list a.cl-row[href=\"#/chief\"] .cl-count')"));
   await cold(`${base}/?demo=live#/chief`);
+  // The steps fold under the live row; opened, the step in hand turns.
+  await until('Chief’s steps', () => run("!!document.querySelector('.live-detail .live-todos') && (document.querySelector('.live-detail').open = true)"));
   await until('Chief’s live progress to animate', () => run("document.querySelector('.live-todos .doing .tick')?.getAnimations().length > 0"));
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   await until('reduced motion to stop the live progress', () => run('document.getAnimations().length === 0'));

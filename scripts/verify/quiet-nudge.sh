@@ -53,7 +53,7 @@ for _ in $(seq 40); do [ "$(nudges)" != 0 ] && break; sleep 0.5; done
 sleep 6 # four more ticks: the same quiet stretch never speaks again
 [ "$(nudges)" = 1 ] || { echo "quiet-nudge: the nudge repeated" >&2; exit 1; }
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
-THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS="390x844 1280x800" bash "$REPO/scripts/verify/screens.sh" "$OUT/quiet-nudge" chief "$B/#person=$PERSON"
 back $((20 * 3600 * 1000))
 for _ in $(seq 40); do [ "$(sql "SELECT state FROM tasks WHERE id = $TASK" | grep -o unsure)" = unsure ] && break; sleep 0.5; done

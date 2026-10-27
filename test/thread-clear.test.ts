@@ -69,7 +69,7 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
   // Home is the crew view; `#/chief` is Chief's thread, the route below drives. An anchored `#/chief/m<id>` keeps its
   // hash too (its own test below).
   await send('Page.navigate', { url: `${base}/?demo=longthread&night#/` });
-  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await until('Home', () => run("!!document.querySelector('.chat-list')"), 30_000);
   assert.equal(await run("!!document.querySelector('.home-chat')"), false, '#/ is the crew view, not Chief\'s thread');
   for (const route of ['#/chief']) {
     await send('Page.navigate', { url: `${base}/?demo=longthread&night${route}` });
@@ -88,9 +88,8 @@ test('a phone thread clears its bars: every sign-in button above the composer, n
       if (el.scrollHeight - el.scrollTop - el.clientHeight <= 2) return true;
       const top = el.getBoundingClientRect().top;
       return [...el.querySelectorAll('.card.ask')].some((c) => { const t = c.getBoundingClientRect().top - top; return t >= -1 && t <= 8; }); })()`), 10_000);
-    // Chief's composer gains its starter bar a moment after the thread (the ideas arrive with the state), which makes the
-    // dock taller and the thread shorter. Measure only once that bar is in, or the bottom line reads the dock before it moves.
-    await until('the composer starter bar', () => run("!!document.querySelector('.chat .dock .c-bar')"), 30_000);
+    // Chief's composer gains its attach button with the state, after the thread; measure only once it is in.
+    await until('the composer attach button', () => run("!!document.querySelector('.chat .dock .c-clip')"), 30_000);
 
     // Scroll the thread itself where it scrolls (its own lines column once contained, the document before that).
     const scrollThread = (f: number) => run(`(() => {

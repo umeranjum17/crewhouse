@@ -54,11 +54,11 @@ SHOTS="$OUT/shots"
 # Before: what a new person sees on the phone, and on the computer with no web address yet.
 WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$LAB/context" phone-where "$SHELL_URL"
 WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$LAB/context" phone-pair-sheet "${SHELL_URL}#/pair"
-THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.sh-chief'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
+THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.chat-list'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
   bash "$REPO/scripts/verify/screens.sh" "$LAB/context" computer-phones-off "$B/#person=$PERSON"
 # The web address: the computer's own app on the link port (a secure context standing in for the https address).
 api /api/phones/web -X PUT -d "{\"address\":\"${SHELL_URL%/}\"}" > /dev/null
-THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.sh-chief'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
+THEN="async () => { for (let i = 0; i < 80 && !document.querySelector('.chat-list'); i++) await new Promise((r) => setTimeout(r, 100)); location.hash = '#/settings/phones'; await new Promise((r) => setTimeout(r, 1500)); return true; }" \
   bash "$REPO/scripts/verify/screens.sh" "$LAB/context" computer-phones-on "$B/#person=$PERSON"
 QR=$(api /api/phones/pair -d '{"role":"control"}' | node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0, "utf8")).qr)')
 case "$QR" in "${SHELL_URL}#byokit-link:"*) ;; *) echo "phone-web-pair: the QR is not a link to the web app" >&2; exit 1;; esac
@@ -76,11 +76,11 @@ done
 sleep 1; axi screenshot "$LAB/context/phone-two-words-night-390.png" > /dev/null
 echo "phone-web-pair: the computer shows: ${ASKED#* }"
 api /api/phones/answer -d "{\"id\":${ASKED%% *},\"yes\":true}" > /dev/null
-for _ in $(seq 100); do axi eval "!!document.querySelector('.sh-chief a')" 2>/dev/null | grep -q true && break; sleep 0.5; done
+for _ in $(seq 100); do axi eval "!!document.querySelector('.chat-list a')" 2>/dev/null | grep -q true && break; sleep 0.5; done
 sleep 1; axi screenshot "$LAB/context/phone-paired-home-day-390.png" > /dev/null
 
 # Chief, from the phone: open his card, type through the page's own box, press Send.
-axi eval "() => { document.querySelector('.sh-chief a')?.click(); return true; }" > /dev/null
+axi eval "() => { document.querySelector('.chat-list a')?.click(); return true; }" > /dev/null
 for _ in $(seq 50); do axi eval "!!document.querySelector('.home-chat textarea')" 2>/dev/null | grep -q true && break; sleep 0.3; done
 axi eval "(() => { const t = document.querySelector('.home-chat textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'Good morning Chief. Please say hello back in one short sentence.'); t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()" > /dev/null
 sleep 0.5; axi eval "() => { document.querySelector('.home-chat button.send')?.click(); return true; }" > /dev/null

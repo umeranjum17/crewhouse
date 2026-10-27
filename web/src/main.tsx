@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, DoneCard, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -178,7 +178,6 @@ function LiveControl({ h, word, refresh }: { h: A.Helper; word: string; refresh:
   );
 }
 
-/** The phone's chats, with Chief and the crew pinned before the recent helpers. */
 /** The owner's row until the house is fully set up: how many of the three jobs are left. None of them is this
  *  device's to do once paired — their calls are refused over the link — so the row waits for the computer. */
 function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | null; tick: number }) {
@@ -189,16 +188,22 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
   return <a className="card nudge" href="#/settings"><span className="grow">Getting set up: {left} {left === 1 ? 'thing' : 'things'} left</span><b>›</b></a>;
 }
 
-/** Chief's thread's header (J03): his face and name, what he does — or, while he cannot work, the one wait that says why
- *  (the sign-in card's own test, or the computer out of reach) — and the gear to his profile. One header at every width:
- *  the tab bar and the side menu carry Home. */
+/** A thread's header (calm): a floating pill over the thread — back, who it is, and their menu — so the conversation
+ *  comes first and the header recedes. `sub` is said only while it matters (Chief out of reach, or waiting on a sign-in). */
+function PillHead({ who, name, href, label, sub, wait }: { who: Helper | 'chief'; name: string; href: string; label: string; sub?: string; wait?: boolean }) {
+  return <header className="pill-head chat-head">
+    <a href="#/" className="ph-btn back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}><Icon name="back" size={22} /></a>
+    <span className="ph-who"><a className="ch-art" href={href} aria-label={label}><Face who={who} size={32} /></a>
+      <span className="grow"><b className="ch-name"><a href={href}>{name}</a></b>{sub && <span className={`ch-status${wait ? ' wait' : ''}`}>{sub}</span>}</span></span>
+    <a className="ph-btn ph-menu" href={href} aria-label={label}><Icon name="more" size={22} /></a>
+  </header>;
+}
+
+/** Chief's thread's header (J03): his pill, with the one wait that says why he cannot work (the sign-in card's own
+ *  test, or the computer out of reach). */
 function ChiefHead({ ctx }: { ctx: Ctx }) {
   const out = chiefLocal(ctx).signedOut && !ctx.offline, wait = out || ctx.offline;
-  return <header className="home-bar is-chat chief-head">
-    <a className="ch-art" href={CHIEF_PROFILE} aria-label="Chief's profile"><Face who="chief" size={44} /></a>
-    <span className="grow"><h2 className="ch-name"><a href={CHIEF_PROFILE}>Chief</a></h2><p className={`ch-status${wait ? ' wait' : ''}`}>{wait ? chiefWord(ctx.live, out, ctx.offline) : 'Hands out the jobs'}</p></span>
-    <a className="icon-btn st-gear" href={CHIEF_PROFILE} aria-label="Chief's profile"><Icon name="settings" size={20} /></a>
-  </header>;
+  return <PillHead who="chief" name="Chief" href={CHIEF_PROFILE} label="Chief's profile" sub={wait ? chiefWord(ctx.live, out, ctx.offline) : undefined} wait={wait} />;
 }
 
 /** The desk's right column beside Chief's chat (J03): the question that matters most (not one his thread already shows),
@@ -214,10 +219,11 @@ function ChiefRail({ state, live, refresh }: { state: Json; live: A.OfficeView; 
       <AskCard c={ask} who={who} onDone={refresh} />
     </section>}
     {today.length > 0 && <section className="home-section" aria-label="Also today"><div className="label">Also today</div>
-      {today.map((r) => { const h = crew.find((x) => x.id === r.helper);
-        return <a key={r.helper + r.title} className="st-card" href={hrefOf(r.helper)} style={{ background: h ? art.colourOf(h.kind) : undefined }}>
-          {h && <Face who={h} size={44} />}<span className="grow"><span className="st-top"><b className="semi">{r.title}</b><span className="st-pill">{r.word}</span></span><span className="st-sub">{r.sub}</span></span></a>; })}
+      <ul className="rail-rows">{today.map((r) => { const h = crew.find((x) => x.id === r.helper);
+        return <li key={r.helper + r.title}><a className="rail-row" href={hrefOf(r.helper)}>{h && <Face who={h} size={32} />}
+          <span className="grow"><b className="clamp1">{r.title}</b><span className="clamp1">{r.sub}</span></span><span className="rail-word">{r.word}</span></a></li>; })}</ul>
     </section>}
+    {!ask && !today.length && <JobList state={state} refresh={refresh} />}
   </>;
 }
 
@@ -237,115 +243,72 @@ const PairRow = () => <div className="card nudge pair-row"><span className="grow
 
 const Empty = ({ children }: { children: ReactNode }) => <div className="frame-empty">{children}</div>;
 
-/** Home (Stack J02): the greeting, then Chief's card — what he has for you, or his own word, and his box — then Today,
- *  one row per job a helper is on or finished today, in the helper's colour, then Hand me a job. On a phone Chief's
- *  asks are Today's first rows (only Chief asks: a crew row never does); on a computer they sit in the column beside,
- *  under "Chief has N things for you", and Today leaves them out so no ask shows twice. Chief's thread is its own page. */
+/** The chat list (calm, Home on a phone and the computer's left pane): Chief first, then each helper by what is going on,
+ *  then the crew room — face, name, when, their last line (or what they are doing now) and an unread dot. Chief alone
+ *  carries a count: what waits on the person's yes. `q` narrows it by name and last line. */
+function ChatRows({ ctx, q = '', on }: { ctx: Ctx; q?: string; on?: string }) {
+  const { state, live } = ctx, out = chiefLocal(ctx).signedOut && !ctx.offline;
+  const unread = (id: string) => state.bots.find((b: Json) => b.id === id)?.unread ?? 0;
+  const rows = A.chats(state, { signedOut: out }).filter((c) => c.id !== 'room' || live.crew.length > 0)
+    .filter((c) => !q.trim() || `${c.name} ${c.line}`.toLowerCase().includes(q.trim().toLowerCase()));
+  if (!rows.length) return <p className="cl-none">Nothing matches “{q.trim()}”.</p>;
+  return <ul className="chat-list" aria-label="Chats">{rows.map((c) => {
+    const n = c.id === 'chief' ? live.counts.needs : 0, dot = !n && unread(c.id) > 0;
+    const line = n ? A.chiefHas(live) : c.working ?? c.line;
+    return <li key={c.id}><a className={`cl-row${on === c.id ? ' on' : ''}${n || dot ? ' unread' : ''}`} href={hrefOf(c.id)} aria-current={on === c.id ? 'page' : undefined}>
+      {c.id === 'room' ? <span className="cl-room" aria-hidden><Icon name="crew" size={22} /></span> : <Face who={c.who} size={52} />}
+      <span className="grow cl-text"><span className="cl-top"><b className="clamp1">{c.name}</b>{c.at > 0 && <time>{A.when(c.at)}</time>}</span>
+        <span className="cl-bottom"><span className={`clamp1 cl-line${c.working && !n ? ' working' : ''}`}>{c.working && !n && <i aria-hidden />}{line}</span>
+          {n > 0 ? <span className="cl-count" aria-label={`${n} waiting on you`}>{A.unreadBadge(n)}</span> : dot && <span className="cl-dot" aria-label="Unread" />}</span></span>
+    </a></li>;
+  })}</ul>;
+}
+
+/** The goal board's row under the chats (phone Home and the computer's left pane): its title and how many roles are on it. */
+const GoalRow = ({ state }: { state: Json }) => !state.goals?.length ? null : <a className="cl-row cl-goal" href="#/goal"><span className="cl-room" aria-hidden><Icon name="jobs" size={22} /></span>
+  <span className="grow cl-text"><b>Your goal</b><span className="clamp1 cl-line">{state.goals.length === 1 ? `${state.goals[0].goal.title}: ` : `${state.goals.length} goals: `}{state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board</span></span><Icon name="next" size={18} /></a>;
+
+/** The places that are not a chat, behind the round menu button: the crew, kept work, routines, apps and settings. */
+const PLACES_MORE: [string, string, IconName][] = [['#/crew', 'Your crew', 'crew'], ['#/things', 'Your things', 'copy'], ['#/routines', 'Routines', 'clock'], ['#/apps', 'Apps', 'apps'], ['#/settings', 'Settings', 'settings']];
+function PlacesMenu({ goal, onClose }: { goal: boolean; onClose: () => void }) {
+  return <div className="places-menu" role="dialog" aria-label="Places" onClick={onClose}>
+    <nav onClick={(e) => e.stopPropagation()}>{[...(goal ? [['#/goal', 'Your goal', 'jobs'] as [string, string, IconName]] : []), ...PLACES_MORE].map(([h, l, i]) =>
+      <a key={h} href={h} onClick={onClose}><Icon name={i} size={22} /><span className="grow">{l}</span><Icon name="next" size={18} /></a>)}</nav>
+  </div>;
+}
+
+/** Home (calm, after Messages): your initial for settings and a round + to hire across the top, the account and setup
+ *  notices only while they matter, then the chat list, then the jobs to hand Chief. A floating pill searches the list
+ *  and the round button beside it opens every other place. Every ask is Chief's, counted on his row. */
 function Home(ctx: Ctx) {
-  const { state, live, refresh, tick, accounts } = ctx;
-  const out = chiefLocal(ctx).signedOut && !ctx.offline;
-  const toChief = async (t: string, files?: { name: string; type: string; data: string }[]) => { const ok = await attempt(() => api.post('chief', t, undefined, undefined, files), undefined, true); if (ok) { refresh(); go('#/chief'); } return ok; };
-  const jobs = useMemo(() => new Map(A.work(state).map((w) => [w.helper, w])), [state]);
-  const n = live.counts.needs, name = A.displayName(state.person), crew = A.crew(state), kept = A.things(state).length;
-  const word = chiefWord(live, out, ctx.offline), plainWord = /^(Free|At work|Waiting)$/.test(word);
-  // Under "Chief has N things for you", what he has (two named, the rest counted; a helper gone quiet counts too, its
-  // Stop card waiting in his thread); else his latest line, or on the first day what he does.
-  const quiet = live.crew.filter((c) => c.stuck && c.seat === 'working');
-  const said = A.chats(state, { signedOut: out })[0], heads = [...live.needs.map((c) => c.head.replace(/\?$/, '')), ...quiet.map((c) => `${c.name} has gone quiet`)];
-  const line = n ? (heads.length > 2 ? `${heads.slice(0, 2).join('. ')}. And ${heads.length - 2} more.` : `${heads.join('. ')}.`)
-    : said.at > 0 ? said.line : crew.length ? '' : "Hand me a job. I'll bring the right helper on, and ask you first.";
-  // A held job (resting, or waiting on a sign-in) is not crewd's current task, so it comes from the job list.
-  const held = new Map<string, string>((state.tasks as Json[]).filter((t) => t.state === 'paused').map((t) => [t.bot, A.plain(t.title)]));
-  const today = A.roster(live.crew).filter((c) => jobs.has(c.id) || held.has(c.id) || glowOf(c, live).cls === 'done');
+  const { state, refresh, tick, accounts } = ctx;
+  const [q, setQ] = useState(''), [menu, setMenu] = useState(false);
+  const me = A.displayName(state.person), held = (state.tasks as Json[]).some((t) => t.state === 'paused');
   return (
-    <div className={`page stack stack-home${n ? ' has-asks' : ''}`}>
-      <header className="st-head">
-        <span className="grow"><h1 className="wide">{A.greeting().replace(/^Good (.)/, (_, c: string) => c.toUpperCase())}{name ? `, ${name}.` : '.'}</h1>
-          <span className="st-date">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span></span>
-        <a className="icon-btn st-gear" href="#/settings" aria-label="Settings"><Icon name="settings" size={20} /></a>
-        <button className="btn st-hand" onClick={() => document.querySelector<HTMLTextAreaElement>('.sh-chief textarea')?.focus()}><Icon name="plus" size={20} />Hand Chief a job</button>
+    <div className="page calm-home">
+      <header className="cl-head">
+        <a className="me-av" href="#/settings" aria-label={`Settings${me ? `, ${me}` : ''}`}>{(me[0] ?? '·').toUpperCase()}</a>
+        <span className="grow" />
+        <a className="round-btn" href="#/crew/add" aria-label="Bring a helper on"><Icon name="plus" size={22} /></a>
       </header>
-      <div className="st-body">
-        <div className="st-pri">
-          {demo && <PairRow />}
-          <AccountCard accounts={accounts} onReady={refresh} />
-          <SetupRow state={state} accounts={accounts} tick={tick} />
-          <NewsOffer tick={tick} />
-          {A.resting(state) && <div className="card nudge st-rest"><Icon name="clock" size={22} /><span className="grow"><b className="semi">{A.resting(state)}.</b>
-            <span>{today.some((c) => held.has(c.id)) ? `${today.filter((c) => held.has(c.id)).map((c) => c.name).join(' and ')}'s job waits, then picks up by itself.` : "I'll pick things back up then."} Nothing moves to another AI without you.</span></span></div>}
-          {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
-          {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
-          <section className="sh-chief" aria-label="Chief">
-            <a className="sh-top" href="#/chief"><Face who="chief" size={64} />
-              <span className="grow"><b className="semi">{n ? A.chiefHas(live) : plainWord ? `Chief is ${word.toLowerCase()}` : 'Chief'}</b>{!n && !plainWord && <span className="st-word">{word}</span>}{line && <span className="st-line">{line}</span>}</span></a>
-            {n > 0 && <div className="sh-acts"><a className="btn go" href="#/chief">Chat with Chief</a></div>}
-            <Composer placeholder={crew.length ? 'Tell Chief anything…' : 'Give Chief a job…'} onSend={toChief} {...typeInto('chief')} />
-          </section>
-          {crew.length ? (n > 0 || today.length > 0) && <>
-            <div className="st-label"><span>Today</span></div>
-            <div className="st-today">
-              {live.needs.map((c) => <AskRow key={c.id} c={c} state={state} />)}
-              {today.map((c) => <TodayRow key={c.id} c={c} live={live} job={jobs.get(c.id)} held={held.get(c.id)} />)}
-            </div>
-          </> : <>
-            <div className="st-label"><span>Your crew</span></div>
-            <div className="st-empty"><b className="wide">No helpers yet.</b><span>Pick a job below. Chief brings a helper on for it, and you say yes first.</span></div>
-          </>}
-          {!!state.goals?.length && <a className="st-room" href="#/goal"><span className="grow"><b className="semi">Your goal</b><span>{state.goals.length === 1 ? `${state.goals[0].goal.title}: ` : `${state.goals.length} goals: `}{state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board</span></span><Icon name="next" /></a>}
-          {kept > 0 && <a className="st-kept" href="#/things"><span className="st-fan" aria-hidden><i /><i /><i /></span><span className="grow"><b className="semi">Kept</b><span>{kept} finished {kept === 1 ? 'job' : 'jobs'} and their files</span></span><Icon name="next" /></a>}
-          <JobList state={state} refresh={refresh} />
-        </div>
-        {!n && !crew.length && <aside className="st-asks st-how" aria-label="How it works"><div className="st-label"><span>How it works</span></div>
-          <ol>{['You tell Chief a job, in your own words.', 'Chief brings a helper on for it. You say yes first.', 'Nothing is sent, paid or deleted without you.'].map((t) => <li key={t}>{t}</li>)}</ol>
-          <p><Icon name="lock" size={20} />You can see or forget anything the crew remembers.</p></aside>}
-        {n > 0 && <aside className="st-asks" aria-label={A.chiefHas(live)}>
-          <div className="st-label"><span>{A.chiefHas(live)}</span></div>
-          {live.needs.map((c) => <HomeAsk key={c.id} c={c} state={state} onDone={refresh} />)}
-          {quiet.map((c) => <a key={c.id} className="st-cc" href="#/chief"><span className="st-cc-top"><Face who={c} size={40} /><span className="st-pill needs-k">{A.WORDS.needs}</span></span>
-            <b className="semi">{c.name} has gone quiet</b><span>Stop the job, or take control, in Chief's chat.</span></a>)}
-        </aside>}
+      {demo && <PairRow />}
+      <AccountCard accounts={accounts} onReady={refresh} />
+      <SetupRow state={state} accounts={accounts} tick={tick} />
+      <NewsOffer tick={tick} />
+      {A.resting(state) && <div className="card nudge st-rest"><Icon name="clock" size={22} /><span className="grow"><b className="semi">{A.resting(state)}.</b>
+        <span>{held ? 'What waits picks up by itself then.' : "I'll pick things back up then."} Nothing moves to another AI without you.</span></span></div>}
+      {A.gettingReady(state) && <div className="card nudge"><span className="grow">{A.gettingReady(state)}</span></div>}
+      {A.update(state) && <div className="card nudge"><span className="grow">{A.update(state)!.words}</span><a className="btn go" href={A.update(state)!.url} target="_blank" rel="noreferrer">Download</a></div>}
+      <ChatRows ctx={ctx} q={q} />
+      {!q && <GoalRow state={state} />}
+      {!q && <JobList state={state} refresh={refresh} />}
+      <div className="cl-dock">
+        <button type="button" className="round-btn" aria-label="Places" aria-expanded={menu} onClick={() => setMenu(true)}><Icon name="apps" size={22} /></button>
+        <label className="search-pill"><Icon name="search" size={20} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search your chats" /></label>
       </div>
+      {menu && <PlacesMenu goal={!!state.goals?.length} onClose={() => setMenu(false)} />}
     </div>
   );
-}
-
-/** One of Today's rows (Stack J02): the job a helper is on, or the one it finished today, in the helper's colour — the
- *  job, then who has it and how far — under the one status every screen reads (office.tsx glowOf). Crew never ask the
- *  person: a waiting row says "Waiting for Chief". */
-function TodayRow({ c, live, job, held }: { c: A.OfficeMember; live: A.OfficeView; job?: A.Work; held?: string }) {
-  const glow = glowOf(c, live), done = job || held ? undefined : A.landed(c, live);
-  const how = job ? (A.waitsOnYou(c) ? A.WAIT_CHIEF : job.line) : held ? c.status : done?.files[0] ? `Made “${done.files[0].name}”` : '';
-  return <a className="st-card" href={hrefOf(c.id)} style={{ background: art.colourOf(c.kind) }} aria-label={`${c.name}: ${glow.word}`}>
-    <Face who={c} size={44} />
-    <span className="grow"><span className="st-top"><b className="semi">{job?.title ?? held ?? done?.title}</b><span className={`st-pill ${glow.cls}`}>{glow.word}</span></span>
-      <span className="st-sub">{how ? `${c.name} · ${how}` : c.name}</span></span>
-  </a>;
-}
-
-/** One of Chief's asks in the computer's side column (Stack J02): who, what he asks and why in one line, then the way on.
- *  Home commits nothing: the yes opens the review sheet, where it is said for real; Not now answers no. */
-function HomeAsk({ c, state, onDone }: { c: A.Card; state: Json; onDone: () => void }) {
-  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === (c.by ?? c.helper)) ?? 'chief';
-  const yes = c.choices[0], deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
-  const line = c.hire ? [c.hire.role, c.hire.first_job && `First job: ${c.hire.first_job}`, 'Nothing changes until you say yes'].filter(Boolean).join('. ') + '.'
-    : c.kind === 'spend' ? `${c.question ?? c.words} Anything that costs money asks every time.` : c.question ?? c.words;
-  return <article className="st-cc" aria-label={`${c.head}: ${A.WORDS.needs}`}>
-    <span className="st-cc-top"><Face who={who} size={40} /><span className="st-pill needs-k">{A.WORDS.needs}</span></span>
-    <b className="semi">{c.head}</b>{line !== c.head && <span>{line}</span>}
-    <span className="st-cc-acts"><a className="btn go" href={askHref(c)}>{c.review ? 'Review order' : yes?.label ?? 'Answer…'}</a>
-      {deny && <button className="btn" onClick={() => void answer(c, deny.body).then((ok) => ok && onDone())}>{deny.label}</button>}</span>
-  </article>;
-}
-
-/** One of Chief's asks as a Today row on a phone: what he asks, in pink, under "Needs you"; a tap opens it. */
-function AskRow({ c, state }: { c: A.Card; state: Json }) {
-  const who = c.hire ? { kind: c.hire.kind, name: c.hire.name } : A.crew(state).find((h) => h.id === (c.by ?? c.helper)) ?? 'chief';
-  const of = c.hire?.first_job ? ` · first job: ${c.hire.first_job}` : c.helper !== 'chief' && typeof who === 'object' ? ` · for ${who.name}` : '';
-  return <a className="st-card st-ask" href={askHref(c)} aria-label={`${c.head}: ${A.WORDS.needs}`}>
-    <Face who={who} size={44} />
-    <span className="grow"><span className="st-top"><b className="semi">{c.head}</b><span className="st-pill needs-k">{A.WORDS.needs}</span></span>
-      <span className="st-sub">Chief asks{of}</span></span>
-  </a>;
 }
 
 /** Chief's thread: his bar, the pinned Needs you and his chat, with (on a desk) the side column of who is on what. */
@@ -648,18 +611,6 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   // line of his after it: a fresh install shows it under what he says when the person answers, never between
   // "What shall I call you?" and their own name.
   const firstAnswer = id === 'chief' ? lines.slice(lines[0]?.from === 'them' ? 1 : 0).find((l) => l.from === 'them' && l.text)?.id : undefined;
-  // The newest finished sheet or page in Chief's thread is a Done card until the person speaks again, opens it or says
-  // Later (Stack J16a); a person's line after it ends the moment.
-  const [kept, setKept] = useState(keptDone);
-  const made = (f: A.FileView) => (f.kind === 'sheet' || f.kind === 'page') && !f.review && !A.sentFile(f);
-  const doneLine = id === 'chief' ? lines.findLast((l) => l.from === 'me' || l.files.some(made)) : undefined;
-  const doneFile = doneLine?.from === 'me' ? undefined : doneLine?.files.find((f) => made(f) && !kept.includes(f.url));
-  const doneBy = doneFile && makerOf(state, A.fileSource(doneFile.url)?.bot ?? '');
-  const keep = (f: A.FileView, later: boolean) => {
-    const put = (urls: string[]) => { try { localStorage.setItem(KEPT_DONE, JSON.stringify(urls.slice(-200))); } catch { /* this visit only */ } setKept(urls); };
-    put([...kept, f.url]);
-    if (later) toast(`Kept: ${f.name}`, { label: 'Undo', run: () => put(kept) });
-  };
   // A quick end goes unsaid only when its reply is in the thread to say it; a reply the thread drops leaves the end line.
   const replied = !!ln?.task && (page?.messages ?? []).some((x: Json) => x.task_id === ln.task && x.author === 'bot' && lines.some((l) => l.id === x.id));
   // The New pill's tap: back to the newest line and pinned again — the same hand a send is.
@@ -730,13 +681,12 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
           const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
             : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
-            : l.text && !(doneBy && l.id === doneLine?.id) && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
-            {l.files.map((f) => f === doneFile && doneBy ? <DoneCard key={f.url} f={f} who={doneBy} text={l.text || f.name} settle={(later) => keep(f, later)} />
-              : <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
+            : l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.text} latest={l.id === newestAnswer} /></div>}
+            {l.files.map((f) => <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved
             ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
             : <div className="line-wrap">{dayOf(l.at)}
-          <div id={`m${l.id}`} className={`line ${l.from}${l.event ? ' chat-event' : ''}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${l.id === reading ? ' reading' : ''}`}>
+          <div id={`m${l.id}`} className={`line ${l.from}${l.event ? ' chat-event' : ''}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.helper ? ' relay' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${l.id === reading ? ' reading' : ''}`}>
             {l.from !== 'note' && <div className="line-by">{(hero || id !== 'chief') && l.from !== 'me' && <Face who={id === 'chief' ? speaker ?? 'chief' : l.from === 'chief' ? 'chief' : speaker ?? h!} size={hero ? 36 : 28} />}<span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? (id === 'chief' ? 'Chief' : `Chief to ${name}`) : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
             {id === 'chief' || !l.text || l.from === 'note' ? content : <div className="helper-bubble">{content}</div>}
@@ -774,7 +724,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
       <div className="dock">{answerTo && <div className="reply-to"><div className="grow"><b>Answering Chief</b><span>{answerTo}</span></div><button type="button" className="icon-btn" aria-label="Not answering" onClick={() => setAnswering(undefined)}>×</button></div>}
-        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} chips={hero ? [] : undefined} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
+        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} attach={hero} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
     </div>
   );
 }
@@ -801,9 +751,9 @@ function HandOff({ c, state }: { c: A.HandChip; state: Json }) {
 
 const LIVE_WORD: Record<A.LiveLine['state'], string> = { reading: A.WORDS.work, working: A.WORDS.work, needs: A.WORDS.needs, waiting: A.WORDS.wait,
   done: A.WORDS.done, failed: A.WORDS.failed, unsure: A.WORDS.unsure };
-/** The live job card under a thread (J03): who is on it in their colour, the job's title and status, a clock counting up,
- *  and the job as a check list — done, doing, still to do — with the small tool calls kept behind the expand. At the
- *  end, one quiet line with how long it took. A job passed to a helper opens that helper's chat. */
+/** The live job under a thread (J03): who is on it, what they are doing now and a clock counting up, with the job's
+ *  check list folded under it. At the end, one quiet line with how long it took. A job passed to a helper opens that
+ *  helper's chat. */
 const QUIET_MS = 4000;
 function LiveRow({ ln, quiet, chipped, replied, asked, who }: { ln: A.LiveLine; quiet: boolean; chipped: boolean; replied: boolean; asked: boolean; who?: A.Helper }) {
   // A crew member waiting on the person reads the neutral "Waiting"; only Chief's own line says "Needs you".
@@ -811,17 +761,22 @@ function LiveRow({ ln, quiet, chipped, replied, asked, who }: { ln: A.LiveLine; 
   // Chief's own reply done in under a second says nothing worth a line: "Done · 0 s" goes, once the reply is there; a failed one waits for its reply, so the line never shows alone before it.
   if (ln.took !== undefined) return chipped || (!ln.helper && !ln.stopped && !replied && ln.state !== 'done') || (ln.state === 'done' && ln.took < 1000 && !ln.helper && replied) ? null : <div className={`live-end ${ln.state}`} role="status">
     <span>{ln.helper ? `${ln.who} · ${word.toLowerCase()}` : word} · {A.took(ln.took)}{ln.count ? ` · ${ln.count} ${ln.count === 1 ? 'step' : 'steps'}` : ''}</span>{ln.helper && <a className="link" href={`#/h/${ln.helper}`}>Open chat ›</a>}</div>;
-  const at = ln.todos.findIndex((s) => s.state === 'doing');
-  return <div className={`line them live-line ${ln.state}`}><div className="line-by" aria-hidden><Face who="chief" size={36} /></div>
-    <div className="live-body" style={ln.helper && who ? { background: art.colourOf(who.kind) } : undefined}>
-      <div className="live-top"><Face who={who ?? 'chief'} size={40} />{!asked && <b className="grow">{A.plain(ln.title ?? ln.who)}</b>}<span className="st-pill">{word}</span></div>
-      <div className="live-head"><span className="live-word"><i aria-hidden /><span>{ln.who}{at >= 0 && ln.todos.length > 1 ? ` · step ${at + 1} of ${ln.todos.length}` : ''}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span></span></div>
-      <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
-        <span className={`tick ${s.state}`} aria-hidden>{s.state === 'done' ? '✓' : ''}</span><span>{s.text}</span></li>)}</ol>
-      {!!ln.next && <p className="live-next">Next: {ln.next}</p>}
-      {!!ln.detail.length && <details className="live-detail"><summary>Show the small steps ({ln.detail.length})</summary>
-        <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol></details>}
-      {ln.helper && <a className="btn live-open" href={`#/h/${ln.helper}`}>Open</a>}
+  // The model's own newest note says more than the engine's "Thinking" that may follow it.
+  const at = ln.todos.findIndex((s) => s.state === 'doing'), said = ln.todos.slice(1, at + 1).filter((s) => s.text !== 'Thinking').at(-1);
+  const now = (said ?? ln.todos[at])?.text ?? (!asked ? A.plain(ln.title ?? '') : '');
+  // Calm: one small inline row while the job runs — who, what they are doing now, how far and how long — with the
+  // whole check list and the small steps folded under it, never a coloured block in the thread.
+  return <div className={`line them live-line ${ln.state}`}>
+    <div className="live-body">
+      <div className="live-row"><Face who={who ?? 'chief'} size={28} />
+        <span className="grow live-say"><span className="live-word"><i aria-hidden /><b>{ln.who}</b></span>{now && <span className="live-now">{now}</span>}</span>
+        <span className="live-meta">{said && ln.todos[at]?.text === 'Thinking' ? 'Thinking' : at >= 0 && ln.todos.length > 1 ? `${at + 1} of ${ln.todos.length}` : word}{ln.state === 'waiting' ? null : <> · <span aria-hidden>{A.took(Date.now() - ln.since)}</span></>}{quiet && <span role="status"> · still working</span>}</span>
+        {ln.helper && <a className="live-open" href={`#/h/${ln.helper}`} aria-label={`Open ${ln.who}'s chat`}><Icon name="next" size={18} /></a>}</div>
+      {(ln.todos.length > 1 || !!ln.detail.length) && <details className="live-detail"><summary>{ln.todos.length > 1 ? 'Steps' : `Small steps (${ln.detail.length})`}</summary>
+        {ln.todos.length > 1 && <ol className="live-todos" aria-live="polite">{ln.todos.map((s) => <li key={`${s.at}-${s.text}`} className={s.state}>
+          <span className={`tick ${s.state}`} aria-hidden>{s.state === 'done' ? '✓' : ''}</span><span>{s.text}</span></li>)}</ol>}
+        {!!ln.next && <p className="live-next">Next: {ln.next}</p>}
+        {!!ln.detail.length && <ol>{ln.detail.map((s) => <li key={`${s.at}-${s.text}`}><time className="time">{A.clock(s.at)}</time><span>{s.text}</span></li>)}</ol>}</details>}
     </div>
   </div>;
 }
@@ -931,12 +886,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
     <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : 'st-screen'}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
       {tab === 'chat' && h && <>
         <div className="sticky-top">
-          <header className="chat-head">
-            <a href="#/" className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a>
-            <Face who={h} size={44} />
-            <div className="grow"><b>{h.name}</b><span className="st-reading">Reading along</span></div>
-            <a className="st-gear" href={`#/h/${id}/details`} aria-label={`${name}'s profile`}><Icon name="crew" /></a>
-          </header>
+          <PillHead who={h} name={h.name} href={`#/h/${id}/details`} label={`${name}'s profile`} />
           {state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <a className="link st-board-link" href="#/goal">Open the board ›</a>}
           {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
@@ -1257,10 +1207,6 @@ function Memory({ tick }: { tick: number }) {
 }
 
 // ---------- things ----------
-const KEPT_DONE = 'crewhouse.done.kept';
-// ponytail: settled Done cards live in this browser only, so the phone or another browser shows the card again;
-// move the list to crewd when that matters.
-const keptDone = (): string[] => { try { return JSON.parse(localStorage.getItem(KEPT_DONE) ?? '[]'); } catch { return []; } };
 /** Who made a finished thing: Chief, a helper on the crew, or nobody left on it. */
 const makerOf = (state: Json, id: string) => id === 'chief' ? 'chief' as const : A.crew(state).find((x) => x.id === id);
 
@@ -2103,6 +2049,14 @@ function Apps({ state, refresh }: Ctx) {
 }
 
 // ---------- shell ----------
+/** A computer's width (the three panes), live as the window changes: there the chat list is the left pane, so Home is
+ *  Chief's thread beside it. */
+function useWide() {
+  const [media] = useState(() => matchMedia('(min-width: 900px)'));
+  const [wide, setWide] = useState(() => media.matches);
+  useEffect(() => { const on = () => setWide(media.matches); media.addEventListener('change', on); return () => media.removeEventListener('change', on); }, [media]);
+  return wide;
+}
 function useLook() {
   const q = new URLSearchParams(location.search);
   const [look, setLookState] = useState(() => (q.has('night') ? 'night' : q.has('day') ? 'day' : localStorage.getItem('crewhouse.look') ?? 'auto'));
@@ -2131,29 +2085,9 @@ function useLook() {
  *  primary one: his tab is the filled one, and in the side menu he wears his face and his one status word. */
 const PLACES: [string, string, IconName, View][] = [['#/', 'Home', 'home', 'home'], ['#/chief', 'Chief', 'talk', 'chief'], ['#/crew', 'Crew', 'crew', 'crew']];
 /** The computer side menu's lower places, quieter than the four above. */
-const MORE: [string, string, IconName, View][] = [['#/things', 'Your things', 'copy', 'things'], ['#/routines', 'Routines', 'clock', 'routines'], ['#/apps', 'Apps', 'plus', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
+const MORE: [string, string, IconName, View][] = [['#/crew', 'Your crew', 'crew', 'crew'], ['#/things', 'Your things', 'copy', 'things'], ['#/routines', 'Routines', 'clock', 'routines'], ['#/apps', 'Apps', 'plus', 'apps'], ['#/settings', 'Settings', 'settings', 'settings']];
 /** Which place a screen belongs to, so its tab reads as the one you are in. */
 const placeOf = (r: Route): View => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'add' || r.view === 'room' ? 'crew' : r.view === 'ai' || r.view === 'computer' ? 'settings' : r.view === 'goal' ? 'home' : r.view;
-
-/** The side menu's crew: every helper with the word the office uses for them (A.roster), one line each. Only Chief
- *  says "Needs you"; a crew row never asks the person. */
-function SideCrew({ live, id }: { live: A.OfficeView; id?: string }) {
-  return (
-    <div className="side-crew">
-      <a className="label side-label" href="#/crew">Your crew</a>
-      {A.roster(live.crew).map((h) => {
-        const r = A.statusOf(h, live);
-        // The seat class is namespaced (`seat-…`) so a seat word like "chat" never collides with an unrelated rule.
-        return <a key={h.id} href={hrefOf(h.id)} className={`side-row ${id === h.id ? 'on' : ''}`}>
-          <Face who={h} size={30} />
-          <b className="grow clamp1">{h.name}</b>
-          <span className={`side-seat seat-${r.seat}`}><span className="clamp1">{r.word}</span></span>
-        </a>;
-      })}
-      {!live.crew.length && <a className="side-blank" href="#/crew/add">No helpers yet. Add one</a>}
-    </div>
-  );
-}
 
 /** Where a file opens as the whole page with what it is beside it (J07b), instead of beside a chat. */
 const OVER: View[] = ['chief', 'things'];
@@ -2175,6 +2109,7 @@ function App() {
   const heard = useRef(0); // when the home computer last answered
   const answered = useRef(false); // the computer has answered this visit, with state or with no authority
   const { look, setLook, night, reduced } = useLook();
+  const wide = useWide(), [find, setFind] = useState('');
   // The kept week stands in, read-only, and says when it was last heard. Nothing kept, nothing shown.
   const showKept = () => {
     const k = keptWeek();
@@ -2261,22 +2196,22 @@ function App() {
   return (
     <>
       {splash}
-      <div className={`shell ${['chief', 'helper', 'room'].includes(v.view) ? 'is-chat' : ''}${book && !OVER.includes(v.view) ? ' with-book' : ''}`}>
+      <div className={`shell calm ${['chief', 'helper', 'room'].includes(v.view) || (v.view === 'home' && wide) ? 'is-chat' : ''}${book && !OVER.includes(v.view) ? ' with-book' : ''}`}>
         <aside className="side">
-          <a href="#/" className="brand"><Face who="chief" size={36} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
-          <nav className="side-navs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav nav-${k}${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
-            <Icon name={i} size={22} /><span className="grow">{l}</span>
-            {k === 'chief' && asks > 0 && <span className="side-count">{asks}</span>}</a>)}</nav>
-          <SideCrew live={ctx.live} id={v.view === 'helper' ? v.id : undefined} />
-          <nav className="side-more" aria-label="More">{MORE.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}><Icon name={i} size={22} />{l}</a>)}</nav>
+          <div className="side-top"><a href="#/" className="brand"><Face who="chief" size={28} /><b>Crewhouse</b>{demo && <span className="demo-tag">Demo</span>}</a>
+            <a className="round-btn" href="#/crew/add" aria-label="Bring a helper on"><Icon name="plus" size={20} /></a></div>
+          <label className="search-pill"><Icon name="search" size={18} /><input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search" aria-label="Search your chats" /></label>
+          <ChatRows ctx={ctx} q={find} on={v.view === 'helper' ? v.id : v.view === 'chief' || v.view === 'home' ? 'chief' : v.view === 'room' ? 'room' : undefined} />
+          {!find && <GoalRow state={ctx.state} />}
+          <nav className="side-more" aria-label="More">{MORE.map(([h, l, i, k]) => <a key={h} href={h} className={`side-nav${place === k ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}><Icon name={i} size={20} />{l}</a>)}</nav>
           <a href="#/settings" className="side-me" aria-label={`Settings${me ? `, ${me}` : ''}`}>
             <span className="me-av">{(me[0] ?? '·').toUpperCase()}</span><span className="grow"><b className="clamp1">{me || 'You'}</b>{(A.meter(ctx.state) || quiet) && <span className="clamp1">{A.meter(ctx.state) || quiet}</span>}</span>
           </a>
         </aside>
         <main className="main">
           {offline && <div className="offline" role="status"><Icon name="wifioff" size={24} /><span className="grow"><b>Can't reach the home computer</b><span>{heard.current ? `Last heard ${A.clock(heard.current)}. ` : ''}You can read your recent chats. You can reply once it's back.</span></span><button className="btn soft" onClick={refresh}>Try now</button></div>}
-          {v.view === 'home' && <Home {...ctx} />}
-          {v.view === 'chief' && <ChiefPage {...ctx} m={v.m} />}
+          {v.view === 'home' && !wide && <Home {...ctx} />}
+          {(v.view === 'chief' || (v.view === 'home' && wide)) && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'goal' && <Goal {...ctx} id={v.id} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
@@ -2290,8 +2225,8 @@ function App() {
           {v.view === 'apps' && <Apps {...ctx} />}
           {v.view === 'share' && <Share refresh={ctx.refresh} />}
         </main>
-        <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k || (k === 'home' && place === 'routines') ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
-          <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'chief' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>
+        {v.view !== 'home' && !['chief', 'helper', 'room'].includes(v.view) && <nav className="tabs" aria-label="Places">{PLACES.map(([h, l, i, k]) => <a key={h} href={h} className={`tab tab-${k}${place === k || (k === 'home' && place === 'routines') ? ' on' : ''}`} aria-current={place === k ? 'page' : undefined}>
+          <span className="tab-ic"><Icon name={i} size={22} /></span><span className="tab-label">{l}</span>{k === 'chief' && asks > 0 && <span className="tab-badge">{asks}</span>}</a>)}</nav>}
       </div>
       {sheet?.site && <SiteSignIn c={sheet} bot={ctx.state.bots.find((b: Json) => b.id === sheet.site!.bot) ?? { id: sheet.site.bot, display: 'The crew' }} onClose={() => { ctx.refresh(); if (history.length > 1) history.back(); else go('#/'); }} />}
       {sheet && !sheet.site && sheet.kind !== 'unlock' && <AskSheet c={sheet} who={crew.find((h) => h.id === (sheet.by ?? sheet.helper))} chiefSays={ctx.state.asks.find((a: Json) => a.id === sheet.id)?.detail?.chief} onClose={() => go('#/chief')} />}
