@@ -1,124 +1,96 @@
-// A cold relaunch of the installed app returns to the place the person was last showing, not always Home
-// (web/src/resume.ts). Driven in a real browser on the built public shell served from a *.localhost origin —
-// the published shell's own situation, opened on its demo (`?demo`; bare, it asks where Chief works), with no crewd, no
-// account and no network. Covers:
-// a thread is remembered and reopened; a link or shortcut that names a place wins over the memory; a remembered
-// thread that has since gone opens Home with no error. Needs a Chromium on PATH (skipped without one).
-import { test, after } from 'node:test';
+// The resume: Chief makes it only from the person's own words in his chat, the person edits it in the app, and the PDF
+// and Word files they save say exactly what the document says. Real crewd over HTTP on the stub engine.
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, statSync, symlinkSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { extname, join } from 'node:path';
-import { tmpdir } from 'node:os';
-import WebSocket from 'ws';
-import { taskBrowser } from './browser.ts';
-import { browserBin } from '../src/desktop.ts';
+import { readFileSync, writeFileSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
+import { join } from 'node:path';
+import { setup, settled, task } from './lab.ts';
 import { temp } from './tmp.ts';
-import { until } from './lab.ts';
+import { readDocument } from '../src/documents.ts';
+import { startServer } from '../src/server.ts';
+import * as A from '../web/src/adapter.ts';
 
-const repo = join(import.meta.dirname, '..');
-const bin = browserBin();
-const root = temp('resume-web');
-// A copy of the web tree, so the checkout's own dist stays as its last real build (as test/office.test.ts does).
-cpSync(join(repo, 'web'), join(root, 'web'), { recursive: true, filter: (s) => !/[/\\]dist([/\\]|$)/.test(s) });
-symlinkSync(join(repo, 'src'), join(root, 'src'), 'dir');
-const dist = join(root, 'web', 'dist');
+const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
+const CV = `Umer Anjum
+London · umer@example.com · github.com/umer
+Frontend engineer at Acme, 2019 to 2023
+Led a team of four building a payments dashboard in React and TypeScript
+Cut page load time by 40 percent on the checkout flow
+BSc Computer Science, 2016
+Private: current salary £70,000`;
+const sections = [
+  { lines: ['Umer Anjum', 'London · umer@example.com · github.com/umer'] },
+  { heading: 'Experience', lines: ['Frontend engineer at Acme, 2019 to 2023', 'Led a team of four building a payments dashboard in React and TypeScript', 'Cut page load time by 40 percent'] },
+  { heading: 'Education', lines: ['BSc Computer Science, 2016'] },
+];
+/** The words on a PDF's pages, read straight out of its text operators (crewd writes them uncompressed). */
+const pdfWords = (b64: string) => [...Buffer.from(b64, 'base64').toString('latin1').matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
+  .map((m) => m[1].replace(/\\([0-7]{3}|.)/g, (_, c) => c.length === 3 ? String.fromCharCode(parseInt(c, 8)) : c)).join(' ');
+const norm = (s: string) => s.replace(/\x95/g, '•').replace(/\s+/g, ' ');
 
-test('a cold relaunch reopens the last place, a named link wins, and a thread that is gone opens Home', { skip: !bin && 'no Chromium here' }, async () => {
-  const built = spawnSync(process.execPath, [join(repo, 'scripts', 'build-web.mjs'), join(root, 'web')], { encoding: 'utf8' });
-  assert.equal(built.status, 0, built.stderr);
-  const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
-  const server = createServer((q, s) => {
-    const p = decodeURIComponent(new URL(q.url ?? '/', 'http://x').pathname).replace(/\.\.+/g, '');
-    let f = join(dist, p === '/' ? 'index.html' : p);
-    if (!existsSync(f) || !statSync(f).isFile()) f = join(dist, 'index.html');
-    s.writeHead(200, { 'content-type': TYPES[extname(f)] ?? 'application/octet-stream' }); s.end(readFileSync(f));
-  });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  const base = `http://crewhouse.localhost:${(server.address() as { port: number }).port}`;
-  const profile = mkdtempSync(join(tmpdir(), 'resume-browser-'));
-  const browser = taskBrowser(bin!, ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=390,844', 'about:blank'], profile);
-  let ws: WebSocket;
-  after(async () => { ws?.close(); server.close(); await browser.close(); });
-  const portFile = join(profile, 'DevToolsActivePort');
-  await until('the browser to listen', () => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 30_000);
-  let page: { webSocketDebuggerUrl: string } | undefined;
-  await until('a page', async () => (page = ((await (await fetch(`http://127.0.0.1:${readFileSync(portFile, 'utf8').split('\n')[0]}/json/list`)).json()) as any[]).find((t) => t.type === 'page')), 10_000);
-  ws = new WebSocket(page!.webSocketDebuggerUrl);
-  await new Promise((r, j) => { ws!.once('open', r); ws!.once('error', j); });
-  let id = 0; const waiting = new Map<number, (m: any) => void>();
-  ws.on('message', (d) => { const m = JSON.parse(String(d)); waiting.get(m.id)?.(m); waiting.delete(m.id); });
-  const send = (method: string, params: object = {}) => new Promise<any>((r, j) => { const n = ++id; waiting.set(n, (m) => (m.error ? j(new Error(`${method}: ${m.error.message}`)) : r(m.result))); ws!.send(JSON.stringify({ id: n, method, params })); });
-  const run = async (expression: string) => {
-    const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (r.exceptionDetails) throw new Error(`page error: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
-    return r.result.value;
+test('a resume from his own words only, edited in the app, saved as PDF and Word that match it', async (t) => {
+  const { cfg, db, crew, done } = setup();
+  Object.assign(cfg, { port: 0, host: '127.0.0.1', linkPort: 0 });
+  const server = await startServer(cfg, db, crew);
+  t.after(async () => { await new Promise<void>((r) => server.close(() => r())); done(); });
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`, key = readFileSync(join(cfg.stateDir, 'person.key'), 'utf8');
+  const api = async (method: string, path: string, body?: object) => {
+    const res = await fetch(base + path, { method, headers: { authorization: `Bearer ${key}`, 'x-crewhouse': '1', 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
+    return { status: res.status, body: await res.json() as any };
   };
-  // A real cold start: about:blank unloads the document, so the target URL is a fresh load (a hash-only change would not be).
-  const cold = async (url = `${base}/?demo`) => {
-    await send('Page.navigate', { url: 'about:blank' });
-    await send('Page.navigate', { url });
-    await until('the app', () => run("!!document.querySelector('.shell')"), 30_000);
+  crew.onboard('Umer');
+  await settled(db, (await crew.post('chief', `Here is my CV:\n${CV}`))!.task);
+  const ask = async (words: string, input: object) => { const id = (await crew.post('chief', `${words} ${call('crew_resume', input)}`))!.task; await settled(db, id); return id; };
+  const delivered = () => db.all("SELECT * FROM events WHERE kind = 'file.delivered' AND bot = 'chief'").length;
+
+  // The no-invention guard: a line he never wrote, or one he marked private, makes no resume. The words of the request
+  // itself are not his material: only what comes before the tool call counts.
+  const refused = async (input: object, why: RegExp) => {
+    const id = await ask('Make my resume', input);
+    assert.match((crew.runtime as any).transcript(task(db, id).session), why);
   };
-  const hash = () => run('location.hash');
+  await refused({ sections: [...sections, { heading: 'Certifications', lines: ['AWS Certified Solutions Architect'] }] }, /“AWS Certified Solutions Architect” is not in what they told you/);
+  await refused({ sections: [...sections.slice(0, 2), { heading: 'Summary', lines: ['current salary £70,000'] }] }, /marked private, so it stays out/);
+  await refused({ sections: [{ heading: 'Certified AWS architect', lines: ['BSc Computer Science, 2016'] }] }, /“Certified AWS architect” is not in what they told you/);
+  assert.equal(delivered(), 0, 'an invented line, a private line and an invented heading make no resume');
 
-  // The public shell's demo, and Scout's thread remembers itself.
-  await cold();
-  assert.equal(await run("!!document.querySelector('.demo-tag')"), true, 'the public shell runs the demo');
-  await run("location.hash = '#/h/scout'");
-  await until('Scout’s thread', () => run("!!document.querySelector('.page.helper')"), 30_000);
+  await ask('Make my resume', { sections });
+  assert.equal(delivered(), 1, 'his own lines make the resume, delivered once');
+  const view = (await api('GET', '/api/document?bot=chief&path=files/resume.docx')).body, doc = A.document(view, 'Resume');
+  const cvAt = db.get("SELECT at FROM messages WHERE bot = 'chief' AND author = 'person' AND text LIKE 'Here is my CV%'")!.at;
+  assert.deepEqual(doc.resume!.map((r) => r.from), [[cvAt], [cvAt], [cvAt]], 'each part records the message he wrote it in, not the request');
+  assert.match(A.resumeFrom(doc.resume![1]), /^From what you told Chief on /);
+  assert.deepEqual(doc.parts.map((p) => p.text), ['Umer Anjum', sections[0].lines[1], 'Experience', ...sections[1].lines, 'Education', ...sections[2].lines]);
 
-  // A home-screen launch (the app root, nothing after the #) reopens the remembered thread.
-  await cold();
-  assert.equal(await hash(), '#/h/scout', 'the cold relaunch reopened the last thread');
-
-  // A named place in a link or shortcut wins over the remembered one.
-  await cold(`${base}/?demo#/things`);
-  assert.equal(await hash(), '#/things', 'the place named in the link wins');
-
-  // A remembered thread that has since gone opens Home, with no error.
-  await cold();
-  await run("location.hash = '#/h/scout'");
-  await until('the thread again', () => run("location.hash === '#/h/scout'"));
-  await run(`localStorage.setItem('crewhouse.place.demo', '#/h/vanished')`);
-  await cold();
-  await until('Home', () => run("location.hash === '#/'"));
-  assert.equal(await run("!!document.querySelector('.page.mute')"), false, 'no error text is shown');
-
-  // J04: a cold approval link belongs to Chief. Close is not an answer, including after a reload.
-  for (const w of [390, 1280]) for (const theme of ['day', 'night']) {
-    await send('Emulation.setDeviceMetricsOverride', { width: w, height: 844, deviceScaleFactor: 1, mobile: w === 390 });
-    await cold(`${base}/?demo&${theme}#/ask/11`);
-    await until('the order review', () => run("!!document.querySelector('.sheet.approve')"));
-    assert.equal(await run("!!document.querySelector('.home-chat')"), true, 'a direct ask opens over Chief, not Home');
-    await until('the sheet entrance to finish', () => run("document.querySelector('.sheet.approve').getAnimations().every(a => a.playState === 'finished')"));
-    const r = await run("(() => { const r=document.querySelector('.sheet.approve').getBoundingClientRect(); return {left:r.left,right:r.right,bottom:r.bottom}; })()");
-    assert.ok(r.left >= 0 && r.right <= w && r.bottom <= 845, `review stays in the ${w}px viewport: ${JSON.stringify(r)}`);
-    assert.equal(await run('document.documentElement.scrollWidth > innerWidth'), false, 'no horizontal scroll');
-    const p = await run("(() => { const r=document.querySelector('.approve-close').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()");
-    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, ...p, button: 'left', clickCount: 1 });
-    await until('Chief after closing', () => run("location.hash === '#/chief' && !document.querySelector('.sheet.approve')"));
-    await run("location.hash = '#/ask/11'");
-    await until('the order still waits for an answer', () => run("!!document.querySelector('.sheet.approve')"));
-    const no = await run("(() => { const r=document.querySelector('.approve-btns button:not(.go)').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()");
-    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, ...no, button: 'left', clickCount: 1 });
-    await until('the declined-order receipt', () => run("[...document.querySelectorAll('.answered')].some(e=>e.textContent.includes('Not now'))"));
-    assert.doesNotMatch(await run("[...document.querySelectorAll('.answered')].map(e=>e.textContent).join(' ')"), /Placed the order/, 'a decline never claims the order was placed');
+  // Export round trip: every line of the document is in the PDF's text and in the Word file's.
+  const save = async (as: string) => { const r = await api('GET', `/api/document?bot=chief&path=files/resume.docx&as=${as}`); assert.equal(r.status, 200); return r.body; };
+  const pdf = await save('pdf'), word = await save('docx'), file = join(temp('resume'), word.name);
+  assert.equal(pdf.name, 'resume.pdf');
+  assert.equal(pdf.type, 'application/pdf');
+  assert.match(Buffer.from(pdf.data, 'base64').subarray(0, 8).toString(), /^%PDF-1\.4/);
+  writeFileSync(file, Buffer.from(word.data, 'base64'));
+  const words = norm(pdfWords(pdf.data)), back = (await readDocument(file)).parts.map((p) => p.text);
+  for (const line of sections.flatMap((s) => s.lines)) {
+    assert.ok(words.includes(line), `the PDF says “${line}”`);
+    assert.ok(back.includes(line), `the Word file says “${line}”`);
   }
-  await cold(`${base}/?demo=chase&night#/chief`);
-  await until('the draft subject', () => run("!!document.querySelector('.draft-ask .ev-subject')"));
-  assert.equal(await run("document.querySelector('.draft-ask img').alt"), 'Scout', 'Chief’s thread keeps the draft author’s face');
-  const contrast = await run(`(() => { const e=document.querySelector('.draft-ask .ev-subject');
-    const luminance=s=>{const c=s.match(/[\\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return .2126*c[0]+.7152*c[1]+.0722*c[2];};
-    const a=luminance(getComputedStyle(e).color),b=luminance(getComputedStyle(e.closest('.ev')).backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
-  assert.ok(contrast >= 4.5, `the draft subject is readable on its paper in night mode: ${contrast}`);
-  await run("location.hash = '#/'");
-  await until('the same draft author on Home', () => run("!!document.querySelector('.st-asks img[alt=Scout]')"));
-  await cold(`${base}/?demo=live#/chief`);
-  await until('Chief’s live progress to animate', () => run("document.querySelector('.live-todos .doing .tick')?.getAnimations().length > 0"));
-  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-  await until('reduced motion to stop the live progress', () => run('document.getAnimations().length === 0'));
-  assert.equal(await run("matchMedia('(prefers-reduced-motion: reduce)').matches"), true);
+  assert.doesNotMatch(words, /70,000/);
+
+  // Edit, then export: his new words are in both files and the old ones are gone; the part says he edited it.
+  const mine = doc.resume!.map((r) => ({ heading: r.heading, lines: r.lines }));
+  mine[1].lines[2] = 'Cut checkout page load time by 40 percent, measured in production';
+  mine[2].lines.push('Kaggle notebooks: github.com/umer/notebooks');
+  const after = A.document((await api('PUT', '/api/resume', { sections: mine })).body, 'Resume');
+  assert.deepEqual(after.resume!.map((r) => r.edited), [false, true, true]);
+  assert.match(A.resumeFrom(after.resume![1]), /^Edited by you, from what you told Chief on /);
+  const pdf2 = norm(pdfWords((await save('pdf')).data)), file2 = join(temp('resume-2'), 'resume.docx');
+  writeFileSync(file2, Buffer.from((await save('docx')).data, 'base64'));
+  const back2 = (await readDocument(file2)).parts.map((p) => p.text);
+  for (const line of ['Cut checkout page load time by 40 percent, measured in production', 'Kaggle notebooks: github.com/umer/notebooks']) {
+    assert.ok(pdf2.includes(line) && back2.includes(line), `the edit “${line}” is in both files`);
+  }
+  assert.ok(!back2.includes('Cut page load time by 40 percent') && !pdf2.includes('Cut page load time by 40 percent'), 'the old line is gone from both');
+  assert.equal((await api('PUT', '/api/resume', { sections: [{ heading: 'Experience', lines: [] }] })).status, 400, 'a resume keeps at least one line');
+  assert.equal((await api('GET', '/api/document?bot=chief&path=files/nope.docx&as=pdf')).status, 403, 'only a delivered document saves');
 });
