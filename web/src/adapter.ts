@@ -1439,7 +1439,7 @@ export const howItWorks = ['Your helpers live on this computer, and think with a
 export const asName = (t: string) => t.trim().length <= 40 && t.trim().split(/\s+/).length <= 4;
 /** Chief's pitch is the newest line of a thread where the person has only given their name: then he offers the first ideas. */
 export const firstChips = (lines: Line[], state: Json) =>
-  !!state.person?.onboarded && !(state.tasks ?? []).length && lines.filter((l) => l.from === 'me').length === 1 && lines.at(-1)?.from === 'them';
+  !!state.person?.onboarded && !(state.tasks ?? []).length && !(state.asks ?? []).some((a: Json) => a.state === 'open') && lines.filter((l) => l.from === 'me').length === 1 && lines.at(-1)?.from === 'them';
 
 /** The starters Chief offers right after the name: useful from the first tap, and never one that dead-ends in a connection. With Google
  *  not set up yet, the calendar starter sits out; a party plan takes its place. */
