@@ -38,9 +38,11 @@ const waitFor = async (re, ms) => { const t = Date.now(); while (Date.now() - t 
 
 if (APK) { try { A('uninstall', PKG); } catch { /* none */ } A('install', '-g', APK); }
 A('shell', 'pm', 'clear', PKG);
-if (!ASK) A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); // pm clear takes it; its prompt would cover the app
-// The first-run question: `install -g` and an earlier run leave the permission granted, which `pm clear` keeps.
-else { A('shell', 'pm', 'revoke', PKG, 'android.permission.POST_NOTIFICATIONS'); A('shell', 'pm', 'clear-permission-flags', PKG, 'android.permission.POST_NOTIFICATIONS', 'user-set', 'user-fixed'); }
+// Both first-run questions (notifications, then running in the background) would cover the app: pm clear takes the
+// first, and the background one (src/news.ts, battery optimisation) outlives pm clear, so each run sets it.
+if (!ASK) { A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); A('shell', 'dumpsys', 'deviceidle', 'whitelist', `+${PKG}`); }
+// The first-run questions: `install -g` and an earlier run leave the permission granted, which `pm clear` keeps.
+else { A('shell', 'pm', 'revoke', PKG, 'android.permission.POST_NOTIFICATIONS'); A('shell', 'pm', 'clear-permission-flags', PKG, 'android.permission.POST_NOTIFICATIONS', 'user-set', 'user-fixed'); A('shell', 'dumpsys', 'deviceidle', 'whitelist', `-${PKG}`); }
 for (const port of [env.LINK_PORT, env.RELAY.split(':').pop()]) A('reverse', `tcp:${port}`, `tcp:${port}`);
 await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past Hello, so the phone opens on Home
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
