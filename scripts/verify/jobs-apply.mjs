@@ -55,7 +55,9 @@ if (step === 'serve') {
     const home = join(stateDir, 'homes', will), space = join(crew, 'bots', will), script = join(tools, 'browser', 'node_modules', 'playwright-axi', 'bin', 'playwright-axi.js');
     const axi = (...a) => execFileSync(process.execPath, [script, ...a], { cwd: space, encoding: 'utf8', env: { PATH: '/usr/bin:/bin', HOME: home, XDG_CONFIG_HOME: join(home, '.config'), XDG_CACHE_HOME: join(home, '.cache'), XDG_DATA_HOME: join(home, '.local', 'share'), XDG_STATE_HOME: join(home, '.local', 'state'), LANG: 'C.UTF-8', NO_COLOR: '1', PLAYWRIGHT_BROWSERS_PATH: join(tools, 'browser', 'ms-playwright'), PLAYWRIGHT_CLI_SESSION: will } });
     axi('open', '--persistent', '--profile', join(space, 'browser')); axi('goto', role.url);
-    const snap = axi('snapshot', '--full'); axi('close');
+    let snap = axi('snapshot', '--full'); // a script-drawn form (Ashby's "Fetching application form") lands a moment later
+    for (let i = 0; i < 30 && !/- (?:textbox|combobox) /.test(snap); i++) { await new Promise((r) => setTimeout(r, 500)); snap = axi('snapshot', '--full'); }
+    axi('close');
     writeFileSync(join(stateDir, '..', 'form-snapshot.txt'), snap);
     const ref = (role, re) => [...snap.matchAll(new RegExp(`- ${role} "([^"]*)"[^\\n]*\\[ref=([\\w-]+)\\]`, 'g'))].find((m) => re.test(m[1]))?.[2];
     const [first, last] = lines[0].split(' '), calls = [];
