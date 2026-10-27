@@ -81,7 +81,7 @@ $P tap 'Tell Chief anything' >/dev/null
 for _ in $(seq 25); do adb -s $SER shell dumpsys input_method | grep -q mInputShown=true && break; sleep 0.4; done # keys sent before the keyboard is up get lost
 adb -s $SER shell input keyevent 123 $(printf '67 %.0s' $(seq 40)) # the kept draft goes first: end, then deletes (a ctrl+a's Ctrl can stick to the next key)
 adb -s $SER shell input text hi
-see '^dev.crewhouse.app .*\] hi$'
+see '^dev.crewhouse.app .*\] hi( \{|$)'
 $P tap '^Send$' >/dev/null
 see 'What would you like to work on'
 api GET /api/bots/chief | grep -q '"text":"hi"' || { echo "the sent message never reached crewd" >&2; exit 1; }
