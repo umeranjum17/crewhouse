@@ -651,5 +651,18 @@
       "Watch Chief type the name and press Renew on his own screen"
     ],
     "result": "The card shows Chief wants to act on a site with Yes, press it and Not now; Chief renewed the card on his screen"
+  },
+  "resume": {
+    "start": "Umer on a fresh crew on the stub engine, with his CV pasted into Chief's chat; no real model or account",
+    "steps": [
+      "Paste the CV to Chief and ask for a resume",
+      "Ask for a line he never wrote (an AWS certificate): no resume is made",
+      "Chief makes the resume from his own lines; it lands in Chief's chat as a file card",
+      "Open the resume: each part shows where it came from",
+      "Tap Edit, change one line in his own words, and Save",
+      "Tap PDF and Word: the files the app saves are opened in a PDF reader and in LibreOffice",
+      "Repeat the resume and the saved edit in the installed app's window at phone size"
+    ],
+    "result": "Every line of the resume is one Umer wrote in Chief's chat; the invented certificate and the line he marked private never appear. Each part says when he told Chief, and the part he changed says Edited by you. The PDF and the Word file the buttons save hold exactly the lines on screen, his edit included. The PDF uses a built-in Latin font, so a non-Latin script would not show. Not a real model."
   }
 }
