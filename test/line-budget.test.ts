@@ -96,7 +96,10 @@ import { join } from 'node:path';
 // Owner-directed (Firstmate: the captain's preview-27 run, the critical path).
 // Raised 8054 -> 8056 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
 // role found is a step on his live line, and the look ends in his chat in crewd's own words, one line per role. Same direction.
-const BUDGET = 8056;
+// Raised 8056 -> 8065 for the reading pack (ch-018-reading-pack, +9 net): crew_prep from Drafted on, each fact's part, the
+// .docx crewd writes from the checked facts alone ("Not stated" where no page spoke to a part), handed back in Chief's chat
+// beside the role's card; crewd's page reader keeps a script-drawn page's own description (an Ashby posting). Owner-directed.
+const BUDGET = 8065;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

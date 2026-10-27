@@ -135,16 +135,19 @@ ${g.brief}`;
 export const fillTask = (g: Pick<Goal, 'brief'>, r: Row, draft: string) => `Fill in the person's application form for ${r.title} at ${r.co} in your own browser. You fill; only the person submits.
 Open ${r.url} with browser goto and find its application form (an Apply link may lead to it). Fill each text line you can with browser fill, using only words from their CV or the approved draft below, as written: their name, contact details, the CV lines and the cover answers. Leave everything else empty for them: what they declare or sign, right to work, visa or sponsorship, pay, notice, consent, who they are, every dropdown, tick box and file, and anything the CV and draft do not say.
 Never sign in, make an account, upload a file, or press a button once you have filled a line. Then call crew_form once: role ${r.id}, and \`stop\` only when the form needs a sign-in or an account, wants a CV file, goes on over more pages, or the site asks whether you are human (say which, plainly).
-Reply with one line.
+Then make their reading pack: ${pack(r, '3 to 5 questions to test themselves with')} Reply with one line.
 The approved draft:
 ${draft}
 Their CV, line by line:
 ${g.brief}`;
 
+/** The reading pack's one call: what the company sells, the role day to day and the interview loop, each fact from its own page. */
+const pack = (r: Row, qs: string) => `read the posting and the company's own public pages, then call crew_prep once: role ${r.id}; brief (5 to 10 facts, each saying one thing in \`says\`, in \`part\` which it is about: \`company\` (who they are and what they sell), \`role\` (the job's real day to day, from the posting) or \`loop\` (their interview stages and topics), the https page that shows it in \`url\`, and in \`quote\` words copied from that page; a fact with no page is left out, and crewd says so where a part has none); questions (${qs}, each with \`why\` they ask it, in a sentence). Questions about pay, notice, visa, right to work or consent are theirs to answer: they are listed for them, never answered.`;
+
 /** The writer's job for a role in Interview, from the person's tap on Prep for this interview. */
 export const prepTask = (g: Pick<Goal, 'brief'>, r: Row) => `Prepare the person for their interview. You write; they read it and answer for themselves.
 Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}.
-Read the posting and the company's own public pages, then call crew_prep once: role ${r.id}; brief (the one-page company brief: 5 to 10 facts, each saying one thing in \`says\`, the https page that shows it in \`url\`, and in \`quote\` words copied from that page; a fact with no page is left out); questions (6 to 10 questions they are likely to be asked for this role, each with \`why\` they ask it, in a sentence). Questions about pay, notice, visa, right to work or consent are theirs to answer: they are listed for them, never answered.
+${pack(r, '6 to 10 questions they are likely to be asked for this role')}
 You never apply, send or contact anyone, and you never write their answers or sign anything. Reply with one line.
 Their CV, line by line:
 ${g.brief}`;

@@ -65,8 +65,12 @@ if (step === 'serve') {
       const r = ref('(?:textbox|combobox)', re); if (r) calls.push(tool('browser', { args: ['fill', r, v] }));
     }
     const tick = ref('checkbox', /consent|agree/i); if (tick) calls.splice(0, 0, tool('browser', { args: ['click', tick] }));
-    await api('POST', `/api/bots/${will}/messages`, { text: `Filling it in ${tool('browser', { args: ['goto', role.url] })} ${calls.join(' ')} ${tool('crew_form', { role: role.id })}` });
+    // Then the reading pack: facts quoted from the posting's own page (crewd opens it and checks every quote).
+    const pk = JSON.parse(readFileSync(new URL('./jobs-pack.json', import.meta.url), 'utf8'))[role.co], url = pk?.page ?? role.url;
+    const pack = pk ? tool('crew_prep', { role: role.id, brief: pk.brief.map((f) => ({ ...f, url })), questions: pk.questions }) : '';
+    await api('POST', `/api/bots/${will}/messages`, { text: `Filling it in ${tool('browser', { args: ['goto', role.url] })} ${calls.join(' ')} ${tool('crew_form', { role: role.id })} ${pack}` });
     const card = await until('the form card', async () => (await state()).asks.find((a) => a.detail?.form));
+    if (pk) await until('the reading pack', async () => /Delivered [^"]*reading-pack/i.test(JSON.stringify(await api('GET', `/api/bots/${will}`))));
     console.log(card.id);
   } else if (step === 'submit') {
     const card = (await state()).asks.find((a) => a.detail?.form), q = (re) => card.detail.form.fields.find((f) => re.test(f.label))?.label;

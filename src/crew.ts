@@ -2110,7 +2110,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (gs.some((g) => g.rae === botId)) own.push(tool('crew_role', "Add ONE option you read yourself to the person's first list. crewd opens `url`, so `pay` must be word for word what the page shows (empty when it shows none), and each `fit` quotes (`cv`) the line of their brief that shows it. Pass `goal` when you look for more than one goal. One already on the board is not added twice.", (p) => this.foundRole(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_form', 'You filled what you can on an application form: crewd reads the page and puts it on ONE card where only the person answers the rest and presses Submit. `role`: its id. `stop`: why the form cannot be finished here, only when one applies.', (p) => this.formReady(botId, p)));
-      if (gs.some((g) => g.will === botId)) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
+      if (gs.some((g) => g.will === botId)) own.push(tool('crew_prep', 'Put the reading pack and interview prep for ONE drafted, applied or interview role on the person\'s board; nothing is sent. `brief`: facts, each with its `part` (company, role or loop), its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
@@ -2343,20 +2343,26 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** Prep for this interview: the writer's brief and questions on a role in Interview. Every claim is read from its own page; what only the person answers stays theirs. */
   private async prepare(botId: string, p: Row) {
     const r = jobs.role(this.db, Number(p.role));
-    if (r?.stage !== 'interview' || !jobs.goal(this.db, r.goal)?.will) throw fail('that role is not in Interview');
-    const brief = [];
+    if (!r || !['drafted', 'applied', 'interview'].includes(r.stage) || !jobs.goal(this.db, r.goal)?.will) throw fail('draft the application to that role first');
+    const brief: Row[] = [];
     for (const c of (Array.isArray(p.brief) ? p.brief : []).slice(0, 10)) {
       const says = clean(c?.says, 300), url = String(c?.url ?? '').trim(), quote = clean(c?.quote, 300);
       if (!says || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])\S+$/.test(url) || url.length > 500) throw fail(`“${short(says, 60)}” needs the https page that shows it`);
       const page = await readPage(url).catch(() => null);
       if (!page || page.status >= 400) throw fail(`I could not open ${url}, so “${short(says, 60)}” is not added.`);
       if (jobs.norm(quote).length < 12 || !jobs.norm(page.text).includes(jobs.norm(quote))) throw fail(`That page does not show “${short(quote, 60)}”. Copy words from the page that shows the fact, or leave the fact out.`);
-      brief.push({ says, url, quote });
+      brief.push({ says, url, quote, part: ['role', 'loop'].includes(c?.part) ? c.part : 'company' });
     }
     const all = (Array.isArray(p.questions) ? p.questions : []).map((q: Row) => ({ ask: clean(q?.ask, 200), why: clean(q?.why, 240) })).filter((q) => q.ask && q.why), questions = all.filter((q) => !jobs.ONLY_YOU.test(q.ask)).slice(0, 10);
     if (!brief.length || questions.length < 3) throw fail('give the brief (each fact with its page) and at least three likely questions, each with why');
     jobs.setPrep(this.db, r.id, botId, { brief, questions, yours: jobs.YOURS, at: Date.now() }); // a pay, visa or consent question is never practised; its field is on the list, empty
-    return { ok: 'the prep is on the role card' };
+    // The reading pack, written by crewd from the checked facts alone: a part no page spoke to says so.
+    const parts = [['company', `${r.co} and what it sells`], ['role', 'The role, day to day'], ['loop', 'The interview loop and topics']].flatMap(([k, h]) => { const f = brief.filter((b) => b.part === k);
+      return [{ heading: h, level: 2 }, f.length ? { bullets: f.map((b) => `${b.says} Source: ${b.url}`) } : { text: `Not stated: neither the posting nor ${r.co}'s own pages say this.`, italic: true }]; });
+    await this.document(botId, `Reading pack for ${r.co}`, [{ text: `${r.title} at ${r.co}. Every line comes from the page named after it.` }, ...parts,
+      { heading: 'Test yourself', level: 2 }, { bullets: questions.map((q) => `${q.ask} (${q.why})`) }, { heading: 'Only you can answer these', level: 2 }, { bullets: jobs.YOURS }], `Reading-pack-${r.co.replace(/[^A-Za-z0-9]+/g, '-').slice(0, 40)}`);
+    this.say(CHIEF, 'bot', `${this.bot(botId)!.display} made your reading pack for ${r.co}: the company, the role and its interview, each line with the page it came from.`, this.activeTask(botId)?.id ?? null); // its card, in Chief's chat beside the role's
+    return { ok: 'the prep is on the role card, and the reading pack is delivered' };
   }
 
   /** The goal's writer in its browser: the CV and the drafts the person sent on with Fill it in are all it may type. */
@@ -2625,8 +2631,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
-  private async document(botId: string, name: string, blocks: unknown) {
-    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, disk.slug(title), 'docx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+  private async document(botId: string, name: string, blocks: unknown, file?: string) {
+    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, file ?? disk.slug(title), 'docx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
     const headings = (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string')
       .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean), sections = Math.max(1, headings.length), headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;
