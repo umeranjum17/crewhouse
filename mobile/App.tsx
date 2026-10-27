@@ -1786,6 +1786,15 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
 
 /** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). An approval
  *  outcome instead reads as one muted row, the action in plain words left and the outcome word right. */
+/** A role a look found, as its card in Chief's chat: why it fits, and Draft my application while it is in Found. */
+function RoleRow({ r, onDone }: { r: A.GoalRole; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return <Card><T style={s.semi}>{r.title}</T><T tone="ink2">{r.co} · {r.place}</T><T tone="ink2">{r.pay}</T>
+    {r.fit.map((f, i) => <T key={i} style={s.small}>{f}</T>)}
+    {r.stage === 'found' && <Btn go label={r.drafting || busy ? 'Drafting…' : 'Draft my application'} disabled={r.drafting || busy} onPress={() => { setBusy(true); void api.draftRole(r.id).then(onDone).finally(() => setBusy(false)); }} />}
+  </Card>;
+}
+
 function AnsweredRow({ line, what, word, rule }: { line?: string; what?: string; word?: string; rule?: string }) {
   const t = useLook();
   if (rule) return <Card><T style={s.semi}>Custom rule · {word}</T><T>{rule}</T><T tone="ink2">{line}</T></Card>;
@@ -2208,8 +2217,9 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
               <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
                 {!!l.text && !l.by && !(doneBy && l.id === doneLine?.id) && (l.detail ? <ChiefAsk l={{ text: l.text, detail: l.detail }} latest={l.id === newestAnswer} />
-                  : bubble ? <View style={[s.them, { backgroundColor: t.solid, borderColor: t.line }]}><ChatText text={l.text} latest={l.id === newestAnswer} /></View>
-                  : <ChatText text={l.text} latest={l.id === newestAnswer} />)}
+                  : bubble ? <View style={[s.them, { backgroundColor: t.solid, borderColor: t.line }]}><ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></View>
+                  : <ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} />)}
+                {l.roles?.map((r) => <RoleRow key={r.id} r={r} onDone={refresh} />)}
                 {!!l.retry && (bubble ? <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
                   <View style={[s.tick, { borderColor: t.mute, borderWidth: 1.5 }]}><T tone="mute" style={[s.small, s.b]}>!</T></View><T style={[s.read, s.b, { textDecorationLine: 'underline' }]}>Try again</T>
                 </Pressable> : <Btn label="Try again" onPress={() => void send(l.retry!)} />)}
