@@ -36,7 +36,7 @@ ui('tap', '^(Start|Yes|Hire)'); // the goal card's yes: nothing starts before it
 // The look is quick on the scripted model: its live steps may be past before a dump, so the later state counts too.
 await on(/is looking now|found: |roles? that fits?:/); await sleep(1200); shot('07-dispatched.png');
 await on(/roles? that fits?:/, 240_000); await sleep(1500); shot('09-results.png');
-ui('reveal', 'Draft my application'); await sleep(800); shot('10-role-cards.png');
+await on(/Draft my application/); shot('10-role-cards.png'); // the cards end the chat, under the look's line
 const s = await api('/api/state');
 writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.goals[0]?.goal, roles: s.goals[0]?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine }, null, 1));
 // Research Rae's own chat: the look's steps, in Rae's words.
