@@ -40,7 +40,7 @@ export type Card = {
   /** One ask-card layout for every kind (§4.4): the kind changes only the status line under the helper's name,
    *  the evidence block and the button words. `evidence` picks the sunken block — a form's or a job's
    *  label-over-value lines, or a draft's to/subject/body — an order is a `review`, anything else a plain preview. */
-  status: string; evidence?: 'lines' | 'draft'; draftTo?: string; yours?: string[]; draftSubject?: string; draftLink?: string; draftWhy?: string;
+  status: string; evidence?: 'lines' | 'draft' | 'form'; draftTo?: string; yours?: string[]; draftSubject?: string; draftLink?: string; draftWhy?: string;
   /** The person's own question for an OK or a spend: their task's title, with a question mark if it has no ending of its
    *  own. The tool's words (site, lines) stay on the review sheet. */
   question?: string;
@@ -50,7 +50,11 @@ export type Card = {
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
+  /** An application form the writer filled on the posting's own site, read by crewd from the page: what went in, the
+   *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
+  form?: FormView;
 };
+export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean }[]; note?: string };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password', style: 'Pick a style' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
@@ -977,6 +981,13 @@ export function card(a: Json, state: Json): Card {
     choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
     return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
+  if (a.kind === 'propose' && d.form) {
+    // Submit is the person's own press, made by crewd on this tap; the helper never has it. No Submit button on the page: no Submit here.
+    const f = d.form, note = f.stop ? `${name} stopped here: ${plain(f.stop)}` : !f.submit ? (f.next ? `This form goes on past this page (its button says “${plain(f.next)}”). Finish it on the site yourself.` : "I couldn't find this form's Submit button. Finish it on the site yourself.") : undefined;
+    return { ...base, kind: 'ok', status: 'Nothing is sent until you press Submit', head: `${name} filled in your application`, words: plain(a.title), evidence: 'form',
+      form: { site: plain(f.site), page: plain(f.page ?? ''), url: String(f.url), filled: (f.filled ?? []).map((x: Json) => ({ label: plain(x.label), value: plain(x.value) })), fields: (f.fields ?? []).map((x: Json) => ({ ...x, key: String(x.label), label: plain(x.label) })), ...(note ? { note } : {}) },
+      choices: [...(f.submit && !f.stop ? [{ label: 'Submit', body: { answer: 'allow', scope: 'once' }, primary: true }] : []), { label: 'Not now', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.draft) {
     // A card written before the channel was recorded still has to say a real noun: nothing here ever shows undefined.
     const channel = plain(String(d.draft.channel ?? '')).trim() || 'draft';
@@ -1000,7 +1011,7 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
       ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       ...(d.draft.yours?.length ? { yours: d.draft.yours.map((q: string) => plain(q)) } : {}),
-      choices: d.draft.role ? [{ label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+      choices: d.draft.role ? [{ label: 'Fill it in for me', body: { answer: 'allow', scope: 'once', fill: true }, primary: true }, { label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' } }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, will/won't do, the person's first step and the first job; nothing changes until the yes.
   if (a.kind === 'propose' && d.hire) {

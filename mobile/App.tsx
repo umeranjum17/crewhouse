@@ -1533,7 +1533,7 @@ function Land({ go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -1602,20 +1602,46 @@ function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
 
 /** A helper's draft takes the person's own words before the yes (web/src/parts.tsx useDraftEdit): their version
  *  replaces the draft, and still nothing is sent. The yes copies the words they see and opens the draft's link. */
+/** A filled application form, mirroring web/src/parts.tsx FormFields: what the crew filled from the CV and draft,
+ *  then the questions left blank for the person (theirs alone first), answered here and carried by the Submit. */
+function FormFields({ f, said, set }: { f: A.FormView; said: Json; set: (key: string, v: string | boolean) => void }) {
+  const t = useLook();
+  const field = (x: A.FormView['fields'][number]) => <View key={x.key} style={{ gap: 6 }}>
+    <T style={{ ...fw('500') }}>{x.label}</T>
+    {x.kind === 'file' ? <T tone="mute" style={s.small}>Attach this yourself on the site: the crew has no file of it.</T>
+      : x.kind === 'tick' ? <Switch value={!!said[x.key]} accessibilityLabel={x.label} trackColor={{ false: t.line, true: t.ink }} thumbColor={t.bg} onValueChange={(v) => set(x.key, v)} />
+      : x.options?.length ? <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{x.options.map((o) => <Btn key={o} soft={said[x.key] !== o} ink={said[x.key] === o} label={o} onPress={() => set(x.key, o)} />)}</View>
+      : <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={String(said[x.key] ?? '')} onChangeText={(v) => set(x.key, v)} accessibilityLabel={x.label} />}
+  </View>;
+  const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);
+  return <View style={[s.ev, { backgroundColor: t.sunken, gap: 10 }]}>
+    <T tone="mute" style={s.small}>{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</T>
+    {!!f.filled.length && <><T tone="mute" style={s.label2}>FILLED FROM YOUR CV AND DRAFT</T>{f.filled.map((x) => <View key={x.label} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{x.label}</T><T style={{ ...fw('500') }}>{x.value}</T></View>)}</>}
+    {!!yours.length && <><T tone="pinkInk" style={s.label2}>ONLY YOU CAN ANSWER THESE</T>{yours.map(field)}</>}
+    {!!rest.length && <><T tone="mute" style={s.label2}>NOT IN YOUR CV OR DRAFT</T>{rest.map(field)}</>}
+    {!!f.note && <T tone="ink2" style={s.small}>{f.note}</T>}
+    <Link label="Open the form yourself" onPress={() => void Linking.openURL(f.url)} />
+  </View>;
+}
+
 function useDraftEdit(c: A.Card) {
   const t = useLook();
-  const [words, setWords] = useState<string | null>(null);
+  const [words, setWords] = useState<string | null>(null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
     can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
-    box: words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
+    box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
+      : words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
       multiline autoFocus accessibilityLabel="Your version of the message" />,
     yes: (body: Json) => {
+      if (c.form) return { ...body, fields: said };
       if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
-      Clipboard.setString(text);
-      if (c.draftLink) void Linking.openURL(c.draftLink);
+      if (!body.fill) {
+        Clipboard.setString(text);
+        if (c.draftLink) void Linking.openURL(c.draftLink);
+      }
       return changed ? { ...body, text } : body;
     },
   };
@@ -1747,6 +1773,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         <View style={s.chips}>
           <Btn go={!c.mailTo} label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />
           {edit.can && <Btn label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
+          {c.choices.filter((x) => x !== yes && x.body.answer === 'allow' && x.body.scope !== 'always').map((x) => <Btn key={x.label} label={x.label} onPress={() => act(edit.yes(x.body))} />)}
           {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
       ) : null}
@@ -1803,7 +1830,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
             {edit.can && <Link label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
-            {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
+            {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body.answer === 'allow' ? edit.yes(x.body) : x.body)} />)}
             {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <Link label={always.label} onPress={() => act(always.body)} />}

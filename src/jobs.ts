@@ -7,7 +7,7 @@ export type Goal = { title: string; places: string; floor: string; cv: string; r
 
 /** What the form asks that only the person answers: declarations, right to work, sponsorship, pay, notice, consent. Never guessed. */
 export const YOURS = ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'];
-export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy/i;
+export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy|gender|race|ethnic|hispanic|veteran|disab|pronoun|sexual|religio|restriction|agreement/i;
 export const WONT = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
 export const WEEK = 7 * 86_400_000;
 
@@ -20,6 +20,36 @@ export const role = (db: Store, id: number) => db.get('SELECT * FROM roles WHERE
 
 /** Whether a draft's CV line is one of the person's own lines (as written, bullets and case aside); `part` lets a quote be a piece of one. */
 export const inCv = (cv: string, line: string, part = false) => { const n = norm(line); return n.length >= 8 && (part ? norm(cv).includes(n) : cv.split('\n').some((l) => norm(l) === n)); };
+
+/** Whether a line typed on a form comes from the person's own words (whole words, as written); a bare yes or no never does. */
+export const sourced = (src: string, v: string) => { const n = norm(v); return !!n && !/^(yes|no|y|n|true|false)$/.test(n) && ` ${norm(src)} `.includes(` ${n} `); };
+
+export type Field = { label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean };
+/** An application form as its own page shows it (crewd's snapshot, never the model's): the fields nobody has filled, the
+ *  button that sends it (or the Next of a form that goes on), and each field's ref by label (a radio by `group\nlabel`). */
+export function formOf(snapshot: string, filled: string[]) {
+  const fields: Field[] = [], refs: Record<string, string> = {}, at = (label: string) => fields.find((f) => f.label === label);
+  let submit = '', next = '', group = { label: '', depth: -1 };
+  for (const line of snapshot.split('\n')) {
+    const m = /^(\s*)- (textbox|combobox|checkbox|radio|option|button|group|radiogroup) "((?:[^"\\]|\\.)*)"(?:.*\[ref=([\w-]+)\])?/.exec(line);
+    if (!m) continue;
+    const [, pad, role, raw, ref] = m, label = raw.replace(/\\"/g, '"').trim(), last = fields.at(-1);
+    if (pad.length <= group.depth) group = { label: '', depth: -1 };
+    if (role === 'group' || role === 'radiogroup') { group = { label, depth: pad.length }; continue; }
+    if (role === 'option') { if (ref) refs[`option\n${label}`] ??= ref; if (last?.kind === 'pick') (last.options ??= []).push(label); continue; }
+    if (role === 'button') {
+      if (/submit|send (my |your )?application/i.test(label)) { submit = label; refs[label] = ref; } else if (/^(next|continue)\b/i.test(label)) next ||= label;
+      else if (/^(attach|upload|choose file)/i.test(label) && group.label && !at(group.label)) fields.push({ label: group.label, kind: 'file', yours: true });
+      continue;
+    }
+    const key = role === 'radio' ? `${group.label}\n${label}` : label;
+    if (filled.includes(label) || refs[key]) continue;
+    refs[key] = ref;
+    if (role === 'radio') { const f = at(group.label); if (f) (f.options ??= []).push(label); else fields.push({ label: group.label || label, kind: 'pick', options: [label], yours: ONLY_YOU.test(group.label || label) }); continue; }
+    fields.push({ label, kind: role === 'checkbox' ? 'tick' : role === 'combobox' ? 'pick' : 'text', yours: ONLY_YOU.test(label) });
+  }
+  return { fields, submit, next, refs };
+}
 
 /** Add a role to Found. A posting already on the board (by its page, or its company and title), passed on or not, is not added twice. */
 export function add(db: Store, r: { co: string; title: string; place: string; pay: string; fit: unknown[]; gap: string; url: string }, now = Date.now()) {
@@ -74,6 +104,15 @@ export const seen = (db: Store) => `\n\n[Crewhouse] Already on the board or pass
 export const draftTask = (g: Pick<Goal, 'cv'>, r: Row) => `Draft the person's application for this role. You write; they copy, check and apply on the company's own site.
 Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}. Pay: ${r.pay || 'not in the posting'}.
 Read the posting. Then call crew_application once: role ${r.id}; cv (the person's own CV lines, copied exactly as written, picked and ordered to lead with what this role asks for; never reword, never add a line); answers (the cover questions the posting asks, each answered only from the CV; if it asks none, "Why do you want to work at ${r.co}?"); yours (any form question about what they declare or sign, right to work, visa, pay, notice or consent: leave it out of answers). You never apply, send or submit.
+Their CV, line by line:
+${g.cv}`;
+
+/** The writer's job on the posting's own form, from the person's tap on Fill it in for me: their words only, nothing sent. */
+export const fillTask = (g: Pick<Goal, 'cv'>, r: Row, draft: string) => `Fill in the person's application form for ${r.title} at ${r.co} in your own browser. You fill; only the person submits.
+Open ${r.url} with browser goto and find its application form (an Apply link may lead to it). Fill each text line you can with browser fill, using only words from their CV or the approved draft below, as written: their name, contact details, the CV lines and the cover answers. Leave everything else empty for them: what they declare or sign, right to work, visa or sponsorship, pay, notice, consent, who they are, every dropdown, tick box and file, and anything the CV and draft do not say.
+Never sign in, make an account, upload a file, or press a button once you have filled a line. Then call crew_form once: role ${r.id}, and \`stop\` only when the form needs a sign-in or an account, wants a CV file, goes on over more pages, or the site asks whether you are human (say which, plainly). Reply with one line.
+The approved draft:
+${draft}
 Their CV, line by line:
 ${g.cv}`;
 
