@@ -89,3 +89,40 @@ export async function readDocument(file: string) {
   if (!parts.length) throw new Error('no such document');
   return { parts };
 }
+
+/** WinAnsi's codes for the punctuation people type that Latin-1 lacks. */
+const WIN: Record<string, number> = { '•': 0o225, '–': 0o226, '—': 0o227, '‘': 0o221, '’': 0o222, '“': 0o223, '”': 0o224, '…': 0o205, '€': 0o200 };
+/**
+ * A PDF of a document's parts, written here with the PDF's own Helvetica, so nothing is installed: headings bold, long
+ * lines wrapped, a new page when one fills. Latin text only (WinAnsi): another script needs a TrueType font embedded
+ * beside /R and /B (the bundled Archivo), with its widths and a ToUnicode map.
+ */
+export function pdfOf(parts: Part[]) {
+  const W = 612, H = 792, M = 56, pages: string[][] = [[]], esc = (s: string) => [...s].map((c) => {
+    const n = c.codePointAt(0)!;
+    return WIN[c] ? `\\${WIN[c].toString(8)}` : n < 32 ? ' ' : n < 128 ? (/[()\\]/.test(c) ? `\\${c}` : c) : n >= 160 && n < 256 ? `\\${n.toString(8)}` : '?';
+  }).join('');
+  let y = H - M;
+  const line = (text: string, size: number, bold: boolean, indent = 0, gap = 0) => {
+    const max = Math.floor((W - 2 * M - indent) / (size * 0.5)); // ponytail: Helvetica's average width, not its metrics; a line of capitals can run past the margin
+    let rest = text.replace(/\s+/g, ' ').trim();
+    y -= gap;
+    while (rest) {
+      let cut = rest.length <= max ? rest.length : rest.lastIndexOf(' ', max);
+      if (cut <= 0) cut = max;
+      if (y - size * 1.35 < M) { pages.push([]); y = H - M; }
+      y -= size * 1.35;
+      pages.at(-1)!.push(`BT /${bold ? 'B' : 'R'} ${size} Tf ${M + indent} ${y.toFixed(1)} Td (${esc(rest.slice(0, cut).trim())}) Tj ET`);
+      rest = rest.slice(cut).trim();
+    }
+  };
+  parts.forEach((p, i) => p.kind === 'heading' ? line(p.text ?? '', i ? 13 : 18, true, 0, i ? 12 : 0) : p.kind === 'li' ? line(`• ${p.text ?? ''}`, 11, false, 12, 2)
+    : p.kind === 'table' ? [p.head ?? [], ...(p.rows ?? [])].forEach((r, j) => line(r.join('   |   '), 10, !j, 0, 3)) : line(p.text ?? '', 11, !!p.bold, 0, 4));
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', `<< /Type /Pages /Kids [${pages.map((_, i) => `${5 + 2 * i} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    ...['Helvetica', 'Helvetica-Bold'].map((f) => `<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`),
+    ...pages.flatMap((ops, i) => [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /R 3 0 R /B 4 0 R >> >> /Contents ${6 + 2 * i} 0 R >>`,
+      `<< /Length ${ops.join('\n').length} >>\nstream\n${ops.join('\n')}\nendstream`])], at: number[] = [];
+  let out = '%PDF-1.4\n'; // every byte below is ASCII (the rest escaped), so a string's length is its byte offset
+  objs.forEach((o, i) => { at.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  return Buffer.from(`${out}xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${at.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${out.length}\n%%EOF\n`, 'latin1');
+}

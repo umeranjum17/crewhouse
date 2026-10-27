@@ -82,6 +82,10 @@ export const api = {
   workbook: (bot: string, path: string) => call('GET', `/api/workbook?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
   /** A delivered document, read by crewd itself: its headings, paragraphs, lists and tables, as words only. */
   document: (bot: string, path: string) => call('GET', `/api/document?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}`) as Promise<Json>,
+  /** A delivered document's file to save, as PDF or Word: `{name, type, data}` in base64, over the link too. */
+  saveAs: (bot: string, path: string, as: 'pdf' | 'docx') => call('GET', `/api/document?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&as=${as}`) as Promise<{ name: string; type: string; data: string }>,
+  /** The person's own edit of their resume: every section's lines as they typed them. Answers with the document again. */
+  resume: (sections: { heading: string; lines: string[] }[]) => call('PUT', '/api/resume', { sections }) as Promise<Json>,
   /** A finished video in pieces for the phone, which can't reach this computer's /files address: base64 slices
    *  `{data, more, size}` from byte `after`. */
   video: (bot: string, path: string, after: number) => call('GET', `/api/video?bot=${encodeURIComponent(bot)}&path=${encodeURIComponent(path)}&after=${after}`) as Promise<{ data: string; more: boolean; size: number }>,

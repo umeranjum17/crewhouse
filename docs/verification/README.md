@@ -15,6 +15,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | composio-policy | `node scripts/test.mjs test/composio.test.ts` — isolated engine-host gate, completion, exact virtual connection-schema discovery (including older Chief jobs and stale native calls), and Composio-first Gmail/native-off checks; `done-done run screens` is app smoke only, not live Gmail acceptance ([recipe](composio-policy.md)) |
 | mail-watch / Chief inbox triage | `done-done run inbox-triage` — recorded synthetic Gmail, read-only scripted Chief alert, cross-sender context and quiet repeat; real personal-inbox phone/PWA acceptance remains separate |
 | delivered-files | `done-done run delivered-files` |
+| resume | `done-done run resume` — the guard's refusal, the resume with its sources, Edit and Save, and the PDF and Word files the app saves, opened ([recipe](resume.md)) |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
 | signin-card | `done-done run signin-card` plus the iPad leg |

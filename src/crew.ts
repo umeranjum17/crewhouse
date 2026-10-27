@@ -20,7 +20,7 @@ import { mailChanges, mailTool } from './mail.ts';
 import { events } from './calendar.ts';
 import { MailSend } from './mail-send.ts';
 import { buildWorkbook, readWorkbook } from './workbooks.ts';
-import { buildDocument, readDocument } from './documents.ts';
+import { buildDocument, pdfOf, readDocument, type Part } from './documents.ts';
 import { STYLES, buildDeck, readDeck } from './slides.ts';
 import type { Link } from './link.ts';
 import { refParts } from './runtime.ts';
@@ -2142,6 +2142,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
       tool('crew_goal', 'Offer the person a job search goal card, once they have told you the roles they want, where, a pay floor if they want one, and pasted their CV in full. Ask only those. Nothing starts before their yes.', (p) => this.offerGoal(p)),
+      tool('crew_resume', 'Make the person\'s resume, which they edit and save as PDF or Word: `sections` [{heading?, lines}], the first without a heading (name, contact). Every line is a piece of one of their own lines in this chat, never one they marked private; crewd refuses any other.', (p) => this.makeResume(p.sections)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
@@ -2219,6 +2220,27 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     return this.propose(CHIEF, `Start looking for ${title}?`, { goal: { title, places, floor, brief, ...(stages ? { stages } : {}) },
       create: { bot: rae?.id, name: rae?.display ?? 'Research Rae', role: `Looks every morning for ${title}`, job, will_do: [`Look every morning at ${stages ? 'public pages' : jobs.JOB_SOURCES} for ${title} (${places})`, `Add what fits to ${stages ? stages[0] : 'Found'} without pinging you`, "Show each option's figure as the page says it, and what your brief does not show", ...(stages ? [`Leave every move after ${stages[0]} to you`] : ['Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'])], wont_do: stages ? jobs.GENERAL_WONT : jobs.WONT, first_step: 'Open Your goal to see what the crew found.', first_job: 'Look for the first options now' },
       preview: { head: 'Your goal', body: `${title}\n${places}${floor ? `\n${stages ? 'Limit' : 'Pay floor'}: ${floor}` : ''}${stages ? `\nStages: ${stages.join(', ')}` : ''}` } });
+  }
+
+  /** crew_resume: the person's resume from their own words in Chief's chat, kept with when they wrote each part, as a real .docx. */
+  private async makeResume(v: unknown) {
+    if (this.activeTask(CHIEF)?.origin !== 'person') throw fail('Only a conversation with the person can make their resume.');
+    await this.writeResume(jobs.traced(this.db.all("SELECT text, at FROM messages WHERE bot = ? AND author = 'person' ORDER BY id", CHIEF) as any, v));
+    await this.deliver(CHIEF, jobs.RESUME, 'Your resume, in your own words');
+    return { ok: true, note: 'Say it is ready in one line: they open it to edit any line, and save it as PDF or Word.' };
+  }
+  private async writeResume(sections: jobs.Section[]) {
+    const full = disk.insideBot(this.cfg, CHIEF, jobs.RESUME); mkdirSync(dirname(full), { recursive: true });
+    await buildDocument(full, { name: 'Resume', blocks: jobs.blocks(sections) });
+    jobs.setResume(this.db, sections);
+  }
+  /** The person's edit of their resume from the app: the same file, rewritten in their words. */
+  async editResume(v: unknown) {
+    const was = jobs.resume(this.db), sections = was && jobs.edited(was.sections, v);
+    if (!was || !this.fileFor(CHIEF, jobs.RESUME)) throw fail('There is no resume yet. Ask Chief for one.', 404);
+    if (!sections?.length) throw fail('A resume needs at least one line.');
+    await this.writeResume(sections);
+    return this.documentView(CHIEF, jobs.RESUME);
   }
 
   /** The person's yes on the goal card: the finder (and a job search's writer), each with its job and its won't-do list, the daily quiet look, and a first look now. */
@@ -2520,7 +2542,14 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!/\.(docx|pptx|md|txt)$/i.test(full) || !existsSync(full) || statSync(full).size > 20_000_000) throw Object.assign(new Error('no such document'), { status: 404 });
     // A delivered .md or .txt leaves as its own words (capped), read by the app's shared safe markdown renderer;
     // a .docx leaves as plain parts and a .pptx as its slides. Either way crewd reads the file, only after delivery.
-    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : /\.pptx$/i.test(full) ? readDeck(full) : readDocument(full);
+    return /\.(md|txt)$/i.test(full) ? { text: readFileSync(full, 'utf8').slice(0, 100_000) } : /\.pptx$/i.test(full) ? readDeck(full)
+      : { ...await readDocument(full), ...(botId === CHIEF && rel === jobs.RESUME ? { resume: jobs.resume(this.db) } : {}) };
+  }
+  /** A delivered .docx to save: the file itself, or a PDF of the words read back out of it, so the PDF says what the document says. */
+  async documentFile(botId: string, rel: string, as: string) {
+    if (!/\.docx$/i.test(rel)) throw fail('only a document saves as PDF or Word', 404);
+    const { parts } = await this.documentView(botId, rel) as { parts: Part[] }, pdf = as === 'pdf', data = pdf ? pdfOf(parts) : readFileSync(disk.insideBot(this.cfg, botId, rel));
+    return { name: `${basename(rel, '.docx')}.${pdf ? 'pdf' : 'docx'}`, type: pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: data.toString('base64') };
   }
 
   /** A delivered video, in base64 slices (a phone fetches it piece by piece over the link), only after delivery. */
