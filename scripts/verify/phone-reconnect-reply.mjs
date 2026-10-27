@@ -45,7 +45,7 @@ const relay = spawn('node', ['relay/main.ts'], { cwd: REPO, stdio: ['ignore', 'p
 relay.stdout.on('data', (b) => appendFileSync(join(OUT, 'relay.log'), b)); relay.stderr.on('data', (b) => appendFileSync(join(OUT, 'relay.log'), b));
 rmSync(READY, { force: true });
 const crewd = spawn('node', ['scripts/verify/native-delegation.ts', LAB, READY, '--scripted'], { cwd: REPO, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...env, CREWHOUSE_ENGINE_DIR: `${REPO}/runtime/openclaw`, LAB_LINK_PORT: String(LP), LAB_HI_REPLY: HI, CREWHOUSE_RELAY: `http://127.0.0.1:${RP}` } });
+  env: { ...env, CREWHOUSE_ENGINE_DIR: `${REPO}/runtime/openclaw`, LAB_LINK_PORT: String(LP), CREWHOUSE_LINK_HOST: '127.0.0.1', LAB_HI_REPLY: HI, CREWHOUSE_RELAY: `http://127.0.0.1:${RP}` } });
 crewd.stdout.on('data', (b) => appendFileSync(join(OUT, 'lab.log'), b)); crewd.stderr.on('data', (b) => appendFileSync(join(OUT, 'lab.log'), b));
 say('relay', relay.pid, 'crewd group', crewd.pid, 'link', LP, 'pipe', PP, 'relay port', RP);
 

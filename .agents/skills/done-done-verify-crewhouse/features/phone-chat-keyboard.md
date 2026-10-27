@@ -36,4 +36,4 @@ Chief's face (the blue circle in a captain's cap), round and themed too.
   means to ship.
 - The stub engine does not stream, so a lingering streamed bubble only shows on the real engine
   (`scripts/verify/native-delegation.ts --scripted`).
-- A paired emulator reaches crewd by the relay as well as the direct link, so a cut has to drop both.
+- A paired emulator reaches crewd by the relay as well as the direct link, so a cut has to drop both; and the lab's link must listen on loopback only (`CREWHOUSE_LINK_HOST=127.0.0.1`), or the emulator redials crewd's LAN or tailnet address around the cut.
