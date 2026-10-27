@@ -21,29 +21,29 @@ test('the phone board maps crewd roles to their stages, and a role offers only t
   crew.onboard('Umer');
   await settled(db, (await crew.post('chief', `Find me roles ${call('crew_goal', { title: 'Frontend engineer', places: 'London or remote', floor: '', cv: CV })}`))!.task);
   await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
-  const state0 = snap().jobs.goal, g = A.goal(snap())!, fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
+  const state0 = snap().goals[0].goal, g = A.goals(snap())[0], fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
   for (const [n, co, pay] of [[1, 'Northwind', '£55,000 to £65,000 a year'], [2, 'Fernhill', ''], [3, 'Oakline', '']])
     await settled(db, (await crew.post(state0.rae, `look ${call('crew_role', { company: co, title: 'Frontend Engineer', place: 'London', url: `${base}/job/${n}`, pay, missing: 'GraphQL is not on your CV', fit })}`))!.task);
-  const id = (co: string) => snap().jobs.roles.find((r: { co: string }) => r.co === co).id;
+  const id = (co: string) => snap().goals[0].roles.find((r: { co: string }) => r.co === co).id;
   await settled(db, crew.draftRole(id('Northwind')).task!);
   await settled(db, (await crew.post(g.will, `draft ${call('crew_application', { role: id('Northwind'), cv: [fit[0].cv], answers: [{ ask: 'Why Northwind?', answer: 'I build payments dashboards.' }] })}`))!.task);
   db.run('UPDATE roles SET stage = ? WHERE id = ?', 'interview', id('Oakline')); // as the person's two taps leave it
 
-  const state = snap(), board = A.goal(state)!;
+  const state = snap(), board: { cols: { name: string; roles: A.GoalRole[] }[] } = A.goals(state)[0];
   assert.deepEqual(board.cols.map((c) => [c.name, c.roles.map((r) => r.co)]), [['Found', ['Fernhill']], ['Drafted', ['Northwind']], ['Applied', []], ['Interview', ['Oakline']], ['Offer', []]]);
-  assert.equal(board.cols.reduce((n, c) => n + c.roles.length, 0), state.jobs.roles.length, "Home's count is the board's");
+  assert.equal(board.cols.reduce((n, c) => n + c.roles.length, 0), state.goals[0].roles.length, "Home's count is the board's");
   const north = board.cols[1].roles[0], fern = board.cols[0].roles[0];
   assert.equal(north.pay, '£55,000 to £65,000 a year');
-  assert.equal(fern.pay, 'Pay not in the posting');
+  assert.equal(fern.pay, 'No figure on the page');
   assert.deepEqual(north.fit, ['You led a payments dashboard']);
   assert.equal(north.gap, 'GraphQL is not on your CV');
   assert.equal(north.source, 'the company\'s website', 'a local address is never shown');
 
   assert.deepEqual(roleActions(fern).map((a) => a.label), ['Draft my application', 'Not for me']);
-  assert.deepEqual(roleActions(north).map((a) => a.label), ['I applied', 'Not for me']);
-  assert.deepEqual(roleActions(board.cols[3].roles[0]).map((a) => a.label), ['Prep for this interview', 'I have an offer']);
-  for (const stage of ['found', 'drafted', 'applied', 'interview', 'offer']) for (const prep of [undefined, { brief: [], questions: [], yours: [] }])
-    for (const a of roleActions({ ...north, stage, prep, next: stage === 'applied' ? ['interview', 'I have an interview'] : undefined }))
+  assert.deepEqual(roleActions(north).map((a) => a.label), ['Open the draft', 'Move to Applied', 'Not for me']);
+  assert.deepEqual(roleActions(board.cols[3].roles[0]).map((a) => a.label), ['Prep for this interview', 'Move to Offer']);
+  for (const r of board.cols.flatMap((c) => c.roles)) for (const prep of [undefined, { brief: [], questions: [], yours: [] }])
+    for (const a of roleActions({ ...r, prep, prepable: true }))
       assert.doesNotMatch(a.label, /submit|send|apply now/i, 'a role never offers to submit');
 
   // The writer's draft waits on its role: what only the person answers is listed and blank, and its yes copies, never submits.

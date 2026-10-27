@@ -58,7 +58,7 @@ shot() { # $1 file stem, $2 the words that must be on screen
   adb shell cmd uimode night no >/dev/null
 }
 bring ' Your goal$'
-shot home ' Frontend engineer: 2 roles on your board$'
+shot home ' Frontend engineer: 2 on your board$'
 ui tap '^Your goal$' >/dev/null
 shot goal ' Found 1$'
 ui tap '^Drafted 1$' >/dev/null; see ' Northwind · London$'
