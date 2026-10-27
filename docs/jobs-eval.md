@@ -50,3 +50,14 @@ The ledger line and `results.json` carry the commit (and whether the files under
 - One CV and one set of postings, in English: it can show where the helper loses, not that it generalises.
 - The live web: the fixed pages are the point (a rerun is comparable), so how the helper searches is not tested.
 - Cost and speed are recorded per case (seconds, tool calls, calls crewd refused, tokens when the engine reports them), not scored.
+
+## First real result: not yet run
+
+The harness is proven on the stub engine only (`scripts/jobs-eval.sh --engine stub`: the scripted helper scores 100%, the scripted baseline 45%, which shows the scorer tells them apart and nothing else). There is no real-model number yet, and none is claimed here. Two attempts at the real run on 27 Oct 2026 stopped before any case ran, with the same error both times:
+
+```
+Error: gave up after 120 s waiting for Claude to read as signed in; crewd's last view of that account:
+{"account":"claude","provider":"claude","name":"Claude","signedIn":false,"restingUntil":0,"signIn":null,"notIncluded":false,"signedOut":false}
+```
+
+The engine had reached `crewd engine ready` and the dedicated test login was linked into its home, while `claude auth status --text` on that login's own HOME reported it signed in. The run needs a signed-in engine, which is the account owner's to give: run the command above with `JOBS_EVAL_CLAUDE_HOME` set once the engine sees the login (the runbook's "Real model words" section has the steps), then add the result and its ledger line here.
