@@ -15,7 +15,7 @@
 # A screen reached by a tap rather than a URL (Chief's thread opened from his card on Home)
 # needs one step after each open: THEN='<js>' is evaluated before the shot, e.g.
 #   THEN="$(cat <<'JS'
-#   (async () => { document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()
+#   (async () => { document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()
 #   JS
 #   )" scripts/verify/screens.sh "$EV/screens" chief "http://127.0.0.1:$PORT/"
 set -euo pipefail

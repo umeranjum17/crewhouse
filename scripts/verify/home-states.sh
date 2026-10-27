@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# done-done journey `screens`, Home's states (Stack J02): boot one isolated stub-engine crewd onboarded as Umer,
+# done-done journey `screens`, Home's states (the calm chat list): boot one isolated stub-engine crewd onboarded as Umer,
 # seed one state, capture Home at 390 and 1280, day and night, through home-gate.mjs (which fails on text under
 # 16px outside caps, pills and tab labels, on clipped text and on sideways scroll), tear down.
 #
 #   scripts/verify/home-states.sh <out-dir> <first|busy|resting>
 #
-#   first    onboarded, no helpers: first-day Chief card and Hand me a job
+#   first    onboarded, no helpers: Chief alone in the list, and Hand me a job
 #   busy     Rae at work on the phone plan, Will done with the heating letter (Kept), Chief asking to bring Ivy on
 #   resting  the same, but Rae's account hit its limit and rests
 # Exit 0 with four PNGs and <state>-gate.json in <out-dir>; non-zero otherwise. Needs /usr/bin/chromium.

@@ -868,8 +868,10 @@ export function chats(state: Json, local: ChiefLocal = {}): Chat[] {
   const rank = (c: Chat) => GROUP_ORDER.indexOf(groupOf(member(c.id), v));
   const rest = crew(state).map((h): Chat => {
     const b = bot(h.id), s = statusOf(member(h.id), v), m = member(h.id);
-    const working = m.seat === 'working' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
-    return { id: h.id, name: h.name, who: h, line: preview(b.last, h.role), at: at(b.last?.at ?? 0) || 0,
+    const working = s.seat === 'working' ? `${h.name} is working${m.step ? ` · ${m.step}` : ''}` : undefined;
+    // A helper done today reads its word and what it made, as its tile does, never a stale "On it.".
+    const made = s.seat === 'done' ? `${s.word} · ${cardLines(m, v).line}` : '';
+    return { id: h.id, name: h.name, who: h, line: made || preview(b.last, h.role), at: at(b.last?.at ?? 0) || 0,
       asks: 0, ring: h.ring === 'needs' ? '' : h.ring, status: s.word, cls: glow(s), ...(working ? { working } : {}) };
   }).sort((a, b) => rank(a) - rank(b) || b.at - a.at);
   const room = state.room ?? {};

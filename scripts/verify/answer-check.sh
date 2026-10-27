@@ -56,7 +56,7 @@ sql "SELECT bot, author, task_id, text FROM messages WHERE bot = 'chief'" > "$OU
 [ "$(sql "SELECT COUNT(*) FROM messages WHERE bot = 'chief' AND author = 'bot' AND task_id IN (SELECT id FROM tasks WHERE bot = 'research-rae') AND text LIKE 'I recommend the lower fare%' AND text NOT LIKE '%checked by Verifier Vera%'" | first)" = 0 ] || { echo "answer-check: the unchecked answer reached Chief's thread alone" >&2; exit 1; }
 grep -q "Does not hold" <<<"$CARD" || { echo "answer-check: the card lacks the finding: $CARD" >&2; exit 1; }
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
-THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS="390x844" bash "$REPO/scripts/verify/screens.sh" "$OUT/answer-check" chief "$B/#person=$PERSON"
 node "$REPO/scripts/verify/steps.mjs" "$OUT" answer-check
 echo "answer-check: checked card line: $CARD"

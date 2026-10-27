@@ -1,5 +1,6 @@
 // Home's headless gate (home-states.sh). Capture one app URL at 390 and 1280, day and night, and run the headless gate on each:
-// no text under 16px outside caps labels, pills and tab labels; no clipped text; no horizontal scroll.
+// no text under 16px outside caps labels, pills and tab labels; no clipped text (a .clamp/.clamp1 line ends in its
+// ellipsis by design: a chat list's preview); no horizontal scroll.
 //   node scripts/verify/home-gate.mjs <repo> <url-with-#hash> <out-dir> <slug> [then-js]
 // Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
 // GATE_SCOPE=<selector> gates the text under it instead of main and .page (a file panel sits outside both).
@@ -44,7 +45,7 @@ try {
       const texty = [...document.querySelectorAll(${JSON.stringify(process.env.GATE_SCOPE ?? 'main *, .page *')})].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));
       const small = (e) => { const cs = getComputedStyle(e); return cs.textTransform === 'uppercase' || e.closest('.st-pill, .pill, .tabbar, .tab, .count, .badge, time, [aria-hidden="true"]'); };
       const tiny = texty.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16 && !small(e)).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
-      const clipped = texty.filter((e) => { const cs = getComputedStyle(e); return (e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'visible' && cs.overflowX !== 'auto') || (e.scrollHeight > e.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !/clamp/.test(e.className)); }).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
+      const clipped = texty.filter((e) => { const cs = getComputedStyle(e); return !/clamp/.test(e.className) && ((e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'visible' && cs.overflowX !== 'auto') || (e.scrollHeight > e.clientHeight + 2 && /hidden|clip/.test(cs.overflowY))); }).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const hscroll = document.documentElement.scrollWidth > innerWidth + 1;
       return { checked: texty.length, tiny, clipped, hscroll };
     })()`);

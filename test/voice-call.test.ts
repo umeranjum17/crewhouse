@@ -96,7 +96,7 @@ async function boot(device: string, withHelper = false) {
   await send('Page.enable');
   await send('Page.addScriptToEvaluateOnNewDocument', { source: device });
   await send('Page.navigate', { url: `${base}/?day#person=${key}` });
-  await until('Home', () => run("!!document.querySelector('.stack-home')"), 30_000);
+  await until('Home', () => run("!!document.querySelector('.chat-list')"), 30_000);
   await run(`location.hash = ${JSON.stringify(helper ? `#/h/${helper.id}` : '#/chief')}`);
   return { run, db, helper, turns: (): Promise<string[]> => run('window.turns') };
 }

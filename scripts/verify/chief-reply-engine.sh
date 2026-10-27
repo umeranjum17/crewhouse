@@ -39,7 +39,7 @@ done
 printf 'Engine: OpenClaw %s (this checkout'"'"'s pin), model: a scripted local provider\nYou asked Chief: %s\nChief replied: %s\n' "$ENGINE" "$ASK" "$R" > "$OUT/reply.txt"
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
-THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chief-reply-engine" chief "$B/#person=$PERSON"
 OK=1
 node "$REPO/scripts/verify/steps.mjs" "$OUT" chief-reply-engine "engine=OpenClaw $ENGINE" "ask=$ASK" "reply=$R"

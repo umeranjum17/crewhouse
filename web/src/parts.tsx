@@ -302,7 +302,8 @@ export function Media({ f, big, forget, who }: { f: FileView; big?: boolean; for
   const [play, setPlay] = useState(false);
   if (f.kind === 'image') return <a href={f.url} target="_blank" rel="noreferrer" className="media"><img src={f.url} alt={f.name} /></a>;
   if (f.review) return <div className="with-review"><a className="doc" href={f.url} target="_blank" rel="noreferrer"><span className="doc-ic">▤</span><span className="grow"><span className="doc-name" title={f.name}>{f.name}</span></span><b>Open</b></a><ReviewCard f={f} /></div>;
-  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} big={big} forget={forget} who={who} />;
+  if ((f.kind === 'sheet' || f.kind === 'page') && big) return <Attachment f={f} forget={forget} />;
+  if (f.kind === 'sheet' || f.kind === 'page') return <PreviewCard f={f} forget={forget} who={who} />;
   if (f.kind === 'video') {
     return play
       ? <video className="media" src={f.url} controls autoPlay />
@@ -418,17 +419,15 @@ export function PreviewCard({ f, big, forget, who, meta }: { f: FileView; big?: 
   return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
 }
 
-/** A job just finished, in Chief's thread (Stack J16a): its maker's colour and face, Done., the thread's own words for
- *  what came of it, a peek inside, then Open it or Later. Either one settles it into the plain file card. */
-export function DoneCard({ f, who, text, settle }: { f: FileView; who: Maker; text: string; settle: (later: boolean) => void }) {
-  const { book, doc, deck, text: md } = usePreview(f);
-  return <section className={`done-card${who === 'chief' ? ' wb-chief' : ''}`} style={tint(who)} aria-label={`Done: ${f.name}`}>
-    <Face who={who} size={96} />
-    <div className="done-say"><h2>Done.</h2><p>{text}</p></div>
-    <Thumb name={f.name} book={book} doc={doc} deck={deck} text={md} />
-    <div className="done-go"><a className="done-open" href={fileTarget(f)?.href} onClick={() => settle(false)}>Open it</a>
-      <button type="button" className="done-later" onClick={() => settle(true)}>Later</button></div>
-  </section>;
+/** A finished file in a thread (calm): a small attachment on the bubbles' own surface — the kind's mark, its name and
+ *  one line of what is in it ("Document · 4 sections") — and a tap opens it. Never a coloured block with buttons. */
+function Attachment({ f, forget }: { f: FileView; forget?: boolean }) {
+  const { book, doc, deck } = usePreview(f);
+  const t = fileTarget(f), out = !t?.href.startsWith('#');
+  const card = <a className="att" href={t?.href} target={out ? '_blank' : undefined} rel={out ? 'noreferrer' : undefined} aria-label={`Open ${f.name}`}>
+    <span className={`att-ic att-${f.kind}`} aria-hidden><Icon name={f.kind === 'sheet' ? 'sheet' : 'file'} size={20} /></span>
+    <span className="grow att-what"><b>{f.name}</b><span>{aboutFile(f, book, doc, deck)}</span></span><Icon name="next" size={18} /></a>;
+  return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
 }
 
 const HUES = ['var(--go)', 'var(--ok)', 'var(--amber)', 'var(--danger)', 'var(--ink2)', 'var(--line2)'];
@@ -791,9 +790,8 @@ export const KEPT = 'kept';
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts). A send the computer hasn't
  * answered in a few seconds says so ("Reconnecting…"), so a stall never looks like a dead button.
  */
-/** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (a PDF, a document or a photo,
- *  shown as chips until sent), a starter or two that fill the box without sending, then the mic and send. */
-export function Composer({ placeholder, onSend, chat, chips, talk, stop, practice }: { practice?: boolean; placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk; stop?: () => void }) {
+/** Chief's box. With `attach`, a round + before the words picks a PDF, a document or a photo (shown as chips until sent). */
+export function Composer({ placeholder, onSend, chat, attach, talk, stop, practice }: { practice?: boolean; placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; attach?: boolean; talk?: Talk; stop?: () => void }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
   const voice = useVoice(chat, chat === 'chief' || !!practice, text, (t) => change(t));
   const [busy, setBusy] = useState(false);
@@ -836,25 +834,27 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop, practic
   if (call.now) return <CallPanel now={call.now} hears={call.route} stop={call.stop} />;
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
-    <form className={`composer${chips ? ' has-bar' : ''}`} onSubmit={(e) => { e.preventDefault(); void send(); }}>
+    <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
-      {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file">{PHOTO_TYPES.includes(p.type) && <img className="c-thumb" src={`data:${p.type};base64,${p.data}`} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
-      <textarea rows={1} value={text} placeholder={voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
-        onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
-        onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-      {chips && <div className="c-bar">
-        <button type="button" className="c-clip" aria-label="Attach a file" title="Attach a PDF, a document or a photo" onClick={() => picker.current?.click()}><span className="desk-only"><Icon name="clip" size={18} /></span><span className="phone-only"><Icon name="plus" size={20} /></span></button>
+      {attach && <>
+        <button type="button" className="c-clip" aria-label="Attach a file" title="Attach a PDF, a document or a photo" onClick={() => picker.current?.click()}><Icon name="plus" size={22} /></button>
         <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
-        {chips.slice(0, 2).map((c) => <button type="button" key={c.ask} className="c-chip clamp1" onClick={() => change(c.ask)}>{c.label}</button>)}
-      </div>}
-      {voice.mic}
-      {stop && !text.trim() && !picked.length
-        ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
-        : call.can && !text.trim() && !picked.length && !busy
-        ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
-        // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.
-        : <button className="send" aria-label="Send" onPointerDown={(e) => e.preventDefault()} disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}>↑</button>}
+      </>}
+      {/* Calm: the words, the mic and the round send-or-talk button share one pill; attach sits apart before it. */}
+      <div className="c-pill">
+        {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file">{PHOTO_TYPES.includes(p.type) && <img className="c-thumb" src={`data:${p.type};base64,${p.data}`} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
+        <textarea rows={1} value={text} placeholder={voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
+          onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
+          onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+        {voice.mic}
+        {stop && !text.trim() && !picked.length
+          ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
+          : call.can && !text.trim() && !picked.length && !busy
+          ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
+          // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.
+          : <button className="send" aria-label="Send" onPointerDown={(e) => e.preventDefault()} disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}><Icon name="up" size={20} /></button>}
+      </div>
     </form>
   );
 }

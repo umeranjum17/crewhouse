@@ -165,7 +165,7 @@ printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R
 [ -z "${PACKAGE_DIR:-}" ] || { cat "$OUT/reply.txt"; grep -E "engine ready|first words|signed in" "$LAB/crewd.log" | cut -c1-120; } >> "$OUT/ready.txt" # the release run's one self-contained record
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
 # Chief's thread, opened the way a person does: a tap on Chief's card on Home.
-THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   WIDTHS=390x844 bash "$REPO/scripts/verify/screens.sh" "$OUT/chat-real" chief "$B/#person=$PERSON"
 if [ "$BOT" != chief ]; then # the helper's own page, where its answer sits
   THEN="(async () => { location.hash = '#/h/$BOT'; for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \

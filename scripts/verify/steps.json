@@ -647,7 +647,7 @@
       "Open the writer's draft card: it offers Fill it in for me, Copy and open the form, and Not now",
       "Tap Fill it in for me: the writer opens the posting's form in its own browser and types only lines from his CV and the approved draft; crewd refuses an email that is not in them, the visa and pay questions and the consent tick",
       "Open the card it raises: the site and page, what was filled from the CV and draft, the questions only he answers left blank (visa sponsorship, expected salary, consent), the CV upload he attaches himself, and a Submit button",
-  "Answer his questions on the card and press Submit (local posting only): crewd puts the lines in, presses the form's own Submit once, and the role moves to Applied when the page says it went",
+      "Answer his questions on the card and press Submit (local posting only): crewd puts the lines in, presses the form's own Submit once, and the role moves to Applied when the page says it went",
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The writer never presses Submit and never answers for him: the card is the one place the application can be sent from, by his tap. On a real posting the run stops at the card and nothing is sent. Not a real model."
@@ -720,5 +720,14 @@
       "Repeat the resume and the saved edit in the installed app's window at phone size"
     ],
     "result": "Every line of the resume is one Umer wrote in Chief's chat; the invented certificate and the line he marked private never appear. Each part says when he told Chief, and the part he changed says Edited by you. The PDF and the Word file the buttons save hold exactly the lines on screen, his edit included. The PDF uses a built-in Latin font, so a non-Latin script would not show. Not a real model."
+  },
+  "calm-design": {
+    "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, the commit before the calm redesign too",
+    "steps": [
+      "Open Chief's chat on a 390 phone, day and night",
+      "Open Home on a 390 phone, day and night",
+      "Open Chief in the three panes on a 1280 computer, day and night"
+    ],
+    "result": "Chief's chat, Home and the desktop shell as that commit draws them, each capture named the same at the head and at the base"
   }
 }

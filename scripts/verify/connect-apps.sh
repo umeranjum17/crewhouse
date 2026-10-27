@@ -127,7 +127,7 @@ rm -f "$OUT"/openclaw*.log
 printf 'You asked Chief: %s\nChief replied (model %s): %s\n' "$ASK" "$MODEL" "$R" > "$OUT/reply.txt"
 sleep 6; touch "$LAB/stop-film"; wait "$FILM"; FILM=""
 export CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?set to your task-named session}"
-THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.sh-chief a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.sh-chief a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
+THEN="(async () => { for (let i = 0; i < 50 && !document.querySelector('.chat-list a'); i++) await new Promise((r) => setTimeout(r, 100)); document.querySelector('.chat-list a')?.click(); for (let i = 0; i < 50 && !document.querySelector('.home-chat'); i++) await new Promise((r) => setTimeout(r, 100)); return !!document.querySelector('.home-chat'); })()" \
   bash "$REPO/scripts/verify/screens.sh" "$OUT/connected-apps" chief "$B/#person=$PERSON"
 bash "$REPO/scripts/verify/screens.sh" "$OUT/connected-apps" apps "$B/#/apps"
 OK=1
