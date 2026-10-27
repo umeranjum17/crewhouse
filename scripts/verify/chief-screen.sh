@@ -29,22 +29,32 @@ for _ in $(seq 100); do [ -s "$LAB/env" ] && break; sleep 0.1; done
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 MODEL_ENV=(CREWHOUSE_ENGINE_BASE_URL="${MODEL:-}" CREWHOUSE_ENGINE_API_KEY=scripted); [ -z "$KEYFILE" ] || MODEL_ENV=()
-crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
-  XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
-  XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
-  XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
-  "${MODEL_ENV[@]}" CREWHOUSE_PORT="$PORT" \
-  CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
-  node "$REPO/src/main.ts"
-PERSON=""
-for _ in $(seq 1200); do
-  if [ -f "$LAB/state/person.key" ]; then
-    PERSON=$(cat "$LAB/state/person.key")
-    curl -fsS --max-time 10 -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B/api/state" 2>/dev/null | grep -q '"phase":"ready"' && break
-  fi
-  sleep 0.25
-done
+boot() {
+  crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" \
+    XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
+    XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
+    XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
+    "${MODEL_ENV[@]}" CREWHOUSE_PORT="$PORT" \
+    CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
+    node "$REPO/src/main.ts"
+  PERSON=""
+  for _ in $(seq 1200); do
+    if [ -f "$LAB/state/person.key" ]; then
+      PERSON=$(cat "$LAB/state/person.key")
+      curl -fsS --max-time 10 -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B/api/state" 2>/dev/null | grep -q '"phase":"ready"' && break
+    fi
+    sleep 0.25
+  done
+}
+boot
 [ -n "$PERSON" ] || { echo "chief-screen: crewd never became ready" >&2; exit 1; }
+# A Chief from before the computer grant: take it (and the one-time mark) out of his bot.json, start crewd again, and the grant is back.
+crewd_stop; CREWD=""
+node -e 'const fs = require("node:fs"), p = process.argv[1], c = JSON.parse(fs.readFileSync(p, "utf8")); c.tools = c.tools.filter((t) => t !== "computer"); delete c.screenOffered; if (!process.argv[2]) c.signedIn = ["127.0.0.1"]; fs.writeFileSync(p, JSON.stringify(c, null, 2))' "$LAB/crew/bots/chief/bot.json" "$KEYFILE"
+cp "$LAB/crew/bots/chief/bot.json" "$OUT/chief-before-upgrade.json"
+PERSON=""; boot
+cp "$LAB/crew/bots/chief/bot.json" "$OUT/chief-after-upgrade.json"
+node -e 'const c = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.exit(c.tools.includes("computer") && c.tools.join() === "crew,files,computer" ? 0 : 1)' "$LAB/crew/bots/chief/bot.json" || { echo "chief-screen: an older Chief did not gain the computer grant on upgrade" >&2; exit 1; }
 H=(-H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON")
 post() { curl -fsS --max-time 60 "${H[@]}" -d "$2" "$B$1" > /dev/null; }
 post /api/onboard '{"address":"Umer"}'
@@ -56,7 +66,7 @@ if [ -n "$KEYFILE" ]; then # the sign-in sheet's own path: start a key sign-in, 
   curl -fsS --max-time 10 "${H[@]}" "$B/api/accounts" | grep -q '"account":"minimax","name":"MiniMax","signedIn":true' || { echo "chief-screen: MiniMax did not take the key: $(curl -fsS --max-time 10 "${H[@]}" "$B/api/accounts" | node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8")).find((a) => a.account === "minimax").signIn)')" >&2; exit 1; }
 fi
 # The app as the person sees it, at phone and desktop width, from before the first word to the end.
-if [ -n "$KEYFILE" ]; then bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LAB/stop-film" & APP=$!; sleep 12; fi
+bash "$REPO/scripts/verify/app-film.sh" "$B/#person=$PERSON" "$OUT/app.mp4" "$LAB/stop-film" & APP=$!; sleep 12
 # The scripted model's moves: the address bar, the form, the name, Renew, then the outcome it saw.
 act() { printf '[tool computer {"node": "crewhouse-chief", %s}] ' "$1"; }
 SCRIPT="$(act '"action": "screenshot"')$(act '"action": "key", "text": "ctrl+l"')$(act "\"action\": \"type\", \"text\": \"$SITE\"")$(act '"action": "key", "text": "Return"')"
@@ -81,10 +91,21 @@ DISPLAY=$X XAUTHORITY="$LAB/state/desktops/chief.xauth" ffmpeg -y -loglevel erro
 FILM=$!
 sleep 2
 post /api/bots/chief/messages "$ASK"
-for _ in $(seq 2400); do [ -s "$OUT/saved.txt" ] && break; sleep 0.25; done
+# Stub run: the loopback host is signed in, so each press and typed line asks on a card; the app film shows each one, then it is answered "once".
+ASKS="$LAB/home/asks.n"; : > "$ASKS"
+for _ in $(seq 2400); do
+  [ -s "$OUT/saved.txt" ] && break
+  [ -n "$KEYFILE" ] && { sleep 0.25; continue; }
+  A=$(node -e 'const { DatabaseSync } = require("node:sqlite"); console.log(new DatabaseSync(process.argv[1], { readOnly: true }).prepare("SELECT id FROM asks WHERE state = ? ORDER BY id LIMIT 1").get("open")?.id ?? "")' "$LAB/state/crew.db" 2>/dev/null || true)
+  if [ -n "$A" ]; then
+    [ -s "$ASKS" ] || { echo "$A" > "$ASKS"; sleep 6; } # the card sits open on the app film for a few seconds before it is answered
+    post "/api/asks/$A/answer" '{"answer":"allow","scope":"once"}'
+  fi
+  sleep 0.25
+done
 sleep 3 # the thank-you page on film
 kill -INT "$FILM"; wait "$FILM" || true; FILM=""
-if [ -n "$APP" ]; then sleep 20; touch "$LAB/stop-film"; wait "$APP"; APP=""; fi # the app shows Chief's words and the job's state
+sleep 20; touch "$LAB/stop-film"; wait "$APP"; APP="" # the app shows Chief's words and the job's state
 # Another bot's screen is never Chief's: crewd's gate refuses a call that names any node but its own.
 if [ -z "$KEYFILE" ]; then
 post /api/bots/chief/messages '{"text":"[tool computer {\"node\": \"crewhouse-scout\", \"action\": \"screenshot\"}]"}'

@@ -272,6 +272,21 @@ test('a helper joined before app grants takes its template\'s apps when the crew
   done();
 });
 
+test('a Chief from before the computer grant gains it once on upgrade, and a later switch-off stays', () => {
+  const { cfg, crew, done } = setup();
+  crew.onboard('sir');
+  const tpl = disk.loadTemplate(cfg, 'chief'), older = disk.botConfig(cfg, 'chief');
+  older.tools = ['crew', 'files'];
+  delete older.screenOffered;
+  writeFileSync(join(disk.botDir(cfg, 'chief'), 'bot.json'), JSON.stringify(older));
+  disk.upgradeFolder(cfg, 'chief', tpl, 'Chief');
+  assert.deepEqual(disk.botConfig(cfg, 'chief').tools, ['crew', 'files', 'computer']);
+  disk.setGrants(cfg, 'chief', ['files']);
+  disk.upgradeFolder(cfg, 'chief', tpl, 'Chief');
+  assert.deepEqual(disk.botConfig(cfg, 'chief').tools, ['crew', 'files']);
+  done();
+});
+
 /** Google's apps, pointed at the stand-in (same scopes and servers otherwise). */
 function googleLab() {
   const s = lab();
