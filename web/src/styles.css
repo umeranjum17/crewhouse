@@ -196,6 +196,8 @@ textarea.input { resize: vertical; }
 .form-q input[type=checkbox] { width: 22px; height: 22px; }
 .form-ev .yours { display: grid; gap: 10px; border: 1px solid var(--pink); border-radius: 10px; padding: 12px; color: var(--pink-ink); }
 .form-ev .yours .form-q { color: var(--ink); }
+.stack-ask .form-ev .yours, .stack-ask .form-ev .yours :is(b, .form-q > span, .mute) { color: #0B0B0B; } /* on the helper's colour, day or night */
+.card.ask.stack-ask .form-ev :is(.ev-to, .ev-line span) { font-size: 16px; line-height: 1.4; }
 /* Chief's hire card (mock 1): section headers over plain lines, the first step numbered, the foot muted. */
 .hire-ev { gap: 8px; }
 .hire-sect { font: 600 12px/16px var(--ui); letter-spacing: .06em; color: var(--mute); margin-top: 6px; text-transform: uppercase; }

@@ -60,6 +60,8 @@ get() { curl -fsS -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "$B$1"; }
 get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.stringify(JSON.parse(s).asks.find((a)=>a.detail?.form)?.detail.form,null,1)))' > "$OUT/form-card.json"
 get /api/events | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).filter((e)=>/^run\.(call|tool)$|^message$/.test(e.kind)).map((e)=>JSON.stringify(e)).join("\n")))' > "$OUT/writer-calls.jsonl"
 hash_gate form "/ask/$FORM"
+# The same card where it lands, in Chief's chat, on the writer's colour day and night; the gate reads the card alone.
+GATE_SCOPE='.stack-ask *' hash_gate form-chat /chief "document.querySelector('.stack-ask .yours')?.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 600));"
 # The installed app: Chromium's own install from Settings, then the form card in its window at phone size.
 mkdir -p "$LAB/pwa" "$OUT/pwa"
 cat > "$LAB/pwa/plan.json" <<JSON
