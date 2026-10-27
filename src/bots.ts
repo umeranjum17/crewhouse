@@ -287,8 +287,7 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
   if (existsSync(old)) {
     const text = readFileSync(old, 'utf8'), m = { bot: id };
     if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
-    rmSync(old);
-    commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
+    rmSync(old); commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
   }
   const soul = tpl && !existsSync(join(dir, 'soul.md')) ? templateSoul(cfg, tpl, display) : '';
   if (soul) {
