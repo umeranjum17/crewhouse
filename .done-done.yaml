@@ -64,6 +64,10 @@ journeys:
   # Interview prep: the brief with linked sources, the likely questions and the practice chat (docs/verification/jobs-prep.md).
   jobs-prep:
     command: 'timeout -k 10 600 bash scripts/verify/jobs-prep.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The reusable long-goal parts: a flat to rent beside the job search, with its own stage names, the quiet daily search, and reminders (docs/verification/goal-parts.md).
+  goal-parts:
+    timeout: 20m
+    command: 'timeout -k 10 1100 bash scripts/verify/goal-parts.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

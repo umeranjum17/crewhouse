@@ -2418,26 +2418,29 @@ const TAGS: Partial<Record<Kind, string>> = { scout: 'Finds things out', scribe:
 export const tagOf = (h: Helper) => TAGS[h.kind] ?? h.role.split(/[.,:;]| and /)[0].trim();
 export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v).group;
 
-/** Your goal: the job-search board in plain words. The crew moves a role only into Found and Drafted; the other columns move on the person's tap. */
-const GOAL_COLS: [string, string, string][] = [['found', 'Found', 'The crew adds these'], ['drafted', 'Drafted', 'The crew drafts; you check'], ['applied', 'Applied', 'Only you move a role here'], ['interview', 'Interview', 'Only you move a role here'], ['offer', 'Offer', 'Only you move a role here']];
-export const GOAL_RULES = { short: 'Applying is always yours. The crew finds roles and drafts; you check, copy and apply.',
-  only: ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything'],
-  asks: ['Declarations you sign', 'Your right to work in a country', 'Visa and sponsorship', 'Pay you expect, and your notice period', 'Consent: your data, background checks, references'] };
+/** Your goals: each goal's board in plain words. The crew moves an item only into a goal's first stages; every later stage moves on the person's own tap. */
+export const GOAL_RULE = 'Deciding is always yours. The crew finds and drafts; you check and act.';
+export const GOAL_WRITER = { ask: 'Draft my application', busy: 'Drafting…', open: 'Open the draft' };
+export type GoalReminder = { id: number; item: number | null; name: string; when: string; fired: boolean };
 export type GoalPrep = { brief: { says: string; host: string; url: string; quote: string }[]; questions: { ask: string; why: string }[]; yours: string[] };
-export type GoalRole = { id: number; co: string; title: string; place: string; pay: string; fit: string[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; prepping: boolean; prep?: GoalPrep; next?: [string, string] };
+export type GoalRole = { prepping: boolean; prep?: GoalPrep; prepable: boolean; id: number; co: string; title: string; place: string; pay: string; fit: string[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; next?: [string, string]; draft: 'ask' | 'open' | null; passable: boolean; reminders: GoalReminder[] };
 /** Where a page is, as a person says it: the site's own name; never a bare address or a machine's own name. */
 const hostOf = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return /^[\d.]+$|^\[|(^|\.)localhost$/.test(h) ? 'the company\'s website' : h; } catch { return ''; } };
-export function goal(state: Json) {
-  const j = state?.jobs;
-  if (!j) return null;
-  const roles: GoalRole[] = j.roles.map((r: Json) => ({ id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'Pay not in the posting', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: hostOf(r.url), url: r.url,
-    checked: new Date(r.checked_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), stage: r.stage, drafting: !!r.drafting, prepping: !!r.prepping,
-    prep: r.prep ? { brief: r.prep.brief.map((b: Json) => ({ says: plain(b.says), host: hostOf(b.url), url: b.url, quote: plain(b.quote) })), questions: r.prep.questions.map((q: Json) => ({ ask: plain(q.ask), why: plain(q.why) })), yours: r.prep.yours.map((q: string) => plain(q)) } : undefined,
-    next: r.stage === 'drafted' ? ['applied', 'I applied'] : r.stage === 'applied' ? ['interview', 'I have an interview'] : r.stage === 'interview' ? ['offer', 'I have an offer'] : undefined }));
-  return { will: j.goal.will as string, title: plain(j.goal.title), places: plain(j.goal.places), floor: plain(j.goal.floor),
-    cols: GOAL_COLS.map(([key, name, who]) => ({ key, name, who, roles: roles.filter((r) => r.stage === key) })),
-    own: ['Every morning at 8:00 the crew looks for new roles and tells you only when one fits.', 'Seven days after you tell it you applied, the crew drafts a follow-up for you to send.'] };
+export function goals(state: Json) {
+  return (state?.goals ?? []).map(({ goal: g, roles: rs }: Json) => {
+    const at = (key: string) => g.stages.findIndex((s: Json) => s.key === key);
+    const reminders: GoalReminder[] = (state.routines ?? []).filter((r: Json) => r.kind === 'remind' && r.goal === g.id).map((r: Json) => ({ id: r.id, item: r.item ?? null, name: plain(r.name), fired: !r.next_at, when: r.next_at ? `at ${moment(Number(r.next_at))}` : `reminded ${moment(Number(r.last_at))}` }));
+    const roles: GoalRole[] = rs.map((r: Json) => {
+      const i = at(r.stage), nx = g.stages[i + 1];
+      return { id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'No figure on the page', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: hostOf(r.url), url: r.url,
+        checked: new Date(r.checked_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), stage: r.stage, drafting: !!r.drafting, prepping: !!r.prepping, prepable: !!g.will && r.stage === 'interview',
+        prep: r.prep ? { brief: r.prep.brief.map((b: Json) => ({ says: plain(b.says), host: hostOf(b.url), url: b.url, quote: plain(b.quote) })), questions: r.prep.questions.map((q: Json) => ({ ask: plain(q.ask), why: plain(q.why) })), yours: r.prep.yours.map((q: string) => plain(q)) } : undefined,
+        next: nx && i + 1 >= g.crew ? [nx.key, `Move to ${nx.name}`] : undefined, draft: !g.will ? null : i === 0 ? 'ask' : i === 1 ? 'open' : null, passable: i < g.crew, reminders: reminders.filter((x) => x.item === r.id) };
+    });
+    return { id: g.id as number, will: g.will as string, title: plain(g.title), places: plain(g.places), floor: plain(g.floor), wont: (g.wont ?? []).map(plain) as string[], asks: (g.asks ?? []).map(plain) as string[], standalone: reminders.filter((x) => x.item === null),
+      cols: g.stages.map((s: Json, i: number) => ({ key: s.key as string, name: plain(s.name), who: i === 0 ? 'The crew adds these' : i < g.crew ? 'The crew drafts; you check' : 'Only you move things here', roles: roles.filter((r) => r.stage === s.key) })) };
+  });
 }
 
 /** The writer's chat is the practice interviewer's once a role in Interview has its prep: the person answers there by typing or the mic, and nothing is read aloud. */
-export const practising = (state: Json, id: string) => state?.jobs?.goal.will === id && state.jobs.roles.some((r: Json) => r.stage === 'interview' && r.prep);
+export const practising = (state: Json, id: string) => (state?.goals ?? []).some((x: Json) => x.goal.will === id && x.roles.some((r: Json) => r.stage === 'interview' && r.prep));

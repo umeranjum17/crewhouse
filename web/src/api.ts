@@ -63,6 +63,8 @@ export const api = {
   /** Prep for this interview, and the practice interviewer: the writer's tasks for a role in Interview. */
   prepRole: (id: number) => call('POST', `/api/jobs/${id}/prep`),
   practiceRole: (id: number) => call('POST', `/api/jobs/${id}/practice`),
+  /** A reminder on a goal's item (`item`) or standing alone on the goal; the person changes or dismisses it through `routine` and `removeRoutine`. */
+  remindGoal: (target: { item: number } | { goal: number }, body: { when: string; text?: string }) => call('POST', 'item' in target ? `/api/jobs/${target.item}/remind` : `/api/goals/${target.goal}/remind`, body),
   state: () => call('GET', '/api/state'),
   mailStatus: (to: string) => call('GET', `/api/mail?to=${encodeURIComponent(to)}`),
   mailMark: (to: string, body: Json) => call('PUT', '/api/mail', { to, ...body }),
