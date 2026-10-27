@@ -202,3 +202,9 @@ journeys:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/binary-inspect.sh "$DONE_DONE_EVIDENCE_ROOT"'
   skill-eval:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/skill-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The calm chat, Home and desktop shell (ch-018) on the ?demo data: Chief's chat and Home at 390, Chief in three panes at
+  # 1280, day and night. With base_ref, verify drives the same capture at the base into before/ (CALM_HEAD: calm-design.sh).
+  calm-design:
+    command: 'bash "${CALM_HEAD:-.}/scripts/verify/calm-design.sh" "$DONE_DONE_EVIDENCE_ROOT"'
+# The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
+base_ref: 66263f7d
