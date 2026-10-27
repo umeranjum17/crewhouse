@@ -10,7 +10,7 @@ A role the person moved to Interview offers **Prep for this interview** (`POST /
 
 ## Driving it
 
-`NODE=/usr/bin/node scripts/verify/jobs-prep.sh <out>` boots a stub crewd (`CREWHOUSE_STUB_GOLDEN=1` for the two scripted practice lines) and a local company page, and captures `home-goal` (Home's goal card, the way into the board; there is no Jobs tab) and `helper-goal` (the writer's page with its job-board link), then `prep-offer`, `prep-card`, `prep-brief`, `prep-questions`, `practice` at 390 and 1280, day and night, plus `pwa-*` at 390.
+`NODE=/usr/bin/node scripts/verify/jobs-prep.sh <out>` boots a stub crewd (`CREWHOUSE_STUB_GOLDEN=1` for the two scripted practice lines) and a local company page, and captures `home-goal` (Home's goal card, the way into the board; there is no Jobs tab), then `prep-offer`, `prep-card`, `prep-brief`, `prep-questions`, `practice` at 390 and 1280, day and night, plus `pwa-*` at 390.
 
 ## Pinned by
 
