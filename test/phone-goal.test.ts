@@ -17,19 +17,19 @@ test('the phone board maps crewd roles to their stages, and a role offers only t
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   after(() => { srv.closeAllConnections(); srv.close(); });
   const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
-  const { db, crew } = setup();
+  const { db, crew } = setup(), snap = (): any => crew.snapshot();
   crew.onboard('Umer');
   await settled(db, (await crew.post('chief', `Find me roles ${call('crew_goal', { title: 'Frontend engineer', places: 'London or remote', floor: '', cv: CV })}`))!.task);
   await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
-  const state0 = crew.snapshot().jobs.goal, g = A.goal(crew.snapshot())!, fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
+  const state0 = snap().jobs.goal, g = A.goal(snap())!, fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
   for (const [n, co, pay] of [[1, 'Northwind', '£55,000 to £65,000 a year'], [2, 'Fernhill', ''], [3, 'Oakline', '']])
     await settled(db, (await crew.post(state0.rae, `look ${call('crew_role', { company: co, title: 'Frontend Engineer', place: 'London', url: `${base}/job/${n}`, pay, missing: 'GraphQL is not on your CV', fit })}`))!.task);
-  const id = (co: string) => crew.snapshot().jobs.roles.find((r: { co: string }) => r.co === co).id;
-  await settled(db, crew.draftRole(id('Northwind')).task);
+  const id = (co: string) => snap().jobs.roles.find((r: { co: string }) => r.co === co).id;
+  await settled(db, crew.draftRole(id('Northwind')).task!);
   await settled(db, (await crew.post(g.will, `draft ${call('crew_application', { role: id('Northwind'), cv: [fit[0].cv], answers: [{ ask: 'Why Northwind?', answer: 'I build payments dashboards.' }] })}`))!.task);
   db.run('UPDATE roles SET stage = ? WHERE id = ?', 'interview', id('Oakline')); // as the person's two taps leave it
 
-  const state = crew.snapshot(), board = A.goal(state)!;
+  const state = snap(), board = A.goal(state)!;
   assert.deepEqual(board.cols.map((c) => [c.name, c.roles.map((r) => r.co)]), [['Found', ['Fernhill']], ['Drafted', ['Northwind']], ['Applied', []], ['Interview', ['Oakline']], ['Offer', []]]);
   assert.equal(board.cols.reduce((n, c) => n + c.roles.length, 0), state.jobs.roles.length, "Home's count is the board's");
   const north = board.cols[1].roles[0], fern = board.cols[0].roles[0];
