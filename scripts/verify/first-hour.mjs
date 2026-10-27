@@ -36,7 +36,7 @@ await on(/found: /, 180_000); await sleep(800); shot('08-progress.png');
 await on(/roles? that fits?:/, 240_000); await sleep(1500); shot('09-results.png');
 ui('reveal', 'Draft my application'); await sleep(800); shot('10-role-cards.png');
 const s = await api('/api/state');
-writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.jobs?.goal, roles: s.jobs?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine }, null, 1));
+writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.goals[0]?.goal, roles: s.goals[0]?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine }, null, 1));
 // Research Rae's own chat: the look's steps, in Rae's words.
 A('shell', 'input', 'keyevent', '4'); await sleep(1500);
 await on(/Research Rae/); ui('tap', '^Research Rae'); await sleep(2500); shot('11-rae.png');

@@ -38,16 +38,16 @@ if (step === 'serve') {
     await api('POST', '/api/bots/chief/messages', { text: `Find me roles ${tool('crew_goal', { title, places: 'London or remote', floor: '£50,000', cv: CV })}` });
     const goal = await until('the goal card', async () => (await state()).asks.find((a) => a.kind === 'propose'));
     await api('POST', `/api/asks/${goal.id}/answer`, { answer: 'allow', scope: 'once' });
-    const { rae, will } = (await until('the board', async () => (await state()).jobs)).goal;
+    const { rae, will } = (await until('the board', async () => (await state()).goals[0])).goal;
     await idle(rae);
     await api('POST', `/api/bots/${rae}/messages`, { text: `Found one ${tool('crew_role', { company: co, title, place: 'London', url: posting, pay, missing: 'GraphQL is not on your CV', fit: [{ says: 'You led a payments dashboard in React', cv: lines[1] }] })}` });
-    const role = await until(`${co} on the board`, async () => (await state()).jobs.roles.find((x) => x.co === co));
+    const role = await until(`${co} on the board`, async () => (await state()).goals[0].roles.find((x) => x.co === co));
     await api('POST', `/api/jobs/${role.id}/draft`);
     await api('POST', `/api/bots/${will}/messages`, { text: `Drafted ${tool('crew_application', { role: role.id, cv: [lines[1], lines[2]], answers: [{ ask: `Why ${co}?`, answer: WHY }] })}` });
     const draft = await until('the draft card', async () => (await state()).asks.find((a) => a.detail?.draft));
     console.log(JSON.stringify({ role: role.id, ask: draft.id }));
   } else if (step === 'fill') {
-    const [crew, stateDir, tools] = rest, s = await state(), will = s.jobs.goal.will, role = s.jobs.roles.find((r) => r.stage === 'drafted');
+    const [crew, stateDir, tools] = rest, s = await state(), will = s.goals[0].goal.will, role = s.goals[0].roles.find((r) => r.stage === 'drafted');
     const d = s.asks.find((a) => a.detail?.draft); // already answered when the person tapped Fill it in for me on the phone
     if (d) await api('POST', `/api/asks/${d.id}/answer`, { answer: 'allow', scope: 'once', fill: true });
     await idle(will);
@@ -74,7 +74,7 @@ if (step === 'serve') {
     const card = (await state()).asks.find((a) => a.detail?.form), q = (re) => card.detail.form.fields.find((f) => re.test(f.label))?.label;
     const fields = { [q(/e-?mail/i)]: 'umer@example.com', [q(/sponsor/i)]: 'No', [q(/salary/i)]: '£60,000', [q(/consent/i)]: true };
     await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow', scope: 'once', fields });
-    console.log(JSON.stringify((await state()).jobs.roles.map((r) => r.stage)));
+    console.log(JSON.stringify((await state()).goals[0].roles.map((r) => r.stage)));
   } else if (step === 'phone') {
     // The same journey by the person's taps on the paired phone ($SERIAL, phone-apply.sh): never the card's "Open the form yourself".
     const [out, lab] = rest, me = new URL(import.meta.url).pathname, sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -99,8 +99,8 @@ if (step === 'serve') {
     show('^I consent to Northwind'); ui('tap', '^I consent to Northwind', '1'); await sleep(800);
     await type('Email', 'umer@example.com'); shot('06-answered.png');
     show('^Submit$'); await sleep(800); shot('07-submit.png'); ui('tap', '^Submit$');
-    await until('Applied', async () => (await state()).jobs.roles[0].stage === 'applied');
+    await until('Applied', async () => (await state()).goals[0].roles[0].stage === 'applied');
     await on(/Sent from/); await sleep(1500); shot('08-sent.png');
-    const s = await state(); writeFileSync(join(out, 'phone-apply.json'), JSON.stringify({ stage: s.jobs.roles[0].stage, receipt: s.answered.find((a) => a.detail?.form)?.answer, sent: JSON.parse(readFileSync(join(lab, 'sent.json'), 'utf8')) }, null, 1));
+    const s = await state(); writeFileSync(join(out, 'phone-apply.json'), JSON.stringify({ stage: s.goals[0].roles[0].stage, receipt: s.answered.find((a) => a.detail?.form)?.answer, sent: JSON.parse(readFileSync(join(lab, 'sent.json'), 'utf8')) }, null, 1));
   }
 }

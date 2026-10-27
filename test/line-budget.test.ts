@@ -79,20 +79,24 @@ import { join } from 'node:path';
 // writer's guarded tools and the person-only moves. Owner-directed in the brief; no trim paired, nothing working is cut to fit.
 // Raised 7680 -> 7722 for the interview-prep slice (ch-jobs-crew-prep, +42 net): the writer's crew_prep tool with crewd's
 // page-by-page check of each fact, the prep store on the board, the prep and practice taps and two scripted stub lines. Owner-directed in the brief; no trim paired.
-// Raised 7722 -> 7846 for the application hand-off (ch-018-journey, +124 net): the writer fills a posting's real form in
+// Raised 7722 -> 7773 for the one-link phone pairing (ch-pair-link, +51 net): the standing link's page and its
+// secret key (src/link.ts, src/pair-page.ts). Raised in the brief; no trim paired.
+// Raised 7773 -> 7807 for the reusable long-goal parts (ch-goal-parts): stage names per goal, goal-scoped finder and reminders (src/jobs.ts, crew.ts).
+// Owner-directed in the brief; no trim paired.
+// Raised 7807 -> 7931 for the application hand-off (ch-018-journey, +124 net): the writer fills a posting's real form in
 // its own browser with only the person's CV and approved draft lines (the gate reads each field's label from crewd's snapshot),
 // crew_form reads the page into one card of what was filled and what only the person answers, and crewd alone presses the
 // form's Submit on their tap and checks the page took it; the kept page closes when crewd stops or the card is turned down; Ashby's question-above-control forms read the same way. Owner-directed in the brief ("trim or raise"); no trim paired.
-// Raised 7846 -> 7855 for the reading pack (ch-018-journey, +9 net): crew_prep from Drafted on, each fact's part, and the
+// Raised 7931 -> 7940 for the reading pack (ch-018-journey, +9 net): crew_prep from Drafted on, each fact's part, and the
 // .docx crewd writes from the checked facts alone, saying "Not stated" where no page spoke to a part; crewd's page reader also
 // keeps a script-drawn page's own description (an Ashby posting), so its facts can be checked. Owner-directed (Firstmate).
-// Raised 7855 -> 7878 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
+// Raised 7940 -> 7963 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
 // Chief's message (poppler's pdftotext, else the documents tool), gives the helper he hands the job to its own copy and text
 // at files/from-chief/, refuses a hand-off that does not say where; the stub's delegate refuses as the engine's gate does.
 // Owner-directed (Firstmate: the captain's preview-27 run, the critical path).
-// Raised 7878 -> 7880 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
+// Raised 7963 -> 7965 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
 // role found is a step on his live line, and the look ends in his chat in crewd's own words, one line per role. Same direction.
-const BUDGET = 7880;
+const BUDGET = 7965;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

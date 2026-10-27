@@ -74,11 +74,11 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   await find({ ...good, url: `${web.base}/gone` });
   await find({ ...good, fit: [{ says: 'You know Rust', cv: 'Shipped a Rust compiler' }] });
   assert.equal(db.get('SELECT COUNT(*) AS n FROM roles')!.n, 0, 'a made-up pay, a dead link and an invented skill add nothing');
-  // A look that adds a role reports in Chief's own chat: progress as it goes, then the role on its own line, its card there.
-  db.run('UPDATE routines SET body = ?, next_at = 0 WHERE id = ?', `look ${call('crew_role', good)}`, g.routine);
-  crew.schedule();
-  const ended = () => db.get("SELECT * FROM tasks WHERE routine = ? AND origin = 'routine' AND state = 'done'", g.routine);
-  await until('the daily look is done', ended);
+  // A look Chief hands on that adds a role reports in his own chat: progress as it goes, then the role on its own line, its card there.
+  db.run('UPDATE routines SET body = ? WHERE id = ?', `look ${call('crew_role', good)}`, g.routine);
+  await (crew as any).fire(db.get('SELECT * FROM routines WHERE id = ?', g.routine), 'now', undefined, 'chief');
+  const ended = () => db.get("SELECT * FROM tasks WHERE routine = ? AND origin = 'chief' AND state = 'done' ORDER BY id DESC", g.routine);
+  await until('the look is done', () => ended()?.id > db.get('SELECT MIN(id) AS id FROM tasks WHERE routine = ?', g.routine)!.id);
   const look = ended()!;
   assert.ok(db.get("SELECT 1 FROM events WHERE kind = 'task.progress' AND json_extract(data, '$.task') = ? AND json_extract(data, '$.text') = '1 found: Frontend Engineer at Acme'", look.id), 'each role found is a step on the live line');
   const told = A.lines(crew.botPage('chief'), 'chief', crew.snapshot() as Json).find((l) => l.roles);
@@ -174,5 +174,46 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   jobs.move(db, role.id, 'offer');
   assert.throws(() => crew.draftRole(role.id, 'prep'), /not waiting/);
   assert.ok(task(db, t).state, 'Chief\'s task is on record');
+  done();
+});
+
+test('a goal that is not a job search: its own stages, a quiet daily search that adds nothing twice, reminders the person dismisses', async () => {
+  const { db, crew, done } = setup();
+  const web = await posting();
+  const brief = 'A two-bedroom flat to rent in Hackney or Walthamstow\nUp to £2,200 a month\nClose to a Victoria line or Overground station';
+  const stages = ['Found', 'Shortlisted', 'Viewing booked', 'Offer made', 'Signed'];
+  crew.onboard('Umer');
+  await settled(db, (await crew.post('chief', `Find me a flat ${call('crew_goal', { title: 'A flat to rent', places: 'Hackney', brief, stages: ['Found'] })}`))!.task);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE kind = 'propose'")!.n, 0, 'one stage is not a board');
+  await settled(db, (await crew.post('chief', `Find me a flat ${call('crew_goal', { title: 'A flat to rent', places: 'Hackney', brief, stages })}`))!.task);
+  await crew.answer(db.get("SELECT * FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
+  const g = jobs.goal(db)!;
+  assert.deepEqual(g.stages, stages);
+  assert.equal(g.will, '', 'no writer for a flat');
+  await until('the first look is done', () => db.get("SELECT 1 FROM tasks WHERE bot = ? AND state NOT IN ('queued','working')", g.rae));
+  const find = async (n: number) => { const id = (await crew.post(g.rae, `look ${call('crew_role', { company: 'Foxtons', title: `Two-bed ${n}`, place: 'Hackney', url: `${web.base}/job/${n}`, pay: '£55,000', missing: 'No garden', fit: [{ says: 'Two bedrooms', cv: 'A two-bedroom flat to rent in Hackney or Walthamstow' }] })}`))!.task; await settled(db, id); };
+  await find(1); await find(1); await find(2);
+  const rows = db.all('SELECT * FROM roles WHERE goal = ?', g.id);
+  assert.equal(rows.length, 2, 'the same option is not added twice');
+  assert.ok(rows.every((r) => r.stage === 'found'), 'the crew writes only the first stage');
+  db.run('UPDATE routines SET body = ?, next_at = 0 WHERE id = ?', `look ${call('crew_role', { company: 'Foxtons', title: 'Two-bed 3', place: 'Hackney', url: `${web.base}/job/3`, pay: '', missing: 'No garden', fit: [{ says: 'Two bedrooms', cv: 'A two-bedroom flat to rent in Hackney or Walthamstow' }] })}`, g.routine);
+  crew.schedule();
+  await until('the daily search is done', () => db.get("SELECT 1 FROM tasks WHERE routine = ? AND origin = 'routine' AND state = 'done'", g.routine));
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM roles WHERE goal = ?', g.id)!.n, 3, 'it adds to the board');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM messages WHERE bot = 'chief' AND task_id = ?", db.get('SELECT last_task FROM routines WHERE id = ?', g.routine)!.last_task)!.n, 0, 'the daily search never speaks in Chief\'s thread');
+  assert.deepEqual(jobs.view(db)!.goal.stages.map((s) => s.name), stages);
+  assert.throws(() => jobs.move(db, rows[0].id, 'applied'), /viewing-booked/, 'only this goal\'s stages exist');
+  jobs.move(db, rows[0].id, 'viewing-booked');
+  const a = crew.remindGoal(null, rows[0].id, { when: 'in 5 minutes' }), b = crew.remindGoal(g.id, null, { when: 'in 5 minutes', text: 'Read the brief' });
+  assert.throws(() => crew.remindGoal(g.id, null, { when: 'in 5 minutes' }), /remind you of/);
+  assert.equal(db.get('SELECT item FROM routines WHERE id = ?', a.id)!.item, rows[0].id);
+  db.run('UPDATE routines SET next_at = ? WHERE id = ?', Date.now() - 1000, b.id);
+  crew.schedule();
+  assert.equal(db.get('SELECT next_at FROM routines WHERE id = ?', b.id)!.next_at, null, 'it went off once');
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, 0, 'a reminder never asks');
+  crew.deleteRoutine(b.id);
+  jobs.move(db, rows[1].id, 'passed');
+  jobs.move(db, rows[0].id, 'passed');
+  assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', a.id)!.n, 0, 'passing on an option drops its reminder');
   done();
 });

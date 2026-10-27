@@ -2,7 +2,8 @@
 # The pairing lab (docs/verification/pwa-pair.md): an isolated crewd on the stub engine, or OpenClaw on LAB_MODEL (its own HOME, every XDG dir, TMPDIR),
 # the repo's own relay (relay/main.ts, open signup) that crewd dials, and the built web shell served from a public-style
 # origin (http://crewhouse.localhost:<port>/, scripts/serve-web.mjs). Never the owner's HOME.
-#   pair-lab.sh up <repo>    start all three; writes $LAB/env (PORT, LINK_PORT, RELAY, WEB, B)
+#   pair-lab.sh up <repo>    start all three; writes $LAB/env (PORT, LINK_PORT, RELAY, WEB, B); LAB_LINK_HOST= (empty) unpins the
+#                            link so it listens on this computer's Tailscale address too, as an installed crewd does
 #   pair-lab.sh cli <args>   the computer's own ./crewhouse against the lab crewd (e.g. `phones code`, `phones approve …`)
 #   pair-lab.sh down         stop what this script started
 set -euo pipefail
@@ -25,7 +26,7 @@ case "${1:-}" in
     wait_for "curl --max-time 10 -fsS http://127.0.0.1:$RPORT/health"
     # LAB_MODEL=<url>: the real pinned OpenClaw engine (runtime/openclaw) on that scripted local provider instead of the stub.
     ENGINE=stub; [ -z "${LAB_MODEL:-}" ] || ENGINE=openclaw
-    (cd "$REPO" && SETSID=setsid mask ${LAB_PACKAGED:+CREWHOUSE_PACKAGED=1} CREWHOUSE_ENGINE=$ENGINE ${LAB_MODEL:+CREWHOUSE_RUN_MODE=test CREWHOUSE_ENGINE_BASE_URL=$LAB_MODEL CREWHOUSE_ENGINE_API_KEY=lab-fixture-only CREWHOUSE_ENGINE_DIR=$REPO/runtime/openclaw} CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK_PORT" CREWHOUSE_LINK_HOST=127.0.0.1 \
+    (cd "$REPO" && SETSID=setsid mask ${LAB_PACKAGED:+CREWHOUSE_PACKAGED=1} CREWHOUSE_ENGINE=$ENGINE ${LAB_MODEL:+CREWHOUSE_RUN_MODE=test CREWHOUSE_ENGINE_BASE_URL=$LAB_MODEL CREWHOUSE_ENGINE_API_KEY=lab-fixture-only CREWHOUSE_ENGINE_DIR=$REPO/runtime/openclaw} CREWHOUSE_PORT="$PORT" CREWHOUSE_LINK_PORT="$LINK_PORT" CREWHOUSE_LINK_HOST="${LAB_LINK_HOST-127.0.0.1}" \
       CREWHOUSE_RELAY="http://127.0.0.1:$RPORT" CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
       node src/main.ts >"$LAB/crewd.log" 2>&1 & echo $! >"$LAB/crewd.pid"; crewd_group $!)
     wait_for "curl --max-time 10 -fsS -H x-crewhouse:1 -H \"Authorization: Bearer \$(cat '$LAB/state/person.key')\" http://127.0.0.1:$PORT/api/state | grep -q person"

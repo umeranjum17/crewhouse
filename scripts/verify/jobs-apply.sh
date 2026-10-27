@@ -61,7 +61,7 @@ get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",(
 get /api/events | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).filter((e)=>/^run\.(call|tool)$|^message$/.test(e.kind)).map((e)=>JSON.stringify(e)).join("\n")))' > "$OUT/writer-calls.jsonl"
 hash_gate form "/ask/$FORM"
 # The reading pack beside it, opened from the writer's thread: crewd's .docx of the checked facts, read back.
-WILL=$(get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).jobs.goal.will))')
+WILL=$(get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).goals[0].goal.will))')
 hash_gate pack "/h/$WILL" "[...document.querySelectorAll('a.wb-card')].find((a) => /Reading pack/i.test(a.getAttribute('aria-label')))?.click(); await new Promise((r) => setTimeout(r, 1500));"
 # The installed app: Chromium's own install from Settings, then the form card in its window at phone size.
 mkdir -p "$LAB/pwa" "$OUT/pwa"

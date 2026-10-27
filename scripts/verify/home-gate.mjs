@@ -14,7 +14,7 @@ const profile = mkdtempSync(join(tmpdir(), 'crewhouse-gate-'));
 const chrome = spawn('/usr/bin/chromium', ['--headless=new', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
   '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const done = async (code) => { chrome.kill(); await new Promise((r) => chrome.once('exit', r)); rmSync(profile, { recursive: true, force: true }); process.exit(code); };
+const done = async (code) => { chrome.kill(); await new Promise((r) => chrome.once('exit', r)); rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); process.exit(code); };
 try {
   const portFile = join(profile, 'DevToolsActivePort');
   for (let i = 0; i < 200 && !(existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n')); i++) await wait(100);

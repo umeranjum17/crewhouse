@@ -30,7 +30,7 @@ const stub = await startModelStub(undefined, (body, text) => {
     if (/The person says: (hi|hello|hey)\b/i.test(text)) return { reply: 'Hi Umer. What can the crew do for you today?' };
     return { reply: 'On it.' };
   }
-  if (/Look for new roles for the person/.test(text)) return { reply: `Added ${roles.length} roles.`, text: [call('crew_report', { text: 'Searching remote AI engineering roles' }),
+  if (/Look for new options for the person's goal/.test(text)) return { reply: `Added ${roles.length} roles.`, text: [call('crew_report', { text: 'Searching remote AI engineering roles' }),
     ...roles.map((r) => call('crew_role', { ...r, pay: '', fit, missing: 'No AI or machine learning work on your CV yet' }))].join(' ') };
   return { reply: 'Done.' };
 });

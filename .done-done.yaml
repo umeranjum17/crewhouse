@@ -81,6 +81,10 @@ journeys:
   first-hour:
     timeout: 40m
     command: 'timeout -k 10 2300 bash scripts/verify/first-hour.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the release APK}"'
+  # The reusable long-goal parts: a flat to rent beside the job search, with its own stage names, the quiet daily search, and reminders (docs/verification/goal-parts.md).
+  goal-parts:
+    timeout: 20m
+    command: 'timeout -k 10 1100 bash scripts/verify/goal-parts.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
@@ -179,6 +183,8 @@ journeys:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/phone-web-pair.sh "$DONE_DONE_EVIDENCE_ROOT" "${KEY_FILE:?authorized MiniMax key file}"'
   phone-pair:
     command: 'timeout -k 10 600 node scripts/verify/phone-pair.mjs --out "$DONE_DONE_EVIDENCE_ROOT" --state "${LAB:?owned lab}/state" --serial "${SERIAL:?owned emulator}" --base "${B:?owned daemon URL}" --apk "${APK:?release apk}" --record'
+  phone-pair-link:
+    command: 'LAB="${LAB:?owned lab}" timeout -k 10 900 node scripts/verify/phone-pair-link.mjs --out "$DONE_DONE_EVIDENCE_ROOT" --serial "${SERIAL:?owned emulator}" --apk "${APK:?release apk}"'
   phone-chat-keep:
     spends: 'live phone-only model calls on an explicitly authorized test account'
     command: 'timeout -k 10 600 node scripts/verify/phone-chat-keep.mjs --serial "${SERIAL:?owned emulator}" --ev "$DONE_DONE_EVIDENCE_ROOT" --apk "${APK:?release apk}" --key-file "${KEY_FILE:?authorized test key file}" --offline --interrupted --seed-turns 52'

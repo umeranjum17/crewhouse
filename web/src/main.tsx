@@ -291,7 +291,7 @@ function Home(ctx: Ctx) {
             <div className="st-label"><span>Your crew</span></div>
             <div className="st-empty"><b className="wide">No helpers yet.</b><span>Pick a job below. Chief brings a helper on for it, and you say yes first.</span></div>
           </>}
-          {state.jobs && <a className="st-room" href="#/goal"><span className="grow"><b className="semi">Your goal</b><span>{state.jobs.goal.title}: {state.jobs.roles.length} {state.jobs.roles.length === 1 ? 'role' : 'roles'} on your board</span></span><Icon name="next" /></a>}
+          {!!state.goals?.length && <a className="st-room" href="#/goal"><span className="grow"><b className="semi">Your goal</b><span>{state.goals.length === 1 ? `${state.goals[0].goal.title}: ` : `${state.goals.length} goals: `}{state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board</span></span><Icon name="next" /></a>}
           {kept > 0 && <a className="st-kept" href="#/things"><span className="st-fan" aria-hidden><i /><i /><i /></span><span className="grow"><b className="semi">Kept</b><span>{kept} finished {kept === 1 ? 'job' : 'jobs'} and their files</span></span><Icon name="next" /></a>}
           <JobList state={state} refresh={refresh} />
         </div>
@@ -938,7 +938,7 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
             <div className="grow"><b>{h.name}</b><span className="st-reading">Reading along</span></div>
             <a className="st-gear" href={`#/h/${id}/details`} aria-label={`${name}'s profile`}><Icon name="crew" /></a>
           </header>
-          {state.jobs && [state.jobs.goal.will, state.jobs.goal.rae].includes(id) && <a className="link st-board-link" href="#/goal">Open the job board ›</a>}
+          {state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <a className="link st-board-link" href="#/goal">Open the board ›</a>}
           {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
@@ -1488,12 +1488,13 @@ function PairCodeCard({ offer, left, typed, link, title, sub, onAway, onNew, onC
 }) {
   return (
     <div className="card pair" aria-label={title}>
-      {left > 0 ? <div className="qr"><PairQR text={offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
+      {left > 0 || link.pairLink ? <div className="qr"><PairQR text={link.pairLink || offer.qr} /></div> : <div className="qr expired">This code ran out.</div>}
       <div className="grow">
         <b>{title}</b>
         {sub}
         <p className="mute small">Then check the two words the phone shows against the ones that appear here.</p>
-        <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>
+        {link.pairLink ? <p className="small">Or send the phone this link. It keeps working, so use it again any time:<b style={{ display: 'block', margin: '6px 0', overflowWrap: 'anywhere', userSelect: 'all' }}>{link.pairLink}</b><button className="btn" onClick={() => void navigator.clipboard?.writeText(link.pairLink).then(() => toast('Link copied'), () => {})}>Copy the link</button></p>
+          : <p className="mute small">{left > 0 ? `Works once, for ${left} more seconds.` : 'Make a new one when the phone is ready.'}</p>}
         {left > 0 && <p className="small">Can’t scan? {link.web ? <>Open <b style={{ overflowWrap: 'anywhere' }}>{new URL(link.web).host}</b> on the phone and type this code: </> : "With the phone on this computer's Wi‑Fi, type this code in the phone app: "}<b className="pair-typed">{offer.typed}</b></p>}
         {left > 0 && A.reach(link).online && (typed ? <p className="small">If the phone is away from home, type this one instead: <b style={{ overflowWrap: 'anywhere', userSelect: 'all' }}>{A.phoneTyped(typed)}</b></p>
           : <button className="link inline small" onClick={onAway}>Show a code for a phone away from home</button>)}

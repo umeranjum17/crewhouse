@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: --version | setup | start | open | autostart | update | uninstall | phones | doctor | tools | test
+# Crewhouse: --version | setup | start | open | autostart | update | uninstall | link | phones | doctor | tools | test
 set -euo pipefail
 export CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product}
 [ "${1:-}" != test ] || export CREWHOUSE_RUN_MODE=test
@@ -274,10 +274,10 @@ const c = loadConfig();
 spawn('xdg-open', [`http://${c.host}:${c.port}/#person=${readFileSync(join(c.stateDir, 'person.key'), 'utf8')}`], { stdio: 'inherit' });
 NODE
     ;;
-  phones)
+  phones|link)
     # Local HTTP client; reads the same config and private capability as the launcher.
-    action="${2:-}"; shift 2 || true
-    case "$action" in code|pending|approve|web) ;; *) echo 'usage: ./crewhouse phones code | pending | approve <two words> | web [off]' >&2; exit 2 ;; esac
+    if [ "$1" = link ]; then action=link; shift; else action="${2:-}"; shift 2 || true; fi
+    case "$action" in code|pending|approve|web|link) ;; *) echo 'usage: ./crewhouse link [new] | phones code | pending | approve <two words> | web [off]' >&2; exit 2 ;; esac
     if [ "$action" = web ]; then
       # The installed web app pairs only on an https page (the browser seals its grant with crypto that plain http lacks).
       # Tailscale serves the phone link, which serves the app too, at this computer's tailnet name with a real certificate.
@@ -311,6 +311,15 @@ const phones = async (path, body) => {
   return data;
 };
 try {
+  if (action === 'link') {
+    // The standing link: the same text the desktop app's Add-a-phone card shows. `new` replaces it (the old one stops opening).
+    const s = await phones('link', words === 'new' ? {} : undefined);
+    if (!s.pairLink) throw new Error('Crewhouse is not listening for phones yet. Start it with ./crewhouse start, then try again.');
+    console.log(`On your phone, turn Tailscale on and open this link:\n\n  ${s.pairLink}\n\nIt keeps working: open it any time, and it hands the app a new one-time ticket each time.\nIf the app is not on the phone yet, the page offers it first. Say yes here when your computer asks (the two words must match).`);
+    if (!s.tailscale) console.log('\nThis computer has no Tailscale address, so the link reaches it only on the home Wi-Fi.');
+    if (words === 'new') console.log('\nThe old link no longer opens.');
+    process.exit();
+  }
   const data = await phones(action === 'code' ? 'pair' : action, action === 'pending' ? undefined : action === 'approve' ? { words } : { role: 'control' });
   if (action === 'code') {
     console.log(`${data.typed}\nWorks once; expires ${new Date(data.expires).toLocaleString()}.`);

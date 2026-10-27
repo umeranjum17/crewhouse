@@ -242,10 +242,11 @@ const freshHire = [
   { bot: 'scribe', promise: 'Your first listing and three posts, written in your voice — you post them.', ask: 'Write my first listing and three posts', group: 'goal', needs: [], hire: 'scribe' },
   { bot: 'reel', promise: 'A 20-second video from three photos.', ask: 'Make a 20-second video from my three photos', group: 'goal', needs: [], hire: 'reel' },
 ];
-// ?demo=goal: the job-search board (applied and drafted roles included) and the writer's draft with the fields only Umer answers.
+// ?demo=goal: the job-search board (applied and drafted roles included) with the writer's draft, and a second goal, a flat to rent, with stage names of its own and two reminders.
 if (variant === 'goal' || variant === 'ask-goal') {
   const role = (id: number, stage: string, co: string, title: string, place: string, pay: string, fit: string[], gap: string) => ({ id, stage, co, title, place, pay, fit: fit.map((says) => ({ says, cv: '' })), gap, url: `https://careers.${co.toLowerCase().replace(/\W/g, '')}.example/jobs/${id}`, found_at: now - id * 3_600_000, checked_at: now - 20 * min, applied_at: stage === 'applied' ? now - 86_400_000 : null, follow: null, drafting: false });
-  Object.assign(state, { jobs: { goal: { title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe' }, roles: [
+  const stages = (names: string[]) => names.map((name) => ({ key: name.toLowerCase().replace(/ /g, '-'), name })), wont = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
+  Object.assign(state, { goals: [{ goal: { id: 1, title: 'Frontend engineer', places: 'London or remote', floor: '£50,000', since: now - 86_400_000, rae: 'scout', will: 'scribe', stages: stages(['Found', 'Drafted', 'Applied', 'Interview', 'Offer']), crew: 2, wont, asks: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period'] }, roles: [
     role(1, 'found', 'Northwind', 'Frontend Engineer', 'London', '£55,000 to £65,000 a year', ['You led a payments dashboard in React and TypeScript', 'You cut checkout load time by 40 percent'], 'GraphQL is not on your CV'),
     role(2, 'found', 'Fernhill', 'UI Engineer', 'Remote (UK)', 'Pay not in the posting', ['You wrote the Node.js API behind a banking app'], 'Design-system experience is not on your CV'),
     role(3, 'drafted', 'Acme Pay', 'Senior Frontend Engineer', 'London', '£70,000 a year', ['You led four engineers on a payments dashboard'], 'Testing with Playwright is not on your CV'),
@@ -256,13 +257,20 @@ if (variant === 'goal' || variant === 'ask-goal') {
         { says: 'Its engineers work in squads of five with their own on-call.', url: 'https://engineering.harbourbank.example/squads', quote: 'squads of five' }],
       questions: [{ ask: 'Tell us about a time you made a slow page fast.', why: 'The role owns checkout speed; they want a measured result.' }, { ask: 'How do you decide what to test in a payments flow?', why: 'Money moves here, so they probe how you weigh risk.' }, { ask: 'Describe a disagreement at work and how it ended.', why: 'They check you can settle things plainly.' }, { ask: 'Why Harbour Bank rather than a startup?', why: 'They want a reason that is about the work, not the logo.' }],
       yours: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'] } },
-  ] } });
+  ] }, { goal: { id: 2, title: 'A flat to rent', places: 'Hackney or Walthamstow, up to £2,200 a month', floor: '', since: now - 2 * 86_400_000, rae: 'scout', will: '', stages: stages(['Found', 'Shortlisted', 'Viewing booked', 'Offer made', 'Signed']), crew: 1, wont: ['Submit, sign or send anything for you', 'Contact anyone on your behalf', 'Accept an offer, terms or any agreement', 'Pay or buy anything', 'Publish anything', 'Answer for you what only you can: declarations, consent, money'], asks: [] }, roles: [
+    role(11, 'found', 'Foxtons', 'Two-bed, Mare Street', 'Hackney E8', '£2,100 a month', ['Two bedrooms, as you asked', 'Under £2,200 a month'], 'No garden'),
+    role(12, 'found', 'Hunters', 'Garden flat, Wood Street', 'Walthamstow E17', '£1,950 a month', ['Two bedrooms and a garden', 'Ten minutes from the Victoria line'], 'Ground floor, so a little noisy'),
+    role(13, 'shortlisted', 'Savills', 'Two-bed, Lea Bridge Road', 'Leyton E10', '£2,150 a month', ['Two bedrooms, as you asked'], 'The listing shows no photos of the kitchen'),
+    role(14, 'viewing-booked', 'Winkworth', 'Two-bed, Blackhorse Road', 'Walthamstow E17', '£2,000 a month', ['Two bedrooms, close to the station'], 'Pets are not mentioned'),
+  ] }] });
+  Object.assign(state, { routines: [...state.routines, { id: 21, bot: 'chief', kind: 'remind', name: 'Viewing: Blackhorse Road, 6 pm', schedule: '', words: '', on: '', state: 'on', goal: 2, item: 14, next_at: now + 2 * 86_400_000, history: [] },
+    { id: 22, bot: 'chief', kind: 'remind', name: 'Read the brief', schedule: '', words: '', on: '', state: 'on', goal: 2, item: null, next_at: null, last_at: now - 20 * min, history: [] }] });
   if (variant === 'goal') Object.assign(state, { asks: [{ id: 30, bot: 'scribe', task_id: null, kind: 'propose', at: now - 5 * min, member: 1, title: 'Scribe drafted your application to Acme Pay.', detail: {
     words: 'Scribe drafted your application to Acme Pay.', yes: 'Approve',
     draft: { channel: 'message', to: 'Acme Pay application form', link: 'https://careers.acmepay.example/jobs/3', role: 3, yours: ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'] },
     preview: { body: "Your CV for this role\n- Led four engineers building a payments dashboard in React and TypeScript\n- Cut page load time by 40 percent on the checkout flow\n\nWhy Acme Pay?\nI build payments dashboards, and I would like to do it for a company that ships every week." },
   } }] });
-  else Object.assign(state, { jobs: null, asks: [{ id: 31, bot: 'chief', task_id: null, kind: 'propose', at: now, title: 'Start looking for Frontend engineer?', detail: {
+  else Object.assign(state, { goals: [], asks: [{ id: 31, bot: 'chief', task_id: null, kind: 'propose', at: now, title: 'Start looking for Frontend engineer?', detail: {
     words: 'Start looking for Frontend engineer?', hire: 'Research Rae', hireId: 'scout', role: 'Looks every morning for Frontend engineer', yes: 'Yes, start my search',
     first_job: 'Look for the first roles now', first_step: 'Open Your goal when Rae tells you a role fits.',
     will_do: ['Look every morning at public postings and company career pages for Frontend engineer (London or remote)', 'Tell you only when a new role fits', "Show each role's pay as the posting says it, and what your CV is missing", 'Writer Will drafts your application for each role you pick, using only lines you wrote', 'Draft a follow-up 7 days after you tell it you applied'],
@@ -651,7 +659,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   const undo = /^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/.exec(path);
   if (method === 'POST' && undo) { const i = events.findIndex((e) => e.kind === 'memory.learned' && e.seq === Number(undo[2])); if (i >= 0) events.splice(i, 1); pages[undo[1]].trail = events.filter((e) => e.bot === undo[1]); return { ok: true }; }
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
-  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
+  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready', pairLink: variant === 'home' ? '' : 'http://100.101.102.103:7712/pair/q3VxK0aTn8mC2RwYb7LpZg',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-6N5B', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/phones/refresh') {
