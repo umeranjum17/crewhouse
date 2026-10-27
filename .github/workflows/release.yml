@@ -1,5 +1,9 @@
 name: npm release
 
+# Publishes `crewhouse` (the `npm install -g crewhouse` line) when package.json carries a version npm does not have yet:
+# automatically after CI passes on main, or by hand with `npm login` then `npm publish --access public` from a checkout
+# (prepack builds the web app and the CLI bundle). A version that is already published is skipped.
+
 on:
   workflow_dispatch:
     inputs:

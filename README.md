@@ -38,19 +38,29 @@ For anyone drowning in small jobs: it runs on your own Linux computer, thinks wi
 
 ## Quick start
 
-On **Ubuntu or Debian** (64-bit), download `crewhouse_0.1.7_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.7) into your Downloads folder, then three commands, and Chief asks your name:
+On any 64-bit **Linux**, one line installs it (no sudo, no git, and no Node of your own: the download carries its own), and a second starts it. Chief asks your name.
 
 ```sh
-cd ~/Downloads
-sudo apt install ./*.deb
-crewhouse-app
+curl -fsSL https://raw.githubusercontent.com/umeranjum17/crewhouse/main/install.sh | sh
+crewhouse start
 ```
 
-The download is about 180 MB and carries everything, the AI engine included, so the first start is ready at once. Then tap one of the three jobs Chief offers under his first message and press **Sign in with…** under his reply: no terminal logins, and no API key to copy except where the account is a key.
+Already have Node 24.16 or later? `npm install -g crewhouse` is the same thing from npm. Either way you get one command:
+
+| Type | And it |
+|---|---|
+| `crewhouse start` | starts Crewhouse in the background, opens it in your browser and prints a code that adds your phone |
+| `crewhouse stop` | stops it |
+| `crewhouse status` | says whether it is running, and where |
+| `crewhouse link` | prints the link that adds a phone |
+| `crewhouse update` | installs the newest version and restarts Crewhouse if it was running |
+| `crewhouse doctor` | shows what is installed and what is missing |
+
+The download is about 180 MB and carries everything, the AI engine included, so the first start is ready at once (from npm, the first start installs the engine, a few minutes). Then tap one of the three jobs Chief offers under his first message and press **Sign in with…** under his reply: no terminal logins, and no API key to copy except where the account is a key.
 
 It thinks with the AI plan you already pay for: ChatGPT Plus, Pro or Go, Grok, GitHub Copilot, MiniMax, OpenRouter, OpenCode Go, or the `claude` CLI you already have signed in ([the full list](docs/supported-subscriptions.md)).
 
-Prefer no terminal? Download the same `.deb` and press **Install** in your software centre. Any other 64-bit Linux, the phone app, a cloud host, or a run from the code: [install and run](docs/install.md).
+Prefer no terminal? On **Ubuntu or Debian** download `crewhouse_0.1.7_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.7) and press **Install** in your software centre, then open **Crewhouse** from your app menu. The phone app, a cloud host, or a run from the code: [install and run](docs/install.md).
 
 ## Why Crewhouse
 
