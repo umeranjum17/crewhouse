@@ -184,7 +184,9 @@ jobs:
           crewhouse start | tee cli-start.txt
           grep -q 'Crewhouse is running at http://127.0.0.1:7721/' cli-start.txt
           crewhouse status | grep -q 'is running'
-          crewhouse doctor
+          # doctor exits 1 when anything it checks is missing (the runner has no PipeWire): here it must only run and report.
+          crewhouse doctor | tee cli-doctor.txt
+          grep -q 'Engine: ' cli-doctor.txt
           crewhouse link 2>&1 | grep -qE 'open this link|not listening for phones'
           crewhouse stop | grep -q 'Crewhouse stopped'
           if crewhouse status; then echo "status said running after stop"; exit 1; fi
