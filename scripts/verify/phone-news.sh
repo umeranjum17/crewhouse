@@ -63,7 +63,7 @@ sleep 5; posted 'Crewhouse is connected'
 say 'I need someone to sort out my invoices'
 posted 'Invoice Ivy'
 shade news-killed-hire-card-shade.png
-opens 'Invoice Ivy' 'Invoice Ivy' news-hire-card-opens-card-phone-390.png
+opens 'Invoice Ivy' 'Nothing changes until you say yes' news-hire-card-opens-card-phone-390.png # words only the card says, not Home
 away
 ask=$(api GET /api/state | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).asks.find(a=>a.state==="open"&&/Invoice Ivy/.test(a.title)).id))')
 api POST "/api/asks/$ask/answer" '{"answer":"allow"}' >/dev/null

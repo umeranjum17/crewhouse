@@ -49,7 +49,7 @@ async function show(n: News, call: (method: string, path: string) => Promise<Jso
   const [title, body, url] = !e ? ['Crewhouse has news', 'Open Crewhouse to see what came in while it was quiet.', 'crewhouse://needs']
     : e.kind === 'message' ? [name(e.bot), A.teaser(String(e.data.text ?? '')), `crewhouse://chat?bot=${e.bot}`]
     : e.kind === 'task.done' ? [`${name(e.bot)} finished`, A.plain(String(e.data.title ?? '')), `crewhouse://chat?bot=${e.bot}`]
-    : e.kind === 'ask.opened' ? [card?.head ?? 'Chief has something for you', card?.words ?? A.plain(String(e.data.title ?? '')), `crewhouse://card?id=${e.data.ask}`]
+    : e.kind === 'ask.opened' ? [card && card.words !== card.head ? card.head : 'Chief has something for you', card?.words ?? A.plain(String(e.data.title ?? '')), `crewhouse://card?id=${e.data.ask}`]
     : [name(e.bot), "Something didn't work. Open the chat to see what happened.", `crewhouse://chat?bot=${e.bot ?? 'chief'}`];
   await Notifications.scheduleNotificationAsync({ identifier: n.id, content: { title, body, data: { url } }, trigger: { channelId: CHANNEL } });
 }
