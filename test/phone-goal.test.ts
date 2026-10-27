@@ -1,0 +1,67 @@
+// The phone's goal screens read crewd's own board through the shared view model: every role in its stage, Home's count
+// the board's, and only the person's moves on a role. Submitting is never one of them.
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { setup, settled } from './lab.ts';
+import * as A from '../web/src/adapter.ts';
+import { roleActions } from '../mobile/src/goal.ts';
+
+const call = (tool: string, input: object) => `[tool ${tool} ${JSON.stringify(input)}]`;
+const CV = `Umer Anjum
+Led a team of four building a payments dashboard in React and TypeScript
+Wrote the Node.js API behind a mobile banking app`;
+
+test('the phone board maps crewd roles to their stages, and a role offers only the person\'s moves', async () => {
+  const srv = createServer((_, res) => { res.setHeader('content-type', 'text/html'); res.end('<h1>Engineer</h1><p>Salary: £55,000 to £65,000 a year. React, TypeScript.</p>'); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  after(() => { srv.closeAllConnections(); srv.close(); });
+  const base = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
+  const { db, crew } = setup(), snap = (): any => crew.snapshot();
+  crew.onboard('Umer');
+  await settled(db, (await crew.post('chief', `Find me roles ${call('crew_goal', { title: 'Frontend engineer', places: 'London or remote', floor: '', cv: CV })}`))!.task);
+  await crew.answer(db.get("SELECT id FROM asks WHERE kind = 'propose' AND state = 'open'")!.id, { answer: 'allow' });
+  const state0 = snap().goals[0].goal, g = A.goals(snap())[0], fit = [{ says: 'You led a payments dashboard', cv: 'Led a team of four building a payments dashboard in React and TypeScript' }];
+  for (const [n, co, pay] of [[1, 'Northwind', '£55,000 to £65,000 a year'], [2, 'Fernhill', ''], [3, 'Oakline', '']])
+    await settled(db, (await crew.post(state0.rae, `look ${call('crew_role', { company: co, title: 'Frontend Engineer', place: 'London', url: `${base}/job/${n}`, pay, missing: 'GraphQL is not on your CV', fit })}`))!.task);
+  const id = (co: string) => snap().goals[0].roles.find((r: { co: string }) => r.co === co).id;
+  await settled(db, crew.draftRole(id('Northwind')).task!);
+  await settled(db, (await crew.post(g.will, `draft ${call('crew_application', { role: id('Northwind'), cv: [fit[0].cv], answers: [{ ask: 'Why Northwind?', answer: 'I build payments dashboards.' }] })}`))!.task);
+  db.run('UPDATE roles SET stage = ? WHERE id = ?', 'interview', id('Oakline')); // as the person's two taps leave it
+
+  const state = snap(), board: { cols: { name: string; roles: A.GoalRole[] }[] } = A.goals(state)[0];
+  assert.deepEqual(board.cols.map((c) => [c.name, c.roles.map((r) => r.co)]), [['Found', ['Fernhill']], ['Drafted', ['Northwind']], ['Applied', []], ['Interview', ['Oakline']], ['Offer', []]]);
+  assert.equal(board.cols.reduce((n, c) => n + c.roles.length, 0), state.goals[0].roles.length, "Home's count is the board's");
+  const north = board.cols[1].roles[0], fern = board.cols[0].roles[0];
+  assert.equal(north.pay, '£55,000 to £65,000 a year');
+  assert.equal(fern.pay, 'No figure on the page');
+  assert.deepEqual(north.fit, ['You led a payments dashboard']);
+  assert.equal(north.gap, 'GraphQL is not on your CV');
+  assert.equal(north.source, 'the company\'s website', 'a local address is never shown');
+
+  assert.deepEqual(roleActions(fern).map((a) => a.label), ['Draft my application', 'Not for me']);
+  assert.deepEqual(roleActions(north).map((a) => a.label), ['Open the draft', 'Move to Applied', 'Not for me']);
+  assert.deepEqual(roleActions(board.cols[3].roles[0]).map((a) => a.label), ['Prep for this interview', 'Move to Offer']);
+  for (const r of board.cols.flatMap((c) => c.roles)) for (const prep of [undefined, { brief: [], questions: [], yours: [] }])
+    for (const a of roleActions({ ...r, prep, prepable: true }))
+      assert.doesNotMatch(a.label, /submit|send|apply now/i, 'a role never offers to submit');
+
+  // The writer's draft waits on its role: what only the person answers is listed and blank, and its yes copies, never submits.
+  const draft = A.cards(state).find((c) => state.asks.find((a: { id: number }) => a.id === c.id)?.detail?.draft?.role === north.id)!;
+  assert.ok(draft.yours?.includes('Expected salary') && draft.yours.includes('Your right to work'));
+  assert.deepEqual(draft.choices.map((c) => c.label), ['Fill it in for me', 'Copy and open the form', 'Not now']);
+  assert.ok(!draft.choices.some((c) => /submit/i.test(c.label)), 'the draft never submits');
+
+  // The filled form, as crewd raises it (test/jobs.test.ts makes it on a real page): Submit is on this card alone,
+  // only while the page has one and nothing stopped the writer; what only the person answers comes blank.
+  const ask = state.asks.find((a: { id: number }) => a.id === draft.id), filled = [{ label: 'First Name', value: 'Umer' }];
+  const fields = [{ label: 'Email', kind: 'text', yours: false }, { label: 'Expected salary', kind: 'text', yours: true }, { label: 'Will you need sponsorship?', kind: 'pick', options: ['Yes', 'No'], yours: true }];
+  const formCard = (form: object) => A.cards({ ...state, asks: [{ ...ask, id: 99, detail: { form: { role: north.id, url: `${base}/job/1`, site: 'northwind.example', page: 'Apply', filled, fields, ...form } } }] })[0];
+  const ready = formCard({ submit: 'Submit application' });
+  assert.deepEqual(ready.choices.map((c) => [c.label, c.body]), [['Submit', { answer: 'allow', scope: 'once' }], ['Not now', { answer: 'deny' }]]);
+  assert.deepEqual(ready.form!.filled, filled);
+  assert.deepEqual(ready.form!.fields.filter((f) => f.yours).map((f) => f.label), ['Expected salary', 'Will you need sponsorship?']);
+  assert.ok(ready.form!.fields.every((f) => !('value' in f)), 'no field carries an answer the crew made up');
+  for (const stop of [{ submit: 'Submit application', stop: 'a captcha' }, { next: 'Continue' }, {}])
+    assert.deepEqual(formCard(stop).choices.map((c) => c.label), ['Not now'], 'no Submit unless the page has one and nothing stopped');
+});

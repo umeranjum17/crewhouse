@@ -22,4 +22,4 @@ The first hour on the phone: `bash scripts/verify/first-hour.sh <out> [apk]` pai
 
 ## Not built yet
 
-Re-drafting a role, removing the goal, the native phone board. Interview prep is `docs/verification/jobs-prep.md`.
+Re-drafting a role, removing the goal. The native phone board is `docs/verification/phone-goal.md`. Interview prep is `docs/verification/jobs-prep.md`.

@@ -48,6 +48,7 @@ import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from 
 import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
 import { MachineError, type MachineRef, type SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
+import { roleActions } from './src/goal';
 
 // ---------- look ----------
 type Look = typeof color.day & { go: string; goInk: string; solid: string; soft: string; card: string; ok: string; wait: string; pinkInk: string; night: boolean };
@@ -1307,7 +1308,7 @@ function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => vo
 }
 
 // ---------- the app ----------
-type Route = { view: 'home' | 'chief' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone' | 'computer'; id?: string; tab?: string; m?: number };
+type Route = { view: 'home' | 'chief' | 'goal' | 'room' | 'crew' | 'helper' | 'things' | 'routines' | 'add' | 'phone' | 'computer'; id?: string; tab?: string; m?: number };
 /** `offline`: the screens show what this phone kept, read-only, until the home computer answers again. */
 type Ctx = { state: Json; tick: number; refresh: () => void; go: (r: Route, replace?: boolean) => void; back: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void; writer?: boolean };
 
@@ -1504,6 +1505,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
       <View style={[{ flex: 1 }, edge && { [edge === 'left' ? 'paddingLeft' : 'paddingRight']: BUBBLE_DP }]}>
         {route.view === 'home' && <Home {...ctx} />}
         {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} />}
+        {route.view === 'goal' && (route.tab === 'prep' ? <Prep key={stack.length} {...ctx} id={route.id!} /> : route.id ? <Role key={stack.length} {...ctx} id={route.id} /> : <Goal {...ctx} />)}
         {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
         {route.view === 'helper' && <HelperPage key={stack.length} {...ctx} id={route.id!} tab={route.tab ?? 'chat'} m={route.m} setTab={(tab) => setStack((st) => [...st.slice(0, -1), { ...route, tab }])} />}
@@ -1524,7 +1526,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
 const PLACES: [Route['view'], string, number][] = [['home', 'Home', WHERE['tab-home']], ['chief', 'Chief', WHERE['tab-talk']], ['crew', 'Crew', WHERE['tab-crew']]];
 /** Which place a screen belongs to, so its tab reads as the one you are in: a helper's chat with Chief is Chief's, the
  *  other helpers and the crew's rooms are Crew's. A screen off the bar matches no place and lights none. */
-const placeOf = (r: Route): Route['view'] => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'room' || r.view === 'add' ? 'crew' : r.view;
+const placeOf = (r: Route): Route['view'] => r.view === 'helper' ? (r.id === 'chief' ? 'chief' : 'crew') : r.view === 'room' || r.view === 'add' ? 'crew' : r.view === 'goal' ? 'home' : r.view;
 
 /** The bar under every paired screen. Tapping a place opens it fresh (replace, as the web's links do); Chief wears the
  *  count of asks in the colour of a bunny-coloured pill. */
@@ -1588,6 +1590,7 @@ function AskEvidence({ c, open, readAll }: { c: A.Card; open: boolean; readAll?:
       {!!c.draftTo && <T tone="mute" style={s.small}>To {c.draftTo}</T>}
       {!!c.draftSubject && <T style={{ ...fw('500') }}>Subject: {c.draftSubject}</T>}
       <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled><T tone="ink2">{body}</T></ScrollView>
+      {!!c.yours?.length && <Yours list={c.yours} foot={`${c.yours.length} left for you. They stay empty in what you copy.`} />}
     </View>;
   }
   if ((c as any).hire) { const h = (c as any).hire;
@@ -1951,6 +1954,9 @@ function Home(ctx: Ctx) {
         </Pressable>}
         {view.crew.length > 0 && <Pressable onPress={() => go({ view: 'room' })} accessibilityRole="button" style={({ pressed }) => [s.stCard, { backgroundColor: t.solid, borderWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           <View style={{ flex: 1, gap: 2 }}><T style={s.semi}>The crew</T><T tone="mute" style={s.read}>{chats[chats.length - 1].line}</T></View><T tone="mute">›</T>
+        </Pressable>}
+        {!!state.goals?.length && <Pressable onPress={() => go({ view: 'goal' })} accessibilityRole="button" style={({ pressed }) => [s.stCard, { backgroundColor: t.solid, borderWidth: 1, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
+          <View style={{ flex: 1, gap: 2 }}><T style={s.semi}>Your goal</T><T tone="mute" style={s.read}>{`${state.goals.length === 1 ? `${A.plain(state.goals[0].goal.title)}: ` : `${state.goals.length} goals: `}${state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board`}</T></View><T tone="mute">›</T>
         </Pressable>}
         <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={ais.length ? `Your AI accounts: ${andJoin(ais.map((a) => a.name))}` : 'Check AI account sign-in on the home computer'} style={({ pressed }) => [s.listRow, s.listGroup, { backgroundColor: t.solid, borderColor: t.line }, pressed && { opacity: 0.6 }]}>
           {ais.length ? <AiMark ai={ais[0]} size={30} /> : <KeyMark size={30} />}
@@ -2398,6 +2404,97 @@ function Room(ctx: Ctx) {
     </View>)}{!lines.length && <T tone="mute">Start a job here and follow along as the crew works together.</T>}</ScrollView>
     <View style={s.dock}><T tone="mute" style={s.small}>You can read along here. To change a job or ask the crew anything, ask Chief.</T><Btn ghost label="Ask Chief about this" onPress={() => { keepDraft('chief', 'the crew, '); ctx.go({ view: 'chief' }); }} /></View>
   </View>;
+}
+
+// ---------- your goal ----------
+/** A section's name inside the goal's screens (web .hire-sect), and one line under it. */
+const Sect = ({ children }: { children: ReactNode }) => <T tone="mute" style={[s.stLabel, { marginTop: 8 }]}>{children}</T>;
+const Line = ({ children }: { children: ReactNode }) => <T style={s.read}>{children}</T>;
+/** The fields only the person answers: named, left blank, never filled by the crew (web .yours). */
+function Yours({ list, foot }: { list: string[]; foot: string }) {
+  const t = useLook();
+  return <View style={{ borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.line2, borderRadius: 12, padding: 12, gap: 8 }}>
+    <T style={[s.read, s.b]}>Only you can answer these</T>
+    {list.map((q, i) => <View key={i} style={{ gap: 4 }}><T style={s.read}>{q}</T><View style={{ height: 32, borderWidth: 1, borderColor: t.line, borderRadius: 8, backgroundColor: t.bg }} /></View>)}
+    <T tone="mute" style={s.read}>{foot}</T>
+  </View>;
+}
+
+/** A role and the goal whose board it is on. */
+const roleIn = (state: Json, id: string) => { for (const g of A.goals(state)) for (const c of g.cols) { const r = c.roles.find((x: A.GoalRole) => String(x.id) === id); if (r) return { g, r: r as A.GoalRole }; } return {}; };
+/** Pills over a row of choices: a goal or a stage, the one shown filled. */
+function Pills({ items, on, set }: { items: { key: string; label: string; a11y?: string }[]; on: string; set: (k: string) => void }) {
+  const t = useLook();
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} accessibilityRole="tablist">
+    {items.map((x) => { const sel = x.key === on;
+      return <Pressable key={x.key} onPress={() => set(x.key)} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={x.a11y ?? x.label}
+        style={{ minHeight: 44, paddingHorizontal: 16, borderRadius: 999, justifyContent: 'center', borderWidth: 1, borderColor: sel ? t.ink : t.line2, backgroundColor: sel ? t.ink : t.solid }}>
+        <Text style={[s.read, { color: sel ? t.bg : t.ink, ...fw('600') }]}>{x.label}</Text></Pressable>; })}
+  </ScrollView>;
+}
+
+/** Your goal (web/src/goal.tsx): the goal line, the rules, a stage picker with the goal's own stage names and that
+ *  stage's items. The crew fills the first stages; every other stage moves on the person's own tap, on an item's own screen. */
+function Goal(ctx: Ctx) {
+  const t = useLook(), { state, go } = ctx, all = A.goals(state), [pick, setPick] = useState(''), [col, setCol] = useState(''), [rules, setRules] = useState(false);
+  const g = all.find((x: Json) => String(x.id) === pick) ?? all[0];
+  if (!g) return <Page title="Your goal" back={['Home', ctx.back]}><Line>Tell Chief what you are looking for and where. He shows you one card before anything starts.</Line><Btn go big label="Tell Chief" onPress={() => go({ view: 'chief' })} /></Page>;
+  const ci = Math.max(0, g.cols.findIndex((x: Json) => x.key === col)), c = g.cols[ci], edge = ci === 0 ? t.line2 : ci === g.cols.length - 1 || c.who.startsWith('Only you') ? t.ok : t.go;
+  return <Page title="Your goal" back={['Home', ctx.back]}>
+    {all.length > 1 && <Pills items={all.map((x: Json) => ({ key: String(x.id), label: x.title }))} on={String(g.id)} set={(k) => { setPick(k); setCol(''); }} />}
+    <T tone="ink2" style={s.read}>{g.title} · {g.places}{g.floor ? ` · from ${g.floor}` : ''}</T>
+    <View style={{ backgroundColor: t.soft, borderColor: t.line, borderWidth: 1, borderRadius: 12, padding: 14, gap: 6 }}>
+      <Line>{A.GOAL_RULE}</Line>
+      <Link label={rules ? 'Hide the rules' : 'See all the rules'} onPress={() => setRules(!rules)} />
+      {rules && <><Sect>The crew will not</Sect>{g.wont.map((l: string) => <Line key={l}>{l}</Line>)}
+        {!!g.asks.length && <><Sect>The crew asks you. It never guesses these</Sect>{g.asks.map((l: string) => <Line key={l}>{l}</Line>)}</>}</>}
+    </View>
+    <Pills items={g.cols.map((x: Json) => ({ key: x.key, label: `${x.name} ${x.roles.length}`, a11y: `${x.name}, ${x.roles.length}` }))} on={c.key} set={setCol} />
+    <T style={s.h2}>{c.name}</T><T tone="mute" style={s.read}>{c.who}</T>
+    {c.roles.length ? c.roles.map((r: A.GoalRole) => <Pressable key={r.id} onPress={() => go({ view: 'goal', id: String(r.id) })} accessibilityRole="button" accessibilityLabel={`${r.title} at ${r.co}`}
+      style={({ pressed }) => [{ backgroundColor: t.solid, borderColor: t.line, borderWidth: 1, borderLeftWidth: 3, borderLeftColor: edge, borderRadius: 12, padding: 14, gap: 2 }, pressed && { opacity: 0.6 }]}>
+      <T style={[s.read, s.b]}>{r.title}</T><T style={s.read}>{r.co} · {r.place}</T><T tone="ink2" style={s.read}>{r.pay}</T>
+    </Pressable>) : <T tone="mute" style={s.read}>Nothing here yet.</T>}
+    <Sect>On its own</Sect><Line>{`Every morning at 8:00 the crew looks for what fits and adds it to ${g.cols[0].name}, quietly. It never pages you.`}</Line>
+  </Page>;
+}
+
+/** One role on its own screen: why it fits, what is missing, the writer's draft while it waits, and only the moves that
+ *  are the person's (src/goal.ts roleActions). Nothing here submits; an application goes in only from its Submit card. */
+function Role(ctx: Ctx & { id: string }) {
+  const { state, go, refresh, canAct } = ctx, { g, r } = roleIn(state, ctx.id), [busy, setBusy] = useState(false);
+  if (!g || !r) return <Page title="Your goal" back={['Your goal', ctx.back]}><Line>This role is no longer on your board.</Line></Page>;
+  // The writer's draft and, once filled, the form's Submit card wait on this role: the person answers them here, so
+  // Open the draft (to Chief's chat, where the web keeps it) shows only once no card of its waits here.
+  const asks = A.cards(state).filter((c) => { const d = state.asks.find((a: Json) => a.id === c.id)?.detail; return (d?.draft ?? d?.form)?.role === r.id; });
+  const run = async (f: () => Promise<unknown>) => { setBusy(true); await attempt(f); refresh(); setBusy(false); };
+  return <Page title={r.title} back={['Your goal', ctx.back]}>
+    <T style={s.read}>{r.co} · {r.place}</T><T tone="ink2" style={s.read}>{r.pay}</T>
+    <Sect>Why it fits</Sect>{r.fit.map((f, i) => <Line key={i}>{f}</Line>)}
+    {!!r.gap && <><Sect>What is missing</Sect><Line>{r.gap}</Line></>}
+    <View style={[s.row, { flexWrap: 'wrap', gap: 4 }]}><T tone="mute" style={s.read}>From</T><Pressable onPress={() => void Linking.openURL(r.url)} accessibilityRole="link" hitSlop={8}><T style={[s.read, { textDecorationLine: 'underline' }]}>{r.source}</T></Pressable><T tone="mute" style={s.read}>, checked {r.checked}</T></View>
+    {asks.map((c) => <AskCard key={c.id} c={c} who={A.crew(state).find((h) => h.id === c.helper)} state={state} onDone={refresh} canAct={canAct} offline={ctx.offline} open={ctx.open} />)}
+    {canAct && <View style={{ gap: 8 }}>{roleActions(r).filter((a) => !(a.kind === 'open-draft' && asks.length)).map((a) => <Btn key={a.label} big go={a.kind !== 'move' || a.go} ghost={a.kind === 'move' && !a.go} label={a.label} disabled={busy || ('busy' in a && a.busy)}
+      onPress={() => a.kind === 'open-prep' ? go({ view: 'goal', id: ctx.id, tab: 'prep' }) : a.kind === 'open-draft' ? go({ view: 'chief' }) : void run(() => a.kind === 'move' ? api.moveRole(r.id, a.stage) : a.kind === 'draft' ? api.draftRole(r.id) : api.prepRole(r.id))} />)}</View>}
+  </Page>;
+}
+
+/** Interview prep for one role (web/src/goal.tsx Prep): the brief with each fact's page, the likely questions and why,
+ *  and what stays the person's. Written to read; nothing is sent. Practice opens the writer's own chat. */
+function Prep(ctx: Ctx & { id: string }) {
+  const { state, go, canAct } = ctx, { g, r } = roleIn(state, ctx.id), [busy, setBusy] = useState(false);
+  if (!g || !r?.prep) return <Page title="Interview prep" back={['Back', ctx.back]}><Line>{r?.prepping ? 'The writer is putting it together.' : 'Nothing is prepared for this role yet.'}</Line></Page>;
+  const p = r.prep, practice = async () => { setBusy(true); if (await attempt(() => api.practiceRole(r.id))) { ctx.refresh(); go({ view: 'helper', id: g.will }); } setBusy(false); };
+  return <Page title={r.co} lead={`${r.title} · ${r.place}`} back={['Back', ctx.back]}>
+    <T tone="mute" style={s.read}>Written for you to read. Nothing is sent, filled in or signed.</T>
+    <Sect>About {r.co}</Sect>
+    {p.brief.map((b: A.GoalPrep['brief'][number], i: number) => <View key={i} style={{ gap: 2 }}><Line>{b.says}</Line><Pressable onPress={() => void Linking.openURL(b.url)} accessibilityRole="link" hitSlop={6}><T tone="mute" style={s.read}>Source: <Text style={{ textDecorationLine: 'underline' }}>{b.host}</Text></T></Pressable></View>)}
+    <Sect>Questions you may be asked</Sect>
+    {p.questions.map((q: A.GoalPrep['questions'][number], i: number) => <View key={i} style={{ gap: 2 }}><T style={[s.read, s.b]}>{`${i + 1}. ${q.ask}`}</T><T tone="mute" style={s.read}>Why they ask: {q.why}</T></View>)}
+    {!!p.yours.length && <Yours list={p.yours} foot="The crew leaves these empty and never writes an answer for them." />}
+    {canAct && <Btn go big label="Practice with the interviewer" disabled={busy} onPress={() => void practice()} />}
+    <T tone="mute" style={s.read}>The writer asks one question at a time in its own chat. Answer by typing or with the mic, and it says what landed and what to tighten.</T>
+  </Page>;
 }
 
 // ---------- the crew ----------
