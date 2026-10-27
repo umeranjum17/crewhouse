@@ -1916,6 +1916,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .wb-peek .wb-sheet :is(th, td):nth-child(n+4) { display: none; }
 .wb-made .wb-thumb i { white-space: nowrap; }
 @media (max-width: 899px) { .st-made .wb-thumb.leaf { display: none; } }
+.working-on .st-made { grid-template-columns: minmax(0, 1fr); } /* the chat's side rail is one card wide */
 @media (min-width: 900px) {
   .page.st-things { max-width: none; width: 100%; padding: 0; }
   .st-things .st-head { flex-wrap: nowrap; min-height: 76px; padding: 12px 28px; border-bottom: 1px solid var(--line); }
