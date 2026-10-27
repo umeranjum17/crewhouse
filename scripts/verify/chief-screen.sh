@@ -106,10 +106,10 @@ done
 sleep 3 # the thank-you page on film
 kill -INT "$FILM"; wait "$FILM" || true; FILM=""
 sleep 20; touch "$LAB/stop-film"; wait "$APP"; APP="" # the app shows Chief's words and the job's state
-# The two screens as stills: the app at its card (the frame whose card corner is most saturated pink), and Chief's screen at the end.
+# The two screens as stills: the app at its card (three seconds after the card corner first turns pink, so a one-frame flash after it is answered never wins), and Chief's screen at the end.
 if [ -z "$KEYFILE" ]; then
   ffmpeg -y -loglevel error -i "$OUT/app.mp4" -vf "fps=2,crop=330:240:1478:136,signalstats,metadata=print:key=lavfi.signalstats.SATAVG:file=$LAB/sat.txt" -f null -
-  AT=$(awk -F'[: =]' '/pts_time/ { t = $0; sub(/.*pts_time:/, "", t) } /SATAVG/ { v = $NF + 0; if (v > m) { m = v; best = t } } END { print best + 0 }' "$LAB/sat.txt")
+  AT=$(awk -F'[: =]' '/pts_time/ { t = $0; sub(/.*pts_time:/, "", t) } /SATAVG/ && $NF + 0 > 20 && !s { s = t } END { print s + 3 }' "$LAB/sat.txt")
   ffmpeg -y -loglevel error -ss "$AT" -i "$OUT/app.mp4" -frames:v 1 "$OUT/ask-card.png"
   ffmpeg -y -loglevel error -sseof -4 -i "$OUT/chief-screen.mp4" -frames:v 1 -update 1 "$OUT/chief-screen-thanks.png"
 fi
