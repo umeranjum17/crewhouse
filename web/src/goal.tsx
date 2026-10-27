@@ -40,7 +40,7 @@ export function RoleCard({ r, refresh }: { r: A.GoalRole; refresh: () => void })
     <p className="role-why clamp1">{r.why}</p>
     {!!r.reminders.length && !open && <p className="role-bell mute small">{r.reminders[0].fired ? 'Reminded you' : 'Reminder'} {r.reminders[0].when}</p>}
     {open && <div className="role-body">
-      {!!r.signals.length && <><div className="hire-sect">Why it ranks here</div>{r.signals.map((x) => <p key={x.label} className="role-li">{x.label}: “{x.quote}” <a className="link" href={x.url} target="_blank" rel="noopener noreferrer">{x.host}</a></p>)}</>}
+      {!!r.signals.length && <><div className="hire-sect">Why it ranks here</div>{r.signals.map((x) => <p key={x.label} className="role-li">{x.label}: “{x.quote}” from <a className="link" href={x.url} target="_blank" rel="noopener noreferrer">{x.host}</a></p>)}</>}
       <div className="hire-sect">Why it fits</div>{r.fit.map((f, i) => <p key={i} className="role-li">{f}</p>)}
       {!!r.gap && <><div className="hire-sect">What is missing</div><p className="role-li">{r.gap}</p></>}
       <p className="mute small">From <a className="link" href={r.url} target="_blank" rel="noopener noreferrer">{r.source}</a>, checked {r.checked}</p>

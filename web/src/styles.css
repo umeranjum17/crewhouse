@@ -2145,7 +2145,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .goal-chips button { border: 1px solid var(--line2); background: var(--solid); border-radius: 999px; padding: 8px 14px; min-height: 40px; font-weight: 600; white-space: nowrap; }
 .goal-chips button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .goal-board { display: grid; gap: 16px; }
-.goal-board section { display: none; }
+.goal-board section { display: none; min-width: 0; }
 .goal-board section.on { display: block; }
 .goal-board h2 { margin-bottom: 0; }
 .role { background: var(--solid); border: 1px solid var(--line); border-left: 3px solid var(--line2); border-radius: 12px; margin-top: 10px; }

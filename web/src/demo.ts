@@ -381,7 +381,7 @@ if (variant === 'thread') {
     { id: 4, author: 'person', at: now - 30 * min, text: 'Make my resume from that.' },
     { id: 5, author: 'bot', at: now - 28 * min, text: 'Here it is. One page, your newest work first.' },
     { id: 6, author: 'system', at: now - 28 * min, text: 'Delivered files/resume.docx: The Resume is ready: 4 sections' },
-    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\nFrontend Engineer at Monzo\nSenior React Developer at Wise\nUI Engineer at Deliveroo' },
+    { id: 7, author: 'bot', at: now - 6 * min, text: 'Scout found three roles that fit:\nSenior React Developer at Wise\nFrontend Engineer at Monzo\nUI Engineer at Deliveroo' },
   ] };
   Object.assign(bots.find((b) => b.id === 'chief')!, { firstUnread: 7 });
 }
