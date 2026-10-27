@@ -86,7 +86,11 @@ import { join } from 'node:path';
 // Raised 7846 -> 7855 for the reading pack (ch-018-journey, +9 net): crew_prep from Drafted on, each fact's part, and the
 // .docx crewd writes from the checked facts alone, saying "Not stated" where no page spoke to a part; crewd's page reader also
 // keeps a script-drawn page's own description (an Ashby posting), so its facts can be checked. Owner-directed (Firstmate).
-const BUDGET = 7855;
+// Raised 7855 -> 7878 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
+// Chief's message (poppler's pdftotext, else the documents tool), gives the helper he hands the job to its own copy and text
+// at files/from-chief/, refuses a hand-off that does not say where; the stub's delegate refuses as the engine's gate does.
+// Owner-directed (Firstmate: the captain's preview-27 run, the critical path).
+const BUDGET = 7878;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { appDir, assertSafeConfig, CHIEF, type Config } from './config.ts';
 import type { Row, Store } from './db.ts';
 import * as disk from './bots.ts';
@@ -162,6 +162,16 @@ export function checkPhotos(photos: unknown): Photo[] {
     return { bytes, ext, mime: String(p.type), ...(photo ? {} : { photo: false }), ...(label ? { name: label } : {}) };
   });
 }
+
+/** A document's words, read once by crewd so Chief and the helper it hands the job to can read a PDF CV: poppler's
+ *  pdftotext, else the documents tool's markitdown; empty when neither can. */
+function docText(cfg: Config, p: Pick<Photo, 'bytes' | 'ext'>) {
+  const run = (bin: string, args: string[]) => new Promise<string>((ok) => { execFile(bin, args, { timeout: 30_000, maxBuffer: 4 << 20 }, (e, out) => ok(e ? '' : out)).stdin?.end(p.bytes); });
+  return (/^(txt|md|csv)$/.test(p.ext) ? Promise.resolve(p.bytes.toString('utf8')) : (p.ext === 'pdf' ? run('pdftotext', ['-layout', '-', '-']) : Promise.resolve('')).then((t) => t.trim() ? t : run(join(toolBin(cfg), 'markitdown'), ['-x', p.ext])))
+    .then((t) => t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 12_000));
+}
+/** Where a helper finds a file the person gave Chief, once Chief hands it the job. */
+const fromChief = (p: Pick<Photo, 'ext' | 'name'>, i: number) => `files/from-chief/${(p.name ?? `file-${i + 1}.${p.ext}`).replace(/[^\w.-]+/g, '_')}`;
 
 /** No routine faster than every MIN_EVERY minutes: a check each minute would use up the person's AI in an afternoon. */
 function paced(when: ReturnType<typeof parseSchedule>) {
@@ -1100,7 +1110,10 @@ export class Crew {
       return;
     }
     const latest = room ? this.db.get('SELECT root FROM tasks WHERE room = 1 AND bot = ? ORDER BY id DESC LIMIT 1', botId) : undefined;
-    return this.addTask(botId, words, 'person', undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
+    // Chief reads an attached document's words here, and a helper it hands the job to gets its own copy, named in the hand-off.
+    const docs = botId === CHIEF ? pics.map((p, i) => ({ p, i })).filter(({ p }) => p.photo === false) : [], read = await Promise.all(docs.map(({ p }) => docText(this.cfg, p)));
+    const body = words + docs.map(({ p }, n) => `\n\n[${p.name ?? 'Their file'}${read[n] ? `, as text]\n${read[n]}` : ']'}\nHanding this job to a helper? Put in the message: "${p.name ?? 'Their file'} is in your ${fromChief(p, n)}${read[n] ? `, and its text in ${fromChief(p, n)}.txt` : ''}."`).join('');
+    return this.addTask(botId, body, 'person', undefined, said?.trim() || words, pics, { room, root: latest?.root, key });
   }
 
   /** One pairing offer, using the same one-use code as Settings. Never give its ticket to a model. */
@@ -1609,7 +1622,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         const root = own(parent), brain = this.live.get(parent.bot)!;
         if (this.db.get('SELECT 1 FROM routines WHERE id = ? AND mailwatch = 1', root.routine ?? 0)) throw new Error('Automatic inbox triage is read-only and cannot delegate.');
         if (parent.bot !== CHIEF || bot === CHIEF || !this.bot(bot) || this.activeTask(bot) || this.starting.has(bot) || this.held.has(bot) || this.live.size + this.starting.size >= this.cfg.maxConcurrent) throw new Error('That helper is busy or unavailable. Choose another helper or wait.');
-        const ask = brief.trim() || root.body, id = this.addTask(bot, ask, CHIEF, undefined, ask, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
+        const ask = brief.trim() || root.body, given = this.db.all("SELECT data FROM events WHERE kind = 'file.delivered' AND bot = ? AND json_extract(data, '$.task') = ? AND json_extract(data, '$.input') = 1 AND json_extract(data, '$.photo') IS NULL", CHIEF, root.id).map((e) => JSON.parse(e.data));
+        // The person's files on Chief's job go with it: the helper's own copy and its words, at the path the hand-off names.
+        const at = given.map((d, i) => fromChief({ ext: extname(d.path).slice(1), name: d.name }, i));
+        if (given.length && !ask.includes('files/from-chief/')) throw new Error(`Put where the person's files are in the message, then send it again: ${at.map((a, i) => `${given[i].name ?? 'Their file'} is in your ${a}`).join('; ')}.`);
+        for (const [i, d] of given.entries()) {
+          const bytes = readFileSync(join(disk.botDir(this.cfg, CHIEF), d.path)), ext = extname(d.path).slice(1), to = disk.insideBot(this.cfg, bot, at[i]), text = await docText(this.cfg, { bytes, ext });
+          mkdirSync(dirname(to), { recursive: true }); writeFileSync(to, bytes); if (text) writeFileSync(`${to}.txt`, text);
+        }
+        const id = this.addTask(bot, ask, CHIEF, undefined, ask, [], { parent: root.id, title: root.title }).task, task = this.db.get('SELECT * FROM tasks WHERE id = ?', id)!;
         this.db.run('UPDATE tasks SET session = ? WHERE id = ?', key, id); task.session = key; this.setTask(task, 'working');
         this.starting.add(bot);
         try {
@@ -2171,7 +2192,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
-      tool('crew_goal', 'Offer the person a job search goal card, once they have told you the roles they want, where, a pay floor if they want one, and pasted their CV in full. Ask only those. Nothing starts before their yes.', (p) => this.offerGoal(p)),
+      tool('crew_goal', 'Offer the person a job search goal card as soon as they want a job and you have their CV in full (pasted, or an attached file\'s text in their message). Roles, places and a pay floor come from their words and what you know of them; ask only what neither says. Nothing starts before their yes.', (p) => this.offerGoal(p)),
       tool('crew_call_me', 'Change how the person is addressed only when they explicitly give a name or title to call them. Never infer it from a task or other message.', (p) => { this.setAddress(String(p.how ?? '')); }),
     ];
   }
