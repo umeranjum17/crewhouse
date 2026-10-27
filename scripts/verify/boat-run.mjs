@@ -2,7 +2,7 @@
 // $BOAT_KEY_FILE (mode 600). With no file yet, it makes the one claim (the kit's claim(): a link and code a person
 // approves, for $BOAT_EMAIL) and saves the key there. The key is never printed, never revoked; each run deletes the
 // computer it made. Driver control uses <out>/ctrl.sock (mode 600):
-//   GET /list, /make, /deliver, /ai, /upload, /model, /logs, /cost, /cleanup, /me, /stop
+//   GET /list, /make, /deliver, /ai, /upload, /model, /logs, /thread, /cost, /cleanup, /me, /stop
 //   /upload puts $CANDIDATE (a download built from the branch under test) at /tmp/crewhouse-candidate.tar.gz on this
 //   run's own computer, for a lab phone build whose EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD names that file; /logs reads
 //   the Crewhouse service's journal there
@@ -34,9 +34,10 @@ if (!key) {
   }
 }
 const aiFile = process.env.AI_KEY_FILE; delete process.env.AI_KEY_FILE;
-const type = (secret) => {
+const type = async (secret) => {
   if (!/^[A-Za-z0-9_.-]+$/.test(secret)) return { delivered: false, why: 'the key has characters adb input cannot carry', length: secret.length };
-  try { execFileSync('adb', ['-P', adbPort, '-s', serial, 'shell', `input text '${secret}'`], { stdio: 'ignore' }); }
+  // A controlled field drops fast injected text (one `input text` of the 69-letter key kept 8): three letters at a time.
+  try { for (const part of secret.match(/.{1,3}/g)) { execFileSync('adb', ['-P', adbPort, '-s', serial, 'shell', `input text '${part}'`], { stdio: 'ignore' }); await new Promise((r) => setTimeout(r, 400)); } }
   catch { return { delivered: false, why: 'adb input failed' }; } // its message would carry the command line
   return { delivered: true, length: secret.length };
 };
@@ -74,6 +75,14 @@ const acts = {
   logs: async () => {
     if (!mine) return { none: true };
     const r = await p.exec(mine, ['sh', '-c', 'journalctl --no-pager -n 80 -u byokit-crewhouse 2>&1; journalctl --no-pager -n 80 --user-unit byokit-crewhouse 2>&1; ls -la /home/user/crewhouse /home/user/crewhouse/.byokit/* 2>&1 | tail -20'], { root: true, timeoutMs: 30_000 });
+    return { code: r.code, out: r.stdout.split('\n') };
+  },
+  // Chief's thread and the engine's model calls on the computer, read-only from crew.db and the journal: the run's transcript.
+  thread: async () => {
+    if (!mine) return { none: true };
+    const js = 'const d=new (require("node:sqlite").DatabaseSync)("/home/user/.local/state/crewhouse/crew.db",{readOnly:true});'
+      + 'for(const r of d.prepare("select at,bot,author,text from messages order by id").all())console.log(new Date(r.at).toISOString(),r.bot,r.author,JSON.stringify(r.text))';
+    const r = await p.exec(mine, ['sh', '-c', `/home/user/crewhouse/crewhouse/node/bin/node -e '${js}' 2>&1; { journalctl --no-pager -o short-iso-precise -u byokit-crewhouse; journalctl --no-pager -o short-iso-precise --user-unit byokit-crewhouse; } 2>&1 | grep -E 'model-fetch|status=|node.invoke|node-connect|pairing auto-approved' | tail -60`], { root: true, timeoutMs: 30_000 });
     return { code: r.code, out: r.stdout.split('\n') };
   },
   cost: async () => mine ? p.usage(mine, started.toISOString()) : { none: true },
