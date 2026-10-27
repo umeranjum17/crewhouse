@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# The captain's first hour on the phone (docs/verification/jobs-loop.md): the release app on a task-owned emulator paired
-# to a crewd on the real pinned OpenClaw engine, whose model is the scripted local provider first-hour-model.ts (fixed
-# words, no AI account). Umer says hi to Chief, sends his CV as a PDF with "This is my resume find me good stuff", taps
-# Start on the goal card, watches Research Rae's look in Chief's own chat (each step live, then the roles as cards) and
-# opens Rae's chat. crewd's reading of the PDF, the goal card, the gate, each posting's real page and the chat are real.
-# Records first-hour.mp4 (pairing is never in the clip) with stills of each step, at the emulator's 1080x2400 (411 dp).
-#   bash scripts/verify/first-hour.sh <out-dir> [release-x86_64.apk]
-# Needs the Android SDK, the APK, chromium (to print the CV PDF), pdftotext and the network (Ashby's public job boards).
+# The captain's first hour (docs/verification/jobs-loop.md): the release app on a task-owned emulator, paired to a crewd on
+# the real pinned OpenClaw engine with the scripted local model first-hour-model.ts (fixed words, no AI account). Umer says
+# hi, sends his CV PDF with "find me good stuff", taps Start and watches Rae's look land in Chief's chat; then Rae's chat.
+#   bash scripts/verify/first-hour.sh <out-dir> [release-x86_64.apk]   (Android SDK, chromium, pdftotext, the network)
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$(realpath -m "${1:?out dir}") APK=$(realpath "${2:-$REPO/mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk}")

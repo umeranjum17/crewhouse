@@ -1598,7 +1598,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         return;
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
-      // A goal's first look is Chief's hand-on, said in his chat one line per item, each its card there; its daily search stays on its board.
+      // A goal's first look is Chief's hand-on, said in his chat one line per item, each its card there (its daily search stays on its board).
       const mine = task.origin === CHIEF && !this.teamJob(task), g = jobs.goals(this.db).find((x) => x.routine === task.routine), what = g?.will ? 'role' : 'option', found = g && mine ? this.db.all('SELECT co, title FROM roles WHERE goal = ? AND found_at >= ? ORDER BY id', g.id, task.created_at) : [];
       wants = mine && !g && b.template === 'scout' && !clear && !!text;
       if (g && mine) this.say(CHIEF, 'bot', found.length ? `${b.display} found ${found.length === 1 ? `a ${what}` : `${found.length} ${what}s`} that fit${found.length === 1 ? 's' : ''}:\n${found.map((r) => `${r.title} at ${r.co}`).join('\n')}\nTap one for why it fits${g.will ? ' and what your CV is missing, or to draft your application' : ''}.` : `${b.display} looked and found nothing new that fits yet, and looks again every morning at 8:00.`, task.id);
@@ -2278,8 +2278,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private startGoal({ goal: g, create: c }: Row) {
     const pick = (template: string) => this.bots().find((b) => b.template === template) ?? this.recruit(template, undefined, CHIEF), rae = pick('scout'), id = jobs.nextId(this.db), job = !g.stages, will = job ? pick('scribe') : null;
     if (!jobs.goals(this.db).some((x) => x.rae === rae.id)) this.create({ ...c, bot: rae.id, name: rae.display, first: undefined, first_job: undefined });
-    // The writer keeps its browser (no won't-do switch-off): on a posting's form the gate lets it type only the person's own lines, and only the person's Submit sends.
-    if (will && !jobs.goals(this.db).some((x) => x.will === will.id)) this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers; on their tap, fills the posting\'s form with them.', aim: 'A draft and a filled form the person checks and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application and crew_form. Never presses Submit or sends.', great: 'Nothing invented, nothing sent.' } });
+    if (will && !jobs.goals(this.db).some((x) => x.will === will.id)) this.create({ bot: will.id, name: will.display, role: 'Drafts your applications for review', job: { does: 'Drafts the person\'s application for a role they pick: their own CV lines rearranged, and the cover answers; on their tap, fills the posting\'s form with them.', aim: 'A draft and a filled form the person checks and submits themselves.', gets: 'One role and the CV.', how: 'Uses only CV lines as written. Leaves what they declare or sign, right to work, visa, pay, notice and consent empty for them. Shows it with crew_application and crew_form. Never presses Submit or sends.', great: 'Nothing invented, nothing sent.' } }); // it keeps its browser (no won't-do switch-off): on a form the gate lets it type only the person's own lines, and only their Submit sends
     const full = { id, title: g.title, places: g.places, floor: g.floor, focus: g.focus, brief: g.brief ?? g.cv, sources: job ? jobs.JOB_SOURCES : 'public listings and official pages' },
       row = this.addRoutine({ bot: rae.id, schedule: 'every day 8:00', task: jobs.findTask(full), name: `Look for ${short(g.title, 40)}`, quiet: true }, 'goal');
     jobs.addGoal(this.db, { ...full, rae: rae.id, will: will?.id ?? '', routine: row.id, since: Date.now(), stages: g.stages ?? jobs.JOB_STAGES, crew: job ? 2 : 1, follow: job ? 'applied' : '', wont: job ? jobs.WONT : jobs.GENERAL_WONT, asks: job ? jobs.YOURS : [] });
@@ -2340,6 +2339,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       return [{ heading: h, level: 2 }, f.length ? { bullets: f.map((b) => `${b.says} Source: ${b.url}`) } : { text: `Not stated: neither the posting nor ${r.co}'s own pages say this.`, italic: true }]; });
     await this.document(botId, `Reading pack for ${r.co}`, [{ text: `${r.title} at ${r.co}. Every line comes from the page named after it.` }, ...parts,
       { heading: 'Test yourself', level: 2 }, { bullets: questions.map((q) => `${q.ask} (${q.why})`) }, { heading: 'Only you can answer these', level: 2 }, { bullets: jobs.YOURS }], `Reading-pack-${r.co.replace(/[^A-Za-z0-9]+/g, '-').slice(0, 40)}`);
+    this.say(CHIEF, 'bot', `${this.bot(botId)!.display} made your reading pack for ${r.co}: the company, the role and its interview, each line with the page it came from.`, this.activeTask(botId)?.id ?? null); // its card, in Chief's chat beside the role's
     return { ok: 'the prep is on the role card, and the reading pack is delivered' };
   }
 

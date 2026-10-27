@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# The application hand-off on the phone (docs/verification/jobs-apply.md): the release app on a task-owned emulator paired to
-# a stub-engine crewd whose writer has the real pinned browser, and a local posting with its own form. Umer opens Chief's
-# card, taps Fill it in for me, opens the filled form's card, answers his own questions there and taps Submit; the posting
-# records what it got and the role is Applied. The writer's turn is scripted (jobs-apply.mjs fill); the gate, crewd's
-# reading of the page and its one press of Submit are real. Records phone-apply.mp4 with stills of each step.
+# The application hand-off on the phone (docs/verification/jobs-apply.md): the release app on a task-owned emulator, paired
+# to a stub-engine crewd whose writer has the real pinned browser, and a local posting. Umer taps Fill it in for me, answers
+# his own questions on the form's card and taps Submit; the role is Applied. Only the writer's turn is scripted. Records
+# phone-apply.mp4 with stills. Needs the Android SDK, /usr/bin/chromium and the release APK; adb runs under the scratch HOME.
 #   BROWSER_TOOLS=<tools-dir> bash scripts/verify/phone-apply.sh <out-dir> [release-x86_64.apk]
-# Needs the Android SDK, /usr/bin/chromium and the APK (cd mobile/android && ./gradlew assembleRelease
-# -PreactNativeArchitectures=x86_64, through fm-mem-gate). adb runs under the scratch HOME, with its own keys and server.
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$(realpath -m "${1:?out dir}") APK=$(realpath "${2:-$REPO/mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk}")

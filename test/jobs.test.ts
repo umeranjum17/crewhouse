@@ -132,6 +132,8 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   const words = JSON.stringify(await crew.documentView(g.will, pk));
   assert.match(words, /Acme and what it sells[^]*Not stated[^]*The role, day to day[^]*React and TypeScript\. Source: http[^]*The interview loop and topics[^]*Not stated[^]*Test yourself[^]*How do you test a checkout\?/);
   assert.equal(db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, asks, 'the pack raises no card of its own');
+  const handed = crew.botPage('chief').messages.find((m: Json) => /made your reading pack for Acme/.test(m.text));
+  assert.deepEqual(handed?.files.map((f: Json) => f.path), [pk], 'the pack is handed back in Chief\'s chat, its card beside the role\'s');
 
   // Only the person's tap sends it, with their own answers; the page saying so moves the role to Applied.
   assert.throws(() => jobs.move(db, role.id, 'sideways'), /interview/);
