@@ -8,7 +8,7 @@ JOBS_EVAL_CLAUDE_HOME=<a HOME holding a signed-in Claude login> \
 scripts/jobs-eval.sh --engine stub --out <dir> --no-ledger     # scripted answers, no model: proves the harness, never a result
 ```
 
-Use a dedicated test login, never your own: the engine and the baseline each use it in turn, and a login has one writer at a time (hence the `flock`). Run Node 24.16+ by path (`NODE=/usr/bin/node`) where a version manager's shim does not survive the throwaway HOME. Exit 0 leaves `report.md` (read this), `results.json`, `helper-<n>.json` and `baseline-<n>.json` (every output and score) in `<dir>`, and appends one line to the ledger, `scripts/jobs-eval/ledger.jsonl` by default.
+Use a dedicated test login, never your own: the engine and the baseline each use it in turn, and a login has one writer at a time (hence the `flock`). Run Node 24.16+ by path (`NODE=/usr/bin/node`) where a version manager's shim does not survive the throwaway HOME. Exit 0 leaves `report.html` (the same report as a page: scores by case and check beside both baselines, the rubric, what the helper did, and the real-run line) and `report.md` (read either), `results.json`, `helper-<n>.json` and `baseline-<n>.json` (every output and score) in `<dir>`, and appends one line to the ledger, `scripts/jobs-eval/ledger.jsonl` by default.
 
 ## What runs
 
@@ -60,4 +60,4 @@ Error: gave up after 120 s waiting for Claude to read as signed in; crewd's last
 {"account":"claude","provider":"claude","name":"Claude","signedIn":false,"restingUntil":0,"signIn":null,"notIncluded":false,"signedOut":false}
 ```
 
-The engine had reached `crewd engine ready` and the dedicated test login was linked into its home, while `claude auth status --text` on that login's own HOME reported it signed in. The run needs a signed-in engine, which is the account owner's to give: run the command above with `JOBS_EVAL_CLAUDE_HOME` set once the engine sees the login (the runbook's "Real model words" section has the steps), then add the result and its ledger line here.
+The engine had reached `crewd engine ready` and the dedicated test login was linked into its home, while `claude auth status --text` on that login's own HOME reported it signed in. The run needs a signed-in engine, which is the account owner's to give: run the command above with `JOBS_EVAL_CLAUDE_HOME` set once the engine sees the login (the runbook's "Real model words" section has the steps), then add the result and its ledger line here. `report.html` says the same on a stub run, and `scripts/verify/jobs-eval.sh` (the done-done journey `jobs-eval`) captures it at 390 and 1280.

@@ -3,7 +3,7 @@
 //   helper    the same crewd on the real engine: the three cases through the product (Chief's goal card, Rae's shortlist,
 //             Will's interview prep), scored by rubric.mjs
 //   baseline  the plain model (the Claude CLI, no tools, no Crewhouse prompt or checks) on the same three cases, scored the same way
-//   report    both arms' files into results.json, report.md and one ledger line (model, prompt hash, commit)
+//   report    both arms' files into results.json, report.md, report.html and one ledger line (model, prompt hash, commit)
 // Observation reads crewd's own SQLite file read-only; every action goes through its HTTP API.
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -155,6 +155,35 @@ const summary = (a) => Object.entries(a.cases).map(([n, c]) => `${n} ${pct(c.sco
 const sha = (...parts) => createHash('sha256').update(parts.join('\n---\n')).digest('hex').slice(0, 12);
 const git = (...a) => { try { return execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8' }).trim(); } catch { return ''; } };
 const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const REAL_LINE = "Real-model run: not yet run. It waits on the account owner's sign-in: the engine never saw the test login (\"signedIn\":false after 120 s), so no case ran. Command and error: docs/jobs-eval.md.";
+/** The one page a person reads: scores per case and check beside both baselines, the rubric, and what the helper did. */
+function page({ record: r, mean, total, losses, cases, checks, first, helpers }) {
+  const cell = (x) => `<td class="n"><span class="bar" style="--w:${Math.round(x * 100)}%"></span>${pct(x)}</td>`;
+  const head = '<th>helper</th><th>plain</th><th>plain + rules</th>';
+  const row = (name, v) => `<tr><th scope="row">${esc(name)}</th>${['helper', 'plain', 'rules'].map((a) => cell(v(a))).join('')}</tr>`;
+  const stub = r.engine === 'stub';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jobs eval</title><style>
+:root{--bg:#fbfaf7;--fg:#1d1b17;--mute:#6b665c;--line:#e2ded3;--card:#fff;--bar:#d9c7a0;--warn:#fff3d6;--warnfg:#6a4a00}
+@media(prefers-color-scheme:dark){:root{--bg:#17150f;--fg:#efece4;--mute:#a39d8e;--line:#35311f;--card:#1f1c14;--bar:#5b4b25;--warn:#3a2f10;--warnfg:#f0d68a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}main{max-width:62rem;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:.5rem 0}h2{font-size:1.1rem;margin:2rem 0 .5rem}p,li{max-width:46rem}.mute{color:var(--mute);font-size:.9rem;overflow-wrap:anywhere}
+.note{background:var(--warn);color:var(--warnfg);padding:10px 14px;border-radius:8px;margin:12px 0}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line)}th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}thead th{font-size:.85rem;color:var(--mute)}
+td.n{position:relative;white-space:nowrap;min-width:5.5rem}.bar{position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--bar);opacity:.55}td.n{z-index:0}
+@media(max-width:520px){th,td{padding:6px 4px;font-size:.85rem}td.n{min-width:0;white-space:normal}.bar{display:none}main{padding:12px 16px}}
+</style></head><body><main><h1>Jobs eval</h1>
+<p class="mute">Commit ${esc(r.commit.slice(0, 10))}${r.dirty ? ' (uncommitted changes)' : ''} · engine ${esc(r.engine)} · model ${esc(r.model?.id ?? 'n/a')} · baseline ${esc(r.baselineModels.join(', ') || 'n/a')} · prompt ${esc(r.prompt)} · rubric v${r.rubric} · cases v${r.cases} · ${r.runs} run${r.runs > 1 ? 's' : ''} per arm</p>
+${stub ? '<p class="note"><b>Stub engine: scripted answers, no model.</b> This proves the harness and the scorer tell the helper and a plain model apart. It is not a result.</p>' : ''}
+<p class="note" id="real-run">${esc(stub ? REAL_LINE : `Real-model run: ${r.model?.id} (${r.model?.account}).`)}</p>
+<h2>Scores by case</h2><div class="scroll"><table><thead><tr><th>case</th>${head}</tr></thead><tbody>${cases.map((c) => row(c, (a) => mean[a][c])).join('')}${row('mean', (a) => total[a])}</tbody></table></div>
+<h2>Where the helper loses (${losses.length})</h2>${losses.length ? `<div class="scroll"><table><thead><tr><th>case: check</th>${head}</tr></thead><tbody>${losses.map((l) => row(`${l.case}: ${l.label}`, (a) => l[a] ?? 0)).join('')}</tbody></table></div>` : '<p>None: no check where the helper scored below a baseline.</p>'}
+<h2>The rubric: every check</h2><div class="scroll"><table><thead><tr><th>case: check</th>${head}</tr></thead><tbody>${cases.flatMap((c) => first[c].checks.map((k) => row(`${c}: ${k.label}`, (a) => checks(a, c)[k.id] ?? 0))).join('')}</tbody></table></div>
+<p class="mute">Each check is 0 to 1 and a script reproduces it (scripts/jobs-eval/rubric.mjs); a case is the mean of its checks and the run the mean of its cases.</p>
+<h2>What the helper did</h2><div class="scroll"><table><thead><tr><th>run: case</th><th>ended</th><th>seconds</th><th>tool calls</th><th>refused by crewd</th></tr></thead><tbody>${helpers.flatMap((h, i) => Object.entries(h.cases).map(([c, x]) => `<tr><th scope="row">${i + 1}: ${esc(c)}</th><td>${esc(x.run.state)}</td><td>${x.run.seconds}</td><td>${x.run.calls}</td><td>${x.run.refused}</td></tr>`)).join('')}</tbody></table></div>
+</main></body></html>
+`;
+}
 function report() {
   const dir = resolve(o.dir), files = (p) => readdirSync(dir).filter((f) => f.startsWith(p)).sort().map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')));
   const helpers = files('helper-'), bases = files('baseline-');
@@ -182,6 +211,7 @@ function report() {
     '## What the helper did', '', '| run | case | task ended | seconds | tool calls | refused by crewd | first refusals |', '|---|---|---|---|---|---|---|',
     ...helpers.flatMap((h, i) => Object.entries(h.cases).map(([c, x]) => `| ${i + 1} | ${c} | ${x.run.state} | ${x.run.seconds} | ${x.run.calls} | ${x.run.refused} | ${x.run.refusals.join(' ; ').replace(/\|/g, '/') || '-'} |`)), ''].join('\n');
   writeFileSync(join(dir, 'results.json'), JSON.stringify({ record, helpers, bases }, null, 1)); writeFileSync(join(dir, 'report.md'), text);
+  writeFileSync(join(dir, 'report.html'), page({ record, mean, total, losses, cases, checks: (arm, c) => checks(arm, c), first: arms.helper[0], helpers }));
   if (o.ledger) appendFileSync(o.ledger, `${JSON.stringify(record)}\n`);
   console.log(text);
 }

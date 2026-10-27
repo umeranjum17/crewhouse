@@ -95,6 +95,9 @@ journeys:
   # The resume: Chief makes it from Umer's own words only, he edits it, and the app saves it as PDF and Word (docs/verification/resume.md).
   resume:
     command: 'timeout -k 10 900 bash scripts/verify/resume.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The jobs eval's report page on the stub engine, at 1280 and 390; the real-model run waits on a sign-in (docs/jobs-eval.md).
+  jobs-eval:
+    command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/jobs-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:
