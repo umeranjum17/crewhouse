@@ -5,12 +5,12 @@ import type { Row, Store } from './db.ts';
 import type { BlockSpec } from './documents.ts';
 
 export const JOB_STAGES = ['Found', 'Drafted', 'Applied', 'Interview', 'Offer'];
-export type Goal = { id: number; title: string; places: string; floor: string; brief: string; rae: string; will: string; routine: number; since: number;
+export type Goal = { id: number; title: string; places: string; floor: string; focus?: string; brief: string; rae: string; will: string; routine: number; since: number;
   stages: string[]; crew: number; follow: string; sources: string; wont: string[]; asks: string[] };
 
 /** What the form asks that only the person answers: declarations, right to work, sponsorship, pay, notice, consent. Never guessed. */
 export const YOURS = ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'];
-export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy/i;
+export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy|gender|\brace\b|ethnic|hispanic|veteran|disab|pronoun|sexual|religio|restriction|\bagreement|\bconfirm|can you start|start date/i;
 export const WONT = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
 /** The same promise for a goal that is not a job search. */
 export const GENERAL_WONT = ['Submit, sign or send anything for you', 'Contact anyone on your behalf', 'Accept an offer, terms or any agreement', 'Pay or buy anything', 'Publish anything', 'Answer for you what only you can: declarations, consent, money'];
@@ -36,6 +36,40 @@ export const namesOf = (v: unknown) => { const n = (Array.isArray(v) ? v : []).m
 
 /** Whether a draft's brief line is one of the person's own lines (as written, bullets and case aside); `part` lets a quote be a piece of one. */
 export const inCv = (cv: string, line: string, part = false) => { const n = norm(line); return n.length >= 8 && (part ? norm(cv).includes(n) : cv.split('\n').some((l) => norm(l) === n)); };
+
+/** Whether a line typed on a form comes from the person's own words (whole words, as written); a bare yes or no never does. */
+export const sourced = (src: string, v: string) => { const n = norm(v); return !!n && !/^(yes|no|y|n|true|false)$/.test(n) && ` ${norm(src)} `.includes(` ${n} `); };
+
+export type Field = { label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean };
+/** An application form as its own page shows it (crewd's snapshot, never the model's): the fields nobody has filled, the
+ *  button that sends it (or the Next of a form that goes on), and each field's ref by label (a radio by `group\nlabel`). */
+export function formOf(snapshot: string, filled: string[]) {
+  const fields: Field[] = [], refs: Record<string, string> = {}, at = (label: string) => fields.find((f) => f.label === label);
+  let submit = '', next = '', group = { label: '', depth: -1 }, said = '';
+  for (const line of snapshot.split('\n')) {
+    // A question written above its control (Ashby): it names a box called only by its placeholder, and its Yes/No buttons.
+    const q = /^\s*- generic(?: \[ref=[\w-]+\])?: (.+)$/.exec(line); if (q) said = q[1].trim();
+    const m = /^(\s*)- (textbox|combobox|checkbox|radio|option|button|group|radiogroup) "((?:[^"\\]|\\.)*)"(?:.*\[ref=([\w-]+)\])?/.exec(line);
+    if (!m) continue;
+    const [, pad, role, raw, ref] = m, label = raw.replace(/\\"/g, '"').trim(), last = fields.at(-1);
+    if (pad.length <= group.depth) group = { label: '', depth: -1 };
+    if (role === 'group' || role === 'radiogroup') { group = { label, depth: pad.length }; continue; }
+    if (role === 'option') { if (ref) refs[`option\n${label}`] ??= ref; if (last?.kind === 'pick') (last.options ??= []).push(label); continue; }
+    const yes = role === 'button' && !!said && /^(yes|no)$/i.test(label), up = group.label || said;
+    if (role === 'button' && !yes) {
+      if (/submit|send (my |your )?application/i.test(label)) { submit = label; refs[label] = ref; } else if (/^(next|continue)\b/i.test(label)) next ||= label;
+      else if (/^(attach|upload|choose file)/i.test(label) && up && !at(up)) fields.push({ label: up, kind: 'file', yours: true });
+      continue;
+    }
+    const pick = role === 'radio' || yes, of = role === 'radio' ? group.label : said, name = !pick && said && /\.\.\.$/.test(label) ? said : label;
+    const key = pick ? `${of}\n${label}` : name;
+    if (filled.includes(name) || refs[key]) continue;
+    refs[key] = ref;
+    if (pick) { const f = at(of); if (f) (f.options ??= []).push(label); else fields.push({ label: of || label, kind: 'pick', options: [label], yours: ONLY_YOU.test(of || label) }); continue; }
+    fields.push({ label: name, kind: role === 'checkbox' ? 'tick' : role === 'combobox' ? 'pick' : 'text', yours: ONLY_YOU.test(name) });
+  }
+  return { fields, submit, next, refs };
+}
 
 /** Add an item to a goal's first stage. A page already on that board (by its page, or its company and title), passed on or not, is not added twice. */
 export function add(db: Store, gid: number, r: { co: string; title: string; place: string; pay: string; fit: unknown[]; gap: string; url: string }, now = Date.now()) {
@@ -82,8 +116,8 @@ export function setPrep(db: Store, id: number, bot: string, p: object) {
 export const views = (db: Store) => goals(db).map((g) => view(db, g)!);
 
 /** The finder's daily job. The board is its report: crewd keeps the run out of Chief's thread, so it never pages the person. */
-export const findTask = (g: Pick<Goal, 'id' | 'title' | 'places' | 'floor' | 'brief' | 'sources'>) => `Look for new options for the person's goal: ${g.title}. Where: ${g.places}.${g.floor ? ` Their limit: ${g.floor}.` : ''}
-Search ${g.sources} with your web tools, and read each page yourself before you add it. For each NEW one that fits, call crew_role once with goal ${g.id}: company (who it is from), title, place, url (its own page), pay (the figure copied word for word from the page, or empty when it shows none), fit (each says why it fits and quotes the line of their brief that shows it in cv) and missing (what it asks for that their brief does not show, said plainly).
+export const findTask = (g: Pick<Goal, 'id' | 'title' | 'places' | 'floor' | 'focus' | 'brief' | 'sources'>) => `Look for new options for the person's goal: ${g.title}. Where: ${g.places}.${g.floor ? ` Their limit: ${g.floor}.` : ''}${g.focus ? ` Favour: ${g.focus}.` : ''}
+Search ${g.sources} with your web tools, and read each page yourself before you add it. Before each search, call crew_report with what you are looking for, in a few words (for example: Searching remote AI engineering roles). For each NEW one that fits, call crew_role once with goal ${g.id}: company (who it is from), title, place, url (its own page), pay (the figure copied word for word from the page, or empty when it shows none), fit (each says why it fits and quotes the line of their brief that shows it in cv) and missing (what it asks for that their brief does not show, said plainly).
 Never claim anything their brief does not show. Skip anything past their limit. You never apply, sign in, send, book, pay or fill in a form. The board is the report: when you are done, reply with one short line saying how many you added, or exactly ALL-CLEAR when none.
 Their brief, line by line:
 ${g.brief}`;
@@ -94,6 +128,16 @@ export const seen = (db: Store, routine: number) => { const g = goals(db).find((
 export const draftTask = (g: Pick<Goal, 'brief'>, r: Row) => `Draft the person's application for this role. You write; they copy, check and apply on the company's own site.
 Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}. Pay: ${r.pay || 'not in the posting'}.
 Read the posting. Then call crew_application once: role ${r.id}; cv (the person's own CV lines, copied exactly as written, picked and ordered to lead with what this role asks for; never reword, never add a line); answers (the cover questions the posting asks, each answered only from the CV; if it asks none, "Why do you want to work at ${r.co}?"); yours (any form question about what they declare or sign, right to work, visa, pay, notice or consent: leave it out of answers). You never apply, send or submit.
+Their CV, line by line:
+${g.brief}`;
+
+/** The writer's job on the posting's own form, from the person's tap on Fill it in for me: their words only, nothing sent. */
+export const fillTask = (g: Pick<Goal, 'brief'>, r: Row, draft: string) => `Fill in the person's application form for ${r.title} at ${r.co} in your own browser. You fill; only the person submits.
+Open ${r.url} with browser goto and find its application form (an Apply link may lead to it). Fill each text line you can with browser fill, using only words from their CV or the approved draft below, as written: their name, contact details, the CV lines and the cover answers. Leave everything else empty for them: what they declare or sign, right to work, visa or sponsorship, pay, notice, consent, who they are, every dropdown, tick box and file, and anything the CV and draft do not say.
+Never sign in, make an account, upload a file, or press a button once you have filled a line. Then call crew_form once: role ${r.id}, and \`stop\` only when the form needs a sign-in or an account, wants a CV file, goes on over more pages, or the site asks whether you are human (say which, plainly).
+Reply with one line.
+The approved draft:
+${draft}
 Their CV, line by line:
 ${g.brief}`;
 

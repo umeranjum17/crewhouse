@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -860,7 +860,7 @@ export function Composer({ placeholder, onSend, chat, chips, talk, stop, practic
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -965,21 +965,45 @@ function AskHead({ c, who }: { c: Card; who: Helper | undefined }) {
   </div>;
 }
 
+/** A filled application form: the site, what the crew put in from the CV and draft, and the questions left blank for
+ *  the person, as fields they answer here (theirs alone first). Their answers ride the Submit. */
+function FormFields({ f, said, set }: { f: FormView; said: Json; set: (key: string, v: string | boolean) => void }) {
+  const field = (x: FormView['fields'][number]) => <label key={x.key} className="form-q"><span>{x.label}</span>
+    {x.kind === 'file' ? <i className="mute small">Attach this yourself on the site: the crew has no file of it.</i>
+      : x.kind === 'tick' ? <input type="checkbox" checked={!!said[x.key]} onChange={(e) => set(x.key, e.target.checked)} />
+      : x.options?.length ? <select className="input" value={String(said[x.key] ?? '')} onChange={(e) => set(x.key, e.target.value)}><option value="">Choose…</option>{x.options.map((o) => <option key={o}>{o}</option>)}</select>
+      : <input className="input" value={String(said[x.key] ?? '')} onChange={(e) => set(x.key, e.target.value)} />}</label>;
+  const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);
+  return <div className="ev form-ev">
+    <div className="ev-to">{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</div>
+    {!!f.filled.length && <><div className="hire-sect">Filled from your CV and draft</div>{f.filled.map((x) => <div key={x.label} className="ev-line"><span>{x.label}</span><b>{x.value}</b></div>)}</>}
+    {!!yours.length && <div className="yours"><b>Only you can answer these</b>{yours.map(field)}</div>}
+    {!!rest.length && <><div className="hire-sect">Not in your CV or draft</div>{rest.map(field)}</>}
+    {f.note && <p className="ask-note">{f.note}</p>}
+    <a className="link small" href={f.url} target="_blank" rel="noreferrer">Open the form yourself</a>
+  </div>;
+}
+
 /** A helper's draft takes the person's own words before the yes: their version replaces the draft, and still nothing
  *  is sent. `box` stands in for the evidence while editing; `yes` carries the words only when they changed, and copies
- *  the words the person sees (their edit when there is one) and opens the draft's link before today's Approve answer. */
+ *  the words the person sees (their edit when there is one) and opens the draft's link before today's Approve answer
+ *  (Fill it in for me neither copies nor opens). A filled form's box is its fields, and `yes` carries the answers. */
 function useDraftEdit(c: Card) {
-  const [words, setWords] = useState<string | null>(null);
+  const [words, setWords] = useState<string | null>(null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
     can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
-    box: words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
+    box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
+      : words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
     yes: (body: Json) => {
+      if (c.form) return { ...body, fields: said };
       if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
-      void navigator.clipboard?.writeText(text).catch(() => { /* the person pastes from the card itself */ });
-      if (c.draftLink) window.open(c.draftLink, '_blank', 'noopener');
+      if (!body.fill) {
+        void navigator.clipboard?.writeText(text).catch(() => { /* the person pastes from the card itself */ });
+        if (c.draftLink) window.open(c.draftLink, '_blank', 'noopener');
+      }
       return changed ? { ...body, text } : body;
     },
   };
@@ -1209,6 +1233,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
           <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
           <More title={title} sub={sub} acts={[
             edit.can && { label: edit.editing ? 'Use the original' : 'Edit', pressed: edit.editing, run: edit.toggle },
+            ...c.choices.filter((x) => x !== yes && x.body.answer === 'allow' && x.body.scope !== 'always').map((x) => ({ label: x.label, run: () => act(edit.yes(x.body)) })),
             deny && { label: deny.label, run: () => act(deny.body) },
             remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) },
             always && { label: always.label, cls: 'ghost always', run: () => act(always.body) }]} />
@@ -1257,7 +1282,7 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         <div className="approve-btns">
           {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body)}>{x.label}</button>)}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body.answer === 'allow' ? edit.yes(x.body) : x.body)}>{x.label}</button>)}
         </div>
         {remind && <button className="link approve-remind" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}

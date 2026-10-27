@@ -86,7 +86,17 @@ import { join } from 'node:path';
 // Raised 7807 -> 7907 for the resume (ch-018-resume, +100 net): Chief's crew_resume with crewd's line-by-line check against
 // the person's own words, the kept record of where each part came from, the person's edit, and the PDF writer (no new
 // dependency) behind Save as PDF for every delivered document. No trim paired; nothing was packed.
-const BUDGET = 7907;
+// Raised 7907 -> 8031 for the application hand-off (ch-018-journey, +124 net): the writer fills a posting's real form in
+// its own browser with only the person's CV and approved draft lines (the gate reads each field's label from crewd's snapshot),
+// crew_form reads the page into one card of what was filled and what only the person answers, and crewd alone presses the
+// form's Submit on their tap and checks the page took it; the kept page closes when crewd stops or the card is turned down; Ashby's question-above-control forms read the same way. Owner-directed in the brief ("trim or raise"); no trim paired.
+// Raised 8031 -> 8054 for attachments through Chief (ch-018-journey, +23 net): crewd reads an attached document's words into
+// Chief's message (poppler's pdftotext, else the documents tool), gives the helper he hands the job to its own copy and text
+// at files/from-chief/, refuses a hand-off that does not say where; the stub's delegate refuses as the engine's gate does.
+// Owner-directed (Firstmate: the captain's preview-27 run, the critical path).
+// Raised 8054 -> 8056 for results in Chief's chat (ch-018-journey, +2 net): the goal's first look is Chief's hand-on, each
+// role found is a step on his live line, and the look ends in his chat in crewd's own words, one line per role. Same direction.
+const BUDGET = 8056;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

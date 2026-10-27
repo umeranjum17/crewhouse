@@ -42,7 +42,7 @@ try {
     const m = await run(`(() => {
       const seen = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('.sr'); };
       const texty = [...document.querySelectorAll(${JSON.stringify(process.env.GATE_SCOPE ?? 'main *, .page *')})].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));
-      const small = (e) => { const cs = getComputedStyle(e); return cs.textTransform === 'uppercase' || e.closest('.st-pill, .pill, .tabbar, .tab, .count, .badge, time'); };
+      const small = (e) => { const cs = getComputedStyle(e); return cs.textTransform === 'uppercase' || e.closest('.st-pill, .pill, .tabbar, .tab, .count, .badge, time, [aria-hidden="true"]'); };
       const tiny = texty.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16 && !small(e)).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const clipped = texty.filter((e) => { const cs = getComputedStyle(e); return (e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'visible' && cs.overflowX !== 'auto') || (e.scrollHeight > e.clientHeight + 2 && /hidden|clip/.test(cs.overflowY) && !/clamp/.test(e.className)); }).map((e) => e.className + ': ' + e.textContent.trim().slice(0, 40));
       const hscroll = document.documentElement.scrollWidth > innerWidth + 1;

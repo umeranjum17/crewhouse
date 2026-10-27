@@ -29,9 +29,10 @@ export const PARAMETERS = {
   crew_status: Type.Object({}), crew_use: Type.Object({ bot: Type.String(), account: Type.String(), model: Type.Optional(Type.String()) }), crew_suggest: Type.Object({ bot: Type.String(), text: Type.String() }),
   crew_create: Type.Object({ bot: Type.Optional(Type.String()), name: Type.Optional(Type.String()), role: Type.String(), job: Type.Object(Object.fromEntries(['does', 'aim', 'gets', 'how', 'great'].map((k) => [k, Type.String({ minLength: 1, maxLength: 600 })])), { additionalProperties: false }), personality: Type.Optional(Type.String()), first: Type.Optional(Type.String()), will_do: Type.Optional(Type.Array(Type.String())), wont_do: Type.Optional(Type.Array(Type.String())), first_step: Type.Optional(Type.String()), first_job: Type.Optional(Type.String()), apps: Type.Optional(Type.Array(Type.String())) }),
   crew_resume: Type.Object({ sections: Type.Array(Type.Object({ heading: Type.Optional(Type.String()), lines: Type.Array(Type.String()) }), { minItems: 1 }) }),
-  crew_goal: Type.Object({ title: Type.String(), places: Type.String(), floor: Type.Optional(Type.String()), cv: Type.Optional(Type.String()), brief: Type.Optional(Type.String()), stages: Type.Optional(Type.Array(Type.String())) }),
+  crew_goal: Type.Object({ title: Type.String(), places: Type.String(), floor: Type.Optional(Type.String()), focus: Type.Optional(Type.String()), cv: Type.Optional(Type.String()), brief: Type.Optional(Type.String()), stages: Type.Optional(Type.Array(Type.String())) }),
   crew_role: Type.Object({ goal: Type.Optional(Type.Number()), company: Type.String(), title: Type.String(), place: Type.String(), url: Type.String(), pay: Type.Optional(Type.String()), fit: Type.Array(Type.Object({ says: Type.String(), cv: Type.String() })), missing: Type.String() }),
   crew_application: Type.Object({ role: Type.Number(), cv: Type.Array(Type.String()), answers: Type.Array(Type.Object({ ask: Type.String(), answer: Type.String() })), yours: Type.Optional(Type.Array(Type.String())) }),
+  crew_form: Type.Object({ role: Type.Number(), stop: Type.Optional(Type.String()) }),
   crew_prep: Type.Object({ role: Type.Number(), brief: Type.Array(Type.Object({ says: Type.String(), url: Type.String(), quote: Type.String() })), questions: Type.Array(Type.Object({ ask: Type.String(), why: Type.String() })) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_case: Type.Object({ thread: Type.String(), facts: Type.String({ maxLength: 600 }) }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
 }, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
@@ -124,9 +125,9 @@ export const webTools = (may?: (u: URL) => boolean) => [
 
 /** Run a pinned AXI by its absolute path on crewd's own node, with only the environment crewd gives it: never the
  *  owner's HOME, XDG folders or PATH, so it reads and writes nothing of theirs. */
-export function runAxi(script: string, args: string[], cwd: string, env: Record<string, string>, signal?: AbortSignal) {
+export function runAxi(script: string, args: string[], cwd: string, env: Record<string, string>, signal?: AbortSignal, cap = 30_000) {
   return new Promise<string>((resolve) => {
     execFile(process.execPath, [script, ...args], { cwd, env, timeout: 120_000, maxBuffer: 8 << 20, signal }, (err, out, errOut) =>
-      resolve(`${out}${errOut}${err && !out ? `\n(exit: ${err.message})` : ''}`.slice(0, 30_000)));
+      resolve(`${out}${errOut}${err && !out ? `\n(exit: ${err.message})` : ''}`.slice(0, cap)));
   });
 }

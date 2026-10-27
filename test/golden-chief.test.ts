@@ -128,11 +128,13 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // same slice, a reminder the person asks for is their own routine rather than a helper hire (+83).
   // Re-frozen 11,727 -> 11,886 for the resume (ch-018-resume): Chief asks for the missing material, then makes it only from
   // the person's own lines (+159).
+  // 11,886 -> 11,962 for ch-018-journey: a job hunt with a CV, pasted or attached, is the jobs goal at once, never a
+  // helper (+76).
   const prompt = disk.systemPrompt(cfg, 'chief', true), soul = readFileSync(join(cfg.repoDir, 'templates', 'chief', 'soul.md'), 'utf8');
   assert.ok(prompt.startsWith(`${soul.trim()}\n\n`), 'Chief carries his soul in session context, not the shared workspace');
   // The same two budgets: the soul moved into this string; the job's allowance does not grow.
   const job = prompt.slice(soul.trim().length + 2);
-  assert.ok(job.length <= 11_886, `Chief prompt grew past its frozen size (job ${job.length})`);
+  assert.ok(job.length <= 11_962, `Chief prompt grew past its frozen size (job ${job.length})`);
   assert.ok(soul.length <= disk.SOUL_CAP, `Chief soul past SOUL_CAP (${soul.length})`);
   assert.doesNotMatch(soul, /on every line/, 'the soul never permits an occasional Sir');
   assert.match(soul, /no "Sir", no "Madam"/, 'Chief never titles the person');

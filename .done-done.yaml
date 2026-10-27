@@ -64,6 +64,23 @@ journeys:
   # Interview prep: the brief with linked sources, the likely questions and the practice chat (docs/verification/jobs-prep.md).
   jobs-prep:
     command: 'timeout -k 10 600 bash scripts/verify/jobs-prep.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The application form: Fill it in for me, the card of what was filled and what only Umer answers, his Submit, Applied,
+  # on a local posting with the writer's real pinned browser (docs/verification/jobs-apply.md).
+  jobs-apply:
+    command: 'BROWSER_TOOLS="${BROWSER_TOOLS:?a tools folder with the browser installed}" timeout -k 10 900 bash scripts/verify/jobs-apply.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The same up to the card on a real posting (OpenAI's Ashby form; openai.com's own page is behind a Cloudflare check):
+  # read and typed into, never submitted. Its CV upload is required, so the card says so and has no Submit.
+  jobs-apply-real:
+    command: 'BROWSER_TOOLS="${BROWSER_TOOLS:?a tools folder with the browser installed}" timeout -k 10 900 bash scripts/verify/jobs-apply.sh "$DONE_DONE_EVIDENCE_ROOT" https://jobs.ashbyhq.com/openai/e9d435e1-1b9e-4715-84ce-75f372e5559c/application OpenAI "Forward Deployed Engineer - UAE"'
+  # The same by taps on the release app: a task-owned emulator, the stub engine and the local posting, recorded.
+  phone-apply:
+    timeout: 40m
+    command: 'BROWSER_TOOLS="${BROWSER_TOOLS:?a tools folder with the browser installed}" timeout -k 10 2300 bash scripts/verify/phone-apply.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the release APK}"'
+  # The captain's first hour on the release app: his CV PDF first with "find me good stuff", Yes on the goal card, the look
+  # live and its roles as cards in Chief's chat, Rae's chat; the real pinned OpenClaw with a scripted local model, recorded.
+  first-hour:
+    timeout: 40m
+    command: 'timeout -k 10 2300 bash scripts/verify/first-hour.sh "$DONE_DONE_EVIDENCE_ROOT" "${PHONE_APK:?the release APK}"'
   # The reusable long-goal parts: a flat to rent beside the job search, with its own stage names, the quiet daily search, and reminders (docs/verification/goal-parts.md).
   goal-parts:
     timeout: 20m
