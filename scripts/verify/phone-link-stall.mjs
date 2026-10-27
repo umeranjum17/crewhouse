@@ -76,6 +76,7 @@ for (const [theme, night] of [['light', 'no'], ['dark', 'yes']]) {
   writeFileSync(join(OUT, `accept-queue-${theme}.txt`), `link port ${port}\n${queueLine}`);
   if (!queue) throw new Error(`the event-loop stall did not produce a non-empty TCP accept queue in ${theme} mode`);
   await until('phone has been offline for twenty seconds', () => Date.now() - started >= 20_000, 25_000);
+  await until('phone has been offline for one minute', () => Date.now() - started >= 60_000, 45_000);
   if (textOnPhone(/Can't reach the home computer/i)) throw new Error(`short-stall grace showed the phone banner in ${theme} mode`);
   if (!textOnPhone(/Scout is working/)) throw new Error(`the running Scout job disappeared during the ${theme} reconnect`);
   shot(`phone-${theme}-during-stall.png`);
