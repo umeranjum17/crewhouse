@@ -15,8 +15,4 @@ python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$REPO/web/dist" > "
 trap 'kill $SRV 2>/dev/null || true' EXIT
 for _ in $(seq 100); do curl -fsS -o /dev/null "http://127.0.0.1:$PORT/" 2>/dev/null && break; sleep 0.1; done
 node "$HERE/calm-cap.mjs" "$REPO" "http://127.0.0.1:$PORT/" "$OUT"
-cat > "$OUT/steps.json" <<J
-{"target":{"version":"$(git rev-parse HEAD)"},"start":"the web app built from this checkout, on the ?demo data",
-"steps":["open Chief's chat and Home on a 390 phone, day and night","open Chief in the three panes on a 1280 computer, day and night"],
-"result":"Chief's chat, Home and the desktop shell as this commit draws them"}
-J
+node "$HERE/steps.mjs" "$OUT" calm-design
