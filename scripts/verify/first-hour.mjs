@@ -18,6 +18,8 @@ const on = async (re, ms = 240_000) => { const end = Date.now() + ms; while (!re
 const shot = (n) => ui('shot', join(out, 'screens', n));
 // Controlled inputs drop fast injected text: three letters at a time (`input text` takes %s for a space).
 const type = async (v) => { for (let i = 0; i < v.length; i += 3) { A('shell', 'input', 'text', v.slice(i, i + 3).replaceAll(' ', '%s')); await sleep(250); } };
+// Drags the chat until a line shows: down (y1 < y2) to earlier lines, up to later ones; six drags at most.
+const drag = async (re, y1, y2) => { for (let i = 0; !re.test(texts()); i++) { if (i === 6) throw new Error(`never dragged to ${re}`); A('shell', 'input', 'swipe', '540', y1, '540', y2, '400'); await sleep(900); } };
 const close = () => { if (/mInputShown=true/.test(A('shell', 'dumpsys', 'input_method'))) A('shell', 'input', 'keyevent', '4'); };
 
 await on(/Ask Chief anything/); await sleep(1500); shot('01-home.png');
@@ -27,21 +29,19 @@ ui('tap', 'Umer_CV'); await on(/Umer_CV\.pdf/); await sleep(600);
 ui('tap', 'Ask Chief anything'); await sleep(800); await type('This is my resume find me good stuff'); close(); await sleep(600); shot('03-cv-attached.png');
 ui('tap', '^Send$');
 await on(/Yes, start my search/); await sleep(1500); shot('04-goal-card.png'); // the chat lands on the card's yes
-// Above it, Chief's reading of the PDF: drag the chat back down until it shows (four drags at most).
-for (let i = 0; !/I read your CV/.test(texts()); i++) { if (i === 4) throw new Error('Chief never said he read the CV'); A('shell', 'input', 'swipe', '540', '800', '540', '1700', '400'); await sleep(900); }
-shot('05-cv-read.png');
-for (let i = 0; !/Yes, start my search/.test(texts()); i++) { if (i === 4) throw new Error('the goal card\'s yes never came back'); A('shell', 'input', 'swipe', '540', '1700', '540', '800', '400'); await sleep(900); }
-shot('06-goal-card-open.png');
+// Above it, Chief's reading of the PDF; then back to the card's yes.
+await drag(/I read your CV/, '800', '1700'); shot('05-cv-read.png');
+await drag(/Yes, start my search/, '1700', '800'); shot('06-goal-card-open.png');
 ui('tap', '^(Start|Yes|Hire)'); // the goal card's yes: nothing starts before it
-// The look is quick on the scripted model: its live steps may be past before a dump, so the later state counts too.
-await on(/is looking now|found: |roles? that fits?:/); await sleep(1200); shot('07-dispatched.png');
-await on(/roles? that fits?:/, 240_000); await sleep(1500); shot('09-results.png');
-await on(/Draft my application/); shot('10-role-cards.png'); // the cards end the chat, under the look's line
+await on(/roles? that fits?:/, 240_000); await on(/Draft my application/); await sleep(1500); shot('07-results.png'); // the cards end the chat
+// Above them, the hand-off line and the look's live steps (quick on the scripted model): drag the chat back down to it.
+await drag(/is looking now/, '800', '1700'); shot('08-dispatched.png');
+await drag(/Draft my application/, '1700', '800'); shot('09-role-cards.png');
 const s = await api('/api/state');
 writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.goals[0]?.goal, roles: s.goals[0]?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine }, null, 1));
 // Research Rae's own chat: the look's steps, in Rae's words.
 ui('tap', '^Home$'); await sleep(1500); // the tab, never BACK: BACK on a tab leaves the app
-await on(/Research Rae/); ui('tap', '^Research Rae'); await sleep(2500); shot('11-rae.png');
+await on(/Research Rae/); ui('tap', '^Research Rae'); await sleep(2500); shot('10-rae.png');
 // The same chat on the web and in the installed app: the look's line and its roles as cards (home-gate: 16px, no clipping).
 const repo = new URL('../..', import.meta.url).pathname, js = "(async () => { location.hash = '#/chief'; await new Promise((r) => setTimeout(r, 2500)); document.querySelector('.role')?.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 600)); })()";
 for (const pwa of ['', '1']) execFileSync(process.execPath, [join(repo, 'scripts/verify/home-gate.mjs'), repo, `${env.B}/#person=${KEY}`, out, `${pwa ? 'pwa-' : ''}chief-results`, js], { stdio: 'inherit', env: { ...process.env, ...(pwa ? { GATE_PWA: '1' } : {}) } });
