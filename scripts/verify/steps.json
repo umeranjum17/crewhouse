@@ -641,5 +641,15 @@
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The flat board shows Found, Shortlisted, Viewing booked, Offer made and Signed, with only Found filled by the crew and each card naming its page and the date checked. The second search adds no duplicate and leaves Chief's thread quiet. A made-up stage is refused and only Umer's tap moves an option on. A reminder on an option is quiet: one line in Chief's thread when it goes off, no ask, and Dismiss removes it. The job search keeps its own stages beside it. Not a real listing site or a real model."
+  },
+  "chief-screen": {
+    "start": "A Chief from before the computer grant, on the stub engine, with a loopback library site signed in",
+    "steps": [
+      "Restart crewd: the older Chief gains the computer grant",
+      "Ask Chief to renew the library card on his own screen",
+      "See the Chief wants to act on a site card in the app and answer Yes, press it",
+      "Watch Chief type the name and press Renew on his own screen"
+    ],
+    "result": "The card shows Chief wants to act on a site with Yes, press it and Not now; Chief renewed the card on his screen"
   }
 }
