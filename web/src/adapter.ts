@@ -2456,16 +2456,21 @@ export const GOAL_RULE = 'Deciding is always yours. The crew finds and drafts; y
 export const GOAL_WRITER = { ask: 'Draft my application', busy: 'Drafting…', open: 'Open the draft' };
 export type GoalReminder = { id: number; item: number | null; name: string; when: string; fired: boolean };
 export type GoalPrep = { brief: { says: string; host: string; url: string; quote: string }[]; questions: { ask: string; why: string }[]; yours: string[] };
-export type GoalRole = { prepping: boolean; prep?: GoalPrep; prepable: boolean; id: number; co: string; title: string; place: string; pay: string; fit: string[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; next?: [string, string]; draft: 'ask' | 'open' | null; passable: boolean; reminders: GoalReminder[] };
+export type GoalRole = { prepping: boolean; prep?: GoalPrep; prepable: boolean; id: number; co: string; title: string; place: string; pay: string; fit: string[]; why: string; signals: { label: string; quote: string; host: string; url: string }[]; gap: string; source: string; url: string; checked: string; stage: string; drafting: boolean; next?: [string, string]; draft: 'ask' | 'open' | null; passable: boolean; reminders: GoalReminder[] };
 /** Where a page is, as a person says it: the site's own name; never a bare address or a machine's own name. */
 const hostOf = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return /^[\d.]+$|^\[|(^|\.)localhost$/.test(h) ? 'the company\'s website' : h; } catch { return ''; } };
+/** Why a role sits where it does, in the page's own words: one line (`why`) and each reason with its page. Nothing here is the helper's description of a company. */
+const ranking = (rs: Json[] = []) => {
+  const signals = rs.map((x) => ({ label: plain(x.label), quote: plain(x.quote), host: hostOf(x.url), url: x.url }));
+  return { signals, why: signals.map((x) => `${x.label}: “${x.quote}”`).join(' · ') || 'No ranking reason found on its page.' };
+};
 export function goals(state: Json) {
   return (state?.goals ?? []).map(({ goal: g, roles: rs }: Json) => {
     const at = (key: string) => g.stages.findIndex((s: Json) => s.key === key);
     const reminders: GoalReminder[] = (state.routines ?? []).filter((r: Json) => r.kind === 'remind' && r.goal === g.id).map((r: Json) => ({ id: r.id, item: r.item ?? null, name: plain(r.name), fired: !r.next_at, when: r.next_at ? `at ${moment(Number(r.next_at))}` : `reminded ${moment(Number(r.last_at))}` }));
     const roles: GoalRole[] = rs.map((r: Json) => {
       const i = at(r.stage), nx = g.stages[i + 1];
-      return { id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'No figure on the page', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), source: hostOf(r.url), url: r.url,
+      return { id: r.id, co: plain(r.co), title: plain(r.title), place: plain(r.place), pay: r.pay ? plain(r.pay) : 'No figure on the page', fit: (r.fit ?? []).map((f: Json) => plain(f.says)), gap: plain(r.gap), ...ranking(r.signals), source: hostOf(r.url), url: r.url,
         checked: new Date(r.checked_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), stage: r.stage, drafting: !!r.drafting, prepping: !!r.prepping, prepable: !!g.will && r.stage === 'interview',
         prep: r.prep ? { brief: r.prep.brief.map((b: Json) => ({ says: plain(b.says), host: hostOf(b.url), url: b.url, quote: plain(b.quote) })), questions: r.prep.questions.map((q: Json) => ({ ask: plain(q.ask), why: plain(q.why) })), yours: r.prep.yours.map((q: string) => plain(q)) } : undefined,
         next: nx && i + 1 >= g.crew ? [nx.key, `Move to ${nx.name}`] : undefined, draft: !g.will ? null : i === 0 ? 'ask' : i === 1 ? 'open' : null, passable: i < g.crew, reminders: reminders.filter((x) => x.item === r.id) };

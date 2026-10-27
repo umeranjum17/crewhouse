@@ -16,6 +16,14 @@ export const WONT = ['Submit an application', 'Send a message to a recruiter or 
 export const GENERAL_WONT = ['Submit, sign or send anything for you', 'Contact anyone on your behalf', 'Accept an offer, terms or any agreement', 'Pay or buy anything', 'Publish anything', 'Answer for you what only you can: declarations, consent, money'];
 export const JOB_SOURCES = 'public job postings and company career pages';
 export const WEEK = 7 * 86_400_000;
+/** What the person's strategy ranks a role on, weightiest first. A signal is the page's own words (`quote`), checked against that page, and
+ *  must read as its kind and not as a "no", so a quote about something else, or a refusal, never ranks a role. */
+export const SIGNALS: Record<string, [label: string, says?: RegExp]> = { remote: ['Remote', /remote|work from (home|anywhere)|distributed/i], gateway: ['Gateway company'], fast: ['Fast process'], sponsor: ['Sponsorship history', /sponsor|visa|h-?1b|work permit/i] };
+export const NEGATED = /\b(no|not|never|unable|cannot|without)\b[^.]{0,40}\b(sponsor|visa|remote)/i;
+export type Signal = { kind: string; quote: string; url: string };
+const score = (signals: string | null) => (JSON.parse(signals ?? '[]') as Signal[]).reduce((n, s) => n + 2 ** (3 - Object.keys(SIGNALS).indexOf(s.kind)), 0);
+/** Rows in the person's order: the more of the strategy a page shows the earlier (remote beats all the rest together); equals keep the order they came in. */
+export const ranked = <T extends Row>(rows: T[]) => rows.sort((a, b) => score(b.signals) - score(a.signals));
 
 export const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** A stage's key: its name, lower case ("Viewing booked" is viewing-booked). */
@@ -72,10 +80,10 @@ export function formOf(snapshot: string, filled: string[]) {
 }
 
 /** Add an item to a goal's first stage. A page already on that board (by its page, or its company and title), passed on or not, is not added twice. */
-export function add(db: Store, gid: number, r: { co: string; title: string; place: string; pay: string; fit: unknown[]; gap: string; url: string }, now = Date.now()) {
+export function add(db: Store, gid: number, r: { co: string; title: string; place: string; pay: string; fit: unknown[]; gap: string; url: string; signals?: Signal[] }, now = Date.now()) {
   const u = new URL(r.url), k = `${gid === 1 ? '' : `${gid}:`}${u.hostname.toLowerCase()}${u.pathname.replace(/\/$/, '')}`;
   if (db.get('SELECT 1 FROM roles WHERE goal = ? AND (key = ? OR (lower(co) = lower(?) AND lower(title) = lower(?)))', gid, k, r.co, r.title)) return { dup: true as const };
-  const id = Number(db.run('INSERT INTO roles (goal, key, co, title, place, pay, fit, gap, url, found_at, checked_at, stage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', gid, k, r.co, r.title, r.place, r.pay, JSON.stringify(r.fit), r.gap, r.url, now, now, key(goal(db, gid)!.stages[0])).lastInsertRowid);
+  const id = Number(db.run('INSERT INTO roles (goal, key, co, title, place, pay, fit, gap, url, found_at, checked_at, stage, signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', gid, k, r.co, r.title, r.place, r.pay, JSON.stringify(r.fit), r.gap, r.url, now, now, key(goal(db, gid)!.stages[0]), JSON.stringify(r.signals ?? [])).lastInsertRowid);
   db.event('role.found', null, { role: id, goal: gid, co: r.co, title: r.title });
   return { dup: false as const, id };
 }
@@ -103,8 +111,8 @@ export function view(db: Store, g = goal(db)) {
   if (!g) return null;
   const busy = ['queued', 'working', 'needs_you', 'paused'];
   return { goal: { id: g.id, title: g.title, places: g.places, floor: g.floor, since: g.since, rae: g.rae, will: g.will, stages: g.stages.map((name) => ({ key: key(name), name })), crew: g.crew, wont: g.wont, asks: g.asks },
-    roles: db.all("SELECT r.*, t.state AS tstate FROM roles r LEFT JOIN tasks t ON t.id = r.task WHERE r.goal = ? AND r.stage != 'passed' ORDER BY r.found_at DESC, r.id DESC", g.id)
-      .map(({ key: _, task: __, tstate, fit, ...r }): Row => ({ ...r, fit: JSON.parse(fit), drafting: r.stage === key(g.stages[0]) && busy.includes(tstate), prepping: r.stage === 'interview' && busy.includes(tstate), prep: prep(db, r.id) })) };
+    roles: ranked(db.all("SELECT r.*, t.state AS tstate FROM roles r LEFT JOIN tasks t ON t.id = r.task WHERE r.goal = ? AND r.stage != 'passed' ORDER BY r.found_at DESC, r.id DESC", g.id))
+      .map(({ key: _, task: __, tstate, fit, signals, ...r }): Row => ({ ...r, fit: JSON.parse(fit), signals: JSON.parse(signals ?? '[]').map((x: Signal) => ({ ...x, label: SIGNALS[x.kind][0] })), drafting: r.stage === key(g.stages[0]) && busy.includes(tstate), prepping: r.stage === 'interview' && busy.includes(tstate), prep: prep(db, r.id) })) };
 }
 
 
@@ -117,7 +125,7 @@ export const views = (db: Store) => goals(db).map((g) => view(db, g)!);
 
 /** The finder's daily job. The board is its report: crewd keeps the run out of Chief's thread, so it never pages the person. */
 export const findTask = (g: Pick<Goal, 'id' | 'title' | 'places' | 'floor' | 'focus' | 'brief' | 'sources'>) => `Look for new options for the person's goal: ${g.title}. Where: ${g.places}.${g.floor ? ` Their limit: ${g.floor}.` : ''}${g.focus ? ` Favour: ${g.focus}.` : ''}
-Search ${g.sources} with your web tools, and read each page yourself before you add it. Before each search, call crew_report with what you are looking for, in a few words (for example: Searching remote AI engineering roles). For each NEW one that fits, call crew_role once with goal ${g.id}: company (who it is from), title, place, url (its own page), pay (the figure copied word for word from the page, or empty when it shows none), fit (each says why it fits and quotes the line of their brief that shows it in cv) and missing (what it asks for that their brief does not show, said plainly).
+Search ${g.sources} with your web tools, and read each page yourself before you add it. Before each search, call crew_report with what you are looking for, in a few words (for example: Searching remote AI engineering roles). For each NEW one that fits, call crew_role once with goal ${g.id}: company (who it is from), title, place, url (its own page), pay (the figure copied word for word from the page, or empty when it shows none), fit (each says why it fits and quotes the line of their brief that shows it in cv) and missing (what it asks for that their brief does not show, said plainly).${g.sources === JOB_SOURCES ? ` Rank them for the person: add signals, only those a page shows, each a kind and quote (words copied from that page) and url when the page is not the posting: remote (the posting says the role is remote), gateway (a well-known brand with US ties, a record of sponsoring visas, or internal transfers), fast (a short hiring process), sponsor (it sponsors visas). Leave out a signal you cannot quote; never guess a fact about a company.` : ''}
 Never claim anything their brief does not show. Skip anything past their limit. You never apply, sign in, send, book, pay or fill in a form. The board is the report: when you are done, reply with one short line saying how many you added, or exactly ALL-CLEAR when none.
 Their brief, line by line:
 ${g.brief}`;

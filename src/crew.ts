@@ -1599,7 +1599,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       }
       this.setTask(task, 'done', clear ? ALL_CLEAR_RESULT : text || 'Done.');
       // A goal's first look is Chief's hand-on, said in his chat one line per item, each its card there (its daily search stays on its board).
-      const mine = task.origin === CHIEF && !this.teamJob(task), g = jobs.goals(this.db).find((x) => x.routine === task.routine), what = g?.will ? 'role' : 'option', found = g && mine ? this.db.all('SELECT co, title FROM roles WHERE goal = ? AND found_at >= ? ORDER BY id', g.id, task.created_at) : [];
+      const mine = task.origin === CHIEF && !this.teamJob(task), g = jobs.goals(this.db).find((x) => x.routine === task.routine), what = g?.will ? 'role' : 'option', found = g && mine ? jobs.ranked(this.db.all('SELECT co, title, signals FROM roles WHERE goal = ? AND found_at >= ? ORDER BY id', g.id, task.created_at)) : [];
       wants = mine && !g && b.template === 'scout' && !clear && !!text;
       if (g && mine) this.say(CHIEF, 'bot', found.length ? `${b.display} found ${found.length === 1 ? `a ${what}` : `${found.length} ${what}s`} that fit${found.length === 1 ? 's' : ''}:\n${found.map((r) => `${r.title} at ${r.co}`).join('\n')}\nTap one for why it fits${g.will ? ' and what your CV is missing, or to draft your application' : ''}.` : `${b.display} looked and found nothing new that fits yet, and looks again every morning at 8:00.`, task.id);
       else if (!g && !wants && !this.checkOf(task) && (mine || (botId !== CHIEF && task.routine && !clear))) {
@@ -2107,7 +2107,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       (p) => inspectBinary(disk.botDir(this.cfg, botId), String(p.path ?? ''), String(p.what ?? 'type'))));
     if (botId !== CHIEF) {
       const gs = jobs.goals(this.db); // a goal's finder and writer have one tool each, and only theirs
-      if (gs.some((g) => g.rae === botId)) own.push(tool('crew_role', "Add ONE option you read yourself to the person's first list. crewd opens `url`, so `pay` must be word for word what the page shows (empty when it shows none), and each `fit` quotes (`cv`) the line of their brief that shows it. Pass `goal` when you look for more than one goal. One already on the board is not added twice.", (p) => this.foundRole(botId, p)));
+      if (gs.some((g) => g.rae === botId)) own.push(tool('crew_role', "Add ONE option you read yourself to the person's first list. crewd opens `url`, so `pay` must be word for word what the page shows (empty when it shows none), and each `fit` quotes (`cv`) the line of their brief that shows it. Pass `goal` when you look for more than one goal. One already on the board is not added twice. `signals` (remote, gateway, fast, sponsor) rank it: each is words copied from a page (`quote`, and its `url` when that is not the posting), which crewd checks.", (p) => this.foundRole(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_form', 'You filled what you can on an application form: crewd reads the page and puts it on ONE card where only the person answers the rest and presses Submit. `role`: its id. `stop`: why the form cannot be finished here, only when one applies.', (p) => this.formReady(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
@@ -2321,7 +2321,15 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!fit.length) throw fail('say why it fits, each reason with the line of their brief that shows it');
     const stray = fit.find((f) => !jobs.inCv(g.brief, f.cv, true));
     if (stray) throw fail(`“${short(stray.cv, 60)}” is not in the person's brief. Say only what their brief shows.`);
-    const out = jobs.add(this.db, g.id, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url }), look = this.activeTask(g.rae); if (!out.dup && look) this.db.event('task.progress', g.rae, { task: look.id, text: `${this.db.get('SELECT COUNT(*) AS n FROM roles WHERE goal = ? AND found_at >= ?', g.id, look.created_at)!.n} found: ${title} at ${co}` });
+    const signals: jobs.Signal[] = [];
+    for (const x of Array.isArray(p.signals) ? p.signals : []) {
+      const kind = String(x?.kind), quote = clean(x?.quote, 200), at = String(x?.url || url).trim(), seen = at === url ? page : /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])\S+$/.test(at) ? await readPage(at).catch(() => null) : null;
+      if (!jobs.SIGNALS[kind]) throw fail(`a signal is one of ${Object.keys(jobs.SIGNALS).join(', ')}`);
+      if (!seen || seen.status >= 400) throw fail(`I could not open ${short(at, 80)}, so “${kind}” is not added. Cite only pages you read yourself.`);
+      if (jobs.norm(quote).length < 12 || !jobs.norm(seen.text).includes(jobs.norm(quote)) || jobs.NEGATED.test(quote) || (jobs.SIGNALS[kind][1] && !jobs.SIGNALS[kind][1]!.test(quote))) throw fail(`That page does not show “${short(quote, 60)}” as ${kind}. Copy words from the page that say it plainly, or leave the signal out.`);
+      if (!signals.some((y) => y.kind === kind)) signals.push({ kind, quote, url: at });
+    }
+    const out = jobs.add(this.db, g.id, { co, title, place: clean(p.place, 120), pay, fit, gap: clean(p.missing, 300), url, signals }), look = this.activeTask(g.rae); if (!out.dup && look) this.db.event('task.progress', g.rae, { task: look.id, text: `${this.db.get('SELECT COUNT(*) AS n FROM roles WHERE goal = ? AND found_at >= ?', g.id, look.created_at)!.n} found: ${title} at ${co}` });
     return out.dup ? { note: 'already on the board; not added again' } : { added: out.id };
   }
 
