@@ -22,11 +22,13 @@ const type = async (v) => { for (let i = 0; i < v.length; i += 3) { A('shell', '
 const drag = async (re, y1, y2) => { for (let i = 0; !re.test(texts()); i++) { if (i === 6) throw new Error(`never dragged to ${re}`); A('shell', 'input', 'swipe', '540', y1, '540', y2, '400'); await sleep(900); } };
 const close = () => { if (/mInputShown=true/.test(A('shell', 'dumpsys', 'input_method'))) A('shell', 'input', 'keyevent', '4'); };
 
-await on(/Ask Chief anything/); await sleep(1500); shot('01-home.png');
+// Home is a chat list (Chief first); his CV goes in Chief's own chat, opened by the bar's Chief.
+await on(/Keeping an eye on things/); await sleep(1500); shot('01-home.png');
+ui('tap', '^Chief$', 1); await on(/Tell Chief anything/);
 // Step one: his CV from the phone's own files, then his words with it (the keyboard closes before Send, never after it).
 ui('tap', '^Add a photo or a document$'); await on(/A document: PDF/); ui('tap', '^A document: PDF'); await on(/Umer_CV/, 60_000); await sleep(800); shot('02-picker.png');
 ui('tap', 'Umer_CV'); await on(/Umer_CV\.pdf/); await sleep(600);
-ui('tap', 'Ask Chief anything'); await sleep(800); await type('This is my resume find me good stuff'); close(); await sleep(600); shot('03-cv-attached.png');
+ui('tap', '^Tell Chief anything'); await sleep(800); await type('This is my resume find me good stuff'); close(); await sleep(600); shot('03-cv-attached.png');
 ui('tap', '^Send$');
 await on(/Yes, start my search/); await sleep(1500); shot('04-goal-card.png'); // the chat lands on the card's yes
 // Above it, Chief's reading of the PDF; then back to the card's yes.
