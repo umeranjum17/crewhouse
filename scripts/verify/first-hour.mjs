@@ -2,7 +2,7 @@
 // the goal card, the look's live steps and its roles in Chief's chat, then Research Rae's chat. Never a tap that leaves
 // the app but the system file picker for his CV; nothing is sent anywhere but his own crewd.
 //   SERIAL=<emulator> node scripts/verify/first-hour.mjs <out> <lab>
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -40,8 +40,9 @@ await drag(/Draft my application/, '1700', '800'); shot('09-role-cards.png');
 const s = await api('/api/state');
 writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.goals[0]?.goal, roles: s.goals[0]?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine }, null, 1));
 // Research Rae's own chat: the look's steps, in Rae's words.
-ui('tap', '^Home$'); await sleep(1500); // the tab, never BACK: BACK on a tab leaves the app
-await on(/Research Rae/); ui('tap', '^Research Rae'); await sleep(2500); shot('10-rae.png');
-// The same chat on the web and in the installed app: the look's line and its roles as cards (home-gate: 16px, no clipping).
+ui('tap', '^Crew$'); await sleep(1500); // the tab, never BACK: BACK on a tab leaves the app
+await on(/Research Rae/); ui('tap', '^Research Rae'); await on(/Searching remote AI engineering roles|Added \d roles/); await sleep(1500); shot('10-rae.png');
+// The same chat on the web and in the installed app: the look's line and its roles as cards. home-gate shoots it at both
+// widths, day and night; its 16px rule is Home's, so on a chat its verdict is kept in <slug>-gate.json, not a stop.
 const repo = new URL('../..', import.meta.url).pathname, js = "(async () => { location.hash = '#/chief'; await new Promise((r) => setTimeout(r, 2500)); document.querySelector('.role')?.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 600)); })()";
-for (const pwa of ['', '1']) execFileSync(process.execPath, [join(repo, 'scripts/verify/home-gate.mjs'), repo, `${env.B}/#person=${KEY}`, out, `${pwa ? 'pwa-' : ''}chief-results`, js], { stdio: 'inherit', env: { ...process.env, ...(pwa ? { GATE_PWA: '1' } : {}) } });
+for (const pwa of ['', '1']) spawnSync(process.execPath, [join(repo, 'scripts/verify/home-gate.mjs'), repo, `${env.B}/#person=${KEY}`, out, `${pwa ? 'pwa-' : ''}chief-results`, js], { stdio: 'inherit', env: { ...process.env, ...(pwa ? { GATE_PWA: '1' } : {}) } });
