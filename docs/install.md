@@ -1,8 +1,35 @@
 # Install and run Crewhouse
 
-The [README](../README.md#quick-start) has the quick start: the computer download first, the terminal path for developers after it. This page has everything after it: what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
+The [README](../README.md#quick-start) has the quick start: one line to install, then `crewhouse start`. This page has everything after it: the other ways to install, what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
+
+## One line
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/umeranjum17/crewhouse/main/install.sh | sh
+```
+
+Needs 64-bit Linux, `curl` and `tar`; no npm, git, Node or sudo. It downloads the newest Linux release (about 180 MB, checked against the checksum GitHub publishes for it), unpacks it into `~/.local/share/crewhouse/release/` with its own Node, AI engine and helpers' tools, and puts a `crewhouse` command in `~/.local/bin/` (add that folder to your `PATH` if it is not there; the script says so). It reads and writes only those folders, plus Crewhouse's own `~/.local/state/crewhouse/`, `~/Crewhouse/` and `~/.local/share/crewhouse/tools/`.
+
+With Node 24.16 or later (or 26.1 or later) there is a second line, the same command from npm:
+
+```bash
+npm install -g crewhouse
+```
+
+The first `crewhouse start` then makes the folder it runs from (once per version, under `~/.local/share/crewhouse/app/`) and installs the AI engine, which takes a few minutes. After that both installs behave the same:
+
+| Command | What it does |
+|---|---|
+| `crewhouse start` | Starts Crewhouse in the background, opens it in your browser, and prints a phone pairing code and QR |
+| `crewhouse stop` | Stops it. Work in progress is picked up when you start it again |
+| `crewhouse status` | Says whether it is running and at what address; exits 3 when it is not |
+| `crewhouse link [new]` | Prints the one link that adds a phone (see Commands below) |
+| `crewhouse update` | Installs the newest version the way you installed it (npm, or the one line again), and restarts Crewhouse if it was running. It leaves your crew, sign-ins and settings alone |
+| `crewhouse doctor` | Shows what is installed and what is missing |
+
+`crewhouse setup`, `open`, `tools`, `autostart on|off` and `phones` work too, exactly as in the Commands table below with `crewhouse` in place of `./crewhouse`. To remove an install: `npm uninstall -g crewhouse`, or delete `~/.local/share/crewhouse/release/` and `~/.local/bin/crewhouse`; Crewhouse's own folders above stay until you delete them.
 
 ## Download
 
@@ -57,8 +84,11 @@ Sign-in uses BYOKit's existing account wizard on the host; an AI key never moves
 
 ## Commands
 
+These are the launcher's commands in a checkout, typed `./crewhouse`; the installed `crewhouse` takes the ones named in [One line](#one-line).
+
 | Command | What it does |
 |---|---|
+| `./crewhouse start` \| `stop` \| `status` | Starts Crewhouse and opens it in your browser (staying in this terminal), stops it, or says whether it is running |
 | `./crewhouse setup --headless [--install-only]` | Prepares a headless host and, unless install-only, starts its service and prints the first-phone code |
 | `./crewhouse headless serve\|pair\|health` | Runs the headless host, prints a fresh unused first-phone code, or checks readiness |
 | `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |

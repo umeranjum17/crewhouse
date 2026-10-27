@@ -171,6 +171,25 @@ jobs:
           curl -fsS -H 'x-crewhouse: 1' -H "Authorization: Bearer $(cat "$CREWHOUSE_STATE_DIR/person.key")" http://127.0.0.1:7711/api/state | grep -q '"person"'
       - run: |
           curl -fsS http://127.0.0.1:7711/ | grep -qi '<html'
+      # The one-line install, from the tarball this job just built, as a person types it: install, start, status, link,
+      # doctor, stop, in a folder with no repo. Own ports and folders, so the .deb's Crewhouse above is left alone.
+      - run: |
+          export CREWHOUSE_ENGINE=stub CREWHOUSE_NO_SERVICE=1 CREWHOUSE_PORT=7721 CREWHOUSE_LINK_PORT=7722 \
+            CREWHOUSE_STATE_DIR="$RUNNER_TEMP/cli-state" CREWHOUSE_CREW_DIR="$RUNNER_TEMP/cli-crew" CREWHOUSE_TOOLS_DIR="$RUNNER_TEMP/cli-tools"
+          CREWHOUSE_TARBALL="$(ls "$PWD"/dist/crewhouse-*-linux-x64.tar.gz)" CREWHOUSE_INSTALL_DIR="$RUNNER_TEMP/cli-release" \
+            CREWHOUSE_BIN_DIR="$RUNNER_TEMP/cli-bin" sh install.sh
+          export PATH="$RUNNER_TEMP/cli-bin:$PATH"
+          cd "$RUNNER_TEMP"
+          if crewhouse status; then echo "status said running before start"; exit 1; fi
+          crewhouse start | tee cli-start.txt
+          grep -q 'Crewhouse is running at http://127.0.0.1:7721/' cli-start.txt
+          crewhouse status | grep -q 'is running'
+          # doctor exits 1 when anything it checks is missing (the runner has no PipeWire): here it must only run and report.
+          crewhouse doctor | tee cli-doctor.txt
+          grep -q 'Engine: ' cli-doctor.txt
+          crewhouse link 2>&1 | grep -qE 'open this link|not listening for phones'
+          crewhouse stop | grep -q 'Crewhouse stopped'
+          if crewhouse status; then echo "status said running after stop"; exit 1; fi
 
   # Screens in CI: the mock slugs (screens-ci.tsv) on ?demo at 390 and 1440, day and night, as a workflow artifact only.
   # Changed frames are compared with main's latest screens artifact and listed as text in the job summary. Runs beside

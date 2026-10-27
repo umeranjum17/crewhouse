@@ -65,6 +65,7 @@ Harness: curl for the HTTP API; chrome-devtools-axi with its own CHROME_DEVTOOLS
 - [Chief on this phone with a MiniMax key](features/phone-only-minimax.md): On an emulator with the release APK, run `phone-only-minimax`; Use this phone only offers MiniMax beside OpenRouter, a lab key, the model pick, the chat names it, Sign out leaves no key (`docs/verification/phone-only-minimax.md`)
 - [Quiet-job nudge](features/quiet-job-nudge.md): Run `scripts/verify/quiet-nudge.sh <out>`; Chief says a job is quiet once, a day later it ends unsure (`docs/verification/quiet-nudge.md`)
 - [Pair the PWA and get a real Chief reply](features/pair-the-pwa-and-get-a-real-chief-reply.md): The core journey — run the `core` journey (the `upgrade` journey proves the release path) (`docs/verification/pair-chat.md`)
+- [The crewhouse command (install line)](features/cli-install.md): Run `scripts/verify/cli-install.sh <out> npm|download <tarball>`; install, start, status, link, doctor, stop from an empty folder and a throwaway HOME (`docs/verification/cli-install.md`)
 - [Which Crewhouse runs](features/versions.md): Run the `versions` journey; `./crewhouse --version`, Settings' foot on the web and installed app, and the phone's Home and This phone foot, against this checkout and a copy one release ahead (`docs/verification/versions.md`)
 - [Onboarding in Chief's chat](features/onboarding-from-hello-into-chief-s-threa.md): First run opens Chief's chat asking the name, then his pitch with ideas to try; run `onboard-chat` (`docs/verification/onboard-chief-chat.md`)
 

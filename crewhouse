@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Crewhouse: --version | setup | start | open | autostart | update | uninstall | link | phones | doctor | tools | test
+# Crewhouse: --version | setup | start | stop | status | open | autostart | update | uninstall | link | phones | doctor | tools | test
 set -euo pipefail
 export CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product}
 [ "${1:-}" != test ] || export CREWHOUSE_RUN_MODE=test
 cd "$(dirname "$0")"
+# What to type to run this Crewhouse again: the install line's `crewhouse` when bin/crewhouse.mjs launched it.
+export CMD=${CREWHOUSE_CMD:-./crewhouse}
 # Portable release: use its checksum-pinned Node, not the machine's PATH.
 [ ! -x ../node/bin/node ] || export PATH="$(cd ../node/bin && pwd -P):$PATH"
 
@@ -27,6 +29,9 @@ paths() {
   [ "$RUN_HOME" = - ] || export CREWHOUSE_RUN_HOME="$RUN_HOME";
 }
 
+# A module the heredocs below import: the built bundle in a package, the source in a checkout.
+mod() { if [ -f dist/crewd.js ]; then echo "./dist/$1.js"; else echo "./$2"; fi; }
+
 # crewd's pid, only if that process really is this checkout's crewd.
 crewd_pid() {
   local f="$STATE/crewd.pid" pid
@@ -38,8 +43,9 @@ crewd_pid() {
 stop_crewd() {
   local pid; pid=$(crewd_pid) || return 1
   kill -TERM "$pid"
-  for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done
-  echo "crewd (pid $pid) did not stop" >&2; exit 1
+  # crewd shuts the engine and the helpers' screens down first: on a busy computer that takes a while.
+  for _ in $(seq 150); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done
+  echo "Crewhouse (pid $pid) has not stopped after 30 seconds. Try $CMD stop again in a moment." >&2; exit 1
 }
 
 # Start with the computer: a systemd user service, so a reboot or a login brings the crew back with no terminal.
@@ -48,7 +54,7 @@ UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/crewhouse.service"
 product_run() { [ "$CREWHOUSE_RUN_MODE" = product ] && [ "${CREWHOUSE_ENGINE:-}" != stub ] && [ -z "${NODE_TEST_CONTEXT:-}" ]; }
 has_systemd() { product_run && command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; }
 autostart_on() {
-  has_systemd || { echo "This computer has no systemd user session, so Crewhouse can't start by itself here. Use ./crewhouse start." >&2; return 1; }
+  has_systemd || { echo "This computer has no systemd user session, so Crewhouse can't start by itself here. Use $CMD start." >&2; return 1; }
   # Helpers fetch their tools on first use, wherever crewd starts from: the unit carries the same marker start sets.
   product_run || { echo 'Lab/test runs cannot install a login service.' >&2; return 1; }
   export CREWHOUSE_FIRST_USE_TOOLS=1
@@ -127,15 +133,18 @@ case "${1:-}" in
     fi
     if [ "${2:-}" = --headless ]; then exec node scripts/headless.mjs setup "${@:3}"; fi
     # Helpers fetch their own tools the first time they need them: setup installs nothing beyond the engine.
-    echo "Helpers fetch their own tools the first time they need them, so there is nothing more to install."
-    echo
-    node "$(entry src/doctor.ts)" || true
-    echo
+    # (A first start leaves the machine report to `doctor`.)
+    if [ -z "${CREWHOUSE_STARTING:-}" ]; then
+      echo "Helpers fetch their own tools the first time they need them, so there is nothing more to install."
+      echo
+      node "$(entry src/doctor.ts)" || true
+      echo
+    fi
     if [ -t 0 ] && has_systemd && [ ! -f "$UNIT" ]; then
       read -r -p "Start Crewhouse by itself whenever you log in? [Y/n] " yn
-      case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open Crewhouse from the app menu, or run ./crewhouse open"; exit 0; } ;; esac
+      case "${yn:-y}" in [Yy]*) autostart_on && { echo "Open Crewhouse from the app menu, or run $CMD open"; exit 0; } ;; esac
     fi
-    echo "Next: ./crewhouse start, which opens Crewhouse in your browser."
+    [ -n "${CREWHOUSE_STARTING:-}" ] || echo "Next: $CMD start, which opens Crewhouse in your browser."
     ;;
   headless)
     need_node
@@ -146,13 +155,13 @@ case "${1:-}" in
     case "${2:-}" in
       on) autostart_on ;;
       off) autostart_off; echo "Crewhouse no longer starts by itself." ;;
-      *) echo "usage: ./crewhouse autostart on | off" >&2; exit 2 ;;
+      *) echo "usage: $CMD autostart on | off" >&2; exit 2 ;;
     esac
     ;;
   start)
     need_node
     [ -f web/dist/index.html ] || npm run build:web
-    if autostarted; then echo "Crewhouse is already running; open it from the app menu or run ./crewhouse open"; exit 0; fi
+    if autostarted; then echo "Crewhouse is already running; open it from the app menu or run $CMD open"; exit 0; fi
     paths
     # Helpers fetch their tools on first use (see src/server.ts): crewd installs them itself, so setup stays short.
     export CREWHOUSE_FIRST_USE_TOOLS=1
@@ -179,7 +188,7 @@ NODE
       else echo "Open ${1%%#*} in your browser."; fi
     }
     if pid=$(crewd_pid); then
-      url=$(app_url) || { echo "Crewhouse is running (pid $pid) but not answering yet; try ./crewhouse open in a moment." >&2; exit 1; }
+      url=$(app_url) || { echo "Crewhouse is running (pid $pid) but not answering yet; try $CMD open in a moment." >&2; exit 1; }
       open_url "$url"
       echo "Crewhouse is already running; opened ${url%%#*} in your browser."
       exit 0
@@ -195,12 +204,32 @@ NODE
     done
     trap - INT TERM
     if [ -z "$url" ]; then
-      echo "Crewhouse is taking a while to answer. It keeps starting in this terminal; open it with ./crewhouse open once it does."
+      echo "Crewhouse is taking a while to answer. It keeps starting in this terminal; open it with $CMD open once it does."
     else
       open_url "$url"
       echo "Crewhouse is up at ${url%%#*}."
     fi
     wait "$crewd"
+    ;;
+  stop)
+    need_node
+    paths
+    if autostarted; then
+      systemctl --user stop crewhouse.service
+      echo "Crewhouse stopped. It starts again by itself when you next log in; $CMD autostart off changes that."
+    elif stop_crewd; then echo "Crewhouse stopped."
+    else echo "Crewhouse is not running."; fi
+    ;;
+  status)
+    need_node
+    paths
+    if pid=$(crewd_pid); then
+      echo "$(version) is running (pid $pid) at $(cat "$STATE/endpoint" 2>/dev/null || echo "an address it has not shown yet")."
+      if [ -f "$UNIT" ]; then echo "It starts by itself when you log in."; else echo "It does not start by itself when you log in; $CMD autostart on changes that."; fi
+    else
+      echo "$(version) is not running. Start it with $CMD start."
+      exit 3
+    fi
     ;;
   update)
     need_node
@@ -208,7 +237,7 @@ NODE
     if [ -n "$(git status --porcelain)" ]; then
       echo "This Crewhouse folder has local changes, so it was not updated:" >&2
       git status --short >&2
-      echo "Commit or discard them, then run ./crewhouse update again." >&2
+      echo "Commit or discard them, then run $CMD update again." >&2
       exit 1
     fi
     before=$(git rev-parse HEAD)
@@ -221,7 +250,7 @@ NODE
     # A restarted crewd keeps fetching helpers' tools on first use, like start.
     export CREWHOUSE_FIRST_USE_TOOLS=1
     # A tool whose pin moved (a new version, or a new program) is reinstalled now, before crewd comes back.
-    node "$(entry src/tools.ts)" install --refresh || echo "A tool didn't update; ./crewhouse tools install tries again." >&2
+    node "$(entry src/tools.ts)" install --refresh || echo "A tool didn't update; $CMD tools install tries again." >&2
     if autostarted; then
       systemctl --user restart crewhouse.service
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on."
@@ -230,7 +259,7 @@ NODE
       nohup node "$(entry src/main.ts)" >> "$STATE/crewd.log" 2>&1 &
       echo "Updated to $(git log -1 --format='%h %s'). crewd restarted; running work carries on (log: $STATE/crewd.log)."
     else
-      echo "Updated to $(git log -1 --format='%h %s'). Start it with ./crewhouse start."
+      echo "Updated to $(git log -1 --format='%h %s'). Start it with $CMD start."
     fi
     ;;
   uninstall)
@@ -238,7 +267,7 @@ NODE
     paths
     all=; yes=
     for a in "${@:2}"; do
-      case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: ./crewhouse uninstall [--all] [--yes]" >&2; exit 2 ;; esac
+      case "$a" in --all) all=1 ;; --yes|-y) yes=1 ;; *) echo "usage: $CMD uninstall [--all] [--yes]" >&2; exit 2 ;; esac
     done
     echo "This removes what Crewhouse installed:"
     echo "  $STATE  (the database, the engine's own folder, saved AI sign-ins, desktops, log)"
@@ -265,11 +294,11 @@ NODE
     ;;
   open)
     need_node
-    node --input-type=module - <<'NODE'
+    CONFIG=$(mod config src/config.ts) node --input-type=module - <<'NODE'
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { loadConfig } from './src/config.ts';
+const { loadConfig } = await import(process.env.CONFIG);
 const c = loadConfig();
 spawn('xdg-open', [`http://${c.host}:${c.port}/#person=${readFileSync(join(c.stateDir, 'person.key'), 'utf8')}`], { stdio: 'inherit' });
 NODE
@@ -277,7 +306,7 @@ NODE
   phones|link)
     # Local HTTP client; reads the same config and private capability as the launcher.
     if [ "$1" = link ]; then action=link; shift; else action="${2:-}"; shift 2 || true; fi
-    case "$action" in code|pending|approve|web|link) ;; *) echo 'usage: ./crewhouse link [new] | phones code | pending | approve <two words> | web [off]' >&2; exit 2 ;; esac
+    case "$action" in code|pending|approve|web|link) ;; *) echo "usage: $CMD link [new] | phones code | pending | approve <two words> | web [off]" >&2; exit 2 ;; esac
     if [ "$action" = web ]; then
       # The installed web app pairs only on an https page (the browser seals its grant with crypto that plain http lacks).
       # Tailscale serves the phone link, which serves the app too, at this computer's tailnet name with a real certificate.
@@ -289,15 +318,15 @@ NODE
       tailscale serve --bg --https="$port" "http://127.0.0.1:$link" >/dev/null || exit 1
       echo "On the iPad or phone (signed in to the same Tailscale), open this in Safari or Chrome and add it to the Home Screen:"
       echo "  https://$name:$port"
-      echo "Open it from the Home Screen, tap Pair, and paste the code from ./crewhouse phones code. Turn this off with ./crewhouse phones web off."
+      echo "Open it from the Home Screen, tap Pair, and paste the code from $CMD phones code. Turn this off with $CMD phones web off."
       exit
     fi
     [ "$action" != approve ] || [ "$#" -gt 0 ] || { echo 'Give the exact two words shown on the phone.' >&2; exit 2; }
-    node --input-type=module - "$action" "$*" <<'NODE'
+    CONFIG=$(mod config src/config.ts) TYPED=$(mod typed web/src/typed.ts) node --input-type=module - "$action" "$*" <<'NODE'
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig } from './src/config.ts';
-import { relayTyped } from './web/src/typed.ts';
+const { loadConfig } = await import(process.env.CONFIG);
+const { relayTyped } = await import(process.env.TYPED);
 const [action, words] = process.argv.slice(2);
 const port = Number(process.env.CREWHOUSE_PORT || 7711);
 const phones = async (path, body) => {
@@ -314,7 +343,7 @@ try {
   if (action === 'link') {
     // The standing link: the same text the desktop app's Add-a-phone card shows. `new` replaces it (the old one stops opening).
     const s = await phones('link', words === 'new' ? {} : undefined);
-    if (!s.pairLink) throw new Error('Crewhouse is not listening for phones yet. Start it with ./crewhouse start, then try again.');
+    if (!s.pairLink) throw new Error(`Crewhouse is not listening for phones yet. Start it with ${process.env.CMD} start, then try again.`);
     console.log(`On your phone, turn Tailscale on and open this link:\n\n  ${s.pairLink}\n\nIt keeps working: open it any time, and it hands the app a new one-time ticket each time.\nIf the app is not on the phone yet, the page offers it first. Say yes here when your computer asks (the two words must match).`);
     if (!s.tailscale) console.log('\nThis computer has no Tailscale address, so the link reaches it only on the home Wi-Fi.');
     if (words === 'new') console.log('\nThe old link no longer opens.');
@@ -353,7 +382,7 @@ NODE
     ;;
   *)
     version
-    echo "usage: ./crewhouse --version | setup [--headless [--install-only]] | headless serve|pair|health | start | autostart on|off | update | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    echo "usage: $CMD --version | setup [--headless [--install-only]] | headless serve|pair|health | start | stop | status | autostart on|off | update | open | link [new] | phones code|pending|approve|web | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

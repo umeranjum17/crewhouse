@@ -92,7 +92,7 @@ export function toolStatus(cfg: Config, only?: string[]) {
       /** Installed by Crewhouse at an older pin than the manifest asks for. */
       outdated: pinned !== null && pinned !== pinOf(cfg, t),
       installable: t.source === 'pinned',
-      howto: t.source === 'pinned' ? `./crewhouse tools install ${t.id}` : t.install.system ?? '',
+      howto: t.source === 'pinned' ? `${process.env.CREWHOUSE_CMD ?? './crewhouse'} tools install ${t.id}` : t.install.system ?? '',
     };
   });
 }
@@ -199,5 +199,5 @@ if (process.argv[1] === import.meta.filename) {
     process.exit(failed ? 1 : 0);
   }
   for (const t of kit()) console.log(`${t.ready ? '✓' : '·'} ${t.id.padEnd(15)} ${t.name} (${t.license})${t.ready ? '' : ` — ${t.howto || t.source}`}`);
-  console.log(`\nInstall the pinned kit into ${cfg.toolsDir}: ./crewhouse tools install [ids...]`);
+  console.log(`\nInstall the pinned kit into ${cfg.toolsDir}: ${process.env.CREWHOUSE_CMD ?? './crewhouse'} tools install [ids...]`);
 }

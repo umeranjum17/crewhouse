@@ -25,10 +25,12 @@ export function node(cache, dest) {
  *  Returns the environment that puts that Node first. */
 export function crewd(app, nodeDir) {
   if (!existsSync(join(repo, 'web', 'dist', 'index.html'))) throw new Error('build the web app first: npm run build:web');
-  for (const part of ['src', 'templates', 'tools', 'skills', 'relay', 'crewhouse', 'package.json', 'package-lock.json', '.npmrc']) {
+  for (const part of ['src', 'templates', 'tools', 'skills', 'relay', 'bin', 'crewhouse', 'install.sh', 'package.json', 'package-lock.json', '.npmrc']) {
     if (existsSync(join(repo, part))) cpSync(join(repo, part), join(app, part), { recursive: true });
   }
   cpSync(join(repo, 'web', 'dist'), join(app, 'web', 'dist'), { recursive: true });
+  mkdirSync(join(app, 'web', 'src'), { recursive: true });
+  cpSync(join(repo, 'web', 'src', 'typed.ts'), join(app, 'web', 'src', 'typed.ts')); // `crewhouse link` formats a relay code with it
   mkdirSync(join(app, 'scripts'), { recursive: true });
   for (const name of ['prepare-engine.mjs', 'headless.mjs']) cpSync(join(repo, 'scripts', name), join(app, 'scripts', name));
   const env = { ...process.env, PATH: `${join(nodeDir, 'bin')}:${process.env.PATH}` };

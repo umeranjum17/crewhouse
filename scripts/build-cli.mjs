@@ -7,6 +7,7 @@ await build({
     tools: 'src/tools.ts',
     'prepare-engine': 'scripts/prepare-engine.mjs',
     config: 'src/config.ts',
+    typed: 'web/src/typed.ts',
   },
   outdir: 'dist',
   bundle: true,
