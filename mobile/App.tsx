@@ -1914,7 +1914,7 @@ function Home(ctx: Ctx) {
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
       <View style={[s.row, { paddingHorizontal: 16, paddingBottom: 8 }]}>
-        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={`Settings${me ? `, ${me}` : ''}`} style={[s.roundBtn, { backgroundColor: t.bubble2, borderWidth: 0 }]}>
+        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" style={[s.roundBtn, { backgroundColor: t.bubble2, borderWidth: 0 }]}>
           <Text style={[s.text, { color: t.ink, fontSize: 18, lineHeight: 22, ...fw('600') }]}>{(me[0] ?? '·').toUpperCase()}</Text></Pressable>
         <View style={{ flex: 1 }} />
         {canAct && <RoundBtn glyph="+" label="Bring a helper on" onPress={() => go({ view: 'add' })} />}
