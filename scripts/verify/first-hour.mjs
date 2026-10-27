@@ -26,9 +26,11 @@ ui('tap', '^Add a photo or a document$'); await on(/A document: PDF/); ui('tap',
 ui('tap', 'Umer_CV'); await on(/Umer_CV\.pdf/); await sleep(600);
 ui('tap', 'Ask Chief anything'); await sleep(800); await type('This is my resume find me good stuff'); close(); await sleep(600); shot('03-cv-attached.png');
 ui('tap', '^Send$');
-await on(/I read your CV/); await sleep(1200); shot('04-cv-read.png'); // Chief took the PDF and read it
-await on(/Start looking for/); await sleep(1500); shot('05-goal-card.png');
-ui('reveal', '^Start looking for'); await sleep(800); shot('06-goal-card-open.png');
+await on(/Yes, start my search/); await sleep(1500); shot('04-goal-card.png'); // the chat lands on the card's yes
+// Above it, Chief's reading of the PDF: drag the chat back down until it shows (four drags at most).
+for (let i = 0; !/I read your CV/.test(texts()); i++) { if (i === 4) throw new Error('Chief never said he read the CV'); A('shell', 'input', 'swipe', '540', '800', '540', '1700', '400'); await sleep(900); }
+shot('05-cv-read.png');
+ui('reveal', '^Yes, start my search'); await sleep(800); shot('06-goal-card-open.png');
 ui('tap', '^(Start|Yes|Hire)'); // the goal card's yes: nothing starts before it
 await on(/is looking now/); await sleep(1200); shot('07-dispatched.png');
 await on(/found: /, 180_000); await sleep(800); shot('08-progress.png');
