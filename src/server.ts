@@ -169,6 +169,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     // Person-authorized HTTP and the enrolled headless owner share phone administration; Link gates other phones.
     if (p === '/api/phones' && m === 'GET') return link.devices();
     if (p === '/api/phones/link' && m === 'GET') return link.status();
+    if (p === '/api/phones/link' && m === 'POST') return link.renewPairLink();
     if (p === '/api/phones/pair' && m === 'POST') { if (phone && body.first === true) throw Object.assign(new Error('first-phone pairing stays on the host'), { status: 403 }); return link.offer(body.role ?? 'control', undefined, body.first === true); }
     if (p === '/api/phones/pending' && m === 'GET') return link.status().asking;
     if (p === '/api/phones/approve' && m === 'POST') { link.approve(String(body.words ?? '')); return { ok: true }; }

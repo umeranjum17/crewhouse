@@ -40,7 +40,8 @@ import { useOffice } from './src/office';
 import { glowOf } from '../web/src/office.tsx';
 import { canHear, hear, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
-import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pair, pairTypedCode, type Grant, type Status } from './src/link';
+import { readLink } from '../web/src/typed.ts';
+import { canPush, connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
 import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
 import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
@@ -709,7 +710,7 @@ const PUSH_WORDS = {
   missing: "Notifications aren't switched on yet. You'll see news when you open Crewhouse.",
 };
 
-function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBack?: () => void; onPut?: () => void }) {
+function Pair({ onPaired, onBack, onPut, paste, link }: { onPaired: (g: Grant) => void; onBack?: () => void; onPut?: () => void; paste?: boolean; link?: string | null }) {
   const t = useLook();
   const [perm, askPerm] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -729,7 +730,7 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
   const typed = async () => {
     setBusy(true);
     setErr('');
-    try { setDone(await pairTypedCode(code, setWords)); } catch (e: any) { setErr(pairWords(e)); }
+    try { setDone(await (readLink(code) ? pairLink(code, setWords) : pairTypedCode(code, setWords))); } catch (e: any) { setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
@@ -740,20 +741,18 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
     setBusy(true);
     setErr('');
     // @byokit/pair's failures are already plain sentences ("That pairing code has run out. Show a new one on your computer.").
-    try { setDone(await pair(text, setWords)); } catch (e: any) { seen.current = ''; setErr(pairWords(e)); }
+    try { setDone(await pairLink(text, setWords)); } catch (e: any) { seen.current = ''; setErr(pairWords(e)); }
     setWords('');
     setBusy(false);
   };
-  // Dev-only QR bypass (QA-283): an emulator's virtual camera can show the code without ever firing
-  // onBarcodeScanned, so a dev build accepts the same scanned text by link
-  // (`adb shell am start -a android.intent.action.VIEW -d "crewhouse://pair?code=<url-encoded QR text>"`)
-  // through the same tryCode handler the camera uses. Release builds ignore it.
-  const devPairUrl = Linking.useURL();
+  // A tapped pairing link (the page `./crewhouse link` prints, or an emulator's `adb shell am start -d "crewhouse://pair?code=<QR text>"`)
+  // pairs through the same handler the camera uses, in every build. The address is spent once: it is cleared when read.
+  const heard = Linking.useURL(), tapped = link ?? heard;
   useEffect(() => {
-    if (!__DEV__ || !devPairUrl) return;
-    const m = /^crewhouse:\/\/pair\?code=(.+)$/.exec(devPairUrl);
-    if (m) void tryCode(decodeURIComponent(m[1]));
-  }, [devPairUrl]);
+    if (!tapped || !/^crewhouse:\/\/pair\?code=/.test(tapped)) return;
+    Linking.clearInitialURL();
+    void tryCode(tapped);
+  }, [tapped]);
   // The pairing success asks for the news permission once, but only where push can work: on a build with no
   // push credential nothing is asked and "You're in" carries no notification line at all.
   useEffect(() => { if (!done) return; void pushState(true).catch(() => {}); }, [!!done]);
@@ -795,16 +794,16 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={[s.screen, { gap: 12 }]} keyboardShouldPersistTaps="handled">
         {onBack && <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.roundBack, { backgroundColor: t.soft }]}><T style={s.backChevron}>{'\u2039'}</T></Pressable>}
-        <T style={[s.wide, { fontSize: 34, lineHeight: 38, marginTop: onBack ? 8 : 40 }]}>Pair this phone</T>
-        <T tone="ink2">On your computer open Settings, then Phones, then Add a phone. Scan its code, or type it here.</T>
-        <Btn ink tall label="Scan the code" onPress={openCamera} />
-        {noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
-        <T style={[s.b, { marginTop: 8 }]}>Or type the code</T>
-        <TextInput style={[s.input, s.codeInput, { color: t.ink, borderColor: t.line, backgroundColor: t.solid }]} value={code} onChangeText={setCode} placeholder="Type or paste the code" placeholderTextColor={t.mute}
-          accessibilityLabel="Pairing code" autoCapitalize="characters" autoCorrect={false} />
-        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 12 }} /> : <Btn soft tall label="Pair" disabled={!code.trim()} onPress={typed} />}
+        <T style={[s.wide, { fontSize: 34, lineHeight: 38, marginTop: onBack ? 8 : 40 }]}>{paste ? 'Paste a link' : 'Pair this phone'}</T>
+        <T tone="ink2">{paste ? 'On your computer, run ./crewhouse link, or open Add a phone in the app. Copy the link it shows and paste it here.' : 'On your computer open Settings, then Phones, then Add a phone. Scan its code, or type it here.'}</T>
+        {!paste && <Btn ink tall label="Scan the code" onPress={openCamera} />}
+        {!paste && noCamera && <Btn label="Open phone settings" onPress={() => void Linking.openSettings()} />}
+        {!paste && <T style={[s.b, { marginTop: 8 }]}>Or type the code</T>}
+        <TextInput style={[s.input, s.codeInput, { color: t.ink, borderColor: t.line, backgroundColor: t.solid }]} value={code} onChangeText={setCode} placeholder={paste ? 'Paste the link here' : 'Type or paste the code'} placeholderTextColor={t.mute}
+          accessibilityLabel={paste ? 'Link' : 'Pairing code'} autoCapitalize={paste ? 'none' : 'characters'} autoCorrect={false} autoFocus={paste} />
+        {busy ? <ActivityIndicator color={t.pink} style={{ margin: 12 }} /> : <Btn soft={!paste} go={paste} tall label={paste ? 'Join' : 'Pair'} disabled={!code.trim()} onPress={typed} />}
         {!!err && <T tone="pinkInk">{err}</T>}
-        <T tone="mute" style={{ marginTop: 4 }}>On the same Wi-Fi the 12-letter code works. Away from home, use the code with an @.</T>
+        <T tone="mute" style={{ marginTop: 4 }}>{paste ? 'Turn Tailscale on, on this phone and on the computer. Your computer asks you to say yes when the phone joins.' : 'On the same Wi-Fi the 12-letter code works. Away from home, use the code with an @.'}</T>
         {onPut && <Btn ghost label="Crewhouse isn't on my computer yet" onPress={onPut} />}
         <T tone="mute" style={s.small}>{A.awake('your computer')}</T>
         <T tone="mute" style={s.small}>Only your computer can read what this phone sends. Anything passing it along can't read it.</T>
@@ -819,11 +818,15 @@ function Pair({ onPaired, onBack, onPut }: { onPaired: (g: Grant) => void; onBac
  *  that has none is the one link on that screen. Just on this phone the phone-only floor, In my cloud the cloud steps. */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
-  const [at, setAt] = useState<'where' | 'pair' | 'put' | 'cloud'>('where');
-  const back = at === 'where' ? null : () => setAt(at === 'put' ? 'pair' : 'where');
+  const [at, setAt] = useState<'where' | 'pair' | 'put' | 'cloud' | 'paste'>('where');
+  // A tapped pairing link opens the app on pairing, whichever first screen it was on; Pair is told the address because it
+  // only hears one that arrives while it is showing.
+  const [tapped, setTapped] = useState<string | null>(null), heard = Linking.useURL();
+  useEffect(() => { if (heard && /^crewhouse:\/\/pair\?code=/.test(heard)) { setTapped(heard); setAt('pair'); } }, [heard]);
+  const back = at === 'where' ? null : () => { setTapped(null); setAt(at === 'put' ? 'pair' : 'where'); };
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
   if (at === 'put') return <PutChief onCode={() => setAt('pair')} onBack={back!} />;
-  if (at === 'pair') return <Pair onPaired={onPaired} onBack={back!} onPut={() => setAt('put')} />;
+  if (at === 'pair' || at === 'paste') return <Pair onPaired={onPaired} onBack={back!} onPut={() => setAt('put')} paste={at === 'paste'} link={tapped} />;
   if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('pair')} onPaired={onPaired} />;
   const w = A.where(cloudOn);
   return (
@@ -839,6 +842,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
         <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
         <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
       </Pressable>)}
+      <Btn ghost label="Paste a link" onPress={() => setAt('paste')} />
       <Note>{w.note}</Note><T tone="mute" style={[s.small, s.centerText]}>{w.later}</T>
     </ScrollView>
   );

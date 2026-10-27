@@ -651,7 +651,7 @@ export async function demoCall(method: string, path: string, body?: Json) {
   const undo = /^\/api\/bots\/([a-z0-9-]+)\/memory\/(\d+)\/undo$/.exec(path);
   if (method === 'POST' && undo) { const i = events.findIndex((e) => e.kind === 'memory.learned' && e.seq === Number(undo[2])); if (i >= 0) events.splice(i, 1); pages[undo[1]].trail = events.filter((e) => e.bot === undo[1]); return { ok: true }; }
   // ?demo=home / ?demo=signin-again: Settings, Phones before Tailscale, and with it signed out.
-  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready',
+  if (method === 'GET' && path === '/api/phones/link') return { on: true, lan: false, pinned: false, tailscale: variant !== 'home', relay: '', relayStatus: 'off', asking: [], push: variant === 'home' ? 'missing' : 'ready', pairLink: variant === 'home' ? '' : 'http://100.101.102.103:7712/pair/q3VxK0aTn8mC2RwYb7LpZg',
     anywhere: variant === 'home' ? 'home' : variant === 'signin-again' ? 'signin' : 'anywhere' };
   if (method === 'POST' && path === '/api/phones/pair') return { qr: 'crewhouse-demo', typed: '7KQ4-M2XP-6N5B', expires: Date.now() + 120_000 };
   if (method === 'POST' && path === '/api/phones/refresh') {

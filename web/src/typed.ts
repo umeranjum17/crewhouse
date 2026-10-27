@@ -14,6 +14,8 @@ export const TYPO = 'That code has a typo. Check the 12 letters on your computer
 export const NO_COMPUTER = 'Your phone could not find your computer on this Wi-Fi. Scan the QR on your computer instead.';
 /** The web app's version: its page can dial only its own address, so the Wi-Fi is no help here. */
 export const NO_HERE = "This page can't reach your computer. On your computer open Settings, Phones, then Add a phone, and scan its code with this phone's camera.";
+export const NO_LINK = 'Your phone could not reach your computer at that link. Turn Tailscale on, on this phone and on the computer, then try again.';
+export const OLD_LINK = 'That link is not from your computer any more. Run ./crewhouse link there for the current one.';
 export const NO_RELAY = "Could not reach your computer's relay. Check it is on and try again.";
 
 // A dotted host with an optional port: the only bare host readTyped takes back as https://host (the rest keep their scheme).
@@ -28,6 +30,15 @@ export function relayTyped(short: string, code: string, relay: string) {
 
 /** A scanned or pasted pairing link to the computer's own web app, when this page is not that app: the address to open instead. */
 export const appLink = (text: string, here = location.origin) => { try { const u = new URL(text.trim()); return /^https?:$/.test(u.protocol) && u.origin !== here && u.hash.includes('byokit-link:') ? u.href : ''; } catch { return ''; } };
+
+/** A pairing link, as tapped, scanned or pasted: the page link `./crewhouse link` prints (the phone asks it for a ticket),
+ *  the app link its button opens (`crewhouse://pair?code=`, the ticket inside), or a bare ticket. Anything else is null. */
+export type Joined = { kind: 'page'; url: string } | { kind: 'offer'; text: string };
+export function readLink(text: string): Joined | null {
+  const t = text.trim(), app = /crewhouse:\/\/pair\?code=([^\s&]+)/.exec(t), page = /https?:\/\/[^\s/]+\/pair\/[\w-]+/.exec(t);
+  try { if (app) return { kind: 'offer', text: decodeURIComponent(app[1]) }; } catch { return null; }
+  return page ? { kind: 'page', url: page[0] } : /BYOKIT-LINK:|byokit-link:/i.test(t) ? { kind: 'offer', text: t } : null;
+}
 
 export function readTyped(text: string): Typed {
   const at = text.indexOf('@');
