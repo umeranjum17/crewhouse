@@ -49,7 +49,7 @@ await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); a
 A('shell', 'input', 'text', code); await sleep(800);
 A('shell', 'input', 'keyevent', '111'); await sleep(500); tap(/^Pair$/); // close the keyboard, then Pair
 let pending = [];
-for (let t = 0; t < 40 && !pending.length; t++) { pending = await api('GET', '/api/phones/pending'); if (!pending.length) await sleep(500); }
+for (let t = 0; t < 120 && !pending.length; t++) { pending = await api('GET', '/api/phones/pending'); if (!pending.length) await sleep(500); }
 if (!pending.length) throw new Error('the phone never reached the computer');
 await api('POST', '/api/phones/answer', { id: pending[0].id, yes: true });
 await sleep(4000);

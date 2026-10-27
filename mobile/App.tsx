@@ -1543,7 +1543,7 @@ function Land({ go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -1612,20 +1612,46 @@ function AskHead({ c, who }: { c: A.Card; who: A.Helper | undefined }) {
 
 /** A helper's draft takes the person's own words before the yes (web/src/parts.tsx useDraftEdit): their version
  *  replaces the draft, and still nothing is sent. The yes copies the words they see and opens the draft's link. */
+/** A filled application form, mirroring web/src/parts.tsx FormFields: what the crew filled from the CV and draft,
+ *  then the questions left blank for the person (theirs alone first), answered here and carried by the Submit. */
+function FormFields({ f, said, set }: { f: A.FormView; said: Json; set: (key: string, v: string | boolean) => void }) {
+  const t = useLook();
+  const field = (x: A.FormView['fields'][number]) => <View key={x.key} style={{ gap: 6 }}>
+    <T style={{ ...fw('500') }}>{x.label}</T>
+    {x.kind === 'file' ? <T tone="mute" style={s.small}>Attach this yourself on the site: the crew has no file of it.</T>
+      : x.kind === 'tick' ? <Switch value={!!said[x.key]} accessibilityLabel={x.label} trackColor={{ false: t.line, true: t.ink }} thumbColor={t.bg} onValueChange={(v) => set(x.key, v)} />
+      : x.options?.length ? <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{x.options.map((o) => <Btn key={o} ink={said[x.key] === o} label={o} onPress={() => set(x.key, o)} />)}</View>
+      : <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={String(said[x.key] ?? '')} onChangeText={(v) => set(x.key, v)} accessibilityLabel={x.label} />}
+  </View>;
+  const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);
+  return <View style={[s.ev, { backgroundColor: t.sunken, gap: 10 }]}>
+    <T tone="mute" style={s.small}>{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</T>
+    {!!f.filled.length && <><T tone="mute" style={s.label2}>FILLED FROM YOUR CV AND DRAFT</T>{f.filled.map((x) => <View key={x.label} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{x.label}</T><T style={{ ...fw('500') }}>{x.value}</T></View>)}</>}
+    {!!yours.length && <><T tone="pinkInk" style={s.label2}>ONLY YOU CAN ANSWER THESE</T>{yours.map(field)}</>}
+    {!!rest.length && <><T tone="mute" style={s.label2}>NOT IN YOUR CV OR DRAFT</T>{rest.map(field)}</>}
+    {!!f.note && <T tone="ink2" style={s.small}>{f.note}</T>}
+    <Link label="Open the form yourself" onPress={() => void Linking.openURL(f.url)} />
+  </View>;
+}
+
 function useDraftEdit(c: A.Card) {
   const t = useLook();
-  const [words, setWords] = useState<string | null>(null);
+  const [words, setWords] = useState<string | null>(null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
     can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
-    box: words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
+    box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
+      : words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}
       multiline autoFocus accessibilityLabel="Your version of the message" />,
     yes: (body: Json) => {
+      if (c.form) return { ...body, fields: said };
       if (c.evidence !== 'draft' || c.mailSend) return body;
       const text = changed ? words!.trim() : c.draftText ?? '';
-      Clipboard.setString(text);
-      if (c.draftLink) void Linking.openURL(c.draftLink);
+      if (!body.fill) {
+        Clipboard.setString(text);
+        if (c.draftLink) void Linking.openURL(c.draftLink);
+      }
       return changed ? { ...body, text } : body;
     },
   };
@@ -1757,6 +1783,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
         <View style={s.chips}>
           <Btn go={!c.mailTo} label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />
           {edit.can && <Btn label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
+          {c.choices.filter((x) => x !== yes && x.body.answer === 'allow' && x.body.scope !== 'always').map((x) => <Btn key={x.label} label={x.label} onPress={() => act(edit.yes(x.body))} />)}
           {deny && <Btn label={deny.label} onPress={() => act(deny.body)} />}
         </View>
       ) : null}
@@ -1765,6 +1792,21 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
       {c.kind === 'plan' && <T tone="mute" style={[s.small, { textAlign: 'center' }]}>Saying Go doesn’t OK any sending or spending. Those still ask you each time.</T>}
     </View>
   );
+}
+
+/** A role a look found, as one compact row of the group under Chief's line (web .calm .line > .role): the role, company
+ *  and place, pay, why it fits in quiet words, and Draft my application while it is in Found. */
+function RoleRow({ r, first, onDone }: { r: A.GoalRole; first: boolean; onDone: () => void }) {
+  const t = useLook(), [busy, setBusy] = useState(false);
+  return <View style={[s.roleRow, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line }]}>
+    <Text style={[s.text, { ...fw('600'), fontSize: 16, color: t.ink }]}>{r.title}</Text>
+    <Text style={[s.text, { fontSize: 16, color: t.quiet }]}>{r.co} · {r.place}</Text>
+    <Text style={[s.text, { fontSize: 16, color: t.ink2 }]}>{r.pay}</Text>
+    {r.fit.map((f, i) => <Text key={i} style={[s.text, { color: t.quiet }]}>{f}</Text>)}
+    {r.stage === 'found' && <Pressable disabled={r.drafting || busy} onPress={() => { setBusy(true); void api.draftRole(r.id).then(onDone).finally(() => setBusy(false)); }} accessibilityRole="button"
+      style={({ pressed }) => [s.smallBtn, { alignSelf: 'flex-start', marginTop: 6, backgroundColor: t.bubble2 }, pressed && { opacity: 0.8 }]}>
+      <Text style={[s.text, { ...fw('600'), fontSize: 16, color: t.ink }]}>{r.drafting || busy ? 'Drafting…' : 'Draft my application'}</Text></Pressable>}
+  </View>;
 }
 
 /** What an answered card leaves in the thread: one small muted line (web/src/parts.tsx AnsweredCard). An approval
@@ -1813,7 +1855,7 @@ function AskSheet({ c, who, chiefSays, canAct, onClose }: { c: A.Card; who: A.He
           {canAct ? <>
             {c.evidence === 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
             {edit.can && <Link label={edit.editing ? 'Use the original' : 'Edit'} onPress={edit.toggle} />}
-            {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body)} />)}
+            {rest.map((x) => <Btn key={x.label} big label={x.label} onPress={() => act(x.body.answer === 'allow' ? edit.yes(x.body) : x.body)} />)}
             {c.evidence !== 'draft' && yes && <Btn go big label={yes.label} disabled={edit.empty} onPress={() => act(edit.yes(yes.body))} />}
           </> : <Btn big label="Close" onPress={onClose} />}
           {always && canAct && <Link label={always.label} onPress={() => act(always.body)} />}
@@ -2123,7 +2165,8 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
                 {/* A helper speaking in Chief's thread: its small face and name over its own bubble (calm .line.relay). */}
                 {!!l.helper && !l.by && <View style={[s.row, { gap: 6, marginLeft: 4 }]}><Face who={faceOf(l.helper)} size={20} /><Text style={[s.relayName, { color: t.quiet }]}>{crewNames.find((c) => c.id === l.helper)?.name ?? name}</Text></View>}
                 {!!l.by && <View style={[s.row, { gap: 8 }]}><Face who={A.crew(state).find((x) => x.id === l.by) ?? 'chief'} size={20} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{l.text}</T></View>}
-                {!!l.text && !l.by && <View style={[s.them, { backgroundColor: t.bubble }]}><ChatText text={l.text} latest={l.id === newestAnswer} calm /></View>}
+                {!!l.text && !l.by && <View style={[s.them, { backgroundColor: t.bubble }]}><ChatText text={l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} calm /></View>}
+                {!!l.roles?.length && <View style={[s.roles, { backgroundColor: t.bubble }]}>{l.roles.map((r, i) => <RoleRow key={r.id} r={r} first={!i} onDone={refresh} />)}</View>}
                 {!!l.retry && <Pressable onPress={() => void send(l.retry!)} accessibilityRole="button" hitSlop={8} style={[s.row, { gap: 8, alignSelf: 'flex-start' }]}>
                   <View style={[s.tick, { borderColor: t.mute, borderWidth: 1.5 }]}><T tone="mute" style={[s.small, s.b]}>!</T></View><T style={[s.read, s.b, { textDecorationLine: 'underline' }]}>Try again</T>
                 </Pressable>}
@@ -3084,6 +3127,8 @@ const s = StyleSheet.create({
   liveBtn: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingLeft: 8, paddingRight: 10, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   liveOpen: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  roles: { width: '80%', maxWidth: 420, borderRadius: 18, overflow: 'hidden' },
+  roleRow: { paddingVertical: 10, paddingHorizontal: 16 },
   smallBtn: { minHeight: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   att: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '80%', maxWidth: 360, paddingVertical: 10, paddingLeft: 10, paddingRight: 12, borderRadius: 16 },
   attIc: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

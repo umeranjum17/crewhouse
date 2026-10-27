@@ -46,7 +46,7 @@ mkdirSync(join(deb, 'control'), { recursive: true });
 const kb = Math.ceil(Number(execFileSync('du', ['-sk', stage]).toString().split('\t')[0]));
 writeFileSync(join(deb, 'control', 'control'), [
   'Package: crewhouse', `Version: ${version}`, 'Architecture: amd64', 'Maintainer: Crewhouse <crewhouse@users.noreply.github.com>',
-  `Installed-Size: ${kb}`, 'Depends: bubblewrap', 'Recommends: xvfb', 'Section: utils', 'Priority: optional',
+  `Installed-Size: ${kb}`, 'Depends: bubblewrap', 'Recommends: xvfb, poppler-utils', 'Section: utils', 'Priority: optional',
   'Homepage: https://github.com/umeranjum17/crewhouse',
   'Description: Your crew of AI helpers, at home, on the AI plan you already have',
   ' Chief and his helpers work on this computer; the phone app pairs with it.', '',
