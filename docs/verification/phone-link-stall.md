@@ -12,8 +12,8 @@ emulator, and `APK` to the release APK built from this checkout. Set `ANDROID_US
 driver is `scripts/verify/phone-link-stall.sh`; it delegates pairing to `scripts/verify/phone-pair-link.mjs` and the
 stall, queue measurement, screenshots, and automatic recovery assertion to `scripts/verify/phone-link-stall.mjs`.
 
-The evidence must show the accept queue above zero during the event-loop hold, Scout still reading **At work** in both
-apps during the retry, no cannot-reach banner for the short offline interval, and automatic recovery. The native app's
+The evidence must show the accept queue above zero during the event-loop hold, Scout still reading **Scout is working** in both
+apps during the retry, no cannot-reach banner after twenty seconds or through the 85-second hold, and automatic recovery. The native app's
 **Back in touch with the home computer** notice and its successful read of Chief's thread prove the return path. The event-loop hold reproduces a sufficient cause of listener
 starvation. It does not establish that the historical incident had the same trigger; the 07:10–07:13 crewd log was not
 available in the isolated task materials.

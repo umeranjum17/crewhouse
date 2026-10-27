@@ -1373,7 +1373,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
   }, [status, awake, refresh]);
   useEffect(() => {
     if (status === 'online') { setLate(false); return; }
-    const t = setTimeout(() => setLate(true), 15_000);
+    const t = setTimeout(() => setLate(true), 90_000);
     return () => clearTimeout(t);
   }, [status]);
   const out = late;

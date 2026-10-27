@@ -36,15 +36,16 @@ const until = async (label, check, ms = 30_000) => {
   throw new Error(`timed out waiting for ${label}`);
 };
 const tap = (re) => { const n = find(re); if (!n) throw new Error(`phone has no ${re}`); adb('shell', 'input', 'tap', String((n.b[0] + n.b[2]) >> 1), String((n.b[1] + n.b[3]) >> 1)); };
-const shot = (name) => writeFileSync(join(OUT, name), execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 26 }));
+const shot = (name) => writeFileSync(join(OUT, name), execFileSync('adb', ['-P', process.env.ADB_SERVER_PORT, '-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 26 }));
 const textOnPhone = (re) => nodes().some((n) => re.test(n.text) || re.test(n.desc));
 
 await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {});
 await api('POST', '/api/recruit', { template: 'scout', name: 'Scout' });
 await api('POST', '/api/bots/scout/messages', { text: 'Scout, ask permission before checking the file.' });
 await until('Scout working', async () => A.office(await api('GET', '/api/state')).crew.some((c) => c.id === 'scout' && c.seat === 'working'));
-await until('phone Home', () => find(/^Home$/));
-if (find(/^Settings$/)) tap(/^Home$/);
+await until('phone Home', () => find(/^Search your chats$/) || find(/^Home$/));
+if (!find(/^Search your chats$/) && find(/^Home$/)) tap(/^Home$/);
+await until('phone chat list', () => find(/^Search your chats$/));
 const log = readFileSync(join(LAB, 'crewd.log'), 'utf8');
 const inspector = log.match(/Debugger listening on ws:\/\/127\.0\.0\.1:\d+\/[^\s]+/)?.[0]?.replace('Debugger listening on ', '');
 if (!inspector) throw new Error('the owned crewd did not start its loopback inspector');
@@ -52,7 +53,7 @@ const port = Number(env.LINK_PORT);
 const stallMs = 85_000;
 for (const [theme, night] of [['light', 'no'], ['dark', 'yes']]) {
   adb('shell', 'cmd', 'uimode', 'night', night);
-  await until('Scout visible as at work', () => textOnPhone(/^At work$/));
+  await until('Scout visible as working', () => textOnPhone(/Scout is working/));
   if (textOnPhone(/Can't reach the home computer/i)) throw new Error(`phone started out offline in ${theme} mode`);
   shot(`phone-${theme}-before-stall.png`);
   const ws = new WebSocket(inspector);
@@ -74,8 +75,9 @@ for (const [theme, night] of [['light', 'no'], ['dark', 'yes']]) {
   }
   writeFileSync(join(OUT, `accept-queue-${theme}.txt`), `link port ${port}\n${queueLine}`);
   if (!queue) throw new Error(`the event-loop stall did not produce a non-empty TCP accept queue in ${theme} mode`);
+  await until('phone has been offline for twenty seconds', () => Date.now() - started >= 20_000, 25_000);
   if (textOnPhone(/Can't reach the home computer/i)) throw new Error(`short-stall grace showed the phone banner in ${theme} mode`);
-  if (!textOnPhone(/^At work$/)) throw new Error(`the running Scout job disappeared during the ${theme} reconnect`);
+  if (!textOnPhone(/Scout is working/)) throw new Error(`the running Scout job disappeared during the ${theme} reconnect`);
   shot(`phone-${theme}-during-stall.png`);
   const resumed = await held;
   if (resumed?.result?.value !== 'event loop resumed') throw new Error(`the ${theme} event-loop stall did not finish cleanly`);
@@ -84,7 +86,8 @@ for (const [theme, night] of [['light', 'no'], ['dark', 'yes']]) {
   writeFileSync(join(OUT, `link-resumed-${theme}.txt`), 'event loop resumed; a new link TCP connection succeeded');
   await until('phone reconnect toast', () => textOnPhone(/Back in touch with the home computer/), 15_000);
   if (textOnPhone(/Can't reach the home computer/i)) throw new Error(`phone retained the cannot-reach banner after ${theme} recovery`);
-  if (!textOnPhone(/^At work$/)) throw new Error(`Scout work was not visible after ${theme} recovery`);
+  if (!textOnPhone(/Scout is working/)) throw new Error(`Scout work was not visible after ${theme} recovery`);
+  await until('phone reconnect toast clears', () => !textOnPhone(/Back in touch with the home computer/), 15_000);
   shot(`phone-${theme}-after-reconnect.png`);
   ws.close();
   console.log(`${theme}: ${stallMs}ms event-loop stall; accept queue reached ${queue}; phone automatically reconnected with Scout at work`);

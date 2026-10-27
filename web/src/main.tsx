@@ -2221,7 +2221,7 @@ function App() {
         <main className="main">
 {offlineBanner && <div className="offline" role="status"><Icon name="wifioff" size={24} /><span className="grow"><b>Can't reach the home computer</b><span>{heard.current ? `Last heard ${A.clock(heard.current)}. ` : ''}You can read your recent chats. You can reply once it's back.</span></span><button className="btn soft" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && !wide && <Home {...ctx} />}
-          {(v.view === 'chief' || (v.view === 'home' && wide)) && <ChiefPage {...ctx} m={v.m} />
+          {(v.view === 'chief' || (v.view === 'home' && wide)) && <ChiefPage {...ctx} m={v.m} />}
           {v.view === 'goal' && <Goal {...ctx} id={v.id} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}
