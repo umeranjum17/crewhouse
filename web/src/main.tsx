@@ -2110,6 +2110,8 @@ function App() {
   const [state, setState] = useState<Json>(null);
   const [tick, setTick] = useState(0);
   const [offline, setOffline] = useState(false);
+  const [offlineBanner, setOfflineBanner] = useState(false);
+  const offlineTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // A bare bookmark or typed address has no authority, so every read is refused with 403 no-authority while the
   // computer is up: one plain screen, never the offline one (which keeps a retry loop for a computer truly gone).
   const [noauth, setNoauth] = useState(false);
@@ -2118,7 +2120,6 @@ function App() {
   const accounts = useAccounts(0, tick);
   const seenDone = useRef<Set<number> | null>(null);
   const heard = useRef(0); // when the home computer last answered
-  const answered = useRef(false); // the computer has answered this visit, with state or with no authority
   const { look, setLook, night, reduced } = useLook();
   const wide = useWide(), [find, setFind] = useState('');
   // The kept week stands in, read-only, and says when it was last heard. Nothing kept, nothing shown.
@@ -2130,12 +2131,14 @@ function App() {
     setOffline(true);
   };
   const refresh = useCallback(() => {
-    const pending = api.state().then((s) => { answered.current = true; setState(s); setOffline(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); return s; })
+    const pending = api.state().then((s) => { clearTimeout(offlineTimer.current); offlineTimer.current = undefined; setState(s); setOffline(false); setOfflineBanner(false); setNoauth(false); heard.current = Date.now(); keepWeek((k) => K.keepState(k, s)); return s; })
       .catch((e) => {
         // No authority is the plain screen, never a kept copy served as if it were live.
-        if (trouble(e) === 'noauth') { answered.current = true; setState(null); setNoauth(true); setOffline(false); return; }
-        showKept();
-        setOffline(true);
+        if (trouble(e) === 'noauth') { clearTimeout(offlineTimer.current); offlineTimer.current = undefined; setState(null); setNoauth(true); setOffline(false); setOfflineBanner(false); }
+        else {
+          showKept(); setOffline(true);
+          if (!offlineTimer.current) offlineTimer.current = setTimeout(() => { offlineTimer.current = undefined; setOfflineBanner(true); }, 90_000);
+        }
       });
     setTick((t) => t + 1);
     return pending;
@@ -2145,15 +2148,12 @@ function App() {
     addEventListener('hashchange', onHash);
     remember(); // the opening place (a link or shortcut) is remembered too
     refresh();
-    // Boot shows the kept copy at once when the computer has not answered within a second; a live answer that comes sooner
-    // replaces nothing, so the kept copy never flashes.
-    const grace = setTimeout(() => { if (!answered.current) showKept(); }, 1000);
     let pending: any;
     // Streamed words are not a change of state: refreshing on each would hold the refresh off until the reply ends.
     const stop = subscribe((e) => { hear(e); if (e.kind === 'reply.partial') return; clearTimeout(pending); pending = setTimeout(refresh, 120); });
     const poll = setInterval(refresh, 15000); // belt and braces if the socket is quietly gone
     if (new URLSearchParams(location.search).has('celebrate')) setParty({ title: "Mum's birthday video", helper: 'reel' });
-    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); clearTimeout(grace); };
+    return () => { removeEventListener('hashchange', onHash); stop(); clearInterval(poll); clearTimeout(offlineTimer.current); };
   }, [refresh]);
   const wasOffline = useRef(false);
   useEffect(() => { if (wasOffline.current && !offline && state) { toast('Back in touch with the home computer ✓'); void mintFiles(); } wasOffline.current = offline; }, [offline]);
@@ -2191,9 +2191,9 @@ function App() {
   useEffect(() => { if (route.view === 'ask' && ctx && A.cards(ctx.state).some((c) => String(c.id) === route.id && c.kind === 'unlock')) { history.replaceState(null, '', '/#/chief'); dispatchEvent(new HashChangeEvent('hashchange')); } }, [route, ctx]);
   // Install before pairing/startup returns too: every face obeys Reduce Motion from its first paint.
   setFaceMoods(ctx ? A.chief(ctx.state, chiefLocal(ctx)).mood : 'idle', ctx?.live.crew ?? [], ctx?.live.talking, reduced);
-  const splash = <Splash done={!!ctx || offline || noauth} />;
+  const splash = <Splash done={!!ctx || offlineBanner || noauth} />;
   if (pairable && !paired) return <>{removed ? <Removed onPair={() => { clearRemoved(); go('#/pair'); }} /> : location.pathname === '/share' ? <Share refresh={refresh} connected={false} /> : <Where pairing={false} />}{route.view === 'pair' && <PairSheet onClose={back} />}<Toasts /></>;
-  if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offline && <Unreachable retry={refresh} />}</>;
+  if (!ctx) return <>{splash}{noauth ? <NoAuthority /> : offlineBanner && <Unreachable retry={refresh} />}</>;
   const engine = A.engineView(ctx.state);
   if (!ctx.state.person.onboarded && engine) return <>{splash}<GettingReady view={engine} refresh={refresh} /><Toasts /></>;
   const v = under.current;
@@ -2219,9 +2219,9 @@ function App() {
           </a>
         </aside>
         <main className="main">
-          {offline && <div className="offline" role="status"><Icon name="wifioff" size={24} /><span className="grow"><b>Can't reach the home computer</b><span>{heard.current ? `Last heard ${A.clock(heard.current)}. ` : ''}You can read your recent chats. You can reply once it's back.</span></span><button className="btn soft" onClick={refresh}>Try now</button></div>}
+{offlineBanner && <div className="offline" role="status"><Icon name="wifioff" size={24} /><span className="grow"><b>Can't reach the home computer</b><span>{heard.current ? `Last heard ${A.clock(heard.current)}. ` : ''}You can read your recent chats. You can reply once it's back.</span></span><button className="btn soft" onClick={refresh}>Try now</button></div>}
           {v.view === 'home' && !wide && <Home {...ctx} />}
-          {(v.view === 'chief' || (v.view === 'home' && wide)) && <ChiefPage {...ctx} m={v.m} />}
+          {(v.view === 'chief' || (v.view === 'home' && wide)) && <ChiefPage {...ctx} m={v.m} />
           {v.view === 'goal' && <Goal {...ctx} id={v.id} />}
           {v.view === 'room' && <Room {...ctx} />}
           {v.view === 'crew' && <Crew {...ctx} />}

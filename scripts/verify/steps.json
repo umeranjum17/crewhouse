@@ -193,6 +193,16 @@
     ],
     "result": "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back"
   },
+  "phone-link-stall": {
+    "target": { "version": "{{sha}}" },
+    "start": "A fresh isolated Crewhouse on the stub engine, with a task-owned Android emulator, release APK, and installed PWA",
+    "steps": [
+      "Pair the Android app to the isolated computer and open Home with Scout running a held task",
+      "Hold the computer's event loop synchronously until the link's TCP accept queue grows; the phone and PWA still show Scout at work and no cannot-reach banner",
+      "Let the computer resume; both clients reconnect by themselves, and Chief's thread loads over the PWA link"
+    ],
+    "result": "The real paired Android app and installed PWA keep running work visible through a brief link stall, avoid a transient cannot-reach banner, and reconnect automatically; the isolated server's accept queue records the event-loop starvation"
+  },
   "phone-download": {
     "start": "a fresh Crewhouse on the stub engine, a new person, no phone paired yet",
     "steps": [
