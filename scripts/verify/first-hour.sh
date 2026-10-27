@@ -56,4 +56,5 @@ wait "$REC" 2>/dev/null || true; REC=
 for f in $(adb -s $SER shell ls /sdcard/ | tr -d '\r' | grep '^hour-.*\.mp4$' | sort -t- -k2 -n); do adb -s $SER pull "/sdcard/$f" "$S/$f" >/dev/null; echo "file '$S/$f'"; done >"$S/list.txt"
 ffmpeg -loglevel error -y -f concat -safe 0 -i "$S/list.txt" -c copy "$OUT/first-hour.mp4"
 cp "$LAB/crewd.log" "$OUT/crewd.log"
+node "$REPO/scripts/verify/steps.mjs" "$OUT" first-hour
 echo "first-hour: ok"
