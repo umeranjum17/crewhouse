@@ -5,9 +5,10 @@
 // first screen reads Pair with my computer),
 // the relay code (`phones code`'s last line: `input text` drops pieces of the relay code on a slow
 // emulator), Pair, then yes at the computer over its own API. `adb reverse` carries the link and relay ports. The
-// notification permission is granted up front, or with --ask the first-run question is captured to <png> and answered Allow.
+// notification permission is granted up front, or with --ask each first-run question (notifications, then on Android
+// running in the background) is captured to its <png> and answered Allow.
 //
-//   LAB=<lab> node scripts/verify/phone-pair-typed.mjs --serial <emulator> [--apk app.apk] [--ask question.png]
+//   LAB=<lab> node scripts/verify/phone-pair-typed.mjs --serial <emulator> [--apk app.apk] [--ask first.png,second.png]
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -56,7 +57,10 @@ for (let t = 0; t < 120 && !pending.length; t++) { pending = await api('GET', '/
 if (!pending.length) throw new Error('the phone never reached the computer');
 await api('POST', '/api/phones/answer', { id: pending[0].id, yes: true });
 await sleep(4000);
-if (ASK) { await waitFor(/^Allow$/, 30000); writeFileSync(ASK, execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 27 })); tap(/^Allow$/); await sleep(1000); }
+for (const [i, png] of (ASK ? ASK.split(',') : []).entries()) {
+  await waitFor(/^Allow$/, i ? 15000 : 30000); await sleep(500);
+  writeFileSync(png, execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 27 })); tap(/^Allow$/); await sleep(1500);
+}
 try { tap(/Open Crewhouse/); } catch { /* already in */ }
 await waitFor(/^Settings$/, 30000);
 console.log(`paired by the typed code as ${pending[0].name}; the app is on Home`);

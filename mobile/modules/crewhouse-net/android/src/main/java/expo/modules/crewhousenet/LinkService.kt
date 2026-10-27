@@ -34,8 +34,14 @@ class LinkService : Service(), HeadlessJsTaskEventListener {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     running = true
     val notice = notice(this, last)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) startForeground(ID, notice, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
-    else startForeground(ID, notice)
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) startForeground(ID, notice, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
+      else startForeground(ID, notice)
+    } catch (e: IllegalStateException) {
+      // Android 12+ refuses it from the background (a restart after the phone killed the app) unless the person let the app
+      // run in the background (CrewhouseNetModule `stayOn`): stop quietly; opening the app starts it again.
+      running = false; stopSelf(); return START_NOT_STICKY
+    }
     run() // (re)run the task, which holds the link on the grant kept now
     return START_STICKY
   }

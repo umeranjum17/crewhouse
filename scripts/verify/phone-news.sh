@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # News with the app closed on Android, no push credential (docs/verification/phone-news.md): the release app on a
-# task-owned emulator paired to a golden-stub crewd. The first run asks for notifications; then, with the app in the
+# task-owned emulator paired to a golden-stub crewd. The first run asks for notifications and to run in the background; then, with the app in the
 # background, its process killed, and after a reboot with the app never opened, Chief's reply, the hire card and the new
 # helper's finished job each show as a notification that opens that chat or card.
 #   bash scripts/verify/phone-news.sh <out-dir> [release-x86_64.apk]
@@ -33,7 +33,7 @@ booted
 adb -s $SER root >/dev/null; adb -s $SER wait-for-device; booted
 LAB_GOLDEN=1 bash "$REPO/scripts/verify/pair-lab.sh" up "$REPO" >/dev/null
 . "$LAB/env"; KEY=$(<"$LAB/state/person.key")
-node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK" --ask "$OUT/news-permission-first-run-phone-390.png"
+node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK" --ask "$OUT/news-permission-first-run-phone-390.png,$OUT/news-background-first-run-phone-390.png"
 P="node $REPO/scripts/verify/phone-ui.mjs"
 api() { curl -fsS -X "$1" -H x-crewhouse:1 -H "authorization: Bearer $KEY" -H content-type:application/json "$B$2" ${3:+-d "$3"}; }
 say() { api POST /api/bots/chief/messages "$(node -e 'console.log(JSON.stringify({text: process.argv[1]}))' "$1")" >/dev/null; }

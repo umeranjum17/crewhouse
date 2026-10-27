@@ -2,12 +2,13 @@
 import { Dictation, DictateError, systemEngine, type DictationHandle } from '@byokit/dictation';
 import { requireOptionalNativeModule } from 'expo';
 
-const net = requireOptionalNativeModule<{ addresses(): Promise<string[]>; keepLink(on: boolean): void; linkWords(words: string): void;
+const net = requireOptionalNativeModule<{ addresses(): Promise<string[]>; keepLink(on: boolean): void; stayOn(): boolean; linkWords(words: string): void;
   addListener(event: 'network', fn: () => void): { remove(): void } }>('CrewhouseNet');
 export const addresses = (): Promise<string[]> => net?.addresses().catch(() => []) ?? Promise.resolve([]);
 // The link service (LinkService.kt, Android; elsewhere nothing happens): on while paired, its ongoing line, and the phone
 // joining a network, to dial again at once.
 export const keepLink = (on: boolean) => net?.keepLink(on);
+export const stayOn = () => net?.stayOn() ?? false;
 export const linkWords = (words: string) => net?.linkWords(words);
 export const onNetwork = (fn: () => void) => { const s = net?.addListener('network', fn); return () => s?.remove(); };
 

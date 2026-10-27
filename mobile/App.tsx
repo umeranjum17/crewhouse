@@ -38,7 +38,7 @@ import { chip, chipSettings, chipState, chipWords, onChip, type StatusState } fr
 import { island } from './src/island';
 import { useOffice } from './src/office';
 import { glowOf } from '../web/src/office.tsx';
-import { canHear, hear, stopHearing } from './modules/crewhouse-net';
+import { canHear, hear, stayOn, stopHearing } from './modules/crewhouse-net';
 import { pairWords } from './src/pair-words';
 import { readLink } from '../web/src/typed.ts';
 import { connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
@@ -702,7 +702,8 @@ function VideoSheet({ f, onClose }: { f: A.FileView; onClose: () => void }) {
 async function pushState(ask = false): Promise<'on' | 'off' | 'missing'> {
   const { status } = ask ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
   if (status !== 'granted') return 'off';
-  if (Platform.OS === 'android') return 'on';
+  // Android then asks to let the app run in the background, so its link comes back after the phone kills the app.
+  if (Platform.OS === 'android') { if (ask) stayOn(); return 'on'; }
   const token = await Notifications.getExpoPushTokenAsync().then((x) => x.data, (e) => (noPushCredential(e) ? '' : undefined));
   return token === '' ? 'missing' : 'on';
 }

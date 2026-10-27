@@ -5,6 +5,7 @@
   <!-- The link to the computer, kept while the app is closed, and back after a reboot (LinkService.kt). -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
   <!-- Speaking to Chief (CrewhouseVoiceModule.kt) asks whether the phone has a speech service to fall back on. -->
   <queries>
     <intent><action android:name="android.speech.RecognitionService" /></intent>
