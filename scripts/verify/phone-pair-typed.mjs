@@ -38,6 +38,8 @@ const waitFor = async (re, ms) => { const t = Date.now(); while (Date.now() - t 
 if (APK) { try { A('uninstall', PKG); } catch { /* none */ } A('install', '-g', APK); }
 A('shell', 'pm', 'clear', PKG);
 if (!ASK) A('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS'); // pm clear takes it; its prompt would cover the app
+// The first-run question: `install -g` and an earlier run leave the permission granted, which `pm clear` keeps.
+else { A('shell', 'pm', 'revoke', PKG, 'android.permission.POST_NOTIFICATIONS'); A('shell', 'pm', 'clear-permission-flags', PKG, 'android.permission.POST_NOTIFICATIONS', 'user-set', 'user-fixed'); }
 for (const port of [env.LINK_PORT, env.RELAY.split(':').pop()]) A('reverse', `tcp:${port}`, `tcp:${port}`);
 await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past Hello, so the phone opens on Home
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
