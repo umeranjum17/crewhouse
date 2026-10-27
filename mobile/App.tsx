@@ -1416,8 +1416,9 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     // A notification's chat, or its card while it still waits (one answered elsewhere leaves Home to show what's left).
     const news = asked && state && /^crewhouse:\/\/(?:chat\?bot=([a-z0-9-]+)|card\?id=(\d+))$/.exec(asked);
     if (news) {
-      setAsked(null);
       const c = news[2] ? A.cards(state).find((x) => x.id === +news[2]) : undefined;
+      if (news[2] && !c && state === first.state) return; // the copy kept on this phone can predate the card: wait for the computer's
+      setAsked(null);
       if (c) { if (c.kind === 'unlock') go({ view: 'chief' }); else setSheet(c); } else go(news[1] === 'chief' ? { view: 'chief' } : news[1] ? { view: 'helper', id: news[1] } : { view: 'home' }, !news[1]);
       return;
     }
@@ -1432,7 +1433,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
     Linking.clearInitialURL();
     if (a.text) keepDraft(a.chat, a.text);
     go(a.chat === 'chief' ? { view: 'chief' } : { view: 'helper', id: a.chat });
-  }, [asked, !!state]);
+  }, [asked, state]);
   const forget = async () => { await bubbleOff().catch(() => {}); link.current?.stop(); await forgetGrant(); onRemoved(); };
 
   if (status === 'refused') {
