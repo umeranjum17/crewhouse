@@ -256,6 +256,17 @@ function ChatText({ text, latest }: { text: string; latest?: boolean }) {
   return <View style={{ gap: 10, maxWidth: 560 }}>{blocks(chatTokens(shown))}{long && <Pressable onPress={() => setMore(!more)} accessibilityRole="button"><T style={s.b}>{more ? 'Less' : 'More'}</T></Pressable>}</View>;
 }
 
+function ChiefAsk({ l, latest }: { l: { text: string; detail: string }; latest?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <View style={{ paddingLeft: 36, gap: 4 }}>
+    <T>{l.text}</T>
+    <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={open ? 'Hide details' : 'Show details'} hitSlop={6}>
+      <T style={s.b}>{open ? 'Hide details' : 'Show details'}</T>
+    </Pressable>
+    {open && <ChatText text={l.detail} latest={latest} />}
+  </View>;
+}
+
 /** An empty list, said warmly: the shared ornament and a plain line, never a blank box. */
 function Empty({ children }: { children: ReactNode }) {
   return <Card style={{ alignItems: 'center', paddingVertical: 22 }}><T tone="mute" style={s.small}>{art.ORNAMENT}</T><T tone="ink2" style={s.centerText}>{children}</T></Card>;
