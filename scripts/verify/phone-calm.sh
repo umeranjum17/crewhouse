@@ -47,7 +47,8 @@ node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK"
 P="node $REPO/scripts/verify/phone-ui.mjs"
 see() { for _ in $(seq 40); do $P texts | grep -qE -- "$1" && return 0; sleep 1; done; $P texts >&2 || true; echo "never saw: $1" >&2; exit 1; }
 shot() { sleep 1; $P shot "$OUT/$1.png"; $P texts >"$OUT/$1.txt"; }
-look() { adb -s $SER shell cmd uimode night "$1" >/dev/null; adb -s $SER shell am start -n dev.crewhouse.app/.MainActivity >/dev/null; sleep 2; }
+# A fresh start reads the look: after quick density and night switches a running app can keep the old one.
+look() { adb -s $SER shell cmd uimode night "$1" >/dev/null; adb -s $SER shell am force-stop dev.crewhouse.app; adb -s $SER shell am start -n dev.crewhouse.app/.MainActivity >/dev/null; sleep 2; }
 adb -s $SER shell wm density 443 >/dev/null # 1080 px across at 443 dpi: 390 wide
 # 1. Home as the chat list and both threads, by day and by night.
 for night in no yes; do
@@ -93,7 +94,7 @@ until_state 'Start looking for Product designer'
 ask=$(api GET /api/state | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).asks.find(a=>a.state==="open"&&/Product designer/.test(a.title)).id))')
 api POST "/api/asks/$ask/answer" '{"answer":"allow"}' >/dev/null
 until_state '"goals":\[{'
-adb -s $SER shell input keyevent BACK; look no
+look no
 see 'Your goal'; see 'Product designer: '
 shot home-goal-day-390
 node "$REPO/scripts/verify/steps.mjs" "$OUT" phone-calm
