@@ -76,7 +76,7 @@ $P tap '^Chief$' >/dev/null; see 'Tell Chief anything'
 for _ in 1 2 3; do $P tap-if '^Remove Umer_Resume.pdf$' >/dev/null; done
 $P tap 'Tell Chief anything' >/dev/null
 for _ in $(seq 25); do adb -s $SER shell dumpsys input_method | grep -q mInputShown=true && break; sleep 0.4; done # keys sent before the keyboard is up get lost
-adb -s $SER shell input keycombination 113 29; adb -s $SER shell input keyevent 67 # the kept draft goes first
+adb -s $SER shell input keyevent 123 $(printf '67 %.0s' $(seq 40)) # the kept draft goes first: end, then deletes (a ctrl+a's Ctrl can stick to the next key)
 adb -s $SER shell input text hi
 see '^dev.crewhouse.app .*\] hi$'
 $P tap '^Send$' >/dev/null
