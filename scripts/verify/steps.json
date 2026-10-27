@@ -606,5 +606,17 @@
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The goal card lists Won't do before anything starts. The board shows each role's place, pay as the posting says it, why it fits, what is missing and its source with the date checked; Found reads as plain information. The draft card keeps declarations, right to work, visa sponsorship, salary, notice and consent empty under Only you can answer these. Only Umer's own tap moves a role to Applied, which sets a 7-day follow-up. Nothing is submitted, sent or accepted. Not a real job site or a real model."
+  },
+  "jobs-prep": {
+    "start": "Umer with a job search on the stub engine: a role he moved to Interview himself, and a local company page; no real model, account or job site",
+    "steps": [
+      "Open Your goal from Jobs, the Interview column, and open the role card: it offers Prep for this interview",
+      "Tap it: the writer puts a company brief and the likely questions on the role; the card now offers Open your interview prep",
+      "Open the prep: the brief with each fact linked to the page it came from, then the likely questions each with why they ask it, and the fields only he answers left empty",
+      "Tap Practise with the interviewer: the writer's chat opens with the first question",
+      "Type an answer (the mic sits beside the box): the writer replies with what landed, what to tighten and an invitation to try again",
+      "Repeat the same screens in the installed app's window at phone size"
+    ],
+    "result": "The prep reads as one page: every company fact shows the site it was read from as a link, each likely question says why it is asked, and the pay, visa, right-to-work, notice and consent fields are listed empty under Only you can answer these. The practice happens in the writer's chat, answered by typing or the mic; the reply gives what landed, what to tighten and an invitation to try again. Nothing is sent, filled in or signed, and no interviewer audio plays. Not a real company site or a real model."
   }
 }

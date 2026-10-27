@@ -84,6 +84,34 @@ test('goal card, guarded finding, drafting, and a board only the person moves', 
   jobs.move(db, role.id, 'interview');
   assert.equal(db.get('SELECT COUNT(*) AS n FROM routines WHERE id = ?', r.follow)!.n, 0, 'moving on takes the follow-up away');
   assert.equal(jobs.view(db)!.roles[0].stage, 'interview');
+
+  // Interview prep: the brief's every fact is read from its page; what only the person answers is listed, never answered.
+  assert.throws(() => crew.draftRole(role.id, 'practice'), /prepare for this interview first/);
+  const open = () => db.get("SELECT COUNT(*) AS n FROM asks WHERE state = 'open'")!.n, before = open();
+  const pt = crew.draftRole(role.id, 'prep').task;
+  await settled(db, pt);
+  assert.match(task(db, pt).body, /crew_prep/);
+  const prep = async (input: object) => { const id = (await crew.post(g.will, `prep ${call('crew_prep', input)}`))!.task; await settled(db, id); };
+  const fact = { says: 'Acme pays a salary.', url: `${web.base}/about`, quote: 'Salary: £55,000 to £65,000 a year' };
+  const qs = [{ ask: 'Tell us about a dashboard you led.', why: 'The role owns one.' }, { ask: 'How do you test a checkout?', why: 'Money moves there.' }, { ask: 'What went wrong on your last project?', why: 'They check how you own a miss.' }];
+  await prep({ role: role.id, brief: [{ ...fact, quote: 'Acme has four thousand staff worldwide' }], questions: qs });
+  await prep({ role: role.id, brief: [{ ...fact, url: `${web.base}/gone` }], questions: qs });
+  await prep({ role: role.id, brief: [fact], questions: qs.slice(0, 2) });
+  assert.equal(jobs.prep(db, role.id), null, 'a fact its page does not show, a dead link and too few questions make no prep');
+  await prep({ role: role.id, brief: [fact], questions: [...qs, { ask: 'What is your expected salary?', why: 'Asked early.' }] });
+  const p = jobs.prep(db, role.id);
+  assert.equal(p.brief[0].url, fact.url, 'every fact keeps the page it was read from');
+  assert.equal(p.questions.length, 3, 'a pay question is not a practice question');
+  assert.ok(p.yours.includes('Expected salary') && p.yours.includes('Visa sponsorship'), 'what only the person answers is listed, empty');
+  assert.equal(db.get('SELECT stage FROM roles')!.stage, 'interview', 'the crew moves nothing');
+  assert.equal(open(), before, 'the prep raises no card: nothing is drafted for sending');
+  const pr = crew.draftRole(role.id, 'practice').task;
+  await settled(db, pr);
+  assert.match(task(db, pr).body, /Tell us about a dashboard you led[\s\S]*What landed:[\s\S]*To tighten:/);
+  assert.doesNotMatch(task(db, pr).body, /expected salary\?\n/, 'the practice interviewer never asks the pay question');
+  assert.throws(() => crew.draftRole(role.id + 1, 'prep'), /no|not/);
+  jobs.move(db, role.id, 'offer');
+  assert.throws(() => crew.draftRole(role.id, 'prep'), /not waiting/);
   assert.ok(task(db, t).state, 'Chief\'s task is on record');
   done();
 });

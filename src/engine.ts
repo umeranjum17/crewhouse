@@ -31,6 +31,7 @@ export const PARAMETERS = {
   crew_goal: Type.Object({ title: Type.String(), places: Type.String(), floor: Type.Optional(Type.String()), cv: Type.String() }),
   crew_role: Type.Object({ company: Type.String(), title: Type.String(), place: Type.String(), url: Type.String(), pay: Type.Optional(Type.String()), fit: Type.Array(Type.Object({ says: Type.String(), cv: Type.String() })), missing: Type.String() }),
   crew_application: Type.Object({ role: Type.Number(), cv: Type.Array(Type.String()), answers: Type.Array(Type.Object({ ask: Type.String(), answer: Type.String() })), yours: Type.Optional(Type.Array(Type.String())) }),
+  crew_prep: Type.Object({ role: Type.Number(), brief: Type.Array(Type.Object({ says: Type.String(), url: Type.String(), quote: Type.String() })), questions: Type.Array(Type.Object({ ask: Type.String(), why: Type.String() })) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_case: Type.Object({ thread: Type.String(), facts: Type.String({ maxLength: 600 }) }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
 }, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
 

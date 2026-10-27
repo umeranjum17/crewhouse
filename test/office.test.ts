@@ -282,9 +282,9 @@ test('your crew reads whole: every tile has its Geo face in its own shape, and n
   }
 });
 
-test('what waits on the person is one count: Home, the menu, the tab bar and the Jobs page agree', { skip: !bin && 'no Chromium here' }, async () => {
-  // Chief's card says "Chief has N things for you" (A.chiefHas, counts.needs); the side menu's and the tab bar's Jobs
-  // count say the same N, and the Jobs page adds up to it: its Needs you rows plus the helpers gone quiet.
+test('what waits on the person is one count: Home, the menu, the tab bar agree', { skip: !bin && 'no Chromium here' }, async () => {
+  // Chief's card says "Chief has N things for you" (A.chiefHas, counts.needs); the side menu's and the tab bar's Chief
+  // count say the same N (the Jobs tab is gone: the job board opens from Home's goal card and the helper's page).
   const b = await browse();
   await b.send('Page.enable'); await b.send('Runtime.enable');
   const num = (s: string | null | undefined) => Number(/\d+/.exec(s ?? '')?.[0] ?? 0);
@@ -299,18 +299,15 @@ test('what waits on the person is one count: Home, the menu, the tab bar and the
       if (w < 900) assert.equal(await b.run("[...document.querySelectorAll('.tabs .tab-ic')].filter((e) => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)').length"), 1, `${demo}: only the current tab is lit`);
       counts[w < 900 ? 'tab bar' : 'menu'] = num(await b.run(`document.querySelector('${w < 900 ? '.tabs .tab-badge' : '.side-navs .side-count'}')?.textContent`));
     }
-    await b.run('location.hash = "#/jobs"');
-    await until('the Jobs page', () => b.run("!!document.querySelector('.jobs-page')"), 30_000);
-    counts.jobs = await b.run("document.querySelectorAll('.jobs-page .needs-row').length") + num(await b.run("document.querySelector('.jobs-quiet b')?.textContent"));
     assert.equal(new Set(Object.values(counts)).size, 1, `${demo}: one count everywhere (${JSON.stringify(counts)})`);
   }
   for (const theme of ['day', 'night']) for (const width of [390, 1440]) {
     await b.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 390 });
-    await b.open(`demo=finished&${theme}#/jobs`);
-    await until('the finished-jobs link', () => b.run("!!document.querySelector('.st-room')"), 30_000);
+    await b.open(`demo=goal&${theme}#/`);
+    await until('the goal link', () => b.run("!!document.querySelector('.st-room')"), 30_000);
     const link = await b.run(`(() => { const a=document.querySelector('.st-room'), title=a.querySelector('b').getBoundingClientRect(), detail=a.querySelector('.grow > span').getBoundingClientRect(), box=a.getBoundingClientRect();
       return { separate: title.bottom <= detail.top, tappable: box.height >= 48, inside: box.left >= 0 && box.right <= innerWidth }; })()`);
-    assert.deepEqual(link, { separate: true, tappable: true, inside: true }, `${theme} ${width}: the finished-jobs title and description are separate, readable rows`);
+    assert.deepEqual(link, { separate: true, tappable: true, inside: true }, `${theme} ${width}: the goal card's title and description are separate, readable rows`);
   }
 });
 

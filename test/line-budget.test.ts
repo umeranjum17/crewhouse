@@ -77,7 +77,9 @@ import { join } from 'node:path';
 // way to pay it would be packing unrelated statements.
 // Raised 7520 -> 7680 for the jobs loop (ch-jobs-loop-build): the goal card, the roles board (src/jobs.ts), the finder's and
 // writer's guarded tools and the person-only moves. Owner-directed in the brief; no trim paired, nothing working is cut to fit.
-const BUDGET = 7680;
+// Raised 7680 -> 7722 for the interview-prep slice (ch-jobs-crew-prep, +42 net): the writer's crew_prep tool with crewd's
+// page-by-page check of each fact, the prep store on the board, the prep and practice taps and two scripted stub lines. Owner-directed in the brief; no trim paired.
+const BUDGET = 7722;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

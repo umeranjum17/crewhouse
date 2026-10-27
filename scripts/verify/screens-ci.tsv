@@ -1,12 +1,12 @@
 # CI screen pass (scripts/verify/ci-screens.sh): slug, demo query, hash route. One row per capture slug, reached on ?demo
-# (demo data only, no crewd, no model). Every slug here is a mocks.tsv slug but jobs (the Stack frame's Jobs place has no design render yet); a slug not listed reaches no ?demo route:
+# (demo data only, no crewd, no model). Every slug here is a mocks.tsv slug but jobs (the job board, opened from Home's goal card; no design render yet); a slug not listed reaches no ?demo route:
 #   where, cloud-pick, cloud-key, computer   the cloud and first-run pages (CREWHOUSE_CLOUD build, public shell)
 #   call-idle, call-listening, call-speaking, call-voice   the voice call opens by a tap on the microphone, no URL state
 #   handoff-ipad   an iPad-only width, outside 390 and 1440
 #   chief-attach, unlock-card   no demo variant puts the attachment or the locked-file card in Chief's thread
 #   model-pick   #/settings/ai/chatgpt renders a blank page on ?demo (a product defect, not a capture one): left out until fixed
 chats	demo	#/crew
-jobs	demo	#/jobs
+jobs	demo=goal	#/goal
 chief-chat	demo	#/chief
 hello	demo=hello	#/
 chief-profile	demo	#/h/chief/details

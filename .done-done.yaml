@@ -61,6 +61,9 @@ journeys:
   # Umer's job search from goal card to applied: the board, a role, the draft with the empty only-you fields (docs/verification/jobs-loop.md).
   jobs-loop:
     command: 'timeout -k 10 600 bash scripts/verify/jobs-loop.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Interview prep: the brief with linked sources, the likely questions and the practice chat (docs/verification/jobs-prep.md).
+  jobs-prep:
+    command: 'timeout -k 10 600 bash scripts/verify/jobs-prep.sh "$DONE_DONE_EVIDENCE_ROOT"'
   stub-drive:
     command: "node scripts/verify/stub-drive.mjs --out $DONE_DONE_EVIDENCE_ROOT"
   static-checks:

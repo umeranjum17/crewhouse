@@ -19,4 +19,4 @@ Umer tells Chief the roles he wants, where, a pay floor if he likes, and pastes 
 
 ## Not built yet
 
-Re-drafting a role, removing the goal, interview prep, the native phone board.
+Re-drafting a role, removing the goal, the native phone board. Interview prep is `docs/verification/jobs-prep.md`.

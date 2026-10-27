@@ -53,7 +53,13 @@ export function view(db: Store) {
   const busy = ['queued', 'working', 'needs_you', 'paused'];
   return { goal: { title: g.title, places: g.places, floor: g.floor, since: g.since, rae: g.rae, will: g.will },
     roles: db.all("SELECT r.*, t.state AS tstate FROM roles r LEFT JOIN tasks t ON t.id = r.task WHERE r.stage != 'passed' ORDER BY r.found_at DESC, r.id DESC")
-      .map(({ key: _, task: __, tstate, fit, ...r }): Row => ({ ...r, fit: JSON.parse(fit), drafting: r.stage === 'found' && busy.includes(tstate) })) };
+      .map(({ key: _, task: __, tstate, fit, ...r }): Row => ({ ...r, fit: JSON.parse(fit), drafting: r.stage === 'found' && busy.includes(tstate), prepping: r.stage === 'interview' && busy.includes(tstate), prep: prep(db, r.id) })) };
+}
+
+/** The interview prep the writer put on a role: the brief (each claim with its page), the likely questions, and what stays the person's. */
+export const prep = (db: Store, id: number) => JSON.parse(db.get('SELECT value FROM settings WHERE key = ?', `jobs.prep.${id}`)?.value ?? 'null');
+export function setPrep(db: Store, id: number, bot: string, p: object) {
+  db.tx(() => { db.run("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", `jobs.prep.${id}`, JSON.stringify(p)); db.event('role.prep', bot, { role: id }); });
 }
 
 /** The finder's daily job, with the roles already seen added at each run. */
@@ -70,3 +76,21 @@ Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}. Pay: ${r.pay || 'no
 Read the posting. Then call crew_application once: role ${r.id}; cv (the person's own CV lines, copied exactly as written, picked and ordered to lead with what this role asks for; never reword, never add a line); answers (the cover questions the posting asks, each answered only from the CV; if it asks none, "Why do you want to work at ${r.co}?"); yours (any form question about what they declare or sign, right to work, visa, pay, notice or consent: leave it out of answers). You never apply, send or submit.
 Their CV, line by line:
 ${g.cv}`;
+
+/** The writer's job for a role in Interview, from the person's tap on Prep for this interview. */
+export const prepTask = (g: Pick<Goal, 'cv'>, r: Row) => `Prepare the person for their interview. You write; they read it and answer for themselves.
+Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}.
+Read the posting and the company's own public pages, then call crew_prep once: role ${r.id}; brief (the one-page company brief: 5 to 10 facts, each saying one thing in \`says\`, the https page that shows it in \`url\`, and in \`quote\` words copied from that page; a fact with no page is left out); questions (6 to 10 questions they are likely to be asked for this role, each with \`why\` they ask it, in a sentence). Questions about pay, notice, visa, right to work or consent are theirs to answer: they are listed for them, never answered.
+You never apply, send or contact anyone, and you never write their answers or sign anything. Reply with one line.
+Their CV, line by line:
+${g.cv}`;
+
+/** The practice interviewer: the writer asks the questions in this chat, one at a time, and answers with feedback. */
+export const practiceTask = (g: Pick<Goal, 'cv'>, r: Row, p: { questions: { ask: string }[] }) => `Be the interviewer for the person's ${r.title} interview at ${r.co}, here in this chat, until they say stop. They answer by typing or speaking; you only write.
+Ask ONE question at a time, in this order, and wait for the answer:
+${p.questions.map((q, i) => `${i + 1}. ${q.ask}`).join('\n')}
+After each answer reply in plain words, in three short paragraphs with a blank line between: "What landed:" (what worked, in their own words), "To tighten:" (one or two specific things), then an invitation to try that answer again or say next. Judge it against their CV below; never add a fact about them, and never write the answer for them.
+A question about pay, notice, visa, right to work or consent is theirs alone to answer: say so, give no figure or wording, and move on. You never send, apply or contact anyone.
+Their CV, line by line:
+${g.cv}
+Start now with question 1.`;

@@ -599,7 +599,7 @@ const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, 
 /** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
  *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
  *  read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
-function useVoice(on: boolean, text: string, put: (t: string) => void) {
+function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: string) => void) {
   const [route, setRoute] = useState<Ears | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
   const now = useRef(text);
@@ -611,13 +611,13 @@ function useVoice(on: boolean, text: string, put: (t: string) => void) {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = hear(route);
     setEar(h);
-    setListen('chief', true);
+    setListen(chat, true);
     h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
       (e) => toast(heardWrong(e)))
-      .finally(() => { setEar(null); setListen('chief', false); });
+      .finally(() => { setEar(null); setListen(chat, false); });
   };
   const off = route === 'none';
-  return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : 'Speak to Chief'} aria-pressed={!!ear}
+  return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
     onClick={() => (off ? toast(VOICE_WORDS.none) : ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button> };
 }
@@ -760,9 +760,9 @@ export const KEPT = 'kept';
  */
 /** Chief's box. With `chips` (the desk feed, B1) a bar under the words: attach (a PDF, a document or a photo,
  *  shown as chips until sent), a starter or two that fill the box without sending, then the mic and send. */
-export function Composer({ placeholder, onSend, chat, chips, talk, stop }: { placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk; stop?: () => void }) {
+export function Composer({ placeholder, onSend, chat, chips, talk, stop, practice }: { practice?: boolean; placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; chips?: { label: string; ask: string }[]; talk?: Talk; stop?: () => void }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
-  const voice = useVoice(chat === 'chief', text, (t) => change(t));
+  const voice = useVoice(chat, chat === 'chief' || !!practice, text, (t) => change(t));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [held, setHeld] = useState(false);

@@ -60,6 +60,9 @@ export const api = {
   /** The board: the person moves a role (applied, interview, offer, passed), or asks the writer for a draft. */
   moveRole: (id: number, stage: string) => call('POST', `/api/jobs/${id}`, { stage }),
   draftRole: (id: number) => call('POST', `/api/jobs/${id}/draft`),
+  /** Prep for this interview, and the practice interviewer: the writer's tasks for a role in Interview. */
+  prepRole: (id: number) => call('POST', `/api/jobs/${id}/prep`),
+  practiceRole: (id: number) => call('POST', `/api/jobs/${id}/practice`),
   state: () => call('GET', '/api/state'),
   mailStatus: (to: string) => call('GET', `/api/mail?to=${encodeURIComponent(to)}`),
   mailMark: (to: string, body: Json) => call('PUT', '/api/mail', { to, ...body }),
