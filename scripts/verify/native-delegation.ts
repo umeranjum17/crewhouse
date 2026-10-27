@@ -19,7 +19,7 @@ if (mode === '--scripted') {
     const system = body.messages.filter((m: any) => m.role === 'system').map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
     // Legwork: a spawned child answers its one item after its tool calls; Chief spawns, then answers when the reports are in.
     // LAB_HI_REPLY (phone-reconnect-reply.mjs): Chief answers a bare "Hi" with these words, streamed in two parts below.
-    if (HI && system.includes('Your id in Crewhouse is chief.') && /^Hi[.!]?$/.test(text.trim())) return { reply: HI };
+    if (HI && system.includes('Your id in Crewhouse is chief.') && /(^|\s)Hi[.!]?\s*$/.test(text)) return { reply: HI };
     const item = /\bitem=(\w+)/.exec(text)?.[1];
     if (item) return { text, reply: `LEGWORK-DONE ${item}` };
     const reports = [...new Set(JSON.stringify(body.messages.filter((m: any) => m.role !== 'system')).match(/LEGWORK-DONE \w+/g) ?? [])];
