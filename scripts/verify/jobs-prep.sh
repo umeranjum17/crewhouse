@@ -53,6 +53,8 @@ IDS=$(drive_prep prep); WILL=$(node -p "JSON.parse(process.argv[1]).will" "$IDS"
 hash_gate prep-card /goal "[...document.querySelectorAll('.goal-chips button')].find((b) => /^Interview/.test(b.textContent))?.click(); await new Promise((r) => setTimeout(r, 400)); document.querySelector('.goal-board section.on .role-head')?.click()"
 hash_gate prep-brief "/goal/$ROLE"
 hash_gate prep-questions "/goal/$ROLE" "document.querySelector('.prep-list + .hire-sect')?.scrollIntoView(); window.scrollTo(0, document.body.scrollHeight)"
+hash_gate home-goal /
+hash_gate helper-goal "/h/$WILL"
 drive_prep practice > /dev/null
 hash_gate practice "/h/$WILL"
 node "$REPO/scripts/verify/steps.mjs" "$OUT" jobs-prep

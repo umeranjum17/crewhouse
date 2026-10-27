@@ -2259,3 +2259,5 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .prep-list .small { font-size: 16px; }
 .prep-list a { overflow-wrap: anywhere; }
 .prep-page .btns { margin-top: 16px; }
+
+.st-board-link { display: block; padding: 8px 16px 10px; font-weight: 600; }
