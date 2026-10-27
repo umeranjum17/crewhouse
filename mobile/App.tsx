@@ -1610,7 +1610,7 @@ function FormFields({ f, said, set }: { f: A.FormView; said: Json; set: (key: st
     <T style={{ ...fw('500') }}>{x.label}</T>
     {x.kind === 'file' ? <T tone="mute" style={s.small}>Attach this yourself on the site: the crew has no file of it.</T>
       : x.kind === 'tick' ? <Switch value={!!said[x.key]} accessibilityLabel={x.label} trackColor={{ false: t.line, true: t.ink }} thumbColor={t.bg} onValueChange={(v) => set(x.key, v)} />
-      : x.options?.length ? <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{x.options.map((o) => <Btn key={o} soft={said[x.key] !== o} ink={said[x.key] === o} label={o} onPress={() => set(x.key, o)} />)}</View>
+      : x.options?.length ? <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{x.options.map((o) => <Btn key={o} ink={said[x.key] === o} label={o} onPress={() => set(x.key, o)} />)}</View>
       : <TextInput style={[s.input, { color: t.ink, borderColor: t.line }]} value={String(said[x.key] ?? '')} onChangeText={(v) => set(x.key, v)} accessibilityLabel={x.label} />}
   </View>;
   const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);

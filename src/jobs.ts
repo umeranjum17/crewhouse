@@ -7,7 +7,7 @@ export type Goal = { title: string; places: string; floor: string; cv: string; r
 
 /** What the form asks that only the person answers: declarations, right to work, sponsorship, pay, notice, consent. Never guessed. */
 export const YOURS = ['Declarations you sign', 'Your right to work', 'Visa sponsorship', 'Expected salary', 'Notice period', 'Consent: your data, background checks, references'];
-export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy|gender|race|ethnic|hispanic|veteran|disab|pronoun|sexual|religio|restriction|agreement/i;
+export const ONLY_YOU = /declar|right to work|work in the|eligib|visa|sponsor|salary|compensation|pay expect|notice|consent|background check|reference|criminal|convict|certify|privacy|gender|\brace\b|ethnic|hispanic|veteran|disab|pronoun|sexual|religio|restriction|\bagreement|\bconfirm|can you start|start date/i;
 export const WONT = ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything', 'Answer for you: pay, visa, right to work, notice, consent'];
 export const WEEK = 7 * 86_400_000;
 
@@ -29,24 +29,28 @@ export type Field = { label: string; kind: 'text' | 'pick' | 'tick' | 'file'; op
  *  button that sends it (or the Next of a form that goes on), and each field's ref by label (a radio by `group\nlabel`). */
 export function formOf(snapshot: string, filled: string[]) {
   const fields: Field[] = [], refs: Record<string, string> = {}, at = (label: string) => fields.find((f) => f.label === label);
-  let submit = '', next = '', group = { label: '', depth: -1 };
+  let submit = '', next = '', group = { label: '', depth: -1 }, said = '';
   for (const line of snapshot.split('\n')) {
+    // A question written above its control (Ashby): it names a box called only by its placeholder, and its Yes/No buttons.
+    const q = /^\s*- generic(?: \[ref=[\w-]+\])?: (.+)$/.exec(line); if (q) said = q[1].trim();
     const m = /^(\s*)- (textbox|combobox|checkbox|radio|option|button|group|radiogroup) "((?:[^"\\]|\\.)*)"(?:.*\[ref=([\w-]+)\])?/.exec(line);
     if (!m) continue;
     const [, pad, role, raw, ref] = m, label = raw.replace(/\\"/g, '"').trim(), last = fields.at(-1);
     if (pad.length <= group.depth) group = { label: '', depth: -1 };
     if (role === 'group' || role === 'radiogroup') { group = { label, depth: pad.length }; continue; }
     if (role === 'option') { if (ref) refs[`option\n${label}`] ??= ref; if (last?.kind === 'pick') (last.options ??= []).push(label); continue; }
-    if (role === 'button') {
+    const yes = role === 'button' && !!said && /^(yes|no)$/i.test(label), up = group.label || said;
+    if (role === 'button' && !yes) {
       if (/submit|send (my |your )?application/i.test(label)) { submit = label; refs[label] = ref; } else if (/^(next|continue)\b/i.test(label)) next ||= label;
-      else if (/^(attach|upload|choose file)/i.test(label) && group.label && !at(group.label)) fields.push({ label: group.label, kind: 'file', yours: true });
+      else if (/^(attach|upload|choose file)/i.test(label) && up && !at(up)) fields.push({ label: up, kind: 'file', yours: true });
       continue;
     }
-    const key = role === 'radio' ? `${group.label}\n${label}` : label;
-    if (filled.includes(label) || refs[key]) continue;
+    const pick = role === 'radio' || yes, of = role === 'radio' ? group.label : said, name = !pick && said && /\.\.\.$/.test(label) ? said : label;
+    const key = pick ? `${of}\n${label}` : name;
+    if (filled.includes(name) || refs[key]) continue;
     refs[key] = ref;
-    if (role === 'radio') { const f = at(group.label); if (f) (f.options ??= []).push(label); else fields.push({ label: group.label || label, kind: 'pick', options: [label], yours: ONLY_YOU.test(group.label || label) }); continue; }
-    fields.push({ label, kind: role === 'checkbox' ? 'tick' : role === 'combobox' ? 'pick' : 'text', yours: ONLY_YOU.test(label) });
+    if (pick) { const f = at(of); if (f) (f.options ??= []).push(label); else fields.push({ label: of || label, kind: 'pick', options: [label], yours: ONLY_YOU.test(of || label) }); continue; }
+    fields.push({ label: name, kind: role === 'checkbox' ? 'tick' : role === 'combobox' ? 'pick' : 'text', yours: ONLY_YOU.test(name) });
   }
   return { fields, submit, next, refs };
 }
@@ -110,16 +114,20 @@ ${g.cv}`;
 /** The writer's job on the posting's own form, from the person's tap on Fill it in for me: their words only, nothing sent. */
 export const fillTask = (g: Pick<Goal, 'cv'>, r: Row, draft: string) => `Fill in the person's application form for ${r.title} at ${r.co} in your own browser. You fill; only the person submits.
 Open ${r.url} with browser goto and find its application form (an Apply link may lead to it). Fill each text line you can with browser fill, using only words from their CV or the approved draft below, as written: their name, contact details, the CV lines and the cover answers. Leave everything else empty for them: what they declare or sign, right to work, visa or sponsorship, pay, notice, consent, who they are, every dropdown, tick box and file, and anything the CV and draft do not say.
-Never sign in, make an account, upload a file, or press a button once you have filled a line. Then call crew_form once: role ${r.id}, and \`stop\` only when the form needs a sign-in or an account, wants a CV file, goes on over more pages, or the site asks whether you are human (say which, plainly). Reply with one line.
+Never sign in, make an account, upload a file, or press a button once you have filled a line. Then call crew_form once: role ${r.id}, and \`stop\` only when the form needs a sign-in or an account, wants a CV file, goes on over more pages, or the site asks whether you are human (say which, plainly).
+Then make their reading pack: ${pack(r, '3 to 5 questions to test themselves with')} Reply with one line.
 The approved draft:
 ${draft}
 Their CV, line by line:
 ${g.cv}`;
 
+/** The reading pack's one call: what the company sells, the role day to day and the interview loop, each fact from its own page. */
+const pack = (r: Row, qs: string) => `read the posting and the company's own public pages, then call crew_prep once: role ${r.id}; brief (5 to 10 facts, each saying one thing in \`says\`, in \`part\` which it is about: \`company\` (who they are and what they sell), \`role\` (the job's real day to day, from the posting) or \`loop\` (their interview stages and topics), the https page that shows it in \`url\`, and in \`quote\` words copied from that page; a fact with no page is left out, and crewd says so where a part has none); questions (${qs}, each with \`why\` they ask it, in a sentence). Questions about pay, notice, visa, right to work or consent are theirs to answer: they are listed for them, never answered.`;
+
 /** The writer's job for a role in Interview, from the person's tap on Prep for this interview. */
 export const prepTask = (g: Pick<Goal, 'cv'>, r: Row) => `Prepare the person for their interview. You write; they read it and answer for themselves.
 Role: ${r.title} at ${r.co} (${r.place}). Posting: ${r.url}.
-Read the posting and the company's own public pages, then call crew_prep once: role ${r.id}; brief (the one-page company brief: 5 to 10 facts, each saying one thing in \`says\`, the https page that shows it in \`url\`, and in \`quote\` words copied from that page; a fact with no page is left out); questions (6 to 10 questions they are likely to be asked for this role, each with \`why\` they ask it, in a sentence). Questions about pay, notice, visa, right to work or consent are theirs to answer: they are listed for them, never answered.
+${pack(r, '6 to 10 questions they are likely to be asked for this role')}
 You never apply, send or contact anyone, and you never write their answers or sign anything. Reply with one line.
 Their CV, line by line:
 ${g.cv}`;

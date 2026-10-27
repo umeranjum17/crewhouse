@@ -625,9 +625,21 @@
       "Open the writer's draft card: it offers Fill it in for me, Copy and open the form, and Not now",
       "Tap Fill it in for me: the writer opens the posting's form in its own browser and types only lines from his CV and the approved draft; crewd refuses an email that is not in them, the visa and pay questions and the consent tick",
       "Open the card it raises: the site and page, what was filled from the CV and draft, the questions only he answers left blank (visa sponsorship, expected salary, consent), the CV upload he attaches himself, and a Submit button",
-      "Answer his questions on the card and press Submit (local posting only): crewd puts the lines in, presses the form's own Submit once, and the role moves to Applied when the page says it went",
+      "Open the reading pack the writer delivers beside the card: what the company sells, the role day to day and the interview loop, each line with the page it came from and Not stated where no page says it, then questions to test himself with and the ones only he answers",
+  "Answer his questions on the card and press Submit (local posting only): crewd puts the lines in, presses the form's own Submit once, and the role moves to Applied when the page says it went",
       "Repeat the same screens in the installed app's window at phone size"
     ],
     "result": "The writer never presses Submit and never answers for him: the card is the one place the application can be sent from, by his tap. On a real posting the run stops at the card and nothing is sent. Not a real model."
+  },
+  "phone-apply": {
+    "start": "The release app on an Android emulator paired to a stub-engine crewd: Umer's job search with a role drafted for a local posting, and the writer's own browser (the pinned playwright-axi); the model's turn is scripted",
+    "steps": [
+      "On Home, tap Chief has 1 thing for you: the writer's draft opens in Chief's thread with Fill it in for me",
+      "Tap Fill it in for me: the writer fills only lines from his CV and the draft on the posting's form",
+      "The card that follows in Chief's thread: the page, what was filled, his own questions blank, Submit",
+      "Answer them on the phone (No to sponsorship, an expected salary, the consent switch, his email) and tap Submit",
+      "Read the thread's receipt: Sent from Northwind Careers"
+    ],
+    "result": "His tap on the phone is the only press of Submit: the posting receives his answers and the role is Applied. Not a real model; the posting is a local page."
   }
 }

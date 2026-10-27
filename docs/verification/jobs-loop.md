@@ -4,7 +4,7 @@ Umer tells Chief the roles he wants, where, a pay floor if he likes, and pastes 
 
 ## Sub-features
 
-- `goal-card`: `crew_goal` (Chief) → `propose` with `create` + `goal`; yes runs `Crew.startGoal`: the finder (scout) and writer (scribe) get crewd's own job text and the won't-do list (`hireOff` drops their browser grant), a quiet `every day 8:00` routine, and a first look now.
+- `goal-card`: `crew_goal` (Chief) → `propose` with `create` + `goal`; yes runs `Crew.startGoal`: the finder (scout) and writer (scribe) get crewd's own job text and the won't-do list (`hireOff` drops the finder's browser grant; the writer keeps its browser for the application form, `docs/verification/jobs-apply.md`), a quiet `every day 8:00` routine, and a first look now.
 - `finding`: `crew_role` only into Found. crewd opens the posting (must open), the pay must be on the page word for word, each fit quotes a CV line; the same posting (page or company+title) is never added twice, and the daily run is handed the seen list.
 - `drafting`: Draft my application (`POST /api/jobs/:id/draft`) → the writer's `crew_application`: CV lines must be exact lines of the CV, an answer to a pay/visa/right-to-work/notice/consent question is refused; the draft card lists the six only-you fields empty. Found → Drafted.
 - `applying`: only the person's tap moves a role on (`POST /api/jobs/:id`); I applied sets a `once` follow-up routine in 7 days for the writer, removed if the role moves on. The inbox is never read.

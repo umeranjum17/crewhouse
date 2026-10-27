@@ -79,11 +79,14 @@ import { join } from 'node:path';
 // writer's guarded tools and the person-only moves. Owner-directed in the brief; no trim paired, nothing working is cut to fit.
 // Raised 7680 -> 7722 for the interview-prep slice (ch-jobs-crew-prep, +42 net): the writer's crew_prep tool with crewd's
 // page-by-page check of each fact, the prep store on the board, the prep and practice taps and two scripted stub lines. Owner-directed in the brief; no trim paired.
-// Raised 7722 -> 7837 for the application hand-off (ch-018-journey, +115 net): the writer fills a posting's real form in
+// Raised 7722 -> 7846 for the application hand-off (ch-018-journey, +124 net): the writer fills a posting's real form in
 // its own browser with only the person's CV and approved draft lines (the gate reads each field's label from crewd's snapshot),
 // crew_form reads the page into one card of what was filled and what only the person answers, and crewd alone presses the
-// form's Submit on their tap and checks the page took it. Owner-directed in the brief ("trim or raise"); no trim paired.
-const BUDGET = 7837;
+// form's Submit on their tap and checks the page took it; the kept page closes when crewd stops or the card is turned down; Ashby's question-above-control forms read the same way. Owner-directed in the brief ("trim or raise"); no trim paired.
+// Raised 7846 -> 7855 for the reading pack (ch-018-journey, +9 net): crew_prep from Drafted on, each fact's part, and the
+// .docx crewd writes from the checked facts alone, saying "Not stated" where no page spoke to a part; crewd's page reader also
+// keeps a script-drawn page's own description (an Ashby posting), so its facts can be checked. Owner-directed (Firstmate).
+const BUDGET = 7855;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

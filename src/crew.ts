@@ -391,7 +391,8 @@ export class Crew {
     for (const [id, l] of this.live) { this.live.delete(id); l.browser?.end(); }
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
-    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop()]);
+    const w = jobs.goal(this.db)?.will, form = w ? this.browserOf(w) : undefined; // a filled form's kept headless page goes with crewd
+    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop(), form && !form.onScreen && form.run(['close'])]);
   }
 
   // ---- reads ----
@@ -1414,7 +1415,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const space = disk.botDir(this.cfg, botId), g = resolveGrants(this.cfg, disk.botConfig(this.cfg, botId).tools ?? [], { 'bot.dir': space, 'bot.id': botId }), axi = g.axi.browser;
     if (!axi) return undefined;
     const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub', env = axiEnv(join(this.cfg.stateDir, 'homes', botId), { ...axi.env, PLAYWRIGHT_CLI_SESSION: botId }), run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
-    return { onScreen, run, start: async () => { const cdp = onScreen ? (await this.desktops.ensure(botId, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); } };
+    // `look` is crewd's own whole read of the page (a long application form runs past the model's cap).
+    return { onScreen, run, look: () => runAxi(axi.script, ['snapshot', '--full'], space, env, undefined, 1 << 20), start: async () => { const cdp = onScreen ? (await this.desktops.ensure(botId, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); } };
   }
 
   private close(botId: string) {
@@ -1769,9 +1771,11 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if ((tool === 'computer' ? !COMPUTER_LOOKS.has(cmd) : acts(tool, { args: [cmd] }, e)) && cmd !== 'fill' && (tool === 'computer' || l?.fills?.length || !/^(click|dblclick)$/.test(cmd)))
         return { block: true, reason: "On an application form you fill text lines and nothing else: ticks, picks, files and every button after your first line are the person's. Call crew_form when you are done." };
       if (tool === 'browser' && acts(tool, { args: [cmd] }, e)) {
-        if (l?.browser) l.snapshot = await l.browser.run(['snapshot', '--full']);
-        const at = (l?.snapshot ?? '').split('\n').find((x) => x.includes(`[ref=${ref.replace(/^@/, '')}]`)) ?? '', label = pressOf(at, ref.replace(/^@/, ''))?.label ?? '';
-        if (!label || jobs.ONLY_YOU.test(label) || (cmd === 'fill' ? args.length > 3 : !/^\s*- (button|link) /.test(at) || /submit|send|accept|agree/i.test(label))) return { block: true, reason: !label ? 'Use a ref from a fresh snapshot.' : cmd === 'fill' ? `“${label}” is the person's to answer: leave it empty.` : 'Before your first line you may only open the form (a button or link); ticks, picks and Submit are the person\'s. Call crew_form.' };
+        if (l?.browser) l.snapshot = await this.browserOf(botId)?.look() ?? l.snapshot;
+        const r = ref.replace(/^@/, ''), at = (l?.snapshot ?? '').split('\n').find((x) => x.includes(`[ref=${r}]`)) ?? '', label = pressOf(at, r)?.label ?? '';
+        // crewd's own name for it: an answer button ("Yes" under a question) or a box named only by its placeholder is the person's.
+        const named = Object.entries(jobs.formOf(l?.snapshot ?? '', []).refs).find(([, x]) => x === r)?.[0] ?? label;
+        if (!label || jobs.ONLY_YOU.test(named) || named !== label || (cmd === 'fill' ? args.length > 3 : !/^\s*- (button|link) /.test(at) || /submit|send|accept|agree/i.test(label))) return { block: true, reason: !label ? 'Use a ref from a fresh snapshot.' : cmd === 'fill' ? `“${label}” is the person's to answer: leave it empty.` : 'Before your first line you may only open the form (a button or link); ticks, picks and Submit are the person\'s. Call crew_form.' };
         if (cmd === 'fill' && !jobs.sourced(job.body, value)) return { block: true, reason: `Only words from their CV or the approved draft go in the form, as written: leave “${label}” empty for them.` };
       }
     }
@@ -1934,12 +1938,13 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     // Submit is the one press, made by crewd on this tap (a line that can't go in throws, and the card stays open).
     if (ask.kind === 'propose' && body.answer === 'allow' && body.fill && detail.draft?.role) this.draftRole(detail.draft.role, 'fill', String(detail.preview?.body ?? ''));
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
-    const sent = ask.kind === 'propose' && body.answer === 'allow' && detail.form ? await this.submitForm(ask.bot, detail.form, body.fields) : '';
+    const sent = ask.kind !== 'propose' || body.answer !== 'allow' ? '' : detail.form ? await this.submitForm(ask.bot, detail.form, body.fields) : body.fill && detail.draft?.role ? 'filling in the form' : '';
     const picks = ask.kind === 'style' || ask.kind === 'video', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
     if (picks && body.answer === 'allow' && !picked) throw fail(`pick one of the ${ask.kind === 'style' ? 'styles' : 'choices'} on the card`);
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
+    if (ask.kind === 'propose' && body.answer === 'deny' && detail.form && !this.browserOf(ask.bot)?.onScreen) void this.browserOf(ask.bot)?.run(['close']);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
     const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
@@ -2082,7 +2087,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (g?.rae === botId) own.push(tool('crew_role', 'Add ONE role you read yourself to the person\'s Found list. crewd opens `url`, so `pay` must be word for word what the posting shows (empty when it shows none), and each `fit` quotes (`cv`) the CV line that shows it. A role already on the board is not added twice.', (p) => this.foundRole(p)));
       if (g?.will === botId) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
       if (g?.will === botId) own.push(tool('crew_form', 'You filled what you can on an application form: crewd reads the page and puts it on ONE card where only the person answers the rest and presses Submit. `role`: its id. `stop`: why the form cannot be finished here, only when one applies.', (p) => this.formReady(botId, p)));
-      if (g?.will === botId) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
+      if (g?.will === botId) own.push(tool('crew_prep', 'Put the reading pack and interview prep for ONE drafted, applied or interview role on the person\'s board; nothing is sent. `brief`: facts, each with its `part` (company, role or loop), its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
       // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
       // It is the same card as Chief's: nothing runs until the person says yes on it.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
@@ -2290,20 +2295,25 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** Prep for this interview: the writer's brief and questions on a role in Interview. Every claim is read from its own page; what only the person answers stays theirs. */
   private async prepare(botId: string, p: Row) {
     const r = jobs.role(this.db, Number(p.role));
-    if (r?.stage !== 'interview') throw fail('that role is not in Interview');
-    const brief = [];
+    if (!r || !['drafted', 'applied', 'interview'].includes(r.stage)) throw fail('draft the application to that role first');
+    const brief: Row[] = [];
     for (const c of (Array.isArray(p.brief) ? p.brief : []).slice(0, 10)) {
       const says = clean(c?.says, 300), url = String(c?.url ?? '').trim(), quote = clean(c?.quote, 300);
       if (!says || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])\S+$/.test(url) || url.length > 500) throw fail(`“${short(says, 60)}” needs the https page that shows it`);
       const page = await readPage(url).catch(() => null);
       if (!page || page.status >= 400) throw fail(`I could not open ${url}, so “${short(says, 60)}” is not added.`);
       if (jobs.norm(quote).length < 12 || !jobs.norm(page.text).includes(jobs.norm(quote))) throw fail(`That page does not show “${short(quote, 60)}”. Copy words from the page that shows the fact, or leave the fact out.`);
-      brief.push({ says, url, quote });
+      brief.push({ says, url, quote, part: ['role', 'loop'].includes(c?.part) ? c.part : 'company' });
     }
     const all = (Array.isArray(p.questions) ? p.questions : []).map((q: Row) => ({ ask: clean(q?.ask, 200), why: clean(q?.why, 240) })).filter((q) => q.ask && q.why), questions = all.filter((q) => !jobs.ONLY_YOU.test(q.ask)).slice(0, 10);
     if (!brief.length || questions.length < 3) throw fail('give the brief (each fact with its page) and at least three likely questions, each with why');
     jobs.setPrep(this.db, r.id, botId, { brief, questions, yours: jobs.YOURS, at: Date.now() }); // a pay, visa or consent question is never practised; its field is on the list, empty
-    return { ok: 'the prep is on the role card' };
+    // The reading pack, written by crewd from the checked facts alone: a part no page spoke to says so.
+    const parts = [['company', `${r.co} and what it sells`], ['role', 'The role, day to day'], ['loop', 'The interview loop and topics']].flatMap(([k, h]) => { const f = brief.filter((b) => b.part === k);
+      return [{ heading: h, level: 2 }, f.length ? { bullets: f.map((b) => `${b.says} Source: ${b.url}`) } : { text: `Not stated: neither the posting nor ${r.co}'s own pages say this.`, italic: true }]; });
+    await this.document(botId, `Reading pack for ${r.co}`, [{ text: `${r.title} at ${r.co}. Every line comes from the page named after it.` }, ...parts,
+      { heading: 'Test yourself', level: 2 }, { bullets: questions.map((q) => `${q.ask} (${q.why})`) }, { heading: 'Only you can answer these', level: 2 }, { bullets: jobs.YOURS }], `Reading-pack-${r.co.replace(/[^A-Za-z0-9]+/g, '-').slice(0, 40)}`);
+    return { ok: 'the prep is on the role card, and the reading pack is delivered' };
   }
 
   /** The goal's writer in its browser: the CV and the drafts the person sent on with Fill it in are all it may type. */
@@ -2318,9 +2328,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const r = jobs.role(this.db, Number(p.role)), l = this.live.get(botId);
     if (!this.applying(botId) || r?.stage !== 'drafted' || !this.db.get('SELECT 1 FROM settings WHERE key = ?', `jobs.draft.${r.id}`)) throw fail('call crew_form for the role whose form the person asked you to fill');
     if (!l?.browser || !l.page) throw fail('open the application form in your browser first');
-    const snap = await l.browser.run(['snapshot', '--full']), url = /^page: \{url: ([^,}\s]+)/m.exec(snap)?.[1] ?? l.page, form = jobs.formOf(snap, (l.fills ?? []).map((f) => f.label)), file = form.fields.find((x) => x.kind === 'file' && x.label.endsWith('*'));
+    const snap = await this.browserOf(botId)!.look(), url = /^page: \{url: ([^,}\s]+)/m.exec(snap)?.[1] ?? l.page, form = jobs.formOf(snap, (l.fills ?? []).map((f) => f.label)), file = form.fields.find((x) => x.kind === 'file' && x.label.endsWith('*'));
     l.keep = true;
-    this.propose(botId, `${this.bot(botId)!.display} filled in your application to ${r.co}.`, { form: { role: r.id, url, site: this.siteName(url, snap), page: (/title: "((?:[^"\\]|\\.)*)"/.exec(snap)?.[1] ?? '').slice(0, 120), filled: l.fills ?? [], fields: form.fields, submit: form.submit, next: form.next, stop: clean(p.stop, 200) || (file ? `it needs a file for “${file.label.replace(/\*$/, '')}”, which I can't attach. Open the form, attach it and press Submit there yourself` : '') } });
+    this.propose(botId, `${this.bot(botId)!.display} filled in your application to ${r.co}.`, { form: { role: r.id, url, site: this.siteName(url, snap), page: (/title: "((?:[^"\\]|\\.)*)"/.exec(snap)?.[1] ?? '').slice(0, 120), filled: l.fills ?? [], fields: form.fields, submit: form.submit, next: form.next, stop: clean(p.stop, 200) || (file ? `it needs a file for “${file.label.replace(/\*$/, '')}”, which the crew can't attach. Open the form, attach it and press Submit there yourself` : '') } });
     return { note: "The form is on the person's card. Only they press Submit, from their own device. Reply with one line." };
   }
 
@@ -2331,7 +2341,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const who = this.bot(botId)?.display ?? 'The writer', b = this.browserOf(botId), said = (given && typeof given === 'object' ? given : {}) as Row;
     if (!b) throw fail(`${who} has no browser now: turn it on in its Tools, then press Submit again.`, 409);
     if (this.busy.has(botId)) throw fail(`${who} is using its browser right now. Press Submit again when it is done.`, 409);
-    const look = () => b.run(['snapshot', '--full']), urlOf = (out: string) => /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1], put = async (args: string[]) => !/^error/m.test(await b.run(args));
+    const look = b.look, urlOf = (out: string) => /^page: \{url: ([^,}\s]+)/m.exec(out)?.[1], put = async (args: string[]) => !/^error/m.test(await b.run(args));
     let snap = await look();
     if (urlOf(snap) !== f.url) { await b.start(); await b.run(['goto', f.url]); snap = await look(); }
     const { refs } = jobs.formOf(snap, []);
@@ -2341,7 +2351,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (v === undefined || v === null || v === '' || v === false || kind === 'file') continue;
       const radio = refs[`${label}\n${v}`], ref = radio ?? refs[label];
       if (!ref) throw fail(`“${label}” isn't on the form at ${f.site} now, so nothing was sent.`, 409);
-      if (!(kind === 'tick' || radio ? await put(['check', ref]) : kind === 'pick' ? await pick(ref, String(v)) : await put(['fill', ref, String(v)]))) throw fail(`“${label}” wouldn't take that on ${f.site}, so nothing was sent.`, 409);
+      if (!(kind === 'tick' || radio ? await put(['check', ref]) || (!!radio && await put(['click', ref])) : kind === 'pick' ? await pick(ref, String(v)) : await put(['fill', ref, String(v)]))) throw fail(`“${label}” wouldn't take that on ${f.site}, so nothing was sent.`, 409);
     }
     if (f.stop || !f.submit || !refs[f.submit]) throw fail(`The form at ${f.site} has no Submit button I can find, so nothing was sent.`, 409);
     let went = await put(['click', refs[f.submit]]);
@@ -2563,8 +2573,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** crew_document: crewd writes the .docx itself (src/documents.ts) into the bot's files/ and delivers it like any other file. */
-  private async document(botId: string, name: string, blocks: unknown) {
-    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, disk.slug(title), 'docx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
+  private async document(botId: string, name: string, blocks: unknown, file?: string) {
+    const title = clean(name, 60) || 'Document', rel = this.fileName(botId, file ?? disk.slug(title), 'docx'), full = disk.insideBot(this.cfg, botId, rel); mkdirSync(dirname(full), { recursive: true });
     await buildDocument(full, { name: title, blocks } as any);
     const headings = (Array.isArray(blocks) ? blocks : []).filter((b: any) => typeof b?.heading === 'string')
       .map((b: any) => clean(b.heading, 45).replace(/[.!?:;]+$/, '').toLowerCase()).filter(Boolean), sections = Math.max(1, headings.length), headline = `The ${title} is ready${headings.length ? `: ${headings.slice(0, 3).join(', ')}` : ''}.`;

@@ -1,6 +1,6 @@
 # Interview prep (jobs crew, second slice)
 
-A role the person moved to Interview offers **Prep for this interview** (`POST /api/jobs/:id/prep`). The writer's `crew_prep` puts a one-page company brief and the likely questions on the role (stored as `jobs.prep.<id>`, in `state.jobs.roles[].prep`); nothing is sent, filled in or signed.
+A role the person moved to Interview offers **Prep for this interview** (the same `crew_prep` also makes the reading pack right after the application form, from Drafted on: docs/verification/jobs-apply.md) (`POST /api/jobs/:id/prep`). The writer's `crew_prep` puts a one-page company brief and the likely questions on the role (stored as `jobs.prep.<id>`, in `state.jobs.roles[].prep`); nothing is sent, filled in or signed.
 
 ## Sub-features
 

@@ -525,7 +525,7 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
  *  crewd's reason; the last job that ended badly today says so until a newer one starts. */
 export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = [], gone: Set<string> = new Set()): Helper {
   const own = asks.filter((a) => a.bot === b.id);
-  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft);
+  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft || a.detail?.form);
   const needs = b.task?.state === 'needs_you' && !chiefDraft;
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
@@ -878,7 +878,7 @@ export const briefTime = (t: number) => { const m = Math.floor((Date.now() - t) 
 export function needsYou(state: Json): Card[] {
   const rank = (a: Json, c: Card) => {
     const d = a.detail ?? {};
-    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return d.draft ? 1 : c.helper === 'chief' ? 2 : 3;
+    if (a.kind === 'propose' || a.kind === 'connect' || d.app) return d.draft || d.form ? 1 : c.helper === 'chief' ? 2 : 3;
     if (d.spends || d.effect === 'spend' || d.effect === 'send') return 0;
     return a.kind === 'permission' ? 1 : 2;
   };
@@ -918,7 +918,7 @@ export const flowed = (body = '') => String(body).split(/\n{2,}/).map((p) => p.r
 export function card(a: Json, state: Json): Card {
   const name = crewName(state, a.bot);
   const d = a.detail ?? {};
-  const base = { id: a.id, helper: a.kind === 'propose' && d.draft ? 'chief' : a.bot, by: a.bot, at: a.at, reply: false };
+  const base = { id: a.id, helper: a.kind === 'propose' && (d.draft || d.form) ? 'chief' : a.bot, by: a.bot, at: a.at, reply: false };
   const title = plain(String(state.bots.find((b: Json) => b.task?.id === a.task_id)?.task?.title ?? state.tasks?.find((t: Json) => t.id === a.task_id)?.title ?? '')).trim();
   const question = title ? (/[?.!]$/.test(title) ? title : `${title}?`) : undefined;
   if (a.kind === 'connect' || d.app) {
@@ -983,9 +983,9 @@ export function card(a: Json, state: Json): Card {
     return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
   if (a.kind === 'propose' && d.form) {
     // Submit is the person's own press, made by crewd on this tap; the helper never has it. No Submit button on the page: no Submit here.
-    const f = d.form, note = f.stop ? `${name} stopped here: ${plain(f.stop)}` : !f.submit ? (f.next ? `This form goes on past this page (its button says “${plain(f.next)}”). Finish it on the site yourself.` : "I couldn't find this form's Submit button. Finish it on the site yourself.") : undefined;
+    const f = d.form, note = f.stop ? `${name} stopped here: ${plain(f.stop).replace(/[^.!?]$/, '$&.')}` : !f.submit ? (f.next ? `This form goes on past this page (its button says “${plain(f.next)}”). Finish it on the site yourself.` : "I couldn't find this form's Submit button. Finish it on the site yourself.") : undefined;
     return { ...base, kind: 'ok', status: 'Nothing is sent until you press Submit', head: `${name} filled in your application`, words: plain(a.title), evidence: 'form',
-      form: { site: plain(f.site), page: plain(f.page ?? ''), url: String(f.url), filled: (f.filled ?? []).map((x: Json) => ({ label: plain(x.label), value: plain(x.value) })), fields: (f.fields ?? []).map((x: Json) => ({ ...x, key: String(x.label), label: plain(x.label) })), ...(note ? { note } : {}) },
+      form: { site: plain(f.site), page: plain(f.page ?? ''), url: String(f.url), filled: (f.filled ?? []).map((x: Json) => ({ label: plain(x.label), value: plain(x.value) })), fields: (f.fields ?? []).map((x: Json) => ({ ...x, key: String(x.label), label: plain(x.label).replace(/\s*\*$/, '') })), ...(note ? { note } : {}) },
       choices: [...(f.submit && !f.stop ? [{ label: 'Submit', body: { answer: 'allow', scope: 'once' }, primary: true }] : []), { label: 'Not now', body: { answer: 'deny' } }] };
   }
   if (a.kind === 'propose' && d.draft) {
@@ -1107,7 +1107,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
-      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
     const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
@@ -2431,7 +2431,7 @@ export const groupOf = (c: OfficeMember, v: OfficeView): Group => statusOf(c, v)
 
 /** Your goal: the job-search board in plain words. The crew moves a role only into Found and Drafted; the other columns move on the person's tap. */
 const GOAL_COLS: [string, string, string][] = [['found', 'Found', 'The crew adds these'], ['drafted', 'Drafted', 'The crew drafts; you check'], ['applied', 'Applied', 'Only you move a role here'], ['interview', 'Interview', 'Only you move a role here'], ['offer', 'Offer', 'Only you move a role here']];
-export const GOAL_RULES = { short: 'Applying is always yours. The crew finds roles and drafts; you check, copy and apply.',
+export const GOAL_RULES = { short: 'Submitting is always yours. The crew finds roles, drafts and fills in the form when you ask; only your tap on its card sends it.',
   only: ['Submit an application', 'Send a message to a recruiter or anyone else', 'Accept an offer, terms or any agreement', 'Buy anything', 'Publish anything'],
   asks: ['Declarations you sign', 'Your right to work in a country', 'Visa and sponsorship', 'Pay you expect, and your notice period', 'Consent: your data, background checks, references'] };
 export type GoalPrep = { brief: { says: string; host: string; url: string; quote: string }[]; questions: { ask: string; why: string }[]; yours: string[] };

@@ -1,0 +1,31 @@
+{
+  "Northwind": {
+    "brief": [
+      { "part": "role", "says": "The job is in London, paying £55,000 to £65,000 a year.", "quote": "London. Salary: £55,000 to £65,000 a year" },
+      { "part": "role", "says": "The stack is React, TypeScript and GraphQL.", "quote": "React, TypeScript, GraphQL" }
+    ],
+    "questions": [
+      { "ask": "Tell us about a dashboard you led.", "why": "The posting is front-end work in React and TypeScript." },
+      { "ask": "How have you used GraphQL?", "why": "It is on the posting and not on your CV." },
+      { "ask": "How did you cut the checkout's load time?", "why": "Speed is the clearest win on your CV." }
+    ]
+  },
+  "OpenAI": {
+    "page": "https://jobs.ashbyhq.com/openai/e9d435e1-1b9e-4715-84ce-75f372e5559c",
+    "brief": [
+      { "part": "company", "says": "OpenAI is an AI research and deployment company.", "quote": "OpenAI is an AI research and deployment company dedicated to ensuring that general-purpose artificial intelligence benefits all of humanity" },
+      { "part": "company", "says": "Its Forward Deployed Engineering team works with customers to turn research into production systems, alongside Product, Research and Go-To-Market.", "quote": "Forward Deployed Engineering team partners with customers to turn research breakthroughs into production systems" },
+      { "part": "role", "says": "You own technical delivery across several deployments, from first prototype to stable production.", "quote": "Own technical delivery across multiple deployments from first prototype to stable production" },
+      { "part": "role", "says": "You write and review production code, front end and back end, in Python, JavaScript or similar.", "quote": "Write and review production-grade code across frontend and backend using Python, JavaScript, or comparable stacks" },
+      { "part": "role", "says": "You embed with customer teams and guide them to adopt what you build.", "quote": "Embed closely with customer teams, understand their needs, and guide adoption of what you build" },
+      { "part": "role", "says": "It is based in Abu Dhabi, three days a week in the office.", "quote": "This role is based in Abu Dhabi. We use a hybrid work model of 3 days in the office per week" },
+      { "part": "role", "says": "Up to half the time is travel.", "quote": "Travel up to 50% is required" }
+    ],
+    "questions": [
+      { "ask": "Walk us through a deployment you took from first prototype to stable production.", "why": "The role owns delivery from prototype to production." },
+      { "ask": "When did you trade scope against speed or quality to protect a delivery?", "why": "The posting names exactly that trade-off." },
+      { "ask": "What have you built on an LLM, and how did the model's behaviour change the product?", "why": "They want people who have deployed systems powered by LLMs." },
+      { "ask": "How would you explain a model's limits to a customer's team?", "why": "You embed with customers and guide adoption." }
+    ]
+  }
+}
