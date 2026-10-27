@@ -7,6 +7,7 @@
 # Needs the Android SDK, a built web/dist and the APK (see phone-mic-fallback.sh). Writes the stills below and the step
 # record in <out-dir>; a reboot takes a few minutes. SERIAL=<emulator> uses one already running (rebooted, never stopped).
 set -euo pipefail
+exec 2>&1 # a failure says why in the run's own output
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$(realpath -m "${1:?out dir}") APK=$(realpath "${2:-$REPO/mobile/android/app/build/outputs/apk/release/app-x86_64-release.apk}")
 S=${FM_SCRATCH:-$HOME/.cache/fm-scratch}/phone-news-$$; OWN=${SERIAL:-}; SER=${SERIAL:-emulator-5590} PKG=dev.crewhouse.app
@@ -41,7 +42,7 @@ posted() { for _ in $(seq 90); do adb -s $SER shell dumpsys notification --nored
 shade() { adb -s $SER shell cmd statusbar expand-notifications; sleep 2; $P shot "$OUT/$1"; }
 opens() { $P tap "$1"; for _ in $(seq 30); do $P texts | grep -q "$2" && break; sleep 1; done; $P texts | grep -q "$2" || { echo "the tap did not open: $2" >&2; exit 1; }; sleep 1; $P shot "$OUT/$3"; }
 away() { adb -s $SER shell input keyevent HOME; sleep 2; }
-pid() { adb -s $SER shell pidof $PKG | tr -d '\r'; }
+pid() { adb -s $SER shell pidof $PKG | tr -d '\r' || true; } # none while the phone restarts it
 shown() { adb -s $SER shell dumpsys activity activities | grep -E 'ResumedActivity' | grep -q "$PKG"; } # on screen, not just in recents
 
 # 1. In the background: the ongoing line says it is connected, and Chief's reply opens his chat.
