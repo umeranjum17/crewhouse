@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import type { Config } from './config.ts';
+import { CHIEF, type Config } from './config.ts';
 import { registry, toolStatus } from './tools.ts';
 import { PROVIDERS } from './accounts.ts';
 import { accountRef, refParts } from './runtime.ts';
@@ -29,7 +29,7 @@ export interface Template {
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
-type BotConfig = { tools: string[]; apps?: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; ideas?: Template['ideas'] };
+type BotConfig = { tools: string[]; apps?: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; screenOffered?: boolean; ideas?: Template['ideas'] };
 
 export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
@@ -287,8 +287,7 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
   if (existsSync(old)) {
     const text = readFileSync(old, 'utf8'), m = { bot: id };
     if (text.trim() && !readNotes(cfg, m).trim()) saveNotes(cfg, m, text.slice(0, NOTES_CAP), `Kept from ${display}'s notes`);
-    rmSync(old);
-    commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
+    rmSync(old); commit(dir, ['notes.md'], 'Notes now live in the person\'s folder');
   }
   const soul = tpl && !existsSync(join(dir, 'soul.md')) ? templateSoul(cfg, tpl, display) : '';
   if (soul) {
@@ -298,6 +297,7 @@ export function upgradeFolder(cfg: Config, id: string, tpl: Template | null, dis
     commit(dir, ['soul.md', 'AGENTS.md'], 'A soul of its own');
   }
   if (tpl && !botConfig(cfg, id).apps) patchConfig(cfg, id, { apps: tpl.apps ?? [] }); // joined before app grants: the template's apps
+  if (tpl && id === CHIEF && !botConfig(cfg, id).screenOffered) patchConfig(cfg, id, { screenOffered: true, tools: [...new Set([...botConfig(cfg, id).tools, ...tpl.tools.filter((t) => t === 'computer')])] }); // once: a Chief from before the computer grant gains it; Settings can still turn it off
   if (!tpl) return;
   // Only untouched template copies may move with a release; a person's edits and uncommitted changes win.
   try {
