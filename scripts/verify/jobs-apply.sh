@@ -3,7 +3,7 @@
 # the writer's real browser (the pinned playwright-axi). The model's turns are scripted; the gate, crewd's reading of the
 # page and its press of Submit are real. Captures the draft card (Fill it in for me), the form card (what was filled from
 # the CV and draft, the questions only Umer answers left blank, Submit), then, on the local posting only, the board after
-# his Submit, and the reading pack the writer delivers beside the card. Each at 390 and 1280, day and night, through home-gate.mjs, plus the form card in the installed app (a real
+# his Submit, and the reading pack Chief hands back beside the role's card. Each at 390 and 1280, day and night, through home-gate.mjs, plus the form card in the installed app (a real
 # Chromium install from Settings, under xvfb-run) at 390.
 #
 #   BROWSER_TOOLS=<tools-dir> scripts/verify/jobs-apply.sh <out-dir>                          the local posting and its form
@@ -62,9 +62,10 @@ get /api/events | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",
 hash_gate form "/ask/$FORM"
 # The same card where it lands, in Chief's chat, on the writer's colour day and night; the gate reads the card alone.
 GATE_SCOPE='.stack-ask *' hash_gate form-chat /chief "document.querySelector('.stack-ask .yours')?.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 600));"
-# The reading pack beside it, opened from the writer's thread: crewd's .docx of the checked facts, read back.
-WILL=$(get /api/state | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>console.log(JSON.parse(s).goals[0].goal.will))')
-hash_gate pack "/h/$WILL" "[...document.querySelectorAll('a.wb-card')].find((a) => /Reading pack/i.test(a.getAttribute('aria-label')))?.click(); await new Promise((r) => setTimeout(r, 1500));"
+# The reading pack, handed back in Chief's chat beside the role's card: crewd's .docx of the checked facts, read back.
+# The gate reads the pack's own panel (Chief's thread loads a moment after the route).
+PACK="const pk = () => [...document.querySelectorAll('a.wb-card')].find((a) => /Reading.pack/i.test(a.getAttribute('aria-label')));"
+GATE_SCOPE='.wb-panel *' hash_gate pack /chief "$PACK for (let i = 0; i < 40 && !pk(); i++) await new Promise((r) => setTimeout(r, 250)); pk().click(); await new Promise((r) => setTimeout(r, 1500));"
 # The installed app: Chromium's own install from Settings, then the form card in its window at phone size.
 mkdir -p "$LAB/pwa" "$OUT/pwa"
 cat > "$LAB/pwa/plan.json" <<JSON
