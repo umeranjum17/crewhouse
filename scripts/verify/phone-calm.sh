@@ -16,6 +16,9 @@ export PATH=/usr/bin:$PATH ANDROID_USER_HOME=$S/android-user ANDROID_AVD_HOME=$S
 mkdir -p "$OUT" "$ANDROID_AVD_HOME"
 EMU=
 cleanup() {
+  local rc=$?
+  # A failure keeps the screen it stopped on, so the cause is on record.
+  [ $rc = 0 ] || { node "$REPO/scripts/verify/phone-ui.mjs" shot "$OUT/failed-screen.png" && node "$REPO/scripts/verify/phone-ui.mjs" texts >"$OUT/failed-screen.txt"; } >/dev/null 2>&1 || true
   adb -s $SER emu kill >/dev/null 2>&1 || true
   bash "$REPO/scripts/verify/pair-lab.sh" down >/dev/null 2>&1 || true
   [ -n "$EMU" ] && wait "$EMU" 2>/dev/null || true
