@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The captain's first hour (docs/verification/jobs-loop.md): the release app on a task-owned emulator, paired to a crewd on
-# the real pinned OpenClaw engine with the scripted local model first-hour-model.ts (fixed words, no AI account). Umer says
-# hi, sends his CV PDF with "find me good stuff", taps Start and watches Rae's look land in Chief's chat; then Rae's chat.
+# the real pinned OpenClaw engine with the scripted local model first-hour-model.ts (fixed words, no AI account). Umer
+# sends his CV PDF with "find me good stuff", taps Start and watches Rae's look land in Chief's chat; then Rae's chat.
 #   bash scripts/verify/first-hour.sh <out-dir> [release-x86_64.apk]   (Android SDK, chromium, pdftotext, the network)
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -38,9 +38,10 @@ for _ in $(seq 600); do grep -q 'engine ready' "$LAB/crewd.log" && break; sleep 
 grep -q 'engine ready' "$LAB/crewd.log" || { echo "first-hour: the engine never became ready" >&2; tail -5 "$LAB/crewd.log" >&2; exit 1; }
 . "$LAB/env"
 node "$REPO/scripts/verify/phone-pair-typed.mjs" --serial $SER --apk "$APK"
-# What the crew already knows of him: his job-search strategy, kept in the profile every helper reads.
-curl -fsS -X PUT -H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" \
-  --data '{"text":"Looking for a job: remote-first, companies that are a way into AI, fast hiring processes."}' "$B/api/profile" >/dev/null
+# What the crew already knows of him: his name and his job-search strategy, kept in the profile every helper reads.
+c() { curl -fsS -H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $(cat "$LAB/state/person.key")" "$@" >/dev/null; }
+c -X POST --data '{"address":"Umer"}' "$B/api/onboard"
+c -X PUT --data '{"text":"Looking for a job: remote-first, companies that are a way into AI, fast hiring processes."}' "$B/api/profile"
 adb -s $SER push "$S/Umer_CV.pdf" /sdcard/Download/Umer_CV.pdf >/dev/null
 adb -s $SER shell content call --method scan_volume --uri content://media --arg external_primary >/dev/null 2>&1 || true # the picker lists it
 # Recorded from here: 170 s pieces until the stop file, joined afterwards.
