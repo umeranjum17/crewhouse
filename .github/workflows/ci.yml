@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Spelled out: the default types plus ready_for_review, and no `edited` (no check reads the PR title or body), so a
+  # body edit starts nothing and a draft that becomes ready gets its first run.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -19,13 +22,18 @@ jobs:
   # What a change can affect: a pull request touching only docs (docs/, top-level *.md), evidence or the landing page
   # skips the heavy work below without taking a runner, and every required check name still reports, as skipped
   # (mobile/ and .agents/ stay in: kept tests read them).
-  # The relay image builds only when the relay changed. A push to main always runs everything.
+  # The relay image builds only when the relay changed.
+  # A draft pull request runs nothing (this job skips, and every job below needs it); marking it ready runs CI.
+  # A push to main runs only `screens`, whose artifact is the baseline pull requests compare against: the same tree
+  # already passed every other job as a pull request, so main does not repeat them.
   changes:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
       relay: ${{ steps.diff.outputs.relay }}
+      screens: ${{ steps.diff.outputs.screens }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +42,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ -z "$BASE" ]; then echo code=true >> "$GITHUB_OUTPUT"; echo relay=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "$BASE" ]; then echo code=false >> "$GITHUB_OUTPUT"; echo relay=false >> "$GITHUB_OUTPUT"; echo screens=true >> "$GITHUB_OUTPUT"; exit 0; fi
           files=$(git diff --name-only "$BASE"...HEAD)
           echo "$files"
           echo code=$(echo "$files" | grep -qvE '^(docs/|data/|landing/|[^/]+\.md$|LICENSE$|NOTICE$)' && echo true || echo false) >> "$GITHUB_OUTPUT"
@@ -196,7 +204,7 @@ jobs:
   # the required checks and is not required: a red run here blocks no merge. Demo data only, no crewd, no model.
   screens:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.screens == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
