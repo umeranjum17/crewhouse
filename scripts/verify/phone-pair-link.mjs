@@ -6,7 +6,7 @@
 //
 //   LAB=<lab> node scripts/verify/phone-pair-link.mjs --serial <emulator> --apk app.apk --out <dir> [--browser com.android.chrome]
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeSteps } from './steps.mjs';
 
@@ -14,16 +14,17 @@ const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i < 0 ? d : args[i + 1]; };
 const SERIAL = opt('serial', null), APK = opt('apk', null), OUT = opt('out', null), LAB = process.env.LAB;
 if (!SERIAL || !APK || !OUT || !LAB) { console.error('usage: LAB=<lab> phone-pair-link.mjs --serial <emulator> --apk a.apk --out <dir> [--browser pkg]'); process.exit(2); }
+mkdirSync(OUT, { recursive: true });
 const BROWSER = opt('browser', 'com.android.chrome'), PKG = 'dev.crewhouse.app';
 const env = Object.fromEntries(readFileSync(join(LAB, 'env'), 'utf8').trim().split('\n').map((l) => l.split(/=(.*)/s).slice(0, 2)));
 const KEY = readFileSync(join(LAB, 'state', 'person.key'), 'utf8').trim();
-const A = (...a) => execFileSync('adb', ['-s', SERIAL, ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
+const A = (...a) => execFileSync('adb', [...(process.env.ADB_SERVER_PORT ? ['-P', process.env.ADB_SERVER_PORT] : []), '-s', SERIAL, ...a], { encoding: 'utf8', maxBuffer: 1 << 26 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const api = async (method, path, body) => {
   const r = await fetch(`${env.B}${path}`, { method, headers: { 'content-type': 'application/json', 'x-crewhouse': '1', authorization: `Bearer ${KEY}` }, body: body && JSON.stringify(body) });
   const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`); return out;
 };
-const shot = (name) => writeFileSync(join(OUT, name), execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 26 }));
+const shot = (name) => writeFileSync(join(OUT, name), execFileSync('adb', [...(process.env.ADB_SERVER_PORT ? ['-P', process.env.ADB_SERVER_PORT] : []), '-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 26 }));
 const nodes = () => {
   let xml = '';
   for (let i = 0; i < 5 && !xml; i++) { try { A('shell', 'uiautomator', 'dump', '/sdcard/ui.xml'); xml = A('shell', 'cat', '/sdcard/ui.xml'); } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000); /* busy window */ } }
@@ -59,6 +60,7 @@ const allow = async () => { // the lab computer says yes to the one phone waitin
   if (!pending.length) throw new Error('the phone never reached the computer');
   await api('POST', '/api/phones/answer', { id: pending[0].id, yes: true });
   for (let t = 0; t < 60 && !find(/^Settings$/); t++) { // You're in, then Open Crewhouse, then Home
+    if (A('shell', 'dumpsys', 'activity', 'activities').includes('com.android.settings/.fuelgauge.RequestIgnoreBatteryOptimizations')) A('shell', 'input', 'keyevent', '4');
     try { tap(/^Open Crewhouse$/); } catch { /* not there yet, or already in */ }
     await sleep(1500);
   }

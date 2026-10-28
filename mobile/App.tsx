@@ -1374,10 +1374,10 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
   }, [status, awake, refresh]);
   useEffect(() => {
     if (status === 'online') { setLate(false); return; }
-    const t = setTimeout(() => setLate(true), 8000);
+    const t = setTimeout(() => setLate(true), 90_000);
     return () => clearTimeout(t);
   }, [status]);
-  const out = status === 'offline' || late;
+  const out = late;
   // The crew in the status bar (Android) or the Dynamic Island (iPhone), from the same refresh as every screen: out of
   // touch or gone, it goes too.
   const show = (s: A.CrewStatus | null) => { chip(s); island(s); };
@@ -1486,8 +1486,8 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
       </ScrollView>
     );
   }
-  const offline = status !== 'online';
-  const canAct = grant.device.role === 'control' && !offline;
+  const offline = out;
+  const canAct = grant.device.role === 'control' && status === 'online';
   const ctx: Ctx = { state, tick, refresh, go, back: () => { back(); }, canAct, offline, open: (c) => (c.kind === 'unlock' ? go({ view: 'chief' }) : setSheet(c)), writer: grant.device.role === 'control' };
   const shared = hasShareIntent && canAct && state.person.onboarded
     ? { text: [shareIntent.text, shareIntent.webUrl].filter((x, i, a) => x && a.indexOf(x) === i).join('\n'), files: (shareIntent.files ?? []).map((f) => ({ path: f.path, mimeType: f.mimeType })) } : null;
@@ -2235,7 +2235,7 @@ function Chat({ id, m, state, tick, refresh, go, canAct, offline, open, writer, 
       </ScrollView>
       {newBelow && <Pressable onPress={jump} accessibilityRole="button" accessibilityLabel="Jump to the newest line" style={[s.newPill, { backgroundColor: t.bg, borderColor: t.line2 }]}><T style={s.newPillText}>↓ New</T></Pressable>}
       </View>
-      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}`} onSend={send} chat={id} docs away={offline} thread stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} /></View>
+      {canAct || writer ? <View style={[s.dock, !!hero && { backgroundColor: t.bg }]}><Composer key={seed} placeholder={id === 'chief' ? 'Tell Chief anything…' : `Talk to ${name}`} onSend={send} chat={id} docs away={!canAct} thread stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} /></View>
         : <T tone="mute" style={[s.small, { padding: 16 }]}>{offline ? "You can reply once the home computer is back." : "This phone watches the crew; it can't send messages."}</T>}
     </View>
   );
