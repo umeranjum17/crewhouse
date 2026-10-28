@@ -3,6 +3,7 @@
 // ellipsis by design: a chat list's preview); no horizontal scroll.
 //   node scripts/verify/home-gate.mjs <repo> <url-with-#hash> <out-dir> <slug> [then-js]
 // Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
+// GATE_WIDTHS=360,390,445 takes those widths instead (844 tall below 900 wide, 832 at a computer's width).
 // GATE_SCOPE=<selector> gates the text under it instead of main and .page (a file panel sits outside both).
 // GATE_DOWNLOADS=<dir> keeps whatever the page saves (a PDF or Word file) in that folder.
 import { spawn } from 'node:child_process';
@@ -33,7 +34,7 @@ try {
   if (process.env.GATE_DOWNLOADS) await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: process.env.GATE_DOWNLOADS }); // a file the page saves lands there
   const gate = {}; let bad = false;
   const [base, hash] = url.split('#');
-  for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
+  for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_WIDTHS ? process.env.GATE_WIDTHS.split(',').map((x) => [+x, +x < 900 ? 844 : 832]) : process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: w < 900 });
     if (process.env.GATE_PWA) await send('Emulation.setEmulatedMedia', { features: [{ name: 'display-mode', value: 'standalone' }] }); // the installed app's window mode
     await send('Page.navigate', { url: `${base}${base.includes('?') ? '&' : '?'}${theme}&r=${Date.now()}#${hash ?? '/'}` });

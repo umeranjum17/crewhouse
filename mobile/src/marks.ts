@@ -22,4 +22,7 @@ export const WHERE = {
   'tab-talk': require('../assets/where/tab-talk.png'),
   'tab-crew': require('../assets/where/tab-crew.png'),
   'tab-jobs': require('../assets/where/tab-jobs.png'),
+  // Home's dock: the places button and the search pill's mark.
+  'tab-apps': require('../assets/where/tab-apps.png'),
+  'tab-search': require('../assets/where/tab-search.png'),
 };

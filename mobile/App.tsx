@@ -1527,7 +1527,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
         {route.view === 'phone' && <ThisPhone state={state} grant={grant} status={status} person={state.person} writer={canAct} refresh={refresh} go={go} back={toHome} onForget={forget} onClear={() => { kept.clear(); say('Cleared from this phone ✓'); }} />}
         {route.view === 'computer' && <ChiefComputer back={['Settings', back]} onRestored={(g) => { link.current?.addUrl(g.urls[0]); onRepaired(g); }} />}
       </View>
-      <Tabs place={placeOf(route)} go={go} state={state} offline={offline} />
+      {route.view !== 'home' && <Tabs place={placeOf(route)} go={go} state={state} offline={offline} />}
       {live && <AskSheet c={live} who={A.crew(state).find((h) => h.id === live.helper)} chiefSays={state.asks.find((a: Json) => a.id === live.id)?.detail?.chief} canAct={canAct} onClose={() => { setSheet(null); refresh(); }} />}
     </KeyboardAvoidingView>
   );
@@ -1954,74 +1954,101 @@ function RoundBtn({ glyph, label, onPress }: { glyph: string; label: string; onP
     <Text style={{ color: t.ink, fontSize: 22, lineHeight: 26 }}>{glyph}</Text></Pressable>;
 }
 
-/** Home (calm, web/src/main.tsx Home): your initial for settings and a round + to hire across the top, the resting
- *  notice only while it matters, then the chat list — Chief first, carrying the count of what waits on you, then each
- *  helper with its last line or what it is doing, then the crew room — then your AI accounts and the jobs to hand
- *  Chief. A search pill narrows the list; the dock under every screen holds the other places. */
+/** Home (calm, web/src/main.tsx Home, after Messages): your initial for settings and a round + to hire across the top,
+ *  the resting notice only while it matters, then the chat list — Chief first, carrying the count of what waits on you,
+ *  then each helper with its last line or what it is doing, then the crew room — then your goal, your AI accounts (first
+ *  while nothing is signed in: that waits on you) and the jobs to hand Chief. The places button and the search pill float
+ *  at the foot; Home has no tab bar. */
 function Home(ctx: Ctx) {
   const t = useLook();
   const { state, go, refresh, canAct, offline } = ctx;
   const view = useOffice(state, offline, OUT);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(''), [menu, setMenu] = useState(false);
   const me = A.displayName(state.person), mine = useSignedIn(ctx.tick), ais = mine?.map((r) => r.ai) ?? [];
   const unread = (id: string) => state.bots.find((b: Json) => b.id === id)?.unread ?? 0;
   const rows = A.chats(state).filter((c) => c.id !== 'room' || view.crew.length > 0)
     .filter((c) => !q.trim() || `${c.name} ${c.line}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const name = [s.text, { color: t.ink, fontSize: 17, lineHeight: 22, ...fw('600') }], sub = [s.text, s.read, { lineHeight: 21, color: t.quiet }];
+  const mark = (src: number) => <View style={[s.clRoom, { backgroundColor: t.bubble2 }]}><Image source={src} style={{ width: 24, height: 24, tintColor: t.ink2 }} /></View>;
+  const signIn = !!mine && !ais.length;
+  const accounts = <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={ais.length ? `Your AI accounts: ${andJoin(ais.map((a) => a.name))}` : 'Check AI account sign-in on the home computer'} style={({ pressed }) => [s.clRow, pressed && { backgroundColor: t.bubble }]}>
+    <View style={[s.clRoom, { backgroundColor: t.bubble2 }]}>{ais.length ? <AiMark ai={ais[0]} size={30} /> : <KeyMark size={30} />}</View>
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}><Text numberOfLines={1} style={name}>Your AI accounts</Text>
+      <Text numberOfLines={signIn ? 2 : 1} style={sub}>{ais.length ? `${andJoin(ais.map((a) => a.name))} ${ais.length > 1 ? 'are' : 'is'} signed in on the home computer.` : 'You sign in on the home computer, in Settings.'}</Text></View>
+    <Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
+  </Pressable>;
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
-      <View style={[s.row, { paddingHorizontal: 16, paddingBottom: 8 }]}>
-        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" style={[s.roundBtn, { backgroundColor: t.bubble2, borderWidth: 0 }]}>
-          <Text style={[s.text, { color: t.ink, fontSize: 18, lineHeight: 22, ...fw('600') }]}>{(me[0] ?? '·').toUpperCase()}</Text></Pressable>
-        <View style={{ flex: 1 }} />
-        {canAct && <RoundBtn glyph="+" label="Bring a helper on" onPress={() => go({ view: 'add' })} />}
-      </View>
-      <View style={[s.searchPill, { backgroundColor: t.bubble }]}>
-        <Text style={{ color: t.quiet, fontSize: 18 }}>⌕</Text>
-        <TextInput value={q} onChangeText={setQ} placeholder="Search" placeholderTextColor={t.quiet} accessibilityLabel="Search your chats" style={[s.text, { flex: 1, fontSize: 17, lineHeight: 22, paddingVertical: 0, color: t.ink }]} />
-      </View>
-      {!!A.resting(state) && <View style={[s.them, { backgroundColor: t.bubble, alignSelf: 'stretch', maxWidth: undefined, marginHorizontal: 16, marginBottom: 8 }]}><T style={s.read}>{A.resting(state)}. I'll pick things back up then.</T></View>}
-      {!rows.length && <Text style={[s.text, s.read, { color: t.quiet, paddingHorizontal: 16, paddingVertical: 12 }]}>Nothing matches “{q.trim()}”.</Text>}
-      {rows.map((c) => {
-        const n = c.id === 'chief' ? view.counts.needs : 0, dot = !n && unread(c.id) > 0, line = n ? A.chiefHas(view) : c.working ?? c.line;
-        return <Pressable key={c.id} onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })}
-          accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`} style={({ pressed }) => [s.clRow, pressed && { backgroundColor: t.bubble }]}>
-          {c.id === 'room' ? <View style={[s.clRoom, { backgroundColor: t.bubble2 }]}><Image source={WHERE['tab-crew']} style={{ width: 24, height: 24, tintColor: t.ink2 }} /></View> : <Face who={c.who} size={52} />}
-          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-            <View style={[s.row, { alignItems: 'baseline' }]}><Text numberOfLines={1} style={[s.text, { flex: 1, color: t.ink, fontSize: 17, lineHeight: 22, ...fw('600') }]}>{c.name}</Text>
-              {c.at > 0 && <Text style={[s.text, { color: t.quiet, fontSize: 14, lineHeight: 18 }]}>{A.when(c.at)}</Text>}</View>
-            <View style={s.row}>
-              {!!c.working && !n && <View style={[s.statusDot, { width: 7, height: 7, backgroundColor: t.ok }]} />}
-              <Text numberOfLines={1} style={[s.text, s.read, { flex: 1, lineHeight: 21, color: n || dot ? t.ink2 : t.quiet }]}>{line}</Text>
-              {n > 0 ? <Text accessibilityLabel={`${n} waiting on you`} style={[s.clCount, { backgroundColor: t.me, color: t.meInk }]}>{A.unreadBadge(n)}</Text>
-                : dot && <View accessibilityLabel="Unread" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.me }} />}
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 96 }} keyboardShouldPersistTaps="handled">
+        <View style={[s.row, { paddingHorizontal: 16, paddingBottom: 8 }]}>
+          <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel="Settings" style={[s.roundBtn, { backgroundColor: t.bubble2, borderWidth: 0 }]}>
+            <Text style={[s.text, { color: t.ink, fontSize: 18, lineHeight: 22, ...fw('600') }]}>{(me[0] ?? '·').toUpperCase()}</Text></Pressable>
+          <View style={{ flex: 1 }} />
+          {canAct && <RoundBtn glyph="+" label="Bring a helper on" onPress={() => go({ view: 'add' })} />}
+        </View>
+        {!!A.resting(state) && <View style={[s.them, { backgroundColor: t.bubble, alignSelf: 'stretch', maxWidth: undefined, marginHorizontal: 16, marginBottom: 8 }]}><T style={s.read}>{A.resting(state)}. I'll pick things back up then.</T></View>}
+        {!q && signIn && accounts}
+        {!rows.length && <Text style={[s.text, s.read, { color: t.quiet, paddingHorizontal: 16, paddingVertical: 12 }]}>Nothing matches “{q.trim()}”.</Text>}
+        {rows.map((c) => {
+          const n = c.id === 'chief' ? view.counts.needs : 0, dot = !n && unread(c.id) > 0, line = n ? A.chiefHas(view) : c.working ?? c.line;
+          return <Pressable key={c.id} onPress={() => go(c.id === 'chief' ? { view: 'chief' } : c.id === 'room' ? { view: 'room' } : { view: 'helper', id: c.id })}
+            accessibilityRole="button" accessibilityLabel={`${c.name}: ${line}`} style={({ pressed }) => [s.clRow, pressed && { backgroundColor: t.bubble }]}>
+            {c.id === 'room' ? mark(WHERE['tab-crew']) : <Face who={c.who} size={52} />}
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <View style={[s.row, { alignItems: 'baseline' }]}><Text numberOfLines={1} style={[name, { flex: 1 }]}>{c.name}</Text>
+                {c.at > 0 && <Text style={[s.text, { color: t.quiet, fontSize: 14, lineHeight: 18 }]}>{A.when(c.at)}</Text>}</View>
+              <View style={s.row}>
+                {!!c.working && !n && <View style={[s.statusDot, { width: 7, height: 7, backgroundColor: t.ok }]} />}
+                <Text numberOfLines={1} style={[s.text, s.read, { flex: 1, lineHeight: 21, color: n || dot ? t.ink2 : t.quiet }]}>{line}</Text>
+                {n > 0 ? <Text accessibilityLabel={`${n} waiting on you`} style={[s.clCount, { backgroundColor: t.me, color: t.meInk }]}>{A.unreadBadge(n)}</Text>
+                  : dot && <View accessibilityLabel="Unread" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.me }} />}
+              </View>
             </View>
-          </View>
-        </Pressable>;
-      })}
-      {!q && !!state.goals?.length && <Pressable onPress={() => go({ view: 'goal' })} accessibilityRole="button" style={({ pressed }) => [s.clRow, pressed && { backgroundColor: t.bubble }]}>
-        <View style={[s.clRoom, { backgroundColor: t.bubble2 }]}><Image source={WHERE['tab-jobs']} style={{ width: 24, height: 24, tintColor: t.ink2 }} /></View>
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}><Text numberOfLines={1} style={[s.text, { color: t.ink, fontSize: 17, lineHeight: 22, ...fw('600') }]}>Your goal</Text>
-          <Text numberOfLines={1} style={[s.text, s.read, { lineHeight: 21, color: t.quiet }]}>{`${state.goals.length === 1 ? `${A.plain(state.goals[0].goal.title)}: ` : `${state.goals.length} goals: `}${state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board`}</Text></View>
-        <Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
-      </Pressable>}
-      {!q && <View style={{ paddingHorizontal: 16, gap: 12, marginTop: 12 }}>
-        <Pressable onPress={() => go({ view: 'phone' })} accessibilityRole="button" accessibilityLabel={ais.length ? `Your AI accounts: ${andJoin(ais.map((a) => a.name))}` : 'Check AI account sign-in on the home computer'} style={({ pressed }) => [s.listRow, { backgroundColor: t.bubble, borderRadius: 18 }, pressed && { opacity: 0.6 }]}>
-          {ais.length ? <AiMark ai={ais[0]} size={30} /> : <KeyMark size={30} />}
-          <View style={{ flex: 1 }}><T style={s.rowTitle}>Your AI accounts</T><Text style={[s.text, s.read, { lineHeight: 21, color: t.quiet }]}>{ais.length ? `${andJoin(ais.map((a) => a.name))} ${ais.length > 1 ? 'are' : 'is'} signed in on the home computer.` : 'You sign in on the home computer, in Settings.'}</Text></View><Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
-        </Pressable>
-        <JobList state={state} go={go} refresh={refresh} />
-        <Versions state={state} hint={false} />
-      </View>}
-    </ScrollView>
+          </Pressable>;
+        })}
+        {!q && !!state.goals?.length && <Pressable onPress={() => go({ view: 'goal' })} accessibilityRole="button" style={({ pressed }) => [s.clRow, pressed && { backgroundColor: t.bubble }]}>
+          {mark(WHERE['tab-jobs'])}
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}><Text numberOfLines={1} style={name}>Your goal</Text>
+            <Text numberOfLines={1} style={sub}>{`${state.goals.length === 1 ? `${A.plain(state.goals[0].goal.title)}: ` : `${state.goals.length} goals: `}${state.goals.reduce((n: number, g: Json) => n + g.roles.length, 0)} on your board`}</Text></View>
+          <Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
+        </Pressable>}
+        {!q && !signIn && accounts}
+        {!q && <View style={{ paddingHorizontal: 16, gap: 12, marginTop: 12 }}>
+          <JobList state={state} go={go} refresh={refresh} />
+          <Versions state={state} hint={false} />
+        </View>}
+      </ScrollView>
+      <View style={[s.homeDock, { backgroundColor: t.bg }]}>
+        <Pressable onPress={() => setMenu(true)} accessibilityRole="button" accessibilityLabel="Places" style={[s.roundBtn, { width: 48, height: 48, borderRadius: 24, backgroundColor: t.bubble, borderColor: t.line }]}>
+          <Image source={WHERE['tab-apps']} style={{ width: 22, height: 22, tintColor: t.ink }} /></Pressable>
+        <View style={[s.searchPill, { backgroundColor: t.bubble, borderColor: t.line }]}>
+          <Image source={WHERE['tab-search']} style={{ width: 20, height: 20, tintColor: t.quiet }} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Search" placeholderTextColor={t.quiet} accessibilityLabel="Search your chats" style={[s.text, { flex: 1, fontSize: 17, lineHeight: 22, paddingVertical: 0, color: t.ink }]} />
+        </View>
+      </View>
+      {menu && <Places goal={!!state.goals?.length} go={go} onClose={() => setMenu(false)} />}
+    </View>
   );
 }
 
-// A transcript turn: the name in a column beside the words (60 at normal size); at large text the name
-// goes above the words instead, so a reply keeps the screen's width.
-const stacked = () => PixelRatio.getFontScale() >= 1.3;
-const nameCol = () => stacked() ? undefined : Math.round(60 * PixelRatio.getFontScale());
-const turn = () => stacked() ? { gap: 2 } : { flexDirection: 'row' as const, gap: 10 };
+/** The places that are not a chat, behind Home's round places button (web/src/main.tsx PlacesMenu): your goal while
+ *  there is one, the crew, kept work, routines and settings. */
+function Places({ goal, go, onClose }: { goal: boolean; go: Ctx['go']; onClose: () => void }) {
+  const t = useLook();
+  const places: [Route['view'], string][] = [...(goal ? [['goal', 'Your goal'] as [Route['view'], string]] : []), ['crew', 'Your crew'], ['things', 'Your things'], ['routines', 'Routines'], ['phone', 'Settings']];
+  return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close">
+      <Pressable style={[s.sheet, { backgroundColor: t.bg, gap: 0 }]} onPress={() => {}}>
+        {places.map(([view, label], i) => <Pressable key={view} onPress={() => { onClose(); go({ view }); }} accessibilityRole="button" style={({ pressed }) => [s.listRow, { paddingHorizontal: 4, borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }, pressed && { opacity: 0.6 }]}>
+          <Text style={[s.text, { flex: 1, color: t.ink, fontSize: 17, lineHeight: 22, ...fw('600') }]}>{label}</Text><Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
+        </Pressable>)}
+      </Pressable>
+    </Pressable>
+  </Modal>;
+}
 
+/** The standing "hand me a job" list (web/src/main.tsx JobList): plain rows under a small label. A tap fills Chief's box
+ *  (or a new helper's, hiring it first) and never sends; a job waiting on an app leads to where it is connected. */
 function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: () => void }) {
   const t = useLook();
   // The gallery hire, then the words in the new helper's own box: nothing starts until they send.
@@ -2029,14 +2056,20 @@ function JobList({ state, go, refresh }: { state: Json; go: Ctx['go']; refresh: 
     const name = state.templates.find((x: Json) => x.id === template)?.display ?? template;
     await attempt(async () => { const b = await api.recruit(template, name); refresh(); keepDraft(b.id, ask); go({ view: 'helper', id: b.id }, true); }, `${name} joined the crew`);
   };
-  return <View><Label>Hand me a job</Label><View style={{ backgroundColor: t.bubble, borderRadius: 18, overflow: 'hidden' }}>
-    {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={[s.listRow, { borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}
+  return <View><Label>Hand me a job</Label>
+    {A.jobs(state).slice(0, 3).map((j, i) => <Pressable key={j.bot + j.label} style={({ pressed }) => [s.listRow, { paddingHorizontal: 0, borderTopColor: t.line, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }, pressed && { opacity: 0.6 }]}
       onPress={() => { if (j.needs.length) go({ view: 'phone' }); else if (j.hire) void hire(j.hire, j.ask); else { keepDraft('chief', j.ask); go({ view: 'chief' }); } }}>
-      <Face who={A.crew(state).find((h) => h.id === j.bot) ?? { kind: 'bunny', name: j.bot }} size={28} />
-      <View style={{ flex: 1 }}><T style={s.rowTitle} lines={2}>{j.label}</T>{!!j.says && <Text numberOfLines={1} style={[s.text, s.read, { lineHeight: 21, color: t.quiet }]}>{j.says}</Text>}{!!j.needs.length && <Text style={[s.text, s.read, { lineHeight: 21, color: t.quiet }]}>{A.jobNeeds(j.needs)}</Text>}</View><Text style={{ color: t.quiet, fontSize: 24 }}>›</Text>
+      <View style={{ flex: 1 }}><T style={s.read} lines={2}>{j.label}</T>{!!j.needs.length && <Text style={[s.text, s.read, { lineHeight: 21, color: t.quiet }]}>{A.jobNeeds(j.needs)}</Text>}</View>
+      <Text style={{ color: t.quiet, fontSize: 24 }}>{j.needs.length ? '›' : '+'}</Text>
     </Pressable>)}
-  </View></View>;
+  </View>;
 }
+
+// A transcript turn: the name in a column beside the words (60 at normal size); at large text the name
+// goes above the words instead, so a reply keeps the screen's width.
+const stacked = () => PixelRatio.getFontScale() >= 1.3;
+const nameCol = () => stacked() ? undefined : Math.round(60 * PixelRatio.getFontScale());
+const turn = () => stacked() ? { gap: 2 } : { flexDirection: 'row' as const, gap: 10 };
 
 // ---------- a chat ----------
 /** `hero`: Home's Chief thread (B1): the hero and pinned ask stay above the thread, which opens at its newest line with
@@ -3308,7 +3341,10 @@ const s = StyleSheet.create({
   mine: { alignSelf: 'flex-end', maxWidth: '80%', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 22 },
   roundBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   pillWho: { flexShrink: 1, minWidth: 0, gap: 10, minHeight: 44, paddingVertical: 4, paddingLeft: 6, paddingRight: 16, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth },
-  searchPill: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, marginHorizontal: 16, marginBottom: 6, paddingHorizontal: 16, borderRadius: 22 },
+  // Home's dock (calm): the places button and the search pill at the list's foot, as on the web, on a band of the page's
+  // own colour so the list never shows through around them (the phone has no backdrop fade).
+  homeDock: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  searchPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, height: 48, paddingHorizontal: 16, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   clRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 16 },
   clRoom: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   clCount: { minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: 7, overflow: 'hidden', fontSize: 16, lineHeight: 24, textAlign: 'center', ...fw('600') },
