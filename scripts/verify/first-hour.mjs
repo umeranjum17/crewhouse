@@ -22,9 +22,9 @@ const type = async (v) => { for (let i = 0; i < v.length; i += 3) { A('shell', '
 const drag = async (re, y1, y2) => { for (let i = 0; !re.test(texts()); i++) { if (i === 6) throw new Error(`never dragged to ${re}`); A('shell', 'input', 'swipe', '540', y1, '540', y2, '400'); await sleep(900); } };
 const close = () => { if (/mInputShown=true/.test(A('shell', 'dumpsys', 'input_method'))) A('shell', 'input', 'keyevent', '4'); };
 
-// Home is a chat list (Chief first); his CV goes in Chief's own chat, opened by the bar's Chief.
+// Home is a chat list (Chief first, each row labelled "<name>: <last line>"); his CV goes in Chief's own chat.
 await on(/Keeping an eye on things/); await sleep(1500); shot('01-home.png');
-ui('tap', '^Chief$', 1); await on(/Tell Chief anything/);
+ui('tap', '^Chief: '); await on(/Tell Chief anything/);
 // Step one: his CV from the phone's own files, then his words with it (the keyboard closes before Send, never after it).
 ui('tap', '^Add a photo or a document$'); await on(/A document: PDF/); ui('tap', '^A document: PDF'); await on(/Umer_CV/, 60_000); await sleep(800); shot('02-picker.png');
 ui('tap', 'Umer_CV'); await on(/Umer_CV\.pdf/); await sleep(600);
@@ -61,7 +61,7 @@ if (Object.values(replies).some((n) => n !== 1)) throw new Error(`not one reply 
 const s = await api('/api/state');
 writeFileSync(join(out, 'first-hour.json'), JSON.stringify({ goal: s.goals[0]?.goal, roles: s.goals[0]?.roles.map((r) => ({ co: r.co, title: r.title, url: r.url, fit: r.fit })), engine: s.engine, keyboard, replies }, null, 1));
 // Research Rae's own chat: the look's steps, in Rae's words.
-ui('tap', '^Crew$'); await sleep(1500); // the tab, never BACK: BACK on a tab leaves the app
+ui('tap', '^Back$'); await sleep(1500); // the app's own Back to Home's list, never the system BACK
 await on(/Research Rae/); ui('tap', '^Research Rae'); await on(/Searching remote AI engineering roles|Added \d roles/); await sleep(1500); shot('12-rae.png');
 // The app in the background (left on Rae's chat): he asks from the computer, Chief's answer arrives as a notification,
 // and its tap opens Chief's chat, not Rae's or Home.
