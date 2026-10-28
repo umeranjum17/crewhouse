@@ -99,7 +99,10 @@ import { join } from 'node:path';
 // Raised 8056 -> 8072 for ranking the roles a look finds by the person's strategy (ch-018-ranking, +16 net): the finder's checked
 // signals (the page's own words for remote, gateway, fast process, sponsorship), crewd's order and the one-line reason. Owner exception
 // requested in the PR; no trim paired (a dead-export and --noUnusedLocals scan found nothing honest to delete).
-const BUDGET = 8072;
+// Raised 8072 -> 8095 for enforced custom rules (ch-user-rules, +23 net): a rule's hold (drafts only, or only when the
+// person says so) checked in the gate before every send, submit or purchase by any crew member, the person's one-call
+// go-ahead, the update/remove card from chat and three scripted stub lines. Owner exception requested in the PR; no trim paired.
+const BUDGET = 8095;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

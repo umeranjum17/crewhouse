@@ -1735,6 +1735,26 @@ function HireCard({ c, yes, deny, act, oops }: { c: A.Card; yes?: A.Card['choice
     <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>{yes && btn(yes, true)}{deny && btn(deny, false)}</View>
   </View>;
 }
+/** A custom rule as the gate reads it: when the crew wants to act, what it should do (web/src/parts.tsx RuleBox). */
+function RuleBox({ r }: { r: A.RuleView }) {
+  const t = useLook(), part = (head: string, body: string, quiet = false, first = false) => <View key={head} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: first ? 0 : 1, borderTopColor: t.line2 }}>
+    <T tone="mute" style={{ fontSize: 16, lineHeight: 22 }}>{head}</T><T tone={quiet ? 'ink2' : 'ink'} style={{ fontSize: quiet ? 16 : 18, lineHeight: quiet ? 22 : 26, marginTop: 2 }}>{body}</T></View>;
+  return <View style={{ alignSelf: 'stretch', borderWidth: 1, borderColor: t.line2, borderRadius: 16, overflow: 'hidden' }}>
+    {r.hold ? [part('When the crew wants to:', A.RULE_WHEN, false, true), part('The crew should:', A.RULE_SHOULD[r.hold]), part('In your words:', r.text, true)] : part(r.text ? 'For every helper:' : 'Remove this rule:', r.text || r.was || '', false, true)}
+    {!!r.was && !!r.text && part('Replaces:', r.was, true)}
+  </View>;
+}
+/** Chief's offer of a custom rule, behind a shield: nothing is saved or changed before the yes. */
+function RuleCard({ c, act, canAct, offline }: { c: A.Card; act: (body: Json) => void; canAct: boolean; offline: boolean }) {
+  const t = useLook();
+  return <View style={[s.askInline, { borderTopColor: t.line2, alignItems: 'center', gap: 14 }]} accessibilityLabel={c.head}>
+    <View style={{ width: 52, height: 52, borderRadius: 14, borderWidth: 1, borderColor: t.line2, backgroundColor: t.solid, alignItems: 'center', justifyContent: 'center' }}><Image source={WHERE.shield} style={{ width: 26, height: 26, tintColor: t.go }} /></View>
+    <T style={{ fontSize: 22, lineHeight: 28, ...fw('700') }}>{c.head}</T>
+    <RuleBox r={c.ruleView!} />
+    {offline ? <T tone="mute" style={s.small}>You can answer once the home computer is back.</T> : !canAct ? <T tone="mute" style={s.small}>This phone watches; answer on another phone or the computer.</T>
+      : <View style={{ alignSelf: 'stretch', gap: 8 }}>{c.choices.map((x) => <Btn key={x.label} big go={x.primary} ghost={!x.primary} label={x.label} onPress={() => act(x.body)} />)}</View>}
+  </View>;
+}
 function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; who: A.Helper | undefined; state: Json; onDone: () => void; canAct: boolean; offline: boolean; open: (c: A.Card) => void }) {
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
@@ -1758,6 +1778,7 @@ function AskCard({ c, who, state, onDone, canAct, offline, open }: { c: A.Card; 
   const [change, setChange] = useState<string | null>(null);
   const edit = useDraftEdit(c);
   if (c.hire && canAct && !offline) return <HireCard c={c} yes={yes} deny={deny} act={act} oops={oops} />;
+  if (c.ruleView) return <RuleCard c={c} act={act} canAct={canAct} offline={offline} />;
   return (
     <View style={[s.askInline, { borderTopColor: t.line2 }]}>
       <AskHead c={c} who={who} />
@@ -2984,16 +3005,18 @@ function BubbleRow({ grant }: { grant: Grant }) {
 const GO_TO: [Route['view'] | null, string, art.Tab | null][] = [['things', 'Your things', 'things'], ['routines', 'Routines', 'routines'], [null, 'Apps', null], ['crew', 'Your crew', 'crew'],
   ...(cloudOn ? [['computer', A.computer(null).title, null] as [Route['view'], string, null]] : [])];
 function CustomRules({ writer }: { writer: boolean }) {
-  const t = useLook(), [rules, setRules] = useState<string[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [error, setError] = useState('');
+  const t = useLook(), [rules, setRules] = useState<A.RuleView[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [hold, setHold] = useState(''), [error, setError] = useState('');
   const load = async () => { try { setRules((await api.rules()).rules); setError(''); } catch (e) { setError((e as Error).message); } };
   useEffect(() => { void load(); }, []);
-  const save = (next: string, old: string) => void attempt(async () => { await api.setRule(next, old); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
-  return <><Label>Custom rules</Label><T tone="ink2">Rules you confirmed with Chief. Every helper reads them before a job. These do not change safety checks.</T>
+  const save = (next: string, old: string, h = '') => void attempt(async () => { await api.setRule(next, old, h); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
+  return <><Label>Custom rules</Label><T tone="ink2">Rules you confirmed with Chief. Every helper reads them before a job. A rule about sending, submitting or buying is also checked before each one.</T>
     {!!error && <T>{error}</T>}
-    {rules.length ? rules.map((rule) => <Card key={rule}>{editing === rule ? <>
-      <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 120 }]} value={text} onChangeText={setText} multiline maxLength={1000} accessibilityLabel="Edit rule" />
-      <View style={s.chips}><Btn go label="Save changes" disabled={!text.trim() || !writer} onPress={() => save(text, rule)} /><Btn label="Cancel" onPress={() => setEditing(null)} /></View>
-    </> : <><T>{rule}</T>{writer && <View style={s.chips}><Btn label="Edit" onPress={() => { setEditing(rule); setText(rule); }} /><Btn ghost label="Remove" onPress={() => save('', rule)} /></View>}</>}</Card>) : !error && <T tone="mute">No custom rules yet. Tell Chief how you want the crew to work.</T>}
+    {rules.length ? rules.map((rule) => <Card key={rule.text}>{editing === rule.text ? <>
+      <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 100 }]} value={text} onChangeText={setText} multiline maxLength={1000} accessibilityLabel="Edit rule" />
+      <T tone="mute">Before sending, submitting or buying</T>
+      <View style={s.chips}>{([['', 'Nothing extra'], ['say', A.RULE_SHOULD.say], ['draft', A.RULE_SHOULD.draft]] as const).map(([k, label]) => <Btn key={k} label={label} go={hold === k} onPress={() => setHold(k)} />)}</View>
+      <View style={s.chips}><Btn go label="Save changes" disabled={!text.trim() || !writer} onPress={() => save(text, rule.text, hold)} /><Btn label="Cancel" onPress={() => setEditing(null)} /></View>
+    </> : <View style={{ gap: 12 }}><RuleBox r={rule} />{writer && <View style={s.chips}><Btn label="Edit" onPress={() => { setEditing(rule.text); setText(rule.text); setHold(rule.hold ?? ''); }} /><Btn ghost label="Remove" onPress={() => save('', rule.text)} /></View>}</View>}</Card>) : !error && <T tone="mute">No custom rules yet. Tell Chief how you want the crew to work.</T>}
   </>;
 }
 /** Which Crewhouse this is, in small print: this app's build (app.json, `-dev` from Metro) and the home computer's. */

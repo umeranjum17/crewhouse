@@ -113,7 +113,7 @@ export const api = {
   forgetCase: (thread: string) => call('POST', '/api/cases/forget', { thread }),
   /** About me and my work: the record every helper reads before a job for them. */
   rules: () => call('GET', '/api/rules'),
-  setRule: (text: string, replaces = '') => call('PUT', '/api/rules', { text, replaces }),
+  setRule: (text: string, replaces = '', hold?: string) => call('PUT', '/api/rules', { text, replaces, ...(hold ? { hold } : {}) }),
   profile: () => call('GET', '/api/profile'),
   setProfile: (text: string) => call('PUT', '/api/profile', { text }),
   /** Who a helper is, in the person's words; `soulReset` puts back how it started. */

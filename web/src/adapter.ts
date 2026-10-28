@@ -46,7 +46,7 @@ export type Card = {
   question?: string;
   /** A draft's own words, unscrubbed: the person may change them before Approve, and their version is what is kept. */
   draftText?: string;
-  rule?: string;
+  rule?: string; ruleView?: RuleView;
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
@@ -56,6 +56,9 @@ export type Card = {
 };
 export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean }[]; note?: string };
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
+/** A confirmed custom rule. `hold` is enforced before every send, submit or purchase; `was` is the saved rule a card changes. */
+export type RuleView = { text: string; hold?: 'draft' | 'say'; was?: string };
+export const RULE_WHEN = 'Send messages, submit forms, or make purchases or commitments', RULE_SHOULD = { draft: 'Only prepare a draft. You send it yourself.', say: 'Go ahead only when you say so' };
 export const askTag = (c: Card) => ({ spend: 'Wants to spend money', question: 'Has a question', routine: 'A routine to start', plan: 'A plan to start', connect: 'Wants an app', signin: 'Wants you to sign in', unlock: 'Needs a password', style: 'Pick a style' } as Record<string, string>)[c.kind] ?? 'Needs your OK';
 export type Work = { helper: string; title: string; line: string; waiting: boolean; things: FileView[] };
 export type Thing = { id: number; helper: string; title: string; at: number; summary: string; files: FileView[] };
@@ -976,8 +979,11 @@ export function card(a: Json, state: Json): Card {
       video: { from: plain(String(d.pick.from ?? '')), choices },
       choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
-  if (a.kind === 'propose' && d.customRule) return { ...base, kind: 'ok', rule: String(d.customRule.text), status: 'Not saved yet', head: 'Confirm custom rule', words: 'Confirm custom rule', preview: { head: 'For every helper', body: String(d.customRule.text) },
-    choices: [{ label: 'Create rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
+  if (a.kind === 'propose' && d.customRule) {
+    const r: RuleView = { text: String(d.customRule.text ?? ''), ...(RULE_SHOULD[d.customRule.hold as 'draft'] ? { hold: d.customRule.hold } : {}), ...(d.customRule.replaces ? { was: String(d.customRule.replaces) } : {}) }, verb = !r.was ? 'New custom rule' : r.text ? 'Update custom rule' : 'Remove custom rule';
+    return { ...base, kind: 'ok', rule: r.text || r.was, ruleView: r, status: 'Not saved yet', head: verb, words: verb, preview: { head: 'For every helper', body: r.text || r.was! },
+      choices: [{ label: !r.was ? 'Create rule' : r.text ? 'Update rule' : 'Remove rule', body: { answer: 'allow' }, primary: true }, { label: 'Cancel', body: { answer: 'deny' } }] };
+  }
   if (a.kind === 'propose' && d.routine) {
     // Chief's offered routine: the lines are the whole confirmation (cadence, what, quiet behaviour, first run). It
     // waits on the person's yes in Chief's thread like a draft (needsYou), and nothing runs until they start it.
@@ -1119,7 +1125,7 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
   const answered = (state.answered ?? []).flatMap((a: Json) => {
     if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
-    if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : 'Saved', line: no ? 'Your rules have not changed.' : 'Find it in Settings, Custom rules.' }];
+    if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : c.ruleView?.text ? 'Saved' : 'Removed', line: no ? 'Your rules have not changed.' : 'See them in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
       : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
