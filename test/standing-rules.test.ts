@@ -37,14 +37,14 @@ test('confirmed rules save, cancel, edit and reach a helper without changing saf
     await turn('chief', call('crew_rule', { text: rule }));
     card = A.cards(await api('GET', '/api/state')).find((c) => c.rule)!;
     await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow' });
-    assert.deepEqual((await api('GET', '/api/rules')).rules, [rule]);
+    assert.deepEqual((await api('GET', '/api/rules')).rules, [{ text: rule }]);
     assert.equal(A.answeredReceipts(await api('GET', '/api/state')).at(-1)?.word, 'Saved');
     await api('POST', `/api/asks/${card.id}/answer`, { answer: 'allow' }, 409);
     const edited = rule + ' Keep each draft short.';
     await api('PUT', '/api/rules', { text: edited, replaces: rule });
     await api('PUT', '/api/rules', { text: 'x', replaces: rule }, 409);
     await api('PUT', '/api/rules', { text: 'x'.repeat(1001) }, 400);
-    assert.deepEqual((await api('GET', '/api/rules')).rules, [edited]);
+    assert.deepEqual((await api('GET', '/api/rules')).rules, [{ text: edited }]);
     await api('POST', '/api/recruit', { template: 'scribe', name: 'Scribe' });
     const job = await turn('scribe', `${call('crew_write', { path: 'files/reply.txt', content: 'Thanks, Umer will reply tomorrow.' })} ${call('crew_draft', { path: 'files/reply.txt', channel: 'message', to: 'Alex' })}`);
     const spec = (crew.runtime as any).specOf(db.get('SELECT session FROM tasks WHERE id = ?', job)!.session);
