@@ -2486,5 +2486,5 @@ export function goals(state: Json) {
   });
 }
 
-/** The writer's chat is the practice interviewer's once a role in Interview has its prep: the person answers there by typing or the mic, and nothing is read aloud. */
+/** The writer's chat is the practice interviewer's once a role in Interview has its prep: the person answers there by typing or the mic, and the interviewer's lines are read aloud in the device voice (PracticeVoice). */
 export const practising = (state: Json, id: string) => (state?.goals ?? []).some((x: Json) => x.goal.will === id && x.roles.some((r: Json) => r.stage === 'interview' && r.prep));
