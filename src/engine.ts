@@ -16,7 +16,7 @@ export const PARAMETERS = {
   crew_document: Type.Object({ name: Type.String(), blocks: Type.Array(Type.Object({}, { additionalProperties: true }), { minItems: 1 }) }), crew_copy: Type.Object({ from: Type.String(), to: Type.String() }),
   crew_video: Type.Object({ url: Type.String() }),
   crew_slides: Type.Object({ name: Type.String(), slides: Type.Array(Type.Object({ title: Type.String(), bullets: Type.Optional(Type.Array(Type.String())) }), { minItems: 1 }), style: Type.Optional(Type.String()) }),
-  crew_rule: Type.Object({ text: Type.String({ maxLength: 1000 }) }),
+  crew_rule: Type.Object({ text: Type.String({ maxLength: 1000 }), hold: Type.Optional(Type.String({ enum: ['draft', 'say'] })), replaces: Type.Optional(Type.String({ maxLength: 1000 })) }),
   crew_remember: Type.Object({ text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }),
   crew_draft: Type.Object({ path: Type.String(), channel: Type.String({ enum: ['email', 'message', 'post'] }), to: Type.String(), subject: Type.Optional(Type.String()), why: Type.Optional(Type.String()), link: Type.Optional(Type.String()) }),
   crew_verify: Type.Object({ repo: Type.String(), base: Type.String(), patch: Type.String(), tests: Type.Array(Type.String()), command: Type.String() }),

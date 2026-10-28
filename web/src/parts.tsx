@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -1044,6 +1044,27 @@ export function AnsweredCard({ line, what, word, rule, undo }: { line?: string; 
   return <div className="card answered" role="status">{line}{undo && <> <button className="link saved-undo" onClick={undo}>Undo</button></>}</div>;
 }
 
+/** A custom rule as the gate reads it: when the crew wants to act, what it should do; a plain rule is its own words. */
+export function RuleBox({ r }: { r: RuleView }) {
+  const part = (head: string, body: string, cls = '') => <div className={`rule-part${cls}`}><span>{head}</span><p>{body}</p></div>;
+  return <div className="rule-box">
+    {r.hold ? <>{part('When the crew wants to:', RULE_WHEN)}{part('The crew should:', RULE_SHOULD[r.hold])}{part('In your words:', r.text, ' quiet')}</>
+      : part(r.text ? 'For every helper:' : 'Remove this rule:', r.text || r.was || '')}
+    {r.was && r.text && part('Replaces:', r.was, ' quiet')}
+  </div>;
+}
+/** Chief's offer of a custom rule, behind a shield: nothing is saved or changed before the yes. */
+function RuleCard({ c, onDone, id }: { c: Card; onDone: () => void; id?: string }) {
+  const act = async (body: Json) => { if (await answer(c, body)) onDone(); };
+  return <div className="card ask rule-ask" id={id} aria-label={c.head}>
+    <span className="rule-shield" aria-hidden><Icon name="shield" size={26} /></span>
+    <b className="rule-title">{c.head}</b>
+    <RuleBox r={c.ruleView!} />
+    {away ? <p className="mute small">You can answer once the home computer is back.</p>
+      : <div className="rule-btns">{c.choices.map((x) => <button key={x.label} className={`btn${x.primary ? ' go' : ' quiet'}`} onClick={() => act(x.body)}>{x.label}</button>)}</div>}
+  </div>;
+}
+
 /** The plain-language ask card, in the thread: one decision with the evidence in front of you. A checkout opens the
  *  review before any yes; spending always says the footer note. */
 /** A site's own icon, from the site itself; its first letter when the site has none to give. */
@@ -1156,6 +1177,7 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
+  if (c.ruleView) return <RuleCard c={c} id={id} onDone={onDone} />;
   const [reply, setReply] = useState('');
   const [oops, setOops] = useState(false);
   const last = useRef<Json | null>(null);

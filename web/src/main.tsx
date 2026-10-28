@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -1655,16 +1655,18 @@ const HubRow = ({ href, tile, title, says }: { href: string; tile: React.ReactNo
   <a href={href} className="row-item go-to"><span className="o-ic">{tile}</span><span className="grow"><b>{title}</b><div className="mute small">{says}</div></span><Icon name="next" /></a>;
 
 function CustomRules({ tick }: { tick: number }) {
-  const [rules, setRules] = useState<string[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [error, setError] = useState('');
+  const [rules, setRules] = useState<A.RuleView[]>([]), [editing, setEditing] = useState<string | null>(null), [text, setText] = useState(''), [hold, setHold] = useState(''), [error, setError] = useState('');
   const load = useCallback(async () => { try { setRules((await api.rules()).rules); setError(''); } catch (e) { setError((e as Error).message); } }, []);
   useEffect(() => { void load(); }, [load, tick]);
-  const save = (next: string, old: string) => void attempt(async () => { await api.setRule(next, old); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
-  return <><p>Rules you confirmed with Chief. Every helper reads them before a job.</p><p className="mute">These do not change safety checks or give permission to send, spend or delete.</p>
+  const save = (next: string, old: string, h = '') => void attempt(async () => { await api.setRule(next, old, h); setEditing(null); await load(); }, next ? 'Saved' : 'Removed');
+  return <><p>Rules you confirmed with Chief. Every helper reads them before a job.</p><p className="mute">A rule about sending, submitting or buying is also checked before each one, so it waits for your word or never happens.</p>
     {error && <p role="alert">{error}</p>}
-    {rules.length ? rules.map((rule) => <div className="card" key={rule}>{editing === rule ? <form onSubmit={(e) => { e.preventDefault(); save(text, rule); }}>
-      <label className="label">Edit rule<textarea className="input" aria-label="Edit rule" maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} rows={5} /></label>
+    {rules.length ? rules.map((rule) => <div className="card rule-item" key={rule.text}>{editing === rule.text ? <form onSubmit={(e) => { e.preventDefault(); save(text, rule.text, hold); }}>
+      <label className="label">Edit rule<textarea className="input" aria-label="Edit rule" maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} rows={4} /></label>
+      <label className="label">Before sending, submitting or buying<select className="input" aria-label="Before sending, submitting or buying" value={hold} onChange={(e) => setHold(e.target.value)}>
+        <option value="">Nothing extra</option><option value="say">{A.RULE_SHOULD.say}</option><option value="draft">{A.RULE_SHOULD.draft}</option></select></label>
       <div className="btns"><button className="btn go" disabled={!text.trim()}>Save changes</button><button className="btn" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
-    </form> : <><p>{rule}</p><div className="btns"><button className="btn" onClick={() => { setEditing(rule); setText(rule); }}>Edit</button><button className="link" onClick={() => save('', rule)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
+    </form> : <><RuleBox r={rule} /><div className="btns"><button className="btn" onClick={() => { setEditing(rule.text); setText(rule.text); setHold(rule.hold ?? ''); }}>Edit</button><button className="link" onClick={() => save('', rule.text)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
     <a className="btn" href="#/chief">Talk to Chief</a></>;
 }
 

@@ -23,7 +23,7 @@ const { GMAIL } = await import('../src/calendar.ts');
 const witness = async (path: string) => (await fetch(`${EMU}/gmail/v1/users/me${path}`, { headers: { authorization: 'Bearer witness' } })).json() as Promise<any>;
 const unhtml = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
-test('Gmail and Calendar on an emulated Google: connect, read, draft and file with one card each, nothing sent', async (t) => {
+test('Gmail and Calendar on an emulated Google: connect, read, draft and file with one card each, nothing sent; a custom rule holds an add until the person says send', async (t) => {
   assert.equal(GMAIL, `${EMU}/gmail/v1/users/me`, 'the test-only seam points Gmail at the emulator');
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
   // Registered before setup's own after(done), so the server stops before the database closes.
@@ -94,4 +94,34 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
   assert.ok(plans && thread.messages[0].labelIds.includes(plans.id), 'the thread carries the label');
   assert.equal(sent.messages?.length ?? 0, 0, 'nothing was sent');
   assert.equal(db.all("SELECT * FROM events WHERE kind IN ('mail.approved', 'mail.sent')").length, 0, 'crewd never tried to send');
+
+  // The person's rule holds Chief's calendar add before any card: drafts only never adds it, "when I say send" adds it
+  // on their word, once, and the emulator's calendar is the witness.
+  process.env.CREWHOUSE_STUB_GOLDEN = '1';
+  t.after(() => { delete process.env.CREWHOUSE_STUB_GOLDEN; });
+  const lunches = async () => ((await (await fetch(`${EMU}/calendar/v3/calendars/primary/events`, { headers: { authorization: 'Bearer witness' } })).json()).items ?? []).filter((e: any) => e.summary === 'Lunch with Ada' && e.status !== 'cancelled');
+  const say = async (text: string) => { const id = (await crew.post('chief', text) as { task: number }).task; await settled(db, id); return id; };
+  const ruleCard = () => db.get("SELECT id, title FROM asks WHERE kind = 'propose' AND state = 'open' AND json_extract(detail, '$.customRule') IS NOT NULL ORDER BY id DESC")!;
+  const cards = () => db.all("SELECT id FROM asks WHERE kind = 'permission'").length, before = cards();
+  // emulate ignores privateExtendedProperty, so calendar add's add-twice check would match any seeded event.
+  for (const id of ['standup0001', 'dentist0001']) await fetch(`${EMU}/calendar/v3/calendars/primary/events/${id}`, { method: 'DELETE', headers: { authorization: 'Bearer witness' } });
+  await say('From now on, only prepare drafts. I will send messages myself.');
+  await crew.answer(ruleCard().id, { answer: 'allow' });
+  assert.deepEqual(crew.rules(), [{ text: 'Only prepare drafts. I will send messages myself.', hold: 'draft' }]);
+  const held = await say('Put lunch with Ada on my calendar for tomorrow at 1.');
+  assert.match(db.all("SELECT text FROM messages WHERE task_id = ? AND author = 'system'", held).map((m) => m.text).join('\n'), /^Held by your rule, so nothing has gone out\. Chief wants to add “Lunch with Ada” to your Google Calendar, .+ To change that, edit the rule in Settings, Custom rules, or tell Chief\.$/);
+  await say('Send it.');
+  assert.equal((await lunches()).length, 0, 'drafts only: saying send changes nothing');
+  await say('Keep drafts, but when I say send, do it.');
+  assert.match(ruleCard().title, /^Update custom rule: Keep drafts/);
+  await crew.answer(ruleCard().id, { answer: 'allow' });
+  assert.deepEqual(crew.rules(), [{ text: 'Keep drafts, but when I say send, do it.', hold: 'say' }], 'the update replaces the old rule');
+  const go = await say('Send it.');
+  assert.equal((await lunches()).length, 1, 'their word adds it');
+  assert.equal(task(db, go).state, 'done', 'the add confirmed, so the job is done, not unsure');
+  assert.equal(db.all("SELECT * FROM events WHERE kind = 'rule.allowed'").length, 1);
+  await say('Send it.');
+  assert.equal((await lunches()).length, 1, 'one word, one call: the next try is held again');
+  assert.equal(db.all("SELECT * FROM events WHERE kind = 'rule.held'").length, 3);
+  assert.equal(cards(), before, 'the rule decides before any card: none opened');
 });

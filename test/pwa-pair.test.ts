@@ -150,8 +150,8 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await send('Input.insertText', { text: 'Keep drafts short.' });
   await until('the edited rule in the box', () => run(`document.querySelector('textarea[aria-label="Edit rule"]').value === 'Keep drafts short.'`));
   await run(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Save changes').click()`);
-  await until('the rule saved over the link', async () => (await http('GET', '/api/rules')).rules[0] === 'Keep drafts short.');
-  assert.deepEqual((await http('GET', '/api/rules')).rules, ['Keep drafts short.']);
+  await until('the rule saved over the link', async () => (await http('GET', '/api/rules')).rules[0]?.text === 'Keep drafts short.');
+  assert.deepEqual((await http('GET', '/api/rules')).rules, [{ text: 'Keep drafts short.' }]);
   await run(`location.hash = '#/settings'`);
   await until('back to paired Settings', () => run(`[...document.querySelectorAll('.card')].some(c => /Paired with your computer/.test(c.textContent))`));
   // Notifications are first-class paired: the state line and its one action sit on the paired card, its key asked
