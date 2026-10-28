@@ -116,8 +116,9 @@ test('Gmail and Calendar on an emulated Google: connect, read, draft and file wi
   assert.match(ruleCard().title, /^Update custom rule: Keep drafts/);
   await crew.answer(ruleCard().id, { answer: 'allow' });
   assert.deepEqual(crew.rules(), [{ text: 'Keep drafts, but when I say send, do it.', hold: 'say' }], 'the update replaces the old rule');
-  await say('Send it.');
+  const go = await say('Send it.');
   assert.equal((await lunches()).length, 1, 'their word adds it');
+  assert.equal(task(db, go).state, 'done', 'the add confirmed, so the job is done, not unsure');
   assert.equal(db.all("SELECT * FROM events WHERE kind = 'rule.allowed'").length, 1);
   await say('Send it.');
   assert.equal((await lunches()).length, 1, 'one word, one call: the next try is held again');

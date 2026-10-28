@@ -63,8 +63,9 @@ say() {
   local s=$1 i
   for ((i = 0; i < ${#s}; i += 3)); do adb shell input text "$(printf %s "${s:i:3}" | sed 's/ /%s/g')"; sleep 0.2; done
   ui texts | grep -qF -- "] $s" || { echo "phone-rules: the box never held: $s" >&2; exit 1; }
+  # The keyboard goes first (BACK only while it shows, else BACK leaves the thread), then Send.
+  [ "$(adb shell dumpsys input_method | grep -c 'mInputShown=true')" = 0 ] || { adb shell input keyevent 4; sleep 1; }
   ui tap '^Send$' >/dev/null
-  [ "$(adb shell dumpsys input_method | grep -c 'mInputShown=true')" = 0 ] || adb shell input keyevent 4
 }
 ui tap '^Chief$' >/dev/null; see 'Tell Chief anything'
 
@@ -94,8 +95,8 @@ wait "$REC"; adb pull /sdcard/rule-journey-2.mp4 "$OUT/rule-journey-2.mp4" >/dev
 
 # The rule where the person keeps it: Settings › Custom rules, then its edit form.
 adb shell input keyevent 4; see '\{Places\}'; ui tap '^Places$' >/dev/null; see ' Settings$'; ui tap '^Settings$' >/dev/null
-bring ' (Custom rules|CUSTOM RULES)$' 12; bring ' Go ahead only when you say so$' 4
-shot rules ' Keep drafts, but when I say send, do it\.$'
+bring ' (Custom rules|CUSTOM RULES)$' 12; bring ' Edit$' 6
+shot rules ' Edit$'
 ui tap '^Edit$' >/dev/null; see ' Save changes$'
 shot rule-edit ' Save changes$'
 { echo '{'; sed '$ s/,$//' "$OUT/lunches.part"; echo '}'; } >"$OUT/lunches.json"; rm -f "$OUT/lunches.part"
