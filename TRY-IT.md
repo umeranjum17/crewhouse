@@ -28,7 +28,7 @@ From a checkout, run `./crewhouse doctor` in a second terminal instead.
 
 ## 3. The phone app
 
-Install [Crewhouse phone preview .26](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261026.26/CREWHOUSE-APK-1.0.0-preview.20261026.26-arm64-v8a.apk), version **1.0.0-preview.20261026.26**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
+Install [Crewhouse phone preview .30](https://github.com/umeranjum17/crewhouse/releases/download/v1.0.0-preview.20261028.30/crewhouse-preview30-arm64-v8a.apk), version **1.0.0-preview.20261028.30**, on your Android phone. Open the download and allow installing from your browser when Android asks. It updates the previous preview in place.
 
 This file is for 64-bit phones, which is nearly all phones made since 2017. Other phones get their file from the same release; see [docs/install.md](docs/install.md).
 
