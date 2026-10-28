@@ -93,8 +93,8 @@ count sent
 wait "$REC"; adb pull /sdcard/rule-journey-2.mp4 "$OUT/rule-journey-2.mp4" >/dev/null; adb shell rm /sdcard/rule-journey-2.mp4
 
 # The rule where the person keeps it: Settings › Custom rules, then its edit form.
-adb shell input keyevent 4; see '^.* Settings$'; ui tap '^Settings$' >/dev/null
-bring ' Custom rules$' 12; bring ' Go ahead only when you say so$' 4
+adb shell input keyevent 4; see '\{Places\}'; ui tap '^Places$' >/dev/null; see ' Settings$'; ui tap '^Settings$' >/dev/null
+bring ' (Custom rules|CUSTOM RULES)$' 12; bring ' Go ahead only when you say so$' 4
 shot rules ' Keep drafts, but when I say send, do it\.$'
 ui tap '^Edit$' >/dev/null; see ' Save changes$'
 shot rule-edit ' Save changes$'

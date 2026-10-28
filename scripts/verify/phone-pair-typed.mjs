@@ -64,5 +64,5 @@ for (const [i, png] of (ASK ? ASK.split(',') : []).entries()) {
   writeFileSync(png, execFileSync('adb', ['-s', SERIAL, 'exec-out', 'screencap', '-p'], { maxBuffer: 1 << 27 })); tap(/^Allow$/); await sleep(1500);
 }
 try { tap(/Open Crewhouse/); } catch { /* already in */ }
-await waitFor(/^Settings$/, 30000);
+await waitFor(/^(Settings|Places)$/, 30000); // Home: the places button since #777, Settings in the tab bar before
 console.log(`paired by the typed code as ${pending[0].name}; the app is on Home`);

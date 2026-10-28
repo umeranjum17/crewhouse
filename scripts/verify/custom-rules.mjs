@@ -106,6 +106,16 @@ try {
     assert.equal(draft?.detail.preview.body, 'Thanks, Alex. I will reply tomorrow. — Umer'); assert.equal(draft.detail.draft.to, 'Alex');
     assert.deepEqual(helper.allow, [], 'the confirmed rule gave no standing safety permission');
     await browser('helper', matrix('helper-draft', 'chief', `document.body.innerText.includes('Alex') && document.body.innerText.includes('Nothing is sent')`));
+    // The installed app (docs/verification/pwa-shell.md): the app's own install button and the real sheet, then the rules
+    // and Chief's thread in its standalone window, phone width as a viewport (Chromium keeps the window 508+ wide), 1280 as the window.
+    const standalone = `matchMedia('(display-mode: standalone)').matches`, phone = { w: 390, h: 844, dpr: 1, mobile: true };
+    await browser('pwa', [{ name: 'settings', url: `${B}/#/settings`, settle: 3000 }, { name: 'install', click: '.install .btn', settle: 3000 }, { name: 'tab', key: 'Tab' }, { name: 'return', key: 'Return', settle: 3000 },
+      { name: 'attach', attachApp: B }, { name: 'standalone', eval: standalone },
+      ...[['rules', 'settings/rules', text('Keep each draft short.')], ['chief', 'chief', text('Lunch with Ada')]].flatMap(([slug, route, shown]) => ['day', 'night'].flatMap(look => [
+        { name: `pwa-${slug}-${look}-390`, ...phone, url: `${B}/?${look}#/${route}`, settle: 0 }, { name: 'ready', wait: `${ready} && (${shown})` },
+        { name: `pwa-${slug}-${look}-390-shot`, eval: `${standalone} && document.documentElement.scrollWidth <= innerWidth`, out: join(EV, `pwa-${slug}-${look}-390.png`) },
+        { name: `pwa-${slug}-${look}-1280`, win: [1280, 900], url: `${B}/?${look}#/${route}`, settle: 0 }, { name: 'ready', wait: `${ready} && (${shown})` },
+        { name: `pwa-${slug}-${look}-1280-shot`, wshot: join(EV, `pwa-${slug}-${look}-1280.png`) }]))]);
     await stop(); await start(); assert.deepEqual((await api('GET', '/api/rules')).rules, [{ text: edited, hold: 'say' }]);
     writeFileSync(join(EV, 'restart.json'), JSON.stringify({ rules: (await api('GET', '/api/rules')).rules, cancelledRuleAbsent: true }));
   }
