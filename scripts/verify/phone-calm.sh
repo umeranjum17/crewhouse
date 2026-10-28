@@ -5,6 +5,7 @@
 # the box and its send sit above the keyboard (phone-keyboard.mjs); one message sent from Chief's box gets his reply; and
 # with a goal on, Home carries its Your goal row.
 #   bash scripts/verify/phone-calm.sh <out-dir> [release-x86_64.apk]
+# HOME_WIDTHS="360 390 445" also takes Home at each of those widths, day and night (home-<day|night>-<width>.png).
 # Needs the Android SDK, a built web/dist and the APK (see phone-mic-fallback.sh). Writes the stills below, each with the
 # screen's texts beside it, and the step record in <out-dir>.
 set -euo pipefail
@@ -53,10 +54,16 @@ adb -s $SER shell wm density 443 >/dev/null # 1080 px across at 443 dpi: 390 wid
 # 1. Home as the chat list and both threads, by day and by night.
 for night in no yes; do
   name=$([ $night = yes ] && echo night || echo day)
-  look $night
+  for w in ${HOME_WIDTHS:-}; do
+    adb -s $SER shell wm density $((1080 * 160 / w)) >/dev/null; look $night
+    see 'Search your chats'; see 'Chief has [0-9]+ things? for you'; shot home-$name-$w
+  done
+  adb -s $SER shell wm density 443 >/dev/null; look $night
   see 'Search your chats'
-  see 'Chief has 1 thing for you'
+  see 'Chief has [0-9]+ things? for you'
   shot home-$name-390
+  # Home's places button (no tab bar on Home) opens the other places.
+  if $P texts | grep -q '{Places}'; then $P tap '^Places$' >/dev/null; see 'Your things'; shot places-$name-390; adb -s $SER shell input keyevent BACK; see 'Search your chats'; fi
   $P tap '^Chief$' >/dev/null; see 'Tell Chief anything'; see 'Invoice Ivy'
   shot chief-$name-390
   adb -s $SER shell input keyevent BACK; see 'Search your chats'
