@@ -5,6 +5,8 @@
 // Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
 // GATE_WIDTHS=360,390,445 takes those widths instead (844 tall below 900 wide, 832 at a computer's width).
 // GATE_SCOPE=<selector> gates the text under it instead of main and .page (a file panel sits outside both).
+// GATE_INIT=<js file> runs before the app boots on every load (scripts/verify/voice-device.js: a device with voices that logs what it says);
+// with it, <slug>-said-<width>-<theme>.json holds that log (window.ctl.said) after the then-js.
 // GATE_DOWNLOADS=<dir> keeps whatever the page saves (a PDF or Word file) in that folder.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,6 +34,7 @@ try {
   const run = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'eval failed'); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable');
   if (process.env.GATE_DOWNLOADS) await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: process.env.GATE_DOWNLOADS }); // a file the page saves lands there
+  if (process.env.GATE_INIT) await send('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(process.env.GATE_INIT, 'utf8') });
   const gate = {}; let bad = false;
   const [base, hash] = url.split('#');
   for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_WIDTHS ? process.env.GATE_WIDTHS.split(',').map((x) => [+x, +x < 900 ? 844 : 832]) : process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
@@ -51,6 +54,7 @@ try {
       return { checked: texty.length, tiny, clipped, hscroll };
     })()`);
     const key = `${w}-${theme}`; gate[key] = m;
+    if (process.env.GATE_INIT) writeFileSync(join(out, `${slug}-said-${key}.json`), JSON.stringify(await run('window.ctl?.said ?? null'), null, 1));
     if (m.tiny.length || m.clipped.length || m.hscroll) bad = true;
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(join(out, `${slug}-${key}.png`), Buffer.from(shot.data, 'base64'));

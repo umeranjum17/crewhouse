@@ -631,6 +631,7 @@ const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, 
 /** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
  *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
  *  read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
+let micOpen = false, cutPractice: (() => void) | null = null;
 function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: string) => void) {
   const [route, setRoute] = useState<Ears | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
@@ -642,11 +643,12 @@ function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: 
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = hear(route);
+    micOpen = true; cutPractice?.(); // the interviewer never talks over the person
     setEar(h);
     setListen(chat, true);
     h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
       (e) => toast(heardWrong(e)))
-      .finally(() => { setEar(null); setListen(chat, false); });
+      .finally(() => { micOpen = false; setEar(null); setListen(chat, false); });
   };
   const off = route === 'none';
   return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
@@ -708,22 +710,72 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
   return { can: route !== 'none' && !!talk, route, now, start, stop };
 }
 
-/** The call in the box's place: what's happening, the words being heard or read, this device's voice and speed, Stop. */
-function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => void }) {
+/** This device's voice and speed, kept on the device: the same menu in a call and on the practice screen. */
+function VoicePick({ children }: { children?: ReactNode }) {
   const [vs, setVs] = useState<SpeechSynthesisVoice[]>([]);
   const [pick, setPick] = useState(kept);
   useEffect(() => { void voices().then(setVs); }, []);
   const choose = (k: { voice?: string; rate?: number }) => { const n = { ...pick, ...k }; setPick(n); try { localStorage.setItem(VOICE, JSON.stringify(n)); } catch { /* kept for this call only */ } };
   const lang = (l: string) => { try { return new Intl.DisplayNames([navigator.language], { type: 'language' }).of(l) ?? l; } catch { return l; } };
+  return <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
+    <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
+    <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>
+    {children}</div></details>;
+}
+
+/** The call in the box's place: what's happening, the words being heard or read, this device's voice and speed, Stop. */
+function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => void }) {
   return <div className={`call ${now.phase}`} role="group" aria-label={`Call with ${now.name}`}>
     <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: `${now.name} is thinking`, speaking: `${now.name} is speaking` }[now.phase]}</span>
-    <details className="call-voice"><summary aria-label="Voice and speed">Voice</summary><div className="call-menu">
-      <label>Voice<select value={pick.voice ?? vs[0]?.name} onChange={(e) => choose({ voice: e.target.value })}>{vs.map((v) => <option key={v.name} value={v.name}>{v.name} · {lang(v.lang)}</option>)}</select></label>
-      <label>Speed<select value={pick.rate ?? 1} onChange={(e) => choose({ rate: +e.target.value })}>{SPEEDS.map(([w, r]) => <option key={r} value={r}>{w}</option>)}</select></label>
-      {hears === 'device' && <p>{VOICE_WORDS.device}</p>}</div></details>
+    <VoicePick>{hears === 'device' && <p>{VOICE_WORDS.device}</p>}</VoicePick>
     <button type="button" className="call-stop" onClick={stop}><i className="mic-stop" />Stop</button>
     {hears === 'online' && <p className="call-heard">{VOICE_WORDS.online}</p>}
     {(now.words || now.phase === 'listening') && <p className={`call-words${now.words ? '' : ' mute'}`}>{now.words || 'Go ahead, I’m listening.'}</p>}
+  </div>;
+}
+
+const MUTED = 'crewhouse.practice.muted';
+/** The practice interviewer reads its new lines (the question, then the feedback) aloud in this device's own voice and
+ *  speed, and nothing else: never the person's answer, never a line already there when the chat opened (older than ten seconds), never while the
+ *  mic is open. No provider voice and no fallback. Stop cuts what is being read; Mute keeps it quiet (kept on the device). */
+export function PracticeVoice({ lines, ready, reading }: { lines: { id: number; from: string; text: string; at?: number }[]; ready: boolean; reading: (id: number) => void }) {
+  const [muted, setMuted] = useState(() => { try { return localStorage.getItem(MUTED) === '1'; } catch { return false; } });
+  const [live, setLive] = useState(false);
+  const [none, setNone] = useState(false);
+  const said = lines.filter((l) => l.from === 'them' && l.text), last = said.at(-1)?.id ?? 0;
+  const now = useRef({ said, muted, last });
+  now.current = { said, muted, last };
+  const read = useRef<number | null>(null), run = useRef<{ stop: () => void } | null>(null), busy = useRef(false);
+  const cut = () => run.current?.stop();
+  useEffect(() => { void voices().then((v) => setNone(!v.length)); cutPractice = cut; return () => { cut(); cutPractice = null; }; }, []);
+  useEffect(() => {
+    if (!ready) return;
+    // What was there when the chat opened stays quiet, but a line from the last ten seconds is the one just asked for (the chat opens as Practice is tapped).
+    if (read.current === null) { read.current = said.filter((l) => !l.at || l.at < Date.now() - 10_000).at(-1)?.id ?? 0; if (last <= read.current) return; }
+    if (busy.current) return;
+    busy.current = true;
+    void (async () => {
+      try {
+        for (let l; (l = now.current.said.find((x) => x.id > read.current!)); ) {
+          read.current = l.id;
+          if (now.current.muted || micOpen) continue;
+          const vs = await voices();
+          if (!vs.length) continue;
+          const s = run.current = speak(spoken(l.text), () => ({ voice: vs.find((v) => v.name === kept().voice) ?? vs[0], rate: kept().rate ?? 1 }), () => {});
+          setLive(true); reading(l.id); await s.done;
+        }
+      } finally { run.current = null; busy.current = false; setLive(false); reading(0); }
+    })();
+  }, [ready, last]);
+  const press = () => {
+    if (live) { read.current = now.current.last; return cut(); } // Stop ends this reading and any still waiting
+    const m = !muted; setMuted(m);
+    try { localStorage.setItem(MUTED, m ? '1' : '0'); } catch { /* muted for this visit only */ }
+  };
+  return <div className={`call practice-voice${live ? ' speaking' : ''}`} role="group" aria-label="Interviewer voice">
+    <span className="pv-words"><b>Device voice for now</b><span>{none ? 'This computer has no voice to read with.' : 'Your own connected voice comes next.'}</span></span>
+    {!none && <VoicePick />}
+    <button type="button" className="pv-btn" aria-pressed={live ? undefined : muted} onClick={press}>{live ? <><i className="mic-stop" />Stop</> : muted ? 'Unmute' : 'Mute'}</button>
   </div>;
 }
 

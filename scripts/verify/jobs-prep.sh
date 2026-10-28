@@ -56,5 +56,16 @@ hash_gate prep-questions "/goal/$ROLE" "document.querySelector('.prep-list + .hi
 hash_gate home-goal /
 drive_prep practice > /dev/null
 hash_gate practice "/h/$WILL"
+# The interviewer reads aloud in the device's own voice (voice-device.js: two voices, every sentence logged, nothing plays).
+# practice-voice: the usual screen with the voice label on a device that has voices; practice-speaking: the question
+# mid-sentence (Stop shown; each waits out ten seconds first, since lines that new at open count as just asked); practice-turn: a full turn, the question and then the feedback logged, the person's answer never.
+export GATE_INIT="$REPO/scripts/verify/voice-device.js"
+TYPE="const ta = document.querySelector('.composer textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'I cut checkout load time by 40 percent by splitting the bundle and lazy loading the payment form.'); ta.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => setTimeout(r, 300)); document.querySelector('.composer .send[aria-label=Send]').click();"
+START="[...document.querySelectorAll('.btn')].find((b) => /^Practice with the interviewer/.test(b.textContent)).click();"
+WAIT="const pause = (ms) => new Promise((r) => setTimeout(r, ms)); const till = async (n) => { for (let i = 0; i < 300 && window.ctl.said.length < n; i++) await new Promise((r) => setTimeout(r, 100)); };"
+hash_gate practice-voice "/h/$WILL"
+hash_gate practice-speaking "/goal/$ROLE" "$WAIT await pause(11000); window.ctl.hold(); $START await till(1)"
+hash_gate practice-turn "/goal/$ROLE" "$WAIT await pause(11000); $START await till(1); $TYPE await till(4)"
+unset GATE_INIT
 node "$REPO/scripts/verify/steps.mjs" "$OUT" jobs-prep
 echo "jobs-prep: ok role=$ROLE"

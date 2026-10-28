@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, PracticeVoice, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -456,7 +456,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   const [pending, setPending] = useState<{ text: string; after: number; at: number; files?: boolean } | null>(null);
   const [partial, setPartial] = useState('');
   const [reading, setReading] = useState(0); // the line a call with Chief is reading aloud
-  const practice = A.practising(state, id); // the writer's chat while a role in Interview has its prep: answer by typing or the mic, nothing read aloud
+  const practice = A.practising(state, id); // the writer's chat while a role in Interview has its prep: answer by typing or the mic; the interviewer reads aloud in the device voice
   // The live line's own feed: crewd's pushed events with the moment they were heard, and which replies are streaming.
   const [heard, setHeard] = useState<Json[]>([]);
   const [writing, setWriting] = useState(new Map<number, number>());
@@ -735,6 +735,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           : A.things(state).filter((x) => x.helper === id).map((x) => ({ key: `t${x.id}`, name: x.title, by: '', at: x.at, f: x.files[0], href: `#/things/t${x.id}`, chip: '—', ...(x.files[0] && A.fileTarget(x.files[0])) }))} />}
       </aside>
       <div className="dock">{answerTo && <div className="reply-to"><div className="grow"><b>Answering Chief</b><span>{answerTo}</span></div><button type="button" className="icon-btn" aria-label="Not answering" onClick={() => setAnswering(undefined)}>×</button></div>}
+        {practice && <PracticeVoice lines={lines} ready={!!page} reading={setReading} />}
         <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} attach={hero} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
     </div>
   );

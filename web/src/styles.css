@@ -2505,3 +2505,10 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .rule-item { display: grid; gap: 12px; justify-items: start; }
 .rule-item .rule-box { width: 100%; }
 .rule-item .label .input { display: block; width: 100%; margin-top: 6px; font: 400 16px/22px var(--ui); text-transform: none; letter-spacing: 0; color: var(--ink); }
+.practice-voice { grid-template-columns: minmax(0, 1fr) auto auto; margin: 0 0 8px; padding: 12px 12px 12px 18px; }
+.pv-words { grid-column: 1 / -1; display: grid; gap: 2px; min-width: 0; font: 400 16px/22px var(--ui); color: var(--mute); }
+.pv-words b { font-weight: 600; color: var(--ink2); }
+.practice-voice .call-voice { grid-column: 2; }
+.pv-btn { grid-column: 3; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--soft); color: var(--ink2); font: 600 16px/1 var(--ui); }
+.practice-voice.speaking .pv-btn { background: var(--danger); color: var(--bg); }
+.practice-voice .call-voice > summary, .practice-voice .call-menu label { font-size: 16px; line-height: 22px; }
