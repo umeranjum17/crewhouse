@@ -1,0 +1,9 @@
+test-prune counts (static call sites of test()/it() in test/*.test.ts; a loop-generated case counts once)
+base: 31bf2a46
+files before: 122
+files after: 108
+cases before: 537
+cases after: 494
+cases removed: 43
+command: grep -hE '^\s*(test|it)(\.\w+)?\(' test/*.test.ts | wc -l
+npm run check: green
