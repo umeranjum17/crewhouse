@@ -45,7 +45,7 @@ const nodes = () => { A('shell', 'uiautomator', 'dump', '/sdcard/ui.xml'); retur
   text: (n.match(/ text="([^"]*)"/) || [])[1] || '', desc: (n.match(/content-desc="([^"]*)"/) || [])[1] || '', pkg: (n.match(/package="([^"]*)"/) || [])[1],
   b: (n.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/) || []).slice(1).map(Number) })).filter((n) => n.pkg === 'dev.crewhouse.app'); };
 ui('tap', '^Tell Chief anything'); for (let i = 0; i < 25 && !/mInputShown=true/.test(A('shell', 'dumpsys', 'input_method')); i++) await sleep(400);
-await type('hi Chief are you still there'); await sleep(800);
+await sleep(1500); await type('hi Chief are you still there'); await sleep(800); // the field takes focus a beat after the keyboard shows; a first chunk typed sooner is dropped ("hi " lost, so the reply was "On it.")
 const win = A('shell', 'dumpsys', 'window', 'InputMethod'), top = Number(win.match(/ frame=\[\d+,(\d+)\]/)[1]) + Number(win.match(/mGivenContentInsets=\[\d+,(\d+)\]/)[1]);
 const app = nodes(), send = app.find((n) => n.text === 'Send' || n.desc === 'Send'), field = app.find((n) => /are you still there/.test(n.text));
 const keyboard = { top, send: send?.b, field: field?.b, bar: app.filter((n) => /^(Home|Crew)$/.test(n.text)).map((n) => n.b) };
