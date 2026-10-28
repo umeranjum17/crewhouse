@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "person": "Umer",
+  "cv": [
+    "Umer Anjum",
+    "Frontend engineer with 6 years of experience, based in London",
+    "Led a team of four building a payments dashboard in React and TypeScript",
+    "Cut page load time by 40 percent on the checkout flow",
+    "Wrote the Node.js API behind a mobile banking app",
+    "Moved a 200-screen app from JavaScript to TypeScript with no downtime",
+    "Ran the weekly on-call rota for a team of five engineers",
+    "BSc Computer Science, University of Leeds, 2016",
+    "Skills: React, TypeScript, Node.js, Jest, Cypress"
+  ],
+  "goal": {
+    "title": "Frontend engineer",
+    "places": "London or remote (UK)",
+    "floor": "£50,000",
+    "ask": "I'm looking for a frontend engineer job, in London or remote in the UK, paying at least £50,000 a year. Here is my CV:"
+  },
+  "seedTitle": "Frontend engineer (eval board)",
+  "postings": [
+    { "n": 1, "co": "Northwind", "title": "Frontend Engineer", "place": "London", "label": "fit", "pay": "£55,000 to £65,000 a year", "gap": "graphql",
+      "body": ["Northwind serves two million customers across the UK.", "Location: London, two days a week in the office.", "Salary: £55,000 to £65,000 a year.", "You will own the speed of our checkout app, working in React and TypeScript. You will also help move our APIs to GraphQL, which most of the team is new to."] },
+    { "n": 2, "co": "Fernhill", "title": "UI Engineer", "place": "Remote (UK)", "label": "fit", "pay": "", "gap": "design system",
+      "body": ["Fernhill builds banking apps for credit unions.", "Location: fully remote, anywhere in the UK.", "You will build and look after our design system, used by six product teams, and ship screens in React and TypeScript."] },
+    { "n": 3, "co": "Harbourline", "title": "Senior React Engineer", "place": "Remote (UK)", "label": "fit", "pay": "£70,000 to £85,000 a year", "gap": "next.js",
+      "body": ["Harbourline helps shipping firms track containers.", "Location: remote, UK time zones.", "Salary: £70,000 to £85,000 a year.", "You will lead a small front-end team, write React and TypeScript, and move our dashboards onto Next.js."] },
+    { "n": 4, "co": "Oakmere Labs", "title": "Frontend Engineer", "place": "London", "label": "fit", "pay": "£60,000 a year", "gap": "clearance",
+      "body": ["Oakmere Labs builds secure messaging for public services.", "Location: London, on site three days a week.", "Salary: £60,000 a year.", "React and TypeScript. An active SC security clearance is required before you start."] },
+    { "n": 5, "co": "Quill & Co", "title": "Frontend Developer", "place": "Manchester", "label": "trap", "why": "below the pay floor and not London or remote", "pay": "£42,000 to £48,000 a year",
+      "body": ["Quill & Co is a publisher of school workbooks.", "Location: Manchester, in the office five days a week.", "Salary: £42,000 to £48,000 a year.", "You will build our ordering site in React."] },
+    { "n": 6, "co": "Brightpath", "title": "Backend Java Engineer", "place": "London", "label": "trap", "why": "a backend Java role, not frontend", "pay": "£72,000 a year",
+      "body": ["Brightpath runs payroll for small firms.", "Location: London.", "Salary: £72,000 a year.", "You will write Java and Spring services and look after our Postgres databases. No front-end work."] },
+    { "n": 7, "co": "Tamarind", "title": "Frontend Engineer", "place": "Austin, Texas", "label": "trap", "why": "in the US and only for people authorised to work there", "pay": "$130,000 a year",
+      "body": ["Tamarind makes scheduling software for restaurants.", "Location: Austin, Texas, USA. Not remote.", "Salary: $130,000 a year.", "You must be authorised to work in the United States. React and TypeScript."] },
+    { "n": 8, "co": "Northwind", "title": "Frontend Engineer", "place": "London", "label": "dup", "of": 1, "why": "the same role as Northwind's first posting", "pay": "£55,000 to £65,000 a year",
+      "body": ["Reposted: still open.", "Northwind serves two million customers across the UK.", "Location: London, two days a week in the office.", "Salary: £55,000 to £65,000 a year.", "You will own the speed of our checkout app, working in React and TypeScript. You will also help move our APIs to GraphQL, which most of the team is new to."] }
+  ],
+  "prep": {
+    "role": { "n": 9, "co": "Kestrel Payments", "title": "Frontend Engineer", "place": "London", "pay": "£58,000 to £68,000 a year" },
+    "posting": ["Kestrel Payments takes card payments for small shops.", "Location: London.", "Salary: £58,000 to £68,000 a year.", "You will own the speed of our checkout widget, take part in the on-call rota, and help move our endpoints to GraphQL. React and TypeScript.", "About Kestrel: {base}/company/kestrel", "How our engineers work: {base}/company/kestrel/engineering"],
+    "pages": {
+      "/company/kestrel": ["Kestrel Payments processes card payments for 4,000 small shops across the UK.", "Kestrel was founded in 2019 and has 120 people, 35 of them engineers.", "Our checkout widget loads in under 800 ms for most shoppers, and we are cutting that to 500 ms this year."],
+      "/company/kestrel/engineering": ["Engineers work in squads of five, and each squad takes a week on call every six weeks.", "The web app is React and TypeScript, and the team is moving its REST endpoints to GraphQL during 2027.", "Every change ships behind a feature flag and is released daily."]
+    },
+    "topics": [
+      { "name": "checkout speed", "re": "checkout|widget|load|speed|perform|latency|800|500 ?ms" },
+      { "name": "GraphQL move", "re": "graphql|rest endpoint|migrat" },
+      { "name": "on-call and squads", "re": "on.?call|squad|rota|team of" },
+      { "name": "React and TypeScript", "re": "react|typescript" }
+    ]
+  }
+}

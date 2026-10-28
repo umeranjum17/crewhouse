@@ -774,5 +774,14 @@
       "Open the same screens in the installed app's window at phone size"
     ],
     "result": "Every claim names its page, who published it and the date of that page; nothing on the screen asks for citizenship, visa status, pay or notice, and no shot has clipped text, text under 16px or sideways scroll. Quotes were checked against the live pages by scripts/check-career-sources.mjs. This is not legal advice and not a check of any employer's current sponsoring."
+  },
+  "jobs-eval": {
+    "start": "a fresh checkout with no real-model run yet; the eval on its stub engine",
+    "steps": [
+      "Run scripts/jobs-eval.sh --engine stub, which writes report.html beside report.md",
+      "Open report.html in a browser at 1280 wide",
+      "Open the same page at 390 wide, a phone"
+    ],
+    "result": "The report page shows scores by case for the helper, a plain model and a plain model with the same rules, where the helper loses, every rubric check and what the helper did, and says it is a stub run and that the real-model run waits on the account owner's sign-in, at 1280 and 390"
   }
 }
