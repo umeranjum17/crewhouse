@@ -31,7 +31,7 @@ const GOLDEN: Record<string, string> = {
   'From now on, only prepare drafts. I will send messages myself.': 'Check this rule before I save it. [tool crew_rule {"text":"Only prepare drafts. I will send messages myself.","hold":"draft"}]',
   'Put lunch with Ada on my calendar for tomorrow at 1.': 'Here is the draft: Lunch with Ada, tomorrow at 13:00. Your rule held it, so nothing has gone out yet. [tool calendar {"args":["add","Lunch with Ada","tomorrow 13:00"]}]',
   'Keep drafts, but when I say send, do it.': 'Got it: drafts first, then I go ahead when you say send. Check the change before I save it. [tool crew_rule {"text":"Keep drafts, but when I say send, do it.","hold":"say","replaces":"Only prepare drafts. I will send messages myself."}]',
-  'Send it.': 'Done: Lunch with Ada is on your calendar for tomorrow at 13:00. [tool calendar {"args":["add","Lunch with Ada","tomorrow 13:00"]}]',
+  'Send it.': 'Done: Lunch with Ada is on your calendar for tomorrow at 13:00. [tool calendar {"args":["add","Lunch with Ada","tomorrow 13:00"]}] [tool crew_outcome {"worked":true}]',
   'From now on, always write long replies.': 'Check this rule before I save it. [tool crew_rule {"text":"Always write long replies."}]',
   'Write a draft reply to Alex.': 'The reply is a draft. Nothing was sent. [tool crew_write {"path":"files/reply.txt","content":"Thanks, Alex. I will reply tomorrow. — Umer"}] [tool crew_draft {"path":"files/reply.txt","channel":"message","to":"Alex"}]',
   'how do i pair my computer with you?': 'Open Add a phone on your computer and scan its code with your phone.',

@@ -1666,7 +1666,7 @@ function CustomRules({ tick }: { tick: number }) {
       <label className="label">Before sending, submitting or buying<select className="input" aria-label="Before sending, submitting or buying" value={hold} onChange={(e) => setHold(e.target.value)}>
         <option value="">Nothing extra</option><option value="say">{A.RULE_SHOULD.say}</option><option value="draft">{A.RULE_SHOULD.draft}</option></select></label>
       <div className="btns"><button className="btn go" disabled={!text.trim()}>Save changes</button><button className="btn" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
-    </form> : <><span className="rule-shield small" aria-hidden><Icon name="shield" size={18} /></span><RuleBox r={rule} /><div className="btns"><button className="btn" onClick={() => { setEditing(rule.text); setText(rule.text); setHold(rule.hold ?? ''); }}>Edit</button><button className="link" onClick={() => save('', rule.text)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
+    </form> : <><RuleBox r={rule} /><div className="btns"><button className="btn" onClick={() => { setEditing(rule.text); setText(rule.text); setHold(rule.hold ?? ''); }}>Edit</button><button className="link" onClick={() => save('', rule.text)}>Remove</button></div></>}</div>) : !error && <div className="card empty">No custom rules yet. Tell Chief how you want the crew to work.</div>}
     <a className="btn" href="#/chief">Talk to Chief</a></>;
 }
 

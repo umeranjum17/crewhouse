@@ -2492,7 +2492,6 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .card.ask.rule-ask, .shell.calm .chat .lines .card.ask.rule-ask { display: grid; justify-items: center; gap: 14px; padding: 20px 16px 16px; text-align: center; width: min(100%, 460px); }
 .rule-shield { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; border: 1px solid var(--line2); background: var(--solid); color: var(--go); flex: none; }
 .rule-shield svg { fill: color-mix(in srgb, var(--go) 24%, transparent); }
-.rule-shield.small { width: 36px; height: 36px; border-radius: 10px; }
 .rule-title { font: 700 22px/28px var(--ui); letter-spacing: -.01em; }
 .rule-box { justify-self: stretch; text-align: left; border: 1px solid var(--line2); border-radius: 16px; overflow: hidden; }
 .rule-part { padding: 12px 16px; }
@@ -2505,4 +2504,4 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .chat .lines .card.ask .rule-btns .btn.quiet { background: transparent; color: var(--ink); border: 0; }
 .rule-item { display: grid; gap: 12px; justify-items: start; }
 .rule-item .rule-box { width: 100%; }
-.rule-item select.input { display: block; width: 100%; margin-top: 6px; font: 400 16px/22px var(--ui); text-transform: none; letter-spacing: 0; }
+.rule-item .label .input { display: block; width: 100%; margin-top: 6px; font: 400 16px/22px var(--ui); text-transform: none; letter-spacing: 0; color: var(--ink); }
