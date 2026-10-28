@@ -1,0 +1,73 @@
+{
+  "schema": 2,
+  "repo": "crewhouse",
+  "head": "a66f4b770364ef0b7c12b9bcfba8f5875cf026ac",
+  "tree": "510a03fe35d4ff052f0c9a2e9ad8c0ac75adc210",
+  "claim": "Draft pull requests run no CI jobs (all 8 skipped, none on a runner), and a ready PR's own run still passes all 8 jobs",
+  "result": "pass",
+  "at": "2026-10-28T05:55:28.718Z",
+  "files": [
+    {
+      "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/draft-probe-run.txt",
+      "sha256": "202da0554cc654817e866acd310fbcc4df72cd3b7d12c4cef810a066f87922b6"
+    },
+    {
+      "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/draft-probe-jobs.txt",
+      "sha256": "3f3aaadfe82ba717164605d377273c75c6bc414028b6057303576f2b090b0ad4"
+    },
+    {
+      "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/pr778-run-jobs.txt",
+      "sha256": "68ce1eb680500a9c3c6c4be9a99932f04938b19277a6e9343bd5cc6eaa1697f0"
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "20261028T055515Z-a66f4b77-0bcdd4",
+      "commit": "a66f4b770364ef0b7c12b9bcfba8f5875cf026ac",
+      "journey": null,
+      "command": "sh copy.sh",
+      "tool": "0.6.18",
+      "steps": {
+        "target": {
+          "version": "ci.yml on fm/ci-diet (PR 778)"
+        },
+        "start": "A repository whose CI ran 7-8 jobs on every draft push and 8 jobs again on every push to main",
+        "steps": [
+          "Open PR 778 ready: CI runs and all 8 jobs pass (pr778-run-jobs.txt)",
+          "Open a throwaway draft PR from the same commit: the CI run is skipped, every job skipped, none on a runner (draft-probe-run.txt, draft-probe-jobs.txt)",
+          "Compare job counts before and after per event (job-counts.txt)"
+        ],
+        "result": "A draft PR starts no CI jobs, a ready PR still runs all required checks, and a push to main runs 2 jobs instead of 8"
+      }
+    }
+  ],
+  "judge": {
+    "route": "claude-code",
+    "model": "claude-haiku-5-5",
+    "independence": "session-only",
+    "author": {
+      "agent": "claude",
+      "model": "claude-haiku-5-5"
+    },
+    "verdicts": [
+      {
+        "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/draft-probe-run.txt",
+        "sha256": "202da0554cc654817e866acd310fbcc4df72cd3b7d12c4cef810a066f87922b6",
+        "verdict": "pass",
+        "seen": "Read 1 entry: status=completed conclusion=skipped event=pull_request for the draft probe PR 780 run. The draft part is shown. The ready-PR part is not in this capture, and the job-level detail is in capture_1."
+      },
+      {
+        "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/draft-probe-jobs.txt",
+        "sha256": "3f3aaadfe82ba717164605d377273c75c6bc414028b6057303576f2b090b0ad4",
+        "verdict": "pass",
+        "seen": "Read 8 entries, each with runner=null and status skipped: check (24, app), relay-image, check (24, migrate), screens, changes, check (24, engine), package, done-done. This matches the draft part with all 8 skipped and none on a runner."
+      },
+      {
+        "path": "<evidence root>/20261028T055515Z-a66f4b77-0bcdd4/pr778-run-jobs.txt",
+        "sha256": "68ce1eb680500a9c3c6c4be9a99932f04938b19277a6e9343bd5cc6eaa1697f0",
+        "verdict": "pass",
+        "seen": "Read 8 entries, each showing success: changes, done-done, check (24, migrate), check (24, app), screens, check (24, engine), package, relay-image. This matches the ready-PR part with all 8 jobs passing."
+      }
+    ]
+  }
+}
