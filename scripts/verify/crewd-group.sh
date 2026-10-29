@@ -7,11 +7,40 @@ CREWD=""
 exec {crewd_err}>&2
 crewd_traps() { trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM; }
 crewd_traps
-# crewhouse_remove_lab <dir>: only discard a lab after every owned process group is empty.
+# crewhouse_remove_lab <dir>: only discard a lab after every process that runs in it is gone: crewd's group, then anything
+# of ours still holding the lab as cwd, environment or command line (the engine runs detached in a group of its own; a
+# driver's Xvfb, film and helper start outside crewd_start). A process that cannot be stopped keeps the lab and ends
+# the driver loudly on stderr with a non-zero status, never a silent 0 with a lab left behind.
 crewhouse_remove_lab() {
-  local lab=$1
-  crewd_stop || return 1
-  chmod -R u+w -- "$lab" && rm -rf -- "$lab"
+  local lab=$1 was=$? rc=0
+  crewd_stop || rc=1
+  crewd_sweep "$lab" || rc=1
+  [ "$rc" -ne 0 ] || { chmod -R u+w -- "$lab" && rm -rf -- "$lab"; } || rc=1
+  [ "$rc" -eq 0 ] || { echo "${0##*/}: FAILED: $lab left behind; a process of this run could not be stopped" >&"$crewd_err"; exit $((was ? was : 70)); }
+}
+# crewd_lab_pids <dir>: pids of this user's processes that name <dir> in cwd, environ or argv, except this shell, its
+# ancestors and the processes of the scan itself (forks of this function carry the driver's environment).
+crewd_lab_pids() {
+  local lab=$1 me=$BASHPID skip=" $$ $BASHPID " p pp
+  pp=$$; while [ "$pp" -gt 1 ]; do pp=$(awk '{ sub(/^.*\) /, ""); print $2 }' "/proc/$pp/stat" 2>/dev/null) || break; skip+="$pp "; done
+  { grep -alFl -f - /proc/[0-9]*/cmdline /proc/[0-9]*/environ <<< "$lab"; ls -l /proc/[0-9]*/cwd | while read -r l; do [[ "$l" == *" -> $lab" || "$l" == *" -> $lab/"* ]] && echo "${l#* /proc/}"; done; } 2>/dev/null |
+    sed -n 's|^\(/proc/\)\?\([0-9]*\)/.*|\2|p' | sort -u | while read -r p; do
+      case "$skip" in *" $p "*) continue;; esac; [ -O "/proc/$p" ] || continue
+      for ((pp = p; pp > 1 && pp != me; )); do pp=$(awk '{ sub(/^.*\) /, ""); print $2 }' "/proc/$pp/stat" 2>/dev/null) || break; done
+      [ "$pp" = "$me" ] || [ -z "$pp" ] || echo "$p"
+    done
+}
+# crewd_sweep <dir>: TERM, then KILL after a bounded grace, every process crewd_lab_pids finds; non-zero if one outlives KILL.
+crewd_sweep() {
+  local lab=$1 sig pids
+  trap '' HUP INT TERM
+  for sig in TERM KILL; do
+    pids=$(crewd_lab_pids "$lab"); [ -n "$pids" ] || break
+    kill "-$sig" $pids 2>/dev/null || true
+    for end in $((SECONDS + 5)); do while [ -n "$(crewd_lab_pids "$lab")" ] && [ "$SECONDS" -le "$end" ]; do sleep 0.05; done; done
+  done
+  pids=$(crewd_lab_pids "$lab"); crewd_traps
+  [ -z "$pids" ] || { echo "${0##*/}: processes ${pids//$'\n'/ } outlived SIGKILL; keeping $lab" >&"$crewd_err"; return 1; }
 }
 # crewd_start <dir> <log> <command…>: the command, run in <dir>, leads a fresh group and dies with this shell
 # (setpriv's parent-death signal). The group record lets a later shell stop it by lab directory alone.

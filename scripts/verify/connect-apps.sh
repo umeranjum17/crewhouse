@@ -29,7 +29,7 @@ export PATH=/usr/bin:$PATH # the distro node: done-done runs with a clean enviro
 REPO=$(git rev-parse --show-toplevel)
 . "$REPO/scripts/verify/crewd-group.sh"
 LAB=$(mktemp -d -t crewhouse-connect-apps.XXXXXX)
-trap 'touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; [ "${OK:-}" = 1 ] || { ! declare -F api > /dev/null || { api /api/events > "$OUT/events.json"; api /api/bots/chief > "$OUT/thread.json"; } 2> /dev/null || true; }; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "${ST:-$LAB/state}"/logs/openclaw*.log "$OUT/" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
+trap 'trap "" HUP INT TERM; touch "$LAB/stop-film" 2>/dev/null; [ -z "${FILM:-}" ] || wait "$FILM" 2>/dev/null || true; [ "${OK:-}" = 1 ] || { ! declare -F api > /dev/null || { api /api/events > "$OUT/events.json"; api /api/bots/chief > "$OUT/thread.json"; } 2> /dev/null || true; }; [ "${OK:-}" = 1 ] || cp "$LAB/crewd.log" "${ST:-$LAB/state}"/logs/openclaw*.log "$OUT/" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 trap 'exit 143' HUP INT TERM # an aborted run still reaches the EXIT trap, which removes the lab and stops its processes
 mkdir -p "$LAB/home" "$LAB"/{state,crew,tools,run}
 PORT=$(node -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
