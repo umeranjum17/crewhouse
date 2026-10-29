@@ -80,7 +80,7 @@ async function serve() {
     await relay.relay.admit(keys.publicKey, 'Crewhouse'); // enrol only this host; no public signup or owner routes
     await api('phones/relay', { url: null }, 'PUT');
     await ready(health, child);
-    const cloud = process.env.CREWHOUSE_CLOUD_DIR, enrol = () => inbox(cloud).catch((e) => console.error(`phone enrol: ${e.message}`));
+    const cloud = process.env.CREWHOUSE_CLOUD_DIR; let busy = false; const enrol = () => { if (!busy) { busy = true; inbox(cloud).catch((e) => console.error(`phone enrol: ${e.message}`)).finally(() => { busy = false; }); } }; // one enrol at a time: a slow one was started again every second
     if (cloud) setInterval(enrol, 1000).unref();
     console.log(cloud ? 'Crewhouse headless host ready. Waiting for the phone that set this computer up.' : 'Crewhouse headless host ready. Run ./crewhouse headless pair to enrol your first phone.');
     process.exitCode = (await exited) ?? 1;

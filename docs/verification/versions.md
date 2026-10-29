@@ -2,7 +2,7 @@
 
 Each surface says which Crewhouse it is, in small low-contrast print, read from that side's own version data
 (`adapter.versions()`): crewd's `state.version` is its package version, with `-dev` when it is not the downloaded app
-(`CREWHOUSE_PACKAGED`); the web app's is the package version `scripts/build-web.mjs` bundles; the phone's is
+(`CREWHOUSE_PACKAGED`, or the download's own `node/bin/node` beside it, as on a cloud computer); the web app's is the package version `scripts/build-web.mjs` bundles; the phone's is
 `mobile/app.json`'s (a preview build says `preview`, a Metro dev build adds `-dev`) beside the release it was built
 from (the repo's package version, passed in by `mobile/metro.config.js`). Where the two sides agree the web app says
 "Crewhouse 0.1.1-dev"; the phone always says "App … · Host …". When they come from different releases the web app says

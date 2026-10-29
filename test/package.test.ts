@@ -228,6 +228,25 @@ test('without the terminal path marker, an unpackaged crewd installs nothing by 
   assert.equal((await events()).filter((e) => e.kind === 'tool.installing').length, 0, 'no install was started');
 });
 
+test('a checkout says -dev; the cloud download, which its headless host starts without the packaged marker, says its own version', async () => {
+  const { at, auth } = await terminalPath(false), version = async (a: string, h: () => Record<string, string>) => {
+    for (let i = 0; i < 100; i++) { const v = (await fetch(`${a}/api/state`, { headers: h(), signal: AbortSignal.timeout(1000) }).then((x) => x.json()).catch(() => null))?.version; if (v) return v; await sleep(100); }
+  };
+  assert.equal(await version(at, auth), `${ours}-dev`);
+  // The tarball's layout: crewhouse/app beside crewhouse/node/bin/node.
+  const real = join(import.meta.dirname, '..'), dir = join(root, 'cloud'), app = join(dir, 'app'), state = join(dir, 'state'), port = await free();
+  mkdirSync(join(dir, 'node', 'bin'), { recursive: true }); symlinkSync(process.execPath, join(dir, 'node', 'bin', 'node'));
+  mkdirSync(app); cpSync(join(real, 'src'), join(app, 'src'), { recursive: true });
+  for (const e of readdirSync(real)) if (e !== 'src') symlinkSync(join(real, e), join(app, e));
+  const cloud = spawn(process.execPath, [join(app, 'src', 'main.ts')], {
+    env: { ...process.env, CREWHOUSE_ENGINE: 'stub', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_FIRST_USE_TOOLS: '1',
+      CREWHOUSE_STATE_DIR: state, CREWHOUSE_CREW_DIR: join(dir, 'crew'), CREWHOUSE_TOOLS_DIR: join(dir, 'tools') },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+  after(() => cloud.kill());
+  assert.equal(await version(`http://127.0.0.1:${port}`, () => authOf(state)), ours);
+});
+
 test('a release build ships the version its tag names, and refuses a malformed tag', async () => {
   const run = (t: string, dir: string) => new Promise<number | null>((r) => spawn(process.execPath, [join(import.meta.dirname, '..', 'scripts', 'set-version-from-tag.mjs'), t, dir], { stdio: 'ignore' }).on('close', r));
   const stale = (dir: string) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'crewhouse', version: '0.1.1' })); writeFileSync(join(dir, 'package-lock.json'), JSON.stringify({ version: '0.1.1', packages: { '': { version: '0.1.1' } } })); };
