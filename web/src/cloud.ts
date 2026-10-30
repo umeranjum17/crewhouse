@@ -54,11 +54,18 @@ export const said = (e: unknown) => {
 };
 
 /** Paste: boat.dev reads the account and lists its computers; only a key it accepted is kept. */
-export async function checkKey(p: Provider, store: MachineStore, key: string): Promise<MachineRef[]> {
+let credentialWrite = Promise.resolve();
+export async function checkKey(p: Provider, store: MachineStore, key: string, signal?: AbortSignal): Promise<MachineRef[]> {
   await p.account();
   const listed = await p.list!();
-  const kept = await store.load();
-  await store.save({ ref: kept?.ref ?? null, providerKey: key });
+  const write = credentialWrite.then(async () => {
+    if (signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError');
+    const kept = await store.load();
+    if (signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError');
+    await store.save({ ref: kept?.ref ?? null, providerKey: key });
+  });
+  credentialWrite = write.catch(() => undefined);
+  await write;
   return listed;
 }
 
@@ -84,8 +91,9 @@ export async function* signIn(email: string, store: MachineStore, o: { api?: str
       else if (step.step === 'failed') return yield { at: 'failed', why: step.why };
       else if (step.step === 'done') {
         clearTimeout(timer);
-        try { return yield { at: 'done', listed: await checkKey(provider(async () => step.key, api), store, step.key) }; }
+        try { return yield { at: 'done', listed: await checkKey(provider(async () => step.key, api), store, step.key, stop.signal) }; }
         catch (e) {
+          if (o.signal?.aborted) return;
           await revokeClaim({ baseUrl: api, key: step.key }).catch(() => undefined); // no live key outlives a sign-in that failed
           return yield { at: 'failed', why: e instanceof MachineError && e.code === 'unreachable' ? 'unreachable' : 'provider' };
         }

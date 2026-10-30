@@ -917,8 +917,9 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const [grant, setGrant] = useState<Grant | null>(null); // the computer's receipt, as this phone's link
   const check = async (k: string) => {
     if (!k.trim() || busy) return;
+    endSignIn();
     setBusy(true); setErr('');
-    try { setListed(await checkKey(boatOn(k.trim()), cloudStore, k.trim())); held.current = k.trim(); endSignIn(); setView('pick'); }
+    try { setListed(await checkKey(boatOn(k.trim()), cloudStore, k.trim())); held.current = k.trim(); setView('pick'); }
     catch (e) { setErr(said(e)); } finally { setBusy(false); }
   };
   // One action with a key already kept (and no sign-in under way): straight to the computers.
