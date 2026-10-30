@@ -22,6 +22,7 @@ provider actions; it never pretends an action succeeded.
 - Daily snapshots and Undo update say **Not available yet** and are disabled. The kit's scheduler only runs while
   the app runs; it is not an always-on backup service. No app timer or provider key on crewd substitutes for it.
 - Delete asks explicitly and uses the kit's remove; Unlink boat.dev (also on the Cloud screen's computer list) asks once, then ends the key at boat.dev (kit `revokeClaim`) and deletes the phone's copy only when boat.dev confirms; if boat.dev can't be reached or refuses, it says nothing was removed and offers Try again (`unlink` in `web/src/cloud.ts`, `test/cloud-signin.test.ts`).
+- Unlink on an emulator: `SERIAL=<emulator> bash scripts/verify/cloud-unlink.sh <out> <lab APK>` (the cloud-screen lab APK, no cloud-enable variable) walks the account's list, the confirmation, boat.dev cut off (nothing removed, Try again), boat.dev back (the lab logs only whether the key is ended, never the key) and the phone still signed out after a restart. The real boat.dev run needs a person to type the claim code on boat.dev's own page.
 - Every request has busy protection, failure words and Refresh computer; no unconditional-success placeholder.
 
 ## Drive and evidence
