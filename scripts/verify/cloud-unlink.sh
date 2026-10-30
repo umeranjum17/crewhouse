@@ -120,6 +120,8 @@ shot signed-out 'boat.dev email'
 # 5. Closed and opened again: still signed out (a kept key would go straight to the account's list).
 adb shell am force-stop "$PKG"; adb shell am start -n "$PKG/.MainActivity" >/dev/null
 see 'Cloud$'; ui tap '^Cloud$'; see 'boat.dev email'
+# The curly apostrophe is the exact localized UI text this driver checks.
+# shellcheck disable=SC1112
 ! ui texts | grep -q 'Which computer\|didn’t find a computer' || { echo "cloud-unlink: the phone still holds the key" >&2; exit 1; }
 
 node "$VERIFY_DIR/steps.mjs" "$OUT" cloud-unlink
