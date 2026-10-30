@@ -6,6 +6,9 @@
 # night. No real boat.dev, no money, no model (docs/verification/chief-computer.md).
 #
 #   SERIAL=emulator-5580 [CLOUD_OTHER=<dir>] bash scripts/verify/cloud-unlink.sh <out-dir> <lab APK>
+#   fm-device-lock.sh <serial> env CLOUD_UNLINK_UNDER_LOCK=<serial> bash scripts/verify/cloud-unlink.sh <out-dir> <lab APK>
+# A physical device is never taken without asking Main first. A locked invocation proceeds only while the lock
+# held by fm-device-lock.sh is still held.
 #
 # A judged run reads every capture in <out-dir> against one claim, so <out-dir> holds the one claimed state (and the step
 # record): CLOUD_CLAIM names it (list, confirm, unreachable or signed-out; default unreachable). Every other state goes to
@@ -17,7 +20,18 @@ set -euo pipefail
 OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"
 case "$SERIAL" in
   emulator-*) ;;
-  *) echo "cloud-unlink: physical devices are never driven" >&2; exit 2 ;;
+  *)
+    LOCK_DIR=${FM_PHONE_LOCK_DIR:-/tmp}
+    LOCK_FILE="$LOCK_DIR/fm-phone-$SERIAL.lock"
+    LOCK_HELD=0
+    if [ "${CLOUD_UNLINK_UNDER_LOCK:-}" = "$SERIAL" ] && exec 9>"$LOCK_FILE"; then
+      if flock -n 9; then exec 9>&-; else LOCK_HELD=1; exec 9>&-; fi
+    fi
+    if [ "$LOCK_HELD" -ne 1 ]; then
+      echo "cloud-unlink: $SERIAL is a physical device and the device lock is not held" >&2
+      exit 2
+    fi
+    ;;
 esac
 OTHER=${CLOUD_OTHER:-$OUT} CLAIM=${CLOUD_CLAIM:-unreachable}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
