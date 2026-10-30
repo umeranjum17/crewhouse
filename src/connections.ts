@@ -9,8 +9,9 @@ import type { Config } from './config.ts';
 import { tool, type CrewTool } from './engine.ts';
 import { calendarTool, events } from './calendar.ts';
 import { mailTool } from './mail.ts';
+import { xTool } from './x.ts';
 
-export type App = Provider & { google?: boolean; warns?: boolean; tool?: (token: () => Promise<string | null>) => CrewTool };
+export type App = Provider & { google?: boolean; warns?: boolean; key?: boolean; tool?: (token: () => Promise<string | null>) => CrewTool };
 /** The kit's presets request one Google service at a time; Gmail stays read-only, filing lives beside it. */
 export const APPS: Record<string, App> = {
   drive: { ...providers.drive, google: true },
@@ -19,6 +20,7 @@ export const APPS: Record<string, App> = {
   gmailsend: { ...providers.gmail, id: 'gmailsend', name: 'Gmail sending', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.send'], google: true, warns: true },
   gmailwrite: { ...providers.gmail, id: 'gmailwrite', name: 'Gmail drafts & labels', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/gmail.compose'], google: true, warns: true },
   notion: { ...providers.notion }, canva: { ...providers.canva },
+  x: { id: 'x', name: 'X', key: true, tool: xTool } as App, // the person's own API key, sealed beside the sign-ins; read-only
 };
 export const GRANTABLE = Object.keys(APPS).filter((id) => APPS[id].tool || APPS[id].mcpUrl);
 export type Connecting = { state: 'waiting' | 'done' | 'failed'; url?: string; error?: string; why?: 'declined' | 'unticked'; step?: number };
@@ -40,7 +42,7 @@ export function connectError(name: string, error: unknown) {
 /** README's sealed adapter: the durable store receives ciphertext only, with each name authenticated inside it. */
 function deviceStore(cfg: Config): Keystore {
   const dir = join(cfg.stateDir, 'people', '1', 'app-signins'), seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true }), file = (name: string) => {
-    if (!/^(google-client|byokit\.connect\.[A-Za-z0-9_-]{43})$/.test(name)) throw new Error('Invalid sign-in name.');
+    if (!/^(google-client|x-key|byokit\.connect\.[A-Za-z0-9_-]{43})$/.test(name)) throw new Error('Invalid sign-in name.');
     return join(dir, name);
   }, ciphertextStore: Keystore = {
     async get(name) { return existsSync(file(name)) ? readFileSync(file(name), 'utf8') : null; },
@@ -96,7 +98,7 @@ export class Connections {
     try { this.googleClient = await googleClientFile(clientPath) ?? undefined; } catch { /* keep the saved key */ }
     this.houseFile = !!this.googleClient; const saved = this.googleClient ? null : await this.store.get('google-client'); if (saved) this.googleClient = JSON.parse(saved);
     for (const id of Object.keys(this.apps)) {
-      try { if (await this.handle(id).connected()) this.active.add(id); }
+      try { if (this.apps[id].key ? await this.store.get(`${id}-key`) : await this.handle(id).connected()) this.active.add(id); }
       catch (e) { this.views.set(id, { state: 'failed', error: connectError(this.apps[id].name, e) }); }
     }
   }
@@ -152,6 +154,7 @@ export class Connections {
     await this.ready;
     const a = this.app(id), house = this.list().find((x) => x.app === id)!.house;
     if (house) throw Object.assign(new Error(house), { status: 409 });
+    if (a.key) throw Object.assign(new Error(`Paste your own ${a.name} API key to add it.`), { status: 400 });
     if (this.connected(id)) return { state: 'done' } as Connecting;
     this.cancelFlow(id);
     const view: Connecting = { state: 'waiting' };
@@ -187,8 +190,16 @@ export class Connections {
     this.toolCache = undefined; await this.clients.get(id)?.close(); this.clients.delete(id);
     this.onChange?.(id); this.onExpired?.(id);
   }
+  /** The person's own key for a key app: shape-checked only, sealed in the device store, never read back to a screen. */
+  async setKey(id: string, raw: unknown) {
+    await this.ready;
+    const a = this.app(id), key = String(raw ?? '').trim();
+    if (!a.key || !/^[\w%.~-]{20,512}$/.test(key)) throw Object.assign(new Error(`That doesn't look like an ${a.name} API key. Copy the whole Bearer Token from your ${a.name} developer page.`), { status: 400 });
+    await this.store.set(`${id}-key`, key); this.active.add(id); this.toolCache = undefined; this.onChange?.(id);
+  }
   async token(id: string): Promise<string | null> {
     await this.ready;
+    if (this.app(id).key) return this.store.get(`${id}-key`);
     try { return await this.handle(id).token(); }
     catch (e) { if (e instanceof ConnectError && e.code === 'signin') return null; throw e; }
     finally { await this.sync(id); }
@@ -202,7 +213,7 @@ export class Connections {
   async disconnect(id: string) {
     await this.ready;
     this.cancelFlow(id); this.views.delete(id); this.active.delete(id); this.toolCache = undefined;
-    await this.clients.get(id)?.close(); this.clients.delete(id); await this.handle(id).disconnect();
+    await this.clients.get(id)?.close(); this.clients.delete(id); await (this.app(id).key ? this.store.delete(`${id}-key`) : this.handle(id).disconnect());
     this.onChange?.(id);
   }
   async keepFresh() { await this.ready; for (const id of this.on()) await this.token(id).catch(() => null); }
@@ -221,7 +232,7 @@ export class Connections {
   }
   private async loadTools() {
     const tools: CrewTool[] = [], effects: Record<string, AppTool> = {}, owner: Record<string, string> = Object.create(null); // looked up by a model's tool name: no inherited keys
-    for (const id of this.on()) {
+    for (const id of new Set([...this.on(), ...Object.keys(this.apps).filter((k) => this.apps[k].key)])) { // a key app's tool is always there: unkeyed it says what to do
       const a = this.app(id);
       if (a.tool) { const t = a.tool(() => this.token(id)); tools.push(t); owner[t.name] = id; }
       if (!a.mcpUrl) continue;

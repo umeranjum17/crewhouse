@@ -13,7 +13,7 @@ import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
 import { glowOf, hear, useOffice } from './office.tsx';
-import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Removed, Sheet, sheet, SignIn, Split, Unreachable } from './flows.tsx';
+import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, KeyApp, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Removed, Sheet, sheet, SignIn, Split, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
 import { remember, resume } from './resume.ts';
 import { nextRun, parseSchedule } from '../../src/routines.ts';
@@ -1986,7 +1986,7 @@ function Apps({ state, refresh }: Ctx) {
   const [only, setOnly] = useState('');
   const [all, setAll] = useState<string[]>([]);
   const [found, setFound] = useState<A.CrewRow[] | null>(null);
-  const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null);
+  const [connecting, setConnecting] = useState<{ app: A.App; tab: Window | null } | null>(null), [keying, setKeying] = useState<A.App | null>(null);
   const [composio, setComposio] = useState<Json>(null), [joining, setJoining] = useState(false);
   const loadComposio = () => api.composio().then(setComposio).catch(() => setComposio({ state: 'off' }));
   useEffect(() => { void loadComposio(); }, []);
@@ -2008,6 +2008,7 @@ function Apps({ state, refresh }: Ctx) {
       const tab = openTab(); if (tab) tab.location.href = 'https://herdr.dev'; return;
     }
     const app = A.appById(state, r.id)!;
+    if (app.key) return void setKeying(app);
     setConnecting({ app, tab: A.needsHouse(state, app) ? null : openTab() });
   };
   const remove = (r: A.CrewRow) => {
@@ -2058,6 +2059,7 @@ function Apps({ state, refresh }: Ctx) {
       {!!found?.length && <section aria-label="In the catalog"><div className="add-head"><b>In the catalog</b></div><div className="card list">{found.map((r, i) => row(r, i))}</div></section>}
       <p className="mute small center">Every app and skill here is reviewed. Adding one opens its own sign-in when it needs one.</p>
       {joining && <ComposioSheet state={composio} onChange={() => void loadComposio()} onClose={() => setJoining(false)} />}
+      {keying && <KeyApp app={keying} onClose={() => setKeying(null)} onDone={() => { setKeying(null); refresh(); toast(`${keying.name} is on`); }} />}
       {connecting && <ConnectApp app={connecting.app} state={state} tab={connecting.tab} onClose={() => setConnecting(null)} onDone={() => { setConnecting(null); refresh(); }} />}
     </div>
   );

@@ -2043,7 +2043,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const tool = (name: keyof typeof PARAMETERS, description: string, fn: (p: any) => unknown): CrewTool => ({
       name, description, parameters: name === 'crew_connect' ? { type: 'object', properties: { app: { type: 'string', enum: apps } }, required: ['app'] } : name === 'crew_routine' ? (botId === CHIEF ? CHIEF_ROUTINE : HELPER_ROUTINE) : PARAMETERS[name],
       run: async (p) => JSON.stringify(await fn(p) ?? { ok: true }),
-    }), task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).filter((app) => !this.composio.on() || !app.startsWith('gmail')), own = [
+    }), task = () => this.activeTask(botId)?.id, apps = Object.keys(this.connections.apps).filter((app) => !this.connections.apps[app].key && (!this.composio.on() || !app.startsWith('gmail'))), own = [
       tool('crew_connect', `Ask the person to connect one of these native apps (${apps.join(', ')}). Ask for one app at a time, then end your turn; you are resumed when they answer.${this.composio.on() ? ` ${GMAIL_CONNECT}` : ''}`,
         (p) => this.askConnect(botId, String(p.app ?? '').toLowerCase())),
       tool('crew_outcome', 'Before you end a job that did something outside your own space (booked, sent, bought, posted, pressed a button on a ' +

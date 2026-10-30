@@ -118,7 +118,7 @@
     }
   ],
   "purposes": {
-    "gmail": "mail", "calendar": "mail", "drive": "mail", "notion": "mail", "gmailwrite": "mail", "gmailsend": "mail", "obsidian": "mail",
+    "gmail": "mail", "calendar": "mail", "drive": "mail", "notion": "mail", "gmailwrite": "mail", "gmailsend": "mail", "obsidian": "mail", "x": "home",
     "weather": "home", "homeassistant-skill": "home",
     "github": "code", "herdr": "code",
     "canva": "design"

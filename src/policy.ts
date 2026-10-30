@@ -118,6 +118,7 @@ export function effectOf(tool: string, input: Record<string, any>, s: Seen): Eff
     if (input.gatewayUrl || input.gatewayToken || (!COMPUTER_LOOKS.has(a) && !COMPUTER_HANDS.has(a))) return { kind: 'refuse', why: "Your computer can't do that here. Look with screenshot or zoom; act with left_click, type, key and scroll." };
     return COMPUTER_LOOKS.has(a) ? { kind: 'safe' } : effectOf('browser', { args: [a === 'type' ? 'type' : 'click'] }, s);
   }
+  if (tool === 'x') return { kind: 'safe' }; // reads only (src/x.ts)
   if (tool === 'calendar') {
     const [cmd = 'today', ...rest] = (Array.isArray(input.args) ? input.args : []).map(String), words = rest.filter((a, i) => !a.startsWith('--') && !rest[i - 1]?.startsWith('--')).map((w) => w.replace(/\s+/g, ' ').trim().slice(0, 80));
     if (['today', 'week', 'free', 'next'].includes(cmd)) return { kind: 'safe' };
@@ -251,6 +252,7 @@ export function toolWords(tool: string, input: Record<string, any>, ok = true): 
     }
     case 'web_search': return `Tried a web search for “${String(input.query ?? '').slice(0, 80)}”`;
     case 'web_fetch': return `Read ${host(input.url)}`;
+    case 'x': return input.args?.[0] === 'posts' ? `Read ${String(input.args?.[1] ?? '').slice(0, 40)}'s posts on X` : `Searched X for “${String(input.args?.[1] ?? '').slice(0, 60)}”`;
     case 'calendar': return ({ add: `Added “${String(input.args?.[1] ?? '').slice(0, 60)}” to the calendar`, move: 'Moved a calendar event', cancel: 'Cancelled a calendar event' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the calendar';
     case 'mail': return ({ search: `Searched the email for “${String(input.args?.[1] ?? '').slice(0, 60)}”`, read: 'Read an email', attachments: Number(input.args?.[2]) ? 'Saved an attachment from an email' : 'Looked at an email’s attachments', draft: 'Drafted a reply to an email', label: 'Filed an email under a label' } as Record<string, string>)[input.args?.[0]] ?? 'Looked at the email';
     case 'video': return ok ? `Looked at the video on ${host(input.url)}` : `Couldn't save the video from ${host(input.url)}`;

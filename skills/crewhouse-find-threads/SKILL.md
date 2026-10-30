@@ -23,7 +23,7 @@ that"), "<rival> alternative" for each rival, and the category words on their ow
 | Lobsters | `https://lobste.rs/search.json?q=<q>&what=stories&order=newest` |
 | Stack Exchange | `https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=creation&q=<q>&site=stackoverflow` |
 | GitHub issues | `gh search issues "<q>"` in a rival's repo |
-| X | list `https://x.com/search?q=<q>&f=live` deep links for the person to skim; never fetch it |
+| X | the `x` tool: `search "<q>" --days 7`, quoting the post and its link. If it says it cannot read X yet, say that line once and list `https://x.com/search?q=<q>&f=live` deep links for the person to skim; never fetch x.com |
 
 **Reddit is off.** Its anonymous JSON answers 403 and its RSS throttles. Offer once, in your own words: "Want me
 to read Reddit keyword alerts? Set up any free alert service that emails you, and connect Gmail." If they say

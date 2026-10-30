@@ -12,7 +12,8 @@ get one line with the link. Nothing else: you never reply, post, vote, join or f
 1. Ask what to listen for, once: the person's name and the spellings it travels under, the project's name, anything
    else they said to watch. Keep the list in a file under `files/` beside the seen-log, so the list and what you
    already reported survive the week.
-2. Read plainly first: `web_search` each name, then `web_fetch` the pages that look live — the thread, the post, the
+2. Read X with the `x` tool first (`search "<name>" --days 7`): its lines already carry the post, the words and the link.
+   If it says it cannot read X yet, say that one line and carry on without X, as below. Then read plainly: `web_search` each name, then `web_fetch` the pages that look live — the thread, the post, the
    news item. Quote the sentence the name appears in; never pass on a search snippet you did not open.
 3. Keep it standing and cheap. Offer it yourself with `crew_routine` and `watch`: crewd reads the page on schedule, so
    a quiet day costs the person nothing and you wake only when something changed. A site that draws its words with

@@ -301,6 +301,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     }
     if ((r = p.match(/^\/api\/connections\/([a-z]+)$/))) {
       const app = r[1];
+      if (m === 'PUT') { await crew.connections.setKey(app, body.key); return { state: 'on' }; }
       if (m === 'POST') { const v = await crew.connections.connect(app); return v.state === 'done' ? { state: 'on' } : v.state === 'failed' ? Promise.reject(Object.assign(new Error(v.error), { status: 502 })) : { url: v.url }; }
       if (m === 'GET') return crew.connections.status(app);
       if (m === 'DELETE') { await crew.connections.cancel(app); return { ok: true }; }

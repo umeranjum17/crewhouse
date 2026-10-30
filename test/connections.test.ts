@@ -8,6 +8,22 @@ import { join } from 'node:path';
 import { setup, settled, task, until, release, grantApps, delegated } from './lab.ts';
 import * as A from '../web/src/adapter.ts';
 
+// X's three read endpoints, stood in for: one key is good, every other is turned down; "slow" is rate limited.
+const KEY = ['xk', 'a1b2c3d4e5f6g7h8i9j0k1l2'].join('-'), xseen: string[] = [];
+const xapi = createServer((req, res) => {
+  const url = new URL(req.url!, 'http://x'), auth = String(req.headers.authorization), json = (x: unknown, status = 200) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(x)); };
+  xseen.push(url.pathname);
+  if (auth === 'Bearer slow-key-slow-key-slow-key') return json({}, 429);
+  if (auth !== `Bearer ${KEY}`) return json({ title: 'Unauthorized' }, 401);
+  if (url.pathname === '/2/tweets/search/recent') return json({ data: [{ id: '11', author_id: 'u1', created_at: '2026-10-28T09:00:00Z', text: 'Crewhouse   is the helper crew I wanted.' }], includes: { users: [{ id: 'u1', username: 'ada' }] } });
+  if (url.pathname === '/2/users/by/username/ada') return json({ data: { id: 'u1' } });
+  if (url.pathname === '/2/users/u1/tweets') return json({ data: [{ id: '12', created_at: '2026-10-29T09:00:00Z', text: 'Shipped it.' }] });
+  json({}, 404);
+});
+await new Promise<void>((r) => xapi.listen(0, '127.0.0.1', () => r()));
+process.env.CREWHOUSE_X_URL = `http://127.0.0.1:${(xapi.address() as any).port}`;
+after(() => xapi.close());
+
 const { Connections, connectError } = await import('../src/connections.ts');
 const disk = await import('../src/bots.ts');
 const { ConnectError } = await import('@byokit/connect');
@@ -355,7 +371,7 @@ test('Google setup saves a sealed key without pretending it was verified; typed 
 
 test("Google: one service per connection, only after its one-time setup; Google's own failures said plainly", async () => {
   const { crew, done } = googleLab();
-  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'gmailsend', 'gmailwrite', 'notion', 'canva'], 'v1: no Outlook, no OneDrive');
+  assert.deepEqual(Object.keys(crew.connections.apps).filter((k) => k !== 'mocknote'), ['drive', 'calendar', 'gmail', 'gmailsend', 'gmailwrite', 'notion', 'canva', 'x'], 'v1: no Outlook, no OneDrive');
   // Before setup: you is sent to Google's "OAuth client not found" page.
   await assert.rejects(crew.connections.connect('calendar'), (e: any) => e.status === 409 && /Google switched on for your crew/.test(e.message));
   assert.match(crew.connections.list().find((c: any) => c.app === 'gmail')!.house!, /set it up once in Settings/);
@@ -540,5 +556,31 @@ test('done needs proof: a job that acts but sees no confirmation, or says nothin
   assert.equal(db.get('SELECT state FROM tasks WHERE routine = ? ORDER BY id DESC', r.id)!.state, 'unsure');
   assert.match(db.get("SELECT text FROM messages WHERE bot = 'chief' ORDER BY id DESC")!.text, /^Quill isn't sure “.+” worked\. I tried something on your Mocknote/);
   assert.match(crew.digest(0), /- Not sure it worked: Quill, /);
+  done();
+});
+
+test("X: the person's own key is sealed and removable; Chief reads posts with the sentence and link, and says plainly when it cannot", async () => {
+  const { cfg, crew, done } = lab();
+  const read = async (...args: string[]) => String(await (await crew.connections.tools()).tools.find((t: any) => t.name === 'x')!.run({ args }));
+  const NONE = /^I can't read X yet\. Add your own X API key under Apps.*search links to check yourself\.$/;
+  assert.match(await read('search', 'crewhouse'), NONE, 'no key: one plain line');
+  assert.deepEqual(xseen, [], 'and nothing is asked of X');
+  await assert.rejects(crew.connections.setKey('x', 'short'), /doesn't look like an X API key/);
+  await assert.rejects(crew.connections.connect('x'), /Paste your own X API key/);
+  await crew.connections.setKey('x', `  slow-key-slow-key-slow-key `);
+  assert.equal(await read('search', 'crewhouse'), 'X is limiting reads right now. Try again in a few minutes.');
+  await crew.connections.setKey('x', 'bad-key-bad-key-bad-key-bad');
+  assert.match(await read('search', 'crewhouse'), /^X turned that key down, so I can't read X yet\..*search links to check yourself\.$/);
+  await crew.connections.setKey('x', KEY);
+  assert.deepEqual(crew.connections.on(), ['x']);
+  assert.equal(await read('search', 'crewhouse', '--days', '3'), '@ada · 2026-10-28 · “Crewhouse is the helper crew I wanted.” · https://x.com/ada/status/11');
+  assert.equal(await read('posts', '@ada'), '@ada · 2026-10-29 · “Shipped it.” · https://x.com/ada/status/12');
+  const file = join(cfg.stateDir, 'people', '1', 'app-signins', 'x-key');
+  assert.ok(!readFileSync(file, 'utf8').includes(KEY), 'sealed, never in clear');
+  const again = new Connections(cfg, 'http://127.0.0.1/cb'); await again.ready;
+  assert.equal(await again.token('x'), KEY, 'and it survives a restart'); await again.stop();
+  await crew.connections.disconnect('x');
+  assert.ok(!existsSync(file) && !crew.connections.connected('x'), 'removed');
+  assert.match(await read('search', 'crewhouse'), NONE);
   done();
 });
