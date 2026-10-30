@@ -912,18 +912,24 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const [setupError, setSetupError] = useState('');
   const [moving, setMoving] = useState(false); // the move's confirm is on the card
   const [way, setWay] = useState(-1);
+  const cachedCheck = useRef<AbortController | null>(null);
   const held = useRef(''); // the checked key, never on screen
   const press = useRef(''); // one rental per press: a repeated Make after a lost answer is the same request
   const [grant, setGrant] = useState<Grant | null>(null); // the computer's receipt, as this phone's link
-  const check = async (k: string) => {
+  const check = async (k: string, signal?: AbortSignal) => {
     if (!k.trim() || busy) return;
+    if (cachedCheck.current?.signal !== signal) { cachedCheck.current?.abort(); cachedCheck.current = null; }
     endSignIn();
     setBusy(true); setErr('');
-    try { setListed(await checkKey(boatOn(k.trim()), cloudStore, k.trim())); held.current = k.trim(); setView('pick'); }
-    catch (e) { setErr(said(e)); } finally { setBusy(false); }
+    try { const listed = await checkKey(boatOn(k.trim()), cloudStore, k.trim(), signal); if (signal?.aborted) return; setListed(listed); held.current = k.trim(); setView('pick'); }
+    catch (e) { if (!signal?.aborted) setErr(said(e)); } finally { if (cachedCheck.current?.signal === signal) cachedCheck.current = null; setBusy(false); }
   };
   // One action with a key already kept (and no sign-in under way): straight to the computers.
-  useEffect(() => { void keptKey().then((k) => { if (k && !signInRun()) void check(k); }); }, []);
+  useEffect(() => { void keptKey().then((k) => {
+    if (!k || signInRun()) return;
+    const controller = new AbortController(); cachedCheck.current = controller;
+    void check(k, controller.signal);
+  }); }, []);
   useEffect(() => watchSignIn(() => setFlow(signInRun()?.state ?? null)), []);
   // The sign-in finished: its key is in the store (never in this screen), and boat.dev's computers are already listed.
   useEffect(() => {
@@ -973,7 +979,7 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
         accessibilityLabel={c.signin.label} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" />
       {flow?.at === 'failed' && <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]}>
         <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{signInSaid(flow.why)}</T></View>}
-      <Btn go big disabled={!email.trim()} label={flow ? c.signin.retry : c.signin.go} onPress={() => startSignIn(email.trim())} />
+      <Btn go big disabled={!email.trim()} label={flow ? c.signin.retry : c.signin.go} onPress={() => { cachedCheck.current?.abort(); cachedCheck.current = null; startSignIn(email.trim()); }} />
       <Pressable onPress={() => void Linking.openURL(c.key.url)} accessibilityRole="link" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.signin.create}</T></Pressable></>}
     <View style={{ backgroundColor: t.soft, borderRadius: radius.card, padding: 12 }}><T tone="ink2" style={s.small}>{c.kept.map((x, i) => i % 2 ? <Text key={i} style={s.b}>{x}</Text> : x)}</T></View></>;
   const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
