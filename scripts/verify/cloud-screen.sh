@@ -55,7 +55,7 @@ adb install -r "$APK" >/dev/null
 adb shell wm size 1080x2400; adb shell wm density 443
 open_app() { adb shell pm clear "$PKG" >/dev/null; adb shell am start -n "$PKG/.MainActivity" >/dev/null; see '^.* Cloud$'; }
 paste_key() {
-  ui tap '^My computer$'; see 'Pairing code'; ui tap 'Pairing code'
+  ui tap '^My computer$'; see '^Type the code$'; ui tap '^Type the code$'; see 'Pairing code'; ui tap 'Pairing code'
   # Controlled inputs drop fast injected text: a few letters at a time.
   for part in $(echo "$KEY" | fold -w 3); do adb shell input text "$part"; sleep 0.4; done
   see "$KEY"

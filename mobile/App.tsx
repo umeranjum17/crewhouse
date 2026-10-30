@@ -828,8 +828,8 @@ function Pair({ onPaired, onBack, onPut, paste, link }: { onPaired: (g: Grant) =
 }
 
 // ---------- phone only: Chief on this phone, no computer ----------
-/** The first screen with no computer paired: two doors, My computer and Cloud. My computer goes straight to pairing
- *  (the computer shows the code; putting Crewhouse on one with none is the one link there); Just chat from this phone is
+/** The first screen with no computer paired: two doors, My computer and Cloud. My computer opens the card that says how to
+ *  run Crewhouse there (the one line, and Type the code goes on to pairing, which stays whole); Just chat from this phone is
  *  one quiet line inside it, the phone-only floor; Cloud the cloud steps. */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
@@ -838,9 +838,10 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
   // only hears one that arrives while it is showing.
   const [tapped, setTapped] = useState<string | null>(null), heard = Linking.useURL();
   useEffect(() => { if (heard && /^crewhouse:\/\/pair\?code=/.test(heard)) { setTapped(heard); setAt('pair'); } }, [heard]);
-  const back = at === 'where' ? null : () => { setTapped(null); setAt(at === 'put' ? 'pair' : 'where'); };
+  const [viaPut, setViaPut] = useState(false); // the code box came from the My computer card: Back returns to it
+  const back = at === 'where' ? null : () => { setTapped(null); setAt(at === 'pair' && viaPut ? 'put' : 'where'); if (at !== 'pair') setViaPut(false); };
   useEffect(() => { if (!back) return; const sub = BackHandler.addEventListener('hardwareBackPress', () => { back(); return true; }); return () => sub.remove(); }, [at]);
-  if (at === 'put') return <PutChief onCode={() => setAt('pair')} onBack={back!} />;
+  if (at === 'put') return <PutChief onCode={() => { setViaPut(true); setAt('pair'); }} onBack={back!} />;
   if (at === 'pair' || at === 'paste') return <Pair onPaired={onPaired} onBack={back!} onPut={() => setAt('put')} paste={at === 'paste'} link={tapped} />;
   if (at === 'cloud') return <CloudConnect onBack={back!} onPair={() => setAt('pair')} onPaired={onPaired} />;
   const w = A.where(cloudOn);
@@ -851,7 +852,7 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
         <View style={{ flex: 1 }}><T style={s.b}>Chief</T><T style={s.title}>{w.hello}</T></View>
       </View>
       {w.rows.map((r) => <View key={r.key} style={[s.card, { backgroundColor: t.card, borderColor: t.line, borderWidth: 1 }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={r.title} onPress={() => setAt(r.key === 'cloud' ? 'cloud' : 'pair')} style={[s.row, { gap: 12, alignItems: 'flex-start' }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={r.title} onPress={() => setAt(r.key === 'cloud' ? 'cloud' : 'put')} style={[s.row, { gap: 12, alignItems: 'flex-start' }]}>
           <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
           <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="ink2" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
         </Pressable>
@@ -869,6 +870,8 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
 function PutChief({ onCode, onBack }: { onCode: () => void; onBack: () => void }) {
   const t = useLook();
   const p = A.PUT;
+  const [said, setSaid] = useState<'copied' | 'failed' | null>(null), [open, setOpen] = useState(false);
+  const copy = () => { try { Clipboard.setString(p.line); setSaid('copied'); } catch { setSaid('failed'); } };
   return (
     <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]}>
       <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={[s.row, { height: 44 }]}>
@@ -877,13 +880,20 @@ function PutChief({ onCode, onBack }: { onCode: () => void; onBack: () => void }
         <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
       <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: 2, borderColor: t.go }]}>
         <T tone="ink2">{p.lead}</T>
-        <Text selectable style={{ fontSize: 14, lineHeight: 20, color: t.ink, backgroundColor: t.bg, borderRadius: radius.card, padding: 12 }}>{p.line}</Text>
-        <Btn label={p.send} onPress={() => void Share.share({ message: p.line })} />
+        <Text selectable style={{ fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: 14, lineHeight: 20, color: t.ink, backgroundColor: t.bg, borderRadius: radius.card, padding: 12 }}>{p.line}</Text>
+        <Btn label={p.copy} onPress={copy} />
+        <View accessibilityLiveRegion="polite">{!!said && <T tone="ink2" style={said === 'failed' ? { color: t.danger } : undefined}>{said === 'copied' ? p.copied : p.copyFailed}</T>}</View>
+        <Btn ghost label={p.send} onPress={() => void Share.share({ message: p.line })} />
+        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={6} style={[s.row, { justifyContent: 'space-between', minHeight: 44 }]}>
+          <T style={s.b}>{p.happens}</T><T tone="ink2">{open ? '⌃' : '⌄'}</T></Pressable>
+        {open && p.steps.map((x, i) => <View key={x} style={[s.row, { alignItems: 'flex-start' }]}>
+          <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T style={{ flex: 1 }}>{x}</T></View>)}
         <T tone="ink2">{p.after}</T>
         <Btn go big label={p.code} onPress={onCode} />
       </View>
-      <Note>{p.needs}</Note>
-      <T tone="mute" style={s.small}>{p.app}</T>
+      <T tone="ink2" style={s.small}>{p.needs}</T>
+      <T tone="ink2" style={s.small}>{p.app}</T>
+      <Note>{A.where(false).note}</Note>
     </ScrollView>
   );
 }
