@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/where-cloud.m
 
 ## How to get to it (user POV)
 
-On the phone app's first screen, In my cloud: paste a boat.dev key, then pick a computer, or make one when the account has none. The progress list says which step stopped and whether Try again is safe. A second phone on a computer another phone set up is offered Move Chief to this phone; after the confirm, the first phone loses access and this one reaches Chief.
+On the phone app's first screen, Cloud signs in to boat.dev with a code; key paste is under Other ways (advanced). Then pick a computer, or make one when the account has none. The progress list says which step stopped and whether Try again is safe. A second phone on a computer another phone set up is offered Move Chief to this phone; after the confirm, the first phone loses access and this one reaches Chief. See [where-cloud.md](../../../../docs/verification/where-cloud.md) for the authoritative journey.
 
 ## Driving it
 

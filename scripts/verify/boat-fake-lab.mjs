@@ -6,6 +6,10 @@
 //   LAB_PORT=7411 node scripts/verify/boat-fake-lab.mjs          # the lab runs until it is stopped (LAB_EMPTY=1: no computer)
 //   touch <lab dir>/install-fails                               # the install fails; remove the file and it passes
 //
+// The code sign-in (the front door): LAB_KEY=boat-claimed-key makes the fake accept the key its claim issues, LAB_EMAIL names the
+// one boat.dev email it accepts (default umer@example.com), and LAB_CLAIM_WAIT=1 keeps the sign-in waiting, one poll a second,
+// until `touch <lab dir>/claim-approve` (the person typed the code) or `touch <lab dir>/claim-expire` (the code lapsed).
+//
 // The phone's build was given the lab's port (EXPO_PUBLIC_CREWHOUSE_BOAT_API=http://127.0.0.1:<port>/api/v1),
 // so the fake's own port is reached through a proxy on it.
 import { spawn } from 'node:child_process';
@@ -22,7 +26,7 @@ const flag = join(dir, 'install-fails');
 const remote = '/home/user/crewhouse/.byokit', cloud = join(dir, '.byokit');
 mkdirSync(cloud, { recursive: true });
 
-const server = await startFakeSandboxServer({ key: KEY });
+const server = await startFakeSandboxServer({ key: KEY, claimInterval: process.env.LAB_CLAIM_WAIT === '1' ? 1 : 0, ...(process.env.LAB_EMAIL ? { claimEmail: process.env.LAB_EMAIL } : {}) });
 const provider = boat({ baseUrl: server.url, label: 'boat.dev', prices: [], key: async () => KEY });
 // LAB_EMPTY=1 is a new account with no computer, so the phone's Make a new computer is the way in.
 const seeded = process.env.LAB_EMPTY === '1' ? { id: 'none' } : await provider.create({ name: 'computer', size: 'small', keepCopies: true, idempotencyKey: 'seed' });
@@ -43,7 +47,7 @@ let log = '';
 host.stdout.on('data', (b) => log += b); host.stderr.on('data', (b) => log += b);
 
 // The bridge: the fake's inbox to the host's inbox, and the host's receipt back to the fake's outbox.
-let failing = null;
+let failing = null, pushed = 0, expired = false;
 const owners = new Set();
 const bridge = setInterval(() => {
   const wantFail = existsSync(flag);
@@ -51,6 +55,10 @@ const bridge = setInterval(() => {
     failing = wantFail;
     server.machine.script('bash', wantFail ? { code: 1, stdout: '', stderr: 'no route', timedOut: false } : { code: 0, stdout: '', stderr: '', timedOut: false });
     console.log('the install fails:', wantFail);
+  }
+  if (process.env.LAB_CLAIM_WAIT === '1' && !existsSync(join(dir, 'claim-approve'))) { // keep exactly one answer queued ahead of the phone's polls
+    const polls = server.requests.filter((r) => r.method === 'POST' && r.path === '/api/boat/oauth2/token').length;
+    if (!expired && existsSync(join(dir, 'claim-expire'))) { expired = true; server.scriptClaimPoll(['expired_token']); } else if (!expired && pushed <= polls) { pushed++; server.scriptClaimPoll(['pending']); }
   }
   const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);
   if (delivered && !existsSync(join(cloud, 'inbox/phone.bin'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
@@ -62,5 +70,7 @@ const bridge = setInterval(() => {
 }, 50);
 
 console.log(`the fake boat.dev is on 127.0.0.1:${PORT}, computer ${seeded.id}, key ${KEY.length} letters, lab ${dir}`);
+// The code sign-in's own addresses (metadata, token, the page's link) name the fake's own port, so a phone needs that one reversed too.
+console.log(`adb reverse tcp:${fakePort} tcp:${fakePort}   # for the code sign-in`);
 console.log(`touch ${flag} to make the install fail; remove it and the phone's Try again reaches ready.`);
 process.on('SIGTERM', () => { clearInterval(bridge); host.kill('SIGTERM'); server.close().then(() => process.exit(0)); });

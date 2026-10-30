@@ -44,8 +44,8 @@ import { PATH_NOTE, path } from '../web/src/career.ts';
 import { connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
 import { startNews, stopNews } from './src/news';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
-import { boatOn, cloudOn, cloudStore, forgetKey, keptKey, lab, phoneKeys } from './src/cloud';
-import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said } from '../web/src/cloud.ts';
+import { boatOn, cloudOn, cloudStore, endSignIn, forgetKey, keptKey, lab, phoneKeys, signInRun, startSignIn, watchSignIn } from './src/cloud';
+import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said, signInSaid } from '../web/src/cloud.ts';
 import { MachineError, type MachineRef, type SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 import { roleActions } from './src/goal';
@@ -895,12 +895,15 @@ function Note({ children }: { children: ReactNode }) {
     <Image source={WHERE.shield} style={{ width: 18, height: 18, marginTop: 1, tintColor: t.ink }} /><T tone="ink2" style={[s.small, { flex: 1, lineHeight: 19 }]}>{children}</T>
   </View>;
 }
-/** In my cloud (mock key-first): paste the boat.dev key, choose the computer (or see what a new one costs), then the
- *  kit's real setup steps tick the list. The kit calls are web/src/cloud.ts; the key stays on this phone (src/cloud.ts). */
+/** In my cloud: sign in to boat.dev with a code (the key paste is under Other ways), choose the computer (or see what a new
+ *  one costs), then the kit's real setup steps tick the list. The kit calls are web/src/cloud.ts; the key stays on this phone
+ *  (src/cloud.ts), which also keeps the sign-in so leaving this screen and coming back finds it where it was left. */
 function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
   const c = A.CLOUD;
-  const [view, setView] = useState<'key' | 'pick' | 'make' | 'steps' | 'other'>('key');
+  const [view, setView] = useState<'signin' | 'key' | 'pick' | 'make' | 'steps' | 'other'>('signin');
+  const [flow, setFlow] = useState(signInRun()?.state ?? null); // the code sign-in's state, where this phone left it
+  const [email, setEmail] = useState(signInRun()?.email ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [listed, setListed] = useState<MachineRef[]>([]);
@@ -909,17 +912,35 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const [setupError, setSetupError] = useState('');
   const [moving, setMoving] = useState(false); // the move's confirm is on the card
   const [way, setWay] = useState(-1);
+  const cachedCheck = useRef<AbortController | null>(null);
   const held = useRef(''); // the checked key, never on screen
   const press = useRef(''); // one rental per press: a repeated Make after a lost answer is the same request
   const [grant, setGrant] = useState<Grant | null>(null); // the computer's receipt, as this phone's link
-  const check = async (k: string) => {
+  const check = async (k: string, signal?: AbortSignal) => {
     if (!k.trim() || busy) return;
+    if (cachedCheck.current?.signal !== signal) { cachedCheck.current?.abort(); cachedCheck.current = null; }
+    endSignIn();
     setBusy(true); setErr('');
-    try { setListed(await checkKey(boatOn(k.trim()), cloudStore, k.trim())); held.current = k.trim(); setView('pick'); }
-    catch (e) { setErr(said(e)); } finally { setBusy(false); }
+    try { const listed = await checkKey(boatOn(k.trim()), cloudStore, k.trim(), signal); if (signal?.aborted) return; setListed(listed); held.current = k.trim(); setView('pick'); }
+    catch (e) { if (!signal?.aborted) setErr(said(e)); } finally { if (cachedCheck.current?.signal === signal) cachedCheck.current = null; setBusy(false); }
   };
-  // One action with a key already kept: straight to the computers.
-  useEffect(() => { void keptKey().then((k) => { if (k) void check(k); }); }, []);
+  // One action with a key already kept (and no sign-in under way): straight to the computers.
+  useEffect(() => { void keptKey().then((k) => {
+    if (!k || signInRun()) return;
+    const controller = new AbortController(); cachedCheck.current = controller;
+    void check(k, controller.signal);
+  }); }, []);
+  useEffect(() => watchSignIn(() => setFlow(signInRun()?.state ?? null)), []);
+  // The sign-in finished: its key is in the store (never in this screen), and boat.dev's computers are already listed.
+  useEffect(() => {
+    if (flow?.at !== 'done') return;
+    const completed = signInRun();
+    if (!completed || completed.state !== flow) return;
+    void keptKey().then((k) => {
+      if (signInRun() !== completed || completed.state !== flow) return;
+      held.current = k; setListed(flow.listed); endSignIn(); setView((v) => v === 'signin' || v === 'other' || v === 'key' ? 'pick' : v);
+    });
+  }, [flow]);
   const run = async (ref: MachineRef, retry = false, move = false) => {
     setPicked(ref.id); setMoving(false);
     if (!retry) setSteps([]);
@@ -944,6 +965,23 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   const pill = (w: string) => <T style={[s.label2, { alignSelf: 'flex-start', color: t.go, backgroundColor: t.softAccent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }]}>{w}</T>;
   const problem = !!err && <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]} /* the failed step's "!" and colour, not link blue */>
     <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{err}</T></View>;
+  const open = () => { if (flow?.at === 'waiting' && /^https?:\/\//.test(flow.url)) void Linking.openURL(flow.url); };
+  const waiting = flow?.at === 'starting' || flow?.at === 'waiting';
+  const signin = <>{pill(c.signin.pill)}<T style={s.title}>{c.signin.title}</T>
+    {waiting ? <>
+      <Btn go big disabled={flow.at !== 'waiting'} label={c.signin.open} onPress={open} />
+      {flow.at === 'waiting' ? <><T style={[s.small, s.b]}>{c.signin.code}</T>
+        <Text selectable style={[s.title, { color: t.ink, letterSpacing: 6 }]} accessibilityLabel={`${c.signin.code}: ${flow.code.split('').join(' ')}`}>{flow.code}</Text></> : null}
+      <View accessibilityLiveRegion="polite" style={s.row}><ActivityIndicator color={t.ink2} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{flow.at === 'waiting' ? c.signin.waiting : c.signin.starting}</T></View>
+      <Btn ghost label={c.signin.other} onPress={endSignIn} /></> : <>
+      <T tone="ink2">{c.signin.lead}</T><T style={[s.small, s.b]}>{c.signin.label}</T>
+      <TextInput style={[s.input, { minHeight: 48, color: t.ink, borderColor: t.line2, backgroundColor: t.bg }]} value={email} onChangeText={setEmail} placeholder={c.signin.placeholder} placeholderTextColor={t.mute}
+        accessibilityLabel={c.signin.label} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" />
+      {flow?.at === 'failed' && <View accessibilityLiveRegion="polite" style={[s.row, { alignItems: 'flex-start' }]}>
+        <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.danger }]}>!</Text><T style={{ flex: 1, color: t.danger }}>{signInSaid(flow.why)}</T></View>}
+      <Btn go big disabled={!email.trim()} label={flow ? c.signin.retry : c.signin.go} onPress={() => { cachedCheck.current?.abort(); cachedCheck.current = null; startSignIn(email.trim()); }} />
+      <Pressable onPress={() => void Linking.openURL(c.key.url)} accessibilityRole="link" hitSlop={6}><T style={[s.small, s.b, { color: t.go }]}>{c.signin.create}</T></Pressable></>}
+    <View style={{ backgroundColor: t.soft, borderRadius: radius.card, padding: 12 }}><T tone="ink2" style={s.small}>{c.kept.map((x, i) => i % 2 ? <Text key={i} style={s.b}>{x}</Text> : x)}</T></View></>;
   const key = <>{pill(c.key.pill)}<T style={s.title}>{c.key.title}</T><T tone="ink2">{c.key.lead}</T>
     <T style={[s.small, s.b]}>{c.key.label}</T>
     <Pressable onPress={() => void Clipboard.getString().then(check)} disabled={busy} accessibilityRole="button" accessibilityLabel={c.key.paste}
@@ -976,13 +1014,15 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
       {p.retry && <><T tone="mute" style={s.small}>{c.steps.again}</T><Btn go big label={c.steps.retry} onPress={() => void run(pickedRef(), true)} /></>}
       {p.move && <><Btn go big label={c.move.go} onPress={() => setMoving(true)} /><Btn ghost label={c.move.back} onPress={() => setView('pick')} /></>}</View>}</>;
   const other = <><T style={s.title}>{c.other.title}</T><T tone="ink2">{c.other.lead}</T>
+    <Pressable onPress={() => setView('key')} accessibilityRole="button" accessibilityLabel={c.other.key[0]} style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
+      <View style={s.row}><T style={[s.b, { flex: 1 }]}>{c.other.key[0]}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{c.other.key[1]}</T></Pressable>
     {c.other.ways.map(([title, sub, more], i) => <Pressable key={title} onPress={() => more ? setWay(way === i ? -1 : i) : onPair()} accessibilityRole="button" accessibilityLabel={title}
       style={{ gap: 4, borderWidth: 1, borderColor: t.line, borderRadius: radius.card, padding: 12 }}>
       <View style={s.row}><T style={[s.b, { flex: 1 }]}>{title}</T><T tone="mute">›</T></View><T tone="mute" style={s.small}>{sub}</T>
       {way === i && <T tone="ink2" style={s.small}>{more}</T>}</Pressable>)}
     <T tone="mute" style={s.small}>{c.other.foot}</T></>;
   const set = view === 'steps' && ready;
-  const back = view === 'key' ? onBack : moving ? () => setMoving(false) : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : 'key'); };
+  const back = view === 'signin' ? onBack : moving ? () => setMoving(false) : () => { setErr(''); setView(view === 'make' || view === 'steps' ? 'pick' : view === 'key' ? 'other' : 'signin'); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
       <ScrollView contentContainerStyle={[s.screen, { gap: 14 }]} keyboardShouldPersistTaps="handled">
@@ -991,10 +1031,10 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
         <View style={[s.row, { alignItems: 'flex-start' }]}><T style={[s.h1, { flex: 1 }]}>{set ? c.ready.top : c.title}</T>
           <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
         {!set && <T tone="ink2">{c.lede}</T>}
-        {box(view !== 'make' && view !== 'other', { key, pick, make, steps: progressList, other }[view])}
-        {view === 'key' && <Btn ghost label={`${c.other.link} →`} onPress={() => setView('other')} />}
-        {view === 'pick' && <Btn ghost label={c.pick.other} onPress={() => { held.current = ''; setView('key'); }} />}
-        {view === 'other' && <Btn ghost label={c.other.back} onPress={() => setView('key')} />}
+        {box(view !== 'make' && view !== 'other', { signin, key, pick, make, steps: progressList, other }[view])}
+        {view === 'signin' && <Btn ghost label={`${c.other.link} →`} onPress={() => setView('other')} />}
+        {view === 'pick' && <Btn ghost label={c.pick.other} onPress={() => { held.current = ''; setView('signin'); }} />}
+        {view === 'other' && <Btn ghost label={c.other.back} onPress={() => setView('signin')} />}
         <Note>{c.trust[0]}</Note>
         <T tone="mute" style={[s.small, s.centerText]}>{c.trust[1]}</T>
       </ScrollView>

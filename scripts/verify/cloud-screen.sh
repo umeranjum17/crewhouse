@@ -39,11 +39,17 @@ shot() {
 LAB=$(mktemp -d -t cloud-screen.XXXXXX)
 . "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
 (cd "$REPO" && exec env LAB_EMPTY=1 LAB_PORT=7411 LAB_DIR="$LAB" HOME="$LAB" node "$VERIFY_DIR/boat-fake-lab.mjs") > "$LAB/lab.log" 2>&1 & LABPID=$!
-trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
+trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; [ -z "${FAKE_PORT:-}" ] || adb reverse --remove "tcp:$FAKE_PORT" >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 for _ in $(seq 120); do grep -q 'the host is ready' "$LAB/lab.log" && break; kill -0 "$LABPID" 2>/dev/null || { cat "$LAB/lab.log" >&2; exit 1; }; sleep 1; done
 grep -q 'the host is ready' "$LAB/lab.log" || { cat "$LAB/lab.log" >&2; echo "cloud-screen: the lab's host never got ready" >&2; exit 1; }
 
+# The phone reaches the fake through 7411, but the fake's OAuth metadata and claim
+# links advertise its own listener port. Reverse that port too so the phone can
+# poll the provider after the person approves the code.
+FAKE_PORT=$(sed -n 's/^adb reverse tcp:\([0-9][0-9]*\) tcp:\1.*/\1/p' "$LAB/lab.log" | head -n 1)
+[ -n "$FAKE_PORT" ] || { cat "$LAB/lab.log" >&2; echo "cloud-screen: the lab did not report its provider port" >&2; exit 1; }
 adb reverse tcp:7411 tcp:7411 >/dev/null
+adb reverse "tcp:$FAKE_PORT" "tcp:$FAKE_PORT" >/dev/null
 adb install -r "$APK" >/dev/null
 # 390 wide: 1080 px at density 443.
 adb shell wm size 1080x2400; adb shell wm density 443
@@ -57,7 +63,8 @@ paste_key() {
   for _ in $(seq 20); do adb shell input keyevent 67; done
   adb shell dumpsys input_method | grep -q 'mInputShown=true' && adb shell input keyevent 4
   ui tap '^Back$'; see '^.* Cloud$'
-  ui tap '^Cloud$'; see 'Paste key'; ui tap '^Paste key$'
+  # The front door is the code sign-in; a key already held is pasted from Other ways (advanced).
+  ui tap '^Cloud$'; see 'Sign in to boat.dev'; ui tap 'Other ways'; see 'Paste a boat.dev key'; ui tap 'Paste a boat.dev key'; see 'Paste key'; ui tap '^Paste key$'
 }
 
 # 1. A new account has no computer: the pick card says so, and Make a new computer is the way in.
@@ -73,8 +80,8 @@ shot failed 'Installing Chief stopped partway'
 rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
 shot ready 'Chief is on your cloud computer'
-# Set up, the title stands alone: the key-first lede is for the steps before it.
-! ui texts | grep -q 'One key lets me' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
+# Set up, the title stands alone: the sign-in lede is for the steps before it.
+! ui texts | grep -q 'lets me set up your computer' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
 # 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
 #    Chief moves here: the computer's own host revokes the first phone.
 open_app; paste_key

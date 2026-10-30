@@ -134,11 +134,20 @@ export const PUT = {
   needs: 'The computer and this phone both need Tailscale, signed in to your account. Nothing else is installed on this phone.',
   app: 'No Tailscale? Install the Crewhouse app on the computer instead. Then open Settings, Phones, Add a phone.',
 };
-/** The cloud connect on the phone (mock key-first): the boat.dev key, then the computer, then Chief sets it up. The kit
- *  side is web/src/cloud.ts; a web page can't call boat.dev, so only the phone app shows these. */
+/** The cloud connect on the phone: sign in to boat.dev with a code (the key paste is under Other ways), then the computer, then
+ *  Chief sets it up. The kit side is web/src/cloud.ts; a web page can't call boat.dev, so only the phone app shows these. */
 export const CLOUD = {
   top: ['Chief’s computer', 'Your own cloud'], title: 'Connect your cloud computer.', boat: { mark: 'b', tile: '#111111' },
-  lede: 'One key lets me set up your computer and help manage it later.',
+  lede: 'One boat.dev sign-in lets me set up your computer and help manage it later.',
+  /** The front door: the person's email goes to boat.dev, which shows a code to type on its own page. Failures are named, never one line. */
+  signin: {
+    pill: 'boat.dev · Your own account', title: 'Sign in to boat.dev', lead: 'Type the email of your boat.dev account. boat.dev gives me a code, and you type it on its own page. You choose your computer after.',
+    label: 'boat.dev email', placeholder: 'Email address', go: 'Get my code', retry: 'Try again', starting: 'Asking boat.dev for your code…',
+    open: 'Open boat.dev to sign in', code: 'Type this code on the boat.dev page', waiting: 'Waiting for you to finish on boat.dev. This screen carries on by itself.',
+    other: 'Use a different email', create: 'No boat.dev account yet? Open boat.dev',
+    failed: { unreachable: 'I can’t reach boat.dev right now. Check your connection and try again.', provider: 'boat.dev couldn’t finish the sign-in. Nothing was connected. Try again.',
+      timeout: 'The sign-in wasn’t finished on boat.dev, so I stopped waiting. Nothing was connected. Try again.' },
+  },
   key: {
     pill: 'boat.dev · Your own account', title: 'Paste your boat.dev key', lead: 'Two actions if your key is ready: paste it, then choose your computer.',
     label: 'Key from boat.dev', paste: 'Paste key', after: 'Your computers appear after you paste. You choose before I install anything.',
@@ -151,7 +160,7 @@ export const CLOUD = {
     /** The kit lists no display name (every computer is `computer`), so they are told apart by order. */
     name: (i: number, n: number) => n > 1 ? `Cloud computer ${i + 1}` : 'Your cloud computer', sub: 'Already rented in your account', setup: 'Setup installs Chief here and allows this phone to connect. Existing files and services are checked first.',
     use: 'Use this computer', none: 'I didn’t find a computer in your boat.dev account.', bill: 'No new rental. boat.dev keeps billing your existing computer as usual.',
-    make: 'Make a new computer instead', other: 'Use a different key',
+    make: 'Make a new computer instead', other: 'Use a different boat.dev account',
   },
   make: {
     pill: 'New rental', title: 'Make a cloud computer?', lead: 'It will be in your own boat.dev account. boat.dev bills you, not Crewhouse.', size: 'Standard · 2 CPU / 4 GB',
@@ -171,7 +180,8 @@ export const CLOUD = {
     lines: ['The phone that set up this computer loses access to Chief at once. It can’t send Chief anything after this.', 'Your chats and your crew stay on the computer. I set Chief up again here, then this phone takes over.'] },
   ready: { pill: 'Set up', title: 'Chief is on your cloud computer.', top: 'Your cloud computer', lines: ['It knows this phone. What you tell Chief here goes to that computer, encrypted all the way.', 'No AI sign-in was copied from another device. Your boat.dev key stays on this phone for computer management.'], talk: 'Talk to Chief' },
   other: {
-    link: 'Other ways', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev key',
+    link: 'Other ways (advanced)', title: 'Other ways to connect', lead: 'I can still use your own computer. Choose the access you want to give.', back: 'Back to boat.dev sign-in',
+    key: ['Paste a boat.dev key', 'For anyone who already holds a key. Then choose your computer.'],
     ways: [['Run a setup command', 'Then paste its setup code. No cloud key needed.', 'That isn’t ready yet. It arrives with the next Crewhouse update.'],
       ['SSH from a computer', 'Use the SSH key you already have there.', 'This is set up from the computer that holds your SSH key, and that isn’t ready yet. The private key never leaves that computer.'],
       ['Use Tailscale', 'An option if you want it. You never need it.', '']],
