@@ -7,7 +7,7 @@ provider actions; it never pretends an action succeeded.
 
 ## Phone controls
 
-`mobile/App.tsx` calls `web/src/cloud.ts` `computerCall` through the pinned `@byokit/cloud` 0.2.1:
+`mobile/App.tsx` calls `web/src/cloud.ts` `computerCall` through the pinned `@byokit/cloud` 0.6.1:
 
 - Read the bound machine's real disk usage and latest snapshot. Normal is below 80%, Getting full below 95%,
   Full otherwise. No snapshot time or update status is invented. The secure record's host must match this phone's
@@ -41,7 +41,7 @@ For native captures, build the release APK through the fleet memory gate, with *
 only `EXPO_PUBLIC_CREWHOUSE_BOAT_API` points to the task's fake-Boat API. Use the owned/private emulator recipe in
 [where-cloud.md](where-cloud.md). Start `boat-fake-lab.mjs` with private HOME/XDG and a task-owned `LAB_DIR`, and
 script its `df` response from a synthetic disk (the live machine path is covered by the kit dispatcher journey).
-Walk Other ways (advanced) → Paste a boat.dev key → Paste key → Use this computer → Ready. The computer's binding is written by real crewd. Pair to that same
+Walk Cloud → Sign in to boat.dev with a code (or Other ways (advanced) → Paste a boat.dev key) → Use this computer → Ready. The computer's binding is written by real crewd. Pair to that same
 lab through its typed relay code without clearing the app's secure store, then Settings → Chief's computer.
 Capture disk, Save a snapshot, Reset warning/Cancel, unavailable Daily snapshots and Undo, and Refresh error/retry.
 Never point a fixture build at a real provider or use real keys. The fake provider cannot route its public

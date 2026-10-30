@@ -1,4 +1,4 @@
-// The cloud connect's phone side (mock key-first): the boat.dev key and this phone's own key pair for Chief's computer
+// The cloud connect's phone side: the boat.dev key and this phone's own key pair for Chief's computer
 // live in this phone's secure store, readable only while it is unlocked and never moved to another device. The kit
 // calls are web/src/cloud.ts, shared with test/cloud-connect.test.ts.
 import { nativeStore } from '@byokit/secrets/native';

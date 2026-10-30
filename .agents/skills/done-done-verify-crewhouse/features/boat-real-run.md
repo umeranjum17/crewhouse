@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/where-cloud.m
 
 ## How to get to it (user POV)
 
-On the phone app's first screen, In my cloud: paste the boat.dev key, pick the computer, Use this computer, Talk to Chief. Chief asks for a sign-in; Settings › Your AI accounts › Paste your MiniMax key signs the computer in, and Chief answers the waiting question by himself. Asked to look at his own screen, he uses his computer and says what is on it.
+On the phone app's first screen, Cloud: sign in to boat.dev with a code (or use Other ways (advanced) to paste a boat.dev key), pick the computer, Use this computer, Talk to Chief. Chief asks for a sign-in; Settings › Your AI accounts › Paste your MiniMax key signs the computer in, and Chief answers the waiting question by himself. Asked to look at his own screen, he uses his computer and says what is on it.
 
 ## Driving it
 

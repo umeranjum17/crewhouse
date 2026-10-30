@@ -80,7 +80,7 @@ shot failed 'Installing Chief stopped partway'
 rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
 shot ready 'Chief is on your cloud computer'
-# Set up, the title stands alone: the key-first lede is for the steps before it.
+# Set up, the title stands alone: the sign-in lede is for the steps before it.
 ! ui texts | grep -q 'lets me set up your computer' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
 # 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
 #    Chief moves here: the computer's own host revokes the first phone.

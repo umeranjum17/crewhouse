@@ -1,4 +1,4 @@
-// The cloud connect's kit side (mock key-first): the phone app runs it on the person's own boat.dev key, since a web
+// The cloud connect's kit side: the phone app runs it on the person's own boat.dev key, since a web
 // page can't call boat.dev (BYOKit cloud kit D-6). Framework-free, so the phone and test/cloud-connect.test.ts share it.
 import { boat, claim, errorKey, machine, MachineError, pairEnrol, revokeClaim, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
 import { b64url, hostId, unb64url, type DeviceGrant, type KeyPair } from '@byokit/pair';

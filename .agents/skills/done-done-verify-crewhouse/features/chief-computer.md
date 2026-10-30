@@ -4,7 +4,7 @@ Read [the drive recipe](../../../../docs/verification/chief-computer.md) and
 [cloud onboarding](../../../../docs/verification/where-cloud.md). These are real-product journeys on an isolated
 stub-engine daemon and the pinned kit's scripted HTTP provider; not a real paid-cloud or model claim.
 
-Build with no cloud-enable variable. Phone and web show `A.where`'s three choices, In my cloud first, with its
+Build with no cloud-enable variable. Phone and web show `A.where`'s three choices, Cloud first; Cloud starts code sign-in and key paste is under Other ways (advanced), with its
 sandbox, billing, sign-in and Settings notes. Phone cloud opens the boat.dev code sign-in (Paste key is under Other ways (advanced)); computer opens Put Chief on your
 computer; phone-only opens its own account picker. Web cloud/phone-only explain the native-app requirement.
 
