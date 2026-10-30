@@ -47,17 +47,17 @@ adb reverse tcp:7411 tcp:7411 >/dev/null
 adb install -r "$APK" >/dev/null
 # 390 wide: 1080 px at density 443.
 adb shell wm size 1080x2400; adb shell wm density 443
-open_app() { adb shell pm clear "$PKG" >/dev/null; adb shell am start -n "$PKG/.MainActivity" >/dev/null; see '^.* In my cloud$'; }
+open_app() { adb shell pm clear "$PKG" >/dev/null; adb shell am start -n "$PKG/.MainActivity" >/dev/null; see '^.* Cloud$'; }
 paste_key() {
-  ui tap '^On my computer$'; see 'Pairing code'; ui tap 'Pairing code'
+  ui tap '^My computer$'; see 'Pairing code'; ui tap 'Pairing code'
   # Controlled inputs drop fast injected text: a few letters at a time.
   for part in $(echo "$KEY" | fold -w 3); do adb shell input text "$part"; sleep 0.4; done
   see "$KEY"
   adb shell input keycombination 113 29; adb shell input keycombination 113 31; sleep 1
   for _ in $(seq 20); do adb shell input keyevent 67; done
   adb shell dumpsys input_method | grep -q 'mInputShown=true' && adb shell input keyevent 4
-  ui tap '^Back$'; see '^.* In my cloud$'
-  ui tap '^In my cloud$'; see 'Paste key'; ui tap '^Paste key$'
+  ui tap '^Back$'; see '^.* Cloud$'
+  ui tap '^Cloud$'; see 'Paste key'; ui tap '^Paste key$'
 }
 
 # 1. A new account has no computer: the pick card says so, and Make a new computer is the way in.

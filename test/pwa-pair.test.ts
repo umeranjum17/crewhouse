@@ -74,7 +74,7 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
 
   /** Paste a code into the Pair sheet, then say yes at the computer once its two words match the page's. */
   const pair = async (code: string) => {
-    await run(`[...document.querySelectorAll('.where-opt')].find((b) => /On my computer/.test(b.textContent)).click()`);
+    await run(`[...document.querySelectorAll('.where-opt')].find((b) => /My computer/.test(b.textContent)).querySelector('.where-main').click()`);
     await until('the pair sheet', () => run(`!!document.querySelector('.pair-code')`));
     await run(`(() => { const t = document.querySelector('.pair-code');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(code)});
@@ -91,10 +91,11 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   await send('Page.navigate', { url: shell });
   await until('the first question', async () => (await mode()) === 'where', 30_000);
   // The release default is approved choice C; only an explicit CREWHOUSE_CLOUD=0 opts out.
-  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['In my cloud', 'On my computer', 'Just on this phone']);
+  assert.deepEqual(await run(`[...document.querySelectorAll('.where-opt b')].map((b) => b.textContent)`), ['My computer', 'Cloud']);
+  assert.equal(await run(`document.querySelectorAll('.where-phone').length`), 1, 'the phone line is one quiet line inside My computer');
   // Browser-only choices hand off to the native app instead of pretending setup ran or dead-ending.
-  for (const title of ['In my cloud', 'Just on this phone']) {
-    await run(`[...document.querySelectorAll('.where-opt')].find((b) => b.querySelector('b').textContent === ${JSON.stringify(title)}).click()`);
+  for (const pick of [`[...document.querySelectorAll('.where-opt .where-main')].at(-1)`, `document.querySelector('.where-phone')`]) {
+    await run(`${pick}.click()`);
     await until('the phone-app handoff', () => run(`document.querySelector('[role="dialog"]')?.getAttribute('aria-label') === 'Use the phone app to set this up'`));
     assert.equal(await run(`!!document.querySelector('.sheet .qr')`), true, 'the handoff gives the app download code');
     await run(`[...document.querySelectorAll('.sheet button')].find((b) => b.textContent === 'Not now').click()`);

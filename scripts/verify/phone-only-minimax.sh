@@ -49,8 +49,8 @@ adb install -r "$APK" >/dev/null
 # 390 wide: 1080 px at density 443.
 adb shell wm size 1080x2400; adb shell wm density 443
 adb shell pm clear "$PKG" >/dev/null; adb shell am start -n "$PKG/.MainActivity" >/dev/null
-see '^.* Just on this phone$' 90
-ui tap '^Just on this phone$'
+see '^Just chat from this phone, no setup$' 90
+ui tap '^Just chat from this phone, no setup$'
 see 'Chief on this phone'
 
 # 1. Both key accounts are offered; MiniMax is picked and the screen names it throughout.
@@ -87,8 +87,8 @@ ui tap '^Sign out$'; see 'Sign out of Chief'
 # The confirm's own button is the last Sign out on screen (the header's sits under the dialog).
 read -r x1 y1 x2 y2 < <(ui texts | grep -E '\] (SIGN OUT|Sign out)$' | tail -1 | sed -E 's/.*\[([0-9]+),([0-9]+),([0-9]+),([0-9]+)\].*/\1 \2 \3 \4/')
 adb shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
-see '^.* Just on this phone$'
-ui tap '^Just on this phone$'
+see '^Just chat from this phone, no setup$'
+ui tap '^Just chat from this phone, no setup$'
 see 'Chief on this phone'
 see 'Paste your OpenRouter key'
 

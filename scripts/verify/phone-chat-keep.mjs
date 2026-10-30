@@ -95,11 +95,11 @@ const run = async () => {
   A('shell', 'settings', 'put', 'system', 'font_scale', '1.0');
   A('shell', 'wm', 'density', 'reset');
   launch();
-  await waitFor(() => hasNode('Just on this phone'), 90000, 'first run');
+  await waitFor(() => hasNode('Just chat from this phone, no setup'), 90000, 'first run');
   say('first run shown'); shot('00-firstrun.png');
 
   // --- sign in with the person's own key (file only; never this process's argv) ---
-  tapText('Just on this phone');
+  tapText('Just chat from this phone, no setup');
   await waitFor(() => hasNode('Paste your .* key'), 15000, 'key screen');
   tapText('Paste your .* key');
   A('push', KEY_FILE, '/data/local/tmp/kc.txt');
@@ -247,10 +247,10 @@ const run = async () => {
     // with "Use this phone only" goes straight to the kept chat — no key screen — so the key is still there.
     const beforeUse = keptFiles();
     tapText('^Use a computer$');
-    await waitFor(() => hasNode('Just on this phone'), 10000, 'the chooser after Use a computer');
+    await waitFor(() => hasNode('Just chat from this phone, no setup'), 10000, 'the chooser after Use a computer');
     const afterUse = keptFiles();
     say(`Use a computer kept the chat files: ${beforeUse} -> ${afterUse}`);
-    tapText('^Just on this phone$');
+    tapText('^Just chat from this phone, no setup$');
     await waitFor(() => hasNode('Ask Chief anything'), 20000, 'the kept chat back (key still saved)');
     say(`back in the kept chat with no new sign-in; files ${keptFiles()}`); shot('16-use-a-computer-keeps.png');
     // The confirmed sign out: the dialog names what goes, then the key and the kept chat are removed.
@@ -261,7 +261,7 @@ const run = async () => {
     const left = keptFiles();
     say(`chat files left after sign out: ${left}`);
     forceStop(); await sleep(1000); launch();
-    await waitFor(() => hasNode('Just on this phone') || hasNode('On my computer'), 30000, 'the chooser after sign out');
+    await waitFor(() => hasNode('Just chat from this phone, no setup') || hasNode('My computer'), 30000, 'the chooser after sign out');
     say('signed out: relaunch opens the chooser, no chat'); shot('18-signed-out.png');
     if (left !== 0) throw new Error(`sign out left ${left} chat files`);
   }

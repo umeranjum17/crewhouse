@@ -47,7 +47,7 @@
   "cloud-screen": {
     "start": "the phone app with the cloud on, a boat.dev account with no computer (the kit's fake boat.dev, Chief's own host behind it on the stub engine)",
     "steps": [
-      "Tap In my cloud and paste the boat.dev key; the account has no computer",
+      "Tap Cloud and paste the boat.dev key; the account has no computer",
       "Tap Make a new computer instead, then Make it and set it up, while the install on the computer fails",
       "Read why setup stopped, then tap Try again once the install can pass; the progress list runs to its end and the screen ends on Your cloud computer, with the card Chief is on your cloud computer and its Talk to Chief button",
       "On a second phone, paste the same key and tap Use this computer on the computer the first phone set up",
@@ -224,7 +224,7 @@
   "phone-pair-timed": {
     "start": "the real app on a phone, with the computer offering a code",
     "steps": [
-      "Open the app and choose On my computer",
+      "Open the app and choose My computer",
       "Type the code at a person's pace",
       "Say the two words are the same at the computer"
     ],
