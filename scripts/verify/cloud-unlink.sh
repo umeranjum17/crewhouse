@@ -78,7 +78,11 @@ adb shell wm size 1080x2400
 adb shell wm density 480
 adb reverse tcp:7411 tcp:7411 >/dev/null
 adb shell am force-stop "$PKG"; adb shell am start -n "$PKG/.MainActivity" >/dev/null
-see 'Cloud$'; ui tap '^Cloud$'; see 'Unlink boat.dev'; ui tap '^Unlink boat.dev$'
+see 'Cloud$'; ui tap '^Cloud$'
+# The account card is taller than the 360 dp viewport at font scale 2.0.
+# Reveal its lower actions before resolving the Unlink row from accessibility bounds.
+adb shell input swipe 540 2050 540 500 500
+see 'Unlink boat.dev'; ui tap '^Unlink boat.dev$'
 see 'Unlink boat\.dev\?'; adb reverse --remove tcp:7411 >/dev/null
 ui tap '^(Unlink|UNLINK)$'; see 'nothing was removed'
 for theme in day night; do
@@ -90,13 +94,13 @@ adb shell cmd uimode night no >/dev/null
 # 4. Back in reach, Try again: boat.dev ends the key first, then the phone is signed out.
 adb reverse tcp:7411 tcp:7411 >/dev/null
 ui tap '^Try again$'
-see 'Sign in to boat.dev'
+see 'boat.dev email'
 for _ in $(seq 20); do ended && break; sleep 1; done
 ended || { cat "$LAB/lab.log" >&2; echo "cloud-unlink: boat.dev never saw the key ended" >&2; exit 1; }
-shot signed-out 'Sign in to boat.dev'
+shot signed-out 'boat.dev email'
 # 5. Closed and opened again: still signed out (a kept key would go straight to the account's list).
 adb shell am force-stop "$PKG"; adb shell am start -n "$PKG/.MainActivity" >/dev/null
-see 'Cloud$'; ui tap '^Cloud$'; see 'Sign in to boat.dev'
+see 'Cloud$'; ui tap '^Cloud$'; see 'boat.dev email'
 ! ui texts | grep -q 'Which computer\|didn’t find a computer' || { echo "cloud-unlink: the phone still holds the key" >&2; exit 1; }
 
 node "$VERIFY_DIR/steps.mjs" "$OUT" cloud-unlink
