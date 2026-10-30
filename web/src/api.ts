@@ -197,6 +197,8 @@ export const api = {
   },
   push: (body: Json) => call('POST', '/api/push', body),
   connect: (app: string) => call('POST', `/api/connections/${app}`),
+  /** The person's own key for a key app (X); crewd seals it and never returns it. */
+  setKey: (app: string, key: string) => call('PUT', `/api/connections/${app}`, { key }),
   connection: (app: string) => call('GET', `/api/connections/${app}`),
   composio: () => call('GET', '/api/composio'),
   composioConnect: () => call('POST', '/api/composio'),

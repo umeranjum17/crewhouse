@@ -347,6 +347,27 @@ export function ComposioSheet({ state, onChange, onClose }: { state: Json; onCha
   );
 }
 
+/** An app that takes the person's own key (X): pasted here, sealed by crewd, never shown again. */
+export function KeyApp({ app, onDone, onClose }: { app: A.App; onDone: () => void; onClose: () => void }) {
+  const [key, setKey] = useState(''), [said, setSaid] = useState(''), [busy, setBusy] = useState(false);
+  const save = (e: { preventDefault(): void }) => {
+    e.preventDefault(); setBusy(true); setSaid('');
+    api.setKey(app.id, key).then(() => { setKey(''); onDone(); }, (x) => { setBusy(false); setSaid(x?.status === 400 ? String(x.message) : "Can't reach the home computer right now. Check it's on, then try again."); });
+  };
+  return (
+    <Sheet label={`Add ${app.name}`} onClose={onClose}>
+      <h2>Add your {app.name} key</h2>
+      <p className="mute">{app.does} Paste the Bearer Token from your own {app.name} developer page. It is kept sealed on your computer.</p>
+      <form className="stack" onSubmit={save}>
+        <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={`${app.name} API key`} aria-label={`${app.name} API key`} autoComplete="off" autoCapitalize="off" spellCheck={false} />
+        {said && <p className="warn-line" role="alert">{said}</p>}
+        <button className="btn go big" disabled={busy || !key.trim()}>Save key</button>
+      </form>
+      <button className="link" onClick={onClose}>Not now</button>
+    </Sheet>
+  );
+}
+
 /** The in-chat offer, only when a task needs the app: one ask card (§4.4, connect). "Connect {App}" opens the app's
  *  page in that tap. */
 export function ConnectCard({ c, helper, state, onDone, id }: { c: A.Card; helper?: string; state: Json; onDone: () => void; id?: string }) {

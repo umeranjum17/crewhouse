@@ -101,7 +101,7 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
   roles?: GoalRole[] };
 /** The one-use pairing ticket is rendered in Chief's chat, never as chat text. */
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
-export type App = { id: string; line: string; name: string; logo: string; on: boolean; does: string; warns?: boolean; status?: string };
+export type App = { id: string; line: string; name: string; logo?: string; key?: boolean; on: boolean; does: string; warns?: boolean; status?: string };
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
@@ -2174,6 +2174,7 @@ const APPS: App[] = [
   { id: 'gmailsend', line: 'Send one email after you approve it', name: 'Gmail sending', logo: '/marks/gmail.png', on: false, warns: true, does: 'Send one email from your own Gmail after you approve it on your paired phone.' },
   { id: 'gmailwrite', line: 'Draft replies and file mail, each asks first', name: 'Gmail drafts & labels', logo: '/marks/gmail.png', on: false, warns: true, does: 'Helpers can draft a reply you send yourself, and file mail under a label. Each draft and each label asks first; nothing is ever sent.' },
   { id: 'notion', line: 'Read and add to your pages', name: 'Notion', logo: '/marks/notion.png', on: false, does: 'Helpers can read and add pages you share with them.' },
+  { id: 'x', line: 'Read what people say on X', name: 'X', key: true, on: false, does: 'Helpers can read X for what people are saying, with your own X API key. They never post, reply, like or follow.' },
   { id: 'canva', line: 'Make designs in your Canva', name: 'Canva', logo: '/marks/canva.png', on: false, does: 'Helpers can make designs in your Canva.' },
 ];
 /** The app grid; which ones are on comes from crewd's connections once it has them. */

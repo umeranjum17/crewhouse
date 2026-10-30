@@ -102,7 +102,9 @@ import { join } from 'node:path';
 // Raised 8072 -> 8095 for enforced custom rules (ch-user-rules, +23 net): a rule's hold (drafts only, or only when the
 // person says so) checked in the gate before every send, submit or purchase by any crew member, the person's one-call
 // go-ahead, the update/remove card from chat and three scripted stub lines. Owner exception requested in the PR; no trim paired.
-const BUDGET = 8095;
+// Raised 8095 -> 8155 for reading X with the person's own key (ch-x-read, +60 net): the sealed key slot beside the app
+// sign-ins, the read-only x tool (src/x.ts) and its gate/server hooks. Owner-approved slice; no trim paired.
+const BUDGET = 8155;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
