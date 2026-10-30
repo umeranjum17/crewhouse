@@ -407,12 +407,12 @@ function AppDownloadQR({ android }: { android?: boolean }) {
  *  On my computer opens the Pair sheet (#/pair); a cloud, or Chief on the phone alone, is set up in the phone app, so
  *  both rows say so. Cloud first is the release default. */
 function Where({ pairing }: { pairing: boolean }) {
-  const [app, setApp] = useState(false);
+  const [app, setApp] = useState(false), [run, setRun] = useState(false);
   const w = A.where(cloudOn);
   return <div className="where">
     <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
     {w.rows.map((r) => <div key={r.key} className="where-opt">
-      <button className="where-main" onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
+      <button className="where-main" onClick={() => r.key === 'computer' ? setRun(true) : setApp(true)}>
         <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="small">{r.sub}</span></span><i aria-hidden>›</i>
       </button>
       {r.key === 'computer' && <button className="link where-phone" onClick={() => setApp(true)}>{w.phone}</button>}
@@ -420,7 +420,22 @@ function Where({ pairing }: { pairing: boolean }) {
     <div className="where-note"><Icon name="shield" size={18} /><p>{w.note}</p></div>
     <p className="where-foot">{w.later}</p>
     {pairing && <PairSheet onClose={back} />}
+    {run && <Sheet label={A.PUT.title} onClose={() => setRun(false)}><RunHere onType={() => { setRun(false); go('#/pair'); }} /></Sheet>}
     {app && <Sheet label={w.app} onClose={() => setApp(false)}><h2>{w.app}</h2><AppDownloadQR /><button className="link" onClick={() => setApp(false)}>Not now</button></Sheet>}
+  </div>;
+}
+/** My computer: the one line that runs Crewhouse there, Copy that says what happened, What happens, and Type the code on to pairing (A.PUT, shared with the phone). */
+function RunHere({ onType }: { onType: () => void }) {
+  const p = A.PUT, [said, setSaid] = useState<'copied' | 'failed' | null>(null), wide = matchMedia('(min-width: 900px)').matches; // open on a computer, closed on a phone so Type the code stays in view
+  const copy = () => { navigator.clipboard.writeText(p.line).then(() => setSaid('copied'), () => setSaid('failed')); };
+  return <div className="run-here">
+    <h2>{p.title}</h2><p>{p.lead}</p>
+    <code className="run-line">{p.line}</code>
+    <button className="btn" onClick={copy}>{p.copy}</button>
+    <p className={said === 'failed' ? 'run-said bad' : 'run-said'} role="status" aria-live="polite">{said === 'copied' ? p.copied : said === 'failed' ? p.copyFailed : ''}</p>
+    <details className="run-what" open={wide}><summary>{p.happens}</summary><ol>{p.steps.map((x) => <li key={x}>{x}</li>)}</ol></details>
+    <button className="btn go big" onClick={onType}>{p.code}</button>
+    <p className="small">{p.needs}</p>
   </div>;
 }
 function PhoneCard({ offer, reload }: { offer: Json; reload: () => void }) {

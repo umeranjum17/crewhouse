@@ -75,6 +75,8 @@ test('the public web app asks where Chief works, pairs by a relay code or the 12
   /** Paste a code into the Pair sheet, then say yes at the computer once its two words match the page's. */
   const pair = async (code: string) => {
     await run(`[...document.querySelectorAll('.where-opt')].find((b) => /My computer/.test(b.textContent)).querySelector('.where-main').click()`);
+    await until('the how-to-run card', () => run(`!!document.querySelector('.run-here .run-line') && document.querySelectorAll('.run-what li').length === 4`));
+    await run(`document.querySelector('.run-here .btn.go').click()`);
     await until('the pair sheet', () => run(`!!document.querySelector('.pair-code')`));
     await run(`(() => { const t = document.querySelector('.pair-code');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(code)});
