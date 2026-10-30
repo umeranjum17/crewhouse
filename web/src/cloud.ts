@@ -121,8 +121,11 @@ export async function unlink(store: MachineStore, forget: () => Promise<void>, o
       if (code !== 'unauthorized') return code === 'unreachable' ? 'unreachable' : 'provider';
       // boat.dev answered the revoke 401: the key may already be dead (an earlier unlink ended it but the phone's delete did not
       // finish), and a dead key can't end itself. Only boat.dev itself refusing the key too makes it safe to delete; else it is kept.
-      const dead = await provider(async () => key, api).account().then(() => false, (x) => x instanceof MachineError && x.code === 'unauthorized');
-      if (!dead) return 'refused';
+      const state = await provider(async () => key, api).account().then(() => 'live' as const, (x) =>
+        x instanceof MachineError && x.code === 'unauthorized' ? 'dead' as const
+          : x instanceof MachineError && x.code === 'unreachable' ? 'unreachable' as const : 'other' as const);
+      if (state === 'unreachable') return 'unreachable';
+      if (state !== 'dead') return 'refused';
     }
   }
   await forget();
