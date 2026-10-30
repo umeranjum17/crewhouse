@@ -36,7 +36,7 @@ shot() {
 LAB=$(mktemp -d -t cloud-unlink.XXXXXX)
 . "$(dirname "${BASH_SOURCE[0]}")/crewd-group.sh"
 (cd "$REPO" && exec env LAB_EMPTY=1 LAB_PORT=7411 LAB_DIR="$LAB" HOME="$LAB" node "$VERIFY_DIR/boat-fake-lab.mjs") > "$LAB/lab.log" 2>&1 & LABPID=$!
-trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; [ -z "${FAKE_PORT:-}" ] || adb reverse --remove "tcp:$FAKE_PORT" >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
+trap 'kill "$LABPID" 2>/dev/null || true; wait "$LABPID" 2>/dev/null || true; adb reverse --remove tcp:7411 >/dev/null 2>&1 || true; [ -z "${FAKE_PORT:-}" ] || adb reverse --remove "tcp:$FAKE_PORT" >/dev/null 2>&1 || true; adb shell settings put system font_scale 1.0 >/dev/null 2>&1 || true; adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true; cp "$LAB/lab.log" "$OTHER/lab.log" 2>/dev/null || true; crewhouse_remove_lab "$LAB"' EXIT
 for _ in $(seq 120); do grep -q 'the host is ready' "$LAB/lab.log" && break; kill -0 "$LABPID" 2>/dev/null || { cat "$LAB/lab.log" >&2; exit 1; }; sleep 1; done
 grep -q 'the host is ready' "$LAB/lab.log" || { cat "$LAB/lab.log" >&2; echo "cloud-unlink: the lab's host never got ready" >&2; exit 1; }
 FAKE_PORT=$(sed -n 's/^adb reverse tcp:\([0-9][0-9]*\) tcp:\1.*/\1/p' "$LAB/lab.log" | head -n 1)
@@ -71,6 +71,22 @@ ui tap '^(Unlink|UNLINK)$'
 see 'nothing was removed'
 ! ended || { echo "cloud-unlink: the key was ended with boat.dev unreachable" >&2; exit 1; }
 shot unreachable 'nothing was removed'
+# 3b. Repeat the failed unlink at 360 dp with the largest font. Configure the
+# display before opening the account screen; phone-ui taps accessibility bounds.
+adb shell settings put system font_scale 2.0
+adb shell wm size 1080x2400
+adb shell wm density 480
+adb reverse tcp:7411 tcp:7411 >/dev/null
+adb shell am force-stop "$PKG"; adb shell am start -n "$PKG/.MainActivity" >/dev/null
+see 'Cloud$'; ui tap '^Cloud$'; see 'Unlink boat.dev'; ui tap '^Unlink boat.dev$'
+see 'Unlink boat\.dev\?'; adb reverse --remove tcp:7411 >/dev/null
+ui tap '^(Unlink|UNLINK)$'; see 'nothing was removed'
+for theme in day night; do
+  adb shell cmd uimode night "$([ "$theme" = night ] && echo yes || echo no)" >/dev/null
+  see 'nothing was removed' 15; sleep 1
+  ui shot "$OTHER/unlink-unreachable-360-largefont-$theme.png"
+done
+adb shell cmd uimode night no >/dev/null
 # 4. Back in reach, Try again: boat.dev ends the key first, then the phone is signed out.
 adb reverse tcp:7411 tcp:7411 >/dev/null
 ui tap '^Try again$'
