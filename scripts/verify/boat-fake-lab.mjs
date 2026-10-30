@@ -47,7 +47,7 @@ let log = '';
 host.stdout.on('data', (b) => log += b); host.stderr.on('data', (b) => log += b);
 
 // The bridge: the fake's inbox to the host's inbox, and the host's receipt back to the fake's outbox.
-let failing = null, pushed = 0, expired = false;
+let failing = null, pushed = 0, expired = false, ended = false;
 const owners = new Set();
 const bridge = setInterval(() => {
   const wantFail = existsSync(flag);
@@ -60,6 +60,7 @@ const bridge = setInterval(() => {
     const polls = server.requests.filter((r) => r.method === 'POST' && r.path === '/api/boat/oauth2/token').length;
     if (!expired && existsSync(join(dir, 'claim-expire'))) { expired = true; server.scriptClaimPoll(['expired_token']); } else if (!expired && pushed <= polls) { pushed++; server.scriptClaimPoll(['pending']); }
   }
+  if (server.revoked.has(KEY) !== ended) { ended = !ended; console.log('the lab key is ended at boat.dev:', ended); } // a yes or no, never the key
   const delivered = server.machine.files.get(`${remote}/inbox/phone.bin`);
   if (delivered && !existsSync(join(cloud, 'inbox/phone.bin'))) { mkdirSync(join(cloud, 'inbox'), { recursive: true }); writeFileSync(join(cloud, 'inbox/phone.bin'), delivered.bytes); }
   // Move Chief to this phone: the new owner's key, handed over once.

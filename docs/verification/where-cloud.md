@@ -20,7 +20,7 @@ phone and web both show both doors, My computer then Cloud. An explicit
   named: refused ("boat.dev didn't accept that address…"), expired ("That sign-in expired…"), unreachable, provider, and the
   app's own wait running out (10 minutes, said without a number), each with Try again. The sign-in is kept by the phone
   (`mobile/src/cloud.ts`), so leaving the Cloud screen and coming back finds the same code still waiting, or the failure.
-  A key the store will not keep is ended at boat.dev at once. The key paste below is under Other ways (advanced) › Paste a
+  A key the store will not keep is ended at boat.dev at once. Undoing the sign-in is one action, Unlink boat.dev (the computer list, and Settings › Chief's computer): one confirmation, boat.dev ends the key first, and the phone's copy is deleted only once boat.dev confirms; unreachable or refused keeps the key and says so, with Try again. The key paste below is under Other ways (advanced) › Paste a
   boat.dev key, and works as before.
 - Phone, key paste (mocks `cloud-key`, `cloud-pick`, `cloud-make`, `cloud-steps`, `cloud-other`): Paste a boat.dev key opens
   the boat.dev key card. The box is a Paste key button: it reads the clipboard, nothing can be typed, and the key never shows. A

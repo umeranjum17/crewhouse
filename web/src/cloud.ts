@@ -106,6 +106,32 @@ export async function* signIn(email: string, store: MachineStore, o: { api?: str
 export const signInSaid = (why: Extract<SignIn, { at: 'failed' }>['why']) =>
   why === 'refused' ? words('claim.refused', vars) : why === 'expired' ? words('claim.expired', vars) : CLOUD.signin.failed[why];
 
+/** Why an unlink left the key where it was. Never the key, never boat.dev's own text: a word the screen can say. */
+export type Unlinked = 'done' | 'unreachable' | 'refused' | 'provider';
+/** Unlink: end the stored key at boat.dev (the kit's `revokeClaim`) FIRST, and delete the local copy (`forget`) only once boat.dev
+ *  has confirmed. Any other ending keeps the key and the signed-in state, so the person can try again and no live key is ever left
+ *  behind a screen that says signed out. With no key held there is nothing to end. */
+export async function unlink(store: MachineStore, forget: () => Promise<void>, o: { api?: string; signal?: AbortSignal } = {}): Promise<Unlinked> {
+  const key = (await store.load())?.providerKey;
+  if (key) {
+    const api = o.api ?? BOAT.api;
+    try { await revokeClaim({ baseUrl: api, key, signal: o.signal }); }
+    catch (e) {
+      const code = e instanceof MachineError ? e.code : 'unreachable';
+      if (code !== 'unauthorized') return code === 'unreachable' ? 'unreachable' : 'provider';
+      // boat.dev answered the revoke 401: the key may already be dead (an earlier unlink ended it but the phone's delete did not
+      // finish), and a dead key can't end itself. Only boat.dev itself refusing the key too makes it safe to delete; else it is kept.
+      const state = await provider(async () => key, api).account().then(() => 'live' as const, (x) =>
+        x instanceof MachineError && x.code === 'unauthorized' ? 'dead' as const
+          : x instanceof MachineError && x.code === 'unreachable' ? 'unreachable' as const : 'other' as const);
+      if (state === 'unreachable') return 'unreachable';
+      if (state !== 'dead') return 'refused';
+    }
+  }
+  await forget();
+  return 'done';
+}
+
 /** Make a new computer: boat.dev rents it in the person's own account, then it is set up like a picked one. The
  *  press's own key makes a repeated call the same rental, never a second one. */
 export const make = (p: Provider, press: string) => p.create!({ name: 'computer', size: PRICES[0].size, keepCopies: true, idempotencyKey: press });
