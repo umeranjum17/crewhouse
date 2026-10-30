@@ -880,7 +880,7 @@ function PutChief({ onCode, onBack }: { onCode: () => void; onBack: () => void }
         <Image source={WHERE[t.night ? 'chief-night' : 'chief-day']} style={{ width: 52, height: 48 }} accessibilityIgnoresInvertColors /></View>
       <View style={[s.card, { gap: 10, backgroundColor: t.card, borderWidth: 2, borderColor: t.go }]}>
         <T tone="ink2">{p.lead}</T>
-        <Text selectable style={{ fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: 14, lineHeight: 20, color: t.ink, backgroundColor: t.bg, borderRadius: radius.card, padding: 12 }}>{p.line}</Text>
+        <Text selectable style={{ fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: 12, lineHeight: 17, color: t.ink, backgroundColor: t.bg, borderRadius: radius.card, padding: 10 }}>{p.line}</Text>
         <Btn label={p.copy} onPress={copy} />
         <View accessibilityLiveRegion="polite">{!!said && <T tone="ink2" style={said === 'failed' ? { color: t.danger } : undefined}>{said === 'copied' ? p.copied : p.copyFailed}</T>}</View>
         <Btn ghost label={p.send} onPress={() => void Share.share({ message: p.line })} />
@@ -888,7 +888,6 @@ function PutChief({ onCode, onBack }: { onCode: () => void; onBack: () => void }
           <T style={s.b}>{p.happens}</T><T tone="ink2">{open ? '⌃' : '⌄'}</T></Pressable>
         {open && p.steps.map((x, i) => <View key={x} style={[s.row, { alignItems: 'flex-start' }]}>
           <Text style={[s.stepNum, { width: 24, height: 24, lineHeight: 24, backgroundColor: t.soft, color: t.ink }]}>{i + 1}</Text><T style={{ flex: 1 }}>{x}</T></View>)}
-        <T tone="ink2">{p.after}</T>
         <Btn go big label={p.code} onPress={onCode} />
       </View>
       <T tone="ink2" style={s.small}>{p.needs}</T>

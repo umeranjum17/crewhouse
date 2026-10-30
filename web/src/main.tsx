@@ -426,15 +426,14 @@ function Where({ pairing }: { pairing: boolean }) {
 }
 /** My computer: the one line that runs Crewhouse there, Copy that says what happened, What happens, and Type the code on to pairing (A.PUT, shared with the phone). */
 function RunHere({ onType }: { onType: () => void }) {
-  const p = A.PUT, [said, setSaid] = useState<'copied' | 'failed' | null>(null);
+  const p = A.PUT, [said, setSaid] = useState<'copied' | 'failed' | null>(null), wide = matchMedia('(min-width: 900px)').matches; // open on a computer, closed on a phone so Type the code stays in view
   const copy = () => { navigator.clipboard.writeText(p.line).then(() => setSaid('copied'), () => setSaid('failed')); };
   return <div className="run-here">
     <h2>{p.title}</h2><p>{p.lead}</p>
     <code className="run-line">{p.line}</code>
     <button className="btn" onClick={copy}>{p.copy}</button>
     <p className={said === 'failed' ? 'run-said bad' : 'run-said'} role="status" aria-live="polite">{said === 'copied' ? p.copied : said === 'failed' ? p.copyFailed : ''}</p>
-    <details className="run-what"><summary>{p.happens}</summary><ol>{p.steps.map((x) => <li key={x}>{x}</li>)}</ol></details>
-    <p>{p.after}</p>
+    <details className="run-what" open={wide}><summary>{p.happens}</summary><ol>{p.steps.map((x) => <li key={x}>{x}</li>)}</ol></details>
     <button className="btn go big" onClick={onType}>{p.code}</button>
     <p className="small">{p.needs}</p>
   </div>;

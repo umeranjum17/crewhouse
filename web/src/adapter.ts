@@ -134,7 +134,6 @@ export const PUT = {
   /** The disclosure under the line, the same four steps the README's headless section describes. */
   happens: 'What happens',
   steps: ['Downloads Crewhouse, one file.', 'Unpacks it in the folder you are in.', 'Keeps it running in the background.', 'Prints a code that works once, for two minutes.'],
-  after: 'It installs Crewhouse, keeps it running and prints a code. The code works once, for two minutes. Type it here.',
   code: 'Type the code',
   needs: 'The computer and this phone both need Tailscale, signed in to your account. Nothing else is installed on this phone.',
   app: 'No Tailscale? Install the Crewhouse app on the computer instead. Then open Settings, Phones, Add a phone.',

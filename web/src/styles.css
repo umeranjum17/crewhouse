@@ -680,9 +680,11 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .where-note p { margin: 0; }
 .run-here { display: flex; flex-direction: column; gap: 12px; text-align: left; }
 .run-here h2, .run-here p { margin: 0; }
-.run-line { display: block; padding: 12px; border-radius: 12px; background: var(--bg); color: var(--ink); font: 14px/20px ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.run-line { display: block; padding: 12px; border-radius: 12px; background: var(--bg); color: var(--ink); font: 12px/17px ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
 .run-said { min-height: 20px; color: var(--ink2); font-size: 14px; }
 .run-said.bad { color: var(--danger); }
+.run-what summary::after { content: "\2304"; margin-left: auto; color: var(--ink2); }
+.run-what[open] summary::after { content: "\2303"; }
 .run-what summary { min-height: 44px; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
 .run-what li { text-align: left; padding-left: 4px; }
 .run-what ol { margin: 4px 0 0; padding-left: 22px; display: grid; gap: 8px; }
