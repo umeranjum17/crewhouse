@@ -4,7 +4,7 @@
 import { nativeStore } from '@byokit/secrets/native';
 import { b64url, keyPair, keyPairFrom, unb64url, type KeyPair } from '@byokit/pair';
 import * as SecureStore from 'expo-secure-store';
-import { BOAT, provider } from '../../web/src/cloud.ts';
+import { BOAT, provider, signIn, type SignIn } from '../../web/src/cloud.ts';
 
 /** Cloud first in releases; an explicit 0 is the deployment opt-out. */
 export const cloudOn = process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD !== '0';
@@ -33,3 +33,23 @@ export async function phoneKeys(): Promise<KeyPair> {
   await keys.set('phone', b64url(k.secretKey));
   return k;
 }
+
+/** The code sign-in lives here, not in the screen, so a person who leaves the Cloud screen and comes back finds it where they
+ *  left it: the same code, still waiting, or the failure that ended it. Only the state is kept, never the key (it is in the store). */
+type Run = { email: string; state: SignIn; stop: AbortController };
+let run: Run | null = null;
+const watchers = new Set<() => void>();
+const tell = () => watchers.forEach((w) => w());
+export const signInRun = () => run;
+export const watchSignIn = (w: () => void) => { watchers.add(w); return () => void watchers.delete(w); };
+export function startSignIn(email: string) {
+  run?.stop.abort();
+  const mine: Run = run = { email, state: { at: 'starting' }, stop: new AbortController() };
+  void (async () => {
+    try { for await (const s of signIn(email, cloudStore, { api: process.env.EXPO_PUBLIC_CREWHOUSE_BOAT_API || BOAT.api, signal: mine.stop.signal })) { if (run === mine) { mine.state = s; tell(); } } }
+    catch { if (run === mine) { mine.state = { at: 'failed', why: 'provider' }; tell(); } }
+  })();
+  tell();
+}
+/** Drop the sign-in: the person chose another email, or it finished and the screen took the computers. */
+export const endSignIn = () => { run?.stop.abort(); run = null; tell(); };

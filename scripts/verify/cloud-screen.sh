@@ -57,7 +57,8 @@ paste_key() {
   for _ in $(seq 20); do adb shell input keyevent 67; done
   adb shell dumpsys input_method | grep -q 'mInputShown=true' && adb shell input keyevent 4
   ui tap '^Back$'; see '^.* Cloud$'
-  ui tap '^Cloud$'; see 'Paste key'; ui tap '^Paste key$'
+  # The front door is the code sign-in; a key already held is pasted from Other ways (advanced).
+  ui tap '^Cloud$'; see 'Sign in to boat.dev'; ui tap 'Other ways'; see 'Paste a boat.dev key'; ui tap 'Paste a boat.dev key'; see 'Paste key'; ui tap '^Paste key$'
 }
 
 # 1. A new account has no computer: the pick card says so, and Make a new computer is the way in.
@@ -74,7 +75,7 @@ rm -f "$LAB/install-fails"; sleep 1
 ui tap '^Try again$'
 shot ready 'Chief is on your cloud computer'
 # Set up, the title stands alone: the key-first lede is for the steps before it.
-! ui texts | grep -q 'One key lets me' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
+! ui texts | grep -q 'lets me set up your computer' || { echo "cloud-screen: the set-up screen still shows the key lede" >&2; exit 1; }
 # 4. A second phone (this app cleared: a new phone key) on that same computer is offered the move, confirms it, and
 #    Chief moves here: the computer's own host revokes the first phone.
 open_app; paste_key

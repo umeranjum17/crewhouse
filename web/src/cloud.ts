@@ -1,6 +1,6 @@
 // The cloud connect's kit side (mock key-first): the phone app runs it on the person's own boat.dev key, since a web
 // page can't call boat.dev (BYOKit cloud kit D-6). Framework-free, so the phone and test/cloud-connect.test.ts share it.
-import { boat, errorKey, machine, MachineError, pairEnrol, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
+import { boat, claim, errorKey, machine, MachineError, pairEnrol, revokeClaim, setup, words, type MachineRef, type MachineStore, type Provider, type SetupStep } from '@byokit/cloud';
 import { b64url, hostId, unb64url, type DeviceGrant, type KeyPair } from '@byokit/pair';
 import { linkUrl } from '@byokit/relay/device';
 import { CLOUD, LINUX_DOWNLOAD, type Computer, type ComputerAct } from './adapter.ts';
@@ -62,6 +62,42 @@ export async function checkKey(p: Provider, store: MachineStore, key: string): P
   return listed;
 }
 
+/** Where the sign-in stands, as the screen shows it. The key itself is never a state: it goes straight into the store. */
+export type SignIn =
+  | { at: 'starting' }
+  | { at: 'waiting'; url: string; code: string }
+  | { at: 'done'; listed: MachineRef[] }
+  | { at: 'failed'; why: 'refused' | 'expired' | 'unreachable' | 'provider' | 'timeout' };
+/** The person has this long on boat.dev's page before the sign-in is dropped and they are told so. */
+export const SIGN_IN_MS = 10 * 60_000;
+
+/** Sign in with a code (the kit's `claim`): the person's email goes to boat.dev as the login hint, the app shows boat.dev's
+ *  link and code, and the key boat.dev issues goes into the store and nowhere else. An abort ends it with no state. */
+export async function* signIn(email: string, store: MachineStore, o: { api?: string; signal?: AbortSignal; ms?: number } = {}): AsyncGenerator<SignIn> {
+  const api = o.api ?? BOAT.api, stop = new AbortController();
+  let late = false;
+  const timer = setTimeout(() => { late = true; stop.abort(); }, o.ms ?? SIGN_IN_MS), off = () => stop.abort();
+  o.signal?.addEventListener('abort', off);
+  try {
+    for await (const step of claim({ baseUrl: api, email, signal: stop.signal })) {
+      if (step.step === 'type-code') yield { at: 'waiting', url: step.url, code: step.code };
+      else if (step.step === 'failed') return yield { at: 'failed', why: step.why };
+      else if (step.step === 'done') {
+        clearTimeout(timer);
+        try { return yield { at: 'done', listed: await checkKey(provider(async () => step.key, api), store, step.key) }; }
+        catch (e) {
+          await revokeClaim({ baseUrl: api, key: step.key }).catch(() => undefined); // no live key outlives a sign-in that failed
+          return yield { at: 'failed', why: e instanceof MachineError && e.code === 'unreachable' ? 'unreachable' : 'provider' };
+        }
+      }
+    }
+    if (late) yield { at: 'failed', why: 'timeout' };
+  } finally { clearTimeout(timer); o.signal?.removeEventListener('abort', off); }
+}
+/** Chief's words for a sign-in that did not finish: the kit's for a refused email and an expired code, the app's for the rest. */
+export const signInSaid = (why: Extract<SignIn, { at: 'failed' }>['why']) =>
+  why === 'refused' ? words('claim.refused', vars) : why === 'expired' ? words('claim.expired', vars) : CLOUD.signin.failed[why];
+
 /** Make a new computer: boat.dev rents it in the person's own account, then it is set up like a picked one. The
  *  press's own key makes a repeated call the same rental, never a second one. */
 export const make = (p: Provider, press: string) => p.create!({ name: 'computer', size: PRICES[0].size, keepCopies: true, idempotencyKey: press });
@@ -119,7 +155,7 @@ export async function computerCall(p: Provider, store: MachineStore, host: strin
     };
     let warning: string | undefined;
     if (act === 'delete') { await m.remove(kept.ref.id); return null; }
-    if (act === 'update') await m.update(recipe(await address(), lab));
+    if (act === 'update') await m.update(recipe(await address(), lab), { undo: false }); // the kit's saved copy before an update (0.6.0) is a separate feature: Undo update stays "not available yet"
     if (act === 'snapshot') {
       const saved = await m.snapshot({ keep: 7 });
       if (saved.pruneError) warning = `Snapshot saved, but older snapshots could not be removed. ${said(saved.pruneError)}`;
@@ -140,7 +176,7 @@ export const computerGrant = (g: DeviceGrant, relay: string): DeviceGrant => ({ 
  *  connection is the computer's own address, whose relay answers only once Chief runs there, so the kit's `pairing`
  *  receipt finishes the last two (its tailnet `securing` step isn't used). */
 const DONE: Partial<Record<SetupStep['step'], number>> = { 'checking-access': 1, inspecting: 2, installing: 3, pairing: 5, ready: 5 };
-const AT = { 'checking-access': 0, listing: 1, inspecting: 1, installing: 2, securing: 3, pairing: 3 };
+const AT = { 'checking-access': 0, listing: 1, creating: 1, inspecting: 1, installing: 2, securing: 3, pairing: 3 };
 /** A failed step's words: which step stopped, then the kit's cause. The one failure the app itself causes is the
  *  picked computer being gone: the kit lists the account's computers and the app's pick cannot find it, which the kit
  *  words as a plain problem. The app knows what happened, so it says that. */

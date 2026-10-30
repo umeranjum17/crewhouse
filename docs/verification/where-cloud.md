@@ -6,14 +6,23 @@ the sign-in-yourself note and "You can change this later in Settings." The words
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
-Cloud first is the release default (`@byokit/cloud` 0.2.1 from npm). Build without any cloud-enable variable:
+Cloud first is the release default (`@byokit/cloud` 0.6.1 from npm). Build without any cloud-enable variable:
 phone and web both show both doors, My computer then Cloud. An explicit
 `EXPO_PUBLIC_CREWHOUSE_CLOUD=0` (phone) or `CREWHOUSE_CLOUD=0` (web) opts out for a deployment. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
 
 ## What it proves
 
-- Phone, key first (mocks `cloud-key`, `cloud-pick`, `cloud-make`, `cloud-steps`, `cloud-other`): In my cloud opens
+- Phone, code sign-in first: Cloud opens "Sign in to boat.dev". The person types their boat.dev email (sent to boat.dev
+  alone, as the kit's `claim` login hint), the card shows boat.dev's link (Open boat.dev to sign in) and the code to type on
+  boat.dev's own page, then waits and carries on by itself with the account's computers listed. The key boat.dev issues goes
+  into the kit's store and nowhere else (`signIn` in `web/src/cloud.ts`; `test/cloud-signin.test.ts`). Each way it can end is
+  named: refused ("boat.dev didn't accept that address…"), expired ("That sign-in expired…"), unreachable, provider, and the
+  app's own wait running out (10 minutes, said without a number), each with Try again. The sign-in is kept by the phone
+  (`mobile/src/cloud.ts`), so leaving the Cloud screen and coming back finds the same code still waiting, or the failure.
+  A key the store will not keep is ended at boat.dev at once. The key paste below is under Other ways (advanced) › Paste a
+  boat.dev key, and works as before.
+- Phone, key paste (mocks `cloud-key`, `cloud-pick`, `cloud-make`, `cloud-steps`, `cloud-other`): Paste a boat.dev key opens
   the boat.dev key card. The box is a Paste key button: it reads the clipboard, nothing can be typed, and the key never shows. A
   refused key says "boat.dev didn't accept your key…" and nothing is kept. An accepted key lists the account's
   computers ("I didn't find a computer…" when there are none). Make a new computer shows the cost line, and Make it
@@ -35,8 +44,8 @@ phone and web both show both doors, My computer then Cloud. An explicit
   delivers this phone's public key; `scripts/headless.mjs` hands it to crewd (`POST /api/phones/enrol`, refused to
   any phone), which enrols it as the host's owner and writes the kit's receipt. The receipt becomes the phone's link
   grant: Ready says Chief knows this phone, and Talk to Chief opens the app on that computer, where Chief answers.
-  Other ways lists the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
-  hardware back, return one step. A kept key skips the paste on the next visit.
+  Other ways (advanced) lists the paste of a key, the setup command and SSH (both "isn't ready yet") and Tailscale (opens Pair). Back, and the
+  hardware back, return one step. A kept key skips the sign-in on the next visit.
 - The setup is repeatable, not a once-per-phone thing. Try again on the same computer sets it up again: the
   install runs again over the computer that already has Chief (the download unpacks read-only files, so the
   recipe makes the old tree writable and clears it first, and the kit's own folder with this phone's key stays),
