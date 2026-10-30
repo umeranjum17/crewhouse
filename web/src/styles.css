@@ -667,14 +667,14 @@ button.code { border: 0; color: var(--ink); cursor: pointer; display: grid; gap:
 .where-say p { margin: 0; }
 .where-say b { display: block; padding-top: 2px; }
 .where-line { margin: 10px 0 0 54px; color: var(--ink2); font-size: 13px; line-height: 18px; }
-.where-opt { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--solid); text-align: left; }
+.where-opt { display: flex; flex-direction: column; width: 100%; margin-top: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--solid); text-align: left; }
 .where-line + .where-opt, .where-say + .where-opt { margin-top: 12px; }
-.where-opt.first { border-color: var(--go); box-shadow: 0 0 0 1px var(--go) inset; }
+.where-main { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; }
+.where-phone { align-self: flex-start; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); width: 100%; text-align: left; font-size: 14px; color: var(--go); text-decoration: underline; }
 .where-opt .grow { display: flex; flex-direction: column; }
 .where-opt .small { line-height: 18px; }
-.where-opt > i { font-style: normal; font-size: 20px; color: var(--mute); }
+.where-main > i { font-style: normal; font-size: 20px; color: var(--mute); }
 .where-mark { width: 36px; height: 36px; border-radius: 10px; background: var(--soft); display: grid; place-items: center; flex: none; }
-.where-opt.first .where-mark { background: var(--soft-accent); color: var(--go); }
 .where-note { display: flex; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--soft); color: var(--ink2); font-size: 13px; line-height: 19px; }
 .where-note svg { flex: none; margin-top: 1px; color: var(--ink); }
 .where-note p { margin: 0; }

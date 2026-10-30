@@ -51,7 +51,7 @@ for (let run = 1; run <= RUNS; run++) {
     if (step > 6) throw new Error('never reached the code box');
     if (find(/^Pairing code$|^Type or paste the code$/)) break; // On my computer opens the box itself
     // Put Chief's "Type the code" first: its back row also reads "On my computer"
-    const n = await tapWhen(/^Type the code$/, 1500).catch(() => tapWhen(/^(Use a computer instead|On my computer|Pair with a computer|Type a code)$/));
+    const n = await tapWhen(/^Type the code$/, 1500).catch(() => tapWhen(/^(Use a computer instead|My computer|On my computer|Pair with a computer|Type a code)$/));
     if (/^Type (a|the) code$/.test(n.text || n.desc)) break;
     await sleep(800);
   }

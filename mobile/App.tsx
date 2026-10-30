@@ -828,9 +828,9 @@ function Pair({ onPaired, onBack, onPut, paste, link }: { onPaired: (g: Grant) =
 }
 
 // ---------- phone only: Chief on this phone, no computer ----------
-/** The first screen with no computer paired (mock C): Chief asks where he should work. On my computer goes straight to
- *  pairing, since most people already have Crewhouse there and the computer shows the code; putting it on a computer
- *  that has none is the one link on that screen. Just on this phone the phone-only floor, In my cloud the cloud steps. */
+/** The first screen with no computer paired: two doors, My computer and Cloud. My computer goes straight to pairing
+ *  (the computer shows the code; putting Crewhouse on one with none is the one link there); Just chat from this phone is
+ *  one quiet line inside it, the phone-only floor; Cloud the cloud steps. */
 function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPaired: (g: Grant) => void }) {
   const t = useLook();
   const [at, setAt] = useState<'where' | 'pair' | 'put' | 'cloud' | 'paste'>('where');
@@ -850,13 +850,14 @@ function GetStarted({ onPhoneOnly, onPaired }: { onPhoneOnly: () => void; onPair
         <ChiefArt mood="hello" size={72} whole />
         <View style={{ flex: 1 }}><T style={s.b}>Chief</T><T style={s.title}>{w.hello}</T></View>
       </View>
-      {!!w.line && <T tone="ink2">{w.line}</T>}
-      {w.rows.map((r, i) => <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={r.title}
-        onPress={() => r.key === 'phone' ? onPhoneOnly() : setAt(r.key === 'cloud' ? 'cloud' : 'pair')}
-        style={[s.card, s.row, { gap: 12, backgroundColor: t.card, borderColor: i ? t.line : t.go, borderWidth: i ? 1 : 2 }]}>
-        <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
-        <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="mute" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
-      </Pressable>)}
+      {w.rows.map((r) => <View key={r.key} style={[s.card, { backgroundColor: t.card, borderColor: t.line, borderWidth: 1 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={r.title} onPress={() => setAt(r.key === 'cloud' ? 'cloud' : 'pair')} style={[s.row, { gap: 12, alignItems: 'flex-start' }]}>
+          <Image source={WHERE[r.key]} style={{ width: 28, height: 28, tintColor: t.ink }} />
+          <View style={{ flex: 1, gap: 4 }}><T style={s.rowTitle}>{r.title}</T><T tone="ink2" style={s.small}>{r.sub}</T></View><T tone="mute">›</T>
+        </Pressable>
+        {r.key === 'computer' && <Pressable accessibilityRole="button" onPress={onPhoneOnly} hitSlop={8} style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.line }}>
+          <T style={[s.small, { color: t.go, textDecorationLine: 'underline' }]}>{w.phone}</T></Pressable>}
+      </View>)}
       <Btn ghost label="Paste a link" onPress={() => setAt('paste')} />
       <Note>{w.note}</Note><T tone="mute" style={[s.small, s.centerText]}>{w.later}</T>
     </ScrollView>

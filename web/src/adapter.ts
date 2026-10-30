@@ -105,15 +105,15 @@ export type App = { id: string; line: string; name: string; logo?: string; key?:
 
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
-/** Chief asks where he should work. `cloud` shows the cloud row and its line; each surface controls whether to include it. */
+/** Chief asks where he should work: two doors, My computer and Cloud (`cloud` off leaves one); each surface controls whether to include it. */
 export const where = (cloud: boolean) => ({
   hello: "Hi, I'm Chief. Where should I work?",
-  line: cloud ? 'In the cloud I get my own computer: my sandbox, away from your phone and your files. Nothing to install at home.' : '',
   rows: ([
-    ['cloud', 'In my cloud', 'No computer needed · about $20 a month, billed to you'],
-    ['computer', 'On my computer', 'One you own and leave on · free'],
-    ['phone', 'Just on this phone', 'Chats and documents only · your own AI key'],
+    ['computer', 'My computer', 'Runs here, on this computer. Free.'],
+    ['cloud', 'Cloud', 'A rented computer that stays on for you. About $0.02 an hour while it is on, billed by Boat, not us.'],
   ] as const).filter(([key]) => cloud || key !== 'cloud').map(([key, title, sub]) => ({ key: key as Where, title, sub })),
+  /** One quiet line inside My computer, one tap. */
+  phone: 'Just chat from this phone, no setup',
   note: 'Whatever you pick, you sign in yourself, on your own accounts. Crewhouse never sees your passwords or card.',
   later: 'You can change this later in Settings.',
   /** The web app can't set up a cloud (or run Chief on the phone alone): both live in the phone app. */

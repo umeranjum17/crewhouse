@@ -411,10 +411,12 @@ function Where({ pairing }: { pairing: boolean }) {
   const w = A.where(cloudOn);
   return <div className="where">
     <div className="where-say"><ChiefArt mascot /><div><b>Chief</b><p>{w.hello}</p></div></div>
-    {w.line && <p className="where-line">{w.line}</p>}
-    {w.rows.map((r, i) => <button key={r.key} className={`where-opt${i ? '' : ' first'}`} onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
-      <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="mute small">{r.sub}</span></span><i aria-hidden>›</i>
-    </button>)}
+    {w.rows.map((r) => <div key={r.key} className="where-opt">
+      <button className="where-main" onClick={() => r.key === 'computer' ? go('#/pair') : setApp(true)}>
+        <span className="where-mark"><Icon name={r.key} size={20} /></span><span className="grow"><b>{r.title}</b><span className="small">{r.sub}</span></span><i aria-hidden>›</i>
+      </button>
+      {r.key === 'computer' && <button className="link where-phone" onClick={() => setApp(true)}>{w.phone}</button>}
+    </div>)}
     <div className="where-note"><Icon name="shield" size={18} /><p>{w.note}</p></div>
     <p className="where-foot">{w.later}</p>
     {pairing && <PairSheet onClose={back} />}

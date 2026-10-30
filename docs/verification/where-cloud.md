@@ -1,13 +1,13 @@
 # Where should I work? (first screen C) and the cloud steps
 
 The first screen on the phone app (`GetStarted` in `mobile/App.tsx`) and on the public web shell (`Where` in
-`web/src/main.tsx`): Chief asks "Hi, I'm Chief. Where should I work?" with In my cloud / On my computer / Just on
-this phone, the sign-in-yourself note and "You can change this later in Settings." The words are `A.where` and
+`web/src/main.tsx`): Chief asks "Hi, I'm Chief. Where should I work?" with two doors, My computer and Cloud (the quiet "Just chat from this phone, no setup" line sits inside My computer),
+the sign-in-yourself note and "You can change this later in Settings." The words are `A.where` and
 `A.CLOUD` in `web/src/adapter.ts`, one source for both. Approved mocks: `where`, `cloud-pick`, `cloud-key` in
 `scripts/verify/mocks.tsv`.
 
 Cloud first is the release default (`@byokit/cloud` 0.2.1 from npm). Build without any cloud-enable variable:
-phone and web both show all three approved `A.where` choices, In my cloud first. An explicit
+phone and web both show both doors, My computer then Cloud. An explicit
 `EXPO_PUBLIC_CREWHOUSE_CLOUD=0` (phone) or `CREWHOUSE_CLOUD=0` (web) opts out for a deployment. The phone runs the kit
 (`web/src/cloud.ts`, shared with `test/cloud-connect.test.ts`); a web page can't call boat.dev (kit D-6).
 

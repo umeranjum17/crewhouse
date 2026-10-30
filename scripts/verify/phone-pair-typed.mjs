@@ -48,8 +48,8 @@ await api('POST', '/api/onboard', { address: 'Umer' }).catch(() => {}); // past 
 const code = execFileSync('bash', ['-c', `${dirname(new URL(import.meta.url).pathname)}/pair-lab.sh cli phones code | tail -1`], { encoding: 'utf8', env: { ...process.env, LAB } }).trim();
 A('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
 // The cloud build opens on "Where should I work?"; without the cloud flag the first screen is "Pair with my computer".
-await waitFor(/^(On my computer|Pair with my computer)$/, 60000);
-tap(/^(Pair with my computer|On my computer)$/); // straight to the code box
+await waitFor(/^(My computer|On my computer|Pair with my computer)$/, 60000);
+tap(/^(Pair with my computer|My computer|On my computer)$/); // straight to the code box
 if (find(/^Type the code$/)) tap(/^Type the code$/); // an older build still stops on Put Chief on your computer
 await waitFor(/Type or paste the code/, 20000); tap(/Type or paste the code/); await sleep(500);
 A('shell', 'input', 'text', code); await sleep(800);
