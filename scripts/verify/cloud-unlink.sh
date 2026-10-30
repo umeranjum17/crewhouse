@@ -14,7 +14,12 @@
 # the clipboard); no screen is read while that field holds it, and the lab log says only whether the key is ended, never the key.
 set -euo pipefail
 [ $# -eq 2 ] || { echo "usage: SERIAL=<emulator> cloud-unlink.sh <out-dir> <apk>" >&2; exit 2; }
-OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"; OTHER=${CLOUD_OTHER:-$OUT} CLAIM=${CLOUD_CLAIM:-unreachable}
+OUT=$1; APK=$2; : "${SERIAL:?set SERIAL to the emulator}"
+case "$SERIAL" in
+  emulator-*) ;;
+  *) echo "cloud-unlink: physical devices are never driven" >&2; exit 2 ;;
+esac
+OTHER=${CLOUD_OTHER:-$OUT} CLAIM=${CLOUD_CLAIM:-unreachable}
 VERIFY_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(git -C "$VERIFY_DIR" rev-parse --show-toplevel)
 PKG=dev.crewhouse.app KEY=lab-key-abcdefgh
