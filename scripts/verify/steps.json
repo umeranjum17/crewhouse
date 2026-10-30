@@ -55,6 +55,16 @@
     ],
     "result": "Make it and set it up rents a computer and sets it up; the failed install says Installing Chief stopped partway and that trying again is safe, with Try again; Try again ends on the screen titled Your cloud computer, with the card Chief is on your cloud computer and a Talk to Chief button; the second phone is offered Move Chief to this phone and Back, the confirm says the phone that set up this computer loses access, and after Yes, move Chief this phone reaches Chief is on your cloud computer"
   },
+  "cloud-unlink": {
+    "start": "the phone app with the cloud on, signed in to a boat.dev account with no computer (the kit's fake boat.dev), the account's list showing",
+    "steps": [
+      "Tap Unlink boat.dev under the account's list and read the confirmation",
+      "Cut the phone's route to boat.dev, then confirm with Unlink",
+      "Read that nothing was removed, restore the route and tap Try again",
+      "Close the app, open it again and tap Cloud"
+    ],
+    "result": "With boat.dev unreachable the app says I can't reach boat.dev right now, so nothing was removed, that the key is still on this phone and still works, and offers Try again; after Try again the key is ended at boat.dev and the screen reads Sign in to boat.dev, and it still does after the app is closed and opened again"
+  },
   "chat-real": {
     "start": "first launch of Crewhouse on a new computer, nobody signed in, no name given",
     "steps": [

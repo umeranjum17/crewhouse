@@ -166,7 +166,7 @@ export const CLOUD = {
     checking: 'Checking your key with boat.dev…', make: 'Need to make a key first?', open: 'Open boat.dev', url: 'https://boat.dev',
     how: 'In your own boat.dev account, open API keys, make a key for setup and computer management, then copy it. Use only the permissions needed.',
   },
-  kept: ['The key can set up and manage computers in your boat.dev account. It stays on ', 'this phone only', ', not Chief’s computer, and is sent only to boat.dev. Forget it in Chief’s computer settings; revoke it at boat.dev to end its access.'],
+  kept: ['The key can set up and manage computers in your boat.dev account. It stays on ', 'this phone only', ', not Chief’s computer, and is sent only to boat.dev. Unlink boat.dev in Chief’s computer settings ends it at boat.dev and deletes it here.'],
   pick: {
     pill: 'Choose before setup', title: 'Which computer should I use?', lead: 'I found these in your boat.dev account. I won’t make a new one unless you ask.',
     /** The kit lists no display name (every computer is `computer`), so they are told apart by order. */
