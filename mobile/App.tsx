@@ -44,8 +44,8 @@ import { PATH_NOTE, path } from '../web/src/career.ts';
 import { connect, desktopSignaling, forgetGrant, keepGrant, kept, loadGrant, noPushCredential, onLive, pairLink, pairTypedCode, type Grant, type Status } from './src/link';
 import { startNews, stopNews } from './src/news';
 import { askPhone, chatToMove, heardAt, isOffline, loadChat, markHeard, pendingTurns, phoneConnect, phoneExpired, phoneMode, phoneModels, phonePick, phonePlan, phoneSignedIn, phoneSignInWords, phoneSignOut, phoneWords, probeOnline, queueTurn, rememberChief, rememberUser, moveChatTo, setPhoneMode, shareDocument, PHONE_KEYS, type ChatTurn, type PhoneDocument, type PhoneKey, type PhoneLine, type PhoneModel } from './src/phone-only';
-import { boatOn, cloudOn, cloudStore, endSignIn, forgetKey, keptKey, lab, phoneKeys, signInRun, startSignIn, watchSignIn } from './src/cloud';
-import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said, signInSaid } from '../web/src/cloud.ts';
+import { boatOn, cloudOn, cloudStore, endSignIn, keptKey, lab, phoneKeys, signInRun, startSignIn, unlinkBoat, watchSignIn } from './src/cloud';
+import { checkKey, computerCall, computerGrant, connect as setUpCloud, cost, make as makeComputer, progress, said, signInSaid, type Unlinked } from '../web/src/cloud.ts';
 import { MachineError, type MachineRef, type SetupStep } from '@byokit/cloud';
 import { clearRetryOf, drainPending, failOffOf, historyOf, retrySuffix } from './src/phone-queue';
 import { roleActions } from './src/goal';
@@ -1043,6 +1043,7 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
         {box(view !== 'make' && view !== 'other', { signin, key, pick, make, steps: progressList, other }[view])}
         {view === 'signin' && <Btn ghost label={`${c.other.link} →`} onPress={() => setView('other')} />}
         {view === 'pick' && <Btn ghost label={c.pick.other} onPress={() => { held.current = ''; setView('signin'); }} />}
+        {view === 'pick' && <UnlinkBoat onDone={() => { held.current = ''; setListed([]); setView('signin'); }} />}
         {view === 'other' && <Btn ghost label={c.other.back} onPress={() => setView('signin')} />}
         <Note>{c.trust[0]}</Note>
         <T tone="mute" style={[s.small, s.centerText]}>{c.trust[1]}</T>
@@ -3177,6 +3178,26 @@ function ThisPhone({ state, grant, status, person, writer, refresh, go, back, on
   );
 }
 
+/** Undo the boat.dev sign-in from the app: one confirmation that names what happens, boat.dev ends the key first, and the phone's
+ *  copy goes only when boat.dev confirms. A failure says so plainly, that nothing was removed, and offers the retry. */
+function UnlinkBoat({ onDone, disabled }: { onDone: () => void; disabled?: boolean }) {
+  const t = useLook(), u = A.CLOUD.unlink;
+  const [state, setState] = useState<'idle' | 'working' | Exclude<Unlinked, 'done'>>('idle');
+  const go = async () => {
+    if (state === 'working') return;
+    setState('working');
+    const r = await unlinkBoat().catch((): Unlinked => 'provider');
+    if (r === 'done') onDone(); else setState(r);
+  };
+  const failed = state !== 'idle' && state !== 'working';
+  return <View style={{ gap: 8 }}>
+    {state === 'working' ? <View accessibilityLiveRegion="polite" style={s.row}><ActivityIndicator color={t.ink2} /><T tone="ink2" style={[s.small, { flex: 1 }]}>{u.working}</T></View> : null}
+    {failed && <View accessibilityLiveRegion="polite"><T style={{ color: t.danger }}>{u.failed[state]}</T></View>}
+    <Btn danger label={failed ? u.retry : u.go} disabled={disabled || state === 'working'}
+      onPress={() => failed ? void go() : Alert.alert(u.ask[0], u.ask[1], [{ text: 'Cancel', style: 'cancel' }, { text: u.yes, style: 'destructive', onPress: () => void go() }])} />
+  </View>;
+}
+
 /** The owner phone manages its bound cloud computer through the kit, even when crewd is out of touch. */
 function ChiefComputer({ back, onRestored }: { back: [string, () => void]; onRestored: (g: Grant) => void }) {
   const t = useLook();
@@ -3245,7 +3266,7 @@ function ChiefComputer({ back, onRestored }: { back: [string, () => void]; onRes
       {off && <View onLayout={(e) => { reasonY.current = e.nativeEvent.layout.y; }}><T tone="mute" style={[s.small, { marginHorizontal: 16 }, nudged && { color: t.ink }]}>{w.connect}</T></View>}
       {!!note && <View accessibilityLiveRegion="polite"><T>{note}</T></View>}
       <View style={group}>{row(0, <><View style={[s.mark, { backgroundColor: boat.tile }]}><Text style={s.markText}>{boat.mark}</Text></View>{two(w.host)}</>)}</View>
-      {held && <View style={group}>{row(0, <>{two(w.key)}<Btn disabled={busy} label={w.forget} onPress={() => void attempt(async () => { await forgetKey(); setHeld(false); setC(null); })} /></>)}</View>}
+      {held && <View style={group}>{row(0, <View style={{ flex: 1, gap: 10 }}>{two(w.key)}<UnlinkBoat disabled={busy} onDone={() => { setHeld(false); setC(null); }} /></View>)}</View>}
       <Pressable onPress={() => setMore(!more)} accessibilityRole="button" accessibilityState={{ expanded: more }} accessibilityLabel={w.more} style={[s.row, { minHeight: 48, paddingHorizontal: 4 }]}>
         <T tone="ink2" style={{ flex: 1, ...fw('500') }}>{w.more}</T><T tone="mute">{more ? '⌄' : '›'}</T></Pressable>
       {more && <View style={group}>

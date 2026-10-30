@@ -4,7 +4,7 @@
 import { nativeStore } from '@byokit/secrets/native';
 import { b64url, keyPair, keyPairFrom, unb64url, type KeyPair } from '@byokit/pair';
 import * as SecureStore from 'expo-secure-store';
-import { BOAT, provider, signIn, type SignIn } from '../../web/src/cloud.ts';
+import { BOAT, provider, signIn, unlink, type SignIn } from '../../web/src/cloud.ts';
 
 /** Cloud first in releases; an explicit 0 is the deployment opt-out. */
 export const cloudOn = process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD !== '0';
@@ -16,11 +16,12 @@ export const cloudStore = {
   save: (record: object) => keys.set('record', JSON.stringify(record)),
 };
 export const keptKey = async (): Promise<string> => (await cloudStore.load())?.providerKey ?? '';
-/** Forget: the key leaves this phone; revoking it at boat.dev is the person's. */
-export const forgetKey = () => keys.delete('record');
-
-/** boat.dev on this key; a lab build names its fixture boat.dev in EXPO_PUBLIC_CREWHOUSE_BOAT_API. */
-export const boatOn = (key: string) => provider(async () => key, process.env.EXPO_PUBLIC_CREWHOUSE_BOAT_API || BOAT.api);
+/** A lab build names its fixture boat.dev in EXPO_PUBLIC_CREWHOUSE_BOAT_API. */
+const boatApi = process.env.EXPO_PUBLIC_CREWHOUSE_BOAT_API || BOAT.api;
+/** boat.dev on this key. */
+export const boatOn = (key: string) => provider(async () => key, boatApi);
+/** Unlink: boat.dev ends the key first, and the phone's copy is deleted only when boat.dev confirms (web/src/cloud.ts `unlink`). */
+export const unlinkBoat = () => unlink(cloudStore, () => keys.delete('record'), { api: boatApi });
 
 /** A lab build's own download and run settings for the computer (web/src/cloud.ts `recipe`); none in a release build. */
 export const lab = { download: process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD_DOWNLOAD, env: JSON.parse(process.env.EXPO_PUBLIC_CREWHOUSE_CLOUD_ENV || '{}') };
@@ -46,7 +47,7 @@ export function startSignIn(email: string) {
   run?.stop.abort();
   const mine: Run = run = { email, state: { at: 'starting' }, stop: new AbortController() };
   void (async () => {
-    try { for await (const s of signIn(email, cloudStore, { api: process.env.EXPO_PUBLIC_CREWHOUSE_BOAT_API || BOAT.api, signal: mine.stop.signal })) { if (run === mine) { mine.state = s; tell(); } } }
+    try { for await (const s of signIn(email, cloudStore, { api: boatApi, signal: mine.stop.signal })) { if (run === mine) { mine.state = s; tell(); } } }
     catch { if (run === mine) { mine.state = { at: 'failed', why: 'provider' }; tell(); } }
   })();
   tell();

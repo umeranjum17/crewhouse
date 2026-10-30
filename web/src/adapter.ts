@@ -152,6 +152,14 @@ export const CLOUD = {
     failed: { unreachable: 'I can’t reach boat.dev right now. Check your connection and try again.', provider: 'boat.dev couldn’t finish the sign-in. Nothing was connected. Try again.',
       timeout: 'The sign-in wasn’t finished on boat.dev, so I stopped waiting. Nothing was connected. Try again.' },
   },
+  /** Undoing the sign-in: one confirmation naming what happens, the key ended at boat.dev first, and the same plain account of a failure. */
+  unlink: {
+    go: 'Unlink boat.dev', retry: 'Try again', working: 'Ending the key at boat.dev…',
+    ask: ['Unlink boat.dev?', 'boat.dev will end the key this phone holds, and then it is deleted from this phone. Your cloud computer keeps running in your boat.dev account, but Chief will lose access to manage it until you sign in again.'], yes: 'Unlink',
+    failed: { unreachable: 'I can’t reach boat.dev right now, so nothing was removed. The key is still on this phone and still works. Check your connection and try again.',
+      refused: 'boat.dev did not accept ending the key, so nothing was removed. The key is still on this phone. Try again.',
+      provider: 'boat.dev couldn’t end the key just now, so nothing was removed. The key is still on this phone. Try again.' },
+  },
   key: {
     pill: 'boat.dev · Your own account', title: 'Paste your boat.dev key', lead: 'Two actions if your key is ready: paste it, then choose your computer.',
     label: 'Key from boat.dev', paste: 'Paste key', after: 'Your computers appear after you paste. You choose before I install anything.',
@@ -221,8 +229,8 @@ export const computer = (c: Computer | null) => {
     disk: ['Disk space', c ? { normal: 'Normal', filling: 'Getting full', full: 'Full' }[c.disk] : off],
     host: ['Runs on boat.dev', 'In your own account. boat.dev bills you, about $20 a month.'],
     /** The boat.dev key: kept only on the phone that set the computer up, never on the computer or the web. */
-    key: ['boat.dev key', 'Kept on this phone only. Revoke it at boat.dev to end its access.'], forget: 'Forget key',
-    keyAway: 'Your boat.dev key stays on the phone that set this computer up. Forget it there.',
+    key: ['boat.dev sign-in', 'The key lives on this phone only. Unlinking ends it at boat.dev and deletes it here.'],
+    keyAway: 'Your boat.dev key stays on the phone that set this computer up. Unlink it there.',
     more: 'More', undo: 'Undo update', remove: 'Delete my cloud computer',
     removeAsk: ['Delete your cloud computer?', "Chief's computer and its snapshots are removed for good, with everything on them. Your phone and your own files are not touched."],
     sheet: {
