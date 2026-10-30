@@ -928,7 +928,12 @@ function CloudConnect({ onBack, onPair, onPaired }: { onBack: () => void; onPair
   // The sign-in finished: its key is in the store (never in this screen), and boat.dev's computers are already listed.
   useEffect(() => {
     if (flow?.at !== 'done') return;
-    void keptKey().then((k) => { held.current = k; setListed(flow.listed); endSignIn(); setView((v) => v === 'signin' || v === 'other' || v === 'key' ? 'pick' : v); });
+    const completed = signInRun();
+    if (!completed || completed.state !== flow) return;
+    void keptKey().then((k) => {
+      if (signInRun() !== completed || completed.state !== flow) return;
+      held.current = k; setListed(flow.listed); endSignIn(); setView((v) => v === 'signin' || v === 'other' || v === 'key' ? 'pick' : v);
+    });
   }, [flow]);
   const run = async (ref: MachineRef, retry = false, move = false) => {
     setPicked(ref.id); setMoving(false);
