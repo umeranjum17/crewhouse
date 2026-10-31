@@ -1,6 +1,6 @@
 {
   "name": "crewhouse",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": false,
   "description": "A crew of AI helpers that does your errands on your own computer, and asks before it spends.",
   "keywords": [
