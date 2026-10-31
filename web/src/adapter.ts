@@ -103,6 +103,9 @@ export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: s
 export const phoneOffer = (page: Json): { qr: string; typed: string; expires: number; message: number; token?: string; waiting?: { id: number; name: string; words: string }; joined?: string } | null => page?.phoneOffer ?? null;
 export type App = { id: string; line: string; name: string; logo?: string; key?: boolean; on: boolean; does: string; warns?: boolean; status?: string };
 
+const LATER = 'You can change this later in Settings.';
+/** The one ending both doors reach, Cloud signed in or My computer paired: Chief's thread, ready, with the change-later line said once. */
+export const arrived = (name: string) => ({ ready: name ? `Chief is ready, ${name}.` : 'Chief is ready.', later: LATER });
 // ---------- where Chief works (the first screen with no computer paired; mocks C, provider, signin-key) ----------
 export type Where = 'cloud' | 'computer' | 'phone';
 /** Chief asks where he should work: two doors, My computer and Cloud (`cloud` off leaves one); each surface controls whether to include it. */
@@ -115,7 +118,7 @@ export const where = (cloud: boolean) => ({
   /** One quiet line inside My computer, one tap. */
   phone: 'Just chat from this phone, no setup',
   note: 'Whatever you pick, you sign in yourself, on your own accounts. Crewhouse never sees your passwords or card.',
-  later: 'You can change this later in Settings.',
+  later: LATER,
   /** The web app can't set up a cloud (or run Chief on the phone alone): both live in the phone app. */
   app: 'Use the phone app to set this up',
 });

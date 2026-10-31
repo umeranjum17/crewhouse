@@ -20,6 +20,7 @@ clears the icon badge and goes back to "Where should I work?".
   refuses), `{off: true, web}` removes the calling device's own address at the mailbox, a computer with no mailbox is
   said in plain words with no dead toggle, and no Getting-set-up item whose call the link refuses is left — Home's
   setup nudge waits for the computer too.
+- Pairing lands on Chief's thread (`crewhouse.arrived` in `web/src/link.ts`, read by `resume()`), headed once by `A.arrived`, the same words Cloud ends on in the phone app ([where-cloud.md](where-cloud.md)); Unpair still lands on Where.
 - Unpair: crewd's device list drops the browser, and the app goes back to "Where should I work?" with no reinstall.
 - The link's trust rules hold: crewd still refuses admin writes over the link (`src/link.ts`).
 

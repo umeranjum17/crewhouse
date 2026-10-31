@@ -2522,3 +2522,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .pv-btn { grid-column: 3; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--soft); color: var(--ink2); font: 600 16px/1 var(--ui); }
 .practice-voice.speaking .pv-btn { background: var(--danger); color: var(--bg); }
 .practice-voice .call-voice > summary, .practice-voice .call-menu label { font-size: 16px; line-height: 22px; }
+
+.arrived { display: flex; flex-direction: column; gap: 2px; margin: calc(var(--top) + 64px) 12px 0; padding: 12px 14px; border-radius: 14px; background: var(--soft); color: var(--ink2); font-size: 13px; line-height: 19px; }
+.arrived b { color: var(--ink); font-size: 15px; line-height: 20px; }
+@media (min-width: 900px) { .arrived { margin: 12px 24px 0; } }

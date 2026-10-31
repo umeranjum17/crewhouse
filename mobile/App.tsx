@@ -131,7 +131,7 @@ export default function App() {
             : grant === undefined || phone === null ? <Center><ActivityIndicator color={t.ink} /></Center>
             // Phone-only stays a way out even with a pairing kept: leaving it returns to the paired app, grant intact.
             : phone ? <PhoneOnly onExit={leavePhone} />
-            : grant === null ? <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { notNow = false; void setPhoneMode(false); setPhone(false); setGrant(g); }} />
+            : grant === null ? <GetStarted onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} onPaired={(g) => { notNow = false; landed = true; void setPhoneMode(false); setPhone(false); setGrant(g); }} />
             : <Crewhouse grant={grant} onRemoved={() => setGrant(null)} onRepaired={(g) => setGrant(g)} onPhoneOnly={() => { void setPhoneMode(true); setPhone(true); }} />}
           <Toast />
         </SafeAreaView>
@@ -1349,6 +1349,13 @@ function PhoneChat({ onExit, onSignedOut }: { onExit: () => void; onSignedOut: (
  *  the whole chat in it. The phone copy goes only after the computer has stored it; a failure keeps it and says so.
  *  Not now hides the offer until the app opens again or pairs again. */
 let notNow = false;
+// A pairing's landing (Cloud or My computer): Chief's thread opens saying he is ready, once.
+let landed = false;
+function Arrived({ person, onSaid }: { person: Json; onSaid: () => void }) {
+  useEffect(() => onSaid, []);
+  const a = A.arrived(A.displayName(person));
+  return <Card style={{ gap: 4, marginBottom: 8 }}><T style={s.b}>{a.ready}</T><T tone="mute" style={s.small}>{a.later}</T></Card>;
+}
 function ContinueOffer({ canAct, onMoved }: { canAct: boolean; onMoved: () => void }) {
   const t = useLook();
   const [move, setMove] = useState(() => (notNow ? null : chatToMove()));
@@ -1392,8 +1399,9 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
   const [why, setWhy] = useState(false);
   const reduce = motion.useReduceMotion();
   const [tick, setTick] = useState(0);
-  const [stack, setStack] = useState<Route[]>([{ view: 'home' }]);
+  const [stack, setStack] = useState<Route[]>(landed ? [{ view: 'home' }, { view: 'chief' }] : [{ view: 'home' }]);
   const [sheet, setSheet] = useState<A.Card | null>(null);
+  const [arrival, setArrival] = useState(landed);
   const link = useRef<ReturnType<typeof connect>['link'] | null>(null);
   const heard = useRef(first.at); // when the home computer last answered
   const [missing, setMissing] = useState('');
@@ -1567,7 +1575,7 @@ function Crewhouse({ grant, onRemoved, onRepaired, onPhoneOnly }: { grant: Grant
       </Modal>
       <View style={[{ flex: 1 }, edge && { [edge === 'left' ? 'paddingLeft' : 'paddingRight']: BUBBLE_DP }]}>
         {route.view === 'home' && <Home {...ctx} />}
-        {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} />}
+        {route.view === 'chief' && <ChiefPage key={stack.length} {...ctx} m={route.m} arrived={arrival} onSaid={() => { landed = false; setArrival(false); }} />}
         {route.view === 'goal' && (route.tab === 'path' ? <Career {...ctx} /> : route.tab === 'prep' ? <Prep key={stack.length} {...ctx} id={route.id!} /> : route.id ? <Role key={stack.length} {...ctx} id={route.id} /> : <Goal {...ctx} />)}
         {route.view === 'room' && <Room {...ctx} />}
         {route.view === 'crew' && <Crew {...ctx} />}
@@ -2434,11 +2442,11 @@ function Head({ children, onBack, wrap }: { children: ReactNode; onBack: () => v
 }
 
 /** Chief's thread, opened from his card on Home: his header, then his chat. */
-function ChiefPage(ctx: Ctx & { m?: number }) {
+function ChiefPage(ctx: Ctx & { m?: number; arrived?: boolean; onSaid?: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <PillHead who="chief" name="Chief" sub={ctx.offline ? OUT : undefined} wait={ctx.offline} onBack={ctx.back}><RoundBtn glyph="⋯" label="Settings" onPress={() => ctx.go({ view: 'phone' })} /></PillHead>
-      <Chat {...ctx} id="chief" m={ctx.m} hero={<ContinueOffer canAct={ctx.canAct} onMoved={ctx.refresh} />} />
+      <Chat {...ctx} id="chief" m={ctx.m} hero={<>{ctx.arrived && <Arrived person={ctx.state.person} onSaid={ctx.onSaid!} />}<ContinueOffer canAct={ctx.canAct} onMoved={ctx.refresh} /></>} />
     </View>
   );
 }

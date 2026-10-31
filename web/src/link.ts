@@ -65,10 +65,10 @@ export async function unpair(link: DeviceLink) {
 const forgotten = async () => { try { await store.clear(); } catch { /* the page leaves either way; a grant left behind is cleared next time */ } try { if (!unpairing) sessionStorage.setItem('crewhouse.removed', '1'); } catch { /* the page still leaves */ } await leave(); };
 
 /** The same installed app opens fresh: the grant (or its absence) decides the mode at boot. A deliberate restart
- *  lands Home, never on the last place, so it flags itself for `resume()` (web/src/resume.ts). */
-export async function leave() {
+ *  lands Home, never on the last place (a pairing's own landing is Chief's thread, `arrived`), so it flags itself for `resume()` (web/src/resume.ts). */
+export async function leave(arrived = false) {
   await setBadge(0);
-  try { sessionStorage.setItem('crewhouse.home', '1'); } catch { /* no storage: Home is the default anyway */ }
+  try { sessionStorage.setItem(arrived ? 'crewhouse.arrived' : 'crewhouse.home', '1'); } catch { /* no storage: Home is the default anyway */ }
   location.replace(location.pathname === '/share' ? '/share' + location.search : '/'); // a share that waited for pairing opens again, paired
 }
 
