@@ -22,8 +22,9 @@ const type = async (v) => { for (let i = 0; i < v.length; i += 3) { A('shell', '
 const drag = async (re, y1, y2) => { for (let i = 0; !re.test(texts()); i++) { if (i === 6) throw new Error(`never dragged to ${re}`); A('shell', 'input', 'swipe', '540', y1, '540', y2, '400'); await sleep(900); } };
 const close = () => { if (/mInputShown=true/.test(A('shell', 'dumpsys', 'input_method'))) A('shell', 'input', 'keyevent', '4'); };
 
-// Home is a chat list (Chief first, each row labelled "<name>: <last line>"); his CV goes in Chief's own chat.
-await on(/Keeping an eye on things/); await sleep(1500); shot('01-home.png');
+// Pairing lands on Chief's chat with his ready card (the onboarding ending); Home's chat list is one Back away.
+await on(/Chief is ready, Umer/); await sleep(1500); shot('01-chief-ready.png');
+ui('tap', '^Back$'); await on(/Keeping an eye on things/); await sleep(1500); shot('01-home.png');
 ui('tap', '^Chief: '); await on(/Tell Chief anything/);
 // Step one: his CV from the phone's own files, then his words with it (the keyboard closes before Send, never after it).
 ui('tap', '^Add a photo or a document$'); await on(/A document: PDF/); ui('tap', '^A document: PDF'); await on(/Umer_CV/, 60_000); await sleep(800); shot('02-picker.png');
