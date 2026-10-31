@@ -60,7 +60,7 @@ The download is about 180 MB and carries everything, the AI engine included, so 
 
 It thinks with the AI plan you already pay for: ChatGPT Plus, Pro or Go, Grok, GitHub Copilot, MiniMax, OpenRouter, OpenCode Go, or the `claude` CLI you already have signed in ([the full list](docs/supported-subscriptions.md)).
 
-Prefer no terminal? On **Ubuntu or Debian** download `crewhouse_0.1.8_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.8) and press **Install** in your software centre, then open **Crewhouse** from your app menu. The phone app, a cloud host, or a run from the code: [install and run](docs/install.md).
+Prefer no terminal? On **Ubuntu or Debian** download `crewhouse_0.1.9_amd64.deb` from the [Linux release](https://github.com/umeranjum17/crewhouse/releases/tag/linux-v0.1.9) and press **Install** in your software centre, then open **Crewhouse** from your app menu. The phone app, a cloud host, or a run from the code: [install and run](docs/install.md).
 
 ## Why Crewhouse
 
