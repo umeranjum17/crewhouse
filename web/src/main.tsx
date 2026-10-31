@@ -15,7 +15,7 @@ import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
 import { glowOf, hear, useOffice } from './office.tsx';
 import { AccountCard, ComposioSheet, ConnectApp, ConnectCard, KeyApp, NEEDS_SIGNIN, NoAuthority, openTab, PairSheet, Removed, Sheet, sheet, SignIn, Split, Unreachable } from './flows.tsx';
 import { pushPossible, pushState, setBadge, startWorker, turnOffNotifications, turnOnNotifications } from './pwa.ts';
-import { remember, resume } from './resume.ts';
+import { arrival, arrivedSaid, remember, resume } from './resume.ts';
 import { nextRun, parseSchedule } from '../../src/routines.ts';
 import * as K from './kept.ts';
 import { Goal, RoleCard } from './goal.tsx';
@@ -323,8 +323,16 @@ function Home(ctx: Ctx) {
 }
 
 /** Chief's thread: his bar, the pinned Needs you and his chat, with (on a desk) the side column of who is on what. */
+/** A pairing's landing (Cloud or My computer): Chief says he is ready, with the change-later line, until the person moves on. */
+function Arrived({ person }: { person: Json }) {
+  const [on] = useState(arrival);
+  useEffect(() => arrivedSaid, []);
+  if (!on) return null;
+  const a = A.arrived(A.displayName(person));
+  return <div className="arrived" role="status"><b>{a.ready}</b><span>{a.later}</span></div>;
+}
 function ChiefPage(ctx: Ctx & { m?: string }) {
-  return <div className="page chat-page home-chat"><div className="home-top"><ChiefHead ctx={ctx} /></div><Chat {...ctx} id="chief" hero m={ctx.m} rail={<ChiefRail ctx={ctx} />} /></div>;
+  return <div className="page chat-page home-chat"><div className="home-top"><ChiefHead ctx={ctx} /><Arrived person={ctx.state.person} /></div><Chat {...ctx} id="chief" hero m={ctx.m} rail={<ChiefRail ctx={ctx} />} /></div>;
 }
 
 /** The standing "hand me a job" list (docs/ui-contract.md, `ideas[]`): what the crew offers to do end to end, money back

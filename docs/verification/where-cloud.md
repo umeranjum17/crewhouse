@@ -56,6 +56,7 @@ phone and web both show both doors, My computer then Cloud. An explicit
   computer is not in your boat.dev account any more. Pick another one."), a computer boat.dev gave no public
   address, and a setup already running on this phone.
 - My computer opens the how-to-run card on phone and web (`A.PUT`: the one line, Copy that says copied or could not copy, What happens, no time claim until one is measured); Type the code goes on to the Pair screen and Back returns to the card.
+- One ending: Cloud's Talk to Chief and the Pair screen's Open Crewhouse (and the web Pair sheet's Open my crew) both land on Chief's thread, headed once by `A.arrived`: "Chief is ready, <name>." and "You can change this later in Settings." The line goes when the person moves on; Back from the thread is Home.
 - Web: The card's Type the code opens the Pair sheet ([pwa-pair.md](pwa-pair.md)); the cloud and phone rows open "Use the
   phone app to set this up" with the app's download code.
 

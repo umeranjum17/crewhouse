@@ -473,7 +473,7 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
     const link = await import('./link.ts');
     await how(link);
     setDone(true);
-    setTimeout(() => void link.leave(), 1200);
+    setTimeout(() => void link.leave(true), 1200);
   })().catch((e: Error) => { setProblem(e.message); setWords(null); setBusy(false); }); };
   /** What was scanned, pasted or opened: the computer's app link goes to that app; anything else pairs from here. */
   const open = (code: string, how: (link: typeof import('./link.ts'), code: string) => Promise<void>) => { const to = appLink(code); if (to) location.assign(to); else join((link) => how(link, code)); };
@@ -516,7 +516,7 @@ export function PairSheet({ onClose }: { onClose: () => void }) {
       </Split>}
       {phase === 'done' && <Split mid top={top} mark={<span className="on-desk"><Face who="chief" size={96} /></span>} title="Paired." lead="This is your crew now. Opening it…">
         <span className="fr-crew" aria-hidden>{(['bunny', 'scout', 'chief', 'scribe', 'tracer'] as const).map((k) => <Face key={k} who={k === 'chief' ? 'chief' : { kind: k, name: k }} size={k === 'chief' ? 88 : 64} />)}</span>
-        <button className="btn go big" onClick={() => void import('./link.ts').then((l) => l.leave())}>Open my crew</button>
+        <button className="btn go big" onClick={() => void import('./link.ts').then((l) => l.leave(true))}>Open my crew</button>
       </Split>}
     </FullPage>
   );

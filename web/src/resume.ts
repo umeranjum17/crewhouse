@@ -21,6 +21,10 @@ export function remember() {
   if (namesPlace(location.hash)) s.setItem(key(), location.hash); else s.removeItem(key());
 }
 
+/** This launch is a pairing's landing: Chief's thread says he is ready, once (`arrived`, web/src/adapter.ts). */
+export let arrival = false;
+export const arrivedSaid = () => { arrival = false; };
+
 /** A home-screen launch (start_url "/", nothing after the #) reopens the remembered place. Any hash at all — a
  *  normal link, a manifest shortcut, even a deliberate `#/` — names its own place and wins over the memory; a
  *  deliberate in-app restart (pairing/unpairing) flags itself and also lands Home; a remembered place that no
@@ -28,6 +32,7 @@ export function remember() {
 export function resume() {
   if (location.pathname !== '/') return; // the /share target is not the app root
   if (location.hash !== '') return; // a bare start_url is the only launch that reopens the memory
+  try { if (sessionStorage.getItem('crewhouse.arrived') === '1') { sessionStorage.removeItem('crewhouse.arrived'); arrival = true; history.replaceState(null, '', `${location.pathname}${location.search}#/chief`); return; } } catch { /* no storage: Home */ }
   let restart = false;
   try { restart = sessionStorage.getItem('crewhouse.home') === '1'; if (restart) sessionStorage.removeItem('crewhouse.home'); } catch { /* no storage */ }
   if (restart) return; // a deliberate restart (pairing/unpairing, web/src/link.ts) lands Home
