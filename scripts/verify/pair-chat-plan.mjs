@@ -22,7 +22,8 @@ const answer = `(() => { const all = [...document.querySelectorAll('.lines .line
 const steps = [
   { name: 'open', w: 390, h: 844, dpr: 2, mobile: true, url: WEB, settle: 5000 },
   { name: 'where', eval: mode },
-  { name: 'pair-row', click: '.where-opt.first', settle: 2500 },
+  { name: 'pair-row', click: '.where-opt .where-main', settle: 2500 }, // the first door, My computer, opens the how-to-run card
+  { name: 'type-code', click: '.run-here .btn.go.big', settle: 1500 },
   { name: 'sheet', eval: `document.body.innerText.slice(0, 200)` },
   { name: 'code', run: `${cli} phones code | tail -1`, eval: put('.pair-code') },
   { name: 'go-wait', wait: `!!document.querySelector('.pair-code')`, timeout: 30000 },
