@@ -11,6 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { cpus, loadavg } from 'node:os';
 import { writeStepsRecord } from './steps.mjs';
 
 const args = process.argv.slice(2);
@@ -36,6 +37,7 @@ if (!args.includes('--resume') && !args.includes('--tail')) try { adb('uninstall
 const TAIL = opt('tail', ''), RESUME = args.includes('--resume') || !!TAIL, STATE_FILE = join(OUT, `.timing-${RECIPE}.state.json`);
 // --tail signin|ask: only that part, on a computer that is already up (a cloud run's AI sign-in or first question, timed on its own clock)
 const saved = RESUME && !TAIL ? JSON.parse(readFileSync(STATE_FILE, 'utf8')) : null; // a run that stopped part-way: the clock and steps so far
+const LOAD0 = loadavg()[0]; // the host's one-minute load: a loaded host makes every time here an upper bound
 const T0 = saved ? saved.T0 : Date.now(); const steps = saved ? saved.steps : [];
 const mark = (name, extra = {}) => {
   const now = Date.now(), prev = steps.length ? steps[steps.length - 1].t : T0;
@@ -133,7 +135,12 @@ recipes.computer = async () => {
   mark('code typed (harness types it; a person reads and types it)', { harness: true });
   await tapWhen(/^Pair$/);
   let asking = [];
-  for (const end = Date.now() + 90000; Date.now() < end && !asking.length; await sleep(500)) asking = await api('/api/phones/pending');
+  let retries = 0;
+  for (const end = Date.now() + 180000; Date.now() < end && !asking.length; await sleep(500)) {
+    asking = await api('/api/phones/pending');
+    const slow = !asking.length && retries < 3 && has(/slow to answer/, nodes()); // the app's own wait ran out: a person presses Pair again
+    if (slow) { retries++; mark(`phone said "Your computer is slow to answer" (retry ${retries})`); await tapWhen(/^Pair$/, 10); }
+  }
   if (!asking.length) throw new Error('the computer never saw the phone ask to pair');
   mark('phone asking; the two words are on both screens');
   await api('/api/phones/answer', { id: asking[0].id, yes: true }); // the computer card's "Yes, the words match"
@@ -217,6 +224,7 @@ try { for (const night of [false, true]) { theme(night); await sleep(2500); shot
 const timed = steps.filter((s) => !s.harness);
 const slowest = timed.reduce((a, s) => (!a || s.afterSeconds > a.afterSeconds ? s : a), null);
 const result = {
+  hostLoad: { oneMinuteAtStart: +LOAD0.toFixed(1), oneMinuteAtEnd: +loadavg()[0].toFixed(1), cores: cpus().length },
   recipe: RECIPE, startedAt: new Date(T0).toISOString(), finishedAt: new Date(end).toISOString(), reachedAnswer: !failure, failure,
   totalSeconds: failure ? null : +((end - T0) / 1000).toFixed(1),
   harnessSeconds: +steps.filter((s) => s.harness).reduce((a, s) => a + s.afterSeconds, 0).toFixed(1),
@@ -231,5 +239,6 @@ writeStepsRecord(join(OUT, RECIPE), {
   steps: steps.map((s) => s.step),
   result: failure ? `Did not reach an answer: ${failure}` : "Chief's first answer to the question is on screen.",
 });
+say(`host one-minute load ${LOAD0.toFixed(1)} at start, ${loadavg()[0].toFixed(1)} at end, on ${cpus().length} cores`);
 say(`${RECIPE}: ${failure ? 'NO NUMBER (' + failure + ')' : result.totalSeconds + ' s total'}; slowest ${slowest ? slowest.step + ' ' + slowest.afterSeconds + ' s' : 'n/a'}`);
 process.exit(failure ? 1 : 0);

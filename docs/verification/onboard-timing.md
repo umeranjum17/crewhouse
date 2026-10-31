@@ -12,12 +12,14 @@ slowest step, and every wait above 30 seconds with the step it was spent in. Ste
 person (typing a key a person would paste, typing the code, typing the question) are marked `harness`; they count in the
 wall clock and are totalled apart (`harnessSeconds`), and never count as the slowest step.
 
+The host's one-minute load is recorded at start and end (`hostLoad`): a loaded host slows every wait, so the numbers are an upper bound. When the app says "Your computer is slow to answer" the harness presses Pair again, as a person would, and records the retry.
+
 A "useful answer" is a model reply to the question the harness sent. Chief's "sign in when you're ready" and his fixed
 name greeting are not answers. A run that never reaches one records no total (`totalSeconds: null`, the failure named).
 
 ## How to drive it
 
-A fresh emulator (wiped, at least 6 GB: a 4 GB one has the system kill the UI dump mid-run), the release APK built from
+Install the pinned kits first (`npm ci` at the root and in `mobile/`; a stale `node_modules` timed a different app). A fresh emulator (wiped, at least 6 GB: a 4 GB one has the system kill the UI dump mid-run), the release APK built from
 the head (`cd mobile && npx expo prebuild -p android --clean --no-install && cd android && ./gradlew assembleRelease
 -PreactNativeArchitectures=x86_64`) and a MiniMax key file (`~/firstmate/config/minimax-api-key`, never printed):
 
