@@ -4,7 +4,7 @@ import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useS
 import { api, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
-import { ears, hear, speak, voices, type Ears } from './voice.ts';
+import { canRecord, ears, hear, record, speak, voices, type Ears } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
@@ -626,23 +626,24 @@ export function Steps({ steps, max = 6, onUndo, onForget, trail }: { steps: Step
   );
 }
 
-const heardWrong = (e: any) => ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "The browser's online service couldn't hear you. Check the connection, or type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.";
+const heardWrong = (e: any) => /^[a-z]+$/.test(e?.message ?? '') ? ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "Couldn't reach the computer that turns your speech into words. Check the connection, or type instead." } as Record<string, string>)[e.message] ?? "Speaking isn't ready on this computer. Type instead." : e?.message ?? "Speaking isn't ready on this computer. Type instead.";
 
-/** The voice note to Chief: a mic in the box, on this device or the browser's online recognizer (said first). Where
- *  neither can hear, the mic says why. What was said lands in the box after what is already there, for the person to
- *  read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
+/** The voice note to Chief: a mic in the box. Where this browser can record, the clip goes to the paired computer and
+ *  Hex writes it down there (nothing to a cloud service); where it can't, the browser's own recognizer hears instead
+ *  (said first). Where neither can hear, the mic says why. What was said lands in the box after what is already there,
+ *  for the person to read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
 let micOpen = false, cutPractice: (() => void) | null = null;
 function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: string) => void) {
-  const [route, setRoute] = useState<Ears | null>(null);
+  const [route, setRoute] = useState<Ears | 'computer' | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
   const now = useRef(text);
   now.current = text;
-  useEffect(() => { if (on) void ears().then(setRoute); }, [on]);
+  useEffect(() => { if (on) void (canRecord() ? Promise.resolve('computer' as const) : ears()).then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
   if (!route) return { mic: null, on: false };
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
-    const h = hear(route);
+    const h = route === 'computer' ? record() : hear(route);
     micOpen = true; cutPractice?.(); // the interviewer never talks over the person
     setEar(h);
     setListen(chat, true);

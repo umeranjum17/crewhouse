@@ -15,6 +15,7 @@ import { describe, firstRun, nextRun, parseSchedule, reminderAt } from './routin
 import { Link } from './link.ts';
 import { lesson, Teacher } from './teach.ts';
 import { MailSend } from './mail-send.ts';
+import { transcribe } from './transcribe.ts';
 import * as jobs from './jobs.ts';
 
 const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
@@ -190,6 +191,8 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
     if (m === 'GET' && p === '/api/room') return crew.room(Number(q.get('before')) || undefined);
     if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
+    // The person's speech from a browser mic, written down here by Hex (src/transcribe.ts): the clip is used once and kept nowhere.
+    if (m === 'POST' && p === '/api/transcribe') return { text: await transcribe(new Uint8Array(Buffer.from(String(body.audio ?? ''), 'base64'))) };
     // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
     // card on the phone refreshes like the web card's.
     if (m === 'POST' && p === '/api/phones/refresh') {

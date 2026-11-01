@@ -56,6 +56,10 @@ export function mintFiles(): Promise<void> {
 export const trouble = (e: any): 'offline' | 'missing' | 'failed' | 'noauth' =>
   (e?.status === 403 && e?.code === 'no-authority' ? 'noauth' : e?.status === 404 ? 'missing' : !e?.status ? 'offline' : 'failed');
 
+/** The person's speech from this device's microphone, written down by Hex on the computer they paired with
+ *  (`src/transcribe.ts`): the clip goes there once, in memory, and never to a cloud service. `wav` is base64. */
+export const transcribe = (wav: string): Promise<{ text: string }> => call('POST', '/api/transcribe', { audio: wav });
+
 export const api = {
   /** The board: the person moves a role (applied, interview, offer, passed), or asks the writer for a draft. */
   moveRole: (id: number, stage: string) => call('POST', `/api/jobs/${id}`, { stage }),

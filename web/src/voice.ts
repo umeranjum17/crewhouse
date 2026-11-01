@@ -2,6 +2,10 @@
 // device when it can; where it has no on-device recognizer (Android Chrome in a PWA, for one), its online recognizer
 // does instead, and the app says so before it listens (the words are `VOICE_WORDS` in adapter.ts). Nothing is sent
 // by speaking: the words go nowhere until the person taps send.
+// Where the browser can record, the box's mic records instead and this computer's Hex writes it down (`record` below),
+// so the audio goes to the computer the person paired with and to no cloud service.
+import { transcribe } from './api.ts';
+
 const Heard = (globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition;
 const lang = () => navigator.language || 'en-US';
 const want = (local: boolean) => ({ langs: [lang()], processLocally: local });
@@ -46,10 +50,53 @@ export function hear(route: Ears, heard?: (words: string) => void): { words: Pro
   return { words, stop: () => { stopped = true; r?.stop(); } };
 }
 
+/** Whether this browser can record at all: a microphone, and a way to keep what it hears. Where it can't, the browser's
+ *  own recognizer still hears (`hear`). */
+export const canRecord = () => !!navigator.mediaDevices?.getUserMedia && !!((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext);
+
+/** A 16-bit mono PCM WAV of what the microphone captured, at its own rate (Hex resamples). */
+function wav(chunks: Float32Array[], rate: number): Uint8Array {
+  const n = chunks.reduce((a, c) => a + c.length, 0), bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
+  const tag = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+  tag(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); tag(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); tag(36, 'data'); v.setUint32(40, n * 2, true);
+  let at = 44;
+  for (const c of chunks) for (const f of c) { v.setInt16(at, Math.max(-1, Math.min(1, f)) * 0x7fff, true); at += 2; }
+  return bytes;
+}
+
+const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
+/** Listens by recording, then has this computer's Hex write the clip down (`transcribe`): the audio goes to the computer
+ *  the person paired with, and a tap on the mic ends the recording. Fails the same ways `hear` does, and in Hex's own
+ *  plain words when it can't write the clip down. */
+export function record(): { words: Promise<string>; stop: () => void } {
+  const off: (() => void)[] = [];
+  let stopped = false;
+  const words = (async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    off.push(() => stream.getTracks().forEach((t) => t.stop()));
+    const Ctx = (globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext, ctx = new Ctx(), chunks: Float32Array[] = [];
+    const tap = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain();
+    mute.gain.value = 0; // the tap only listens: the microphone is never played back
+    tap.onaudioprocess = (e: any) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    ctx.createMediaStreamSource(stream).connect(tap).connect(mute).connect(ctx.destination);
+    await new Promise<void>((ended) => { const end = () => { tap.onaudioprocess = null; void ctx.close(); ended(); }; if (stopped) end(); else off.push(end); });
+    off.forEach((f) => f());
+    const clip = wav(chunks, ctx.sampleRate);
+    return clip.length > 44 ? (await transcribe(base64(clip))).text : '';
+  })().catch((e: any) => {
+    if (/^(NotAllowed|Security)Error$/.test(e?.name ?? '')) throw new Error('blocked');
+    if (e instanceof DOMException) throw new Error('nomic');
+    throw e; // the computer's own words, or the link's
+  });
+  return { words, stop: () => { stopped = true; off.forEach((f) => f()); } };
+}
+
 // Reading Chief's replies aloud: only this device's own voices (never an online one), a sentence at a time, so a call
 // can show the one being read and Stop cuts in between.
 const synth: SpeechSynthesis | undefined = globalThis.speechSynthesis;
-
 /** This device's own voices in the person's language, its default first, once the browser has listed them (none
  *  where it has no voice of its own). */
 export async function voices(): Promise<SpeechSynthesisVoice[]> {
