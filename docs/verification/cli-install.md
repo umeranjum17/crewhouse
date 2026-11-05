@@ -33,7 +33,7 @@ place (the swap, the stop and the start are the same).
 - `status` before the first start says it is not running (exit 3) and installs nothing; `stop` says the same (exit 0).
 - `start` prints the address and a phone pairing code; `status` then gives the pid and the same address.
 - `link` prints the link that adds a phone, or says Crewhouse is not listening for phones yet.
-- `doctor` lists the machine's tools with the installed command's name (`crewhouse tools install …`), never `./crewhouse`.
+- `doctor` puts what Crewhouse needs first and the rest under Optional. `✗` stops it and exits 1; a missing optional part is `·`, names its fix and exits 0. It uses the installed command's name (`crewhouse tools install …`), never `./crewhouse`.
 - `stop` stops crewd, a second `status` says not running, and a wrong word prints the usage with exit 2.
 - Nothing outside the lab changes: no systemd unit, no keyring entry, no file in the real HOME.
 

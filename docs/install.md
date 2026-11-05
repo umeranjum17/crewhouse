@@ -29,7 +29,7 @@ After `npm install -g`, the first `crewhouse start` makes the folder it runs fro
 | `crewhouse status` | Says whether it is running and at what address; exits 3 when it is not |
 | `crewhouse link [new]` | Prints the one link that adds a phone (see Commands below) |
 | `crewhouse update` | Installs the newest version the way you installed it (npm, or the one line again), and restarts Crewhouse if it was running. It leaves your crew, sign-ins and settings alone |
-| `crewhouse doctor` | Shows what is installed and what is missing |
+| `crewhouse doctor` | Says whether Crewhouse can run, and what optional parts are missing, each with its fix |
 
 `crewhouse setup`, `open`, `tools`, `autostart on|off` and `phones` work too, exactly as in the Commands table below with `crewhouse` in place of `./crewhouse`. To remove an install: `npm uninstall -g crewhouse`, or delete `~/.local/share/crewhouse/release/` and `~/.local/bin/crewhouse`; Crewhouse's own folders above stay until you delete them.
 
@@ -96,7 +96,7 @@ These are the launcher's commands in a checkout, typed `./crewhouse`; the instal
 | `./crewhouse setup --headless [--install-only]` | Prepares a headless host and, unless install-only, starts its service and prints the first-phone code |
 | `./crewhouse headless serve\|pair\|health` | Runs the headless host, prints a fresh unused first-phone code, or checks readiness |
 | `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
-| `./crewhouse doctor` | Shows what's installed and what's missing |
+| `./crewhouse doctor` | Says whether Crewhouse can run, and what optional parts are missing, each with its fix |
 | `./crewhouse open` | Reopens Crewhouse in your browser |
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
