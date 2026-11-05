@@ -785,6 +785,16 @@
     ],
     "result": "Every line of the resume is one Umer wrote in Chief's chat; the invented certificate and the line he marked private never appear. Each part says when he told Chief, and the part he changed says Edited by you. The PDF and the Word file the buttons save hold exactly the lines on screen, his edit included. The PDF uses a built-in Latin font, so a non-Latin script would not show. Not a real model."
   },
+  "pi-engine": {
+    "start": "Two real crewds: one on the stub engine with the Pi flag off, as bot-crew drives it, and one started with CREWHOUSE_ENGINE=pi, onboarded as Umer, on the real pinned Pi and the model {{model}}",
+    "steps": [
+      "With the flag off, open the bot list and a bot's chat on a 390 phone and a 1280 computer, day and night",
+      "With the flag on, send Chief: {{ask}}",
+      "Open Chief's chat on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
+      "Hash a stand-in person's Pi folder before and after the run"
+    ],
+    "result": "With the flag off the list and chat work as before; with it on Chief's chat shows the message and the answer Pi gave: {{reply}}. The stand-in Pi folder hashes the same; the person's real folder was not checked"
+  },
   "bot-crew": {
     "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",
     "steps": [

@@ -87,6 +87,9 @@ jobs:
       - run: npm audit signatures --prefix "$(cat "$RUNNER_TEMP/engine-prepare/openclaw/engine-set")"
       - run: npm run check
       - run: npm run build:web
+      # The Pi engine's journey runs on the real pinned Pi: the kit by its committed ref, until it is on npm.
+      - if: env.GROUP == 'app'
+        run: node scripts/prepare-pi.mjs
       - run: npm test -- --group="$GROUP" # stub runner only: no Herdr, no CLI, no model calls
   check-engine:
     needs: changes

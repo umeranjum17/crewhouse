@@ -14,7 +14,7 @@ export interface Config {
   linkPort: number;
   relay: string;
   relayPublic: string;
-  engine: 'openclaw' | 'stub';
+  engine: 'openclaw' | 'stub' | 'pi';
   maxConcurrent: number;
   engineProvider?: { baseUrl: string; apiKey: string };
   googleClient: string;
@@ -54,7 +54,7 @@ export function loadConfig(): Config {
     linkPort: Number(process.env.CREWHOUSE_LINK_PORT ?? (product ? 7712 : 0)),
     relay: process.env.CREWHOUSE_RELAY?.trim() ?? '',
     relayPublic: relayOrigin(process.env.CREWHOUSE_RELAY_PUBLIC?.trim() || null) ?? '',
-    engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : 'openclaw',
+    engine: process.env.CREWHOUSE_ENGINE === 'stub' ? 'stub' : process.env.CREWHOUSE_ENGINE === 'pi' ? 'pi' : 'openclaw',
     maxConcurrent: Number(process.env.CREWHOUSE_MAX_CONCURRENT || 3),
     engineProvider: process.env.CREWHOUSE_ENGINE_BASE_URL && process.env.CREWHOUSE_ENGINE_API_KEY
       ? { baseUrl: process.env.CREWHOUSE_ENGINE_BASE_URL, apiKey: process.env.CREWHOUSE_ENGINE_API_KEY } : undefined,

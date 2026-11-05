@@ -49,6 +49,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@byokit/pi": "file:runtime/byokit/packages/pi",
     "@desklink/react-native": "0.5.8",
     "@types/node": "^22.10.0",
     "@types/react": "^19.3.0",

@@ -108,7 +108,10 @@ import { join } from 'node:path';
 // src/transcribe.ts (the Hex adapter, its two plain-words refusals and the exit hook that stops its helper) and the one
 // endpoint in src/server.ts that hands it a clip. Owner exception requested in the PR; no trim paired (the Hex path is the
 // feature, and BYOKit's @byokit/dictation takes the module over as a hex engine).
-const BUDGET = 8204;
+// Raised 8204 -> 8282 for the Pi engine behind its flag (ch-pi-runtime, +78 net): src/pi/runtime.ts (the AgentRuntime adapter
+// on @byokit/pi, the only file naming the kit) and the flag in src/config.ts and src/engines.ts. Owner exception requested in the
+// PR; no trim paired (the adapter is the feature, and OpenClaw's stays until Pi replaces it).
+const BUDGET = 8282;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
