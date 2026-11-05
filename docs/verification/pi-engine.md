@@ -10,7 +10,7 @@ To run it by hand: `CREWHOUSE_ENGINE=pi CREWHOUSE_ENGINE_BASE_URL=<OpenAI-compat
 
 ## Capture
 
-`flag-off/`: the bot list and a helper's chat, as `bot-crew` writes them. `flag-on/chief-{390,1280}-{day,night}.png` and `flag-on/installed/chief-390-{day,night}.png`: Chief's chat with the message and the answer, no error line. `reply.txt`: the words and Pi's record of them. `pi-folder.txt`: a stand-in person's Pi folder, in the HOME crewd and Pi start from, hashed whole before and after.
+`flag-off/`: the bot list and a helper's chat, as `bot-crew` writes them. `flag-on/chief-{390,1280}-{day,night}.png` and `flag-on/installed/chief-390-{day,night}.png`: Chief's chat with the message and the answer, no error line. `reply.txt`: the words and Pi's record of them. `pi-folder.txt`: a stand-in Pi folder, in the HOME crewd and Pi start from, hashed whole before and after. The person's real folder is not read here, so nothing in this journey proves it unchanged; that rests on the kit's own isolation test. `same-shots.txt`: any shot dropped for being byte for byte another, since done-done refuses that as reuse.
 
 ## The gate
 

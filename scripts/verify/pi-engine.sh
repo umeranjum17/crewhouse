@@ -4,12 +4,13 @@
 # CREWHOUSE_ENGINE=pi runs Chief on the real pinned Pi through @byokit/pi, on a real model (the free MiniMax M3.1 Flash, the key
 # read from the file into crewd's environment and nowhere else); one message goes through the API the app uses, and his thread
 # is captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the
-# HOME crewd and Pi both start from, is hashed whole before and after. The owner's real folder is never read here.
+# HOME crewd and Pi both start from, is hashed whole before and after. The owner's real folder is never read here, so this says
+# nothing about it: that rests on the kit's own isolation test.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
 #
 # Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends a few model calls on that key.
-# Writes reply.txt (Chief's words and Pi's own session record of them), pi-folder.txt (the hashes) and the step record.
+# Writes reply.txt (Chief's words and Pi's own session record of them), pi-folder.txt (the hashes), same-shots.txt and the step record.
 set -euo pipefail
 OUT=${1:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; KEYFILE=${2:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
@@ -74,7 +75,11 @@ node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/fla
 GATE_PWA=1 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on/installed" chief "$THREAD"
 crewd_stop
 [ "$(hashes)" = "$BEFORE" ] || { echo "pi-engine: the stand-in person's Pi folder changed" >&2; exit 1; }
-{ echo "A stand-in person's Pi folder, in the HOME crewd and Pi started from, hashed whole before and after the flag-on run: unchanged, byte for byte."
+{ echo "The person's real Pi folder was not checked: the read guard refused it, so this run says nothing about it. That it stays untouched rests on the kit's isolation test."
+  echo "A stand-in Pi folder, in the HOME crewd and Pi started from, hashed whole before and after the flag-on run: unchanged, byte for byte."
   printf '%s\n' "$BEFORE"; } > "$OUT/pi-folder.txt"
+# The installed window can draw exactly what the browser drew; done-done refuses a byte-identical pair as reuse, so keep one and say which.
+find "$OUT" -name '*.png' -type f | sort | xargs sha256sum | awk 'seen[$1] { print $2, seen[$1]; next } { seen[$1] = $2 }' | while read -r twin kept; do
+  rm -- "$twin"; echo "${twin#"$OUT/"} was byte for byte ${kept#"$OUT/"}"; done > "$OUT/same-shots.txt"
 node "$REPO/scripts/verify/steps.mjs" "$OUT" pi-engine "ask=$ASK" "reply=$R" "model=$MODEL"
 echo "pi-engine: Chief replied on Pi; captures in $OUT"

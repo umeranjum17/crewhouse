@@ -793,7 +793,7 @@
       "Open Chief's chat on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
       "Hash a stand-in person's Pi folder before and after the run"
     ],
-    "result": "With the flag off the list and chat work as before; with it on Chief's chat shows the message and the answer Pi gave: {{reply}}. The stand-in person's Pi folder hashes the same"
+    "result": "With the flag off the list and chat work as before; with it on Chief's chat shows the message and the answer Pi gave: {{reply}}. The stand-in Pi folder hashes the same; the person's real folder was not checked"
   },
   "bot-crew": {
     "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",
