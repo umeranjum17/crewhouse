@@ -2233,14 +2233,14 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .calm .chat-page > .chat { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .calm .chat-page .lines { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--top) + 68px) 16px 12px; max-width: none; }
 .calm .chat-page .lines > :first-child { margin-top: auto; }
-.calm .chat-page .dock { position: static; flex: none; margin: 0; padding: 8px 12px max(12px, env(safe-area-inset-bottom)); background: none; mask-image: none; -webkit-mask-image: none; max-width: none; }
+.calm .chat-page .dock { position: static; flex: none; margin: 0; padding: 8px 16px max(12px, env(safe-area-inset-bottom)); background: none; mask-image: none; -webkit-mask-image: none; max-width: none; }
 .calm .chat-intro, .calm .chat-page .back:not(.ph-btn) { display: none; }
 
 /* A helper's thread is Chief's thread: the same full height and the same open foot, no band over the composer. */
 .shell.calm .page.chat-page.st-helper-chat:not(.room-page) .chat .dock { border-top: 0; background: none; }
 @media (max-width: 899px) {
   .shell.calm .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) { height: calc(100dvh - var(--top)); }
-  .shell.calm .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) .dock { padding: 8px 12px max(12px, env(safe-area-inset-bottom)); }
+  .shell.calm .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) .dock { padding: 8px 16px max(12px, env(safe-area-inset-bottom)); }
 }
 
 /* Lines: the crew's words in soft bubbles, the person's in the one warm pill. No name row in a one-to-one thread. */
@@ -2342,18 +2342,47 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .chat .lines .card.ask .btn.go, .shell.calm .chat .lines .card.ask .btn:first-of-type { background: var(--ink); color: var(--bg); border: 0; }
 .shell.calm .chat .lines .card.ask .btn:not(.go):not(:first-of-type), .shell.calm .chat .lines .card.nudge .btn:not(.go) { background: transparent; color: var(--ink); border: 1px solid var(--line2); }
 
-/* The composer: a round + apart, then one pill holding the words, the mic and the round send-or-talk button. */
+/* The composer: one pill holding the +, the words, the mic and the round send-or-talk button. Amber marks what is the
+   person's own: words ready to send, and the mic while it listens. */
 .calm .composer { display: flex; align-items: flex-end; gap: 8px; flex-wrap: nowrap; padding: 0; border: 0; border-radius: 0; background: none; min-height: 0; box-shadow: none; }
 .calm .composer > .send-away, .calm .composer > .send-failed { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; }
-.calm .composer .c-clip { width: 48px; height: 48px; flex: none; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink); align-self: flex-end; }
-.calm .c-pill { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px; min-height: 48px; box-sizing: border-box; padding: 3px 4px 3px 18px; border-radius: 26px; background: var(--bubble); border: 1px solid var(--glass-line); }
+.calm .c-pill { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px; min-height: 58px; box-sizing: border-box; padding: 6px 6px 6px 20px; border-radius: 29px; background: var(--bubble); border: 1px solid var(--glass-line); }
+.calm .c-pill:has(> .c-clip) { padding-left: 6px; }
 .calm .c-pill:focus-within { border-color: var(--line2); }
-.calm .c-pill textarea { flex: 1; min-width: 0; align-self: center; padding: 8px 0; font: 400 17px/22px var(--ui); color: var(--ink); background: none; border: 0; outline: none; resize: none; max-height: 160px; field-sizing: content; }
+.calm .c-pill textarea { flex: 1; min-width: 0; align-self: center; padding: 8px 0; font: 400 17px/24px var(--ui); color: var(--ink); background: none; border: 0; outline: none; resize: none; max-height: 160px; field-sizing: content; }
 .calm .c-pill textarea::placeholder { color: var(--quiet); }
-.calm .c-pill .mic { width: 40px; height: 40px; border-radius: 50%; background: none; color: var(--quiet); border: 0; flex: none; }
-.calm .c-pill .send { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 0; background: var(--ink); color: var(--bg); transform: none; }
+.calm .c-pill :is(.c-clip, .mic, .send) { width: 44px; height: 44px; flex: none; display: grid; place-items: center; padding: 0; margin: 0; border: 0; border-radius: 50%; transform: none; }
+.calm .c-pill .c-clip { background: none; color: var(--ink); }
+.calm .c-pill .mic { background: none; color: var(--quiet); }
+/* The bare + and mic give the words their empty corners, so a short line stays on one row at 390. */
+.shell.calm .chat .dock .c-pill .c-clip { margin-right: -6px; }
+.shell.calm .chat .dock .c-pill .mic:not(.on) { margin-right: -4px; }
+.calm .c-pill .mic.on { background: var(--me); color: var(--me-ink); animation: none; }
+.calm .c-pill .send { background: var(--me); color: var(--me-ink); }
+.calm .c-pill :is(.send.talk, .send.stop) { background: var(--ink); color: var(--bg); }
 .calm .c-pill .send:disabled { background: var(--bubble2); color: var(--quiet); }
-.calm .c-pill .c-files { flex: 1 0 100%; }
+.calm .c-pill .c-files { flex: 1 0 100%; order: -2; align-items: center; padding: 6px 8px 4px; box-sizing: border-box; }
+/* While it listens over words already in the box, they take the whole top row: the wave never squeezes them. */
+.calm .c-pill.over textarea { flex-basis: 100%; order: -1; padding-left: 8px; }
+.calm .c-pill.over .c-wave { margin-left: auto; }
+.calm .c-wave { flex: none; display: flex; align-items: center; gap: 3px; height: 44px; padding: 0 6px; color: var(--amber); }
+.calm .c-wave i { width: 3px; height: 18px; border-radius: 2px; background: currentColor; }
+.calm .c-wave i:nth-child(even) { height: 10px; }
+.calm .c-wave i:nth-child(3) { height: 24px; }
+.calm .c-wave b { margin-left: 6px; font: 400 16px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--ink2); }
+@media (prefers-reduced-motion: no-preference) {
+  .calm .c-wave i { animation: c-wave 900ms ease-in-out infinite alternate; }
+  .calm .c-wave i:nth-child(even) { animation-delay: -450ms; }
+  @keyframes c-wave { to { transform: scaleY(.45); } }
+}
+/* What waits to go: a chip each at body size, and two or more photos as the thread's pile, small, with its count. */
+.calm .c-file { font: 500 16px/20px var(--ui); }
+.calm .c-file button { font-size: 16px; }
+.calm .c-pile { display: inline-flex; align-items: center; gap: 12px; padding: 0 8px 0 0; border: 0; background: none; color: var(--quiet); font: 400 16px/22px var(--ui); cursor: pointer; }
+.calm .c-pile .fan { width: 84px; height: 72px; }
+.calm .c-pile .fan img { top: 4px; width: 46px; height: 62px; margin-left: -23px; border-radius: 10px; box-shadow: none; }
+.calm .c-pile .fan img:nth-last-child(2) { transform: translateX(-17px) rotate(-9deg); }
+.calm .c-pile .fan img:nth-last-child(3) { transform: translateX(17px) rotate(9deg); }
 
 /* Home: the chat list (after Messages). */
 .calm .page.calm-home { padding: calc(var(--top) + 12px) 0 120px; max-width: none; }
@@ -2454,10 +2483,14 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 }
 /* Calm overrides the phone thread's earlier composer and cards, which sit in their own media blocks. */
 .shell.calm .chat .dock .composer { position: relative; display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 8px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; min-height: 0; }
-.shell.calm .chat .dock .c-clip { width: 48px; height: 48px; border: 1px solid var(--glass-line); background: var(--bubble); }
-.shell.calm .chat .dock .c-pill textarea { min-height: 0; padding: 9px 0; border-radius: 0; background: none; font: 400 17px/22px var(--ui); }
-.shell.calm .chat .dock .c-pill .mic { width: 40px; height: 40px; margin: 0; }
-.shell.calm .chat .dock .c-pill .send { width: 40px; height: 40px; }
+.shell.calm .chat .dock .c-pill textarea { min-height: 0; padding: 8px 0; border-radius: 0; background: none; font: 400 17px/24px var(--ui); }
+.shell.calm .chat .dock .c-pill.over textarea { padding-left: 8px; }
+.shell.calm .chat .dock .c-pill .send { width: 44px; height: 44px; border-radius: 50%; }
+.shell.calm .chat .dock .c-pill .mic { width: 44px; height: 44px; margin-left: 0; margin-top: 0; margin-bottom: 0; }
+.shell.calm .chat .dock .c-pill .c-clip { width: 44px; height: 44px; border-radius: 50%; }
+.shell.calm .chat .dock .c-pill .c-clip { background: none; }
+.shell.calm .chat .dock .c-pill .send { background: var(--me); color: var(--me-ink); }
+.shell.calm .chat .dock .c-pill :is(.send.talk, .send.stop) { background: var(--ink); color: var(--bg); }
 .shell.calm .chat .dock .c-pill .send:disabled { background: var(--bubble2); color: var(--quiet); }
 .shell.calm .chat .lines .card.ask { gap: 10px; border: 0; background: var(--bubble) !important; color: var(--ink) !important; }
 .shell.calm .chat .lines .card.ask .ask-words { font: 600 17px/24px var(--ui); letter-spacing: 0; margin: 0; }

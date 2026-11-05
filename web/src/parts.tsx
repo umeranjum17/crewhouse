@@ -640,7 +640,7 @@ const heardWrong = (e: any) => (e?.status && e.status !== 404 ? e.message : ({ b
 /** What went wrong with the mic; words that end in a command to run stay long enough to read, and copy the command. */
 const sayHeardWrong = (e: any) => { const m = heardWrong(e), run = /, run: (.+)$/.exec(m)?.[1]; toast(m, run ? { label: 'Copy', run: () => void navigator.clipboard?.writeText(run) } : undefined); };
 
-/** The voice note to Chief: a mic in the box. Where this browser can record, the clip goes to the paired computer and
+/** The voice note: a mic in the box. Where this browser can record, the clip goes to the paired computer and
  *  Hex writes it down there (nothing to a cloud service); where it can't, the browser's own recognizer hears instead
  *  (said first). Where neither can hear, the mic says why. What was said lands in the box after what is already there,
  *  for the person to read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
@@ -649,11 +649,14 @@ function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: 
   const [route, setRoute] = useState<Ears | 'computer' | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
   const [writing, setWriting] = useState(false); // the mic is off and the computer is writing the clip down
+  const [secs, setSecs] = useState(0); // how long this clip has run
   const now = useRef(text);
   now.current = text;
   useEffect(() => { if (on) void (canRecord() ? Promise.resolve('computer' as const) : ears()).then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
-  if (!route) return { mic: null, on: false, writing: false };
+  const live = !!ear && !writing;
+  useEffect(() => { setSecs(0); if (!live) return; const tick = setInterval(() => setSecs((n) => n + 1), 1000); return () => clearInterval(tick); }, [live]);
+  if (!route) return { mic: null, wave: null, on: false, writing: false };
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = route === 'computer' ? record() : hear(route);
@@ -665,9 +668,10 @@ function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: 
       .finally(() => { micOpen = false; setEar(null); setWriting(false); setListen(chat, false); });
   };
   const off = route === 'none';
-  return { on: !!ear, writing, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
-    onClick={() => { if (off) toast(VOICE_WORDS.none); else if (!ear) start(); else { ear.stop(); setWriting(route === 'computer'); } }}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button> };
+  return { on: !!ear, writing, wave: live && <span className="c-wave" role="timer"><i /><i /><i /><i /><i /><b>{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</b></span>,
+    mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
+    onClick={() => { if (off) toast(VOICE_WORDS.none); else if (!ear) start(); else { ear.stop(); setWriting(route === 'computer'); } }}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg></button> };
 }
 
 /** A call with Chief: his thread's lines (to read his new ones aloud) and which of them is being read. */
@@ -856,10 +860,23 @@ export const KEPT = 'kept';
  * here with a Retry: nothing a person typed is ever thrown away (web/src/draft.ts). A send the computer hasn't
  * answered in a few seconds says so ("Reconnecting…"), so a stall never looks like a dead button.
  */
-/** Chief's box. With `attach`, a round + before the words picks a PDF, a document or a photo (shown as chips until sent). */
+/** What waits to go with the words: one chip each, and two or more photos as a small pile with their count, the same
+ *  pile a helper's pictures make in the thread. A tap lays them out as chips, each with its ✕. */
+function Picked({ files, drop }: { files: Pick[]; drop: (i: number) => void }) {
+  const [all, setAll] = useState(false);
+  const photo = (p: Pick) => PHOTO_TYPES.includes(p.type), src = (p: Pick) => `data:${p.type};base64,${p.data}`;
+  const pics = files.filter(photo), pile = pics.length > 1 && !all;
+  return <div className="c-files">
+    {pile && <button type="button" className="c-pile" aria-label={`Show all ${pics.length} images`} onClick={() => setAll(true)}>
+      <span className="fan">{pics.slice(0, 3).reverse().map((p, i) => <img key={i} src={src(p)} alt="" />)}</span>{pics.length} images</button>}
+    {files.map((p, i) => !(pile && photo(p)) && <span key={`${p.name}.${i}`} className="c-file">{photo(p) && <img className="c-thumb" src={src(p)} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => drop(i)}>✕</button></span>)}
+  </div>;
+}
+
+/** The box. With `attach`, a + at the head of the pill picks a PDF, a document or a photo (shown over the words until sent). */
 export function Composer({ placeholder, onSend, chat, attach, talk, stop, practice }: { practice?: boolean; placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; attach?: boolean; talk?: Talk; stop?: () => void }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
-  const voice = useVoice(chat, chat === 'chief' || !!practice, text, (t) => change(t));
+  const voice = useVoice(chat, !!chat, text, (t) => change(t));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [held, setHeld] = useState(false);
@@ -903,19 +920,21 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
     <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
-      {attach && <>
-        <button type="button" className="c-clip" aria-label="Attach a file" title="Attach a PDF, a document or a photo" onClick={() => picker.current?.click()}><Icon name="plus" size={22} /></button>
-        <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
-      </>}
-      {/* Calm: the words, the mic and the round send-or-talk button share one pill; attach sits apart before it. */}
-      <div className="c-pill">
-        {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file">{PHOTO_TYPES.includes(p.type) && <img className="c-thumb" src={`data:${p.type};base64,${p.data}`} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
+      {/* One pill: the +, the words, the mic and the round send-or-talk button. */}
+      <div className={`c-pill${voice.on && text.trim() ? ' over' : ''}`}>
+        {picked.length > 0 && <Picked files={picked} drop={(i) => setPicked((x) => x.filter((_, j) => j !== i))} />}
+        {attach && <>
+          <button type="button" className="c-clip" aria-label="Attach a file" title="Attach a PDF, a document or a photo" onClick={() => picker.current?.click()}><Icon name="plus" size={22} /></button>
+          <input ref={picker} type="file" multiple accept={PICK_ACCEPT} hidden tabIndex={-1} aria-hidden onChange={(e) => { choose(e.target.files); e.target.value = ''; }} />
+        </>}
         <textarea rows={1} value={text} placeholder={voice.writing ? 'Writing it down…' : voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
           onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
           onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+        {voice.wave}
         {voice.mic}
         {stop && !text.trim() && !picked.length
           ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
+          : voice.on && !text.trim() && !picked.length ? null // the lit mic is the one control while it listens
           : call.can && !text.trim() && !picked.length && !busy
           ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
           // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.

@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/voice.md`.
 
 ## How to get to it (user POV)
 
-In Chief's chat, tap the mic and speak: the computer's Hex writes it down and the words wait in the box until send. With the box empty, tap Talk: what you say
+In any chat, tap the mic and speak: the computer's Hex writes it down and the words wait in the box until send. With the box empty, tap Talk: what you say
 is sent when you stop, Chief's reply is read aloud a sentence at a time with that line marked, then it listens again
 until Stop.
 

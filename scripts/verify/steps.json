@@ -832,5 +832,17 @@
       "Wait for Chief's reply in the thread"
     ],
     "result": "The card names the login it found, nothing runs before the tap, and a real reply from that login arrives after it"
+  },
+  "composer": {
+    "start": "Real crewd on the stub engine, onboarded as Umer, with Scout on the crew and a stand-in device for ears and voices",
+    "steps": [
+      "Open Scout's chat on a 390 phone and a 1280 computer, day and night, with the box empty",
+      "Pick three photos and a PDF, and type a line",
+      "Type a line and tap the mic",
+      "Tap the pile of photos on a 390 phone",
+      "Open typed and listening in the installed app's window at 390",
+      "Let the mic hear more words, then tap Send on a 390 phone"
+    ],
+    "result": "One pill holds the +, the words, the mic and the round voice button; words turn Send amber; three photos wait as one pile counted 3 images and a tap lays them out; the lit amber mic shows a wave and its clock over the kept words; heard words join the box and only Send sends them"
   }
 }
