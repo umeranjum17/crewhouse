@@ -45,7 +45,7 @@ place (the swap, the stop and the start are the same).
 bash scripts/verify/install-line.sh <out> <dist>/crewhouse-<version>-linux-x64.tar.gz
 ```
 
-This runs `curl ... | sh` under a real pseudo-terminal in Docker, on plain `ubuntu:24.04` logins at the default umask 0002, and times it from the line to the app answering. It covers a fresh login, a login whose `~/.local/state` is already 775 with a file in it, and no terminal at all, which must only install. It writes `install-line.txt` and exits 0 only when each said what it should. `test/install-line.test.ts` holds the same cases on a stand-in download, plus a script cut off part-way running nothing.
+This runs `curl ... | sh` under a real pseudo-terminal in Docker, on the real engine with no account, on `ubuntu:24.04` and `debian:13` (or the images named after the tarball), and times it from the line to the app answering. Each image gets a fresh normal login through PAM, a login whose `~/.local/state` is already 775 with a file in it, no terminal at all, which must only install, and root. Each login that started it then runs `status`, `doctor`, `open` and `stop`. It writes `install-line.txt` and exits 0 only when each said what it should. CI's package job runs it on the tarball it builds. `test/install-line.test.ts` holds the same cases on a stand-in download, plus a script cut off part-way running nothing.
 
 ## When it breaks
 

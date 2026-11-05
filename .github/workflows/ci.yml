@@ -198,6 +198,9 @@ jobs:
           crewhouse link 2>&1 | grep -qE 'open this link|not listening for phones'
           crewhouse stop | grep -q 'Crewhouse stopped'
           if crewhouse status; then echo "status said running after stop"; exit 1; fi
+      # The real line on real default logins, on the same tarball: the real engine, no stub and no account, in a real terminal,
+      # as a normal user through a PAM login and as root, on Ubuntu and Debian.
+      - run: bash scripts/verify/install-line.sh "$RUNNER_TEMP/install-line" "$(ls "$PWD"/dist/crewhouse-*-linux-x64.tar.gz)"
 
   # Screens in CI: the mock slugs (screens-ci.tsv) on ?demo at 390 and 1440, day and night, as a workflow artifact only.
   # Changed frames are compared with main's latest screens artifact and listed as text in the job summary. Runs beside
