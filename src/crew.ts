@@ -133,7 +133,6 @@ export function relayResult(reply: string, note = '', acted = false) {
   const tidy = (s: string) => s.replace(/^A document in \d+ sections?:\s*(.+)$/i, 'The $1 is ready.')
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1').replace(/\*\*|^\s*[-*]\s*/gm, '')
     .replace(/\b(sir|ma'am)\b[,.]?\s*/gi, '').replace(/^\w+:\s*/, '').replace(/https?:\/\/\S+/g, '').trim();
-  // Prefer a full sentence or delivery note; never relay stale work-in-progress clauses.
   for (const source of [reply, note.length < 140 ? note : '']) {
     const sentences = tidy(source).match(/[^.!?;]+[.!?;][”"']?(?=\s|$)/g) ?? [], full = sentences.map((s) => s.trim()).find((s) => s.length <= 160 && s.split(' ').length > 2 && !/(?:…|\.{2,})[”"']?$/.test(s) && !STALE_PROGRESS.test(s));
     if (full) return `${full.replace(/[.!?;][”"']?$/, '').trim()}.`;
@@ -676,7 +675,6 @@ export class Crew {
     const yes = (v: unknown) => v === true || v === 1 || v === 'true' || v === '1', once = yes(b.once); // the model's JSON is untyped: a flag it wrote as "true" still means yes, or a watch Chief called quiet is made noisy
     const own = !once && !b.bot, bot = once || own ? this.bot(CHIEF)! : this.bot(String(b.bot ?? '').toLowerCase()); // no helper named: the person's own, run as Chief's task
     if (!bot || (!once && !own && bot.id === CHIEF)) throw Object.assign(new Error(`${b.bot ? `no bot called ${b.bot}` : 'no helper for this'}; a reminder the person asks for names no bot, a helper's job names one of the crew`), { status: 404 });
-    // A watch: crewd reads the page on schedule and wakes the helper only when it changed.
     const watch = b.watch ? String(b.watch).trim() : null;
     if (watch && !/^https?:$/.test(URL.canParse(watch) ? new URL(watch).protocol : '')) throw fail('a page to watch starts with https://');
     const on = b.on ? String(b.on).trim() : null;
@@ -863,13 +861,11 @@ export class Crew {
     if (r.kind === 'digest') return this.connections.connected('calendar')
       ? this.connections.today().catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined))
       : this.sendDigest(r, why, now);
-    // Overlap: the last run is still going (or waiting on the person), so this one is skipped, not stacked. A last
-    // run parked waiting on sign-in is not under way: it is retried instead, never silently skipped.
+    // Overlap: the last run is still going (or waiting on the person), so this one is skipped; one parked on sign-in is retried.
     const open = r.last_task && this.db.get("SELECT * FROM tasks WHERE id = ? AND state IN ('queued', 'working', 'needs_you', 'paused')", r.last_task);
     if (open) {
       if (why === 'now' && open.state === 'paused' && open.result === 'Waiting for tomorrow: the crew has had its share of your AI today.') {
-        // A manual run is a new run: the one-hour clock restarts, or an hour-old task is killed the moment it starts,
-        // told to the person as a false "took longer than an hour". The origin keeps the documented share bypass.
+        // A manual run is a new run: the one-hour clock restarts, or an hour-old task is killed the moment it starts (a false "took longer than an hour"). The origin keeps the share bypass.
         this.db.run("UPDATE tasks SET origin = 'routine.now', wake_at = NULL, created_at = ? WHERE id = ?", Date.now(), open.id);
         this.setTask(open, 'queued');
         this.db.event('routine.fired', r.bot, { routine: r.id, name: r.name, why, task: open.id });
@@ -996,7 +992,6 @@ export class Crew {
           // Chief's hand-off in a helper's chat collapses to its task's title, with the full words behind Show details.
           ...(id !== CHIEF && m.author === 'chief' && m.task_id ? { title: this.db.get('SELECT title FROM tasks WHERE id = ?', m.task_id)?.title } : {}) })),
       tasks: this.db.all('SELECT * FROM tasks WHERE bot = ? ORDER BY id DESC LIMIT 50', id).map((t) => this.task(t)),
-      // What this helper learned about the person.
       notes: disk.readNotes(this.cfg, { bot: id }), profile: disk.readProfile(this.cfg), notesCap: disk.NOTES_CAP,
       soul: disk.readSoul(this.cfg, id), soulCap: disk.SOUL_CAP, rules: id === CHIEF ? readFileSync(join(disk.botDir(this.cfg, id), 'AGENTS.md'), 'utf8').split('## Boundaries')[1]?.replace(/.*crew_.*/g, '').trim() : undefined, // Chief's job is tool wiring; his profile shows its plain-words limits
       skills: disk.listSkills(this.cfg, id),
@@ -1004,10 +999,8 @@ export class Crew {
       files: disk.listFiles(this.cfg, id, new Set(this.db.all(`SELECT json_extract(e.data, '$.path') AS path FROM events e JOIN tasks t ON t.id = json_extract(e.data, '$.task')
         WHERE e.bot = ? AND e.kind = 'file.delivered'`, id).map((e) => String(e.path).replace(/^files\//, '')))),
       trail: this.db.eventsForBot(id, TRAIL).map((e) => ({ ...e, ...(e.kind === 'memory.learned' && undone.has(e.seq) ? { undone: true } : {}) })),
-      // Standing answers in plain words; taking one back sends the words back.
       allow: (disk.botConfig(this.cfg, id).allow ?? []).map(coversOf),
       memory: disk.botConfig(this.cfg, id).memory !== false,
-      // The sites the person signed it in to (bare hosts), shown in Details, each with Forget.
       signedIn: disk.botConfig(this.cfg, id).signedIn ?? [],
     };
   }
@@ -1692,7 +1685,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         try {
           text = await this.toolCall(run, tool, rawInput, signal);
         } catch (e: any) { ok = false; text = `error: ${String(e?.message ?? e).slice(0, 300)}`; }
-        // A result that reads "error: …" is a failure the model was told about, so the record says so too.
         const failed = !ok || text.startsWith('error:'), [name, input] = this.unwrap(tool, rawInput), l = this.live.get(run.bot), actedFor = l?.actedFor; if (l) l.actedFor = undefined;
         // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
         this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok: !failed, head: text.split('\n')[0].slice(0, 160) });
@@ -1794,8 +1786,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       this.refusedNet(botId, tool);
       return { block: true, reason: 'This helper may reach only the places on its list; that tool goes elsewhere.' };
     }
-    // The engine's own tools never call back into crewd, so their step is written here; every tool the crew runs is
-    // written once the call is over, with the truth of how it went.
+    // The engine's own tools never call back into crewd, so their step is written here.
     if (BUILTINS.has(tool)) { const words = toolWords(tool, input); if (words) this.db.event('run.tool', botId, { task: task?.id, words }); }
     // On an application form the writer types the person's own lines, by their field's label as the page writes it, and nothing else.
     const job = (tool === 'browser' || tool === 'computer') && e.kind !== 'refuse' && this.applying(botId);
@@ -1899,7 +1890,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** The card for acting as the person on a site: the button or form line, the site, the page's own lines and money. */
   private press(botId: string, e: Extract<Effect, { words: string }>, input: Record<string, any>) {
     const l = this.live.get(botId), name = this.bot(botId)?.display ?? botId, host = this.hostOf(l?.page) || 'a site', site = this.siteName(l?.page, l?.snapshot) || host, value = ['fill', 'select'].includes(String(input.args?.[0] ?? '')) && input.args?.[2] !== undefined ? String(input.args[2]) : null;
-    // The lines typed on this page that no card has shown yet ride the card for the press that sends them.
     const pending = value === null ? l?.fills ?? [] : [];
     if (pending.length) {
       const signed = (disk.botConfig(this.cfg, botId).signedIn ?? []).some((d) => host === d || host.endsWith(`.${d}`)), n = pending.length;
@@ -2121,8 +2111,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
             { skill: { name: d.slug, description: String(p.description), says: d.says, steps: d.steps }, preview: { head: `How ${b.display} would do it`, body: d.steps } });
         }),
     ];
-    // The binary inspector, for a helper the person granted it to: it looks inside a file in the helper's own folder
-    // and never runs it. The grant is the person's, so the tool is only offered where they gave it.
+    // The binary inspector, offered only where the person granted it: it looks inside a file in the helper's own folder and never runs it.
     if (this.live.get(botId)?.grants.includes('binary-inspect')) own.push(tool('crew_inspect',
       'Look inside a binary file in your own folder without ever running it: `what` is type, headers, strings, symbols or sections, and `path` is the file (for example files/app.bin). '
       + 'It only reads: the file is never run, nothing is written and the network is never reached.',
@@ -2133,8 +2122,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_application', 'Show the person ONE application for a role, on a card; nothing is sent. `cv`: their own CV lines, copied exactly. `answers`: cover questions answered only from the CV. `yours`: form questions only they answer (left empty).', (p) => this.application(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_form', 'You filled what you can on an application form: crewd reads the page and puts it on ONE card where only the person answers the rest and presses Submit. `role`: its id. `stop`: why the form cannot be finished here, only when one applies.', (p) => this.formReady(botId, p)));
       if (gs.some((g) => g.will === botId)) own.push(tool('crew_prep', 'Put the interview prep for ONE role in Interview on the person\'s board; nothing is sent. `brief`: facts about the company, each with its page (`url`) and words copied from it (`quote`). `questions`: likely questions, each with `why` they ask it. crewd opens every page.', (p) => this.prepare(botId, p)));
-      // A helper can ask for its own recurring check — a watch on a page, or a quiet look that needs its own browser.
-      // It is the same card as Chief's: nothing runs until the person says yes on it.
+      // A helper can ask for its own recurring check (a watch, or a quiet look in its own browser): the same card as Chief's, and nothing runs until the person says yes.
       own.push(tool('crew_signin', 'A site needs the person signed in before you can go on: open its sign-in page in your browser, then call this with `site` (its address). ' +
         'The person sees a Sign in card, signs in on your screen themselves and taps Done; never type a password or code. End your turn with one short line; you are resumed when they are done.', (p) => this.askSignin(botId, String(p.site ?? ''))));
       own.push(tool('crew_unlock', 'A PDF in your folder is password-locked (reading it fails on a password): call this with `files`, their paths in your folder. Never ask for a password in words: the person types each one on a card in Chief\'s chat, Crewhouse opens the file on this computer into an unlocked copy in files/unlocked/ and forgets it. End your turn with one short line; you are resumed with the copies when they are done.', (p) => this.askUnlock(botId, p.files)));
@@ -2765,7 +2753,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           `I'm running ${list} now, once, to catch up.`, null);
       }
     });
-    // Wake triggers: chores the person asked to start on waking, through the same fire path as a time.
     for (const r of this.db.all("SELECT * FROM routines WHERE state = 'on' AND trigger IS NOT NULL AND kind != 'digest'")) {
       try { if ('wake' in parseTrigger(r.trigger)) this.fire(r, 'wake'); } catch (e) { console.error('trigger', r.id, e); }
     }

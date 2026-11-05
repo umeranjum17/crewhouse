@@ -221,8 +221,7 @@ export async function readWorkbook(file: string, max = { rows: MAX.rows, cols: M
     });
     return { name: String(ws.name), total, rows, nums, roles, charts: [] as unknown[] };
   });
-  // Charts, read from their own parts (exceljs drops them): a bar, line or pie chart's title, labels and numbers from
-  // the cells its series point at, under the sheet those cells are on. ponytail: regexes over DrawingML, not an XML parser.
+  // Charts, read from their own parts (exceljs drops them): title, labels and the numbers its series point at. ponytail: regexes over DrawingML, not an XML parser.
   const zip = await (await import('jszip')).default.loadAsync(readFileSync(file));
   for (const f of Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f)).sort((a, b) => parseInt(a.slice(14)) - parseInt(b.slice(14)))) {
     const xml = await zip.file(f)!.async('string'), type = /<c:(bar|line|pie)Chart>/.exec(xml)?.[1], at = (part: string) => {

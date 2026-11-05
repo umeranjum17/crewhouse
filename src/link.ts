@@ -125,7 +125,6 @@ export class Link {
     this.db.onEvent((e) => this.host.broadcast(e));
   }
 
-  // Grants live in the devices table: one row per phone.
   private load(): Grant[] {
     return this.db.all('SELECT * FROM devices ORDER BY created_at').map((d) => ({
       id: d.id, key: b64url(new Uint8Array(Buffer.from(d.pk, 'base64'))), name: d.name, role: d.role, kind: d.kind ?? undefined, created: d.created_at, lastSeen: d.last_seen ?? undefined }));
@@ -428,13 +427,10 @@ export class Link {
       asks: [], tasks: [], events: [], ideas: [], templates: [], routines: [], resting: {}, connections: [], room: { last: null, busy: [] },
     } } : { status: 426, body: { error: UPDATE_APP } };
     if (!path.startsWith('/api/')) return { status: 404, body: { error: 'not found' } };
-    // The phone's own: every address it can reach this computer at now (a phone paired at home learns Tailscale and the
-    // relay), and its push address.
     // The phone says which route it came by and its own Tailscale address; the computer says whether its Tailscale has
     // that address as a peer (shared with this phone's account), for the words when the phone later can't reach it.
     if (op === 'GET /api/reach') {
       const a = (body ?? {}) as { via?: unknown; ip?: unknown };
-      // The routes a phone reaches this computer by, as it reports them (`GET /api/reach {via}`).
       if (['home', 'tailscale', 'relay'].includes(a.via as string)) this.put(`phone.reach.${g.id}`, JSON.stringify({ ...this.reached(g.id), [a.via as string]: Date.now() }));
       const peer = !(process.env.CREWHOUSE_HEADLESS === '1' && process.env.CREWHOUSE_RELAY_PUBLIC) && typeof a.ip === 'string' ? await tailscalePeer(a.ip, this.tailscaleBin) : undefined;
       return { status: 200, body: { urls: this.urls(), anywhere: this.anywhere, peer, reached: this.reached(g.id) } };
@@ -443,13 +439,11 @@ export class Link {
     // `{missing}` (an old build with no push credential), `{off}` when the person said no; a browser's Web Push address goes to the relay.
     if (op === 'POST /api/push') {
       const sub = body as any;
-      // A browser asks for the mailbox's public Web Push key first (the kit's own device flow: it is what a device
-      // needs to subscribe its own address). `null` without a relay, said plainly; `online` is the mailbox's own state.
+      // A browser asks for the mailbox's public Web Push key first, to subscribe its own address: `null` without a relay; `online` is the mailbox's state.
       if (sub?.key === true) return { status: 200, body: { ok: true, vapid: this.client?.vapidKey ?? null, online: this.relayStatus === 'online' } };
       const phone = isExpoToken(sub?.expo) ? sub.expo : sub?.local === true ? 'local' : sub?.missing === true ? 'missing' : sub?.off === true && !webAddress(sub?.web) ? 'off' : '';
       if (phone) { this.put(`phone.push.${g.id}`, phone); this.db.event('device.push', null, { id: g.id }); return { status: 200, body: { ok: true } }; }
-      // Off with a browser address: drop this device's own address at the relay (as the computer's own browser does,
-      // setWebPush), so off really means no pushes.
+      // Off with a browser address: drop this device's address at the relay too (as setWebPush does), so off means no pushes.
       if (sub?.off === true) return Promise.resolve(this.client?.unsubscribe(g.id, { web: sub.web })).catch(() => {}).then(() => ({ status: 200, body: { ok: true } }));
       return this.webSubscribe(g.id, sub?.web).then(() => ({ status: 200, body: { ok: true } }), (e: any) => ({ status: e.status ?? 400, body: { error: e.message } }));
     }

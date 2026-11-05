@@ -182,7 +182,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       link.answer(Number(body.id), body.yes === true); return { ok: true };
     }
     if ((r = p.match(/^\/api\/phones\/([\w-]+)$/)) && m === 'DELETE') { await link.revoke(r[1]); return { ok: true }; }
-    // What is installing now, and a newer Crewhouse to download.
     if (m === 'GET' && p === '/api/state') return { ...crew.snapshot(), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, installing: [...installing.keys()], showing: teacher.showing(), version: packaged || existsSync(join(cfg.repoDir, '..', 'node', 'bin', 'node')) ? version : `${version}-dev`, ...(update ? { update } : {}) };
     if (m === 'POST' && p === '/api/engine/retry') { if (crew.runtime.engine?.().phase === 'failed') void crew.startEngine(); return { ok: true }; }
     if (m === 'GET' && p === '/api/events') return db.events(Number(q.get('after') || 0), 200);
@@ -190,8 +189,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (m === 'POST' && p === '/api/push') { await link.setWebPush(body); return { ok: true }; }
     // The person's speech from a browser mic, written down here by Hex (src/transcribe.ts): the clip is used once and kept nowhere.
     if (m === 'POST' && p === '/api/transcribe') return { text: await transcribe(new Uint8Array(Buffer.from(String(body.audio ?? ''), 'base64'))) };
-    // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at, so the
-    // card on the phone refreshes like the web card's.
+    // The one phone-admin call a paired phone makes itself: renewing the Add-a-phone code it is looking at.
     if (m === 'POST' && p === '/api/phones/refresh') {
       if (Object.hasOwn(body ?? {}, 'member')) throw Object.assign(new Error('Get the latest Crewhouse app to keep chatting.'), { status: 426 });
       return crew.refreshPhone(Number(body?.message));
@@ -222,8 +220,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/messages$/)) && m === 'POST') { const b = body, move = typeof b.move === 'string' && /^[\w-]{1,64}$/.test(b.move) ? b.move : ''; return crew.post(r[1], b.text ?? '', b.photos, b.room === true, move ? `move.${move}` : key, b.said, !!move, b.files); }
     if ((r = p.match(/^\/api\/people\/(\d+)$/)) && m === 'PUT') return crew.updatePerson(body);
     if (m === 'GET' && p === '/api/accounts') {
-      // The person's AI accounts: one line per account (two of one provider included), signed in or not, resting until
-      // when, any sign-in in progress, and the account's own name, plan and email.
       return crew.accounts.list();
     }
     // One account (Settings › AI accounts): the live catalog, and the person's pick, checked against it.
@@ -247,7 +243,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       else await crew.accounts.logout(key);
       return { ok: true, signIn: crew.accounts.view(key) };
     }
-    // Connections: the person's apps (Notion, Canva, Google…), connected on the app's own page (docs/ui-contract.md).
     if (m === 'GET' && p === '/api/connections') return crew.connections.list();
     // Composio's hosted tools: one sign-in through the engine's own MCP OAuth, the page opened by the person's tap.
     if (p === '/api/composio') {
@@ -255,7 +250,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (m === 'POST') return crew.composio.connect();
       if (m === 'DELETE') { await crew.composio.disconnect(); return { ok: true }; }
     }
-    // Herdr's own row on the Apps screen: missing, installed, or answering (probed when the screen opens).
     if (m === 'GET' && p === '/api/herdr') return herdrStatus(cfg);
     if (p === '/api/mail' || p === '/api/mail/review') {
       if (m === 'GET' && p === '/api/mail') return mail.status(q.get('to'));
@@ -281,7 +275,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
     if (p === '/api/notify') return link.notify(m === 'PUT' ? body.on !== false : undefined);
     if (m === 'GET' && p === '/api/learning') return { on: await Promise.resolve(crew.learningOn()) };
     if ((r = p.match(/^\/api\/learning$/)) && m === 'POST') { await crew.setLearning(body.on === true); return { ok: true, on: body.on === true }; }
-    // The reviewed starter skill set, its on/off as the engine sees it, and switching it the engine's own way.
     if (m === 'GET' && p === '/api/skills') return crew.starterSkills();
     if (m === 'GET' && p === '/api/skills/search') return { results: await crew.searchSkills(String(q.get('q') ?? '').slice(0, 80)) };
     if ((r = p.match(/^\/api\/skills\/([a-z0-9-]+)\/(on|off)$/)) && m === 'POST') {
@@ -390,7 +383,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       void install(r[1]);
       return { ok: true };
     }
-    // Teach by showing: take the wheel with a recorder on, then Done (keep it) or Cancel.
     if ((r = p.match(/^\/api\/bots\/([a-z0-9-]+)\/show$/)) && m === 'POST') {
       const b = crew.bot(r[1]);
       if (!b) throw Object.assign(new Error('no such bot'), { status: 404 });
@@ -426,8 +418,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       // A reminder's time may count from now ("in 20 minutes") or name today or tomorrow; the repeating parser cannot read those.
       if (/^\s*(in|today|tomorrow)\b/.test(text)) { const next = reminderAt(text); return { words: 'One time', next, first: firstRun(next), guessed: false, zone }; }
       const when = parseSchedule(text), next = nextRun(when, Date.now());
-      // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` lets a
-      // screen away from home name the time zone (and only then).
+      // `first` is the computer's own clock, so the card and the preview read the same words everywhere; `zone` names a far time zone (only then).
       return { words: describe(when), next, first: firstRun(next), guessed: 'guessed' in when && when.guessed === true, zone };
     }
     // The board: only the person's own tap moves a role past Drafted (crewd's tools cannot).

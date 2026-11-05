@@ -115,9 +115,8 @@ export class Teacher {
     const call = (method: string, params: object = {}) => this.call(s, method, params, sessionId), snap = () => setTimeout(() => void call('Page.captureScreenshot', { format: 'jpeg', quality: 50 }).then((r) => {
       if (r?.data && s.shots.length < 8) s.shots.push({ type: 'image/jpeg', data: r.data });
     }), 1200);
-    // The show starts on the page the person took the wheel of, but where it starts is written down only when the
-    // person actually does something there or the browser really moves on: attaching also replays the current state
-    // of every page crewd's own tool or an old session left open, and that state is nobody's step.
+    // Where the show starts is written down only when the person does something there or the browser really moves on:
+    // attaching also replays the state of every page left open, and that state is nobody's step.
     let begun = false, live = false;
     const open = (url: string) => { begun = true; s.raw.push({ kind: 'open', url }); snap(); }, begin = () => { if (!begun && !/^(about|chrome|devtools|data):/.test(first)) open(first); };
     s.pages.set(sessionId, (m) => {

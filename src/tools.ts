@@ -141,13 +141,11 @@ export async function installTool(cfg: Config, id: string, log: (s: string) => v
   if (t.source !== 'pinned') throw new Error(`${t.name} is not installed by Crewhouse${t.install.system ? `: ${t.install.system}` : ''}`);
   const dir = join(cfg.toolsDir, id);
   if (existsSync(pinFile(cfg, id)) && readFileSync(pinFile(cfg, id), 'utf8') === pinOf(cfg, t) && t.bins.every((b) => existsSync(join(toolBin(cfg), b)))) { log(`${t.name}: already installed`); return; }
-  // The copy is fetched and checked before the old one goes: a download that never arrives leaves the person with the
-  // copy they had, not with none.
+  // The copy is fetched and checked before the old one goes: a download that never arrives leaves the copy they had.
   const fetched = t.install.download ? await download(t.install.download.url, t.install.download.sha256) : null;
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   mkdirSync(toolBin(cfg), { recursive: true });
-  // Links left from this tool's earlier pin (a program it no longer has) go with it.
   for (const b of readdirSync(toolBin(cfg))) if (readlinkOr(join(toolBin(cfg), b)).startsWith(dir + '/')) rmSync(join(toolBin(cfg), b), { force: true });
   const run = (cmd: string, args: string[], env: Record<string, string> = {}) =>
     execFileSync(cmd, args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env }, maxBuffer: 64 << 20 });
