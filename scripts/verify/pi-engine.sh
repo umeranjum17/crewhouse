@@ -3,14 +3,17 @@
 # Off: the bot list and a bot's chat as they stand, by bot-crew.sh, into <out>/flag-off. On: an isolated crewd with
 # CREWHOUSE_ENGINE=pi, where pi-crew.mjs asks two helpers at once through the API the app uses, each on its own real pinned Pi
 # through @byokit/pi, on a real model (the free MiniMax M3.1 Flash, the key read from the file into crewd's environment and
-# nowhere else); a third helper and Chief are never asked. Both chats are captured at 390 and 1280, day and night, and in the
-# installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
+# nowhere else). Each uses its own tool from its own extension list, a third helper on an empty list answers in words, and Chief is
+# never asked; pi-tap.mjs records the tools each model request offered. All three chats are captured at 390 and 1280, day and
+# night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
 # and after. The owner's real folder is never read here, so this says nothing about it: that rests on the kit's own isolation test.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
 #
-# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends two model calls on that key, one for each helper.
-# Writes crew.txt (what was asked, the replies, the processes), pi-folder.txt (the hashes), same-shots.txt and the step record.
+# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends about five model calls on that key: a tool call and
+# an answer for each of two helpers, one answer for the third. PI_ORIGIN points the journey at another OpenAI-compatible provider.
+# Writes crew.txt (what was asked, the replies, the processes, the tools), offered.jsonl (the tap's record), pi-folder.txt (the
+# hashes), same-shots.txt and the step record.
 set -euo pipefail
 OUT=${1:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; KEYFILE=${2:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
@@ -18,7 +21,8 @@ REPO=$(git rev-parse --show-toplevel)
 [ -f "$REPO/runtime/byokit/packages/pi/dist/index.js" ] || { echo "pi-engine: run node scripts/prepare-pi.mjs first" >&2; exit 1; }
 [ -f "$REPO/web/dist/index.html" ] || (cd "$REPO" && npm run build:web > "$OUT/build-web.log" 2>&1)
 LAB=$(mktemp -d -t crewhouse-pi.XXXXXX)
-trap 'crewhouse_remove_lab "$LAB"' EXIT
+TAP=""
+trap '[ -z "$TAP" ] || kill "$TAP"; crewhouse_remove_lab "$LAB"' EXIT
 STANDIN="$LAB/home/.pi/agent"
 mkdir -p "$STANDIN/extensions" "$LAB"/{state,crew,tools,run}
 hashes() { (cd "$LAB/home/.pi" && find . -type f | sort | xargs -r sha256sum); }
@@ -33,11 +37,15 @@ NODE=$(node -p process.execPath)
 PORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 B="http://127.0.0.1:$PORT"
 MODEL=${PI_MODEL:-MiniMax-M3.1-Flash}
+TAPPORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
+: > "$OUT/offered.jsonl"
+"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" &
+TAP=$!
 crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB/home" TMPDIR="$LAB" KEYFILE="$KEYFILE" \
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
-  CREWHOUSE_ENGINE=pi CREWHOUSE_ENGINE_BASE_URL=https://api.minimax.io/v1 CREWHOUSE_ENGINE_MODEL="$MODEL" CREWHOUSE_PORT="$PORT" CREWHOUSE_PI_IDLE_MS=8000 \
+  CREWHOUSE_ENGINE=pi CREWHOUSE_ENGINE_BASE_URL="http://127.0.0.1:$TAPPORT/v1" CREWHOUSE_ENGINE_MODEL="$MODEL" CREWHOUSE_PORT="$PORT" CREWHOUSE_PI_IDLE_MS=8000 \
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
   bash -c 'CREWHOUSE_ENGINE_API_KEY=$(cat "$KEYFILE") exec "$@"' pi-engine "$NODE" "$REPO/src/main.ts"
 PERSON=""
@@ -59,6 +67,7 @@ shots() { local THREAD="(async () => { location.hash = '$2'; for (let i = 0; i <
 LAST=$("$NODE" "$REPO/scripts/verify/pi-crew.mjs" "$B" "$LAB" "$CREWD" "$OUT")
 shots scout '#/h/scout' "$(node -p 'JSON.parse(process.argv[1]).scout' "$LAST")"
 shots scribe '#/h/scribe' "$(node -p 'JSON.parse(process.argv[1]).scribe' "$LAST")"
+shots reel '#/h/reel' "$(node -p 'JSON.parse(process.argv[1]).reel' "$LAST")"
 crewd_stop
 [ "$(hashes)" = "$BEFORE" ] || { echo "pi-engine: the stand-in person's Pi folder changed" >&2; exit 1; }
 { echo "The person's real Pi folder was not checked: the read guard refused it, so this run says nothing about it. That it stays untouched rests on the kit's isolation test."
@@ -67,6 +76,6 @@ crewd_stop
 # The installed window can draw exactly what the browser drew; done-done refuses a byte-identical pair as reuse, so keep one and say which.
 find "$OUT" -name '*.png' -type f | sort | xargs sha256sum | awk 'seen[$1] { print $2, seen[$1]; next } { seen[$1] = $2 }' | while read -r twin kept; do
   rm -- "$twin"; echo "${twin#"$OUT/"} was byte for byte ${kept#"$OUT/"}"; done > "$OUT/same-shots.txt"
-SCOUT=$(node -p 'JSON.parse(process.argv[1]).scout' "$LAST"); SCRIBE=$(node -p 'JSON.parse(process.argv[1]).scribe' "$LAST")
-node "$REPO/scripts/verify/steps.mjs" "$OUT" pi-engine "scout=$SCOUT" "scribe=$SCRIBE" "model=$MODEL"
-echo "pi-engine: two helpers replied on Pi; captures in $OUT"
+SCOUT=$(node -p 'JSON.parse(process.argv[1]).scout' "$LAST"); SCRIBE=$(node -p 'JSON.parse(process.argv[1]).scribe' "$LAST"); REEL=$(node -p 'JSON.parse(process.argv[1]).reel' "$LAST")
+node "$REPO/scripts/verify/steps.mjs" "$OUT" pi-engine "scout=$SCOUT" "scribe=$SCRIBE" "reel=$REEL" "model=$MODEL"
+echo "pi-engine: three helpers replied on Pi, each with its own tools; captures in $OUT"

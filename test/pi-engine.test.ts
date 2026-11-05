@@ -24,8 +24,10 @@ const treeHash = (dir: string) => {
   return hash.digest('hex');
 };
 const readdirSafe = (p: string) => { try { return readdirSync(p); } catch { return null; } };
+/** The tools a model request offered, by name: what the bot could call on that turn, as the model saw it. */
+const names = (call: { body: any }) => (call.body.tools ?? []).map((t: any) => t.function?.name).sort();
 
-test('a bot answers on Pi, can run nothing, and the person\'s own Pi hashes the same', { skip, timeout: 120_000 }, async () => {
+test('a bot answers on Pi with only the default extension, can write nothing, and the person\'s own Pi hashes the same', { skip, timeout: 120_000 }, async () => {
   const own = join(person, '.pi', 'agent');
   mkdirSync(join(own, 'extensions'), { recursive: true });
   writeFileSync(join(own, 'auth.json'), '{"canary":{"type":"api_key","key":"CANARY-KEY"}}');
@@ -46,10 +48,10 @@ test('a bot answers on Pi, can run nothing, and the person\'s own Pi hashes the 
   const call = model.calls.at(-1)!;
   assert.match(JSON.stringify(call.body.messages), /Your id in Crewhouse is chief\./);
   assert.equal(call.authorization, 'Bearer lab-key-never-on-disk');
-  assert.deepEqual(call.body.tools ?? [], [], 'Pi offers the model no tool');
-  assert.match(JSON.stringify(call.body.messages), /no tools at all/, 'and the prompt that names tools says so');
+  assert.deepEqual(names(call), ['todo'], "Pi offers the model the default set and none of Pi's own tools");
+  assert.match(JSON.stringify(call.body.messages), /only these tools: todo/, 'and the prompt that names other tools says so');
 
-  // A model that calls a tool anyway changes nothing: Pi was left none to run. The next job is the bot's next session.
+  // A model that calls one of Pi's own tools anyway changes nothing: Pi was left none to run. The next job is the bot's next session.
   const canary = join(s.root, 'written-by-pi.txt'), said = model.calls.length;
   await ended(s.crew.requestChief(`[tool write {"path": ${JSON.stringify(canary)}, "content": "x"}]`).task);
   assert.ok(model.calls.length > said, 'the model was asked');
@@ -144,6 +146,60 @@ test('helpers run on Pi side by side: each its own process, memory and session; 
 
   await s.crew.stop();
   await until('no Pi outlives crewd', () => Object.keys(pis()).length === 0);
+  s.done();
+});
+
+test('each bot on Pi loads its own list: neither sees the other\'s tools, an empty list answers in words, a name outside the reviewed set stops the job', { skip, timeout: 180_000 }, async () => {
+  process.env.CREWHOUSE_PI_IDLE_MS = '300';
+  after(() => { delete process.env.CREWHOUSE_PI_IDLE_MS; });
+  const model = await startModelStub();
+  after(() => model.close());
+  const s = setup(3, { engine: 'pi', engineProvider: { baseUrl: model.url, apiKey: 'lab-key' } });
+  s.crew.onboard('Umer');
+  const [scout, scribe, reel] = ['scout', 'scribe', 'reel'].map((t) => s.crew.recruit(t, undefined, 'person').id);
+  const list = (bot: string, text: string) => writeFileSync(join(s.cfg.crewDir, 'bots', bot, 'extensions.json'), text);
+  const ask = async (bot: string, text: string) => {
+    const job = (await s.crew.post(bot, text) as { task: number }).task;
+    await until(`${bot}'s job ${job}`, () => !['queued', 'working'].includes(task(s.db, job).state), 60_000);
+    return { state: task(s.db, job).state, said: String(lastSaid(s.db, bot)), offered: names(model.calls.filter((c) => JSON.stringify(c.body.messages).includes(`Your id in Crewhouse is ${bot}.`)).at(-1)!) };
+  };
+  list(scribe, '["hello"]');
+  list(reel, '[]'); // scout has no file: the default
+
+  const added = await ask(scout, '[tool todo {"action": "add", "text": "ring the dentist"}]');
+  assert.deepEqual([added.state, added.offered], ['done', ['todo']], 'no list in its folder: the default');
+  assert.match(added.said, /Added todo #1: ring the dentist/);
+  const hi = await ask(scribe, '[tool hello {"name": "Umer"}]');
+  assert.deepEqual([hi.state, hi.offered], ['done', ['hello']], "its own list, and not the default's todo");
+  assert.match(hi.said, /Hello, Umer!/);
+
+  assert.match((await ask(scout, '[tool hello {"name": "Umer"}]')).said, /hello not found/i, "scout cannot call scribe's tool");
+  assert.match((await ask(scribe, '[tool todo {"action": "list"}]')).said, /todo not found/i, "nor scribe scout's");
+  assert.doesNotMatch(readFileSync(join(s.cfg.stateDir, 'pi', scribe, 'SYSTEM.md'), 'utf8'), /tools: todo/);
+
+  const plain = await ask(reel, 'What day is it?');
+  assert.deepEqual([plain.state, plain.offered], ['done', []], 'an empty list: no tool at all');
+  assert.match(plain.said, new RegExp(`stub ${reel}: done with`), 'and it still answers in words');
+  assert.match(readFileSync(join(s.cfg.stateDir, 'pi', reel, 'SYSTEM.md'), 'utf8'), /no tools at all/);
+
+  // A helper's working list lives in its standing session: its Pi stopping loses nothing, and a changed list takes effect on the next job.
+  await until('every Pi to stop once idle', () => !Object.keys(pis()).length, 30_000);
+  const kept = await ask(scout, '[tool todo {"action": "list"}]');
+  assert.match(kept.said, /#1: ring the dentist/);
+  list(scout, '["hello", "todo", "todo"]');
+  assert.deepEqual((await ask(scout, 'Anything new?')).offered, ['hello', 'todo']);
+
+  // The folder names, it never points: a path or a broken file stops the job with the cause, and nothing it named is loaded.
+  const canary = join(s.root, 'loaded.txt'), planted = join(s.root, 'planted.ts');
+  writeFileSync(planted, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(canary)}, 'x'); export default function () {}`);
+  const asked = model.calls.length;
+  for (const bad of [JSON.stringify([planted]), '["__proto__"]', '{"todo": true}', 'not json']) {
+    list(reel, bad);
+    const ended = await ask(reel, 'Hello again');
+    assert.deepEqual([ended.state, ended.said], ['failed', "This job did not start: extensions.json in this bot's folder may only list todo, hello."], bad);
+  }
+  assert.equal(model.calls.length, asked, 'no model was asked on a bad list');
+  assert.equal(existsSync(canary), false, 'and the planted file never ran');
   s.done();
 });
 
