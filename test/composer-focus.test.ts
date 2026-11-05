@@ -95,4 +95,11 @@ test('the phone chat keeps the box usable, and a photo picked there goes as a sh
     const input = ${box}.closest('form').querySelector('input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); return png.size; })()`);
   assert.ok(pngBytes > 10 << 20, 'the photo is over the 10 MB a file may be, so the raw path would refuse it');
   await until('the photo chip', () => run("[...document.querySelectorAll('.home-chat .c-file')].some((c) => /^photo\\.jpg/.test(c.textContent) && /JPG · \\d+ KB/.test(c.textContent))"), 30_000);
+
+  // A second photo folds both into one pile with its count; a tap lays them out as chips, each with its ✕.
+  await run(`(async () => { const c = document.createElement('canvas'); c.width = 60; c.height = 80; const png = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer(); dt.items.add(new File([png], 'second.png', { type: 'image/png' })); const input = ${box}.closest('form').querySelector('input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until('the pile of two', () => run("/2 images/.test(document.querySelector('.home-chat .c-pile')?.textContent) && !document.querySelector('.home-chat .c-file')"), 30_000);
+  await run("document.querySelector('.home-chat .c-pile').click()");
+  await until('both chips laid out', () => run("document.querySelectorAll('.home-chat .c-file button').length === 2 && !document.querySelector('.home-chat .c-pile')"), 10_000);
 });

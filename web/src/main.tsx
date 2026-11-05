@@ -764,7 +764,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
       </aside>
       <div className="dock">{answerTo && <div className="reply-to"><div className="grow"><b>Answering Chief</b><span>{answerTo}</span></div><button type="button" className="icon-btn" aria-label="Not answering" onClick={() => setAnswering(undefined)}>×</button></div>}
         {practice && <PracticeVoice lines={lines} ready={!!page} reading={setReading} />}
-        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Talk to ${name}…`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} attach={hero} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
+        <Composer key={seed} placeholder={answerTo ? 'Your answer for Chief…' : id === 'chief' ? 'Tell Chief anything…' : practice ? 'Type or speak your answer…' : `Ask ${name}`} onSend={send} stop={id === 'chief' && (ln?.state === 'working' || ln?.state === 'reading') ? stopChief : undefined} attach={!practice} talk={practice ? undefined : { chat: id, name, lines, reading: setReading }} practice={practice} {...typeInto(id)} /></div>
     </div>
   );
 }

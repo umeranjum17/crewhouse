@@ -229,5 +229,9 @@ journeys:
   # one stack, at 390 and 1280, day and night, then the installed window and the laid-out stack. Chromium wants a TMPDIR on disk.
   bot-crew:
     command: 'bash scripts/verify/bot-crew.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The pill composer (ch-ui-slice2) on a real stub-engine crewd: empty, typed with a pile of photos, and listening, at 390 and
+  # 1280, day and night, then the installed window, the laid-out pile, and heard words waiting for Send. TMPDIR on disk, as bot-crew.
+  composer:
+    command: 'bash scripts/verify/composer.sh "$DONE_DONE_EVIDENCE_ROOT"'
 # The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
 base_ref: 66263f7d
