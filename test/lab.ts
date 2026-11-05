@@ -19,9 +19,9 @@ import type { StubRuntime } from '../src/stub-runtime.ts';
 
 export type Lab = ReturnType<typeof setup>;
 let n = 0;
-export function setup(maxConcurrent = 3) {
+export function setup(maxConcurrent = 3, over: Partial<ReturnType<typeof loadConfig>> = {}) {
   const dir = join(root, `lab-${++n}`);
-  const cfg = { ...loadConfig(), stateDir: join(dir, 'state'), crewDir: join(dir, 'crew'), toolsDir: join(dir, 'tools'), maxConcurrent, engine: 'stub' as const };
+  const cfg = { ...loadConfig(), stateDir: join(dir, 'state'), crewDir: join(dir, 'crew'), toolsDir: join(dir, 'tools'), maxConcurrent, engine: 'stub' as const, ...over };
   const db = new Store(cfg.stateDir);
   const crew = new Crew(cfg, db);
   crew.init();
