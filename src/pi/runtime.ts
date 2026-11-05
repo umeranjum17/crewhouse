@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Config } from '../config.ts';
 import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts';
 
-type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; detail?: string };
+type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; reason: string; detail?: string };
 type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> };
 type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string> }): Bot; close(): Promise<void> };
 /** The kit's own name; the one account a custom provider stands in for (Crew's constructor marks it ready); the variable the key travels in, so it never lands on disk. */
@@ -64,7 +64,7 @@ export class PiRuntime implements AgentRuntime {
         const settle = (end: RunEnd) => { off(); resolve(end); }, off = bot.on((e) => {
           if (e.type === 'text') on({ type: 'text', text: said += e.text }); // the app shows the reply so far, the kit hands over each piece
           else if (e.type === 'end') settle(e.end.ok || 'aborted' in e.end ? e.end : { ok: false, kind: 'other', message: e.end.message });
-          else if (e.type === 'stopped') settle({ ok: false, kind: 'other', message: e.detail ?? 'Pi stopped before it answered.' }); // gone before the run began: no end follows
+          else if (e.type === 'stopped') { if (e.reason !== 'idle') settle({ ok: false, kind: 'other', message: e.detail ?? 'Pi stopped before it answered.' }); } // gone before the run began: no end follows; an idle stop is the last Pi leaving, and this run waits for the next
           else on(e);
         });
         bot.prompt(spec.message).catch((e) => { off(); reject(e); });

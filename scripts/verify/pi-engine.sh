@@ -52,8 +52,8 @@ done
 grep -q '(engine: pi,' "$OUT/crewd.log" || { echo "pi-engine: crewd did not start on Pi" >&2; exit 1; }
 api() { curl -fsS --max-time 60 -H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
-# A chat at 390 and 1280, day and night, and in the installed window, once its last words are on the page.
-shots() { local THREAD="(async () => { location.hash = '$2'; for (let i = 0; i < 100 && !document.body.innerText.includes($(node -p 'JSON.stringify(process.argv[1].trim().slice(0, 24))' "$3")); i++) await new Promise((r) => setTimeout(r, 100)); })()"
+# A chat at 390 and 1280, day and night, and in the installed window, once its last words and the head's call button are on the page.
+shots() { local THREAD="(async () => { location.hash = '$2'; for (let i = 0; i < 100 && !(document.querySelector('.ph-go') && document.body.innerText.includes($(node -p 'JSON.stringify(process.argv[1].trim().slice(0, 24))' "$3"))); i++) await new Promise((r) => setTimeout(r, 100)); })()"
   node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on" "$1" "$THREAD"
   GATE_PWA=1 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on/installed" "$1" "$THREAD"; }
 LAST=$("$NODE" "$REPO/scripts/verify/pi-crew.mjs" "$B" "$LAB" "$CREWD" "$OUT")

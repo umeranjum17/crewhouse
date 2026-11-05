@@ -111,6 +111,7 @@ test('helpers run on Pi side by side: each its own process, memory and session; 
   assert.deepEqual([lastSaid(s.db, a), lastSaid(s.db, b)], ['Mango answered', 'Papaya answered'], 'each answer is in its own chat');
 
   await until('both Pis stopped once idle', () => Object.keys(pis()).length === 0);
+  // Asked the moment the process is gone: the kit has yet to report that stop, and the new job must not take it for its own.
   const [first, second] = await Promise.all([ask(a, 'What did I ask you?'), ask(b, 'What did I ask you?')]);
   await Promise.all([ended(first), ended(second)]);
   assert.deepEqual([task(s.db, first).state, task(s.db, second).state], ['done', 'done']);
