@@ -21,7 +21,7 @@ const USAGE = `Crewhouse ${version}
   crewhouse status    says whether it is running, and where
   crewhouse link      prints the link that adds a phone
   crewhouse update    installs the newest version and restarts Crewhouse if it was running
-  crewhouse doctor    shows what is installed and what is missing`;
+  crewhouse doctor    says whether it can run, and how to add what is missing`;
 if (['--version', '-v', 'version'].includes(cmd)) fail(`Crewhouse ${version}`, 0);
 if (['help', '--help', '-h'].includes(cmd)) fail(USAGE, 0);
 const node = process.versions.node.split('.').map(Number);

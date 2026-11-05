@@ -53,7 +53,7 @@ Already have Node 24.16 or later? `npm install -g crewhouse` is the same thing f
 | `crewhouse status` | says whether it is running, and where |
 | `crewhouse link` | prints the link that adds a phone |
 | `crewhouse update` | installs the newest version and restarts Crewhouse if it was running |
-| `crewhouse doctor` | shows what is installed and what is missing |
+| `crewhouse doctor` | says whether Crewhouse can run, and what optional parts are missing, each with its fix |
 
 The download is about 180 MB and carries everything, the AI engine included, so the first start is ready at once (from npm, the first start installs the engine, a few minutes). Then tap one of the three jobs Chief offers under his first message and press **Sign in with…** under his reply: no terminal logins, and no API key to copy except where the account is a key.
 

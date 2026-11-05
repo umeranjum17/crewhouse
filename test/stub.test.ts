@@ -119,9 +119,10 @@ test('desktop setup refuses a loader failure in doctor, the tool kit and the liv
       writeFileSync(engine, `#!/bin/sh\necho 'error while loading shared libraries: ${library}: cannot open shared object file: No such file or directory' >&2\nexit 127\n`, { mode: 0o700 });
       process.env.DESKLINK_ENGINE = engine;
       const out = doctor();
-      assert.equal(out.status, 1, out.stderr);
-      assert.match(out.stdout, new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
-      assert.doesNotMatch(out.stdout, /desklink engine are ready|\nReady\./);
+      assert.equal(out.status, 0, 'a desktop that cannot load is an optional part: Crewhouse still runs');
+      assert.match(out.stdout, new RegExp(`· not available: needs .*missing system library: ${library.replaceAll('.', '\\.')}.*sudo dnf install`));
+      assert.match(out.stdout, /Crewhouse is ready\. \d+ optional part\(s\) missing/);
+      assert.doesNotMatch(out.stdout, /desklink engine are ready/);
       assert.match(out.stdout, /Computer \(desklink\).*missing system library/, 'the kit row uses the same runtime check');
       assert.equal(probeEngine().refused, true);
       assert.match(missing().join('\n'), new RegExp(`missing system library: ${library.replaceAll('.', '\\.')}`));

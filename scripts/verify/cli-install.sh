@@ -49,7 +49,7 @@ step 3 'is not running' crewhouse status
 step 0 'is not running' crewhouse stop
 step 0 'Crewhouse is running at http://127.0.0.1:[0-9]+/.*Phone pairing code' crewhouse start
 step 0 'is running \(pid [0-9]+\) at http://127.0.0.1:[0-9]+' crewhouse status
-step 0 'engine|crew' crewhouse doctor
+step 0 'Needed to run:.*Crewhouse is ready' crewhouse doctor
 step 0 'open this link|not listening for phones' crewhouse link
 if [ "$MODE" = download ]; then # update: the same build installed over itself while running; crewd must come back as a new process
   pid() { (cd "$LAB/empty" && "${E[@]}" crewhouse status | sed -n 's/.*(pid \([0-9]*\)).*/\1/p'); }
