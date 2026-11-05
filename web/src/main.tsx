@@ -193,8 +193,9 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
 function PillHead({ who, name, href, label, sub, wait }: { who: Helper | 'chief'; name: string; href: string; label: string; sub?: string; wait?: boolean }) {
   return <header className="pill-head chat-head">
     <a href="#/" className="ph-btn back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}><Icon name="back" size={22} /></a>
-    <span className="ph-who"><a className="ch-art" href={href} aria-label={label}><Face who={who} size={32} /></a>
-      <span className="grow"><b className="ch-name"><a href={href}>{name}</a></b>{sub && <span className={`ch-status${wait ? ' wait' : ''}`}>{sub}</span>}</span></span>
+    <span className="ph-who"><a className="ch-art" href={href} aria-label={label}><Face who={who} size={32} />{who === 'chief' && <i className="cl-star" aria-hidden><Icon name="star" size={9} /></i>}</a>
+      <span className="grow"><b className="ch-name clamp1"><a href={href}>{name}</a></b>{sub && <span className={`ch-status clamp1${wait ? ' wait' : ''}`}>{sub}</span>}</span></span>
+    <span className="ph-call" />
     <a className="ph-btn ph-menu" href={href} aria-label={label}><Icon name="more" size={22} /></a>
   </header>;
 }

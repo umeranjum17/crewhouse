@@ -670,6 +670,8 @@ export const VOICE_WORDS = {
   device: 'Your voice stays on this device. Only the words go to Chief.',
   online: "Your browser's online service hears this to turn it into text. Only the words go to Chief.",
   none: "This browser can't turn speech into words here, so type instead.",
+  call: "This browser can't hear you or read replies aloud here, so calls are off. Type instead.",
+  micOn: 'The mic is on. Tap it to stop, then call.',
 };
 
 /** When the crew is resting because an account ran out, in one sentence: "Your ChatGPT is resting until 6:40 pm". */

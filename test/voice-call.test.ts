@@ -135,18 +135,22 @@ test('a call with Chief listens, sends, reads the reply aloud, listens again, St
   assert.match(await run("document.querySelector('.toast').textContent"), /I can't hear a microphone on this computer\. Type instead\./);
 });
 
-test('a helper chat listens, sends, speaks that helper\'s reply and listens again until Stop', { skip: !bin && 'no Chromium here' }, async () => {
+test('a helper chat\'s head starts the call, speaks that helper\'s reply, ends it, and keeps words in the box', { skip: !bin && 'no Chromium here' }, async () => {
   const { run, helper, turns } = await boot(DEVICE({ device: true, online: true }), true);
   assert.ok(helper);
   await until('Talk in the helper box', () => run("!!document.querySelector('.chat .dock button.send.talk')"), 30_000);
   assert.equal(await run("document.querySelector('.send.talk').title"), 'Talk with Scribe');
-  await run("document.querySelector('.send.talk').click()");
+  await until('the head\'s call button', () => run("document.querySelector('.pill-head .ph-go:not(.off)')?.getAttribute('aria-label') === 'Call Scribe'"), 10_000);
+  await run("const t = document.querySelector('.chat .dock textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'half a thought'); t.dispatchEvent(new Event('input', { bubbles: true }))");
+  await run("document.querySelector('.ph-go').click()");
   await until('helper reply starts speaking', () => run("document.querySelector('.call')?.classList.contains('speaking')"), 30_000);
   assert.equal(await run("document.querySelector('.call').getAttribute('aria-label')"), 'Call with Scribe');
   assert.ok((await turns()).some((t) => t.startsWith('say Hi.')));
-  await run("document.querySelector('.call-stop').click()");
+  assert.equal(await run("document.querySelector('.ph-go.on').getAttribute('aria-label')"), 'End the call with Scribe');
+  await run("document.querySelector('.ph-go').click()");
   await until('helper call and speech stop', () => run("!document.querySelector('.call')"), 10_000);
-  assert.equal((await turns()).filter((t) => t === 'listen').length, 1, 'Stop during speech never reopens the microphone');
+  assert.equal((await turns()).filter((t) => t === 'listen').length, 1, 'ending during speech never reopens the microphone');
+  assert.equal(await run("document.querySelector('.chat .dock textarea').value"), 'half a thought', 'the box kept its words through the call');
 });
 
 test('with no recognizer of its own, the browser\'s online one hears, and its line shows before the call listens', { skip: !bin && 'no Chromium here' }, async () => {
@@ -180,6 +184,11 @@ test('with neither recognizer, the mic says why and Talk is not offered', { skip
   assert.equal(await run("!document.querySelector('.send.talk')"), true, 'no Talk without a recognizer');
   await run("document.querySelector('.mic.off').click()");
   await until('the reason in a toast', () => run(`document.querySelector('.toast')?.textContent === ${JSON.stringify(VOICE_WORDS.none)}`), 10_000);
+  await until('the head\'s call button, off', () => run("document.querySelector('.ph-go.off')?.getAttribute('aria-disabled') === 'true'"), 10_000);
+  assert.equal(await run("document.querySelector('.ph-go').getAttribute('aria-label')"), VOICE_WORDS.call);
+  await run("document.querySelector('.ph-go').click()");
+  await until('why calls are off', () => run(`[...document.querySelectorAll('.toast')].some((t) => t.textContent === ${JSON.stringify(VOICE_WORDS.call)})`), 10_000);
+  assert.equal(await run("!document.querySelector('.call')"), true, 'no call starts');
 });
 
 test('a recognizer that cannot say where it hears (Safari, every iPad and iPhone browser) hears as the online one', { skip: !bin && 'no Chromium here' }, async () => {
