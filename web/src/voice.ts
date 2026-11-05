@@ -68,35 +68,40 @@ function wav(chunks: Float32Array[], rate: number): Uint8Array {
 
 const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 
+/** What one clip may hold, so a long note always fits crewd's request limit: 4.5M samples, about 90 s at 48 kHz. */
+const MOST = 4_500_000;
+
 /** Listens by recording, then has this computer's Hex write the clip down (`transcribe`): the audio goes to the computer
- *  the person paired with, and a tap on the mic ends the recording. Fails the same ways `hear` does, and in Hex's own
- *  plain words when it can't write the clip down. */
+ *  the person paired with. A tap on the mic ends the recording, or the clip filling up. Fails the same ways `hear` does,
+ *  `far` when the computer can't be reached, and with crewd's own plain words (a `status`) when Hex can't write it down. */
 export function record(): { words: Promise<string>; stop: () => void } {
-  const off: (() => void)[] = [];
-  let stopped = false;
+  let stop = () => {}, ctx: any;
+  const stopped = new Promise<void>((done) => { stop = done; }), chunks: Float32Array[] = [];
   const words = (async () => {
+    ctx = new ((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext)(); // on the tap itself: Safari starts audio only from one
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    off.push(() => stream.getTracks().forEach((t) => t.stop()));
-    const Ctx = (globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext, ctx = new Ctx(), chunks: Float32Array[] = [];
     const tap = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain();
     mute.gain.value = 0; // the tap only listens: the microphone is never played back
-    tap.onaudioprocess = (e: any) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    tap.onaudioprocess = (e: any) => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); if (chunks.length * 4096 >= MOST) stop(); };
     ctx.createMediaStreamSource(stream).connect(tap).connect(mute).connect(ctx.destination);
-    await new Promise<void>((ended) => { const end = () => { tap.onaudioprocess = null; void ctx.close(); ended(); }; if (stopped) end(); else off.push(end); });
-    off.forEach((f) => f());
+    void ctx.resume();
+    await stopped;
+    tap.onaudioprocess = null;
+    stream.getTracks().forEach((t) => t.stop());
     const clip = wav(chunks, ctx.sampleRate);
     return clip.length > 44 ? (await transcribe(base64(clip))).text : '';
   })().catch((e: any) => {
     if (/^(NotAllowed|Security)Error$/.test(e?.name ?? '')) throw new Error('blocked');
     if (e instanceof DOMException) throw new Error('nomic');
-    throw e; // the computer's own words, or the link's
-  });
-  return { words, stop: () => { stopped = true; off.forEach((f) => f()); } };
+    throw e?.status ? e : new Error('far');
+  }).finally(() => void ctx?.close());
+  return { words, stop };
 }
 
 // Reading Chief's replies aloud: only this device's own voices (never an online one), a sentence at a time, so a call
 // can show the one being read and Stop cuts in between.
 const synth: SpeechSynthesis | undefined = globalThis.speechSynthesis;
+
 /** This device's own voices in the person's language, its default first, once the browser has listed them (none
  *  where it has no voice of its own). */
 export async function voices(): Promise<SpeechSynthesisVoice[]> {

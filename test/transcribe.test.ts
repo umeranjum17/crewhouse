@@ -9,12 +9,15 @@ const words = (p: string) => { process.env.CREWHOUSE_HEX = p; return transcribe(
 
 test('with no Hex, the person reads the one install command', async () => {
   const said = await words('/nonexistent/hex');
-  assert.match(said, /^Speaking here needs Hex on this computer first\. In a terminal, run: curl -fsSL \S+ \| sh$/);
-  assert.doesNotMatch(said, /Error|undefined|at |\{|code/);
+  assert.match(said, /^Speaking needs Hex on your computer first\. On that computer, run: (curl -fsSL \S+ \| sh|brew install --cask \S+)$/);
 });
 
-test('with no speech model, the person reads the model command', async () => {
-  const said = await words('/bin/false'); // a binary that is not Hex: its model list is empty
-  assert.match(said, /^Hex has no speech model on this computer yet\. In a terminal, run: ~\/\.local\/bin\/hex model install$/);
-  assert.doesNotMatch(said, /Error|undefined|at |\{|code/);
+test('with no speech model, the person reads the model command, at the Hex this computer has', async () => {
+  const said = await words('/bin/false'); // a binary that is not Hex: it has no model
+  assert.equal(said, "Speaking needs Hex's speech model on your computer first. On that computer, run: /bin/false model install parakeet_unified_en");
+});
+
+test('one refusal does not stop the next clip from trying again', async () => {
+  await words('/nonexistent/hex');
+  assert.match(await words('/bin/false'), /speech model/);
 });

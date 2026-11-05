@@ -6,8 +6,9 @@
 # Real crewd on the stub engine (no account, no model of ours), isolated per docs/verification/runbook.md's Launch,
 # web/dist built first. Hex is this computer's real install (~/.local/bin/hex or $CREWHOUSE_HEX) with a real local speech
 # model, so the transcript is real local inference. There is no live microphone: Chromium's own fake capture device is fed
-# the public whisper.cpp sample (samples/jfk.wav), whose words are known, so the ears are stood in for and nothing else.
-# `missing` runs crewd with no Hex at all, for the words the person reads then.
+# the public whisper.cpp sample (samples/jfk.wav) once, whose words are known, so the ears are stood in for and nothing else.
+# `hex` proves the exact words in the box at 390 and 1440, day and night, nothing sent, and Hex's helper going when crewd
+# does. `missing` runs crewd with no Hex at all, at 390 day, for the words the person reads then.
 # Needs chromium, xvfb-run. Scratch under ~/.cache/fm-scratch, never /tmp.
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd); OUT=$(mkdir -p "$1" && cd "$1" && pwd); WHAT=${2:-hex}
@@ -45,12 +46,12 @@ curl --max-time 10 -fsS "${H[@]}" -X POST -d '{"address":"Umer"}' "$B/api/onboar
 # own window. The look is the app's Auto, following the device's light or dark (`scheme`).
 "$NODE" -e '
 const [B, key, LAB, OUT, WAV, WHAT, REPO] = process.argv.slice(1);
-const LOOKS = [["light", 390, 844], ["dark", 390, 844], ["light", 1440, 900], ["dark", 1440, 900]];
+const LOOKS = [["light", 390, 844], ["dark", 390, 844], ["light", 1440, 900], ["dark", 1440, 900]].slice(0, WHAT === "hex" ? 4 : 1);
 const DAY = { light: "day", dark: "night" };
 const BOTTOM = "(() => { const l = document.querySelector(\".lines\"); if (l) l.scrollTop = l.scrollHeight; return matchMedia(\"(display-mode: standalone)\").matches; })()";
 const box = "document.querySelector(\".chat .dock textarea\")";
 const mic = ".chat .dock .mic";
-const SAID = "ask not what your country can do for you";
+const SAID = "And so, my fellow Americans, ask not what your country can do for you. Ask what you can do for your country.";
 const steps = [
   { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000 },
   { name: "settings", url: `${B}/#/settings`, wait: "!!document.querySelector(\".install .btn\")", timeout: 20000 },
@@ -64,14 +65,14 @@ for (const [n, [scheme, w, h]] of LOOKS.entries()) {
   steps.push(
     { name: `${slug}-open`, scheme, w, h, dpr: 2, mobile: w < 500, url: `${B}/?r=${n}#/chief`, grant: ["audioCapture"], wait: `!!document.querySelector("${mic}")`, timeout: 20000, settle: 2500, eval: `({ standalone: matchMedia("(display-mode: standalone)").matches, mic: document.querySelector("${mic}")?.getAttribute("aria-label") })` },
     { name: `${slug}-listen`, click: mic, settle: 500, wait: `!!document.querySelector("${mic}.on")`, timeout: 10000, eval: `${box}.placeholder` },
-    { name: `${slug}-speak`, eval: `new Promise((r) => setTimeout(r, ${WHAT === "hex" ? 14000 : 3000}))` },
+    { name: `${slug}-speak`, eval: `new Promise((r) => setTimeout(r, ${WHAT === "hex" ? 13000 : 3000}))` },
     { name: `${slug}-stop`, click: mic, settle: 500 },
-    { name: `${slug}-heard`, wait: WHAT === "hex" ? `${box}.value.includes(${JSON.stringify(SAID)})` : `!!document.querySelector(".toast")`, timeout: 60000, eval: "({ text: document.querySelector(\".chat .dock textarea\").value, toasts: [...document.querySelectorAll(\".toast\")].map((t) => t.textContent) })", out: `${OUT}/pwa/voice-hex-${DAY[scheme]}-${w}.png` },
+    { name: `${slug}-heard`, wait: WHAT === "hex" ? `!!${box}.value` : `!!document.querySelector(".toast .toast-act")`, timeout: 60000, eval: "({ text: document.querySelector(\".chat .dock textarea\").value, toasts: [...document.querySelectorAll(\".toast\")].map((t) => t.textContent) })", out: `${OUT}/pwa/voice-hex-${DAY[scheme]}-${w}.png` },
     { name: `${slug}-settled`, eval: BOTTOM },
   );
 }
 console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${REPO}/scripts/verify/xkey.py`, args: [
-  "--window-size=1400,950", "--force-device-scale-factor=1", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", `--use-file-for-fake-audio-capture=${WAV}`, "about:blank"], steps }));
+  "--window-size=1400,950", "--force-device-scale-factor=1", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", `--use-file-for-fake-audio-capture=${WAV}%noloop`, "about:blank"], steps }));
 ' "$B" "$KEY" "$LAB" "$OUT" "$WAV" "$WHAT" "$REPO" > "$LAB/pwa-plan.json"
 xvfb-run -a -s "-screen 0 1920x1200x24" "$NODE" "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa-plan.json" > "$OUT/pwa/run.json" || true
 "$NODE" -e '
@@ -83,8 +84,8 @@ for (const { step: n, value } of r.filter((x) => /-(open|listen|heard)$/.test(x.
   if (n.endsWith("-open") && value.standalone !== true) fail.push(`${s}: not the installed app`);
   if (n.endsWith("-listen") && value !== "Listening…") fail.push(`${s}: the box does not say it is listening: ${value}`);
   if (n.endsWith("-heard")) {
-    if (want === "hex" && !String(value.text ?? "").includes("ask not what your country can do for you")) fail.push(`${s}: box ${JSON.stringify(value.text)}`);
-    if (want !== "hex" && !/Speaking here needs Hex/.test(JSON.stringify(value.toasts))) fail.push(`${s}: toasts ${JSON.stringify(value.toasts)}`);
+    if (want === "hex" && value.text !== "And so, my fellow Americans, ask not what your country can do for you. Ask what you can do for your country.") fail.push(`${s}: box ${JSON.stringify(value.text)}`);
+    if (want !== "hex" && !/^Speaking needs Hex on your computer first\. On that computer, run: curl -fsSL \S+ \| shCopy$/.test(value.toasts?.[0] ?? "")) fail.push(`${s}: toasts ${JSON.stringify(value.toasts)}`);
     console.log(s, JSON.stringify(value));
   }
 }
@@ -97,5 +98,13 @@ curl --max-time 10 -fsS "${H[@]}" "$B/api/bots/chief" > "$OUT/chief.json"
 const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")), mine = (j.messages ?? []).filter((x) => x.author === "person");
 console.log("person messages at crewd:", JSON.stringify(mine.map((x) => x.text)));
 if (mine.length) { console.log("FAIL the heard words reached crewd before send"); process.exit(1); }' "$OUT/chief.json" | tee -a "$OUT/transcript.txt"
-grep -c "" "$OUT/crewd.log" >/dev/null && grep -iE "^hex:|hex couldn" "$OUT/crewd.log" | tail -3 | tee -a "$OUT/transcript.txt" || true
+if [ "$WHAT" = hex ]; then
+  # A helper left without its parent keeps the model loaded, so crewd alone is stopped here, not its group: Hex must go too.
+  HELPER=$(pgrep -P "$CREWD" -f 'service --embedded') || { log "FAIL no Hex helper under crewd"; exit 1; }
+  kill -TERM "$CREWD"
+  for _ in $(seq 1 200); do kill -0 "$HELPER" 2>/dev/null || break; sleep 0.1; done
+  if kill -0 "$HELPER" 2>/dev/null; then log "FAIL Hex's helper outlived crewd"; exit 1; fi
+  log "Hex's helper went with crewd"
+fi
+"$NODE" "$REPO/scripts/verify/steps.mjs" "$OUT" "$([ "$WHAT" = hex ] && echo voice-hex || echo voice-hex-missing)"
 ls "$OUT/pwa"

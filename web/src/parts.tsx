@@ -626,7 +626,9 @@ export function Steps({ steps, max = 6, onUndo, onForget, trail }: { steps: Step
   );
 }
 
-const heardWrong = (e: any) => /^[a-z]+$/.test(e?.message ?? '') ? ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "Couldn't reach the computer that turns your speech into words. Check the connection, or type instead." } as Record<string, string>)[e.message] ?? "Speaking isn't ready on this computer. Type instead." : e?.message ?? "Speaking isn't ready on this computer. Type instead.";
+const heardWrong = (e: any) => (e?.status && e.status !== 404 ? e.message : ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "The browser's online service couldn't hear you. Check the connection, or type instead.", far: "Can't reach your computer to write this down. Check the connection, or type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.");
+/** What went wrong with the mic; words that end in a command to run stay long enough to read, and copy the command. */
+const sayHeardWrong = (e: any) => { const m = heardWrong(e), run = /, run: (.+)$/.exec(m)?.[1]; toast(m, run ? { label: 'Copy', run: () => void navigator.clipboard?.writeText(run) } : undefined); };
 
 /** The voice note to Chief: a mic in the box. Where this browser can record, the clip goes to the paired computer and
  *  Hex writes it down there (nothing to a cloud service); where it can't, the browser's own recognizer hears instead
@@ -636,11 +638,12 @@ let micOpen = false, cutPractice: (() => void) | null = null;
 function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: string) => void) {
   const [route, setRoute] = useState<Ears | 'computer' | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
+  const [writing, setWriting] = useState(false); // the mic is off and the computer is writing the clip down
   const now = useRef(text);
   now.current = text;
   useEffect(() => { if (on) void (canRecord() ? Promise.resolve('computer' as const) : ears()).then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
-  if (!route) return { mic: null, on: false };
+  if (!route) return { mic: null, on: false, writing: false };
   const start = () => {
     if (route === 'online') toast(VOICE_WORDS.online);
     const h = route === 'computer' ? record() : hear(route);
@@ -648,12 +651,12 @@ function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: 
     setEar(h);
     setListen(chat, true);
     h.words.then((w) => { if (w) put(now.current.trim() ? `${now.current.trimEnd()} ${w}` : w); else toast("I didn't catch that. Try again."); },
-      (e) => toast(heardWrong(e)))
-      .finally(() => { micOpen = false; setEar(null); setListen(chat, false); });
+      sayHeardWrong)
+      .finally(() => { micOpen = false; setEar(null); setWriting(false); setListen(chat, false); });
   };
   const off = route === 'none';
-  return { on: !!ear, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
-    onClick={() => (off ? toast(VOICE_WORDS.none) : ear ? ear.stop() : start())}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  return { on: !!ear, writing, mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
+    onClick={() => { if (off) toast(VOICE_WORDS.none); else if (!ear) start(); else { ear.stop(); setWriting(route === 'computer'); } }}>{ear ? <i className="mic-stop" /> : <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>}</button> };
 }
 
@@ -897,7 +900,7 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
       {/* Calm: the words, the mic and the round send-or-talk button share one pill; attach sits apart before it. */}
       <div className="c-pill">
         {picked.length > 0 && <div className="c-files">{picked.map((p, i) => <span key={`${p.name}.${i}`} className="c-file">{PHOTO_TYPES.includes(p.type) && <img className="c-thumb" src={`data:${p.type};base64,${p.data}`} alt="" />}<b>{p.name}</b><span className="mute">{(p.name.split('.').pop() ?? '').toUpperCase().slice(0, 4)} · {fileSize(p.size)}</span><button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
-        <textarea rows={1} value={text} placeholder={voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
+        <textarea rows={1} value={text} placeholder={voice.writing ? 'Writing it down…' : voice.on ? 'Listening…' : placeholder} aria-label={placeholder}
           onFocus={() => { setFocused(true); hear(true, text); }} onBlur={() => { setFocused(false); hear(false, text); }}
           onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
         {voice.mic}

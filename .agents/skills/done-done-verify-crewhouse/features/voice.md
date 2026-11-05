@@ -4,7 +4,7 @@ Part of the crewhouse verification map. Source: `docs/verification/voice.md`.
 
 ## How to get to it (user POV)
 
-In Chief's chat, tap the mic and speak: the words wait in the box until send. With the box empty, tap Talk: what you say
+In Chief's chat, tap the mic and speak: the computer's Hex writes it down and the words wait in the box until send. With the box empty, tap Talk: what you say
 is sent when you stop, Chief's reply is read aloud a sentence at a time with that line marked, then it listens again
 until Stop.
 
@@ -18,3 +18,6 @@ until Stop.
    `transcript.txt`; the step record `steps.json`.
 4. It proves: nothing is sent by speaking, the line being read is marked, what was read aloud, each said thing reached
    crewd once, and a Safari-shaped recognizer hears with the online line.
+5. The mic on Hex: `done-done run voice-hex` (needs Hex and its speech model on this computer: real local inference, the
+   microphone stood in for by Chromium playing `samples/jfk.wav`) and `done-done run voice-hex-missing` (no Hex: the install
+   words). Capture: `pwa/voice-hex-{day,night}-{390,1440}.png`; `transcript.txt`.
