@@ -269,3 +269,7 @@ journeys:
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:
     command: 'bash scripts/verify/live-desktop.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The inline draft card: waiting, draft, copied and discarded on the computer's web app, and Review then Send to one message in
+  # emulate's mailbox from the installed app paired as a control device (docs/verification/action-card.md). No real mailbox.
+  action-card:
+    command: 'timeout -k 10 900 bash scripts/verify/action-card.sh "$DONE_DONE_EVIDENCE_ROOT"'

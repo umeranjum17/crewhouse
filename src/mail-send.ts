@@ -116,9 +116,9 @@ export class MailSend {
     const detail = { effect: 'send', send: { draft: id, from, to, subject, body }, preview: { body } }, r = this.db.run("INSERT INTO asks (bot,kind,title,detail,at) VALUES ('chief','mail','Send this one email from your Gmail?',?,?)", JSON.stringify(detail), Date.now()), ask = Number(r.lastInsertRowid); this.db.event('mail.review', 'chief', { ask, draft: id });
     return { id: ask };
   }
-  private receiptOf(draft: number, kind: string) {
+  private receiptOf(draft: number, kind: string, sent = false) {
     const row = this.db.get('SELECT bot, detail FROM asks WHERE id = ?', draft)!, d = JSON.parse(row.detail);
-    this.db.event(kind, row.bot, { ...receipt(d.draft, d.preview), task: d.task });
+    this.db.event(kind, row.bot, { ...receipt(d.draft, d.preview), task: d.task, ...(sent ? { sent } : {}) });
   }
   async answer(ask: Row, answer: string, phone: string) {
     if (!['allow', 'deny'].includes(answer)) throw fail('Choose Send or Not now.', 400);
@@ -141,7 +141,7 @@ export class MailSend {
       if (!res.ok) { const refused = res.status < 500; throw Object.assign(fail(refused ? `Gmail said ${res.status}. Nothing was sent; the draft is open again for a new review.` : `Gmail said ${res.status}.`), { refused }); }
       const sent = await res.json() as Row;
       if (typeof sent.id !== 'string' || !sent.id) throw fail('Gmail did not confirm delivery.');
-      this.db.run("UPDATE asks SET state='answered',answer='sent' WHERE id=?", ask.id); this.db.event('mail.sent', ask.bot, { ask: ask.id, id: sent.id, from, to }); this.receiptOf(m.draft, 'draft.approved');
+      this.db.run("UPDATE asks SET state='answered',answer='sent' WHERE id=?", ask.id); this.db.event('mail.sent', ask.bot, { ask: ask.id, id: sent.id, from, to }); this.receiptOf(m.draft, 'draft.approved', true);
     } catch (e: any) {
       if (e.refused) {
         this.db.tx(() => {
@@ -157,8 +157,7 @@ export class MailSend {
   }
   /** Clear a card stuck on "check Gmail": the person acknowledges it, whichever device they read it on. */
   dismiss(ask: Row) {
-    const changed = this.db.run("UPDATE asks SET state='answered',answer='dismissed',answered_at=? WHERE id=? AND kind='mail' AND state='uncertain'", Date.now(), ask.id);
-    if (!changed.changes) throw fail('This email is not waiting to be checked.');
+    if (!this.db.run("UPDATE asks SET state='answered',answer='dismissed',answered_at=? WHERE id=? AND kind='mail' AND state='uncertain'", Date.now(), ask.id).changes) throw fail('This email is not waiting to be checked.');
     this.db.event('mail.dismissed', ask.bot, { ask: ask.id });
   }
 }

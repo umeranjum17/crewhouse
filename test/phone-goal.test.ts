@@ -49,7 +49,7 @@ test('the phone board maps crewd roles to their stages, and a role offers only t
   // The writer's draft waits on its role: what only the person answers is listed and blank, and its yes copies, never submits.
   const draft = A.cards(state).find((c) => state.asks.find((a: { id: number }) => a.id === c.id)?.detail?.draft?.role === north.id)!;
   assert.ok(draft.yours?.includes('Expected salary') && draft.yours.includes('Your right to work'));
-  assert.deepEqual(draft.choices.map((c) => c.label), ['Fill it in for me', 'Copy and open the form', 'Not now']);
+  assert.deepEqual(draft.choices.map((c) => c.label), ['Fill it in for me', 'Copy and open the form', 'Discard']);
   assert.ok(!draft.choices.some((c) => /submit/i.test(c.label)), 'the draft never submits');
 
   // The filled form, as crewd raises it (test/jobs.test.ts makes it on a real page): Submit is on this card alone,

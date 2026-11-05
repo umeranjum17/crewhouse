@@ -6,7 +6,7 @@ Source: `src/mail-send.ts`, `src/server.ts`, `src/link.ts`, `mobile/App.tsx` (`M
 
 ## Authority and prerequisites
 
-Only an authenticated **control** phone may attest, prepare the send review or approve
+A web app paired as a control device reaches crewd over the same link and counts as one; `action-card.md` drives it on emulate's Google. Only an authenticated **control** phone may attest, prepare the send review or approve
 an email. Local HTTP and the desktop refuse approval of Tracer email drafts and send
 cards, even with forged `phone`/`person` fields. Watch-only phones cannot attest.
 The computer connects the separate **Gmail sending** app in Settings through BYOKit;
