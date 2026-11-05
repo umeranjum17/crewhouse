@@ -1786,6 +1786,14 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
   }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)), ...(bot === 'chief' && l.from === 'them' ? rolesIn(state, l.text) : {}) })).filter((l: Line) => l.text || l.files.length);
 }
+/** Pictures a helper hands over one after another are one pile, not a line each: only crewd's bare delivery lines fold
+ *  together, so a note the helper wrote beside a picture stays where it is. */
+const barePicture = (l: Line) => l.from === 'note' && l.files.length > 0 && l.files.every((f) => f.kind === 'image') && (!l.text || /^Here's “/.test(l.text));
+export const pictureRuns = (lines: Line[]) => lines.reduce<Line[]>((out, l) => {
+  const p = out.at(-1);
+  return p && barePicture(p) && barePicture(l) ? [...out.slice(0, -1), { ...p, text: '', files: [...p.files, ...l.files] }] : [...out, l];
+}, []);
+
 /** A look's result in Chief's chat names each role it added on a line of its own ("<title> at <company>", crewd's words):
  *  on the web each is that role's own card under the line; the phone reads the names. */
 const roleLine = (r: GoalRole) => `${r.title} at ${r.co}`;
