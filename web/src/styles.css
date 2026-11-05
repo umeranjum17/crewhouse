@@ -2209,11 +2209,12 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 [data-theme='night'] .shell.calm { --bubble: #222222; --bubble2: #2C2C2C; --quiet: #9A9994; --glass: color-mix(in srgb, #1C1C1C 86%, transparent); --glass-line: color-mix(in srgb, #FFFFFF 9%, transparent); --pane: #0D0D0D; }
 .calm .round-btn, .calm .ph-btn { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink);
   -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); text-decoration: none; cursor: pointer; padding: 0; }
-.calm .me-av { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--bubble2); color: var(--ink); font: 600 18px/1 var(--ui); text-decoration: none; }
+.calm .me-av { width: 44px; height: 44px; flex: none; display: grid; place-items: center; box-sizing: border-box; border-radius: 50%; border: 1px solid var(--glass-line); background: var(--bubble2); color: var(--ink); font: 600 18px/1 var(--ui); text-decoration: none; }
 
 /* The floating header pill: back, who, menu — glass over the thread, which scrolls under it. */
 .calm .pill-head { position: absolute; z-index: 6; top: calc(var(--top) + 10px); left: 12px; right: 12px; display: flex; align-items: center; gap: 8px; min-height: 0; padding: 0; border: 0; max-width: none; pointer-events: none; }
 .calm .pill-head > * { pointer-events: auto; }
+@media (max-width: 899px) { .calm .pill-head::before { content: ''; position: absolute; z-index: -1; inset: calc(-10px - var(--top)) -12px -10px; background: linear-gradient(var(--bg) 62%, transparent); pointer-events: none; } } /* the thread fades out under the head, never reads through it */
 .calm .pill-head .back { display: grid; }
 .calm .ph-who { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 104px); height: 44px; padding: 0 16px 0 6px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass);
   -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
@@ -2235,14 +2236,21 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .calm .chat-page .dock { position: static; flex: none; margin: 0; padding: 8px 12px max(12px, env(safe-area-inset-bottom)); background: none; mask-image: none; -webkit-mask-image: none; max-width: none; }
 .calm .chat-intro, .calm .chat-page .back:not(.ph-btn) { display: none; }
 
+/* A helper's thread is Chief's thread: the same full height and the same open foot, no band over the composer. */
+.shell.calm .page.chat-page.st-helper-chat:not(.room-page) .chat .dock { border-top: 0; background: none; }
+@media (max-width: 899px) {
+  .shell.calm .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) { height: calc(100dvh - var(--top)); }
+  .shell.calm .page.chat-page.st-helper-chat:not(.home-chat):not(.room-page):has(> .chat) .dock { padding: 8px 12px max(12px, env(safe-area-inset-bottom)); }
+}
+
 /* Lines: the crew's words in soft bubbles, the person's in the one warm pill. No name row in a one-to-one thread. */
 .shell.calm .chat .lines .line { display: block; max-width: none; margin-top: 10px; }
 .shell.calm .chat .lines .line > .line-by { display: none; }
 .shell.calm .chat .lines .line > .line-by .who { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
-.shell.calm .chat .lines .line > .bubble-text:not(.inbox-bubble) { width: fit-content; max-width: min(80%, 620px); box-sizing: border-box; padding: 11px 16px; border-radius: 20px; background: var(--bubble); color: var(--ink);
-  font: 400 17px/1.5 var(--ui); border: 0; overflow-wrap: anywhere; text-wrap: pretty; }
+.shell.calm .chat .lines .line > .bubble-text:not(.inbox-bubble) { width: fit-content; max-width: min(88%, 620px); box-sizing: border-box; padding: 12px 18px; border-radius: 24px 24px 24px 8px; background: var(--bubble); color: var(--ink);
+  font: 400 18px/1.45 var(--ui); border: 0; overflow-wrap: anywhere; text-wrap: pretty; }
 .shell.calm .chat .lines .line.me { display: flex; flex-direction: column; align-items: flex-end; }
-.shell.calm .chat .lines .line.me > .bubble-text { max-width: min(80%, 620px); background: var(--me); color: var(--me-ink); padding: 10px 18px; border-radius: 22px; }
+.shell.calm .chat .lines .line.me > .bubble-text { max-width: min(82%, 620px); background: var(--me); color: var(--me-ink); padding: 12px 18px; border-radius: 24px 24px 8px 24px; }
 .shell.calm .chat .lines .line.me + .line.me, .shell.calm .chat .lines .line-wrap:has(.line.me) + .line-wrap:has(.line.me) .line { margin-top: 4px; }
 .shell.calm .chat .lines .line.me .bubble-text a { color: inherit; }
 .calm .line .helper-bubble { background: none; border: 0; padding: 0; }
@@ -2287,6 +2295,16 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .att > .lucide, .shell.calm .att > svg:last-child { color: var(--quiet); flex: none; }
 .shell.calm .chat .lines .doc { width: min(80%, 360px); border-radius: 16px; background: var(--bubble); border: 0; }
 .shell.calm .chat .lines .media img, .shell.calm .chat .lines .media.cover { border-radius: 16px; max-width: min(80%, 360px); }
+
+/* Several pictures on one line: the first three fanned, the front one square-on, their count under them. */
+.shell.calm .img-stack { display: block; width: min(100%, 320px); margin-top: 12px; padding: 0; border: 0; background: none; color: var(--quiet); text-align: left; cursor: pointer; }
+.calm .fan { position: relative; display: block; height: 228px; }
+.calm .fan img { position: absolute; top: 8px; left: 50%; width: 148px; height: 200px; margin-left: -74px; object-fit: cover; border-radius: 20px; border: 1px solid var(--glass-line); box-sizing: border-box; background: var(--bubble2); box-shadow: 0 6px 18px color-mix(in srgb, #000 22%, transparent); }
+.calm .fan img:nth-last-child(2) { transform: translateX(-72px) rotate(-11deg); }
+.calm .fan img:nth-last-child(3) { transform: translateX(72px) rotate(11deg); }
+.calm .fan-count { display: flex; align-items: center; gap: 8px; padding: 6px 4px 0; font: 400 16px/22px var(--ui); }
+.shell.calm .chat .lines .stack-all { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 420px); margin-top: 12px; }
+.shell.calm .chat .lines .stack-all .media img { display: block; width: 100%; max-width: none; aspect-ratio: 3 / 4; object-fit: cover; }
 
 /* Hand-offs: one quiet chip line, never a block. */
 .shell.calm .chat .lines .hand-off { margin-top: 8px; }
@@ -2343,13 +2361,22 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .calm .calm-home > .card, .calm .calm-home > .nudge { margin: 4px 16px 8px; }
 .calm .chat-list { list-style: none; margin: 0; padding: 0; }
 .calm .cl-row { display: flex; align-items: center; gap: 14px; padding: 10px 16px; color: var(--ink); text-decoration: none; }
+.calm-home .chat-list > li:first-child { margin-bottom: 10px; } /* Chief stands a little apart from the helpers */
+.calm .cl-face { position: relative; flex: none; display: grid; }
+.calm .cl-face .face { box-shadow: 0 0 0 1px var(--glass-line); }
+.calm .cl-star { position: absolute; right: -3px; bottom: -3px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: var(--bg); box-shadow: 0 0 0 2px var(--bg); }
+.calm .cl-star svg { fill: currentColor; }
+.calm .cl-crew { position: relative; flex: none; width: 60px; height: 60px; }
+.calm .cl-crew .face { position: absolute; left: 13px; top: 0; box-shadow: 0 0 0 2px var(--bg); }
+.calm .cl-crew .face:nth-child(2) { left: 0; top: 26px; }
+.calm .cl-crew .face:nth-child(3) { left: 26px; top: 26px; }
 .calm .cl-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .calm .cl-row .face { flex: none; }
 .calm .cl-room { width: 52px; height: 52px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--bubble2); color: var(--ink2); }
 .calm .cl-text { display: grid; gap: 2px; min-width: 0; padding: 4px 0; }
 .calm .cl-top, .calm .cl-bottom { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.calm .cl-top b { flex: 1; min-width: 0; font: 600 17px/22px var(--ui); letter-spacing: -.005em; }
-.calm .cl-top time { flex: none; font: 400 14px/18px var(--ui); color: var(--quiet); }
+.calm .cl-top b { flex: 1; min-width: 0; font: 600 18px/24px var(--ui); letter-spacing: -.005em; }
+.calm .cl-top time { flex: none; font: 400 15px/20px var(--ui); color: var(--quiet); }
 .calm .cl-line { flex: 1; min-width: 0; font: 400 16px/21px var(--ui); color: var(--quiet); }
 .calm .cl-line.working i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--ok); vertical-align: 2px; }
 .calm .cl-row.unread .cl-line { color: var(--ink2); }
@@ -2384,7 +2411,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .calm .side .search-pill input { font-size: 16px; }
   .calm .side .chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
   .calm .side .cl-row { gap: 12px; padding: 8px 10px; border-radius: 14px; }
-  .calm .side .cl-row .face { zoom: .85; }
+  .calm .side .cl-face, .calm .side .cl-crew { zoom: .78; }
   .calm .side .cl-room { width: 44px; height: 44px; }
   .calm .side .cl-row.on { background: var(--bubble); }
   .calm .side .cl-top b { font-size: 16px; line-height: 20px; }
@@ -2401,8 +2428,6 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .calm .page.chat-page { height: 100dvh; }
   .calm .pill-head { position: static; padding: 14px 24px; pointer-events: auto; border-bottom: 1px solid var(--hair); }
   .calm .pill-head .back, .calm .pill-head .ph-btn.back { display: none; }
-  .calm .ph-who { padding: 0; height: auto; border: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; max-width: none; }
-  .calm .ph-who .ch-art .face { zoom: 1.12; }
   .calm .ph-menu { width: 36px; height: 36px; background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--quiet); }
   .calm .chat-page > .sticky-top > :not(.pill-head) { margin: 8px 24px 0; }
   .calm .page.chat-page .chat { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; gap: 0; }

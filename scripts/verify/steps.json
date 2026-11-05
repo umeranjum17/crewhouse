@@ -785,6 +785,16 @@
     ],
     "result": "Every line of the resume is one Umer wrote in Chief's chat; the invented certificate and the line he marked private never appear. Each part says when he told Chief, and the part he changed says Edited by you. The PDF and the Word file the buttons save hold exactly the lines on screen, his edit included. The PDF uses a built-in Latin font, so a non-Latin script would not show. Not a real model."
   },
+  "bot-crew": {
+    "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",
+    "steps": [
+      "Open the bot list on a 390 phone and a 1280 computer, day and night",
+      "Open Scout's chat on a 390 phone and a 1280 computer, day and night",
+      "Open both again in the installed app's window at 390",
+      "Tap the pile of pictures in Scout's chat on a 390 phone"
+    ],
+    "result": "The list shows big faces, Chief's amber count and star, Scout's unread dot and The crew's overlapping faces; Scout's chat shows the name chip, soft bubbles and a fanned pile counted 5 images, and a tap lays out all five"
+  },
   "calm-design": {
     "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, the commit before the calm redesign too",
     "steps": [

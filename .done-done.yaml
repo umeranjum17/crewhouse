@@ -225,5 +225,9 @@ journeys:
   # 1280, day and night. With base_ref, verify drives the same capture at the base into before/ (CALM_HEAD: calm-design.sh).
   calm-design:
     command: 'bash "${CALM_HEAD:-.}/scripts/verify/calm-design.sh" "$DONE_DONE_EVIDENCE_ROOT"'
+  # The bot list and bot chat (ch-ui-slice1) on a real stub-engine crewd: a list with every mark and Scout's five pictures as
+  # one stack, at 390 and 1280, day and night, then the installed window and the laid-out stack. Chromium wants a TMPDIR on disk.
+  bot-crew:
+    command: 'bash scripts/verify/bot-crew.sh "$DONE_DONE_EVIDENCE_ROOT"'
 # The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
 base_ref: 66263f7d

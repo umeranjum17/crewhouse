@@ -317,6 +317,16 @@ export function Media({ f, big, forget, who }: { f: FileView; big?: boolean; for
   return forget && sentFile(f) ? <div className="file-with-forget">{card}<ForgetFile f={f} /></div> : card;
 }
 
+/** Several pictures on one line: a fanned pile of the first three with their count under it. A tap lays every one out,
+ *  each opening as a lone picture does, so none hides behind the pile. */
+export function ImageStack({ files }: { files: FileView[] }) {
+  const [all, setAll] = useState(false);
+  if (all) return <div className="stack-all">{files.map((f) => <Media key={f.url} f={f} />)}</div>;
+  return <button type="button" className="img-stack" aria-label={`Show all ${files.length} images`} onClick={() => setAll(true)}>
+    <span className="fan">{files.slice(0, 3).reverse().map((f) => <img key={f.url} src={f.url} alt="" />)}</span>
+    <span className="fan-count"><Icon name="copy" size={18} />{files.length} images</span></button>;
+}
+
 /** "Forget this file": the person takes one file out of the helper's folder themselves. One tap arms it, the next
  *  does it; nothing else in that folder changes, and the file's own card leaves the chat with it. */
 export function ForgetFile({ f }: { f: FileView }) {

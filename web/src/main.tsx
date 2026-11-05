@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, Media, ChatText, PalArt, Pill, PracticeVoice, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, ImageStack, Media, ChatText, PalArt, Pill, PracticeVoice, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -258,7 +258,8 @@ function ChatRows({ ctx, q = '', on, children }: { ctx: Ctx; q?: string; on?: st
     const n = c.id === 'chief' ? live.counts.needs : 0, dot = !n && unread(c.id) > 0;
     const line = n ? A.chiefHas(live) : c.working ?? c.line;
     return <li key={c.id}><a className={`cl-row${on === c.id ? ' on' : ''}${n || dot ? ' unread' : ''}`} href={hrefOf(c.id)} aria-current={on === c.id ? 'page' : undefined}>
-      {c.id === 'room' ? <span className="cl-room" aria-hidden><Icon name="crew" size={22} /></span> : <Face who={c.who} size={52} />}
+      {c.id === 'room' ? <span className="cl-crew" aria-hidden>{A.crew(state).slice(0, 3).map((h) => <Face key={h.id} who={h} size={34} />)}</span>
+        : <span className="cl-face"><Face who={c.who} size={60} />{c.id === 'chief' && <i className="cl-star" aria-hidden><Icon name="star" size={13} /></i>}</span>}
       <span className="grow cl-text"><span className="cl-top"><b className="clamp1">{c.name}</b>{c.at > 0 && <time>{A.when(c.at)}</time>}</span>
         <span className="cl-bottom"><span className={`clamp1 cl-line${c.working && !n ? ' working' : ''}`}>{c.working && !n && <i aria-hidden />}{line}</span>
           {n > 0 ? <span className="cl-count" aria-label={`${n} waiting on you`}>{A.unreadBadge(n)}</span> : dot && <span className="cl-dot" aria-label="Unread" />}</span></span>
@@ -497,7 +498,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
   }).catch(() => setPage((cur: Json) => cur ?? keptWeek().chats[id] ?? null)), [id, around]);
   useEffect(() => { void load(); }, [load, tick]);
   const base = A.lines(page, id, state);
-  const said = A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []);
+  const said = A.pictureRuns(A.savedNotes(page?.trail ?? [], hero ? A.trayNotes(state, base) : base, page?.profile, page?.messages ?? []));
   // In a helper's chat, a file delivered on its own line reads inside the helper's next words, the way it hands it over.
   const bare = (l?: A.Line) => l?.from === 'note' && !l.text && l.files.length > 0;
   const lines = id === 'chief' ? said : said.flatMap((l, i) => bare(l) && said[i + 1]?.from === 'them' ? []
@@ -713,19 +714,21 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
             ...(receiptSlots.before.get(i) ?? []).map((r) => <AnsweredCard key={`a${r.id}`} line={r.line} what={r.what} word={r.word} rule={r.rule} />),
             ...(hands?.before.get(i) ?? []).map((c) => <HandOff key={`h${c.task}`} c={c} state={state} />),
           ];
+          const pics = l.files.filter((f) => f.kind === 'image');
           // Chief's hand-off reads as the plain task: the line above already says "Chief to <name>".
           const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
             : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
             : l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></div>}
             {l.roles?.map((r) => <RoleCard key={r.id} r={r} refresh={refresh} />)}
-            {l.files.map((f) => <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
+            {pics.length > 1 && <ImageStack files={pics} />}
+            {l.files.filter((f) => pics.length < 2 || f.kind !== 'image').map((f) => <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;
           const wrap = l.memory !== undefined || l.saved
             ? <div className="line-wrap">{dayOf(l.at)}<AnsweredCard line={l.text} undo={() => undoMemory(l)} /></div>
             : <div className="line-wrap">{dayOf(l.at)}
           <div id={`m${l.id}`} className={`line ${l.from}${l.event ? ' chat-event' : ''}${l.unsure ? ' unsure' : ''}${l.recap ? ' recap' : ''}${l.helper ? ' relay' : ''}${l.id > (opened.current ?? Infinity) ? ' fresh' : ''}${l.id === reading ? ' reading' : ''}`}>
             {l.from !== 'note' && <div className="line-by">{(hero || id !== 'chief') && l.from !== 'me' && <Face who={id === 'chief' ? speaker ?? 'chief' : l.from === 'chief' ? 'chief' : speaker ?? h!} size={hero ? 36 : 28} />}<span className="who">{l.from === 'me' ? 'You' : l.from === 'chief' ? (id === 'chief' ? 'Chief' : `Chief to ${name}`) : speaker?.name ?? name}</span><time className="sr">{l.at ? A.clock(l.at) : ''}</time></div>}
             {l.by && <span className="note-by" aria-hidden />}
-            {id === 'chief' || !l.text || l.from === 'note' ? content : <div className="helper-bubble">{content}</div>}
+            {content}
             {l.retry && <button type="button" className="btn sm try-again" onClick={() => void send(l.retry!)}>Try again</button>}
             {answered && phoneOffer?.message === l.id && <PhoneCard offer={phoneOffer} reload={() => void load()} />}
           </div></div>;
