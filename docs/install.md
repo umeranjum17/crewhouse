@@ -1,6 +1,6 @@
 # Install and run Crewhouse
 
-The [README](../README.md#quick-start) has the quick start: one line to install, then `crewhouse start`. This page has everything after it: the other ways to install, what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
+The [README](../README.md#quick-start) has the quick start: one line that installs Crewhouse and starts it. This page has everything after it: the other ways to install, what `setup` asks, where Crewhouse keeps things, every command, the phone app, the installed web app and the desktop bar.
 
 Crewhouse is self-hosted only. There is no hosted service and no account with us. Your personal assistant runs on your computer. You use it from a browser or the phone app.
 
@@ -18,7 +18,9 @@ With Node 24.16 or later (or 26.1 or later) there is a second line, the same com
 npm install -g crewhouse
 ```
 
-The first `crewhouse start` then makes the folder it runs from (once per version, under `~/.local/share/crewhouse/app/`) and installs the AI engine, which takes a few minutes. After that both installs behave the same:
+In a terminal, the one-line install carries on and starts Crewhouse by its full path, so the terminal that ran it needs no new PATH. With no terminal it only installs, and `crewhouse start` is yours to run. It keeps its state folder (`~/.local/state`, and `crewhouse` inside it) yours alone whatever your login's umask, and tells you if it closed one others could write to, with the line that puts it back.
+
+After `npm install -g`, the first `crewhouse start` makes the folder it runs from (once per version, under `~/.local/share/crewhouse/app/`) and installs the AI engine, which takes a few minutes. After that both installs behave the same:
 
 | Command | What it does |
 |---|---|

@@ -38,11 +38,10 @@ For anyone drowning in small jobs: it runs on your own Linux computer, thinks wi
 
 ## Quick start
 
-On any 64-bit **Linux**, one line installs it (no sudo, no git, and no Node of your own: the download carries its own), and a second starts it. Chief asks your name.
+On any 64-bit **Linux**, one line installs it and starts it (no sudo, no git, and no Node of your own: the download carries its own). Chief asks your name.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/umeranjum17/crewhouse/main/install.sh | sh
-crewhouse start
 ```
 
 Already have Node 24.16 or later? `npm install -g crewhouse` is the same thing from npm. Either way you get one command:

@@ -5,11 +5,23 @@
 # CREWHOUSE_INSTALL_DIR (default ~/.local/share/crewhouse/release) and CREWHOUSE_BIN_DIR (default ~/.local/bin) move it;
 # CREWHOUSE_TARBALL=<file or URL> [CREWHOUSE_SHA256=<hex>] installs that download instead of the newest.
 # `install.sh --check` only prints the newest version's number (`crewhouse update` asks it).
+# In a terminal it carries on and starts Crewhouse; with no terminal, and under `crewhouse update`, it only installs.
 set -eu
 
 # The engine's files are read-only, so a folder with one in it is made writable before it goes.
 drop() { [ ! -e "$1" ] || { chmod -R u+w "$1"; rm -rf -- "$1"; }; }
 die() { printf 'Crewhouse could not be installed: %s\n' "$*" >&2; exit 1; }
+# Sign-ins sit under the state folder, and a folder others can write to is refused; a default Ubuntu login's umask makes one.
+# New ones are the person's alone whatever the umask, and an open one of theirs is closed and says how to undo that.
+private() {
+  if [ ! -e "$1" ]; then (umask 077; mkdir -p -- "$1"); return; fi
+  [ -d "$1" ] && [ ! -L "$1" ] && [ -O "$1" ] || return 0
+  was=$(stat -c %a "$1")
+  case $was in *[2367]?|*[2367]) chmod 700 "$1"; echo "Only you can write to $1 now. It was $was; chmod $was $1 puts it back." ;; esac
+}
+
+# All in one function, so a download cut off part-way is a syntax error and runs nothing.
+main() {
 [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] || die "this download is for 64-bit Linux. On anything else: npm install -g crewhouse"
 for tool in curl tar sha256sum mktemp; do command -v "$tool" >/dev/null || die "$tool is missing; install it and run this again."; done
 
@@ -58,5 +70,15 @@ echo "Crewhouse $version is installed."
 [ -z "${CREWHOUSE_UPDATING:-}" ] || exit 0
 printf '#!/bin/sh\nexec "%s/node/bin/node" "%s/app/bin/crewhouse.mjs" "$@"\n' "$dir" "$dir" > "$bin/crewhouse"
 chmod 755 "$bin/crewhouse"
-case ":$PATH:" in *":$bin:"*) ;; *) echo "Add $bin to your PATH to type crewhouse from anywhere: export PATH=\"$bin:\$PATH\"" ;; esac
-echo "Start it with: crewhouse start"
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+private "$state"; private "${CREWHOUSE_STATE_DIR:-$state/crewhouse}"
+case ":$PATH:" in *":$bin:"*) ;; *)
+  echo "To type crewhouse, open a new terminal, or use the full path: $bin/crewhouse"
+  echo "If a new terminal cannot find it: export PATH=\"$bin:\$PATH\"" ;;
+esac
+# This script's own input is the pipe from curl, so the app is handed the terminal. With no terminal nothing starts by itself.
+if [ -t 1 ] && ( : < /dev/tty ) 2>/dev/null; then "$bin/crewhouse" start < /dev/tty
+else echo "Start it with: crewhouse start"; fi
+}
+
+main "$@"
