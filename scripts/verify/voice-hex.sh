@@ -51,7 +51,6 @@ const DAY = { light: "day", dark: "night" };
 const BOTTOM = "(() => { const l = document.querySelector(\".lines\"); if (l) l.scrollTop = l.scrollHeight; return matchMedia(\"(display-mode: standalone)\").matches; })()";
 const box = "document.querySelector(\".chat .dock textarea\")";
 const mic = ".chat .dock .mic";
-const SAID = "And so, my fellow Americans, ask not what your country can do for you. Ask what you can do for your country.";
 const steps = [
   { name: "boot", w: 1400, h: 950, dpr: 1, mobile: false, url: `${B}/#person=${key}`, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000 },
   { name: "settings", url: `${B}/#/settings`, wait: "!!document.querySelector(\".install .btn\")", timeout: 20000 },
@@ -77,14 +76,14 @@ console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/ho
 xvfb-run -a -s "-screen 0 1920x1200x24" "$NODE" "$REPO/scripts/verify/pwa-shell.mjs" "$LAB/pwa-plan.json" > "$OUT/pwa/run.json" || true
 "$NODE" -e '
 const want = process.argv[2], r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-const fail = [];
+const fail = [], words = (t) => (t ?? "").toLowerCase().replace(/[^a-z ]/g, ""); // every word, in order; where Hex puts a stop can move with the clip
 for (const x of r.filter((x) => x.error)) { console.log(x.step, JSON.stringify(x.error)); fail.push(`${x.step} failed`); }
 for (const { step: n, value } of r.filter((x) => /-(open|listen|heard)$/.test(x.step ?? "") && x.value !== undefined)) {
   const s = n.replace(/-(open|listen|heard)$/, "");
   if (n.endsWith("-open") && value.standalone !== true) fail.push(`${s}: not the installed app`);
   if (n.endsWith("-listen") && value !== "Listening…") fail.push(`${s}: the box does not say it is listening: ${value}`);
   if (n.endsWith("-heard")) {
-    if (want === "hex" && value.text !== "And so, my fellow Americans, ask not what your country can do for you. Ask what you can do for your country.") fail.push(`${s}: box ${JSON.stringify(value.text)}`);
+    if (want === "hex" && words(value.text) !== "and so my fellow americans ask not what your country can do for you ask what you can do for your country") fail.push(`${s}: box ${JSON.stringify(value.text)}`);
     if (want !== "hex" && !/^Speaking needs Hex on your computer first\. On that computer, run: curl -fsSL \S+ \| shCopy$/.test(value.toasts?.[0] ?? "")) fail.push(`${s}: toasts ${JSON.stringify(value.toasts)}`);
     console.log(s, JSON.stringify(value));
   }
