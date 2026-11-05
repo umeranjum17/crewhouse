@@ -229,7 +229,7 @@ journeys:
   # one stack, at 390 and 1280, day and night, then the installed window and the laid-out stack. Chromium wants a TMPDIR on disk.
   bot-crew:
     command: 'bash scripts/verify/bot-crew.sh "$DONE_DONE_EVIDENCE_ROOT"'
-  # The Pi flag, off and on: the list and chat with it off, one real answer on Pi with it on, a stand-in Pi folder hashed (pi-engine.md).
+  # The Pi flag, off and on: the list and chat with it off, real answers on Pi with it on from Chief and two helpers at once, a stand-in Pi folder hashed (pi-engine.md).
   pi-engine:
     timeout: 20m
     spends: 'a few live model calls on the free MiniMax M3.1 Flash, on the key the key file names'

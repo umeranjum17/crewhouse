@@ -1,6 +1,5 @@
-// The Pi engine behind CREWHOUSE_ENGINE=pi: off unless asked for, and the one file that reaches @byokit/pi. The kit is a dev-only
-// reference until it publishes (node scripts/prepare-pi.mjs), so its name stays a variable and everything else builds without it.
-// This slice: a bot answers on Pi. Nothing Pi could run passes Crew.gate yet and Pi has no sandbox, so settings.json leaves it no tools.
+// The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi: a dev-only reference until it publishes (node scripts/prepare-pi.mjs), so its name stays a variable.
+// Each bot gets the kit's own process, home, session and extension list (empty for now). Nothing Pi could run passes Crew.gate yet and Pi has no sandbox, so settings.json leaves it no tools.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Config } from '../config.ts';
@@ -8,24 +7,25 @@ import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } 
 
 type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; detail?: string };
 type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> };
-type Kit = { bot(spec: { id: string; folder: string; session: string; env: Record<string, string> }): Bot; close(): Promise<void> };
+type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string> }): Bot; close(): Promise<void> };
 /** The kit's own name; the one account a custom provider stands in for (Crew's constructor marks it ready); the variable the key travels in, so it never lands on disk. */
-const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', KEY = 'CREWHOUSE_MODEL_KEY', MODEL = () => process.env.CREWHOUSE_ENGINE_MODEL || 'test';
+const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', KEY = 'CREWHOUSE_MODEL_KEY', MODEL = () => process.env.CREWHOUSE_ENGINE_MODEL || 'test', TALK = '\n\nHere you have no tools at all, crew tools included, whatever this prompt names: answer in plain words.\n';
 
 export class PiRuntime implements AgentRuntime {
   readonly identity = { name: 'Pi', version: '1.5.0' }; // the kit refuses any other Pi
-  private cfg: Config; private kit?: Kit; private failed?: string;
+  private cfg: Config; private kit?: Promise<Kit>; private failed?: string;
   private open = new Map<string, { bot: Bot; session: string; system: string }>(); private runs = new Map<string, Bot>();
   onEngine?: () => void;
   constructor(cfg: Config) { this.cfg = cfg; }
 
+  private load(): Promise<Kit> { return this.kit ??= import(KIT).then((kit) => kit.createPiKit({ stateDir: this.cfg.stateDir, idleMs: Number(process.env.CREWHOUSE_PI_IDLE_MS) || undefined })); } // once, by whichever comes first: a job recovered at boot can reach run() before crewd reaches start()
   async start() {
     delete this.failed;
-    try { this.kit = (await import(KIT)).createPiKit({ stateDir: this.cfg.stateDir }); }
-    catch (e) { this.failed = (e as Error).message; throw e; }
+    try { await this.load(); }
+    catch (e) { delete this.kit; this.failed = (e as Error).message; throw e; }
     finally { this.onEngine?.(); }
   }
-  async stop() { await this.kit?.close(); }
+  async stop() { await this.kit?.then((kit) => kit.close(), () => {}); }
   engine() { return this.failed ? { phase: 'failed', words: 'Pi is not set up on this computer. Run node scripts/prepare-pi.mjs, then try again.', detail: this.failed } : { phase: 'ready', words: '' }; }
 
   async accounts(): Promise<AccountRow[]> { return this.cfg.engineProvider ? [{ id: ACCOUNT, provider: ACCOUNT, state: 'ready' }] : []; }
@@ -36,21 +36,21 @@ export class PiRuntime implements AgentRuntime {
     return { paste() {}, cancel() {} };
   }
   async signOut() {}
-  async learned() { return []; }
-  async forget() {}
+  async learned() { return []; } async forget() {}
 
   /** The bot's Pi on this session and system prompt: a running one is kept only while both still hold, as Pi reads them at start. */
   private async botFor(spec: RunSpec) {
     const session = spec.key.replace(/[^A-Za-z0-9._-]+/g, '-'), was = this.open.get(spec.bot), provider = this.cfg.engineProvider;
     if (was?.session === session && was.system === spec.system) return was.bot;
-    if (!this.kit || !provider) throw new Error('Pi is not ready: its kit or model provider is missing.');
+    if (!provider) throw new Error('Pi is not ready: its model provider is missing.');
+    const kit = await this.load();
     await was?.bot.stop();
     const home = join(this.cfg.stateDir, 'pi', spec.bot), folder = join(home, 'work'); // the kit's Pi home: the person's own Pi is never used
     mkdirSync(folder, { recursive: true, mode: 0o700 });
-    writeFileSync(join(home, 'SYSTEM.md'), spec.system);
+    writeFileSync(join(home, 'SYSTEM.md'), spec.system + TALK); // the prompt names tools Pi leaves out, and a model told of a tool writes its call into the reply
     writeFileSync(join(home, 'settings.json'), JSON.stringify({ defaultTools: [] }));
     writeFileSync(join(home, 'models.json'), JSON.stringify({ providers: { crewhouse: { baseUrl: provider.baseUrl, api: 'openai-completions', apiKey: `$${KEY}`, models: [{ id: MODEL() }] } } }));
-    const bot = this.kit.bot({ id: spec.bot, folder, session, env: { [KEY]: provider.apiKey } });
+    const bot = kit.bot({ id: spec.bot, folder, session, extensions: [], env: { [KEY]: provider.apiKey } });
     this.open.set(spec.bot, { bot, session, system: spec.system });
     return bot;
   }

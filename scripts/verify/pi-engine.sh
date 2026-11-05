@@ -5,12 +5,13 @@
 # read from the file into crewd's environment and nowhere else); one message goes through the API the app uses, and his thread
 # is captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the
 # HOME crewd and Pi both start from, is hashed whole before and after. The owner's real folder is never read here, so this says
-# nothing about it: that rests on the kit's own isolation test.
+# nothing about it: that rests on the kit's own isolation test. Then pi-crew.mjs asks two helpers at once on that same crewd, kills one
+# helper's Pi mid-turn, and leaves a third never asked; both helpers' chats are captured the same way.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
 #
 # Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends a few model calls on that key.
-# Writes reply.txt (Chief's words and Pi's own session record of them), pi-folder.txt (the hashes), same-shots.txt and the step record.
+# Writes reply.txt (Chief's words and Pi's own session record of them), crew.txt (the helpers' rounds), pi-folder.txt (the hashes), same-shots.txt and the step record.
 set -euo pipefail
 OUT=${1:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; KEYFILE=${2:?usage: pi-engine.sh <out-dir> <minimax-key-file>}; mkdir -p "$OUT"
 REPO=$(git rev-parse --show-toplevel)
@@ -37,7 +38,7 @@ crewd_start "$REPO" "$OUT/crewd.log" env -i PATH="$PATH" LANG=C.UTF-8 HOME="$LAB
   XDG_STATE_HOME="$LAB/home/.local/state" XDG_DATA_HOME="$LAB/home/.local/share" \
   XDG_CONFIG_HOME="$LAB/home/.config" XDG_CACHE_HOME="$LAB/home/.cache" \
   XDG_RUNTIME_DIR="$LAB/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$LAB/no-bus" \
-  CREWHOUSE_ENGINE=pi CREWHOUSE_ENGINE_BASE_URL=https://api.minimax.io/v1 CREWHOUSE_ENGINE_MODEL="$MODEL" CREWHOUSE_PORT="$PORT" \
+  CREWHOUSE_ENGINE=pi CREWHOUSE_ENGINE_BASE_URL=https://api.minimax.io/v1 CREWHOUSE_ENGINE_MODEL="$MODEL" CREWHOUSE_PORT="$PORT" CREWHOUSE_PI_IDLE_MS=8000 \
   CREWHOUSE_STATE_DIR="$LAB/state" CREWHOUSE_CREW_DIR="$LAB/crew" CREWHOUSE_TOOLS_DIR="$LAB/tools" \
   bash -c 'CREWHOUSE_ENGINE_API_KEY=$(cat "$KEYFILE") exec "$@"' pi-engine "$NODE" "$REPO/src/main.ts"
 PERSON=""
@@ -70,9 +71,14 @@ RECORD=$(node -e 'const fs = require("node:fs"), dir = process.argv[1], [file] =
   console.log(JSON.stringify({ session: file.replace(/^[^_]*_/, ""), provider: a.provider, model: a.model, text: a.content.filter((c) => c.type === "text").map((c) => c.text).join("") }))' "$LAB/state/pi/chief/work/sessions")
 node -e 'const r = JSON.parse(process.argv[1]); if (!r.text.includes(process.argv[2].trim().slice(0, 40))) { console.error("pi-engine: Pi session has other words than the chat"); process.exit(1); }' "$RECORD" "$R"
 printf 'Engine: Pi, flag on (CREWHOUSE_ENGINE=pi), model %s\nYou asked Chief: %s\nChief replied: %s\nPi session record: %s\n' "$MODEL" "$ASK" "$R" "$RECORD" > "$OUT/reply.txt"
-THREAD="(async () => { location.hash = '#/chief'; for (let i = 0; i < 100 && !document.body.innerText.includes($(node -p 'JSON.stringify(process.argv[1].trim().slice(0, 24))' "$R")); i++) await new Promise((r) => setTimeout(r, 100)); })()"
-node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on" chief "$THREAD"
-GATE_PWA=1 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on/installed" chief "$THREAD"
+# A chat at 390 and 1280, day and night, and in the installed window, once its last words are on the page.
+shots() { local THREAD="(async () => { location.hash = '$2'; for (let i = 0; i < 100 && !document.body.innerText.includes($(node -p 'JSON.stringify(process.argv[1].trim().slice(0, 24))' "$3")); i++) await new Promise((r) => setTimeout(r, 100)); })()"
+  node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on" "$1" "$THREAD"
+  GATE_PWA=1 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on/installed" "$1" "$THREAD"; }
+shots chief '#/chief' "$R"
+LAST=$("$NODE" "$REPO/scripts/verify/pi-crew.mjs" "$B" "$LAB" "$CREWD" "$OUT")
+shots scout '#/h/scout' "$(node -p 'JSON.parse(process.argv[1]).scout' "$LAST")"
+shots scribe '#/h/scribe' "$(node -p 'JSON.parse(process.argv[1]).scribe' "$LAST")"
 crewd_stop
 [ "$(hashes)" = "$BEFORE" ] || { echo "pi-engine: the stand-in person's Pi folder changed" >&2; exit 1; }
 { echo "The person's real Pi folder was not checked: the read guard refused it, so this run says nothing about it. That it stays untouched rests on the kit's isolation test."
@@ -82,4 +88,4 @@ crewd_stop
 find "$OUT" -name '*.png' -type f | sort | xargs sha256sum | awk 'seen[$1] { print $2, seen[$1]; next } { seen[$1] = $2 }' | while read -r twin kept; do
   rm -- "$twin"; echo "${twin#"$OUT/"} was byte for byte ${kept#"$OUT/"}"; done > "$OUT/same-shots.txt"
 node "$REPO/scripts/verify/steps.mjs" "$OUT" pi-engine "ask=$ASK" "reply=$R" "model=$MODEL"
-echo "pi-engine: Chief replied on Pi; captures in $OUT"
+echo "pi-engine: Chief and two helpers replied on Pi; captures in $OUT"
