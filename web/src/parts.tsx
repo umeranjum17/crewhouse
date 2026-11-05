@@ -687,13 +687,14 @@ const spoken = (t: string) => t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(
  *  listens while it reads, so it can't hear itself; Stop ends it at any point, and every word stays in the chat. */
 function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean>) {
   const [route, setRoute] = useState<Ears>('none');
+  const [known, setKnown] = useState(false);
   const [now, setNow] = useState<Now | null>(null);
   const lines = useRef(talk?.lines ?? []);
   lines.current = talk?.lines ?? [];
   const arrived = useRef(() => {});
   const run = useRef<{ stopped: boolean; cut: () => void } | null>(null);
   useEffect(() => arrived.current(), [talk?.lines]);
-  useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => setRoute(v.length > 0 ? r : 'none')); }, [!!talk]);
+  useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => { setRoute(v.length > 0 ? r : 'none'); setKnown(true); }); }, [!!talk]);
   const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
   useEffect(() => stop, []); // leaving the chat ends the call
   const show = (n: Omit<Now, 'name'>) => { setNow({ ...n, name: talk?.name ?? 'Chief' }); if (talk?.chat === 'chief') setListen('chief', n.phase === 'listening'); };
@@ -725,7 +726,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
     } catch (e) { end = heardWrong(e); }
     run.current = null; mark(0); setNow(null); if (talk?.chat === 'chief') setListen('chief', false); toast(end);
   };
-  return { can: route !== 'none' && !!talk, route, now, start, stop };
+  return { can: route !== 'none' && !!talk, known, route, now, start, stop };
 }
 
 /** This device's voice and speed, kept on the device: the same menu in a call and on the practice screen. */
@@ -873,6 +874,8 @@ function Picked({ files, drop }: { files: Pick[]; drop: (i: number) => void }) {
   </div>;
 }
 
+const WAVE = <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg>;
+
 /** The box. With `attach`, a + at the head of the pill picks a PDF, a document or a photo (shown over the words until sent). */
 export function Composer({ placeholder, onSend, chat, attach, talk, stop, practice }: { practice?: boolean; placeholder: string; onSend: (t: string, files?: Pick[]) => Promise<unknown> | unknown; chat?: string; attach?: boolean; talk?: Talk; stop?: () => void }) {
   const [text, setText] = useState(() => (chat ? draftOf(chat).text : ''));
@@ -911,13 +914,19 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
   const call = useCall(talk, async (said) => {
     let ok = false;
     try { ok = !!(await onSend(said)); } catch { ok = false; }
-    if (!ok) { setText(said); setFailed(true); if (chat) sent(chat, false, said); }
+    if (!ok) { setText((t) => (t.trim() ? `${t} ${said}` : said)); setFailed(true); if (chat) sent(chat, false, said); }
     return ok;
   });
-  if (call.now) return <CallPanel now={call.now} hears={call.route} stop={call.stop} />;
+  // The head's call button (PillHead's slot): the same call as the box's voice button, Stop while it runs, and with no way to call here it says why.
+  const [slot, setSlot] = useState<Element | null>(null);
+  useEffect(() => setSlot(document.querySelector('.ph-call')), []);
+  const why = !call.can ? VOICE_WORDS.call : voice.on ? VOICE_WORDS.micOn : '';
+  const headCall = talk && slot && call.known && createPortal(<button type="button" className={`ph-btn ph-go${call.now ? ' on' : why ? ' off' : ''}`} aria-disabled={!call.now && !!why} aria-pressed={!!call.now} aria-label={call.now ? `End the call with ${talk.name}` : why || `Call ${talk.name}`} title={why || undefined}
+    onClick={() => { if (call.now) call.stop(); else if (why) toast(why); else void call.start(); }}>{WAVE}</button>, slot);
+  if (call.now) return <>{headCall}<CallPanel now={call.now} hears={call.route} stop={call.stop} /></>;
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
-    <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+    <>{headCall}<form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
       {away || held ? <div className="send-away" role="status">{away ? 'Reconnecting… your words stay here until the home computer answers.' : 'Reconnecting… your message will send when the home computer answers.'}</div>
         : failed && <div className="send-failed" role="alert"><span>Not sent — it's kept here.</span><button type="button" className="btn sm" onClick={() => void send()}>Retry</button></div>}
       {/* One pill: the +, the words, the mic and the round send-or-talk button. */}
@@ -936,11 +945,11 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
           ? <button type="button" className="send stop" aria-label="Stop" title="Stop" onClick={stop}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg></button>
           : voice.on && !text.trim() && !picked.length ? null // the lit mic is the one control while it listens
           : call.can && !text.trim() && !picked.length && !busy
-          ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg></button>
+          ? <button type="button" className="send talk" aria-label={`Talk with ${talk?.name ?? 'Chief'}`} title={`Talk with ${talk?.name ?? 'Chief'}`} onClick={() => void call.start()}>{WAVE}</button>
           // A press on Send keeps focus in the box (no blur), so the keyboard stays up after every send; the click still sends.
           : <button className="send" aria-label="Send" onPointerDown={(e) => e.preventDefault()} disabled={!away && ((!text.trim() && !picked.length) || busy)} aria-disabled={away || undefined}><Icon name="up" size={20} /></button>}
       </div>
-    </form>
+    </form></>
   );
 }
 

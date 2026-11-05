@@ -2216,15 +2216,19 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .calm .pill-head > * { pointer-events: auto; }
 @media (max-width: 899px) { .calm .pill-head::before { content: ''; position: absolute; z-index: -1; inset: calc(-10px - var(--top)) -12px -10px; background: linear-gradient(var(--bg) 62%, transparent); pointer-events: none; } } /* the thread fades out under the head, never reads through it */
 .calm .pill-head .back { display: grid; }
-.calm .ph-who { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 104px); height: 44px; padding: 0 16px 0 6px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass);
+.calm .pill-head .back { margin: 0; } /* the page-wide back link pulls left; a round button sits on the 12px gutter */
+.calm .ph-who { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: calc(100% - 156px); height: 44px; padding: 0 16px 0 6px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass);
   -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
 .calm .ph-who .grow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .calm .ph-who .ch-name { margin: 0; font: 600 17px/22px var(--ui); letter-spacing: -.01em; white-space: nowrap; }
 .calm .ph-who .ch-name a { color: inherit; text-decoration: none; }
 .calm .ph-who .ch-status { margin: 0; font: 400 16px/22px var(--ui); color: var(--quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .calm .ph-who .ch-status.wait { color: var(--ink2); }
-.calm .ph-who .ch-art { display: grid; flex: none; }
-.calm .ph-menu { margin-left: auto; }
+.calm .ph-who .ch-art { display: grid; flex: none; position: relative; }
+.calm .ph-who .cl-star { right: -4px; bottom: -4px; width: 14px; height: 14px; box-shadow: 0 0 0 1.5px var(--bg); }
+.calm .ph-call { display: flex; margin-left: auto; }
+.calm .ph-go.off { color: var(--quiet); opacity: .7; cursor: not-allowed; }
+.calm .ph-go.on { background: var(--me); color: var(--me-ink); border-color: transparent; }
 
 /* A thread is one screen: the pill floats over its top, the thread scrolls, the composer sits at its foot. */
 .calm .page.chat-page { position: relative; height: calc(100dvh - var(--top)); display: flex; flex-direction: column; padding: 0; margin: 0; max-width: none; overflow: hidden; }
@@ -2457,7 +2461,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .calm .page.chat-page { height: 100dvh; }
   .calm .pill-head { position: static; padding: 14px 24px; pointer-events: auto; border-bottom: 1px solid var(--hair); }
   .calm .pill-head .back, .calm .pill-head .ph-btn.back { display: none; }
-  .calm .ph-menu { width: 36px; height: 36px; background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--quiet); }
+  .calm .ph-menu, .calm .ph-go { width: 36px; height: 36px; background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--quiet); }
   .calm .chat-page > .sticky-top > :not(.pill-head) { margin: 8px 24px 0; }
   .calm .page.chat-page .chat { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; gap: 0; }
   .calm .page.chat-page .chat .lines { grid-column: 1; grid-row: 1; padding: 20px max(24px, calc((100% - 760px) / 2)) 12px; }

@@ -233,5 +233,9 @@ journeys:
   # 1280, day and night, then the installed window, the laid-out pile, and heard words waiting for Send. TMPDIR on disk, as bot-crew.
   composer:
     command: 'bash scripts/verify/composer.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The chat head (ch-chat-head) on a real stub-engine crewd: face, name chip, Chief's star and the call control, at 390 and 1280,
+  # day and night; a running call, the off state with its words, a long name, and the installed window. TMPDIR on disk, as bot-crew.
+  chat-head:
+    command: 'bash scripts/verify/chat-head.sh "$DONE_DONE_EVIDENCE_ROOT"'
 # The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
 base_ref: 66263f7d
