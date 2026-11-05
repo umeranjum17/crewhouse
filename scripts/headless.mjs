@@ -23,7 +23,7 @@ async function tailnet() {
   }
   const s = await tailscaleState({ timeoutMs: 5000 });
   const ip = s.ips.find(isIPv4);
-  if (s.backendState !== 'Running' || s.reason || !ip || (s.keyExpiry && Date.parse(s.keyExpiry) <= Date.now())) throw new Error(s.reason || 'Sign in to Tailscale on this machine first.');
+  if (s.backendState !== 'Running' || s.reason || !ip || (s.keyExpiry && Date.parse(s.keyExpiry) <= Date.now())) throw new Error(`${s.reason || 'Tailscale is not signed in on this machine'}, and a phone needs a way to reach it.\nNext: run CREWHOUSE_RELAY_PUBLIC=https://<your-relay-host> ${process.env.CMD ?? './crewhouse'} setup --headless with your own published relay, or install Tailscale and sign in: https://tailscale.com/download`);
   return ip;
 }
 async function api(path, body, method = body ? 'POST' : 'GET') {
