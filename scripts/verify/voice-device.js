@@ -15,6 +15,7 @@
     start() { ctl.heard = (words, final) => { this.onresult({ results: [[{ transcript: words }]] }); if (final) this.onend(); }; }
     stop() { timer(() => this.onend(), 0); }
   };
+  Object.defineProperty(navigator, 'mediaDevices', { value: undefined }); // a browser that can't record: these ears hear
   const voices = [{ name: 'Daniel', lang: 'en-GB', localService: true, default: true }, { name: 'Samantha', lang: 'en-US', localService: true }];
   window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   Object.defineProperty(window, 'speechSynthesis', { value: { getVoices: () => voices, addEventListener() {}, cancel() {},

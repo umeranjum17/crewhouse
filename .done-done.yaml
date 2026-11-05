@@ -134,6 +134,11 @@ journeys:
     command: 'FM_MEM_GATE=~/firstmate/config/fm-mem-gate.sh timeout -k 10 2400 bash scripts/verify/phone-news.sh "$DONE_DONE_EVIDENCE_ROOT"'
   voice:
     command: 'timeout -k 10 600 bash scripts/verify/voice.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The mic records and this computer's Hex writes it down; a real install and model, the stand-in is the microphone (voice.md).
+  voice-hex:
+    command: 'timeout -k 10 600 bash scripts/verify/voice-hex.sh "$DONE_DONE_EVIDENCE_ROOT" hex'
+  voice-hex-missing:
+    command: 'timeout -k 10 300 bash scripts/verify/voice-hex.sh "$DONE_DONE_EVIDENCE_ROOT" missing'
   image:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 900 bash scripts/verify/image.sh "$PWD" "$DONE_DONE_EVIDENCE_ROOT"'
   unlock-card:

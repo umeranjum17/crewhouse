@@ -2,6 +2,10 @@
 // device when it can; where it has no on-device recognizer (Android Chrome in a PWA, for one), its online recognizer
 // does instead, and the app says so before it listens (the words are `VOICE_WORDS` in adapter.ts). Nothing is sent
 // by speaking: the words go nowhere until the person taps send.
+// Where the browser can record, the box's mic records instead and this computer's Hex writes it down (`record` below),
+// so the audio goes to the computer the person paired with and to no cloud service.
+import { transcribe } from './api.ts';
+
 const Heard = (globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition;
 const lang = () => navigator.language || 'en-US';
 const want = (local: boolean) => ({ langs: [lang()], processLocally: local });
@@ -44,6 +48,54 @@ export function hear(route: Ears, heard?: (words: string) => void): { words: Pro
     });
   })();
   return { words, stop: () => { stopped = true; r?.stop(); } };
+}
+
+/** Whether this browser can record at all: a microphone, and a way to keep what it hears. Where it can't, the browser's
+ *  own recognizer still hears (`hear`). */
+export const canRecord = () => !!navigator.mediaDevices?.getUserMedia && !!((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext);
+
+/** A 16-bit mono PCM WAV of what the microphone captured, at its own rate (Hex resamples). */
+function wav(chunks: Float32Array[], rate: number): Uint8Array {
+  const n = chunks.reduce((a, c) => a + c.length, 0), bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
+  const tag = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+  tag(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); tag(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); tag(36, 'data'); v.setUint32(40, n * 2, true);
+  let at = 44;
+  for (const c of chunks) for (const f of c) { v.setInt16(at, Math.max(-1, Math.min(1, f)) * 0x7fff, true); at += 2; }
+  return bytes;
+}
+
+const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
+/** What one clip may hold, so a long note always fits crewd's request limit: 4.5M samples, about 90 s at 48 kHz. */
+const MOST = 4_500_000;
+
+/** Listens by recording, then has this computer's Hex write the clip down (`transcribe`): the audio goes to the computer
+ *  the person paired with. A tap on the mic ends the recording, or the clip filling up. Fails the same ways `hear` does,
+ *  `far` when the computer can't be reached, and with crewd's own plain words (a `status`) when Hex can't write it down. */
+export function record(): { words: Promise<string>; stop: () => void } {
+  let stop = () => {}, ctx: any;
+  const stopped = new Promise<void>((done) => { stop = done; }), chunks: Float32Array[] = [];
+  const words = (async () => {
+    ctx = new ((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext)(); // on the tap itself: Safari starts audio only from one
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const tap = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain();
+    mute.gain.value = 0; // the tap only listens: the microphone is never played back
+    tap.onaudioprocess = (e: any) => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); if (chunks.length * 4096 >= MOST) stop(); };
+    ctx.createMediaStreamSource(stream).connect(tap).connect(mute).connect(ctx.destination);
+    void ctx.resume();
+    await stopped;
+    tap.onaudioprocess = null;
+    stream.getTracks().forEach((t) => t.stop());
+    const clip = wav(chunks, ctx.sampleRate);
+    return clip.length > 44 ? (await transcribe(base64(clip))).text : '';
+  })().catch((e: any) => {
+    if (/^(NotAllowed|Security)Error$/.test(e?.name ?? '')) throw new Error('blocked');
+    if (e instanceof DOMException) throw new Error('nomic');
+    throw e?.status ? e : new Error('far');
+  }).finally(() => void ctx?.close());
+  return { words, stop };
 }
 
 // Reading Chief's replies aloud: only this device's own voices (never an online one), a sentence at a time, so a call

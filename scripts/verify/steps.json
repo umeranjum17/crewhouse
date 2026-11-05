@@ -509,6 +509,24 @@
     ],
     "result": "At phone and desktop width, day and night: the mic listens with Listening in the box, the words heard wait unsent in the box with no message in the thread until send, Talk sends what was said once and reads Chief's reply aloud with its line marked green, then Stop ends the call; a Safari-shaped recognizer hears with the online line"
   },
+  "voice-hex": {
+    "start": "a fresh crew on the stub engine, the app installed from Settings, Hex and its speech model on this computer, and Chromium's stand-in microphone playing a real recording of a speech",
+    "steps": [
+      "Open Chief's chat in the installed app at phone width (390) and desktop width (1440), day and night",
+      "Tap the mic in Chief's box: the empty box says Listening and the mic is a stop button",
+      "The recording plays into the microphone, then tap the mic to stop",
+      "The clip goes to crewd and Hex writes it down on this computer"
+    ],
+    "result": "At phone and desktop width, day and night, the speech's exact words wait in the box, unsent, and no person message is in Chief's thread"
+  },
+  "voice-hex-missing": {
+    "start": "a fresh crew on the stub engine, the app installed from Settings, no Hex on this computer, and Chromium's stand-in microphone",
+    "steps": [
+      "Open Chief's chat in the installed app at phone width (390), day",
+      "Tap the mic in Chief's box, then tap it again to stop"
+    ],
+    "result": "The person reads that speaking needs Hex on their computer and the one command to run there, with a Copy button, and the box still takes typing"
+  },
   "image": {
     "start": "a fresh crew on the stub engine with Video Vic on it, and nothing in Chief's or Vic's files",
     "steps": [

@@ -104,7 +104,11 @@ import { join } from 'node:path';
 // go-ahead, the update/remove card from chat and three scripted stub lines. Owner exception requested in the PR; no trim paired.
 // Raised 8095 -> 8155 for reading X with the person's own key (ch-x-read, +60 net): the sealed key slot beside the app
 // sign-ins, the read-only x tool (src/x.ts) and its gate/server hooks. Owner-approved slice; no trim paired.
-const BUDGET = 8155;
+// Raised 8155 -> 8204 for speech written down on the paired computer (captain-ask-crewhouse-voice-transcriptio-13, +49 net):
+// src/transcribe.ts (the Hex adapter, its two plain-words refusals and the exit hook that stops its helper) and the one
+// endpoint in src/server.ts that hands it a clip. Owner exception requested in the PR; no trim paired (the Hex path is the
+// feature, and BYOKit's @byokit/dictation takes the module over as a hex engine).
+const BUDGET = 8204;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
