@@ -190,12 +190,13 @@ function SetupRow({ state, accounts, tick }: { state: Json; accounts: Json[] | n
 
 /** A thread's header (calm): a floating pill over the thread — back, who it is, and their menu — so the conversation
  *  comes first and the header recedes. `sub` is said only while it matters (Chief out of reach, or waiting on a sign-in). */
-function PillHead({ who, name, href, label, sub, wait }: { who: Helper | 'chief'; name: string; href: string; label: string; sub?: string; wait?: boolean }) {
+function PillHead({ who, name, href, label, sub, wait, screen }: { who: Helper | 'chief'; name: string; href: string; label: string; sub?: string; wait?: boolean; screen?: string }) {
   return <header className="pill-head chat-head">
     <a href="#/" className="ph-btn back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}><Icon name="back" size={22} /></a>
     <span className="ph-who"><a className="ch-art" href={href} aria-label={label}><Face who={who} size={32} />{who === 'chief' && <i className="cl-star" aria-hidden><Icon name="star" size={9} /></i>}</a>
       <span className="grow"><b className="ch-name clamp1"><a href={href}>{name}</a></b>{sub && <span className={`ch-status clamp1${wait ? ' wait' : ''}`}>{sub}</span>}</span></span>
     <span className="ph-call" />
+    {screen && <a className="ph-btn ph-screen" href={screen} aria-label={`${name}'s computer`}><Icon name="computer" size={22} /></a>}
     <a className="ph-btn ph-menu" href={href} aria-label={label}><Icon name="more" size={22} /></a>
   </header>;
 }
@@ -204,7 +205,7 @@ function PillHead({ who, name, href, label, sub, wait }: { who: Helper | 'chief'
  *  test, or the computer out of reach). */
 function ChiefHead({ ctx }: { ctx: Ctx }) {
   const out = chiefLocal(ctx).signedOut && !ctx.offline, wait = out || ctx.offline;
-  return <PillHead who="chief" name="Chief" href={CHIEF_PROFILE} label="Chief's profile" sub={wait ? chiefWord(ctx.live, out, ctx.offline) : undefined} wait={wait} />;
+  return <PillHead who="chief" name="Chief" href={CHIEF_PROFILE} label="Chief's profile" sub={wait ? chiefWord(ctx.live, out, ctx.offline) : undefined} wait={wait} screen="#/h/chief/screen" />;
 }
 
 /** The desk's right column beside Chief's chat (J03): the question that matters most (not one his thread already shows),
@@ -889,7 +890,7 @@ function HelperPortrait({ h, children }: { h: A.Helper; children?: ReactNode }) 
 function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const { id, tab, state, tick, refresh, offline } = ctx;
   const h = A.crew(state).find((x) => x.id === id);
-  const [page, setPage] = useState<Json>(null), lists = useModelLists(ctx.accounts);
+  const [page, setPage] = useState<Json>(null), lists = useModelLists(ctx.accounts), wide = useWide();
   const load = useCallback(() => api.bot(id).then(setPage).catch(() => {}), [id]);
   useEffect(() => { void load(); }, [load, tick]);
   // Chief has no helper card, but his Every-step trail (with Undo for what he learned) is the same view: admit him for it.
@@ -899,6 +900,9 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
   const name = h?.name ?? 'Chief';
   // The chat is the page; everything else lives behind Details. Old deep links to a section land on Details too.
   const details = tab !== 'chat' && tab !== 'did' && tab !== 'screen';
+  // The live panel: beside the chat on a computer, the whole page on a phone.
+  const room = tab === 'screen' && wide, profile = h ? `#/h/${id}/details` : CHIEF_PROFILE, thread = h ? `#/h/${id}/chat` : '#/chief';
+  const head = <PillHead who={h ?? 'chief'} name={name} href={profile} label={`${name}'s profile`} screen={tab === 'chat' ? `#/h/${id}/screen` : undefined} />;
   const trail = page ? A.steps(page.trail ?? [], b?.task?.id, true) : [];
   const apps = A.appsOf(state, id);
   const member = ctx.live.crew.find((c) => c.id === id), lastJob = A.things(state).find((t) => t.helper === id);
@@ -924,13 +928,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
     void load();
   }, 'Forgotten');
   return (
-    <div className={`page helper ${tab === 'chat' ? 'chat-page st-helper-chat' : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : 'st-screen'}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
-      {tab === 'chat' && h && <>
+    <div className={`page helper ${tab === 'chat' || room ? `chat-page st-helper-chat${room ? ' ld-room' : ''}` : details ? 'st-profile' : tab === 'did' ? 'st-helper-chat st-trail' : 'st-screen'}`} style={h ? { '--helper-colour': art.colourOf(h.kind) } as CSSProperties : undefined}>
+      {(room || (tab === 'chat' && h)) && <>
         <div className="sticky-top">
-          <PillHead who={h} name={h.name} href={`#/h/${id}/details`} label={`${name}'s profile`} />
-          {state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <div className="st-board-links"><a className="link st-board-link" href="#/goal">Open the board ›</a>
+          {head}
+          {h && state.goals?.some((g: Json) => [g.goal.will, g.goal.rae].includes(id)) && <div className="st-board-links"><a className="link st-board-link" href="#/goal">Open the board ›</a>
             {state.goals.some((g: Json) => g.goal.will && [g.goal.will, g.goal.rae].includes(id)) && <a className="link st-board-link" href="#/goal/path">Your path to the US ›</a>}</div>}
-          {(b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
+          {h && (b?.task || h.driving) && <LiveControl h={h} word={word ?? ''} refresh={refresh} />}
         </div>
         <Chat key={id} {...ctx} id={id} />
       </>}
@@ -980,9 +984,13 @@ function HelperPage(ctx: Ctx & { id: string; tab: string }) {
           : <div className="card empty">Nothing yet. Give {name} something to do.</div>}
         <p className="st-recorded"><Icon name="lock" /><span>Recorded by Crewhouse, not remembered by {short}.</span></p>
       </> : null)}
-      {tab === 'screen' && b?.computer && <div className="sticky-top"><header className="chat-head">
-        <a href={`#/h/${id}/details`} className="back" aria-label="Back" onClick={(e) => { e.preventDefault(); back(); }}>‹</a><div className="grow"><b>Computer</b></div></header></div>}
-      {tab === 'screen' && b?.computer && <Screen bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }} />}
+      {tab === 'screen' && !room && <div className="sticky-top">{head}</div>}
+      {tab === 'screen' && <section className="ld-side" aria-label={`${name}'s computer`}>
+        {room && <div className="ld-top"><b className="grow">{name}'s computer</b><a className="link" href={thread}>Close</a></div>}
+        {b?.computer ? <Screen auto offline={offline} bot={{ ...page?.bot, ...b }} showing={A.showing(state, id)} refresh={() => { refresh(); void load(); }}
+          doing={A.deskDoing(name, b, b.controls === 'person')} leave={b.task && b.controls !== 'person' && (!member || member.seat === 'working') ? `You can leave. ${name} keeps going.` : undefined} />
+          : <div className="ld-none"><Icon name="computer" size={32} /><b>No computer connected</b><span>{A.computerGap(name, page?.tools?.find((t: Json) => t.id === 'computer'))}</span></div>}
+      </section>}
     </div>
   );
 }
@@ -1041,8 +1049,7 @@ function ChiefProfile(ctx: Ctx & { tab: string; page: Json }) {
           <ScreenPeek key={pc.id} bot={state.bots.find((b: Json) => b.id === pc.id)} who={pc.driving ? 'You have control' : pc.working ? `${pc.name} is using it` : `${pc.name}'s computer`} />
           <button className="btn go cp-take" onClick={() => attempt(async () => { if (!pc.driving) await api.takeOver(pc.id); refresh(); go(`#/h/${pc.id}/screen`); })}>{pc.driving ? 'Back to the controls' : 'Take control'}</button>
           <p className="mute small">Its own screen, away from yours. Taking control pauses {pc.name} until you hand it back.</p>
-        </div> : <div className="card empty cp-none"><b>No computer yet</b><span className="mute small">{desk && !desk.ready && desk.missing?.length
-          ? `This machine is missing what a computer needs: ${desk.missing.join(', ')}.` : 'None of your crew has a computer, so no one can work on a screen of their own.'}</span></div>}
+        </div> : <div className="card empty cp-none"><b>No computer yet</b><span className="mute small">{A.computerMissing(desk) ?? 'None of your crew has a computer, so no one can work on a screen of their own.'}</span></div>}
         <h2 className="st-label">Which AI Chief uses</h2>
         <div className="card list"><MemberAi id="chief" name="Chief" state={state} accounts={ctx.accounts} lists={lists} refresh={refresh} /></div>
         <h2 className="st-label">News</h2>

@@ -265,3 +265,7 @@ journeys:
   ubuntu-sandbox:
     timeout: 40m
     command: 'bash scripts/verify/ubuntu-sandbox.sh "$DONE_DONE_EVIDENCE_ROOT" "${UBUNTU_SANDBOX_DEB:?the .deb from scripts/package.mjs}"'
+  # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
+  # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
+  live-desktop:
+    command: 'bash scripts/verify/live-desktop.sh "$DONE_DONE_EVIDENCE_ROOT"'
