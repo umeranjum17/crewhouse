@@ -119,6 +119,29 @@ prepare_engine() {
 # The version this checkout runs, from package.json: a download says it plain, a source checkout adds -dev (as crewd's /api/state does).
 version() { echo "Crewhouse $(sed -n 's/^  "version": "\([^"]*\)".*/\1/p' package.json)$([ -x ../node/bin/node ] || [ "${CREWHOUSE_PACKAGED:-}" = 1 ] || echo -dev)"; }
 
+# This checkout's app address, once its crewd answers. The URL carries the private capability, so only the browser gets it.
+app_url() {
+  node --input-type=module - <<'NODE' 2>/dev/null
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const { loadConfig } = await import('./' + (existsSync('./dist/config.js') ? 'dist/config.js' : 'src/config.ts'));
+try {
+  const c = loadConfig(), key = join(c.stateDir, 'person.key');
+  if (!existsSync(key)) process.exit(1);
+  const authority = readFileSync(key, 'utf8');
+  const base = readFileSync(join(c.stateDir, 'endpoint'), 'utf8').trim();
+  const r = await fetch(`${base}/api/state`, { headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` }, signal: AbortSignal.timeout(2000) });
+  if (!r.ok) process.exit(1);
+  console.log(`${base}/#person=${authority}`);
+} catch { process.exit(1); }
+NODE
+}
+open_url() {
+  if command -v xdg-open >/dev/null; then (xdg-open "$1" >/dev/null 2>&1 &)
+  elif command -v open >/dev/null; then (open "$1" >/dev/null 2>&1 &)
+  else echo "Open ${1%%#*} in your browser."; fi
+}
+
 case "${1:-}" in
   --version|-v|version) version ;;
   setup)
@@ -165,28 +188,6 @@ case "${1:-}" in
     paths
     # Helpers fetch their tools on first use (see src/server.ts): crewd installs them itself, so setup stays short.
     export CREWHOUSE_FIRST_USE_TOOLS=1
-    # This checkout's app address, once its crewd answers. The URL carries the private capability, so only the browser gets it.
-    app_url() {
-      node --input-type=module - <<'NODE' 2>/dev/null
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-const { loadConfig } = await import('./' + (existsSync('./dist/config.js') ? 'dist/config.js' : 'src/config.ts'));
-try {
-  const c = loadConfig(), key = join(c.stateDir, 'person.key');
-  if (!existsSync(key)) process.exit(1);
-  const authority = readFileSync(key, 'utf8');
-  const base = readFileSync(join(c.stateDir, 'endpoint'), 'utf8').trim();
-  const r = await fetch(`${base}/api/state`, { headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` } });
-  if (!r.ok) process.exit(1);
-  console.log(`${base}/#person=${authority}`);
-} catch { process.exit(1); }
-NODE
-    }
-    open_url() {
-      if command -v xdg-open >/dev/null; then (xdg-open "$1" >/dev/null 2>&1 &)
-      elif command -v open >/dev/null; then (open "$1" >/dev/null 2>&1 &)
-      else echo "Open ${1%%#*} in your browser."; fi
-    }
     if pid=$(crewd_pid); then
       url=$(app_url) || { echo "Crewhouse is running (pid $pid) but not answering yet; try $CMD open in a moment." >&2; exit 1; }
       open_url "$url"
@@ -294,14 +295,9 @@ NODE
     ;;
   open)
     need_node
-    CONFIG=$(mod config src/config.ts) node --input-type=module - <<'NODE'
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-const { loadConfig } = await import(process.env.CONFIG);
-const c = loadConfig();
-spawn('xdg-open', [`http://${c.host}:${c.port}/#person=${readFileSync(join(c.stateDir, 'person.key'), 'utf8')}`], { stdio: 'inherit' });
-NODE
+    # The address carries the private capability: it goes to the browser, and never into any words printed here.
+    url=$(app_url) || { echo "Crewhouse is not running. Start it with $CMD start." >&2; exit 1; }
+    open_url "$url"
     ;;
   phones|link)
     # Local HTTP client; reads the same config and private capability as the launcher.

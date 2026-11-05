@@ -36,3 +36,18 @@ place (the swap, the stop and the start are the same).
 - `doctor` lists the machine's tools with the installed command's name (`crewhouse tools install …`), never `./crewhouse`.
 - `stop` stops crewd, a second `status` says not running, and a wrong word prints the usage with exit 2.
 - Nothing outside the lab changes: no systemd unit, no keyring entry, no file in the real HOME.
+
+## When it breaks
+
+A failed command says the real cause and one next line within seconds, and never a stack trace or the private link. The
+words live in `bin/why.mjs`, shared by `bin/crewhouse.mjs` and `doctor`; a new cause is one line in its table.
+
+```bash
+bash scripts/verify/failure-words.sh <out> <dist>/crewhouse-<version>-linux-x64.tar.gz
+```
+
+This installs the real download on a plain `ubuntu:24.04` login in Docker (default umask, no browser, no Tailscale) and
+breaks it: the group-writable `~/.local` such a login has, a held port that never answers, a folder it may not write to,
+`open` with no browser and with nothing running, `setup --headless` with no Tailscale. Each step has a time limit, and the
+line printed for `~/.local` is run as printed and must reach a running app. It writes `failure-words.txt` and exits 0 only
+when every step said what it should. `test/failure-words.test.ts` holds the same failures on the scripted engine.

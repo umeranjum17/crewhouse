@@ -2,10 +2,10 @@
 import { loadConfig } from './config.ts';
 import { toolStatus } from './tools.ts';
 import { browserBin, missing, probeEngine } from './desktop.ts';
-import { sandboxReady } from './engine.ts';
-import { pickRuntime } from './engines.ts';
+import { sandboxReady } from './engine.ts'; import { pickRuntime } from './engines.ts'; import { why } from '../bin/why.mjs';
 
-const cfg = loadConfig(), { name, version } = pickRuntime(cfg).identity;
+// The one tool for a broken machine must not crash on one: an engine that won't build is the finding.
+const cfg = loadConfig(), engine = (() => { try { return pickRuntime(cfg).identity; } catch (e) { return why((e as Error).message); } })();
 let problems = 0;
 const line = (ok: boolean | null, what: string, detail = '') => {
   if (ok === false) problems++;
@@ -14,7 +14,7 @@ const line = (ok: boolean | null, what: string, detail = '') => {
 
 const [maj, min] = process.versions.node.split('.').map(Number);
 line(maj === 24 && min >= 16 || maj === 26 && min >= 1 || maj > 26, `Node ${process.versions.node}`, 'needs 24.16 or later on 24, or 26.1 or later');
-line(true, `Engine: ${name} ${version}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/${name.toLowerCase()}; your own ${name} and ~/.${name.toLowerCase()} are never used`);
+if ('name' in engine) line(true, `Engine: ${engine.name} ${engine.version}, Crewhouse's own copy`, `it runs under ${cfg.stateDir}/${engine.name.toLowerCase()}; your own ${engine.name} and ~/.${engine.name.toLowerCase()} are never used`); else line(false, `Engine: ${engine.cause}`, engine.next && `next: ${engine.next}`);
 line(sandboxReady() || null, sandboxReady() ? "Bots' shell runs in a sandbox (bubblewrap)" : 'no sandbox here: bots work without a shell',
   sandboxReady() ? '' : 'install bubblewrap (apt install bubblewrap, dnf install bubblewrap, pacman -S bubblewrap), and allow unprivileged user namespaces');
 console.log('AI accounts: sign in from the app, under Settings, AI accounts.');

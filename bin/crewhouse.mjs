@@ -2,10 +2,11 @@
 // The `crewhouse` command of the two installs that have no checkout: `npm install -g crewhouse`, and install.sh (a
 // download that carries its own Node and engine). Both run the same launcher script, `crewhouse` beside this folder.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { why } from './why.mjs';
 
 process.env.CREWHOUSE_RUN_MODE ??= 'product';
 process.env.CREWHOUSE_CMD ??= 'crewhouse';
@@ -68,23 +69,39 @@ if (!existsSync(download ? join(config.stateDir, 'person.key') : join(config.sta
   const setup = launcher(here, 'setup', [], 'inherit', { ...process.env, CREWHOUSE_STARTING: '1' });
   if (setup.status !== 0) fail(`Setup did not finish; run crewhouse setup again once the cause above is fixed.`, setup.status ?? 1);
 }
-mkdirSync(config.stateDir, { recursive: true });
-const out = openSync(log, 'a');
-spawn('bash', [join(here, 'crewhouse'), 'start'], { cwd: here, env: process.env, detached: true, stdio: ['ignore', out, out] }).unref();
+const failed = (text, end = '') => {
+  const { cause, raw, next = 'crewhouse doctor' } = why(text);
+  fail(`Crewhouse did not start: ${cause}.\n${cause === raw ? '' : `It said: ${raw}\n`}Next: ${next}${end}`);
+};
+let logged, out;
+try {
+  mkdirSync(config.stateDir, { recursive: true });
+  logged = existsSync(log) ? statSync(log).size : 0;
+  out = openSync(log, 'a');
+} catch (e) { failed(e.message); }
+const launched = spawn('bash', [join(here, 'crewhouse'), 'start'], { cwd: here, env: process.env, detached: true, stdio: ['ignore', out, out] });
+launched.unref();
+// The launcher lives as long as crewd does, so its exit is crewd's: a failed start says why now, not after the whole wait.
+let stopped = false;
+launched.once('exit', (code) => { stopped = code !== 0; });
 const key = join(config.stateDir, 'person.key');
 const endpoint = join(config.stateDir, 'endpoint');
 let authority, base;
-for (let i = 0; i < 240 && !base; i++) {
+for (let i = 0; i < 240 && !base && !stopped; i++) {
   if (existsSync(key) && existsSync(endpoint)) {
     authority = readFileSync(key, 'utf8');
     const at = readFileSync(endpoint, 'utf8').trim();
     try {
-      if ((await fetch(`${at}/api/state`, { headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` } })).ok) base = at;
+      // The address may be a past run's, and whatever holds that port now need never answer.
+      if ((await fetch(`${at}/api/state`, { headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}` }, signal: AbortSignal.timeout(2000) })).ok) base = at;
     } catch {}
   }
   if (!base) await new Promise((r) => setTimeout(r, 500));
 }
-if (!base) fail(`Crewhouse did not start. Its log is ${log}.`);
+if (!base) {
+  if (stopped) failed(readFileSync(log).subarray(logged).toString(), `\nThe full log is ${log}.`);
+  fail(`Crewhouse has not answered after two minutes, and it may still be starting.\nNext: crewhouse status, then look at the log: ${log}.`);
+}
 const pair = await fetch(`${base}/api/phones/pair`, {
   method: 'POST', headers: { 'x-crewhouse': '1', authorization: `Bearer ${authority}`, 'content-type': 'application/json' },
   body: JSON.stringify({ role: 'control' }),
