@@ -1,0 +1,5 @@
+{
+  "folder": "runtime/byokit/node_modules/@earendil-works/pi-coding-agent/examples/extensions",
+  "reviewed": { "todo": "todo.ts", "hello": "hello.ts" },
+  "default": ["todo"]
+}
