@@ -68,7 +68,6 @@ export class StubRuntime implements AgentRuntime {
   /** The last RunSpec a key ran with: what the model actually saw (tests read it; no session file exists). */
   specOf(key: string) { return this.specs.get(key); }
   /** The last steer a key was given (tests read it; the engine keeps the conversation itself). */
-  steerOf(key: string) { return this.steered.get(key); }
   async start(host: ToolHost) { this.host = host; }
   async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); this.tired.clear(); this.extra.clear(); }
   // Grok stands in for an account that must be signed in first; the rest the person has.

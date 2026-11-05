@@ -983,7 +983,7 @@ test('steer: a word from the person reaches the bot mid-task without starting ov
   await release(crew, 'reel');
   await settled(db, t);
   assert.ok(db.get("SELECT 1 FROM messages WHERE bot = 'reel' AND author = 'person' AND text = 'make it faster'"));
-  assert.equal((crew.runtime as any).steerOf(`agent:m1:crewhouse:reel`), 'make it faster', 'it went into the same conversation');
+  assert.equal((crew.runtime as any).steered.get(`agent:m1:crewhouse:reel`), 'make it faster', 'it went into the same conversation');
   done();
 });
 

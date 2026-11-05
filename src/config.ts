@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process'; import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync } from 'node:fs'; import { appDir } from './paths.ts'; export { appDir }; import { homedir, tmpdir, userInfo } from 'node:os';
+import { spawnSync } from 'node:child_process'; import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync } from 'node:fs'; import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+export const appDir = resolve(import.meta.dirname, '..'), CALLBACK_PORT = Number(process.env.CREWHOUSE_CALLBACK_PORT || 1455); // ChatGPT's fixed sign-in callback port on this computer
 
 /** Product launchers keep the installed crew; tests and unmarked scripts get a private home. */
 export interface Config {

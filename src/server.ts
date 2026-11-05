@@ -18,9 +18,6 @@ import { MailSend } from './mail-send.ts';
 import { transcribe } from './transcribe.ts';
 import * as jobs from './jobs.ts';
 
-const resultPage = (title: string, words: string, close = false) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
-  `<title>${title.replace(/[<&]/g, '')}</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}` + (close ? '<script>setTimeout(() => window.close(), 1500)</script>' : '') + '</body>';
-
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.pdf': 'application/pdf', '.webmanifest': 'application/manifest+json',
@@ -147,7 +144,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (p === '/connect/callback') {
         const words = await crew.connections.finish(new URL(req.url!, `http://${cfg.host}:${cfg.port}`));
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-        return res.end(resultPage('Crewhouse', words, /connected\./.test(words)));
+        return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Crewhouse</title><body style="font:18px system-ui;margin:3em auto;max-width:26em;padding:0 1em;text-align:center;color:#2e2a40">${words.replace(/[<&]/g, '')}${/connected\./.test(words) ? '<script>setTimeout(() => window.close(), 1500)</script>' : ''}</body>`);
       }
       const file = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/);
       if (file) {
@@ -237,12 +234,13 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       return { models, picked: disk.brains(cfg, 'chief').find((b) => b.provider === key)?.model ?? null, dflt: models.find((x) => x.dflt)?.id ?? null };
     }
     // "Sign in with …": start (the page, or `via: 'code'` / `'key'`), paste the address or key, cancel, sign out; "I've changed my plan" (retry).
-    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z0-9.-]+)\/(login|paste|workspace|cancel|logout|retry)$/)) && m === 'POST') {
+    if ((r = p.match(/^\/api\/accounts\/(\d+)\/([a-z0-9.-]+)\/(login|paste|workspace|cancel|logout|retry|use)$/)) && m === 'POST') {
       const [key, act] = [r[2], r[3]];
       provider(key);
       const b = body;
       if (act === 'login') return { ok: true, signIn: await crew.accounts.login(key, b.via === 'key' ? 'key' : b.via === 'code' ? 'code' : 'browser', !!b.fresh) };
       else if (act === 'retry') crew.retryAccount(key);
+      else if (act === 'use') await crew.useFound(key);
       else if (act === 'paste') await crew.accounts.paste(key, String(b.text ?? ''));
       else if (act === 'workspace') { if (typeof b.id === 'string') await crew.accounts.workspace(key, b.id); }
       else if (act === 'cancel') await crew.accounts.cancel(key);
