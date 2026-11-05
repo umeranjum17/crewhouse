@@ -204,7 +204,9 @@
     "result": "Each control worked on the real engine: the approved file read gave the answer, Stop ended the job with no later step, and Take control paused the helper until it was handed back"
   },
   "phone-link-stall": {
-    "target": { "version": "{{sha}}" },
+    "target": {
+      "version": "{{sha}}"
+    },
     "start": "A fresh isolated Crewhouse on the stub engine, with a task-owned Android emulator and release APK",
     "steps": [
       "Pair the Android app to the isolated computer and open Home with Scout running a held task",
@@ -811,5 +813,14 @@
       "Open the same page at 390 wide, a phone"
     ],
     "result": "The report page shows scores by case for the helper, a plain model and a plain model with the same rules, where the helper loses, every rubric check and what the helper did, and says it is a stub run and that the real-model run waits on the account owner's sign-in, at 1280 and 390"
+  },
+  "found-login": {
+    "start": "a fresh Crewhouse on a computer where Claude Code is already signed in",
+    "steps": [
+      "Open Chief's card and read the offer",
+      "Tap Use Claude Code",
+      "Wait for Chief's reply in the thread"
+    ],
+    "result": "The card names the login it found, nothing runs before the tap, and a real reply from that login arrives after it"
   }
 }

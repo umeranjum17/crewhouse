@@ -43,6 +43,7 @@ export interface AgentRuntime {
   /** Every account the person has (two of one provider included), by engine id; the shim keys them by accountRef. */
   accounts(): Promise<AccountRow[]>;
   signedIn(account: string): Promise<boolean>;
+  found?(account: string): Promise<boolean>; // the person's own CLI holds this login: never used until they say yes
   signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void): { paste(text: string): Promise<unknown> | void; pick?(id: string): Promise<unknown> | void; cancel(): void; done?: Promise<unknown> };
   signOut(account: string): Promise<void>;
   /** The live catalog of one signed-in account: the models the person can pick from, ids without the provider, and `dflt` on the one a run takes with nothing picked. */

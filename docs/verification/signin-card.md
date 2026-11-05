@@ -93,3 +93,8 @@ A failed `anthropic-cli` sign-in carries the kit's typed cause; the sheet shows 
 Drive: `scripts/verify/cli-cause.ts <repo> <scratch> <ready.json>` under the isolated env (real crewd and built UI, only the
 kit's sign-in faked; `<scratch>/cause.json` `{"signIn": true|false}` picks the variant). Open Chief's card, Use another
 account, Claude. Capture both variants, day/night at 390/1440. Close the browser before TERM, or the server waits on it.
+
+## A login found on this computer
+
+A fresh install with Claude Code or Codex already signed in reads `found`: Chief's card says so and offers "Use Claude Code", and no job runs until that tap. The tap's real reply is the proof: the job that waited, or Chief's one-line hello. Gate: `node --test test/found-login.test.ts`.
+Drive: `scripts/verify/found-login.sh <out>` (local only, needs `web/dist` built): real crewd and built UI, the installed Claude Code run as it is under this HOME for both its status and its replies, with only the engine between them stubbed. It opens no login file and never names one.

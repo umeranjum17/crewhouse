@@ -7,8 +7,7 @@ import { ENGINE_VERSION, OpenClawKit, stateWords, type KitOptions, type KitState
 import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
-import { CALLBACK_PORT } from '../callback-port.ts';
-import { appDir, loadConfig } from '../config.ts';
+import { appDir, CALLBACK_PORT, loadConfig } from '../config.ts';
 import { PARAMETERS } from '../engine.ts';
 import { accountRef, refParts } from '../runtime.ts';
 import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
@@ -187,6 +186,7 @@ export class OpenClawRuntime implements AgentRuntime {
     const row = (await this.accounts()).find((r) => r.id === id);
     return !!row && (row.state === 'ready' || row.state === 'resting' || row.state === 'unknown'); // an unanswered probe is no sign-out: the engine asks again on the run
   }
+  async found(account: string) { return ['claude-cli', 'openai-codex'].includes(await this.routeOf(account) ?? ''); }
   /** How a sign-in ended, in the card's plain words. */
   private view(v: SignInView, on: (step: SignInStep) => void, name: string) {
     if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });

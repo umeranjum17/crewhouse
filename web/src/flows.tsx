@@ -207,7 +207,7 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   const list = A.aiList(accounts);
   const [{ ai, g }, ...others] = [...list.mine, ...list.more];
   // Nobody signed in yet: MiniMax's key sheet is a tap on the card itself, not behind "Use another account".
-  const upfront = list.mine.some((r) => r.g.state === 'ready') ? [] : others.filter((r) => r.ai.key === 'minimax'), tucked = others.filter((r) => !upfront.includes(r));
+  const upfront = g.found || list.mine.some((r) => r.g.state === 'ready') ? [] : others.filter((r) => r.ai.key === 'minimax'), tucked = others.filter((r) => !upfront.includes(r));
   const pick = (r: typeof ai, cls: string) => <button key={r.key} className={cls} onClick={() => { setSignKey(r.key); setSigning('keyEntry' in r && r.keyEntry === true ? null : openTab()); }}><AiMark ai={r} size={24} /><span className="grow">Sign in with {r.name}</span><Icon name="next" /></button>;
   const signAi = others.find((r) => r.ai.key === signKey)?.ai ?? ai;
   // Not before the accounts are known: Chief's header says the same sign-in wait from the same test (chiefLocal).
@@ -225,12 +225,12 @@ export function AccountCard({ accounts, inChat, onReady }: { accounts: Json[] | 
   );
   return (
     <div className="card ask">
-      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{g.state === 'ready' && !g.notIncluded ? 'Signed in' : A.NEEDS_SIGNIN}</div></div></div>
-      <p className="ask-words">{g.recovery || (g.state === 'ready' ? <>You're signed in to {ai.name}.</> : 'keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
-      {g.state !== 'ready' && <div className="ai-picks">{pick(ai, 'btn go')}{upfront.map(({ ai: r }) => pick(r, 'btn'))}</div>}
+      <div className="ask-head"><Face who="chief" size={28} /><div className="grow"><b>Chief</b><div className="ask-status"><i />{g.state === 'ready' && !g.notIncluded ? 'Signed in' : g.found ? 'Found on this computer' : A.NEEDS_SIGNIN}</div></div></div>
+      <p className="ask-words">{g.recovery || (g.found ? <>{ai.found} is already signed in on this computer. Should the crew use it? It runs on your own plan, and Chief replies here to show it works.</> : g.state === 'ready' ? <>You're signed in to {ai.name}.</> : 'keyEntry' in ai && ai.keyEntry === true ? <>Paste your {ai.name} key. Your job starts when it is saved.</> : <>Say yes once on your AI's page. Your job starts when you come back.</>)}</p>
+      {g.state !== 'ready' && <div className="ai-picks">{g.found ? <button className="btn go" onClick={() => attempt(async () => { await api.useFound(ai.key); onReady(); }, 'Chief is on it')}><AiMark ai={ai} size={24} /><span className="grow">Use {ai.found}</span><Icon name="next" /></button> : pick(ai, 'btn go')}{upfront.map(({ ai: r }) => pick(r, 'btn'))}</div>}
       <details className="more-ways">
         <summary><span className="grow">Use another account</span><span className="ai-stack">{tucked.map(({ ai: r }) => <AiMark key={r.key} ai={r} size={22} />)}</span><i aria-hidden>›</i></summary>
-        <div className="ai-picks">{tucked.map(({ ai: r }) => pick(r, 'btn'))}</div>
+        <div className="ai-picks">{g.found && pick(ai, 'btn')}{tucked.map(({ ai: r }) => pick(r, 'btn'))}</div>
       </details>
       {signing !== false && <SignIn ai={signAi} tab={signing} onReady={() => { setSigning(false); onReady(); }} onSignedIn={onReady} onClose={() => setSigning(false)} />}
     </div>

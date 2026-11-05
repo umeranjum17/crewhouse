@@ -14,7 +14,7 @@ const free = () => new Promise<number>((r) => { const s = createServer().listen(
 process.env.CREWHOUSE_CALLBACK_PORT ??= String(await free());
 const { OpenClawRuntime } = await import('../src/openclaw/runtime.ts');
 const { faked } = await import('./kit-fake.ts');
-const { CALLBACK_PORT } = await import('../src/callback-port.ts');
+const { CALLBACK_PORT } = await import('../src/config.ts');
 
 const ending = (start: (on: (s: SignInStep) => void) => unknown) => new Promise<SignInStep>((resolve) => { start((s) => { if (!s.waiting) resolve(s); }); });
 

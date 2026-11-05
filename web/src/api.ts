@@ -165,6 +165,7 @@ export const api = {
   /** A pasted plan key acting for several workspaces: use it for the one picked (row ids, never secrets). */
   signInWorkspace: (account: string, id: string) => call('POST', `/api/accounts/1/${account}/workspace`, { id }),
   retryAccount: (account: string) => call('POST', `/api/accounts/1/${account}/retry`),
+  useFound: (account: string) => call('POST', `/api/accounts/1/${account}/use`),
   /** The person switches Google on for their crew: their own Google app's client ID and secret (docs/google-setup.md). */
   houseGoogle: (id: string, secret: string) => call('PUT', '/api/house/google', { id, secret }),
   /** Owner only: the most helpers may spend in a month, in dollars. */

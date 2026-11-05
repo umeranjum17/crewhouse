@@ -2057,13 +2057,13 @@ function runOf(h: Json, reminder = false, mail = false) {
  *  needs installed (`cli`), where that provider's own page lives (`site`, `plans`), and, for a key account, the page
  *  where a person makes the key it asks them to paste (`keyPage`). Kept in step with crewd's
  *  own list by test/ui.test.ts. */
-const MARKS: Record<string, { bg: string; name?: string; cli?: string; site?: string; plans?: string; keyPage?: string }> = {
-  chatgpt: { bg: '#10a37f', site: 'https://chatgpt.com/', plans: 'https://chatgpt.com/#pricing' },
+const MARKS: Record<string, { bg: string; name?: string; cli?: string; found?: string; site?: string; plans?: string; keyPage?: string }> = {
+  chatgpt: { bg: '#10a37f', found: 'Codex', site: 'https://chatgpt.com/', plans: 'https://chatgpt.com/#pricing' },
   grok: { bg: '#1d1d1f' },
   copilot: { bg: '#24292f' },
   openrouter: { bg: '#8b5cf6', keyPage: 'https://openrouter.ai/keys' },
   minimax: { bg: '#e11d48', name: 'MiniMax', keyPage: 'https://platform.minimax.io/user-center/basic-information/interface-key' },
-  claude: { bg: '#d97757', cli: 'Claude Code, installed and signed in on this computer' },
+  claude: { bg: '#d97757', found: 'Claude Code', cli: 'Claude Code, installed and signed in on this computer' },
   'opencode-go': { bg: '#18181b' },
 };
 /** OpenCode Go, by route id straight from the kit's catalogue like crewd's own list (src/accounts.ts): key, name and
@@ -2089,7 +2089,7 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
   const [provider, ...rest] = key.split('.');
-  const none = { cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '', provider, label: rest.join('.'), plan: '', email: '' };
+  const none = { found: false, cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '', provider, label: rest.join('.'), plan: '', email: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -2109,7 +2109,7 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
     recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '',
-    provider: String(a.provider ?? a.name ?? none.provider), label: a.label ? String(a.label) : none.label, plan: a.plan ? String(a.plan) : '', email: a.email ? String(a.email) : '' };
+    found: !!a.found, provider: String(a.provider ?? a.name ?? none.provider), label: a.label ? String(a.label) : none.label, plan: a.plan ? String(a.plan) : '', email: a.email ? String(a.email) : '' };
 }
 export const chatgpt = (accounts: Json[] | null) => account(accounts, 'chatgpt');
 
@@ -2158,6 +2158,7 @@ export function aiList(accounts: Json[] | null) {
       ? g.notIncluded ? "Signed in, but your plan doesn't include helpers yet." : g.resting ? `Signed in. ${g.resting}.`
         : `Signed in${x.email ? ` as ${x.email}` : ''}${x.plan ? ` on your ${x.plan} plan` : ''}${g.work ? `, a work account` : ''}. The crew uses it${ai.billing === 'api' ? ', charged per use' : ''}.`
       : g.recovery ? g.recovery : g.state === 'checking' ? 'Checking…'
+      : g.found ? `${ai.found} is signed in on this computer. The crew asks you before it uses it.`
       : 'keyEntry' in ai && ai.keyEntry && g.signedOut ? 'Signed out. The key stays saved on this computer: it works again after a restart, or paste a new key if it stopped working.'
       : (x.provider ?? key) === 'chatgpt' ? `Not signed in yet. You'll say yes once on ${ai.name}.`
       : ai.cli ? `Not set up. Needs ${ai.cli} first.`
@@ -2166,7 +2167,7 @@ export function aiList(accounts: Json[] | null) {
     return { ai, ref: key, name: refName({ ...x, name: ai.name }), label, g, says };
   });
   const mine = rows.filter((r) => r.g.state === 'ready' || r.g.notIncluded), out = rows.filter((r) => r.g.signedOut);
-  const front = mine.length ? mine : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt' && !r.label);
+  const found = rows.filter((r) => r.g.found), front = mine.length ? mine : found.length ? found : out.length ? out : rows.filter((r) => r.ai.key === 'chatgpt' && !r.label);
   return { mine: front, more: rows.filter((r) => !front.includes(r)) };
 }
 /** The account the crew thinks with: the first one signed in. Null while checking, 'none' when there is none yet. */

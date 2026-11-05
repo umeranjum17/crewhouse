@@ -277,6 +277,7 @@ export class Crew {
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
     this.runtime.onEngine = () => this.db.live('system.engine', '', {}); // each install or start phase, live for Hello's getting-ready screen
     this.accounts.onSignedIn = () => { stamp('account signed in'); this.signedAt = Date.now(); this.wake(`You're signed in. I'll start now.`); };
+    this.accounts.untried = () => !this.db.get("SELECT 1 FROM tasks WHERE state = 'done' LIMIT 1");
     this.connections = new Connections(cfg, `http://${cfg.host}:${cfg.port}/connect/callback`);
     this.connections.onChange = (app) => this.db.event('app.changed', null, { app });
     this.connections.onExpired = (app) => this.say(CHIEF, 'system', `Your ${this.connections.apps[app].name} connection has run out. Connect it again under Settings, Connections, whenever you like.`, null);
@@ -408,7 +409,6 @@ export class Crew {
     return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop(), form && !form.onScreen && form.run(['close'])]);
   }
 
-  // ---- reads ----
   person(): Row {
     const m = this.db.get('SELECT * FROM people WHERE id = 1');
     if (!m) throw Object.assign(new Error('no such person'), { status: 404 });
@@ -1008,7 +1008,6 @@ export class Crew {
     };
   }
 
-  // ---- people ----
   onboard(address: string, ask?: string, bot?: string, chat = false): { task: number } | void {
     if (chat) { const a = clean(address, 40); this.setAddress(a); this.say(CHIEF, 'person', a, null); return void this.say(CHIEF, 'bot', chiefPitch(a), null); } // the name answered in Chief's own thread
     const a = clean(address, 40), hello = ask?.trim(); let to = CHIEF; // no name is fine: Chief uses none until the person gives one
@@ -1041,7 +1040,6 @@ export class Crew {
     return this.person();
   }
 
-  // ---- crew ----
   private addBot(tpl: disk.Template, display: string, id: string, by: string) {
     disk.createBotFolder(this.cfg, id, tpl, display);
     this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -1088,7 +1086,6 @@ export class Crew {
     return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
-  // ---- work ----
   /** A message in the person's thread with a bot. */
   say(bot: string, author: string, text: string, taskId: number | null = null) {
     if (author === 'bot') text = cleanReply(text);
@@ -1561,6 +1558,13 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!waiting.length) return;
     this.db.tx(() => { for (const t of waiting) this.setTask(t, 'queued'); if (words) this.say(CHIEF, 'bot', words, null); });
     this.dispatch();
+  }
+
+  /** Yes to a login found on this computer: the job that waited, or a one-line hello, is the real reply that proves it. */
+  async useFound(account: string) {
+    if (!await this.accounts.found(account)) return;
+    this.accounts.ready.set(account, true); this.accounts.onSignedIn?.();
+    if (!this.db.get("SELECT 1 FROM tasks WHERE state IN ('queued', 'working')")) this.addTask(CHIEF, 'Say hello to me in one short line, so I can see you can think.', 'person', undefined, `Yes, use ${PROVIDERS[account].name}`);
   }
 
   /** "I've changed my plan": try the account again. */

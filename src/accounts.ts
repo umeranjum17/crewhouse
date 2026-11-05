@@ -31,7 +31,7 @@ export function provider(key: string) {
 /** One account, in the app's words: its ref (what models.json and the screens key on), the provider it is an account of,
  *  its own name, plan and email, and the sign-in states the words come from. */
 export type AccountView = { account: string; provider: string; name: string; label?: string; email?: string; plan?: string;
-  signedIn: boolean; restingUntil: number; signIn: ReturnType<Accounts['view']>; notIncluded: boolean; signedOut: boolean };
+  signedIn: boolean; found: boolean; restingUntil: number; signIn: ReturnType<Accounts['view']>; notIncluded: boolean; signedOut: boolean };
 
 /** A time in the person's own words: "9:08 pm". Never a raw stamp. */
 export const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s([AP])M$/, (m) => m.toLowerCase());
@@ -56,6 +56,7 @@ export class Accounts {
   private running = new Map<string, { handle: { paste(text: string): void; pick?(id: string): Promise<unknown> | void }; cancel(): Promise<unknown> | void; finished: Promise<void> }>();
   /** Set by Crew: the person signed in, so waiting work starts now. */
   onSignedIn?: () => void;
+  untried?: () => boolean; // set by Crew: nothing has finished here yet, so a login found on this computer waits for a yes
 
   private runtime: AgentRuntime;
   constructor(runtime: AgentRuntime) {
@@ -69,12 +70,14 @@ export class Accounts {
     if (this.excluded.has(account) || (out && !this.byEngine.has(account))) return false;
     const r = out ? undefined : this.ready.get(account);
     if (r !== undefined) return r;
+    if (await this.found(account)) return false;
     const hit = this.fresh.get(account); if (hit && hit.until > Date.now()) return hit.yes;
     const yes = await this.runtime.signedIn(account).catch(() => undefined); // a failed probe says nothing and is asked again
     if (yes !== undefined) this.fresh.set(account, { until: Date.now() + (yes ? 60_000 : 10_000), yes });
     if (out && yes) { this.expired.delete(account); this.byEngine.delete(account); } // the engine's own check changed its mind: the no was a flake
     return !!yes;
   }
+  async found(account: string) { return !this.ready.has(account) && !!this.untried?.() && !!await this.runtime.found?.(account) && !!await this.runtime.signedIn(account).catch(() => false); }
   /** A run says the sign-in is gone. The engine's CLI check behind it has a 3 s limit and reads a slow answer as a no, so one no
    *  proves nothing: ask again past the engine's 10 s answer window. A failed probe is unknown, never a sign-out; two nos latch (and a
    *  later yes clears them). A turn the API refused (`admission` false) is believed at once; the kit's own "not signed in" before any turn
@@ -150,7 +153,7 @@ export class Accounts {
     const view = async (provider: string, label?: string, row?: { email?: string; plan?: string }) => {
       const account = accountRef(provider, label);
       return { account, provider, name: PROVIDERS[provider]?.name ?? provider, ...(label ? { label } : {}), ...(row?.email ? { email: row.email } : {}), ...(row?.plan ? { plan: row.plan } : {}),
-        signedIn: await this.signedIn(account), restingUntil: this.restingUntil(account), signIn: this.view(account),
+        signedIn: await this.signedIn(account), found: await this.found(account), restingUntil: this.restingUntil(account), signIn: this.view(account),
         notIncluded: this.notIncluded(account), signedOut: this.expired.has(account) };
     };
     const order = Object.keys(PROVIDERS), all = [...await Promise.all(rows.map((r) => view(r.provider, r.label, r))),

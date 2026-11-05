@@ -140,6 +140,7 @@ test('Claude signed in on this computer is usable: the kit reports it as claude-
   try {
     await f.started;
     assert.equal(await f.runtime.signedIn('claude'), true);
+    assert.deepEqual([await f.runtime.found('claude'), await f.runtime.found('grok')], [true, false]); // the app asks before using it
     const end = await f.runtime.run({ key: 'agent:m1:crewhouse:chief:1', bot: 'chief', task: 1, account: 'claude',
       model: 'claude-opus-5', cwd: '', system: '', message: 'Say hello.', builtins: [] }, () => {});
     assert.ok(end.ok, JSON.stringify(end));
