@@ -9,7 +9,8 @@
 //   no helpers in plan   answer as a plan without helpers does
 //   sign me out          answer as an account whose sign-in stopped working does
 //   {frameId}            inside a call: the frame id of the last screenshot the engine's computer tool reported
-//   ask permission       hold the turn (after its tool calls) until the test releases it (`release`)
+//   ask permission       hold the turn (after its tool calls) until the test releases it (`release`); `as NAME` names the
+//                        hold, for two turns held on one key
 //   anything else        reply `stub <bot>: done with "<the last line of the message>"`
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -125,7 +126,7 @@ export function startModelStub(promptTokens?: number, script?: (body: any, text:
     }
     let text = done();
     if (/ask permission/i.test(said)) {
-      const key = String(req.headers.authorization ?? 'hold');
+      const key = /ask permission as (\S+)/i.exec(said)?.[1] ?? String(req.headers.authorization ?? 'hold');
       text = await new Promise<string>((resolve) => {
         holds.set(key, (reply) => resolve(reply || text));
         res.once('close', () => holds.delete(key));
