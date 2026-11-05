@@ -37,6 +37,16 @@ place (the swap, the stop and the start are the same).
 - `stop` stops crewd, a second `status` says not running, and a wrong word prints the usage with exit 2.
 - Nothing outside the lab changes: no systemd unit, no keyring entry, no file in the real HOME.
 
+## The install line carries on
+
+`install.sh` run in a real terminal ends in the running app: it starts Crewhouse by its full path with the terminal as input.
+
+```bash
+bash scripts/verify/install-line.sh <out> <dist>/crewhouse-<version>-linux-x64.tar.gz
+```
+
+This runs `curl ... | sh` under a real pseudo-terminal in Docker, on plain `ubuntu:24.04` logins at the default umask 0002, and times it from the line to the app answering. It covers a fresh login, a login whose `~/.local/state` is already 775 with a file in it, and no terminal at all, which must only install. It writes `install-line.txt` and exits 0 only when each said what it should. `test/install-line.test.ts` holds the same cases on a stand-in download, plus a script cut off part-way running nothing.
+
 ## When it breaks
 
 A failed command says the real cause and one next line within seconds, and never a stack trace or the private link. The
