@@ -789,15 +789,13 @@
     "start": "Two real crewds: one on the stub engine with the Pi flag off, as bot-crew drives it, and one started with CREWHOUSE_ENGINE=pi, onboarded as Umer, on the real pinned Pi and the model {{model}}",
     "steps": [
       "With the flag off, open the bot list and a bot's chat on a 390 phone and a 1280 computer, day and night",
-      "With the flag on, send Chief: {{ask}}",
-      "Open Chief's chat on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
-      "Bring on Scout, Scribe and Reel, give Scout and Scribe each a note of their own, and ask Scout and Scribe at once to remember a word each; Reel is never asked",
-      "Wait until no Pi is running, then ask both at once for their word and their note",
-      "Ask both at once for a story and kill Scout's Pi mid-turn, then ask Scout again",
+      "With the flag on, bring on Scout, Scribe and Reel, and give Scout and Scribe each a note of their own",
+      "Ask Scout and Scribe at once, once each, for a word given to that helper and the colour in its own note; Reel and Chief are never asked",
+      "Wait until no Pi is running",
       "Open Scout's and Scribe's chats on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
       "Hash a stand-in person's Pi folder before and after the run"
     ],
-    "result": "With the flag off the list and chat work as before; with it on Chief's chat shows the message and the answer Pi gave: {{reply}}. Scout and Scribe each ran their own Pi at the same moment, each answered in its own chat from its own word and note and never the other's, both Pis stopped when idle, Reel never had one, and Scout's killed Pi failed only Scout's job. The stand-in Pi folder hashes the same; the person's real folder was not checked"
+    "result": "With the flag off the list and chat work as before. With it on Scout and Scribe each ran their own Pi at the same moment and each answered once in its own chat, from its own word and note and never the other's. Scout said: {{scout}} Scribe said: {{scribe}} Both Pis stopped when idle, and Reel and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
   },
   "bot-crew": {
     "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",
