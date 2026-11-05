@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Verify journey `install-line`: the real one-line install on the real download, on plain Ubuntu logins at the default umask 0002.
-# In a real terminal the line must end in the running app; the time printed runs from the line to the app answering.
+# Verify journey `install-line`: the real one-line install on the real download and the real engine, no account, on default
+# logins (a normal user through PAM, and root) of each image. In a real terminal the line must end in the running app, and
+# start, status, doctor, open and stop must then work; the time printed runs from the line to the app answering.
 #
-#   scripts/verify/install-line.sh <out-dir> <tarball>      tarball from scripts/package.mjs; needs Docker and the ubuntu:24.04 image
+#   scripts/verify/install-line.sh <out-dir> <tarball> [image…]   tarball from scripts/package.mjs; needs Docker; images default to ubuntu:24.04 debian:13
 #
+# CI's package job runs this on the tarball it builds.
 # Exit 0 and <out-dir>/install-line.txt when every login said what it should. `curl` reads this checkout's install.sh by file://,
 # since the published one is main's; everything after that is the line as a person runs it.
 set -uo pipefail
 
 if [ "${1:-}" != --inside ]; then
-  [ $# -eq 2 ] && [ -f "$2" ] || { echo "usage: install-line.sh <out-dir> <tarball>" >&2; exit 2; }
-  OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); TARBALL=$(realpath "$2"); REPO=$(git rev-parse --show-toplevel)
-  docker run --rm --memory 6g --cpus 4 -v "$TARBALL:/mnt/crewhouse.tar.gz:ro" -v "$REPO/install.sh:/mnt/install.sh:ro" -v "$REPO/scripts/verify/install-line.sh:/mnt/journey.sh:ro" ubuntu:24.04 \
-    bash -c 'apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates >/dev/null 2>&1
-      for who in fresh loose quiet; do useradd -m -s /bin/bash "$who"; su - "$who" -c "bash /mnt/journey.sh --inside $who" || failed=1; done; exit "${failed:-0}"' \
-    2>&1 | tee "$OUT/install-line.txt"
-  exit "${PIPESTATUS[0]}"
+  [ $# -ge 2 ] && [ -f "$2" ] || { echo "usage: install-line.sh <out-dir> <tarball> [image…]" >&2; exit 2; }
+  OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); TARBALL=$(realpath "$2"); REPO=$(git rev-parse --show-toplevel); shift 2
+  : > "$OUT/install-line.txt"; FAILED=0
+  [ $# -gt 0 ] || set -- ubuntu:24.04 debian:13
+  for image in "$@"; do
+    printf '\n##### %s\n' "$image" | tee -a "$OUT/install-line.txt"
+    docker run --rm --memory 6g --cpus 4 -v "$TARBALL:/mnt/crewhouse.tar.gz:ro" -v "$REPO/install.sh:/mnt/install.sh:ro" -v "$REPO/scripts/verify/install-line.sh:/mnt/journey.sh:ro" "$image" \
+      bash -c 'apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates >/dev/null 2>&1
+        for who in fresh loose quiet; do useradd -m -s /bin/bash "$who"; su - "$who" -c "bash /mnt/journey.sh --inside $who" || failed=1; done
+        su - root -c "bash /mnt/journey.sh --inside root" || failed=1; exit "${failed:-0}"' \
+      2>&1 | tee -a "$OUT/install-line.txt"
+    [ "${PIPESTATUS[0]}" = 0 ] || FAILED=1
+  done
+  exit "$FAILED"
 fi
 
 WHO=$2 FAILED=0 LINE='curl -fsSL file:///mnt/install.sh | sh'
@@ -57,9 +66,14 @@ fi
 stat -c '%a %n' ~/.local/state ~/.local/state/crewhouse
 [ "$(stat -c %a ~/.local/state)" = 700 ] && [ "$(stat -c %a ~/.local/state/crewhouse)" = 700 ] || bad 'the state folder is not 700'
 
-# The same command in a new login finds what the line started; the shell's own PATH picks it up from ~/.profile.
-AGAIN=$(bash -lc 'crewhouse status' 2>&1); echo "new login: $AGAIN"
-grep -qE 'is running \(pid [0-9]+\)' <<<"$AGAIN" || bad 'a new login should find crewhouse, running'
+# A normal login's next shell finds the command by itself through ~/.profile; a container's root has no such line.
+if [ "$WHO" = root ]; then AGAIN=$(~/.local/bin/crewhouse status 2>&1); else AGAIN=$(bash -lc 'crewhouse status' 2>&1); fi
+echo "next login: $AGAIN"
+grep -qE 'is running \(pid [0-9]+\)' <<<"$AGAIN" || bad 'the next login should find crewhouse, running'
+# doctor exits 1 over optional parts today (pick 5): here the engine must be fine and it must not crash.
+SAID=$(~/.local/bin/crewhouse doctor 2>&1); grep -E 'Engine: |problem' <<<"$SAID"; says '✓ Engine: '
+SAID=$(~/.local/bin/crewhouse open 2>&1); RC=$?; echo "open: [exit $RC] ${SAID%%#person=*}"; says 'in your browser'
+grep -q '#person=' <<<"$SAID" && bad 'open printed the private link'
 ~/.local/bin/crewhouse stop
 [ "$FAILED" = 0 ] && echo "install-line ($WHO): the line ended in the running app in $ELAPSED s"
 exit "$FAILED"
