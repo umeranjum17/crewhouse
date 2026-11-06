@@ -4,15 +4,16 @@
 # CREWHOUSE_ENGINE=pi, where pi-crew.mjs asks two helpers at once through the API the app uses, each on its own real pinned Pi
 # through @byokit/pi, on a real model (the free MiniMax M3.1 Flash, the key read from the file into crewd's environment and
 # nowhere else). Each saves a code in its own notes, and Chief is never asked; pi-tap.mjs records each model request and its reply.
-# crewd then restarts over the same folders with both Pi sessions gone: each recalls its own code, Scout cannot get Scribe's, and Scribe
-# says when its notes are full. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
+# crewd then restarts over the same folders with both Pi sessions gone: each recalls its own code from the notes its prompt showed, and
+# nothing sent to the model for one holds the other's. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
 # and after. The owner's real folder is never read here, so this says nothing about it: that rests on the kit's own isolation test.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
 #
-# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends nine model calls on that key if each helper takes one
-# call per step, and never more than PI_CALL_LIMIT (12 unless set): past it the tap answers an error itself and the journey fails.
-# PI_ORIGIN points the journey at another OpenAI-compatible provider.
+# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends six model calls on that key if each helper takes one
+# call per step, and never more than PI_CALL_LIMIT (20 unless set): past it the tap answers an error itself and the journey fails.
+# PI_ORIGIN points the journey at another OpenAI-compatible provider. PI_SCREENS=off leaves out the flag-off run and every screen and keeps
+# crewd's logs in the lab, so a run through `done-done verify` hands the judge only the record it can read: one check takes 10 captures.
 # Writes crew.txt (what was asked, the replies, the processes, the tools), offered.jsonl (the tap's record), pi-folder.txt (the
 # hashes), same-shots.txt and the step record.
 set -euo pipefail
@@ -32,7 +33,8 @@ printf '{"defaultModel":"canary-model"}' > "$STANDIN/settings.json"
 printf 'throw new Error("CANARY extension loaded");' > "$STANDIN/extensions/canary.ts"
 BEFORE=$(hashes)
 
-bash "$REPO/scripts/verify/bot-crew.sh" "$OUT/flag-off"
+SCREENS=${PI_SCREENS:-on}; LOGS=$OUT; [ "$SCREENS" = on ] || LOGS=$LAB
+[ "$SCREENS" != on ] || bash "$REPO/scripts/verify/bot-crew.sh" "$OUT/flag-off"
 
 NODE=$(node -p process.execPath)
 PORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
@@ -40,7 +42,7 @@ B="http://127.0.0.1:$PORT"
 MODEL=${PI_MODEL:-MiniMax-M3.1-Flash}
 TAPPORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 : > "$OUT/offered.jsonl"
-"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-12}" &
+"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-20}" "$LAB/sent.jsonl" &
 TAP=$!
 # crewd on Pi, up and answering, its log in $1. The second boot is the restart: same folders, same key, a new process.
 PERSON=""
@@ -62,8 +64,8 @@ boot() {
   done
   [ -n "$up" ] || { echo "pi-engine: crewd never became ready" >&2; exit 1; }
 }
-boot "$OUT/crewd.log"
-grep -q '(engine: pi,' "$OUT/crewd.log" || { echo "pi-engine: crewd did not start on Pi" >&2; exit 1; }
+boot "$LOGS/crewd.log"
+grep -q '(engine: pi,' "$LOGS/crewd.log" || { echo "pi-engine: crewd did not start on Pi" >&2; exit 1; }
 api() { curl -fsS --max-time 60 -H content-type:application/json -H x-crewhouse:1 -H "Authorization: Bearer $PERSON" "${@:2}" "$B$1"; }
 api /api/onboard -d '{"address":"Umer"}' > /dev/null
 # A chat at 390 and 1280, day and night, and in the installed window, once its last words and the head's call button are on the page.
@@ -72,18 +74,18 @@ shots() { local THREAD="(async () => { location.hash = '$2'; for (let i = 0; i <
   GATE_PWA=1 node "$REPO/scripts/verify/home-gate.mjs" "$REPO" "$B/#person=$PERSON" "$OUT/flag-on/installed" "$1" "$THREAD"; }
 "$NODE" "$REPO/scripts/verify/pi-crew.mjs" "$B" "$LAB" "$CREWD" "$OUT" > /dev/null
 crewd_stop
-boot "$OUT/crewd-restarted.log"
+boot "$LOGS/crewd-restarted.log"
 LAST=$("$NODE" "$REPO/scripts/verify/pi-crew.mjs" "$B" "$LAB" "$CREWD" "$OUT" recall)
 SCOUT=$(node -p 'JSON.parse(process.argv[1]).scout' "$LAST"); SCRIBE=$(node -p 'JSON.parse(process.argv[1]).scribe' "$LAST")
-shots scout '#/h/scout' "$SCOUT"
-shots scribe '#/h/scribe' "$SCRIBE"
+if [ "$SCREENS" = on ]; then shots scout '#/h/scout' "$SCOUT"; shots scribe '#/h/scribe' "$SCRIBE"; fi
 crewd_stop
 [ "$(hashes)" = "$BEFORE" ] || { echo "pi-engine: the stand-in person's Pi folder changed" >&2; exit 1; }
 { echo "The person's real Pi folder was not checked: the read guard refused it, so this run says nothing about it. That it stays untouched rests on the kit's isolation test."
   echo "A stand-in Pi folder, in the HOME crewd and Pi started from, hashed whole before and after the flag-on run: unchanged, byte for byte."
   printf '%s\n' "$BEFORE"; } > "$OUT/pi-folder.txt"
 # The installed window can draw exactly what the browser drew; done-done refuses a byte-identical pair as reuse, so keep one and say which.
-find "$OUT" -name '*.png' -type f | sort | xargs sha256sum | awk 'seen[$1] { print $2, seen[$1]; next } { seen[$1] = $2 }' | while read -r twin kept; do
+[ "$SCREENS" != on ] || find "$OUT" -name '*.png' -type f | sort | xargs sha256sum | awk 'seen[$1] { print $2, seen[$1]; next } { seen[$1] = $2 }' | while read -r twin kept; do
   rm -- "$twin"; echo "${twin#"$OUT/"} was byte for byte ${kept#"$OUT/"}"; done > "$OUT/same-shots.txt"
-node "$REPO/scripts/verify/steps.mjs" "$OUT" pi-engine "scout=$SCOUT" "scribe=$SCRIBE" "model=$MODEL" "calls=$(wc -l < "$OUT/offered.jsonl")"
+RECORD=pi-engine; [ "$SCREENS" = on ] || RECORD=pi-recall
+node "$REPO/scripts/verify/steps.mjs" "$OUT" "$RECORD" "scout=$SCOUT" "scribe=$SCRIBE" "model=$MODEL" "calls=$(wc -l < "$OUT/offered.jsonl")"
 echo "pi-engine: two helpers replied on Pi, each with its own tools, and kept their own notes across a restart; captures in $OUT"

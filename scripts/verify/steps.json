@@ -798,6 +798,19 @@
     ],
     "result": "With no wall the file landed in the person's Documents. With the wall the write inside the folder landed, every write outside was refused with the line \"That's outside my folder, so I can't open it.\", the job carried on and the host shows nothing changed; the bot's folder is the only writable place on a real disk. With no bubblewrap the flag-on boot refused in one line naming the fix, a job ended on that line, no model was asked and no Pi ran. With the flag off the same machine worked as before."
   },
+  "pi-recall": {
+    "start": "One real crewd started with CREWHOUSE_ENGINE=pi, onboarded as Umer, on the real pinned Pi and the model {{model}}",
+    "steps": [
+      "With the flag on, bring on Scout and Scribe, and give each a note of their own",
+      "Leave Scout's folder with no extension list, so it takes the default, and list hello and notes in Scribe's folder",
+      "Ask Scout and Scribe at once to save a locker code in their notes, then give a word of theirs and the colour in their own note; Chief is never asked",
+      "Wait until no Pi is running, stop crewd and start it again over the same folders, and remove both Pi sessions",
+      "Ask Scout and Scribe each for its own code",
+      "Wait until no Pi is running",
+      "Hash a stand-in person's Pi folder before and after the run"
+    ],
+    "result": "Scout and Scribe each ran their own Pi at the same moment and answered in their own chat, from their own word and note and never the other's. Every model call offered Scout only todo and notes and Scribe only hello and notes, and {{calls}} model calls were made in all. After crewd restarted with both Pi sessions gone, each recalled its own code from its own notes and never the other's. Nothing sent to the model for one held the other's code or word. Asked for its code, Scout said: {{scout}} Asked for its code, Scribe said: {{scribe}} Each job's prompt showed that bot's notes as it started, and the same notes on each of its rounds. Every Pi stopped when idle, and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
+  },
   "pi-engine": {
     "start": "Two real crewds: one on the stub engine with the Pi flag off, as bot-crew drives it, and one started with CREWHOUSE_ENGINE=pi, onboarded as Umer, on the real pinned Pi and the model {{model}}",
     "steps": [
@@ -806,12 +819,12 @@
       "Leave Scout's folder with no extension list, so it takes the default, and list hello and notes in Scribe's folder",
       "Ask Scout and Scribe at once to save a locker code in their notes, then give a word of theirs and the colour in their own note; Chief is never asked",
       "Wait until no Pi is running, stop crewd and start it again over the same folders, and remove both Pi sessions",
-      "Fill Scribe's notes, then ask Scout for its code and Scribe's, and Scribe for its code and to save one more",
+      "Ask Scout and Scribe each for its own code",
       "Wait until no Pi is running",
       "Open Scout's and Scribe's chats on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
       "Hash a stand-in person's Pi folder before and after the run"
     ],
-    "result": "With the flag off the list and chat work as before. With it on Scout and Scribe each ran their own Pi at the same moment and answered in their own chat, from their own word and note and never the other's. Every model call offered Scout only todo and notes and Scribe only hello and notes, and {{calls}} model calls were made in all. After crewd restarted with both Pi sessions gone, each recalled its own code from its own notes and never the other's. Asked for its code and Scribe's, Scout said: {{scout}} With its notes full, Scribe said: {{scribe}} Every Pi stopped when idle, and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
+    "result": "With the flag off the list and chat work as before. With it on Scout and Scribe each ran their own Pi at the same moment and answered in their own chat, from their own word and note and never the other's. Every model call offered Scout only todo and notes and Scribe only hello and notes, and {{calls}} model calls were made in all. After crewd restarted with both Pi sessions gone, each recalled its own code from its own notes and never the other's. Nothing sent to the model for one held the other's code or word. Asked for its code, Scout said: {{scout}} Asked for its code, Scribe said: {{scribe}} Each job's prompt showed that bot's notes as it started, and the same notes on each of its rounds. Every Pi stopped when idle, and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
   },
   "bot-crew": {
     "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",
@@ -824,7 +837,7 @@
     "result": "The list shows big faces, Chief's amber count and star, Scout's unread dot and The crew's overlapping faces; Scout's chat shows the name chip, soft bubbles and a fanned pile counted 5 images, and a tap lays out all five"
   },
   "calm-design": {
-    "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, the commit before the calm redesign too",
+    "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, unset for now, the commit before the calm redesign too",
     "steps": [
       "Open Chief's chat on a 390 phone, day and night",
       "Open Home on a 390 phone, day and night",
