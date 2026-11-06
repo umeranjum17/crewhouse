@@ -23,13 +23,12 @@ const api = async (path, body) => {
   if (!res.ok) fail(`${path} said ${res.status}`);
   return res.json();
 };
-/** crewd's Pis by bot: Pi renames itself, so the folder it works in says whose it is. */
+/** crewd's Pis by bot: Pi renames itself, so the folder it works in says whose it is, and it sits behind bubblewrap, so it is a descendant of crewd and not a child. */
 const pis = () => {
-  let kids = '';
-  try { kids = execFileSync('ps', ['-o', 'pid=,comm=', '--ppid', crewd], { encoding: 'utf8' }); } catch { /* ps exits 1 when there are none */ }
-  return Object.fromEntries(kids.split('\n').filter((l) => /pi-rpc/.test(l)).flatMap((l) => {
-    const pid = Number(l.trim().split(/\s+/)[0]);
-    try { return [[readlinkSync(`/proc/${pid}/cwd`).split('/').at(-2), pid]]; } catch { return []; }
+  const all = execFileSync('ps', ['-eo', 'pid=,ppid=,comm='], { encoding: 'utf8' }).split('\n').filter(Boolean).map((l) => l.trim().split(/\s+/)), parent = new Map(all.map(([pid, ppid]) => [pid, ppid]));
+  const under = (pid) => { for (let at = parent.get(pid); at; at = parent.get(at)) if (at === String(crewd)) return true; return false; };
+  return Object.fromEntries(all.filter(([pid, , comm]) => comm === 'pi-rpc' && under(pid)).flatMap(([pid]) => {
+    try { return [[readlinkSync(`/proc/${pid}/cwd`).split('/').at(-2), Number(pid)]]; } catch { return []; }
   }));
 };
 const ask = async (bot, text) => { say(`You asked ${bot}: ${text}`); return (await api(`/api/bots/${bot}/messages`, { text })).task; };

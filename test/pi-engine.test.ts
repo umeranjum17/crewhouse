@@ -1,9 +1,9 @@
 // CREWHOUSE_ENGINE=pi end to end: the real Crew, one real pinned Pi per bot through the kit, a scripted model on loopback. No account, no network.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -64,13 +64,94 @@ test('a bot answers on Pi with only the default extension, can write nothing, an
   assert.equal(treeHash(join(person, '.pi')), before, "the person's own Pi folder is byte for byte the same");
 });
 
-/** The Pis this process runs, by the folder each works in: Pi renames itself, so its command line says nothing. */
-const pis = (parent = process.pid) => Object.fromEntries(readdirSync('/proc').filter((p) => /^\d+$/.test(p)).flatMap((pid) => {
-  try {
-    if (Number(readFileSync(`/proc/${pid}/stat`, 'utf8').replace(/^.*\) /, '').split(' ')[1]) !== parent || readFileSync(`/proc/${pid}/comm`, 'utf8').trim() !== 'pi-rpc') return [];
-    return [[readlinkSync(`/proc/${pid}/cwd`), { pid: Number(pid), home: /(?:^|\0)HOME=([^\0]*)/.exec(readFileSync(`/proc/${pid}/environ`, 'utf8'))?.[1] }]];
-  } catch { return []; } // gone between the listing and the read
-}));
+/** The Pis this process runs, by the folder each works in: Pi renames itself, so its command line says nothing, and it sits behind bubblewrap, so it is a descendant and not a child. */
+const pis = (root = process.pid) => {
+  const stats = readdirSync('/proc').filter((p) => /^\d+$/.test(p)).flatMap((pid) => {
+    try { return [{ pid: Number(pid), parent: Number(readFileSync(`/proc/${pid}/stat`, 'utf8').replace(/^.*\) /, '').split(' ')[1]), comm: readFileSync(`/proc/${pid}/comm`, 'utf8').trim() }]; }
+    catch { return []; } // gone between the listing and the read
+  });
+  const under = (p: { parent: number }): boolean => { const up = stats.find((s) => s.pid === p.parent); return p.parent === root || (!!up && under(up)); };
+  return Object.fromEntries(stats.filter((p) => p.comm === 'pi-rpc' && under(p)).flatMap(({ pid }) => {
+    try { return [[readlinkSync(`/proc/${pid}/cwd`), { pid, home: /(?:^|\0)HOME=([^\0]*)/.exec(readFileSync(`/proc/${pid}/environ`, 'utf8'))?.[1] }]]; }
+    catch { return []; }
+  }));
+};
+
+test('a bot on Pi is held in its own folder: a write anywhere else is refused by the wall in plain words, a write inside lands, and nothing outside changes', { skip, timeout: 120_000 }, async () => {
+  process.env.CREWHOUSE_PI_TOOLS = 'write'; // the proof's own tool: the product leaves Pi none
+  after(() => { delete process.env.CREWHOUSE_PI_TOOLS; });
+  const model = await startModelStub();
+  after(() => model.close());
+  // Off /tmp, as a person's files are: inside the wall /tmp is the bot's own throwaway, so a target there would never meet the read-only disk.
+  const lab = mkdtempSync('/var/tmp/crewhouse-pi-wall-'), mine = join(lab, 'person');
+  after(() => rmSync(lab, { recursive: true, force: true }));
+  const s = setup(3, { engine: 'pi', engineProvider: { baseUrl: model.url, apiKey: 'lab-key' }, stateDir: join(lab, 'state'), crewDir: join(lab, 'crew'), toolsDir: join(lab, 'tools') });
+  s.crew.onboard('Umer');
+  const scout = s.crew.recruit('scout', undefined, 'person').id;
+  const home = join(s.cfg.stateDir, 'pi', scout), work = join(home, 'work'), neighbour = join(s.cfg.stateDir, 'pi', 'neighbour', 'work');
+  mkdirSync(neighbour, { recursive: true });
+  mkdirSync(join(mine, 'Documents'), { recursive: true });
+  const ask = async (text: string) => {
+    const job = (await s.crew.post(scout, text) as { task: number }).task;
+    await until(`job ${job}`, () => !['queued', 'working'].includes(task(s.db, job).state), 60_000);
+    return { state: task(s.db, job).state, said: String(lastSaid(s.db, scout)) };
+  };
+  const write = (path: string) => ask(`[tool write ${JSON.stringify({ path, content: 'written by the bot' })}]`);
+
+  const inside = await write(join(work, 'notes', 'mine.txt'));
+  assert.equal(inside.state, 'done');
+  assert.equal(readFileSync(join(work, 'notes', 'mine.txt'), 'utf8'), 'written by the bot', 'a write in its folder lands on the real disk');
+
+  const held = Object.values(pis())[0], own = (ns: string, pid: number | string) => readlinkSync(`/proc/${pid}/ns/${ns}`);
+  assert.notEqual(own('mnt', held.pid), own('mnt', 'self'), 'Pi sees its own disk');
+  assert.notEqual(own('pid', held.pid), own('pid', 'self'), 'and its own process list');
+
+  const models = readFileSync(join(home, 'models.json'), 'utf8');
+  for (const target of [join(mine, 'Documents', 'escape.txt'), join(mine, 'made-by-the-bot', 'escape.txt'), join(neighbour, 'escape.txt'), join(s.cfg.stateDir, 'person.key'), join(s.cfg.repoDir, 'escape.txt'), join(home, 'models.json')]) {
+    const out = await write(target);
+    assert.equal(out.state, 'done', 'the job carries on');
+    assert.match(out.said, /That's outside my folder, so I can't open it\./, target);
+    assert.doesNotMatch(out.said, /EROFS|read-only/);
+  }
+  for (const gone of [join(mine, 'Documents', 'escape.txt'), join(mine, 'made-by-the-bot'), join(neighbour, 'escape.txt'), join(s.cfg.stateDir, 'person.key'), join(s.cfg.repoDir, 'escape.txt')]) assert.equal(existsSync(gone), false, gone);
+  assert.equal(readFileSync(join(home, 'models.json'), 'utf8'), models, 'its own model setup is not its to change');
+  for (const throwaway of [join(home, 'scratch.txt'), join('/tmp', `crewhouse-pi-wall-${process.pid}.txt`)]) {
+    assert.match((await write(throwaway)).said, /Successfully wrote/, 'Pi\'s home and /tmp are its own throwaways: it may write there');
+    assert.equal(existsSync(throwaway), false, 'and none of that reaches the disk');
+  }
+  assert.equal((await write(join(work, 'after.txt'))).state, 'done', 'and it keeps working afterwards');
+  assert.ok(existsSync(join(work, 'after.txt')));
+  s.done();
+});
+
+test('a machine with no wall boots refusing: Pi never starts, the app says why and names the fix, and a job ends on that line', { skip, timeout: 120_000 }, async () => {
+  const model = await startModelStub();
+  after(() => model.close());
+  const fix = (name: string) => { const dir = temp(`pi-nowall-${name}`); symlinkSync(execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim(), join(dir, 'git')); return dir; };
+  const missing = fix('missing'), refusing = fix('refusing'), old = fix('old');
+  writeFileSync(join(refusing, 'bwrap'), "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n", { mode: 0o755 });
+  writeFileSync(join(old, 'bwrap'), "#!/bin/sh\necho 'bwrap: Unknown option --disable-userns' >&2\nexit 1\n", { mode: 0o755 }); // Ubuntu 22.04's: fine for the helpers' shell, no wall for Pi
+  const cases = [{ path: missing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap is not installed\. To fix it: sudo apt install bubblewrap/ }, { path: refusing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap cannot start here \(it said: bwrap: setting up uid map: Permission denied\)\. To fix it: / }, { path: old, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: this bubblewrap is too old \(it said: bwrap: Unknown option --disable-userns\)\. To fix it: update bubblewrap to 0\.8 or later$/ }];
+  for (const { path, line } of cases) {
+    const root = temp(`pi-nowall-${cases.findIndex((c) => c.path === path)}`), port = await new Promise<number>((r) => { const l = createServer().listen(0, '127.0.0.1', () => { const { port } = l.address() as AddressInfo; l.close(() => r(port)); }); });
+    const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], { env: { ...process.env, PATH: path, CREWHOUSE_ENGINE: 'pi', CREWHOUSE_ENGINE_BASE_URL: model.url, CREWHOUSE_ENGINE_API_KEY: 'lab-key', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') }, stdio: ['ignore', 'ignore', 'ignore'] });
+    after(() => daemon.kill());
+    const api = async (at: string, body?: unknown) => (await fetch(`http://127.0.0.1:${port}${at}`, { method: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${readFileSync(join(root, 'state', 'person.key'), 'utf8')}`, 'content-type': 'application/json', 'x-crewhouse': '1' }, body: body ? JSON.stringify(body) : undefined })).json();
+    let engine: any, failed: any;
+    await until('the engine to report', async () => engine = await api('/api/state').then((st) => st.engine?.phase === 'failed' && st.engine, () => false), 30_000);
+    assert.match(engine.words, line);
+    await api('/api/onboard', { address: 'Umer' });
+    const { id } = await api('/api/recruit', { template: 'scout' }), asked = model.calls.length;
+    await api(`/api/bots/${id}/messages`, { text: 'Good morning' });
+    await until('the job to end', async () => failed = (await api(`/api/bots/${id}`)).tasks.find((t: any) => t.state === 'failed'), 30_000);
+    assert.match(failed.result, line, 'the job ends on the same line');
+    assert.equal(model.calls.length, asked, 'no model was asked');
+    assert.deepEqual(pis(daemon.pid), {}, 'and no Pi ran');
+    assert.equal(existsSync(join(root, 'state', 'pi', id, 'work')), false, 'nor was a folder made for one');
+    daemon.kill();
+    await new Promise((r) => daemon.once('exit', r));
+  }
+});
 
 test('helpers run on Pi side by side: each its own process, memory and session; an idle one has no process; one crash stops only itself', { skip, timeout: 180_000 }, async () => {
   process.env.CREWHOUSE_PI_IDLE_MS = '300';
