@@ -261,7 +261,7 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
       if (m === 'GET' && p === '/api/mail') return mail.status(q.get('to'));
       if (!phone) throw Object.assign(new Error('Use your paired phone to mark organisations or approve Gmail sending.'), { status: 403 });
       if (m === 'PUT' && p === '/api/mail') return mail.set(body.to, body, phone);
-      if (m === 'POST' && p === '/api/mail/review') return mail.review(Number(body.draft));
+      if (m === 'POST' && p === '/api/mail/review') { if (body.text !== undefined) await crew.answer(Number(body.draft), { answer: 'allow', text: body.text, keep: true }); return mail.review(Number(body.draft)); }
       throw Object.assign(new Error('No such email action.'), { status: 404 });
     }
     // The "How I did it" drawer: one plain row per tool call of a task, recorded by crewd, redacted to words.

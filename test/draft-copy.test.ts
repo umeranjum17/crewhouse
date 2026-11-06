@@ -1,6 +1,6 @@
 // "Copy and open" on a draft with a link, in the real web app on both ask surfaces (the card in the thread and the
 // sheet that opens it): the yes copies the words the person sees — their edit when they made one — and opens the link.
-// Driven in a real Chromium on the built app (web/src/parts.tsx useDraftEdit), so the copy and the open are what a
+// Driven in a real Chromium on the built app (web/src/parts.tsx useDraftEdit, useAct), so the copy and the open are what a
 // person gets. Also checks exact terminal-argument approvals fit the sheet. Needs Chromium on PATH (skipped without one).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -80,7 +80,7 @@ const pressYes = async (b: Awaited<ReturnType<typeof browse>>, edit: string, sco
   const in_ = (what: string) => `[...document.querySelectorAll('${scope} button, ${scope} a')].find((x) => x.textContent === ${JSON.stringify(what)})`;
   await until(`the draft's yes in ${scope}`, () => b.run(`!!${in_('Copy and open')}`), 30_000);
   if (edit) {
-    await b.run(`${in_('Edit')}.click()`);
+    if (scope.includes('sheet')) await b.run(`${in_('Edit')}.click()`);
     await until('the person\'s own words box', () => b.run(`!!document.querySelector('${scope} textarea.draft-edit')`), 10_000);
     await b.run(`(() => { const t = document.querySelector('${scope} textarea.draft-edit'); t.focus(); t.select(); })()`);
     await b.type(edit);
@@ -155,6 +155,27 @@ test('an answered card leaves a receipt line in the thread, and the card is gone
   await until("Chief's box", () => b.run("!!document.querySelector('.home-chat .composer')"), 30_000);
   await pressYes(b, '');
   await until('the receipt in the thread', () => b.run("!!document.querySelector('.home-chat .lines .card.answered')"), 10_000);
-  assert.match(await b.run("document.querySelector('.home-chat .lines .card.answered').textContent"), /^Copied: .+ · \d{1,2}:\d{2} (am|pm)$/);
+  assert.match(await b.run("document.querySelector('.home-chat .lines .card.answered').textContent"), /^Copied, you send it: .+ · \d{1,2}:\d{2} (am|pm)$/);
   assert.equal(await b.run("!!document.querySelector('.home-chat .lines .card.ask')"), false, 'the answered card itself is gone');
+});
+
+test('the card edits in place, says what waits, and a double tap acts once', { skip: !bin && 'no Chromium here' }, async () => {
+  const b = await browse();
+  await b.open('demo=chase&day#/chief');
+  const card = '.home-chat .lines .card.ask', status = `document.querySelector('${card} .ask-status').textContent`;
+  await until('the box in the card', () => b.run(`!!document.querySelector('${card} textarea.draft-edit')`), 30_000);
+  assert.match(await b.run(status), /^Waiting for you · Nothing is sent/);
+  await b.run(`(() => { const t = document.querySelector('${card} textarea.draft-edit'); t.focus(); t.select(); })()`);
+  await b.type(EDIT);
+  await until('the draft state', () => b.run(`${status}.startsWith('Draft')`), 10_000);
+  await b.run(`(() => { const yes = [...document.querySelectorAll('${card} button')].find((x) => x.textContent === 'Copy and open'); yes.click(); yes.click(); })()`);
+  await until('the receipt in the thread', () => b.run("!!document.querySelector('.home-chat .lines .card.answered')"), 10_000);
+  assert.deepEqual(await b.run('window.__done'), { copied: [EDIT], opened: [LINK] }, 'one copy and one open, not two');
+  assert.match(await b.run("document.querySelector('.home-chat .lines .card.answered').textContent"), /^Copied, you send it: /);
+  assert.doesNotMatch(await b.run("document.querySelector('.home-chat .lines').textContent"), /\bSent\b/, 'nothing went out, so nothing says it did');
+  await b.open('demo=chase&day&r=2#/chief');
+  await b.run('location.reload()');
+  await until('the card again', () => b.run(`[...document.querySelectorAll('${card} button')].some((x) => x.textContent === 'Discard')`), 30_000);
+  await b.run(`[...document.querySelectorAll('${card} button')].find((x) => x.textContent === 'Discard').click()`);
+  await until('the discarded receipt', () => b.run("document.querySelector('.home-chat .lines .card.answered')?.textContent.startsWith('Discarded')"), 10_000);
 });

@@ -73,7 +73,7 @@ export const api = {
   state: () => call('GET', '/api/state'),
   mailStatus: (to: string) => call('GET', `/api/mail?to=${encodeURIComponent(to)}`),
   mailMark: (to: string, body: Json) => call('PUT', '/api/mail', { to, ...body }),
-  mailReview: (draft: number) => call('POST', '/api/mail/review', { draft }),
+  mailReview: (draft: number, text?: string) => call('POST', '/api/mail/review', { draft, text }),
   room: (before?: number) => call('GET', `/api/room${before ? `?before=${before}` : ''}`),
   bot: (id: string, around?: number) => call('GET', `/api/bots/${id}${around ? `?around=${around}` : ''}`),
   /** The person has read this chat up to now: its unread dot goes. */

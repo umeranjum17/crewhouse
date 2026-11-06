@@ -298,6 +298,7 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     await request('PUT /api/mail', { to: 'ada@fernwood.example', suppressed: false }); asked.length = 0;
     const review = await request('POST /api/mail/review', { draft: draft.id }); assert.equal(review.status, 200);
     assert.equal((await request('POST /api/mail/review', { draft: draft.id })).body.id, review.body.id, 'one card, even on retry');
+    assert.match((await request('POST /api/mail/review', { draft: draft.id, text: 'Hi Ada, other words.' })).body.error, /already waiting/, 'the card waiting shows the old words, so it is answered first');
     const card = (await request('GET /api/state')).body.asks.find((a: any) => a.id === review.body.id);
     assert.equal(card.bot, 'chief', 'sending is reviewed with Chief, never in a helper’s Needs you');
     assert.deepEqual(card.detail.send, { from: 'umer@sender.example', to: 'ada@fernwood.example', subject: 'A grounded subject' }); assert.equal(card.detail.preview.body, text);
@@ -306,6 +307,12 @@ test('Tracer email: real sandbox HTTP cannot approve; paired control attests onc
     assert.equal(asked.length, 0, 'no Gmail send request, even with an attestation and a review card');
     await request(`POST /api/asks/${card.id}/answer`, { answer: 'deny' });
     assert.equal(db.all("SELECT * FROM events WHERE kind='mail.approved' OR kind='mail.sent'").length, 0, 'backed out; no Send press');
+    // The person's own words go on the review through the same control route; the draft stays open, Send is still its own tap.
+    assert.equal((await http('POST', '/api/mail/review', { draft: draft.id, text: 'Hi Ada, my words.' })).status, 403, 'the computer cannot change what is reviewed');
+    const mine = await request('POST /api/mail/review', { draft: draft.id, text: 'Hi Ada, my words.' }), asks = (await request('GET /api/state')).body.asks;
+    assert.equal(asks.find((a: any) => a.id === mine.body.id).detail.preview.body, 'Hi Ada, my words.', 'Send shows exactly what the person wrote');
+    assert.equal(asks.find((a: any) => a.id === draft.id).state, 'open'); assert.equal(asked.length, 0, 'reviewing sends nothing');
+    await request(`POST /api/asks/${mine.body.id}/answer`, { answer: 'deny' });
   } finally { phone?.stop(); view?.stop(); identity = ''; await new Promise<void>(r => server.close(() => r())); await new Promise<void>(r => who.close(() => r())); done(); }
 });
 
@@ -326,6 +333,8 @@ test('one approval sends exactly once, and a check-Gmail card can always be dism
     assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1, 'exactly one of two approvals is accepted');
     assert.equal(asked.filter((x) => x.startsWith('POST /messages/send')).length, 1, 'exactly one email is sent for one approval');
     assert.equal(db.all("SELECT * FROM events WHERE kind='mail.sent'").length, 1, 'one sent event, never two');
+    const told = A.answeredReceipts({ ...crew.snapshot(), answered: [draft, card].map((id) => { const a = db.get('SELECT * FROM asks WHERE id=?', id)!; return { ...a, detail: JSON.parse(a.detail) }; }) });
+    assert.deepEqual(told.map((r) => r.line.split(':')[0]), ['Sent'], 'one receipt, from the card that knows it was sent');
     // A failed send leaves the card uncertain; the person can always clear it, so it never sticks in Needs you.
     db.run("UPDATE asks SET state='uncertain',answer='check Gmail' WHERE id=?", card);
     const snapshot = crew.snapshot().asks.find((a: any) => a.id === card)!;

@@ -1,7 +1,7 @@
 // The shared pieces: dot art, the ASCII moments, ask cards and the approval sheet, media, steps, the composer.
 import { createPortal } from 'react-dom';
 import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type CSSProperties } from 'react';
-import { api, trouble, type Json } from './api.ts';
+import { api, paired, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
 import { canRecord, ears, hear, record, speak, voices, type Ears } from './voice.ts';
@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { DRAFT_EDITED, RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, phoneOnly, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -954,7 +954,7 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.mailSend ? (body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.') : c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? (c.evidence === 'draft' ? 'Discarded' : 'OK, not now') : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -1006,7 +1006,7 @@ export function CampaignReceipt({ outcome: c }: { outcome: CampaignOutcome }) {
   </div>;
 }
 
-function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: ReactNode }) {
+function AskEvidence({ c, open, readAll, box }: { c: Card; open: boolean; readAll: ReactNode; box?: ReactNode }) {
   const body = c.preview?.body ?? '';
   if (c.mailAction === 'draft') return <div className="ev"><ChatText text={body} /></div>;
   if (c.campaign) return <><CampaignPosts text={body} />{c.campaign.poster ? <Media f={c.campaign.poster} big /> : <p>The poster is not ready here yet.</p>}</>;
@@ -1024,7 +1024,7 @@ function AskEvidence({ c, open, readAll }: { c: Card; open: boolean; readAll: Re
       {c.draftTo && <div className="ev-to">To {c.draftTo}</div>}
       {c.draftSubject && <b className="ev-subject">Subject: {c.draftSubject}</b>}
       {c.draftWhy && <div className="ev-quiet">Because you said “{c.draftWhy}”</div>}
-      <div className="ev-body draft-body">{body}</div>
+      {box || <div className="ev-body draft-body">{body}</div>}
       {!!c.yours?.length && <div className="yours"><b>Only you can answer these</b>{c.yours.map((q, i) => <div key={i} className="yours-q"><span>{q}</span><i aria-hidden /></div>)}<span className="mute small">{c.yours.length} left for you. They stay empty in what you copy.</span></div>}
     </div>;
   }
@@ -1082,14 +1082,15 @@ function FormFields({ f, said, set }: { f: FormView; said: Json; set: (key: stri
  *  is sent. `box` stands in for the evidence while editing; `yes` carries the words only when they changed, and copies
  *  the words the person sees (their edit when there is one) and opens the draft's link before today's Approve answer
  *  (Fill it in for me neither copies nor opens). A filled form's box is its fields, and `yes` carries the answers. */
-function useDraftEdit(c: Card) {
-  const [words, setWords] = useState<string | null>(null), [said, setSaid] = useState<Json>({});
+function useDraftEdit(c: Card, inline = false) {
+  const can = c.evidence === 'draft' && !!c.draftText && !phoneOnly(c, !!paired), held = `ask:${c.id}`;
+  const [words, setWords] = useState<string | null>(inline && can ? draftOf(held).text || c.draftText! : null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
-    can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
-    toggle: () => setWords(words === null ? c.draftText ?? '' : null),
+    can, editing: words !== null, empty: words !== null && !words.trim(), changed, text: changed ? words!.trim() : undefined,
+    toggle: () => { keepDraft(held, ''); setWords(inline ? c.draftText! : words === null ? c.draftText ?? '' : null); },
     box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
-      : words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your version of the message" autoFocus />,
+      : words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => { setWords(e.target.value); keepDraft(held, e.target.value); }} aria-label="Your version of the message" autoFocus={!inline} />,
     yes: (body: Json) => {
       if (c.form) return { ...body, fields: said };
       if (c.evidence !== 'draft' || c.mailSend) return body;
@@ -1101,6 +1102,16 @@ function useDraftEdit(c: Card) {
       return changed ? { ...body, text } : body;
     },
   };
+}
+
+/** One answer at a time: the second tap of a double tap does nothing, not even a second copy or open. Only a failure frees the card. */
+function useAct(c: Card, done: () => void) {
+  const [oops, setOops] = useState(false), last = useRef<(() => Promise<boolean>) | null>(null), busy = useRef(false);
+  const run = async (go: () => Promise<boolean>) => { if (busy.current) return; busy.current = true; last.current = go; setOops(false); if (await go()) done(); else { busy.current = false; setOops(true); } };
+  const act = (body: Json | (() => Json)) => { if (!busy.current) void run(((b) => () => answer(c, b))(typeof body === 'function' ? body() : body)); };
+  const failed = oops && (c.mailSend ? <div className="send-failed" role="alert">Sending was not confirmed. Check Gmail before doing anything else.</div>
+    : <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && void run(last.current)}>Try again</button></div>);
+  return { act, run, failed };
 }
 
 type MoreAct = { label: string; run: () => unknown; pressed?: boolean; cls?: string };
@@ -1273,13 +1284,11 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.ruleView) return <RuleCard c={c} id={id} onDone={onDone} />;
   const [reply, setReply] = useState('');
-  const [oops, setOops] = useState(false);
-  const last = useRef<Json | null>(null);
-  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onDone(); else setOops(true); };
+  const { act, run, failed } = useAct(c, onDone);
   const yes = c.choices[0];
   const deny = c.choices.find((x) => x.body.answer === 'deny' && x !== yes);
   // A deferred "Not now" comes back on its own: "Remind me tomorrow" re-asks it from a one-shot routine.
-  const remind = !c.mailSend && !c.campaign && !c.remind && deny && deny.label === 'Not now' ? { ...deny.body, remind: true } : null;
+  const remind = !c.mailSend && !c.campaign && !c.remind && deny && (deny.label === 'Not now' || c.reminds) ? { ...deny.body, remind: true } : null;
   const always = c.choices.find((x) => x.body.scope === 'always');
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   // A routine offered by Chief: the lines are the confirmation, and changing the time is an edit before the yes.
@@ -1289,18 +1298,18 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   const stuck = when !== null && (!when.trim() || !preview || preview.bad);
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
-  const edit = useDraftEdit(c);
+  const edit = useDraftEdit(c, true), review = !!c.mailTo && !!paired, draft = c.evidence === 'draft' && !c.mailSend;
   const routine = c.kind === 'routine' ? c.lines : undefined;
   const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
   const kind = c.hire?.kind ?? ((c.by ?? c.helper) === 'chief' ? 'chief' : who?.kind ?? 'chief');
   return (
     <div className={`card ask stack-ask${c.campaign ? ' campaign' : ''}${c.kind === 'plan' ? ' plan-ask' : ''}${c.evidence === 'draft' ? ' draft-ask' : ''}${kind === 'chief' ? ' chief-ask' : ''}`} id={id} aria-label={c.head}
       style={{ '--ask-colour': art.colourOf(kind) } as CSSProperties}>
-      <AskHead c={c} who={who} />
+      <AskHead c={edit.changed ? { ...c, status: DRAFT_EDITED } : c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}
-      {edit.box || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
-        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={!!c.rule} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
-      {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
+      {(c.form && edit.box) || (routine ? <div className="ask-lines">{routine.map((l, i) => <p key={i} className={`ask-line${i ? ' quiet' : ''}`}>{l}</p>)}</div>
+        : <AskEvidence c={c.evidence === 'draft' && c.preview ? { ...c, preview: { ...c.preview, body: c.mailSend ? c.preview.body : flowed(c.preview.body) } } : c} open={!!c.rule} box={edit.box} readAll={<a className="link" href={`#/ask/${c.id}`}>Read all</a>} />)}
+      {failed}
       {away ? <p className="mute small">You can answer once the home computer is back.</p> : c.kind === 'routine' ? (
         <>
           {when !== null && <form className="row routine-edit" onSubmit={(e) => { e.preventDefault(); if (!stuck) void start(); }}>
@@ -1346,17 +1355,20 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
         <div className="btns"><button className="btn go" onClick={() => act(yes.body)}>{yes.label}</button>{deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}</div>
       ) : yes ? (
         <div className="btns">
-          <button className="btn go" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>
+          <button className="btn go" disabled={edit.empty || phoneOnly(c, !!paired)} onClick={() => (review ? run(() => attempt(() => api.mailReview(c.id, edit.text), 'Read it through, then Send')) : act(() => edit.yes(yes.body)))}>{review ? 'Review one email' : yes.label}</button>
+          {draft && deny && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
           <More title={title} sub={sub} acts={[
-            edit.can && { label: edit.editing ? 'Use the original' : 'Edit', pressed: edit.editing, run: edit.toggle },
-            ...c.choices.filter((x) => x !== yes && x.body.answer === 'allow' && x.body.scope !== 'always').map((x) => ({ label: x.label, run: () => act(edit.yes(x.body)) })),
-            deny && { label: deny.label, run: () => act(deny.body) },
+            edit.changed && { label: 'Use the original', run: edit.toggle },
+            review && { label: yes.label, run: () => act(() => edit.yes(yes.body)) },
+            ...c.choices.filter((x) => x !== yes && x.body.answer === 'allow' && x.body.scope !== 'always').map((x) => ({ label: x.label, run: () => act(() => edit.yes(x.body)) })),
+            !draft && deny && { label: deny.label, run: () => act(deny.body) },
             remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) },
             always && { label: always.label, cls: 'ghost always', run: () => act(always.body) }]} />
         </div>
       ) : null}
       {c.kind === 'spend' && <p className="ask-note">Anything that costs money asks you every time.</p>}
-      {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
+      {phoneOnly(c, !!paired) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
+      {review && <p className="ask-note">Review shows the whole email; Send there is your second tap. Mark the organisation in the phone app first.</p>}
       {c.kind === 'plan' && <p className="ask-note">Saying Go doesn’t OK any sending or spending. Those still ask you each time.</p>}
     </div>
   );
@@ -1367,11 +1379,9 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
  *  without a readable total offers no yes at all. */
 export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper | undefined; chiefSays?: string; onClose: () => void }) {
   const [open, setOpen] = useState(false);
-  const [oops, setOops] = useState(false);
-  const last = useRef<Json | null>(null);
+  const { act, failed } = useAct(c, onClose);
   const box = useRef<HTMLDivElement>(null);
   useDialogOwn(box, onClose);
-  const act = async (body: Json) => { last.current = body; setOops(false); if (await answer(c, body)) onClose(); else setOops(true); };
   const question = c.review && c.preview?.head ? c.preview.head : c.words;
   const yes = c.choices[0]?.body.answer === 'allow' ? c.choices[0] : null;
   // Every way out that isn't the one yes — an unpriced order has two, and neither is a yes.
@@ -1394,15 +1404,15 @@ export function AskSheet({ c, who, chiefSays, onClose }: { c: Card; who: Helper 
         {edit.box || <AskEvidence c={c} open={open} readAll={<button className="link" onClick={() => setOpen(true)}>Read all</button>} />}
         {c.review && c.order && !c.order.known && <div className="mute small">So nothing is counted against the monthly limit.</div>}
         {chiefSays && <div className="chief-says"><Face who="chief" size={20} /><span><b>Chief:</b> {chiefSays}</span></div>}
-        {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={() => last.current && act(last.current)}>Try again</button></div>}
+        {failed}
         <div className="approve-btns">
-          {yes && <button className="btn go big" disabled={edit.empty || (c.mailSend && !c.mailUncertain) || !!c.mailTo} onClick={() => act(edit.yes(yes.body))}>{yes.label}</button>}
+          {yes && <button className="btn go big" disabled={edit.empty || phoneOnly(c, !!paired)} onClick={() => act(() => edit.yes(yes.body))}>{yes.label}</button>}
           {edit.can && <button className="btn big" aria-pressed={edit.editing} onClick={edit.toggle}>{edit.editing ? 'Use the original' : 'Edit'}</button>}
-          {rest.map((x) => <button key={x.label} className="btn big" disabled={c.mailSend && !c.mailUncertain && x.body.answer !== 'deny'} onClick={() => act(x.body.answer === 'allow' ? edit.yes(x.body) : x.body)}>{x.label}</button>)}
+          {rest.map((x) => <button key={x.label} className="btn big" disabled={phoneOnly(c, !!paired) && x.body.answer !== 'deny'} onClick={() => act(() => (x.body.answer === 'allow' ? edit.yes(x.body) : x.body))}>{x.label}</button>)}
         </div>
         {remind && <button className="link approve-remind" onClick={() => act({ ...remind.body, remind: true })}>Remind me tomorrow</button>}
         {always && <button className="btn ghost always" onClick={() => act(always.body)}>{always.label}</button>}
-        {((c.mailSend && !c.mailUncertain) || c.mailTo) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
+        {phoneOnly(c, !!paired) && <p className="ask-note">Approve this email on your paired phone. Nothing sends from this screen.</p>}
         {c.kind === 'spend' && <p className="ask-note"><Icon name="lock" size={20} /><span>Anything that costs money asks you every time.</span></p>}
         </div>
       </div>

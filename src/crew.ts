@@ -1944,7 +1944,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string; fill?: boolean; fields?: unknown }, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string; fill?: boolean; fields?: unknown; keep?: boolean }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
@@ -1952,7 +1952,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (!['allow', 'deny'].includes(body.answer ?? '')) throw fail('answer allow or deny');
     const scope = body.answer === 'allow' ? body.scope ?? 'once' : 'once';
     if (!['once', 'task', 'always'].includes(scope) || (scope !== 'once' && !detail.key) || (scope === 'task' && !ask.task_id)) throw fail('allow once, for this task, or always');
-    const who = this.bot(ask.bot)?.display ?? ask.bot;
     // A suggestion takes effect on yes, before the card closes: if it can't, the card stays open. A routine offered by
     // Chief takes the time the person changed on the card ("Change time"), then the same yes.
     if (body.schedule && ask.kind === 'propose' && detail.routine) detail.routine.schedule = String(body.schedule);
@@ -1960,6 +1959,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (body.text !== undefined) {
       const text = String(body.text).trim();
       if (ask.kind !== 'propose' || !detail.draft || body.answer !== 'allow') throw fail('only a draft you approve takes new words');
+      if (body.keep && this.db.get("SELECT 1 FROM asks WHERE json_extract(detail,'$.send.draft') = ? AND state = 'open'", askId)) throw fail('Answer the email already waiting for you first.', 409);
       if (!text || text.length > DRAFT_CAP) throw fail(text ? 'that draft is too long' : 'the draft is empty');
       if (text !== String(detail.preview?.body ?? '').trim()) {
         // A card from before drafts showed whole may hold only the start of it: changing that would cut the rest.
@@ -1968,6 +1968,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         detail.draft = { ...detail.draft, sha: sha(text), edited: true }; detail.preview = { ...detail.preview, body: text }; // the receipt quotes their words, not the helper's
       }
     }
+    if (body.keep) return void this.db.run('UPDATE asks SET detail = ? WHERE id = ?', JSON.stringify(detail), askId); // new words before Review one email: the draft stays open
     // An application: Fill it in starts the writer on the posting's form with the words approved here; a filled form's
     // Submit is the one press, made by crewd on this tap (a line that can't go in throws, and the card stays open).
     if (ask.kind === 'propose' && body.answer === 'allow' && body.fill && detail.draft?.role) this.draftRole(detail.draft.role, 'fill', String(detail.preview?.body ?? ''));
@@ -1980,7 +1981,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.form && !this.browserOf(ask.bot)?.onScreen) void this.browserOf(ask.bot)?.run(['close']);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${who}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${this.bot(ask.bot)?.display ?? ask.bot}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
       this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });

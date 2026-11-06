@@ -50,6 +50,8 @@ export type Card = {
   mailAction?: 'draft' | 'label';
   campaign?: { ready: boolean; poster?: FileView };
   mailTo?: string; mailSend?: boolean; mailFrom?: string; mailUncertain?: boolean;
+  /** An application's draft: its Discard can still come back tomorrow. */
+  reminds?: boolean;
   /** An application form the writer filled on the posting's own site, read by crewd from the page: what went in, the
    *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
   form?: FormView;
@@ -1027,7 +1029,7 @@ export function card(a: Json, state: Json): Card {
     lines: (d.plan.steps ?? []).map((x: string, i: number) => `${i + 1}. ${plain(x)}`),
     choices: [{ label: 'Go', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] };
   if (a.kind === 'mail') { const unsure = a.state === 'uncertain';
-    return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Nothing sent · approve on your paired phone', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
+    return { ...base, kind: 'ok', status: unsure ? 'Check Gmail before doing anything else' : 'Waiting for you · nothing sent yet', head: unsure ? 'Did this email go out?' : 'Send this one email?', words: unsure ? 'Sending was not confirmed. Check your Gmail Sent folder; this email will not be sent again.' : 'Check the sender, recipient and every word. Send approves this message only.', evidence: 'draft', mailSend: true, mailUncertain: unsure, mailFrom: d.send.from, draftTo: d.send.to, draftSubject: d.send.subject, preview: d.preview, choices: unsure ? [{ label: 'OK, got it', body: { answer: 'dismiss' } }] : [{ label: 'Send', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Not now', body: { answer: 'deny' } }] }; }
   if (a.kind === 'propose' && d.form) {
     // Submit is the person's own press, made by crewd on this tap; the helper never has it. No Submit button on the page: no Submit here.
     const f = d.form, note = f.stop ? `${name} stopped here: ${plain(f.stop).replace(/[^.!?]$/, '$&.')}` : !f.submit ? (f.next ? `This form goes on past this page (its button says “${plain(f.next)}”). Finish it on the site yourself.` : "I couldn't find this form's Submit button. Finish it on the site yourself.") : undefined;
@@ -1055,10 +1057,11 @@ export function card(a: Json, state: Json): Card {
     let body = String(d.preview?.body ?? '').replace(/^\s{0,3}(?:#{1,6}|>)[ \t]+/gm, '').trim();
     const [first, ...rest] = body.split('\n');
     if (subject && /^subject:/i.test(first) && first.replace(/^subject:\s*/i, '').trim().toLowerCase() === subject.toLowerCase()) body = rest.join('\n').trim();
-    return { ...base, kind: 'ok', status: `Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft',
-      ...(state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email' ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
+    const guarded = state.bots?.some((b: Json) => b.id === a.bot && b.template === 'tracer') && channel === 'email';
+    return { ...base, kind: 'ok', status: guarded ? 'Waiting for you · nothing sent yet' : `Waiting for you · Nothing is sent · ${channel === 'post' ? 'post' : 'send'} it yourself`, evidence: 'draft', reminds: !!d.draft.role,
+      ...(guarded ? { mailTo: String(d.draft.to) } : {}), draftTo: plain(d.draft.to), draftSubject: plain(d.draft.subject) || undefined, draftLink: d.draft.link ? plain(d.draft.link) : undefined, draftText: body, draftWhy: plain(d.draft.why) || undefined, head, words: head, preview: { body },
       ...(d.draft.yours?.length ? { yours: d.draft.yours.map((q: string) => plain(q)) } : {}),
-      choices: d.draft.role ? [{ label: 'Fill it in for me', body: { answer: 'allow', scope: 'once', fill: true }, primary: true }, { label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' } }, { label: 'Not now', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Reject', body: { answer: 'deny' } }] };
+      choices: d.draft.role ? [{ label: 'Fill it in for me', body: { answer: 'allow', scope: 'once', fill: true }, primary: true }, { label: 'Copy and open the form', body: { answer: 'allow', scope: 'once' } }, { label: 'Discard', body: { answer: 'deny' } }] : [{ label: d.draft.link ? 'Copy and open' : 'Copy', body: { answer: 'allow', scope: 'once' }, primary: true }, { label: 'Discard', body: { answer: 'deny' } }] };
   }
   // Chief's hire in a glance: who, will/won't do, the person's first step and the first job; nothing changes until the yes.
   if (a.kind === 'propose' && d.hire) {
@@ -1122,7 +1125,7 @@ export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
 const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked', video: 'Picked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
- *  "Copied: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
+ *  "Copied, you send it: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {
   const subject = c.draftSubject?.trim();
   if (subject) return subject;
@@ -1144,17 +1147,21 @@ function receiptAction(kind: string, detail: Json): string {
   if (d.effect === 'delete') return 'Deleted something';
   return '';
 }
-/** A receipt per recently answered card: one plain line, "Copied: Refund for order 98765 · 9:12 pm". The card itself is
+/** The state line while the person's own words sit in the box, and whether this device must leave the send to the paired phone. */
+export const DRAFT_EDITED = 'Draft · your changes · nothing sent yet';
+export const phoneOnly = (c: Card, paired: boolean) => !paired && ((c.mailSend && !c.mailUncertain) || !!c.mailTo);
+/** A receipt per recently answered card: one plain line, "Copied, you send it: Refund for order 98765 · 9:12 pm". The card itself is
  *  gone, but the thread still shows what the person agreed to and when. An approval outcome also carries the action in
  *  plain words (`what`) and its outcome word (`word`), so the thread can show one muted pill, "Placed the order at
  *  shop.example   Allowed", as the reference does. A dismissed mail acknowledgement leaves nothing. */
 export function answeredReceipts(state: Json): { id: number; helper: string; at: number; line: string; what?: string; word?: string; rule?: string }[] {
   const answered = (state.answered ?? []).flatMap((a: Json) => {
-    if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed')) return [];
+    // A draft that went on to Gmail is told by its own mail card, the one that knows whether it was sent.
+    if (!a.answered_at || (a.kind === 'mail' && a.answer === 'dismissed') || a.answer === 'Gmail sending attempted') return [];
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : c.ruleView?.text ? 'Saved' : 'Removed', line: no ? 'Your rules have not changed.' : 'See them in Settings, Custom rules.' }];
-    const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : 'Approved')
-      : no ? (c.evidence === 'draft' ? 'Rejected' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+    const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : shown === 'not sent' ? 'Not sent' : 'Approved')
+      : no ? (c.evidence === 'draft' ? 'Discarded' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied, you send it' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
     const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
@@ -1556,6 +1563,7 @@ export function receipt(kind: string, d: Json) {
   const what = plain(d.subject ? `“${String(d.subject)}”` : d.body ?? '');
   const where = `to ${plain(d.to ?? '')}`;
   const why = plain(d.why ?? '');
+  if (d.sent) return `Sent your ${plain(d.channel ?? 'message')} ${what} ${where} from your Gmail${why ? ` · because you said “${why}”` : ''}`;
   return kind === 'draft.approved'
     ? `Kept your ${plain(d.channel ?? 'message')} ${what} ${where} · nothing was sent, you send it yourself${why ? ` · because you said “${why}”` : ''}`
     : `Didn't send that ${plain(d.channel ?? 'message')} ${what} ${where} · you said not now`;

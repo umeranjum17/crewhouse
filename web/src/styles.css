@@ -223,6 +223,7 @@ textarea.input { resize: vertical; }
 .order-row.total { font-weight: 600; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
 .ask-note { font: 400 13px/18px var(--ui); color: var(--mute); text-align: center; margin: 10px 0 0; }
 .routine-edit { margin-top: 10px; }
+.card.ask.draft-ask .draft-edit { background: transparent; color: inherit; border-color: rgba(0,0,0,.18); min-height: 6em; }
 .draft-edit { margin-top: 12px; font: inherit; line-height: 1.5; resize: vertical; min-height: 9em; }
 .routine-note { margin-top: 6px; }
 .routine-ask form { margin-top: 12px; }
@@ -2495,6 +2496,15 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .chat .lines .card.ask .ask-head .face { zoom: .7; }
 .shell.calm .chat .lines .card.ask .btn { min-height: 36px; padding: 6px 14px; border-radius: 999px; font: 600 16px/20px var(--ui); }
 .shell.calm .chat .lines .card.ask .btn.go { background: var(--ink); color: var(--bg); border: 0; }
+.shell.calm .chat .lines .card.ask .btn.go:disabled { background: var(--soft); color: var(--mute); opacity: 1; }
+.shell.calm .chat .lines .card.ask.draft-ask { --ink: #1E1B16; --mute: #4A453A; --line2: #CFC6AE; --ink2: #4A453A; --soft: #E4DCC6; --bubble: #FBF6E6; --bubble2: var(--bubble); border: 1px solid var(--line2); }
+[data-theme='night'] .shell.calm .chat .lines .card.ask.draft-ask { --bubble: #EFE8D6; }
+.shell.calm .chat .lines .card.ask.draft-ask .ev { padding: 0; }
+.shell.calm .chat .lines .card.ask.draft-ask :is(.ev-to, .ev-subject) { padding: 8px 0; border-bottom: 1px solid var(--line2); font-weight: 400; }
+.shell.calm .chat .lines .card.ask.draft-ask .draft-edit { background: #FFFDF6; border-color: var(--line2); min-height: 132px; }
+.shell.calm .chat .lines .card.ask.draft-ask .ask-status { color: var(--mute); }
+.shell.calm .chat .lines .card.ask.draft-ask .btn.go { background: #A86420; color: #fff; }
+.shell.calm .chat .lines .card.ask.draft-ask .btn.go:disabled { background: var(--soft); color: var(--mute); }
 .shell.calm .chat .lines .card.ask .btn:not(.go) { background: transparent; color: var(--ink); border: 1px solid var(--line2); }
 .shell.calm .chat .lines .card.ask .ask-status { color: var(--quiet); }
 .calm .calm-home .btn.go, .calm .side .btn.go { background: var(--ink); color: var(--bg); }
