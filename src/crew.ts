@@ -70,7 +70,6 @@ export const MIN_EVERY = 15;
 const SLEPT_MS = 60_000, STUCK_MS = Number(process.env.CREWHOUSE_STUCK_MS || 180_000); // working with no news this long: show "stuck?"
 /** A quiet check-in's reply when nothing needs the person, and how its run is recorded. */
 const ALL_CLEAR = 'ALL-CLEAR', ALL_CLEAR_RESULT = 'All clear';
-/** Events that make up a bot's plain "what I did" trail. */
 const TRAIL = ['task.created', 'task.working', 'task.done', 'task.failed', 'task.unsure', 'task.progress', 'run.tool', 'run.allowed',
   'ask.opened', 'ask.answered', 'ask.parked', 'file.delivered', 'memory.learned', 'memory.undone', 'bot.allowed', 'run.resumed',
   'skill.learned', 'skill.removed', 'soul.changed', 'draft.approved', 'draft.rejected', 'profile.edited'];
@@ -226,7 +225,6 @@ export class Crew {
   private taskGrants = new Map<number, string[]>();
   private starting = new Set<string>();
   private timer?: NodeJS.Timeout;
-  /** Bots with a run in flight (the engine is working). */
   readonly busy = new Set<string>();
   /** Applied learning already recorded in the log, keyed by skill id. */
   private seenLearned = new Set<string>();
@@ -533,7 +531,6 @@ export class Crew {
       events: this.db.events(0, 80),
       /** The person's resting AI accounts, only while a job waits on them (pause(); docs/ui-contract.md). */
       resting: this.db.get("SELECT 1 FROM tasks WHERE state = 'paused' AND result LIKE 'Your % reached its limit and rests until%'") ? Object.fromEntries([...this.accounts.rests].filter(([, t]) => t)) : {},
-      /** The apps the person has connected, by the app screen's own names. */
       connections: this.connections.on(),
       /** Whether Google is switched on (Calendar, Gmail and Drive need it), and its four steps as
        *  far as Google's own answers show: checked, missing, or only said done. */
@@ -582,7 +579,6 @@ export class Crew {
     return { last: last ?? null, unread: unseen.n as number, firstUnread: unseen.first as number | null };
   }
 
-  /** The person has read this thread up to now. */
   read(bot: string) {
     if (!this.bot(bot)) throw fail('no such bot', 404);
     this.db.run('INSERT INTO reads (member, bot, seen) VALUES (1, ?, ?) ON CONFLICT(member, bot) DO UPDATE SET seen = MAX(seen, excluded.seen)', bot, this.db.get('SELECT MAX(id) AS id FROM messages WHERE bot = ?', bot)!.id ?? 0);
@@ -641,7 +637,6 @@ export class Crew {
   }
 
   // ---- routines: time-based, deterministic, no model call to decide when ----
-  /** The person's routines and morning digest. */
   routines() {
     return this.db.all('SELECT * FROM routines ORDER BY kind, id').map(({ brain: _, ...r }): Row => ({
       ...r, words: r.schedule && r.kind !== 'remind' ? describe(parseSchedule(r.schedule)) : '',
@@ -1086,7 +1081,6 @@ export class Crew {
     return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
-  /** A message in the person's thread with a bot. */
   say(bot: string, author: string, text: string, taskId: number | null = null) {
     if (author === 'bot') text = cleanReply(text);
     const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at) VALUES (?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now()).lastInsertRowid);
@@ -1137,7 +1131,6 @@ export class Crew {
     return offer;
   }
 
-  /** A targeted request for Chief. */
   requestChief(text: string, said?: string) {
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
     // The thread shows the person's own words (`said`), never crewd's instruction to the model.
@@ -1197,7 +1190,6 @@ export class Crew {
     return !files.length && /\?\s*$/.test(text) ? text : relayResult(text, files.map((e) => JSON.parse(e.data).note as string).find(Boolean), !!task.acted);
   }
 
-  /** The job this task was started to check, if it is a check. */
   private checkOf(task: Row) { return this.db.get("SELECT json_extract(data, '$.task') AS t FROM events WHERE kind = 'check.started' AND json_extract(data, '$.check') = ?", task.id)?.t as number | undefined; }
 
   /** A scout's answer waits for a second helper to challenge it; the card names the checked answer and what the check found. */
@@ -1589,7 +1581,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     }
   }
 
-  /** A turn finished with a reply. */
   finish(botId: string, reply: string) {
     const task = this.activeTask(botId), text = cleanReply(reply.trim());
     let wants = false;
@@ -2249,7 +2240,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     } finally { closeSync(fd); }
   }
 
-  /** The person said yes to a suggestion. */
   private adopt(botId: string, d: Row) {
     if (d.customRule) this.setRule(d.customRule.text, d.customRule.replaces ?? '', d.customRule.hold);
     else if (d.skill) {

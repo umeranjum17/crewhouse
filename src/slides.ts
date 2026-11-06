@@ -111,7 +111,6 @@ const all = (e: any, name: string): any[] => {
   for (const c of e?.elements ?? []) if (c.type === 'element') { if (c.name === name) out.push(c); out.push(...all(c, name)); }
   return out;
 };
-/** The runs of one paragraph, joined: what the slide says. */
 const says = (e: any) => all(e, 'a:t').map((t: any) => (t.elements ?? []).map((x: any) => x.text ?? '').join('')).join('');
 
 /** Read a deck back for the app: one entry per slide, its title and its lines, words only — plus those same words

@@ -116,6 +116,5 @@ export function parseTrigger(text: string): Trigger {
   throw triggerBad(text);
 }
 
-/** The trigger back in plain words; `who` is the helper's display name, whose inbox the file trigger watches. */
 export const describeTrigger = (t: Trigger, who: string) => 'mail' in t ? `When an email${t.from ? ` from ${t.from}` : ''}${t.subject ? ` with subject ${t.subject}` : ''} arrives`
   : 'calendar' in t ? (t.calendar ? `${t.calendar} minutes before each meeting` : 'When a meeting starts') : 'file' in t ? `When a file arrives in ${who}'s inbox` : 'When this computer wakes up';

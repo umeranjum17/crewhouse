@@ -14,7 +14,6 @@ export interface Seen {
   space: string;
   /** The crew's own install: every helper's folder and the person's notes. The crew's own work is the crew's. */
   crew?: string;
-  /** The page the bot's browser is on, from its own tool results. */
   page?: string;
   /** Sites the person signed the bot in to (its browser acts there as them). */
   signedIn?: string[];

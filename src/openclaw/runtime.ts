@@ -187,7 +187,6 @@ export class OpenClawRuntime implements AgentRuntime {
     return !!row && (row.state === 'ready' || row.state === 'resting' || row.state === 'unknown'); // an unanswered probe is no sign-out: the engine asks again on the run
   }
   async found(account: string) { return ['claude-cli', 'openai-codex'].includes(await this.routeOf(account) ?? ''); }
-  /** How a sign-in ended, in the card's plain words. */
   private view(v: SignInView, on: (step: SignInStep) => void, name: string) {
     if (v.state === 'waiting') on({ waiting: true, ...(v.url ? { url: v.url } : {}), ...(v.code ? { code: v.code } : {}), ...(v.error ? { error: v.error } : {}) });
     else if (v.state === 'done') on({ waiting: false, done: true });

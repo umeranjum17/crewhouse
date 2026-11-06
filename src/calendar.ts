@@ -69,7 +69,6 @@ export async function events(token: Token, from: Date, to: Date, extra: Record<s
 
 const span = (at: Date, allDay: boolean, end: Date) => (allDay ? { start: { date: ymd(at) }, end: { date: ymd(end) } } : { start: { dateTime: at.toISOString() }, end: { dateTime: end.toISOString() } });
 
-/** `--name value` options, and the words left over. */
 export function options(args: string[]) {
   const o: Record<string, string> = {}, rest: string[] = [];
   for (let i = 0; i < args.length; i++) { if (args[i].startsWith('--') && i + 1 < args.length) o[args[i].slice(2)] = args[++i]; else rest.push(args[i]); }
