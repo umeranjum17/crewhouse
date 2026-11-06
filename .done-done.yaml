@@ -222,7 +222,7 @@ journeys:
   skill-eval:
     command: 'CHROME_DEVTOOLS_AXI_SESSION="${CHROME_DEVTOOLS_AXI_SESSION:?task-named session}" timeout -k 10 600 bash scripts/verify/skill-eval.sh "$DONE_DONE_EVIDENCE_ROOT"'
   # The calm chat, Home and desktop shell (ch-018) on the ?demo data: Chief's chat and Home at 390, Chief in three panes at
-  # 1280, day and night. With base_ref, verify drives the same capture at the base into before/ (CALM_HEAD: calm-design.sh).
+  # 1280, day and night. Its before/after is paused: no base_ref is set, as a journey with nothing at the base ends inconclusive (features/calm-chat-home-desktop.md).
   calm-design:
     command: 'bash "${CALM_HEAD:-.}/scripts/verify/calm-design.sh" "$DONE_DONE_EVIDENCE_ROOT"'
   # The bot list and bot chat (ch-ui-slice1) on a real stub-engine crewd: a list with every mark and Scout's five pictures as
@@ -232,7 +232,7 @@ journeys:
   # The Pi flag, off and on: the list and chat with it off, two helpers on their own extension lists and notes and one on none with it on, a restart, a stand-in Pi folder hashed (pi-engine.md).
   pi-engine:
     timeout: 20m
-    spends: 'nine live model calls on the free MiniMax M3.1 Flash if each helper takes one call per step, and never more than PI_CALL_LIMIT (12 unless set), on the key the key file names'
+    spends: 'six live model calls on the free MiniMax M3.1 Flash if each helper takes one call per step, and never more than PI_CALL_LIMIT (20 unless set), on the key the key file names'
     command: 'bash scripts/verify/pi-engine.sh "$DONE_DONE_EVIDENCE_ROOT" "${MINIMAX_KEY_FILE:?the MiniMax key file}"'
   # A bot's whole Pi process behind bubblewrap: the same escape with no wall and with it, the launcher and mounts of the running Pi, a machine with no bubblewrap with the flag on and off. Real Pi, scripted model, nothing spent (pi-engine.md).
   pi-wall:
@@ -251,5 +251,3 @@ journeys:
   ubuntu-sandbox:
     timeout: 40m
     command: 'bash scripts/verify/ubuntu-sandbox.sh "$DONE_DONE_EVIDENCE_ROOT" "${UBUNTU_SANDBOX_DEB:?the .deb from scripts/package.mjs}"'
-# The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
-base_ref: 66263f7d
