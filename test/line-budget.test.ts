@@ -113,7 +113,8 @@ import { join } from 'node:path';
 // PR; no trim paired (the adapter is the feature, and OpenClaw's stays until Pi replaces it).
 // Raised 8282 -> 8310 for a bot's own notes on Pi (ch-pi-memory, +28 net, owner exception given by Juggernaut for the PR):
 // src/pi/notes.ts, the one reviewed tool on one fixed file. A scan found nothing honest to delete; a trim lane is filed separately.
-const BUDGET = 8310;
+// Trimmed 8310 -> 8279 for ch-src-trim-pi-memory: 28 comment lines that only restated the code, repaying the ch-pi-memory raise; the Ubuntu sandbox change (#816) had freed 3 more.
+const BUDGET = 8279;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
