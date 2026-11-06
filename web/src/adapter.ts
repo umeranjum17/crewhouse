@@ -15,13 +15,15 @@ export type Helper = {
 };
 export type Choice = { label: string; body: Json; primary?: boolean };
 export type Card = {
-  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style' | 'video'; head: string; words: string;
+  id: number; helper: string; by?: string; kind: 'ok' | 'spend' | 'question' | 'connect' | 'routine' | 'plan' | 'signin' | 'unlock' | 'style' | 'video' | 'pick'; head: string; words: string;
   /** A helper's locked files: one password field each, typed only into this card (`passwords` in the answer). */
   unlock?: { helper: { kind: Kind; name: string }; files: { path: string; name: string }[] };
   /** A deck's style pick: the deck's first slide in each offered look, one choice per look (`style` in the answer). */
   pick?: { deck: string; title: string; lines: string[]; styles: { id: string; label: string }[] };
   /** A video link's quality pick: where it is from, each quality (or the sound alone) with its size (`pick` in the answer). */
-  video?: { from: string; choices: { id: string; label: string; size: string }[] };
+  video?: { from: string; choices: { id: string; label: string; size: string }[]; go?: string };
+  /** A bot's crew_piece: a card, form or picker on the action card's paper, its answer going back to the same turn. */
+  piece?: boolean;
   /** The one plain rule for the copies an unlock leaves, picked on the same card: how long they stay in the folder. */
   keep?: { line: string; rule: string; options: { label: string; rule: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
@@ -56,7 +58,9 @@ export type Card = {
    *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
   form?: FormView;
 };
-export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean }[]; note?: string };
+export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean; optional?: boolean }[]; note?: string };
+/** A piece's form holds its Send until every line it needs has an answer; crewd checks the same again. */
+export const formOpen = (c: { piece?: boolean; form?: FormView }, said: Json) => !!c.piece && !!c.form?.fields.some((f) => f.kind !== 'tick' && !f.optional && !String(said[f.key] ?? '').trim());
 /** The small line above an ask's title: what kind of yes it wants, so the title itself can stay plain. */
 /** A confirmed custom rule. `hold` is enforced before every send, submit or purchase; `was` is the saved rule a card changes. */
 export type RuleView = { text: string; hold?: 'draft' | 'say'; was?: string };
@@ -566,8 +570,8 @@ const midnight = () => new Date().setHours(0, 0, 0, 0);
  *  with no news past crewd's limit is still working (its `stuckFor` is Chief's to ask about); a held job waits, with
  *  crewd's reason; the last job that ended badly today says so until a newer one starts. */
 export function helper(b: Json, events: Json[] = [], crew: Json[] = [], tasks: Json[] = [], asks: Json[] = [], gone: Set<string> = new Set()): Helper {
-  const own = asks.filter((a) => a.bot === b.id);
-  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft || a.detail?.form);
+  const own = asks.filter((a) => a.bot === b.id || (a.detail?.piece && a.detail.bot === b.id));
+  const chiefDraft = b.task?.state === 'needs_you' && own.length > 0 && own.every((a) => a.detail?.draft || a.detail?.form || a.detail?.piece);
   const needs = b.task?.state === 'needs_you' && !chiefDraft;
   const stuck = !!b.stuck;
   const driving = b.controls === 'person';
@@ -1008,6 +1012,19 @@ export function card(a: Json, state: Json): Card {
       video: { from: plain(String(d.pick.from ?? '')), choices },
       choices: [...choices.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), { label: 'Not now', body: { answer: 'deny' } }] };
   }
+  if (a.kind === 'piece') {
+    // Chief carries it; the bot that asked keeps its face. A kind this app does not know yet stays plain words with one way out.
+    const p = d.piece ?? {}, text = plain(String(p.text ?? '')), no: Choice = { label: 'Not now', body: { answer: 'deny' } }, yes = plain(String(p.yes ?? ''));
+    const one = { ...base, helper: 'chief', by: d.bot ?? a.bot, piece: true, status: 'Waiting for you', head: plain(a.title), words: plain(a.title) };
+    const lines = text ? { lines: [text] } : {};
+    if (p.kind === 'card') return { ...one, kind: 'ok', ...lines, choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
+    if (p.kind === 'form') return { ...one, kind: 'ok', form: { site: '', page: text, url: '', filled: [], fields: (p.fields ?? []).map((f: Json) => ({ key: String(f.id), label: plain(f.label), kind: f.tick ? 'tick' : f.options ? 'pick' : 'text', options: f.options, yours: false, optional: !!f.optional })) },
+      choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
+    const options = (d.pick?.choices ?? []).map((c: Json) => ({ id: String(c.id), label: plain(c.label), size: plain(c.note ?? '') }));
+    if (p.kind === 'picker' && options.length) return { ...one, kind: 'pick', words: text, video: { from: '', choices: options, go: yes },
+      choices: [...options.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), no] };
+    return { ...one, kind: 'ok', ...lines, choices: [{ ...no, label: 'OK' }] };
+  }
   if (a.kind === 'propose' && d.customRule) {
     const r: RuleView = { text: String(d.customRule.text ?? ''), ...(RULE_SHOULD[d.customRule.hold as 'draft'] ? { hold: d.customRule.hold } : {}), ...(d.customRule.replaces ? { was: String(d.customRule.replaces) } : {}) }, verb = !r.was ? 'New custom rule' : r.text ? 'Update custom rule' : 'Remove custom rule';
     return { ...base, kind: 'ok', rule: r.text || r.was, ruleView: r, status: 'Not saved yet', head: verb, words: verb, preview: { head: 'For every helper', body: r.text || r.was! },
@@ -1123,7 +1140,7 @@ export function card(a: Json, state: Json): Card {
 }
 export const cards = (state: Json) => (state.asks.map((a: Json) => card(a, state)) as Card[]).filter((c) => c.campaign?.ready !== false);
 /** The action an answered card leaves in the thread, in one plain past-tense word. */
-const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked', video: 'Picked' };
+const RECEIPT: Record<string, string> = { connect: 'Connected', routine: 'Started', plan: 'Started', spend: 'Allowed', question: 'Answered', unlock: 'Unlocked', style: 'Picked', video: 'Picked', pick: 'Picked' };
 /** Name the thing agreed to in a few words — a draft's subject, else the first words of its body — so a receipt reads
  *  "Copied, you send it: Refund for order 98765 · 9:12 pm", not a bare "Copied". Empty when the card carries no words. */
 function receiptWhat(c: Card): string {
@@ -1161,9 +1178,9 @@ export function answeredReceipts(state: Json): { id: number; helper: string; at:
     const c = card({ ...a, state: 'open' }, state), shown = String(a.answer ?? ''), no = shown.startsWith('not now') || shown === 'change it';
     if (c.rule) return [{ id: a.id, helper: 'chief', at: a.answered_at, rule: c.rule, word: no ? 'Cancelled' : c.ruleView?.text ? 'Saved' : 'Removed', line: no ? 'Your rules have not changed.' : 'See them in Settings, Custom rules.' }];
     const word = a.kind === 'mail' ? (no ? 'Not now' : shown === 'sent' ? 'Sent' : shown === 'not sent' ? 'Not sent' : 'Approved')
-      : no ? (c.evidence === 'draft' ? 'Discarded' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form ? plain(shown) : c.evidence === 'draft' ? 'Copied, you send it' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
+      : no ? (c.evidence === 'draft' ? 'Discarded' : 'Not now') : c.site ? `Signed in to ${c.site.host}` : shown === 'filling in the form' ? 'Filling in the form' : c.form || (c.piece && c.kind === 'ok') ? plain(shown) : c.evidence === 'draft' ? 'Copied, you send it' : c.campaign ? 'Approved' : RECEIPT[c.kind] ?? 'Allowed';
     if (c.kind === 'routine' && !no) return []; // Its durable start event already names the approved routine.
-    const named = c.evidence === 'draft' ? receiptWhat(c) : c.kind === 'video' && !no ? plain(shown) : '';
+    const named = c.evidence === 'draft' ? receiptWhat(c) : (c.kind === 'video' || c.kind === 'pick') && !no ? plain(shown) : c.piece && !c.form ? c.head : '';
     const action = no ? '' : receiptAction(String(a.kind ?? ''), a.detail ?? {});
     return [{ id: a.id, helper: 'chief', at: a.answered_at, line: `${word}${named ? `: ${named}` : ''} · ${timeOf(a.answered_at)}`, ...(action ? { what: action, word } : {}) }];
   });

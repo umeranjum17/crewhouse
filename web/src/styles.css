@@ -2502,6 +2502,8 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .chat .lines .card.ask.draft-ask .ev { padding: 0; }
 .shell.calm .chat .lines .card.ask.draft-ask :is(.ev-to, .ev-subject) { padding: 8px 0; border-bottom: 1px solid var(--line2); font-weight: 400; }
 .shell.calm .chat .lines .card.ask.draft-ask .draft-edit { background: #FFFDF6; border-color: var(--line2); min-height: 132px; }
+.shell.calm .chat .lines .card.ask.draft-ask .input { background: #FFFDF6; color: var(--ink); }
+.shell.calm .chat .lines .card.ask.draft-ask .form-q { color-scheme: light; }
 .shell.calm .chat .lines .card.ask.draft-ask .ask-status { color: var(--mute); }
 .shell.calm .chat .lines .card.ask.draft-ask .btn.go { background: #A86420; color: #fff; }
 .shell.calm .chat .lines .card.ask.draft-ask .btn.go:disabled { background: var(--soft); color: var(--mute); }

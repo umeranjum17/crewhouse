@@ -25,11 +25,11 @@ const bin = browserBin();
 
 // The device's recognizers: its own (`device`) and the browser's online one (`online`); either may be missing. Each turn
 // lands in window.turns; "ECHO" would mean the mic opened while Chief was being read.
-const DEVICE = (has: { device: boolean; online: boolean; safari?: boolean; records?: boolean }) => `(() => {
+const DEVICE = (has: { device: boolean; online: boolean; safari?: boolean; records?: boolean; holds?: boolean }) => `(() => {
   if (!${!!has.records}) Object.defineProperty(navigator, 'mediaDevices', { value: undefined });
   const tap = BaseAudioContext.prototype.createScriptProcessor; // window.recording: audio has reached the mic's tap
   BaseAudioContext.prototype.createScriptProcessor = function (...a) { const n = tap.apply(this, a); n.addEventListener('audioprocess', () => { window.recording = true; }); return n; };
-  const turns = window.turns = []; let speaking = false, heard = 0;
+  const turns = window.turns = []; let speaking = false, heard = 0, held = null;
   localStorage.setItem('crewhouse.voice', JSON.stringify({ rate: 1.25 }));
   window.SpeechRecognition = class {
     static available = async (o) => (o.processLocally ? ${has.device} : ${has.online}) ? 'available' : 'unavailable';
@@ -41,9 +41,10 @@ const DEVICE = (has: { device: boolean; online: boolean; safari?: boolean; recor
   const voices = [{ name: 'Online', lang: 'en-US', localService: false }, { name: 'Here', lang: 'en-GB', localService: true }];
   window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   Object.defineProperty(window, 'speechSynthesis', { value: {
-    getVoices: () => voices, addEventListener() {}, cancel() {},
+    getVoices: () => voices, addEventListener() {}, cancel() { const u = held; held = null; speaking = false; u?.onend(); },
     speak(u) {
       speaking = true; turns.push('say ' + u.text.trim() + ' @' + u.voice?.name + ' x' + u.rate);
+      if (${!!has.holds}) { held = u; return; } // speech lasts until the app cancels it, however slow the machine
       setTimeout(() => { turns.push('shown ' + document.querySelector('.line.reading .bubble-text')?.textContent + ' | ' + document.querySelector('.call-words')?.textContent); speaking = false; u.onend(); }, 150);
     },
   } });
@@ -136,7 +137,7 @@ test('a call with Chief listens, sends, reads the reply aloud, listens again, St
 });
 
 test('a helper chat\'s head starts the call, speaks that helper\'s reply, ends it, and keeps words in the box', { skip: !bin && 'no Chromium here' }, async () => {
-  const { run, helper, turns } = await boot(DEVICE({ device: true, online: true }), true);
+  const { run, helper, turns } = await boot(DEVICE({ device: true, online: true, holds: true }), true);
   assert.ok(helper);
   await until('Talk in the helper box', () => run("!!document.querySelector('.chat .dock button.send.talk')"), 30_000);
   assert.equal(await run("document.querySelector('.send.talk').title"), 'Talk with Scribe');

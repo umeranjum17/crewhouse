@@ -8,7 +8,7 @@ import { osKeyringSeal } from '@byokit/secrets';
 import { PROVIDERS } from '../accounts.ts';
 import { commit } from '../bots.ts';
 import { appDir, CALLBACK_PORT, loadConfig } from '../config.ts';
-import { PARAMETERS } from '../engine.ts';
+import { PARAMETERS, PIECE_ABOUT } from '../engine.ts';
 import { accountRef, refParts } from '../runtime.ts';
 import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunRef, RunSpec, SignInStep, ToolHost } from '../runtime.ts';
 
@@ -55,7 +55,7 @@ const ABOUT: Record<string, string> = {
   calendar: "The person's own Google Calendar: see what is next, the day or week, free time, add, move, cancel, as `args`.",
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
-  crew_rule: 'Propose a rule; asks first.',
+  crew_rule: 'Propose a rule; asks first.', crew_piece: PIECE_ABOUT,
   crew_remember: 'Save person facts: {text}, replaces?, everyone?. Rules need crew_rule.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };
