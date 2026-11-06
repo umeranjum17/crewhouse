@@ -16,6 +16,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | mail-watch / Chief inbox triage | `done-done run inbox-triage` — recorded synthetic Gmail, read-only scripted Chief alert, cross-sender context and quiet repeat; real personal-inbox phone/PWA acceptance remains separate |
 | delivered-files | `done-done run delivered-files` |
 | pi-engine | `done-done run pi-engine` with `MINIMAX_KEY_FILE` set, after `node scripts/prepare-pi.mjs` ([recipe](pi-engine.md)) |
+| pi-wall | `done-done run pi-wall`, after `node scripts/prepare-pi.mjs` ([recipe](pi-engine.md)) |
 | resume | `done-done run resume` — the guard's refusal, the resume with its sources, Edit and Save, and the PDF and Word files the app saves, opened ([recipe](resume.md)) |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
@@ -87,6 +88,7 @@ cannot be sealed: `done-done check` refuses the run with "has no step record".
 | onboard-chief-chat | [onboard-chief-chat.md](onboard-chief-chat.md) | Hello screen and its trust links, onboarding, Chief's greeting/chat, and shared profile facts with a plain saved note |
 | crew-room | [crew-room.md](crew-room.md) | The crew room and Chief's standup on a real MiniMax M3.1 Flash run: Chief hands one job to Scout then Scribe, the room shows his brief to each and his closing words as the standup, at 390 wide, day and night |
 | pi-engine | [pi-engine.md](pi-engine.md) | The Pi flag: with it off the bot list and a helper's chat as before, with it on two helpers asked at once, each on its own pinned Pi, keeping their own notes across a restart, at 390 and 1280, day and night, and in the installed window; a stand-in Pi folder hashes the same. Passed on the scripted provider only, not yet on M3.1 Flash |
+| pi-wall | [pi-engine.md](pi-engine.md) | A bot's whole Pi process behind bubblewrap: the same escape landing with no wall and refused with it, a write inside landing, and a machine with no bubblewrap refusing on the flag and working off it |
 | chat-real | [chat-real.md](chat-real.md) | First-day path on the real engine (no name, first request from Hello, MiniMax key): Chief starts on M3.1 Flash by itself and a real reply arrives (the stub engine's reply is hidden by design); `timeline.txt` times each step; the reply at 390 wide, day and night; fails when none arrives in time |
 | flash-read | [flash-read.md](flash-read.md) | A bot's read of a file outside its own folder: the crew's own work (a helper's file) is read without a question and the job ends, the person's own files still ask, anything else is refused; driven on the real engine on MiniMax M3.1 Flash through OpenRouter, with Chief's thread at 390/1440, day and night |
 | chief-wait | [chief-wait.md](chief-wait.md) | Chief waits for a helper's report: the hand-off goes out natively, the report comes back in Chief's next turn and Chief answers the person from it, with no work of his own and no question while the helper works; driven on the real engine with a scripted model, with Chief's thread at 390/1440, day and night |

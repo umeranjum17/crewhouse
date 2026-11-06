@@ -5,7 +5,7 @@
 //   node bin/sandbox.mjs install  as root, for the .deb's postinst: installs the rule where Ubuntu restricts it
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Ubuntu 23.10 and later refuse a program the namespaces bubblewrap needs unless AppArmor has a rule for it. The rule is
@@ -27,21 +27,46 @@ const line = (apt, sudo) => steps(apt).map((s) => [...(sudo ? ['sudo'] : []), ..
 function explain(e) {
   if (e.code === 'ENOENT') return { cause: 'bubblewrap is not installed', next: 'sudo apt install bubblewrap (Fedora: sudo dnf install bubblewrap, Arch: sudo pacman -S bubblewrap)' };
   const said = String(e.stderr ?? '').trim().split('\n').pop() || (e.code === 'ETIMEDOUT' ? 'it did not finish in 5 seconds' : 'it stopped without saying why');
+  if (/unknown option/i.test(said)) return { cause: `this bubblewrap is too old (it said: ${said})`, next: 'update bubblewrap to 0.8 or later' };
   if (restricted()) {
     return { cause: `Ubuntu's AppArmor stops bubblewrap from starting until its rule is installed (bubblewrap said: ${said})`, next: line(true, true), fixable: true };
   }
   return { cause: `bubblewrap cannot start here (it said: ${said})`, next: 'allow unprivileged user namespaces for your account: your distribution\'s setting for them (Debian: sudo sysctl kernel.unprivileged_userns_clone=1)' };
 }
 
+function probe(args) {
+  try {
+    execFileSync('bwrap', args, { stdio: ['ignore', 'ignore', 'pipe'], timeout: 5000 });
+    return { ok: true };
+  } catch (e) { return { ok: false, ...explain(e) }; }
+}
+
 let seen;
 /** `{ ok: true }`, or `{ ok: false, cause, next }`: the cause in plain words and the one command. Probed once per process, as the person running it. */
-export function sandbox() {
-  if (seen) return seen;
-  try {
-    execFileSync('bwrap', ['--ro-bind', '/', '/', '--unshare-all', 'true'], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 5000 });
-    return (seen = { ok: true });
-  } catch (e) { return (seen = { ok: false, ...explain(e) }); }
+export function sandbox() { return seen ??= probe(['--ro-bind', '/', '/', '--unshare-all', 'true']); }
+
+// The wall around a bot's whole Pi process: stricter than the shell's, and the probe below starts these same flags, so a
+// bubblewrap that takes the shell's but not these (Ubuntu 22.04's 0.6.1) counts as no wall. No new namespaces inside; the network
+// stays until its own slice. No clearenv: the kit builds Pi's environment from nothing, and a --setenv would put the model key on
+// a command line anyone on the machine can read.
+const WALL = ['--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--unshare-cgroup', '--disable-userns', '--assert-userns-disabled', '--die-with-parent', '--new-session'];
+const SETTINGS = ['/etc/ssl', '/etc/ca-certificates', '/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/etc/localtime'];
+
+/** Why no bot on Pi may start here, as the one line the person reads, or '' when the wall stands. Asked afresh each time: the fix needs no restart. */
+export function wallDown() {
+  const held = probe([...WALL, '--ro-bind', '/', '/', 'true']);
+  return held.ok ? '' : `Bots can't start, because Crewhouse can't hold them inside their folders: ${held.cause}. To fix it: ${held.next}`;
 }
+
+/** The words a bot on Pi reads when the wall stops it (pi-refusal.mjs): an extension, so it runs inside the wall too. */
+export const piRefusal = (repo) => join(repo, 'bin', 'pi-refusal.mjs');
+
+/** bubblewrap's arguments up to the command, for one bot: `folder` is the only place on disk it can change. Pi must write in its `home`, so that is a throwaway with `folder` inside, gone with the process like /tmp, and its setup files are read-only on top. The node binary, Pi's code, the bot's `extensions` and the system are read-only; nothing else of the person's is there. */
+export const piWall = ({ folder, home, repo, extensions }) => [...WALL,
+  '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
+  ...SETTINGS.flatMap((path) => ['--ro-bind-try', path, path]), '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', home,
+  ...[process.execPath, join(repo, 'runtime', 'byokit', 'node_modules'), ...extensions, ...['SYSTEM.md', 'settings.json', 'models.json'].map((file) => join(home, file))].flatMap((path) => ['--ro-bind', path, path]),
+  '--bind', folder, folder, '--remount-ro', '/', '--chdir', folder, '--'];
 
 async function setup() {
   const first = sandbox();

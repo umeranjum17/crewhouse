@@ -1,27 +1,27 @@
-// The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi (a dev-only reference until it publishes: node scripts/prepare-pi.mjs, so its name stays a variable). Each bot gets the kit's own process, home, session and extension list. Nothing Pi runs passes Crew.gate yet and Pi has no sandbox, so settings.json leaves it none of Pi's own tools and extensions.json holds only code that reaches nothing past its session, or past the bot's own notes file (notes.ts).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'; import { join } from 'node:path';
+// The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi (a dev-only reference until it publishes: node scripts/prepare-pi.mjs, so its name stays a variable). Each bot gets the kit's own process, home, session and extension list, and that process runs behind bubblewrap (bin/sandbox.mjs) or not at all. Nothing Pi runs passes Crew.gate yet, so settings.json leaves it none of Pi's own tools, but for the ones CREWHOUSE_PI_TOOLS names in a proof, and extensions.json holds only code that reaches nothing past its session, or past the bot's own notes file (notes.ts).
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'; import { join } from 'node:path'; import { piRefusal, piWall, wallDown } from '../../bin/sandbox.mjs';
 import { botConfig } from '../bots.ts'; import type { Config } from '../config.ts'; import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts';
 
 type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; reason: string; detail?: string };
-type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> }; type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string> }): Bot; close(): Promise<void> };
+type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> }; type Launch = { command: string; args: readonly string[] }; type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string>; launch: (pi: Launch) => Launch }): Bot; close(): Promise<void> };
 /** The kit's own name; the one account a custom provider stands in for (Crew's constructor marks it ready); the variable the key travels in, so it never lands on disk. */
 const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', KEY = 'CREWHOUSE_MODEL_KEY', MODEL = () => process.env.CREWHOUSE_ENGINE_MODEL || 'test', talk = (tools: string[]) => `\n\nHere you have ${tools.length ? `only these tools: ${tools.join(', ')}` : 'no tools at all'}, crew tools included, whatever this prompt names. Otherwise answer in plain words.\n`;
 
 export class PiRuntime implements AgentRuntime {
   readonly identity = { name: 'Pi', version: '1.5.0' }; // the kit refuses any other Pi
-  private cfg: Config; private kit?: Promise<Kit>; private failed?: string;
+  private cfg: Config; private kit?: Promise<Kit>; private failed?: { words: string; detail: string };
   private open = new Map<string, { bot: Bot; session: string; system: string }>(); private runs = new Map<string, Bot>(); onEngine?: () => void;
   constructor(cfg: Config) { this.cfg = cfg; }
 
   private load(): Promise<Kit> { return this.kit ??= import(KIT).then((kit) => kit.createPiKit({ stateDir: this.cfg.stateDir, idleMs: Number(process.env.CREWHOUSE_PI_IDLE_MS) || undefined })); } // once, by whichever comes first: a job recovered at boot can reach run() before crewd reaches start()
   async start() {
     delete this.failed;
-    try { await this.load(); }
-    catch (e) { delete this.kit; this.failed = (e as Error).message; throw e; }
+    try { const down = wallDown(); if (down) throw new Error(down); await this.load(); }
+    catch (e) { delete this.kit; this.failed = { words: wallDown() || 'Pi is not set up on this computer. Run node scripts/prepare-pi.mjs, then try again.', detail: (e as Error).message }; throw e; }
     finally { this.onEngine?.(); }
   }
   async stop() { await this.kit?.then((kit) => kit.close(), () => {}); }
-  engine() { return this.failed ? { phase: 'failed', words: 'Pi is not set up on this computer. Run node scripts/prepare-pi.mjs, then try again.', detail: this.failed } : { phase: 'ready', words: '' }; }
+  engine() { return this.failed ? { phase: 'failed', ...this.failed } : { phase: 'ready', words: '' }; }
 
   async accounts(): Promise<AccountRow[]> { return this.cfg.engineProvider ? [{ id: ACCOUNT, provider: ACCOUNT, state: 'ready' }] : []; }
   async signedIn(account: string) { return account === ACCOUNT && !!this.cfg.engineProvider; }
@@ -47,15 +47,15 @@ export class PiRuntime implements AgentRuntime {
     const home = join(this.cfg.stateDir, 'pi', spec.bot), folder = join(home, 'work'); // the kit's Pi home: the person's own Pi is never used
     mkdirSync(folder, { recursive: true, mode: 0o700 });
     writeFileSync(join(home, 'SYSTEM.md'), system);
-    writeFileSync(join(home, 'settings.json'), JSON.stringify({ defaultTools: [] }));
+    writeFileSync(join(home, 'settings.json'), JSON.stringify({ defaultTools: process.env.CREWHOUSE_PI_TOOLS?.split(',') ?? [] }));
     writeFileSync(join(home, 'models.json'), JSON.stringify({ providers: { crewhouse: { baseUrl: provider.baseUrl, api: 'openai-completions', apiKey: `$${KEY}`, models: [{ id: MODEL() }] } } }));
-    const bot = kit.bot({ id: spec.bot, folder, session, extensions: paths, env: { [KEY]: provider.apiKey } });
+    const repo = this.cfg.repoDir, extensions = [...paths, piRefusal(repo)], bot = kit.bot({ id: spec.bot, folder, session, extensions, env: { [KEY]: provider.apiKey }, launch: ({ command, args }) => ({ command: 'bwrap', args: [...piWall({ folder, home, repo, extensions }), command, ...args] }) });
     this.open.set(spec.bot, { bot, session, system });
     return bot;
   }
 
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
-    const list = this.extensions(spec);
+    const list = wallDown() || this.extensions(spec);
     if (typeof list === 'string') return { ok: false, kind: 'handoff', message: list };
     const bot = await this.botFor(spec, list); let said = '';
     this.runs.set(spec.key, bot);
