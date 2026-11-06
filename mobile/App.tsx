@@ -1635,7 +1635,7 @@ function Land({ go }: Ctx) {
 }
 
 // ---------- asks ----------
-const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
+const answer = (c: A.Card, body: Json) => c.mailSend ? api.answer(c.id, body).then(() => { say(body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.'); return true; }, e => { say(e.message); return false; }) : attempt(() => api.answer(c.id, body), c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && !c.piece && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.answer === 'deny' ? 'OK, not now' : 'Done. Carrying on.');
 
 /** The ask's evidence in the sunken block, mirroring web/src/parts.tsx AskEvidence (§4.4): the order's lines with
  *  the total above a hairline, a form's or a job's label-over-value lines, a draft, the routine's confirmation
@@ -1718,12 +1718,12 @@ function FormFields({ f, said, set }: { f: A.FormView; said: Json; set: (key: st
   </View>;
   const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);
   return <View style={[s.ev, { backgroundColor: t.sunken, gap: 10 }]}>
-    <T tone="mute" style={s.small}>{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</T>
+    {!!f.page && <T tone="mute" style={s.small}>{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</T>}
     {!!f.filled.length && <><T tone="mute" style={s.label2}>FILLED FROM YOUR CV AND DRAFT</T>{f.filled.map((x) => <View key={x.label} style={{ gap: 2 }}><T tone="mute" style={s.label2}>{x.label}</T><T style={{ ...fw('500') }}>{x.value}</T></View>)}</>}
     {!!yours.length && <><T tone="pinkInk" style={s.label2}>ONLY YOU CAN ANSWER THESE</T>{yours.map(field)}</>}
-    {!!rest.length && <><T tone="mute" style={s.label2}>NOT IN YOUR CV OR DRAFT</T>{rest.map(field)}</>}
+    {!!rest.length && <>{!!f.url && <T tone="mute" style={s.label2}>NOT IN YOUR CV OR DRAFT</T>}{rest.map(field)}</>}
     {!!f.note && <T tone="ink2" style={s.small}>{f.note}</T>}
-    <Link label="Open the form yourself" onPress={() => void Linking.openURL(f.url)} />
+    {!!f.url && <Link label="Open the form yourself" onPress={() => void Linking.openURL(f.url)} />}
   </View>;
 }
 
@@ -1732,7 +1732,7 @@ function useDraftEdit(c: A.Card) {
   const [words, setWords] = useState<string | null>(null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
-    can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: words !== null && !words.trim(),
+    can: c.evidence === 'draft' && !!c.draftText, editing: words !== null, empty: (words !== null && !words.trim()) || A.formOpen(c, said),
     toggle: () => setWords(words === null ? c.draftText ?? '' : null),
     box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
       : words !== null && <TextInput style={[s.input, { color: t.ink, borderColor: t.line, minHeight: 160, textAlignVertical: 'top' }]} value={words} onChangeText={setWords}

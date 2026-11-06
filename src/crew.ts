@@ -10,7 +10,7 @@ import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watc
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS, GRANTABLE } from './connections.ts';
 import { Composio, GMAIL_CONNECT } from './composio.ts';
-import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
+import { PARAMETERS, PIECE_ABOUT, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import { handsOf, type Hands } from '../bin/hands.mjs';
 import type { Server } from 'node:net';
@@ -104,6 +104,14 @@ const fail = (message: string, status = 400) => Object.assign(new Error(message)
 const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => { const n = encodeURIComponent(f); return join('files', 'unlocked', n.length > 200 ? `${sha(f).slice(0, 32)}.pdf` : n); }, unlockedCurrent = (space: string, f: string) => { try { return statSync(join(space, unlockedAs(f))).mtimeMs >= statSync(join(space, f)).mtimeMs; } catch { return false; } }, lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
+/** A piece's answer as the bot reads it, and the words its receipt says. A form's values are checked here, never taken on the app's word. */
+const pieceResult = (p: Row, picked: Row | undefined, said: any) => {
+  if (picked) return { result: { answered: true, picked: { id: picked.id, label: picked.label } }, words: picked.label };
+  if (p.kind !== 'form') return { result: { answered: true }, words: p.yes };
+  const values = Object.fromEntries(p.fields.map((f: Row) => [f.id, f.tick ? !!said?.[f.id] : clean(said?.[f.id], 500)]));
+  for (const f of p.fields) if (!f.tick && (values[f.id] ? f.options && !f.options.includes(values[f.id]) : !f.optional)) throw fail(`fill in ${f.label}`);
+  return { result: { answered: true, values }, words: clean(p.fields.filter((f: Row) => f.tick || values[f.id]).map((f: Row) => `${f.label}: ${f.tick ? (values[f.id] ? 'yes' : 'no') : values[f.id]}`).join(', '), 240) };
+};
 const needText = (v: unknown, n: number, msg: string) => { const s = clean(v, n); if (!s) throw fail(msg); return s; }
 const unfenced = (v: unknown) => String(v ?? '').replace(/[⟦⟧]/g, ''), senderKey = (v: unknown) => { const s = unfenced(v); return (s.match(/<([^>]+)>/)?.[1] ?? s).trim().toLowerCase(); }, fenced = (v: unknown) => `⟦${unfenced(v)}⟧`, mailLink = (id: unknown) => `https://mail.google.com/mail/u/0/#inbox/${id}`;
 /** A URL is context for a job, never its name. */
@@ -499,7 +507,7 @@ export class Crew {
     if (a.kind === 'connect' || a.kind === 'signin' || a.kind === 'unlock') return { ...a, detail: a.kind === 'signin' ? { bot: d.bot, host: d.host, origin: d.origin } : a.kind === 'unlock' ? { bot: d.bot, files: d.files, names: d.files.map((f: string) => this.sentName(d.bot, f)), rule: this.fileRule(d.bot) } : { app: d.app, words: d.words } };
     if (a.kind === 'mail') return { ...a, detail: { effect: 'send', send: { from: d.send.from, to: d.send.to, subject: d.send.subject }, preview: d.preview } };
     if (a.kind === 'propose') return { ...a, detail: { words: a.title, preview: d.preview, ...(d.customRule ? { customRule: d.customRule } : {}), ...(d.create ? { yes: d.goal ? 'Yes, start my search' : `Yes, ${d.create.bot ? 'give' : 'bring'} ${String(d.create.name).split(' ').pop()} ${d.create.bot ? 'the job' : 'on'}`, hire: d.create.name, hireId: d.create.bot ?? disk.slug(d.create.name), role: d.create.role, will_do: d.create.will_do ?? [], wont_do: d.create.wont_do ?? [], first_step: d.create.first_step, first_job: d.create.first_job ?? d.create.first, ...(d.create.bot ? { adapt: true } : {}) } : d.draft ? { yes: 'Approve' } : {}), ...(d.draft ? { draft: d.draft } : {}), ...(d.form ? { form: d.form } : {}), ...(d.routine ? { routine: d.routine } : {}) } };
-    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}),
+    return { ...a, detail: { effect: d.effect, words: a.title, spends: d.effect === 'spend', covers, ...(covers ? { always: covers } : {}), ...(d.preview ? { preview: d.preview } : {}), ...(d.press ? { press: true } : {}), ...(d.fill ? { fill: true } : {}), ...(d.mail ? { mail: d.mail } : {}), ...(d.pick ? { pick: d.pick } : {}), ...(d.piece ? { piece: d.piece, bot: d.bot } : {}),
       ...(d.checkout ? { order: { shown: d.checkout.shown ?? '', known: Number.isFinite(d.checkout.total), dollars: d.checkout.currency === '$' } } : {}) } };
   }
 
@@ -1583,7 +1591,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const task = this.activeTask(botId), text = cleanReply(reply.trim());
     let wants = false;
     // A turn that ended on a parked question isn't the end of the task: it resumes when the person answers.
-    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
+    const parked = task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video', 'piece')", task.id), clear = !!task?.routine && text.replace(/[.\s]+$/, '') === ALL_CLEAR && !!this.db.get('SELECT 1 FROM routines WHERE id = ? AND quiet = 1', task.routine);
     this.db.tx(() => {
       if (text && !clear) this.say(botId, 'bot', text, task?.id ?? null);
       if (task && parked && task.state !== 'needs_you') this.setTask(task, 'needs_you');
@@ -1974,16 +1982,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (ask.kind === 'propose' && body.answer === 'allow' && body.fill && detail.draft?.role) this.draftRole(detail.draft.role, 'fill', String(detail.preview?.body ?? ''));
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
     const sent = ask.kind !== 'propose' || body.answer !== 'allow' ? '' : detail.form ? await this.submitForm(ask.bot, detail.form, body.fields) : body.fill && detail.draft?.role ? 'filling in the form' : '';
-    const picks = ask.kind === 'style' || ask.kind === 'video', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
+    const picks = ask.kind === 'style' || ask.kind === 'video' || detail.piece?.kind === 'picker', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
     if (picks && body.answer === 'allow' && !picked) throw fail(`pick one of the ${ask.kind === 'style' ? 'styles' : 'choices'} on the card`);
+    const said = ask.kind === 'piece' && body.answer === 'allow' ? pieceResult(detail.piece, picked, body.fields) : undefined;
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.form && !this.browserOf(ask.bot)?.onScreen) void this.browserOf(ask.bot)?.run(['close']);
     if (ask.kind === 'propose' && body.answer === 'deny' && detail.draft) this.db.event('draft.rejected', ask.bot, { ...receipt(detail.draft, detail.preview), task: detail.task });
-    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${this.bot(ask.bot)?.display ?? ask.bot}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
+    const kept = ask.kind === 'unlock' ? detail.all.filter((r: string) => unlockedCurrent(disk.botDir(this.cfg, detail.bot), r)).map(unlockedAs) : [], shown = opened || sent || said?.words || picked?.label || (body.answer === 'deny' ? (kept.length ? `not now; unlocked: ${kept.join(', ')}` : 'not now') : scope === 'task' ? 'allowed for this task' : scope === 'always' ? `always allowed for ${this.bot(ask.bot)?.display ?? ask.bot}` : 'allowed once'), held = this.holds.get(askId), task = ask.task_id && this.db.get('SELECT * FROM tasks WHERE id = ?', ask.task_id);
     this.db.tx(() => {
-      this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ? WHERE id = ?", shown, Date.now(), askId);
+      this.db.run("UPDATE asks SET state = 'answered', answer = ?, answered_at = ?, detail = ? WHERE id = ?", shown, Date.now(), said ? JSON.stringify({ ...detail, result: said.result }) : ask.detail, askId);
       this.db.event('ask.answered', ask.bot, { ask: askId, task: ask.task_id, answer: shown });
       if (body.answer === 'allow' && detail.checkout && ask.task_id) this.checkouts.set(ask.bot, { task: ask.task_id, ...detail.checkout });
       if (body.answer === 'allow' && detail.effect === 'spend' && detail.cost) this.db.event('money.spent', ask.bot, { amount: detail.cost, month: monthOf(), ask: askId });
@@ -1992,7 +2001,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         disk.setSettings(this.cfg, ask.bot, { allow: [...(disk.botConfig(this.cfg, ask.bot).allow ?? []), detail.key] });
         this.db.event('bot.allowed', ask.bot, { covers: coversOf(detail.key) });
       }
-      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id)) this.setTask(task, this.live.get(task.bot)?.task === task.id ? 'working' : 'queued');
+      if (task?.state === 'needs_you' && !held && !this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video', 'piece')", task.id)) this.setTask(task, this.live.get(task.bot)?.task === task.id ? 'working' : 'queued');
       if (body.answer === 'deny' && body.remind === true) this.defer(ask);
       if (key) this.db.run('INSERT INTO settings (key, value) VALUES (?, ?)', `link.key.${key}`, '{"ok":true}');
     });
@@ -2010,9 +2019,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       return this.dispatch();
     }
     if (body.answer === 'allow') this.granted.add(permissionIdentity(ask.bot, ask.task_id, ask.title, detail));
-    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video')", task.id)) return;
+    if (task && this.db.get("SELECT 1 FROM asks WHERE task_id = ? AND state = 'open' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video', 'piece')", task.id)) return;
     const l = task && this.live.get(task.bot); if (!task || !l || l.task !== task.id) return void (task && this.handoffs.set(task.id, `${this.called().replace(/^the/, 'The')} answered: ${shown}`), this.dispatch()); // not running now (a hand-off's turn ended, or a restart): it resumes with the answer
-    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video') ORDER BY id", task.id);
+    const answers = this.db.all("SELECT title, answer FROM asks WHERE task_id = ? AND state = 'answered' AND kind IN ('permission', 'connect', 'signin', 'unlock', 'style', 'video', 'piece') ORDER BY id", task.id);
     this.turn(task.bot, l, `[Crewhouse] ${this.called().replace(/^the/, 'The')} has answered your requests: ${JSON.stringify(answers)}. Continue with what was allowed; skip what was declined, or explain what you need.`);
   }
 
@@ -2098,6 +2107,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return this.propose(botId, `${this.bot(botId)!.display} wrote your ${channel}.`,
             { draft: { channel, to, subject, why: said && mine.includes(said) ? clean(p.why, 160) : '', path: full.slice(disk.botDir(this.cfg, botId).length + 1), sha: sha(text), ...(link ? { link } : {}) }, preview: { body: text } }); // the card quotes the person: only a line this helper remembers them saying survives
         }),
+      tool('crew_piece', PIECE_ABOUT, (p) => this.piece(botId, p)),
       tool('crew_verify', 'Have Crewhouse itself check a fix you propose to a git checkout in your folder: it applies only the check (`tests`, the ' +
         'paths in the patch that test the fix) to `base` and runs `command`, which must fail; then the whole patch, which must pass; it runs in a ' +
         'fresh copy seeded with the dependencies your checkout already has installed. A check that failed before only on a missing module proves nothing, and a patch you deliver unproven ends as not sure.',
@@ -2606,6 +2616,26 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     return { asked: true, note: 'The person sees three sample looks as a pick card in Chief’s chat now. End your turn with one short line; you are resumed with their pick, then call crew_slides again with that style.' };
   }
 
+  /** crew_piece: a line is said where the bot speaks, and so is any kind this crewd does not know. A card, form or picker waits in
+   *  Chief's thread, this call held on it; called again unchanged after a park, it finds the same card and its answer. */
+  private async piece(botId: string, p: Row) {
+    const task = this.activeTask(botId), kind = String(p.kind), title = needText(p.title || p.text, 200, 'give the piece a title'), text = p.title ? clean(p.text, 1000) : '';
+    const rows = (list: unknown, n: number) => (Array.isArray(list) ? list : []).slice(0, n).map((r) => ({ ...r, id: clean(r?.id, 40), label: clean(r?.label, 120), ...(Array.isArray(r?.options) && r.options.length ? { options: r.options.slice(0, 12).map((o: unknown) => clean(o, 80)) } : {}) })).filter((r) => r.id && r.label);
+    if (!['card', 'form', 'picker'].includes(kind)) { this.say(botId, 'bot', [title, text].filter(Boolean).join('\n'), task?.id ?? null); return { ok: true, shown: 'line' }; }
+    const fields = kind === 'form' ? rows(p.fields, 8) : [], choices = kind === 'picker' ? rows(p.choices, 6) : [];
+    if (kind === 'form' ? !fields.length : kind === 'picker' && choices.length < 2) throw new Error(kind === 'form' ? 'a form needs fields, each with an id and a label' : 'a picker needs at least two choices, each with an id and a label');
+    const id = this.db.get("SELECT id FROM asks WHERE kind = 'piece' AND task_id IS ? AND title = ? ORDER BY id DESC", task?.id ?? null, title)?.id
+      ?? this.openAsk(CHIEF, task, title, { bot: botId, piece: { kind, text, yes: clean(p.yes, 40) || { card: 'Yes', form: 'Send', picker: 'Choose' }[kind], fields }, ...(choices.length ? { pick: { choices } } : {}) }, 'piece');
+    const now = await this.answered(botId, task, id), d = JSON.parse(now.detail);
+    return now.state === 'open' ? { asked: true, note: 'The person has the card in Chief’s chat. End your turn with one short line; you are resumed when they answer, then call crew_piece again unchanged.' } : d.result ?? { answered: false, note: 'The person said not now. Carry on without it, or end with one short line.' };
+  }
+
+  /** A card this tool call opened or found again: held until the person answers or the turn parks, then the row as it stands. */
+  private async answered(botId: string, task: Row | undefined, id: number) {
+    if (this.db.get("SELECT 1 FROM asks WHERE id = ? AND state = 'open'", id) && !this.holds.has(id)) { if (task) this.setTask(task, 'needs_you'); await this.hold(botId, task, id); }
+    return this.db.get('SELECT state, answer, detail FROM asks WHERE id = ?', id)!;
+  }
+
   /** crew_video: the bot's pinned yt-dlp reads the link in its own sandbox; the person picks a quality or the sound alone, each with
    *  its size, on a card in Chief's chat; only that pick is then downloaded into files/ and delivered with the link it came from. */
   private async video(botId: string, link: unknown) {
@@ -2619,9 +2649,8 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       const meta = JSON.parse(readFileSync(join(space, info), 'utf8')), formats = videoChoices(meta), title = clean(meta.title, 80) || 'the video';
       if (!formats.length) throw new Error('yt-dlp found no video or sound to save at that link');
       ask = { id: this.openAsk(CHIEF, task, `Save “${title}”`, { url, formats, pick: { title, from: new URL(url).hostname.replace(/^www\./, ''), choices: formats.map(({ id, label, size }) => ({ id, label, size })) } }, 'video'), state: 'open' };
-    } else if (ask.state === 'open' && task) this.setTask(task, 'needs_you');
-    if (ask.state === 'open' && !this.holds.has(ask.id)) await this.hold(botId, task, ask.id);
-    const now = this.db.get('SELECT state, answer, detail FROM asks WHERE id = ?', ask.id)!, d = JSON.parse(now.detail), pick = (d.formats as Row[]).find((c) => c.label === now.answer);
+    }
+    const now = await this.answered(botId, task, ask.id), d = JSON.parse(now.detail), pick = (d.formats as Row[]).find((c) => c.label === now.answer);
     if (now.state === 'open') return { asked: true, note: 'The person has the card in Chief’s chat. End your turn with one short line; you are resumed when they pick, then call crew_video again with the same url.' };
     if (!pick) return { saved: false, note: 'The person said not now, so nothing was downloaded. End with one short line.' };
     const rel = this.fileName(botId, disk.slug(d.pick.title), pick.ext);

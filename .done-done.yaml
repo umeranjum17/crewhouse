@@ -273,3 +273,6 @@ journeys:
   # emulate's mailbox from the installed app paired as a control device (docs/verification/action-card.md). No real mailbox.
   action-card:
     command: 'timeout -k 10 900 bash scripts/verify/action-card.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # One call for a card, form, picker or plain line, across the real engine with the scripted model (docs/verification/chat-pieces.md).
+  chat-pieces:
+    command: 'timeout -k 10 1500 bash scripts/verify/chat-pieces.sh "$DONE_DONE_EVIDENCE_ROOT"'

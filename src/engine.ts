@@ -16,6 +16,9 @@ export const PARAMETERS = {
   crew_workbook: Type.Object({ name: Type.String(), sheets: Type.Array(Type.Object({ name: Type.String(), columns: Type.Array(Type.Object({ header: Type.String(), width: Type.Optional(Type.Number()), options: Type.Optional(Type.Array(Type.String())) })), rows: Type.Array(Type.Array(Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]))) })), charts: Type.Optional(Type.Array(Type.Object({ type: Type.String({ enum: ['bar', 'line', 'pie'] }), title: Type.Optional(Type.String()), sheet: Type.Optional(Type.String()), categories: Type.String(), series: Type.Array(Type.Object({ name: Type.Optional(Type.String()), values: Type.String() })), at: Type.Optional(Type.String()) }))) }),
   crew_document: Type.Object({ name: Type.String(), blocks: Type.Array(Type.Object({}, { additionalProperties: true }), { minItems: 1 }) }), crew_copy: Type.Object({ from: Type.String(), to: Type.String() }),
   crew_video: Type.Object({ url: Type.String() }),
+  crew_piece: Type.Object({ kind: Type.String({ description: 'line, card, form or picker' }), title: Type.String(), text: Type.Optional(Type.String()), yes: Type.Optional(Type.String()),
+    fields: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), options: Type.Optional(Type.Array(Type.String())), tick: Type.Optional(Type.Boolean()), optional: Type.Optional(Type.Boolean()) }))),
+    choices: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), note: Type.Optional(Type.String()) }))) }),
   crew_slides: Type.Object({ name: Type.String(), slides: Type.Array(Type.Object({ title: Type.String(), bullets: Type.Optional(Type.Array(Type.String())) }), { minItems: 1 }), style: Type.Optional(Type.String()) }),
   crew_rule: Type.Object({ text: Type.String({ maxLength: 1000 }), hold: Type.Optional(Type.String({ enum: ['draft', 'say'] })), replaces: Type.Optional(Type.String({ maxLength: 1000 })) }),
   crew_remember: Type.Object({ text: Type.String(), replaces: Type.Optional(Type.String()), everyone: Type.Optional(Type.Boolean()) }),
@@ -37,6 +40,8 @@ export const PARAMETERS = {
   crew_prep: Type.Object({ role: Type.Number(), brief: Type.Array(Type.Object({ says: Type.String(), url: Type.String(), quote: Type.String() })), questions: Type.Array(Type.Object({ ask: Type.String(), why: Type.String() })) }),
   crew_call_me: Type.Object({ how: Type.String() }), crew_case: Type.Object({ thread: Type.String(), facts: Type.String({ maxLength: 600 }) }), crew_recruit: Type.Object({ template: Type.String(), name: Type.Optional(Type.String()) }),
 }, HELPER_ROUTINE = Type.Omit(PARAMETERS.crew_routine, ['bot', 'once']), CHIEF_ROUTINE = Type.Object({ ...PARAMETERS.crew_routine.properties, ...Type.Required(Type.Pick(PARAMETERS.crew_routine, ['bot'])).properties });
+
+export const PIECE_ABOUT = 'Ask the person something; their answer is this call\'s result. Never make them type what they could tap. `kind` line: say `title`, nothing is asked. `card`: yes or no on `title` and `text`; `yes` names the button. `picker`: one of two to six `choices`. `form`: up to eight `fields`, with `options` or `tick`. A yes allows nothing: sends and spends still ask. No passwords.';
 
 /** One tool a run may call: the spec the model sees, and crewd's own executor behind it. */
 export interface CrewTool { name: string; description: string; parameters: object; run: (input: any, signal?: AbortSignal) => Promise<unknown> }

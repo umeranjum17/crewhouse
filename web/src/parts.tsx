@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { DRAFT_EDITED, RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, phoneOnly, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { DRAFT_EDITED, formOpen, RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, phoneOnly, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -954,7 +954,7 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
 }
 
 // ---------- asks ----------
-export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.mailSend ? (body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.') : c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? (c.evidence === 'draft' ? 'Discarded' : 'OK, not now') : 'Done. Carrying on.');
+export const answer = (c: Card, body: Json) => attempt(() => api.answer(c.id, body), c.mailSend ? (body.answer === 'deny' ? 'Nothing sent.' : body.answer === 'dismiss' ? 'OK.' : 'Sent from your Gmail.') : c.rule ? (body.answer === 'deny' ? 'Cancelled. Your rules have not changed.' : 'Saved in Custom rules.') : body.change ? 'Chief will change the plan' : c.form && !c.piece && body.answer === 'allow' ? 'Pressed Submit for you' : body.fill ? 'Filling in the form now' : body.remind ? 'OK, back tomorrow' : body.answer === 'deny' ? (c.evidence === 'draft' ? 'Discarded' : 'OK, not now') : 'Done. Carrying on.');
 
 /** A waiting-for-the-computer schedule preview: the words in plain time, and the first run on the computer's own clock. */
 function useSchedule(text: string | null) {
@@ -1069,12 +1069,12 @@ function FormFields({ f, said, set }: { f: FormView; said: Json; set: (key: stri
       : <input className="input" value={String(said[x.key] ?? '')} onChange={(e) => set(x.key, e.target.value)} />}</label>;
   const yours = f.fields.filter((x) => x.yours), rest = f.fields.filter((x) => !x.yours);
   return <div className="ev form-ev">
-    <div className="ev-to">{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</div>
+    {!!f.page && <div className="ev-to">{f.page.startsWith(f.site) ? f.page : `On ${f.site}${f.page ? ` · ${f.page}` : ''}`}</div>}
     {!!f.filled.length && <><div className="hire-sect">Filled from your CV and draft</div>{f.filled.map((x) => <div key={x.label} className="ev-line"><span>{x.label}</span><b>{x.value}</b></div>)}</>}
     {!!yours.length && <div className="yours"><b>Only you can answer these</b>{yours.map(field)}</div>}
-    {!!rest.length && <><div className="hire-sect">Not in your CV or draft</div>{rest.map(field)}</>}
+    {!!rest.length && <>{!!f.url && <div className="hire-sect">Not in your CV or draft</div>}{rest.map(field)}</>}
     {f.note && <p className="ask-note">{f.note}</p>}
-    <a className="link small" href={f.url} target="_blank" rel="noreferrer">Open the form yourself</a>
+    {!!f.url && <a className="link small" href={f.url} target="_blank" rel="noreferrer">Open the form yourself</a>}
   </div>;
 }
 
@@ -1087,7 +1087,7 @@ function useDraftEdit(c: Card, inline = false) {
   const [words, setWords] = useState<string | null>(inline && can ? draftOf(held).text || c.draftText! : null), [said, setSaid] = useState<Json>({});
   const changed = words !== null && words.trim() !== c.draftText;
   return {
-    can, editing: words !== null, empty: words !== null && !words.trim(), changed, text: changed ? words!.trim() : undefined,
+    can, editing: words !== null, empty: (words !== null && !words.trim()) || formOpen(c, said), changed, text: changed ? words!.trim() : undefined,
     toggle: () => { keepDraft(held, ''); setWords(inline ? c.draftText! : words === null ? c.draftText ?? '' : null); },
     box: c.form ? <FormFields f={c.form} said={said} set={(k, v) => setSaid({ ...said, [k]: v })} />
       : words !== null && <textarea className="input draft-edit" rows={8} value={words} onChange={(e) => { setWords(e.target.value); keepDraft(held, e.target.value); }} aria-label="Your version of the message" autoFocus={!inline} />,
@@ -1258,7 +1258,7 @@ function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
   const act = async (body: Json) => { setOops(false); if (await answer(c, body)) onDone(); else setOops(true); }, save = () => act({ answer: 'allow', pick: picked.id });
   const deny = c.choices.find((x) => x.body.answer === 'deny'), remind = deny ? { ...deny.body, remind: true } : null;
   return (
-    <div className="card ask stack-ask chief-ask video-ask" id={id} aria-label={c.head} style={{ '--ask-colour': art.colourOf('chief') } as CSSProperties}>
+    <div className={`card ask stack-ask chief-ask video-ask${c.piece ? ' draft-ask' : ''}`} id={id} aria-label={c.head} style={{ '--ask-colour': art.colourOf('chief') } as CSSProperties}>
       <AskHead c={c} who={who} />
       <p className="ask-words">{c.head}</p>
       <p className="small">{v.from ? `From ${v.from}. ` : ''}{c.words}</p>
@@ -1268,7 +1268,7 @@ function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
       </div>
       {oops && <div className="send-failed" role="alert">That didn't go through. <button type="button" className="link inline" onClick={save}>Try again</button></div>}
       <div className="btns">
-        <button className="btn go" onClick={save}>{picked.id === 'audio' ? 'Save the sound' : `Save in ${picked.label}`}</button>
+        <button className="btn go" onClick={save}>{v.go ?? (picked.id === 'audio' ? 'Save the sound' : `Save in ${picked.label}`)}</button>
         <More title={c.head} sub={c.status} acts={[
           deny && { label: deny.label, run: () => act(deny.body) },
           remind && { label: 'Remind me tomorrow', cls: 'quiet', run: () => act(remind) }]} />
@@ -1278,7 +1278,7 @@ function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
 }
 
 export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
-  if (c.kind === 'video') return <VideoCard c={c} id={id} who={who} onDone={onDone} />;
+  if (c.video) return <VideoCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'style') return <StyleCard c={c} id={id} who={who} onDone={onDone} />;
@@ -1298,12 +1298,12 @@ export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefin
   const stuck = when !== null && (!when.trim() || !preview || preview.bad);
   // Chief's plan: "Change it" opens a box, and what the person types goes back to Chief for a new plan.
   const [change, setChange] = useState<string | null>(null);
-  const edit = useDraftEdit(c, true), review = !!c.mailTo && !!paired, draft = c.evidence === 'draft' && !c.mailSend;
+  const edit = useDraftEdit(c, true), review = !!c.mailTo && !!paired, draft = (c.evidence === 'draft' && !c.mailSend) || !!c.piece;
   const routine = c.kind === 'routine' ? c.lines : undefined;
   const title = routine ? routine[0] : question, sub = routine ? routine[1] : c.status;
   const kind = c.hire?.kind ?? ((c.by ?? c.helper) === 'chief' ? 'chief' : who?.kind ?? 'chief');
   return (
-    <div className={`card ask stack-ask${c.campaign ? ' campaign' : ''}${c.kind === 'plan' ? ' plan-ask' : ''}${c.evidence === 'draft' ? ' draft-ask' : ''}${kind === 'chief' ? ' chief-ask' : ''}`} id={id} aria-label={c.head}
+    <div className={`card ask stack-ask${c.campaign ? ' campaign' : ''}${c.kind === 'plan' ? ' plan-ask' : ''}${c.evidence === 'draft' || c.piece ? ' draft-ask' : ''}${kind === 'chief' ? ' chief-ask' : ''}`} id={id} aria-label={c.head}
       style={{ '--ask-colour': art.colourOf(kind) } as CSSProperties}>
       <AskHead c={edit.changed ? { ...c, status: DRAFT_EDITED } : c} who={who} />
       {!routine && !c.hire && <p className="ask-words">{question}</p>}

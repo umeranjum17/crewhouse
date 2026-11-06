@@ -1,4 +1,15 @@
 {
+  "chat-pieces": {
+    "start": "Umer on a private real crewd and the real engine, with a scripted model; no account, no network",
+    "steps": [
+      "Ask Chief about the dentist: a card with Keep it and Not now; tap Keep it twice",
+      "Ask Chief to send a parcel: a form, Book it held until the lines are filled; fill them and tap Book it",
+      "Ask Chief to book a lunch: a picker of three days; pick Wednesday and tap Book that day",
+      "Ask for news, then for a kind this Crewhouse does not know: each is a plain line",
+      "Repeat every look at 390 and 1280, day and night, and in the installed window"
+    ],
+    "result": "Each answer returns to the same held call in the same turn as a structured result, and Chief's next words are built from it. Three cards answered once each, none left open. The model is scripted, so this does not prove which piece a real model would choose."
+  },
   "inbox-triage": {
     "start": "Umer on a private real crewd, scripted engine, synthetic recorded inbox and a Railway case; no real Google or model",
     "steps": [
