@@ -69,7 +69,6 @@ export class StubRuntime implements AgentRuntime {
   specOf(key: string) { return this.specs.get(key); }
   async start(host: ToolHost) { this.host = host; }
   async stop() { this.host = undefined; this.holds.clear(); this.transcripts.clear(); this.specs.clear(); this.steered.clear(); this.cancelled.clear(); this.tired.clear(); this.extra.clear(); }
-  // Grok stands in for an account that must be signed in first; the rest the person has.
   async accounts(): Promise<AccountRow[]> {
     return [
       { id: 'openai', provider: 'chatgpt', plan: 'Plus', email: 'umer@example.test', state: 'ready' },

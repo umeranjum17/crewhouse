@@ -2,7 +2,6 @@
 // package.json) writes the .docx into the bot's folder. Reading one back for the app's preview uses jszip and
 // xml-js, the docx package's own dependencies — crewd parses the file, the app only ever sees plain parts.
 // The model never hand-writes the binary.
-// The shape a helper fills in: headings, paragraphs (whole-paragraph bold/italic), bullet lists, a table.
 type Cell = string | number | boolean | null | undefined;
 export type BlockSpec =
   | { heading: string; level?: number }

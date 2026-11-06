@@ -116,7 +116,8 @@ import { join } from 'node:path';
 // Trimmed 8310 -> 8279 for ch-src-trim-pi-memory: 28 comment lines that only restated the code, repaying the ch-pi-memory raise; the Ubuntu sandbox change (#816) had freed 3 more.
 // Raised 8279 -> 8313 for the chat piece contract (ch-chat-piece-contract, +34 net with the inline draft card under it, Juggernaut decision B): the crew_piece
 // tool, its answer shape, its hold and its place in the ask lists. The paired trim lane filed by the lead repays it, behaviour unchanged.
-const BUDGET = 8313;
+// Trimmed 8313 -> 8279 for ch-src-trim-piece-budget: 34 comment lines that only restated the code, repaying the piece contract's raise exactly; src measures 8277.
+const BUDGET = 8279;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
