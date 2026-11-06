@@ -229,10 +229,10 @@ journeys:
   # one stack, at 390 and 1280, day and night, then the installed window and the laid-out stack. Chromium wants a TMPDIR on disk.
   bot-crew:
     command: 'bash scripts/verify/bot-crew.sh "$DONE_DONE_EVIDENCE_ROOT"'
-  # The Pi flag, off and on: the list and chat with it off, two helpers on their own extension lists and one on none with it on, a stand-in Pi folder hashed (pi-engine.md).
+  # The Pi flag, off and on: the list and chat with it off, two helpers on their own extension lists and notes and one on none with it on, a restart, a stand-in Pi folder hashed (pi-engine.md).
   pi-engine:
     timeout: 20m
-    spends: 'about five live model calls on the free MiniMax M3.1 Flash, a tool call and an answer for two helpers and one answer for a third, on the key the key file names'
+    spends: 'nine live model calls on the free MiniMax M3.1 Flash if each helper takes one call per step, and never more than PI_CALL_LIMIT (12 unless set), on the key the key file names'
     command: 'bash scripts/verify/pi-engine.sh "$DONE_DONE_EVIDENCE_ROOT" "${MINIMAX_KEY_FILE:?the MiniMax key file}"'
   # The pill composer (ch-ui-slice2) on a real stub-engine crewd: empty, typed with a pile of photos, and listening, at 390 and
   # 1280, day and night, then the installed window, the laid-out pile, and heard words waiting for Send. TMPDIR on disk, as bot-crew.

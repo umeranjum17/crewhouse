@@ -3,7 +3,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -13,7 +13,7 @@ const person = temp('pi-person');
 process.env.HOME = person;
 const { lastSaid, setup, task, until } = await import('./lab.ts');
 const { holding, release, startModelStub } = await import('./openclaw-stub.ts');
-const { remember } = await import('../src/bots.ts');
+const { patchConfig, remember } = await import('../src/bots.ts');
 
 const built = existsSync(join(import.meta.dirname, '..', 'runtime', 'byokit', 'packages', 'pi', 'dist', 'index.js'));
 const skip = !built && !process.env.CI ? 'run node scripts/prepare-pi.mjs first' : false; // CI prepares it, so CI never skips
@@ -48,8 +48,8 @@ test('a bot answers on Pi with only the default extension, can write nothing, an
   const call = model.calls.at(-1)!;
   assert.match(JSON.stringify(call.body.messages), /Your id in Crewhouse is chief\./);
   assert.equal(call.authorization, 'Bearer lab-key-never-on-disk');
-  assert.deepEqual(names(call), ['todo'], "Pi offers the model the default set and none of Pi's own tools");
-  assert.match(JSON.stringify(call.body.messages), /only these tools: todo/, 'and the prompt that names other tools says so');
+  assert.deepEqual(names(call), ['notes', 'todo'], "Pi offers the model the default set and none of Pi's own tools");
+  assert.match(JSON.stringify(call.body.messages), /only these tools: todo, notes/, 'and the prompt that names other tools says so');
 
   // A model that calls one of Pi's own tools anyway changes nothing: Pi was left none to run. The next job is the bot's next session.
   const canary = join(s.root, 'written-by-pi.txt'), said = model.calls.length;
@@ -167,7 +167,7 @@ test('each bot on Pi loads its own list: neither sees the other\'s tools, an emp
   list(reel, '[]'); // scout has no file: the default
 
   const added = await ask(scout, '[tool todo {"action": "add", "text": "ring the dentist"}]');
-  assert.deepEqual([added.state, added.offered], ['done', ['todo']], 'no list in its folder: the default');
+  assert.deepEqual([added.state, added.offered], ['done', ['notes', 'todo']], 'no list in its folder: the default');
   assert.match(added.said, /Added todo #1: ring the dentist/);
   const hi = await ask(scribe, '[tool hello {"name": "Umer"}]');
   assert.deepEqual([hi.state, hi.offered], ['done', ['hello']], "its own list, and not the default's todo");
@@ -196,10 +196,66 @@ test('each bot on Pi loads its own list: neither sees the other\'s tools, an emp
   for (const bad of [JSON.stringify([planted]), '["__proto__"]', '{"todo": true}', 'not json']) {
     list(reel, bad);
     const ended = await ask(reel, 'Hello again');
-    assert.deepEqual([ended.state, ended.said], ['failed', "This job did not start: extensions.json in this bot's folder may only list todo, hello."], bad);
+    assert.deepEqual([ended.state, ended.said], ['failed', "This job did not start: extensions.json in this bot's folder may only list todo, hello, notes."], bad);
   }
   assert.equal(model.calls.length, asked, 'no model was asked on a bad list');
   assert.equal(existsSync(canary), false, 'and the planted file never ran');
+  s.done();
+});
+
+test('a bot on Pi keeps its own notes: recalled with no session left, never the other bot\'s, full says so, and the memory switch takes the tool away', { skip, timeout: 180_000 }, async () => {
+  process.env.CREWHOUSE_PI_IDLE_MS = '300';
+  after(() => { delete process.env.CREWHOUSE_PI_IDLE_MS; });
+  const model = await startModelStub();
+  after(() => model.close());
+  const s = setup(3, { engine: 'pi', engineProvider: { baseUrl: model.url, apiKey: 'lab-key' } });
+  s.crew.onboard('Umer');
+  const [scout, scribe] = ['scout', 'scribe'].map((t) => s.crew.recruit(t, undefined, 'person').id);
+  const work = (bot: string) => join(s.cfg.stateDir, 'pi', bot, 'work'), file = (bot: string) => join(work(bot), 'notes.md');
+  const ask = async (bot: string, input: object) => {
+    const job = (await s.crew.post(bot, `[tool notes ${JSON.stringify(input)}]`) as { task: number }).task;
+    await until(`${bot}'s job ${job}`, () => !['queued', 'working'].includes(task(s.db, job).state), 60_000);
+    assert.equal(task(s.db, job).state, 'done');
+    return String(lastSaid(s.db, bot));
+  };
+
+  assert.match(await ask(scout, { action: 'read' }), /You have no notes yet/);
+  assert.match(await ask(scout, { action: 'add', text: 'The locker  code\nis K7' }), /Saved\. 24 of 8192 bytes used/);
+  await ask(scribe, { action: 'add', text: 'The locker code is M4' });
+  assert.equal(readFileSync(file(scout), 'utf8'), '- The locker code is K7\n', 'one plain line per note');
+
+  // Both Pis stop and their sessions go, so the file is the only thing left that could carry a note into the next turn.
+  await until('both Pis stopped once idle', () => Object.keys(pis()).length === 0, 30_000);
+  for (const bot of [scout, scribe]) rmSync(join(work(bot), 'sessions'), { recursive: true });
+  const asked = model.calls.length;
+  const recalled = await ask(scout, { action: 'read' });
+  assert.match(recalled, /The locker code is K7/);
+  assert.doesNotMatch(JSON.stringify(model.calls[asked].body.messages), /K7/, 'the turn began knowing nothing of it');
+
+  // Neither reaches the other's: the tool takes no path, so one aimed at the other folder reads the bot's own notes.
+  for (const [bot, own, other] of [[scout, /K7/, /M4/], [scribe, /M4/, /K7/]] as const) {
+    const said = await ask(bot, { action: 'read', path: join(work(bot === scout ? scribe : scout), 'notes.md') });
+    assert.match(said, own);
+    assert.doesNotMatch(said, other);
+  }
+
+  // Full is said, the note is not saved, and forgetting makes room. The last byte counts: a note that fits exactly is kept.
+  const line = '- The locker code is M4\n', room = 8192 - Buffer.byteLength(line) - Buffer.byteLength('- last\n');
+  writeFileSync(file(scribe), `${line}- ${'x'.repeat(room - 3)}\n`);
+  assert.match(await ask(scribe, { action: 'add', text: 'last' }), /8192 of 8192 bytes used/);
+  const full = readFileSync(file(scribe), 'utf8');
+  assert.match(await ask(scribe, { action: 'add', text: 'one more' }), /Your notes are full: 8192 of 8192 bytes are used and this note needs 11, so it was not saved\. Forget something first\./);
+  assert.equal(readFileSync(file(scribe), 'utf8'), full, 'nothing was half written');
+  assert.match(await ask(scribe, { action: 'forget', text: 'nothing has this' }), /nothing was dropped/);
+  assert.match(await ask(scribe, { action: 'forget', text: 'XXX' }), /Dropped 1/);
+  assert.match(await ask(scribe, { action: 'add', text: 'one more' }), /Saved/);
+  assert.equal(readFileSync(file(scribe), 'utf8'), `${line}- last\n- one more\n`);
+
+  // The person's switch outranks the list: no tool, so nothing is read or written, and the notes stay where they are.
+  patchConfig(s.cfg, scout, { memory: false });
+  assert.match(await ask(scout, { action: 'add', text: 'kept against the switch' }), /notes not found/i);
+  assert.deepEqual(names(model.calls.at(-1)!), ['todo']);
+  assert.equal(readFileSync(file(scout), 'utf8'), '- The locker code is K7\n');
   s.done();
 });
 

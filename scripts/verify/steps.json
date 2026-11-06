@@ -789,14 +789,16 @@
     "start": "Two real crewds: one on the stub engine with the Pi flag off, as bot-crew drives it, and one started with CREWHOUSE_ENGINE=pi, onboarded as Umer, on the real pinned Pi and the model {{model}}",
     "steps": [
       "With the flag off, open the bot list and a bot's chat on a 390 phone and a 1280 computer, day and night",
-      "With the flag on, bring on Scout, Scribe and Reel, and give Scout and Scribe each a note of their own",
-      "Leave Scout's folder with no extension list, so it takes the default, list hello in Scribe's folder and nothing in Reel's",
-      "Ask Scout and Scribe at once to use their own tool, then give a word of theirs and the colour in their own note; then ask Reel a plain question; Chief is never asked",
+      "With the flag on, bring on Scout and Scribe, and give each a note of their own",
+      "Leave Scout's folder with no extension list, so it takes the default, and list hello and notes in Scribe's folder",
+      "Ask Scout and Scribe at once to save a locker code in their notes, then give a word of theirs and the colour in their own note; Chief is never asked",
+      "Wait until no Pi is running, stop crewd and start it again over the same folders, and remove both Pi sessions",
+      "Fill Scribe's notes, then ask Scout for its code and Scribe's, and Scribe for its code and to save one more",
       "Wait until no Pi is running",
-      "Open Scout's, Scribe's and Reel's chats on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
+      "Open Scout's and Scribe's chats on a 390 phone and a 1280 computer, day and night, and in the installed app's window at 390",
       "Hash a stand-in person's Pi folder before and after the run"
     ],
-    "result": "With the flag off the list and chat work as before. With it on Scout and Scribe each ran their own Pi at the same moment and answered in their own chat, from their own word and note and never the other's. Every model call offered Scout only todo, Scribe only hello and Reel no tool, and each of the two called its own tool. Scout said: {{scout}} Scribe said: {{scribe}} Reel, on an empty list, said: {{reel}} Every Pi stopped when idle, and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
+    "result": "With the flag off the list and chat work as before. With it on Scout and Scribe each ran their own Pi at the same moment and answered in their own chat, from their own word and note and never the other's. Every model call offered Scout only todo and notes and Scribe only hello and notes, and {{calls}} model calls were made in all. After crewd restarted with both Pi sessions gone, each recalled its own code from its own notes and never the other's. Asked for its code and Scribe's, Scout said: {{scout}} With its notes full, Scribe said: {{scribe}} Every Pi stopped when idle, and Chief never had one. The stand-in Pi folder hashes the same; the person's real folder was not checked"
   },
   "bot-crew": {
     "start": "Real crewd on the stub engine, onboarded as Umer: Scout delivered five pictures, Reel is at work, Scribe is done and Chief asks to bring someone on",

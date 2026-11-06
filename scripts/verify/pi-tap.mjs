@@ -1,19 +1,46 @@
 #!/usr/bin/env node
-// The `pi-engine` journey's witness for what a real model is offered: Pi's own record keeps the calls a bot made, never the tools
-// it could see. A loopback pass-through to the provider, between crewd and the model, writes one line per model request: the bot and
-// the names of its tools. Bytes pass unchanged. It never writes the key or a word of the conversation.
-//   node scripts/verify/pi-tap.mjs <provider-origin> <port> <record-file>
+// The `pi-engine` journey's witness and its spend limit. Pi's own record keeps a bot's calls, never the tools it could see, and a job's
+// lab is gone once a run fails. A loopback pass-through to the provider, between crewd and the model, writes one line per model request:
+// the bot, the tools offered, what each tool last said, then the reply's status, finish reason, tool calls with their arguments, and
+// tokens. Bytes pass unchanged. It never writes the key. Past <limit> requests it answers an error itself and the provider is never
+// reached, so a model that keeps calling tools fails the journey and cannot spend more than the limit.
+//   node scripts/verify/pi-tap.mjs <provider-origin> <port> <record-file> <limit>
 import { appendFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 
-const [origin, port, record] = process.argv.slice(2);
+const [origin, port, record, limit] = process.argv.slice(2);
+let asked = 0;
+const words = (m) => (typeof m.content === 'string' ? m.content : (m.content ?? []).map((c) => c.text ?? '').join('')).slice(0, 200);
+/** What a streamed reply came to: its chunks merged, as Pi merges them. */
+const heard = (text) => {
+  const calls = [], out = { finish: null, calls, tokens: null, text: 0, thinking: 0 };
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: {')) continue;
+    const chunk = JSON.parse(line.slice(6)), choice = chunk.choices?.[0], delta = choice?.delta ?? {};
+    out.finish = choice?.finish_reason ?? out.finish; out.tokens = chunk.usage?.total_tokens ?? out.tokens;
+    out.text += delta.content?.length ?? 0; out.thinking += (delta.reasoning_content ?? delta.reasoning ?? '').length;
+    for (const part of delta.tool_calls ?? []) {
+      const call = calls[part.index ?? 0] ??= { name: '', args: '' };
+      call.name += part.function?.name ?? ''; call.args += part.function?.arguments ?? '';
+    }
+  }
+  return out;
+};
 createServer(async (req, res) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
-  const body = Buffer.concat(chunks), sent = JSON.parse(body.toString() || '{}');
-  appendFileSync(record, `${JSON.stringify({ bot: /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(JSON.stringify(sent.messages))?.[1], tools: (sent.tools ?? []).map((t) => t.function?.name).sort() })}\n`);
+  const body = Buffer.concat(chunks), sent = JSON.parse(body.toString() || '{}'), messages = sent.messages ?? [];
+  const line = { at: new Date().toISOString(), bot: /Your id in Crewhouse is ([a-z0-9-]+)\./.exec(JSON.stringify(messages))?.[1], tools: (sent.tools ?? []).map((t) => t.function?.name).sort(), results: messages.slice(messages.findLastIndex((m) => m.role === 'assistant') + 1).filter((m) => m.role === 'tool').map(words) };
+  const write = (more) => appendFileSync(record, `${JSON.stringify({ ...line, ...more })}\n`);
+  if (++asked > Number(limit)) {
+    write({ status: 'stopped by the tap' });
+    res.writeHead(400, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ error: { message: `pi-tap stopped this request: only ${limit} model calls were allowed` } }));
+  }
   const reply = await fetch(new URL(req.url, origin), { method: req.method, headers: { authorization: req.headers.authorization ?? '', 'content-type': 'application/json' }, body });
   res.writeHead(reply.status, { 'content-type': reply.headers.get('content-type') ?? 'application/json' });
-  for await (const chunk of reply.body) res.write(chunk);
+  const seen = new TextDecoder(); let text = '';
+  for await (const chunk of reply.body) { res.write(chunk); text += seen.decode(chunk, { stream: true }); }
   res.end();
+  write({ status: reply.status, ...reply.ok ? heard(text) : { error: text.slice(0, 200) } });
 }).listen(Number(port), '127.0.0.1');

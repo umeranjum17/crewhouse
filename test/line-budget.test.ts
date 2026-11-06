@@ -111,7 +111,9 @@ import { join } from 'node:path';
 // Raised 8204 -> 8282 for the Pi engine behind its flag (ch-pi-runtime, +78 net): src/pi/runtime.ts (the AgentRuntime adapter
 // on @byokit/pi, the only file naming the kit) and the flag in src/config.ts and src/engines.ts. Owner exception requested in the
 // PR; no trim paired (the adapter is the feature, and OpenClaw's stays until Pi replaces it).
-const BUDGET = 8282;
+// Raised 8282 -> 8310 for a bot's own notes on Pi (ch-pi-memory, +28 net, owner exception given by Juggernaut for the PR):
+// src/pi/notes.ts, the one reviewed tool on one fixed file. A scan found nothing honest to delete; a trim lane is filed separately.
+const BUDGET = 8310;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
