@@ -6,7 +6,7 @@ const CAP = 8192, say = (text: string, isError = false) => ({ content: [{ type: 
 export default function (pi: { registerTool(tool: object): void }) {
   pi.registerTool({
     name: 'notes', label: 'Notes',
-    description: `Your own notes, the only thing you keep between jobs. Read them before you answer anything that may depend on an earlier job. Add one short line for anything you will need later. They hold ${CAP} bytes, and only you can see them.`,
+    description: `Your own notes, kept between jobs, and not the notes your prompt shows you. Read them only when the person asks about an earlier job. Add one short line only when the person asks you to keep something. One call is enough, then answer. They hold ${CAP} bytes, and only you can see them.`,
     parameters: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['read', 'add', 'forget'] }, text: { type: 'string', description: 'add: the note, one short line. forget: words of the notes to drop.' } } },
     async execute(_call: string, { action, text = '' }: { action: string; text?: string }, _signal: unknown, _update: unknown, { cwd }: { cwd: string }) {
       const file = join(cwd, 'notes.md'), had = existsSync(file) ? readFileSync(file, 'utf8') : '', words = text.replace(/\s+/g, ' ').trim();
