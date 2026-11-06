@@ -8,7 +8,8 @@
 // GATE_INIT=<js file> runs before the app boots on every load (scripts/verify/voice-device.js: a device with voices that logs what it says);
 // with it, <slug>-said-<width>-<theme>.json holds that log (window.ctl.said) after the then-js.
 // GATE_DOWNLOADS=<dir> keeps whatever the page saves (a PDF or Word file) in that folder.
-import { spawn } from 'node:child_process';
+// GATE_FILM=<dir> films the then-js of each pass into <dir>/<slug>-<width>-<theme>.webm, from the page's own screencast.
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,7 +30,14 @@ try {
   const ws = new WebSocket(pages.find((p) => p.type === 'page').webSocketDebuggerUrl);
   await new Promise((r) => ws.once('open', r));
   let id = 0; const waiting = new Map();
-  ws.on('message', (m) => { const d = JSON.parse(m); waiting.get(d.id)?.(d); waiting.delete(d.id); });
+  const frames = [];
+  ws.on('message', (m) => { const d = JSON.parse(m); waiting.get(d.id)?.(d); waiting.delete(d.id);
+    if (d.method === 'Page.screencastFrame') { frames.push({ t: d.params.metadata.timestamp, jpeg: Buffer.from(d.params.data, 'base64') }); ws.send(JSON.stringify({ id: ++id, method: 'Page.screencastFrameAck', params: { sessionId: d.params.sessionId } })); } });
+  const film = (file) => { const dir = mkdtempSync(join(profile, 'film-'));
+    const list = frames.map((f, i) => { writeFileSync(join(dir, `${i}.jpg`), f.jpeg); return `file '${i}.jpg'\nduration ${((frames[i + 1]?.t ?? f.t + 1) - f.t).toFixed(4)}`; }).join('\n');
+    writeFileSync(join(dir, 'frames.txt'), `${list}\nfile '${frames.length - 1}.jpg'\n`);
+    const ff = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', join(dir, 'frames.txt'), '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libvpx-vp9', '-crf', '32', '-b:v', '0', '-pix_fmt', 'yuv420p', file], { encoding: 'utf8' });
+    if (ff.status !== 0) throw new Error(ff.stderr); };
   const send = (method, params = {}) => new Promise((r, j) => { const n = ++id; waiting.set(n, (d) => d.error ? j(new Error(`${method}: ${d.error.message}`)) : r(d.result)); ws.send(JSON.stringify({ id: n, method, params })); });
   const run = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'eval failed'); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable');
@@ -43,7 +51,9 @@ try {
     await send('Page.navigate', { url: `${base}${base.includes('?') ? '&' : '?'}${theme}&r=${Date.now()}#${hash ?? '/'}` });
     for (let i = 0; i < 100 && !(await run("!!document.querySelector('.page')").catch(() => false)); i++) await wait(100);
     await wait(1200);
+    if (process.env.GATE_FILM) { mkdirSync(process.env.GATE_FILM, { recursive: true }); frames.length = 0; await send('Page.startScreencast', { format: 'jpeg', quality: 80, everyNthFrame: 1 }); }
     if (then) { await run(then); await wait(600); }
+    if (process.env.GATE_FILM) { await send('Page.stopScreencast'); film(join(process.env.GATE_FILM, `${slug}-${w}-${theme}.webm`)); }
     const m = await run(`(() => {
       const seen = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('.sr'); };
       const texty = [...document.querySelectorAll(${JSON.stringify(process.env.GATE_SCOPE ?? 'main *, .page *')})].filter((e) => [...e.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()) && seen(e));

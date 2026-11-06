@@ -2525,3 +2525,10 @@ export function goals(state: Json) {
 
 /** The writer's chat is the practice interviewer's once a role in Interview has its prep: the person answers there by typing or the mic, and the interviewer's lines are read aloud in the device voice (PracticeVoice). */
 export const practising = (state: Json, id: string) => (state?.goals ?? []).some((x: Json) => x.goal.will === id && x.roles.some((r: Json) => r.stage === 'interview' && r.prep));
+
+/** The live panel's words, from crewd's state alone. `computerGap` says why there is no screen to show; `deskDoing` is the
+ *  line under the picture, the bot's real step or job, never a guess at what the picture shows. */
+export const computerMissing = (tool?: Json) => tool && !tool.ready && tool.missing?.length ? `This machine is missing what a computer needs: ${tool.missing.join(', ')}.` : null;
+export const computerGap = (name: string, tool?: Json) => computerMissing(tool) ?? `${name} doesn't have a computer, so there is no screen to watch.`;
+export const deskDoing = (name: string, bot: Json, held: boolean) =>
+  held ? `${name} is paused until you hand it back.` : bot.task ? (bot.step && step(bot.step)) || plain(bot.task.title) : `${name} isn't working on anything right now.`;

@@ -1988,14 +1988,6 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 @media (min-width: 900px) { .fr-h { font-size: clamp(44px, 4.4vw, 64px); } }
 /* watch a helper (J15) */
 .card.screen { border-radius: 28px; }
-.screen-h { flex: 1 1 auto; font: 800 22px/1.15 Archivo, sans-serif; font-stretch: 125%; }
-.screen-hand { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 0; font: 400 16px/1.45 var(--ui); color: var(--mute); }
-.screen-hand svg { flex: none; margin-top: 2px; }
-.screen-btns .btn { min-height: 52px; border-radius: 18px; font-size: 16px; }
-.screen-btns .btn:nth-child(2) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.screen-btns .btn:nth-child(n+3) { background: var(--soft); border-color: transparent; }
-.card.screen > .row { flex-wrap: wrap; margin-bottom: 12px; }
-.screen-hand + .screen-held, .screen-held ~ .hand-back { margin-top: 14px; }
 .st-screen.page { width: 100%; }
 .btn.soft { background: var(--soft); border-color: transparent; }
 
@@ -2588,3 +2580,35 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .arrived { display: flex; flex-direction: column; gap: 2px; margin: calc(var(--top) + 64px) 12px 0; padding: 12px 14px; border-radius: 14px; background: var(--soft); color: var(--ink2); font-size: 13px; line-height: 19px; }
 .arrived b { color: var(--ink); font-size: 15px; line-height: 20px; }
 @media (min-width: 900px) { .arrived { margin: 12px 24px 0; } }
+
+/* The live desktop (slice 3 of Same room, our crew): the picture in one rounded frame on a screen-off ground, by day and night.
+   The veil covers everything that is not a running stream, so a last frame never passes for live. */
+.ld-stage { position: relative; aspect-ratio: 1280 / 800; overflow: hidden; border-radius: 20px; border: 1px solid var(--glass-line); background: #0b0b0c; }
+.ld-mark { display: flex; justify-content: center; margin-top: 12px; }
+.ld-veil { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: #0b0b0c; color: #f4f2ee; font: 400 17px/24px var(--ui); }
+.ld-spin { width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 2px solid transparent; border-top-color: currentColor; border-right-color: currentColor; animation: ld-spin 1s linear infinite; }
+@keyframes ld-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ld-spin { animation: none; } }
+.ld-doing { margin: 12px 0 0; text-align: center; font: 600 18px/24px var(--ui); color: var(--ink); overflow-wrap: anywhere; }
+.ld-leave { margin: 4px 0 0; text-align: center; font: 400 16px/22px var(--ui); color: var(--mute); }
+.btn.ld-take { display: block; width: 100%; min-height: 54px; margin-top: 16px; border-radius: 999px; background: var(--ink); border-color: var(--ink); color: var(--bg); font: 600 17px/1 var(--ui); }
+.ld-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 20px; margin-top: 12px; }
+.ld-more .link { min-height: 44px; font-size: 16px; }
+.card.screen .hand-back { margin-top: 14px; }
+.card.screen .hand-back .btn { font-size: 16px; }
+.card.screen.ld { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.card.screen.ld > .mute.small { margin: 12px 0 0; text-align: center; font-size: 16px; line-height: 22px; }
+.ld-none { display: grid; justify-items: center; gap: 8px; padding: 48px 20px; text-align: center; border-radius: 20px; border: 1px solid var(--glass-line); color: var(--mute); font: 400 16px/22px var(--ui); }
+.ld-none b { font: 600 18px/24px var(--ui); color: var(--ink); }
+.calm .pill-head:has(.ph-screen) { gap: 4px; } /* four round buttons: the chip keeps room for a whole first name at 360 */
+.calm .pill-head:has(.ph-screen) .ph-who { max-width: calc(100% - 192px); padding-right: 12px; }
+.calm .st-screen .ld-side { box-sizing: border-box; padding: calc(var(--top) + 66px) 0 24px; }
+@media (min-width: 900px) {
+  .calm .ph-screen { width: 36px; height: 36px; background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--quiet); }
+  .calm .page.chat-page.ld-room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: auto minmax(0, 1fr); }
+  .calm .ld-room > .sticky-top { grid-column: 1; grid-row: 1; }
+  .calm .ld-room .working-on, .calm .ld-room .live-ctl .btn.go { display: none; } /* the panel is both: the job's line and Take control */
+  .calm .ld-room > .chat { grid-column: 1; grid-row: 2; min-height: 0; }
+  .calm .ld-room > .ld-side { grid-column: 2; grid-row: 1 / 3; min-height: 0; overflow-y: auto; padding: 16px 24px 24px; border-left: 1px solid var(--hair); background: var(--pane); }
+  .ld-top { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-bottom: 8px; font: 600 17px/22px var(--ui); }
+}

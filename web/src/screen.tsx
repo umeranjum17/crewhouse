@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { CONTROL_PERMISSIONS, DesktopView, useDesktopSession } from '@desklink/react-native';
 import { api, desktopSignaling, type Json } from './api.ts';
 import * as A from './adapter.ts';
-import { attempt, Icon, Pill, SiteIcon } from './parts.tsx';
+import { attempt, Pill, SiteIcon } from './parts.tsx';
 
 const STATUS: Record<string, string> = {
-  idle: 'Not watching', opening: 'Opening…', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
+  idle: 'Not watching', opening: 'Starting desktop…', connecting: 'Starting desktop…', live: 'Live', reconnecting: 'Picture lost. Reconnecting…', ended: 'Stopped', failed: "Couldn't open it",
 };
 
 /** One plain line for a screen that would not open. desklink's own failure text is diagnostic, never shown; a path
@@ -80,7 +80,9 @@ export function SiteSignIn({ c, bot, onClose }: { c: A.Card; bot: Json; onClose:
   );
 }
 
-export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => void; showing?: { words: string } | null }) {
+/** A bot's screen: the picture in its frame, Live only while the stream runs, and a veil saying what is true over anything
+ *  else (a stopped stream leaves its last frame behind). `auto` is the live panel: opening it is the ask to watch, view only. */
+export function Screen({ bot, refresh, showing, auto, offline, doing, leave }: { bot: Json; refresh: () => void; showing?: { words: string } | null; auto?: boolean; offline?: boolean; doing?: string; leave?: string }) {
   const control = bot.controls === 'person';
   const watching = useRef(false);
   const [err, setErr] = useState('');
@@ -106,32 +108,28 @@ export function Screen({ bot, refresh, showing }: { bot: Json; refresh: () => vo
 
   const watch = () => { setErr(''); watching.current = true; void open(); };
   const stop = () => { watching.current = false; void close(); };
+  useEffect(() => { if (auto && !offline && !control && !watching.current) watch(); }, [auto, offline]);
   const act = (fn: () => Promise<unknown>) => async () => { setErr(''); if (await attempt(fn)) refresh(); };
 
   const live = session.snapshot.status;
-  const idle = live === 'idle' || live === 'ended' || live === 'failed';
+  const idle = live === 'idle' || live === 'ended' || live === 'failed', showingLive = live === 'live' && !offline;
+  const starting = !offline && !err && (live === 'opening' || live === 'connecting' || live === 'reconnecting' || (auto && live === 'idle' && watching.current));
+  const veil = offline ? "Your home computer isn't answering, so this isn't live." : err || (live === 'idle' && !starting ? `Watch ${bot.display} work on its own computer` : `${STATUS[live] ?? 'Starting desktop…'}${live === 'ended' ? '. This is not live.' : ''}`);
   return (
-    <div className="card screen">
-      <div className="row">
-        <b className="grow screen-h">{bot.display}'s screen</b>
-        <Pill tone={live === 'live' ? 'ok' : 'off'}>{control ? 'You have control' : STATUS[live] ?? 'Opening…'}</Pill>
-      </div>
-      {control && <p className="screen-hand"><Icon name="hand" size={22} />{bot.display} is paused until you hand it back.</p>}
+    <div className={`card screen${auto ? ' ld' : ''}`}>
       {/* desklink types through its own hidden textarea; a tap on the picture must focus it (a tap, not a pinch), or keys never reach the bot's desktop. */}
-      <div className={control ? 'screen-held' : undefined} onClick={() => { if (control) session.showKeyboard(); }}>
-        <DesktopView
-          sessionId={session.nativeId}
-          style={{ width: '100%', aspectRatio: '1280 / 800', borderRadius: 16 }}
-          accessibilityLabel={`${bot.display}'s screen`}
-          placeholder={<div className="screen-idle">{idle ? `Watch ${bot.display} work on its own computer` : STATUS[live]}</div>}
-        />
+      <div className={`ld-stage${control ? ' screen-held' : ''}`} onClick={() => { if (control) session.showKeyboard(); }}>
+        <DesktopView sessionId={session.nativeId} style={{ width: '100%', aspectRatio: '1280 / 800' }} accessibilityLabel={`${bot.display}'s screen`} />
+        {!showingLive && <div className="ld-veil" role="status">{starting && <i className="ld-spin" aria-hidden />}<span>{veil}</span></div>}
       </div>
-      {err && <p className="nudge-line">{err}</p>}
-      {!control && <p className="screen-hand"><Icon name="hand" size={22} />While you have control, {bot.display} waits.</p>}
-      {!control && <div className="btns screen-btns">
-        {idle ? <button className="btn go" onClick={watch}>Watch {bot.display}</button> : <button className="btn soft" onClick={stop}>Stop watching</button>}
-        <button className="btn" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take control</button>
-        {what === null && <button className="btn" onClick={() => setWhat('')}>Show {bot.display} how</button>}
+      {(showingLive || control) && <div className="ld-mark"><Pill tone={showingLive ? 'ok' : 'off'}>{control ? 'You have control' : 'Live'}</Pill></div>}
+      {doing && <p className="ld-doing">{doing}</p>}
+      {leave && <p className="ld-leave">{leave}</p>}
+      {err && !idle && <p className="nudge-line">{err}</p>}
+      {!control && <button className="btn ld-take" onClick={act(async () => { await api.takeOver(bot.id); watching.current = true; })}>Take control</button>}
+      {!control && <div className="ld-more">
+        {idle ? <button className="link" onClick={watch}>Watch {bot.display}</button> : <button className="link" onClick={stop}>Stop watching</button>}
+        {what === null && <button className="link" onClick={() => setWhat('')}>Show {bot.display} how</button>}
       </div>}
       {what !== null && !control && (
         <form className="hand-back" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.show(bot.id, what); setWhat(null); watching.current = true; if (idle) watch(); })(); }}>
