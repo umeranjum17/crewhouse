@@ -921,5 +921,15 @@
       "Read each job's model requests, the chat, and crewd's run.limit events"
     ],
     "result": "The churning helper was asked once for its answer after twenty tool calls and answered \"The locker code is K7.\" inside the cap of thirty. The one that kept going was stopped just past the cap, by the calls already under way when the kit's stop landed: its job ended on \"ChatGPT couldn't finish this one. Try again.\" and crewd's events hold one run.limit for that job, 30 of 30. The plain question was answered with no tool call and no ask. With the flag off the message finished as before and nothing of Pi was made."
+  },
+  "hands": {
+    "start": "A real crewd on the stub engine, driven through the API the app uses, with Writer Will and Research Rae brought on and the pinned browser AXI's stand-in, which writes down every call it gets; Will's bot.json names the far computer \"lab\", a pretend far computer in crewd's state",
+    "steps": [
+      "Ask Will to save a note with its shell and look at a page in its browser",
+      "Ask Rae, whose bot.json names no far computer, the same",
+      "Point Will at a far computer that does not exist, and ask again",
+      "Point Will at a far computer whose name is a path, and ask again"
+    ],
+    "result": "Will's shell call, then its browser opening, the page and the close at the job's end reached the far stand-in in that order with their exact arguments, Will read the stand-in's answer that no computer ran it, and nothing ran on this computer. Rae's shell wrote into its own folder here and its browser ran here through the pinned AXI, as before, with nothing sent far. With the far computer missing, and with a name that is a path, both of Will's calls failed in plain words Will read, crewd recorded them failed, and nothing fell back to this computer."
   }
 }

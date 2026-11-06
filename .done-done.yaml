@@ -246,6 +246,12 @@ journeys:
   pi-room:
     timeout: 10m
     command: 'node scripts/verify/pi-room.mjs "$DONE_DONE_EVIDENCE_ROOT"'
+  # One door for a bot's hands (bin/hands.mjs): a bot whose bot.json names a far computer sends its shell and browser calls to the far
+  # stand-in in order with their exact arguments and reads its answer; a bot with none runs here as before; a far computer that cannot be
+  # reached is a failure the bot reads and nothing runs here. Real crewd on the stub engine, nothing spent (hands.md).
+  hands:
+    timeout: 5m
+    command: 'node scripts/verify/hands.mjs "$DONE_DONE_EVIDENCE_ROOT"'
   # The pill composer (ch-ui-slice2) on a real stub-engine crewd: empty, typed with a pile of photos, and listening, at 390 and
   # 1280, day and night, then the installed window, the laid-out pile, and heard words waiting for Send. TMPDIR on disk, as bot-crew.
   composer:

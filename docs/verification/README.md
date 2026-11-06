@@ -19,6 +19,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | pi-wall | `done-done run pi-wall`, after `node scripts/prepare-pi.mjs` ([recipe](pi-engine.md)) |
 | pi-answer | `done-done run pi-answer`, after `node scripts/prepare-pi.mjs` ([recipe](pi-engine.md)) |
 | pi-room | `done-done run pi-room`, after `node scripts/prepare-pi.mjs`, on a login with a user manager ([recipe](pi-engine.md)) |
+| hands | `done-done run hands` — far, here and failure on a real stub-engine crewd ([recipe](hands.md)) |
 | resume | `done-done run resume` — the guard's refusal, the resume with its sources, Edit and Save, and the PDF and Word files the app saves, opened ([recipe](resume.md)) |
 | workbook-chart | `done-done run workbook-chart` (includes installed PWA) |
 | slides-deck | `done-done run slides-deck` (includes installed PWA) |
