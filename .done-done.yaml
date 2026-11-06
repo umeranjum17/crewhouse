@@ -242,5 +242,10 @@ journeys:
   # day and night; a running call, the off state with its words, a long name, and the installed window. TMPDIR on disk, as bot-crew.
   chat-head:
     command: 'bash scripts/verify/chat-head.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The helpers' sandbox on a stock Ubuntu 24.04 (ch-ubuntu-bwrap-profile): Ubuntu's own cloud image in a KVM VM, twice (the .deb, and
+  # crewhouse setup), the probe and doctor before and after as the stock ubuntu login. UBUNTU_SANDBOX_DEB is a .deb from scripts/package.mjs.
+  ubuntu-sandbox:
+    timeout: 40m
+    command: 'bash scripts/verify/ubuntu-sandbox.sh "$DONE_DONE_EVIDENCE_ROOT" "${UBUNTU_SANDBOX_DEB:?the .deb from scripts/package.mjs}"'
 # The commit before the calm redesign (ch-018): verify pairs each capture with the same capture there.
 base_ref: 66263f7d

@@ -63,7 +63,7 @@ When run in a terminal, `setup` asks one thing:
 
 - Whether Crewhouse should start by itself when you log in (a systemd user service). You can change this later with `./crewhouse autostart on|off`.
 
-`./crewhouse doctor` shows what's installed and what's missing; `./crewhouse tools` has the details for each tool. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
+`./crewhouse doctor` shows what's installed and what's missing; `./crewhouse tools` has the details for each tool. The helpers' sandboxed shell needs [bubblewrap](https://github.com/containers/bubblewrap) (on Ubuntu 23.10 and later also the one AppArmor rule Ubuntu ships for it, in `apparmor-profiles`: the `.deb` installs it, and `crewhouse setup` asks once and runs it with `sudo`; if it is missing, `doctor` names the command), and their own screens need Xvfb and Chromium. Crewhouse is built and tested on Linux. On macOS, helpers get no shell or screens, and autostart isn't available.
 
 Everything Crewhouse writes lives in `~/.local/state/crewhouse/` (the database, the engine and saved sign-ins), `~/Crewhouse/` (helpers and what they know about each person) and `~/.local/share/crewhouse/tools/` (the tool kit). `./crewhouse uninstall` removes all of it, but keeps your crew folder unless you add `--all`.
 
