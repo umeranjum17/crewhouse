@@ -269,7 +269,6 @@ export class Link {
     });
   }
 
-  /** The address a phone dials through the relay, or none. */
   relayUrl() { return this.relay && this.host ? linkUrl(this.relayPublic, this.host.id) : ''; }
   /** Set by the server: what a phone's desktop stream talks to. */
   desk?: Desk;

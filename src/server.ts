@@ -273,7 +273,6 @@ export async function startServer(cfg: Config, db: Store, crew: Crew) {
           const ok = d.ok !== false && !String(d.head ?? '').startsWith('error:');
           return { at: e.at, words: toolWords(d.tool, input, ok) || `Used ${String(d.tool).replace(/_/g, ' ')}`, ok }; });
     }
-    // What the engine learned from your work, and Forget.
     if (m === 'GET' && p === '/api/learned') return crew.runtime.learned ? crew.runtime.learned() : [];
     if ((r = p.match(/^\/api\/learned\/forget$/)) && m === 'POST') {
       if (body.id) await crew.runtime.forget?.(String(body.id), String(body.skill ?? ''));

@@ -26,7 +26,6 @@ const score = (signals: string | null) => (JSON.parse(signals ?? '[]') as Signal
 export const ranked = <T extends Row>(rows: T[]) => rows.sort((a, b) => score(b.signals) - score(a.signals));
 
 export const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-/** A stage's key: its name, lower case ("Viewing booked" is viewing-booked). */
 export const key = (name: string) => norm(name).replace(/ /g, '-');
 const fail = (message: string, status = 400) => Object.assign(new Error(message), { status });
 

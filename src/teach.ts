@@ -51,7 +51,6 @@ export function stepsOf(raw: Raw[]): string[] {
 type Showing = { bot: string; what: string; raw: Raw[]; shots: { type: string; data: string }[]; seen: Set<string>; ws: WebSocket; timer: NodeJS.Timeout;
   poll?: NodeJS.Timeout; at: number; n: number; pending: Map<number, (r: any) => void>; pages: Map<string, (m: any) => void>; busy?: boolean };
 
-/** The shows in progress, one per bot. */
 export class Teacher {
   private shows = new Map<string, Showing>();
 
@@ -88,7 +87,6 @@ export class Teacher {
     return { what: s.what, steps: stepsOf(s.raw), shots: s.shots.slice(0, 4) };
   }
 
-  /** A DevTools command, on the browser or one page's session. */
   private call(s: Showing, method: string, params: object = {}, sessionId?: string) {
     return new Promise<any>((resolve) => {
       if (s.ws.readyState !== WebSocket.OPEN) return resolve(undefined);
@@ -98,7 +96,6 @@ export class Teacher {
     });
   }
 
-  /** Every page the browser has open: listen to it once. */
   private async attach(s: Showing) {
     if (s.busy) return; // a slow pass must not run twice: two sessions for one page would record every step twice
     s.busy = true;

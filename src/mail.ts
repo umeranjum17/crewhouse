@@ -55,7 +55,6 @@ export function bodyOf(payload: any): string {
   return (quoted >= 0 ? lines.slice(0, quoted) : lines).filter((l) => !l.startsWith('>')).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** Threads as rows: who, what, how long ago (from each thread's newest message). */
 async function rows(token: Token, threads: { id: string }[]) {
   return Promise.all(threads.map(async ({ id }) => {
     const t = await get(token, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`), m = t.messages?.at(-1), who = t.messages?.filter((x: any) => !x.labelIds?.includes('SENT')).at(-1) ?? m, raw = header(who, 'From'), addr = raw.match(/<[^<>]*>$/)?.[0] ?? '';

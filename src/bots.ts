@@ -80,7 +80,6 @@ export function setBrains(cfg: Config, id: string, models: string[]) {
   writeFileSync(modelsFile(cfg), JSON.stringify({ ...pickedModels(cfg), [id]: list }, null, 2) + '\n');
   return list;
 }
-/** The person's standing answers for a bot ("Always for Reel") and its memory switch. */
 export function setSettings(cfg: Config, id: string, s: { allow?: unknown; memory?: unknown }) {
   if (s.allow !== undefined && !(Array.isArray(s.allow) && s.allow.every((a) => typeof a === 'string'))) throw new Error('allow must be a list');
   if (s.memory !== undefined && typeof s.memory !== 'boolean') throw new Error('memory is on or off');
@@ -107,7 +106,6 @@ export function templateKit(cfg: Config, tpl: Template) {
   return tpl.tools.filter((id) => id !== 'crew' && all.has(id)).map((id) => { const t = all.get(id)!; return { id, name: t.name, asks: t.asks, ready: t.ready }; });
 }
 
-/** Granted and working on this machine. */
 export const canUse = (cfg: Config, id: string, tool: string) => botTools(cfg, id).some((t) => t.id === tool && t.granted && t.ready);
 
 export const templatesDir = (cfg: Config) => join(cfg.repoDir, 'templates'), botDir = (cfg: Config, id: string) => join(cfg.crewDir, 'bots', id);
@@ -377,7 +375,6 @@ export function listFiles(cfg: Config, id: string, allowed?: Set<string>) {
   return out.sort((a, b) => b.mtime - a.mtime).slice(0, 200);
 }
 
-/** Resolve a path inside a bot folder, refusing anything that escapes it. */
 export function insideBot(cfg: Config, id: string, p: string) {
   const dir = botDir(cfg, id), full = resolve(dir, p);
   if (full !== dir && !full.startsWith(dir + '/')) throw new Error('path is outside the bot folder');
