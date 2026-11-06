@@ -28,7 +28,7 @@ export type RunEvent =
   | { type: 'started' | 'thinking' }
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; phase: 'start' | 'end'; error?: boolean }
-  | { type: 'usage'; tokens: number }
+  | { type: 'usage'; tokens: number } | { type: 'limit'; toolCalls: number; limit: number } // limit: the turn made toolCalls and was stopped asking past the engine's per-turn cap
   | { type: 'delegated'; id: string; parent: string; root: string };
 export type RunEnd = { ok: true; text: string } | { ok: false; aborted: true } |
   { ok: false; kind: 'signed-out' | 'resting' | 'plan' | 'network' | 'other' | 'output' | 'handoff'; until?: number; message: string }; // handoff messages are Crewhouse-authored, never raw engine diagnostics

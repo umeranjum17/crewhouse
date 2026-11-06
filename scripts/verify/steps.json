@@ -884,5 +884,16 @@
       "Open the head and a running call in the installed app's window at 390"
     ],
     "result": "The head reads back, the face and name chip, the call control, the menu; only Chief wears the star; a tap starts the same call as the box's voice button and lights the control, and a tap on it ends the call; with no way to call here it is dimmed and says why; a long name ends in an ellipsis clear of the controls; a line said on a call reaches crewd once."
+  },
+  "pi-answer": {
+    "start": "A real crewd started with CREWHOUSE_ENGINE=pi on the real pinned Pi and a scripted model that calls a notes or todo tool on every request and never writes a word; one helper on its default tools",
+    "steps": [
+      "Ask the helper to find the locker code; the model keeps calling tools until it is asked for its answer, then answers",
+      "Ask it to find the gate code with a model that keeps calling tools even after it is asked",
+      "Ask it a plain question the model answers straight away",
+      "Start crewd with the Pi flag off and send the first message again",
+      "Read each job's model requests, the chat, and crewd's run.limit events"
+    ],
+    "result": "The churning helper was asked once for its answer after twenty tool calls and answered \"The locker code is K7.\" inside the cap of thirty. The one that kept going was stopped just past the cap, by the calls already under way when the kit's stop landed: its job ended on \"ChatGPT couldn't finish this one. Try again.\" and crewd's events hold one run.limit for that job, 30 of 30. The plain question was answered with no tool call and no ask. With the flag off the message finished as before and nothing of Pi was made."
   }
 }

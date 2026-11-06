@@ -4,8 +4,8 @@ import { botConfig } from '../bots.ts'; import type { Config } from '../config.t
 
 type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; reason: string; detail?: string };
 type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> }; type Launch = { command: string; args: readonly string[] }; type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string>; launch: (pi: Launch) => Launch }): Bot; close(): Promise<void> };
-/** The kit's own name; the one account a custom provider stands in for (Crew's constructor marks it ready); the variable the key travels in, so it never lands on disk. */
-const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', KEY = 'CREWHOUSE_MODEL_KEY', MODEL = () => process.env.CREWHOUSE_ENGINE_MODEL || 'test', talk = (tools: string[]) => `\n\nHere you have ${tools.length ? `only these tools: ${tools.join(', ')}` : 'no tools at all'}, crew tools included, whatever this prompt names. Otherwise answer in plain words.\n`;
+/** The kit's own name; the one account a custom provider stands in for (Crew's constructor marks it ready); the variable the key travels in, so it never lands on disk; the most tool calls a turn makes (the kit's maxToolCalls stops it past them), and how many a turn that has said nothing may make before it is asked for its answer, which Pi hands the model before its next call, leaving room to give it. */
+const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', KEY = 'CREWHOUSE_MODEL_KEY', CALLS = 30, ASK = 20, ANSWER = "You have used most of this turn's tool calls and said nothing yet. Stop calling tools now and answer the person in plain words with what you have.", MODEL = () => process.env.CREWHOUSE_ENGINE_MODEL || 'test', talk = (tools: string[]) => `\n\nHere you have ${tools.length ? `only these tools: ${tools.join(', ')}` : 'no tools at all'}, crew tools included, whatever this prompt names. Otherwise answer in plain words.\n`;
 
 export class PiRuntime implements AgentRuntime {
   readonly identity = { name: 'Pi', version: '1.5.0' }; // the kit refuses any other Pi
@@ -13,7 +13,7 @@ export class PiRuntime implements AgentRuntime {
   private open = new Map<string, { bot: Bot; session: string; system: string }>(); private runs = new Map<string, Bot>(); onEngine?: () => void;
   constructor(cfg: Config) { this.cfg = cfg; }
 
-  private load(): Promise<Kit> { return this.kit ??= import(KIT).then((kit) => kit.createPiKit({ stateDir: this.cfg.stateDir, idleMs: Number(process.env.CREWHOUSE_PI_IDLE_MS) || undefined })); } // once, by whichever comes first: a job recovered at boot can reach run() before crewd reaches start()
+  private load(): Promise<Kit> { return this.kit ??= import(KIT).then((kit) => kit.createPiKit({ stateDir: this.cfg.stateDir, idleMs: Number(process.env.CREWHOUSE_PI_IDLE_MS) || undefined, maxToolCalls: CALLS })); } // once, by whichever comes first: a job recovered at boot can reach run() before crewd reaches start()
   async start() {
     delete this.failed;
     try { const down = wallDown(); if (down) throw new Error(down); await this.load(); }
@@ -57,7 +57,7 @@ export class PiRuntime implements AgentRuntime {
   async run(spec: RunSpec, on: (event: RunEvent) => void): Promise<RunEnd> {
     const list = wallDown() || this.extensions(spec);
     if (typeof list === 'string') return { ok: false, kind: 'handoff', message: list };
-    const bot = await this.botFor(spec, list); let said = '';
+    const bot = await this.botFor(spec, list); let said = '', calls = 0;
     this.runs.set(spec.key, bot);
     try {
       return await new Promise<RunEnd>((resolve, reject) => {
@@ -65,7 +65,7 @@ export class PiRuntime implements AgentRuntime {
           if (e.type === 'text') on({ type: 'text', text: said += e.text }); // the app shows the reply so far, the kit hands over each piece
           else if (e.type === 'end') settle(e.end.ok || 'aborted' in e.end ? e.end : { ok: false, kind: 'other', message: e.end.message });
           else if (e.type === 'stopped') { if (e.reason !== 'idle') settle({ ok: false, kind: 'other', message: e.detail ?? 'Pi stopped before it answered.' }); } // gone before the run began: no end follows; an idle stop is the last Pi leaving, and this run waits for the next
-          else on(e);
+          else { if (e.type === 'tool' && e.phase === 'start' && ++calls === ASK && !said.trim()) bot.steer(ANSWER).catch((err) => console.error(`${spec.bot}: the ask for an answer did not reach Pi, so the kit's cap ends this turn: ${(err as Error).message}`)); on(e); } // the kit's limit event goes on to the app as it is
         });
         bot.prompt(spec.message).catch((e) => { off(); reject(e); });
       });

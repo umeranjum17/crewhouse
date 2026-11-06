@@ -340,6 +340,44 @@ test('a bot on Pi keeps its own notes: recalled with no session left, never the 
   s.done();
 });
 
+test('a bot on Pi that keeps writing notes is asked for its answer and gives it inside the cap; one that never stops ends on the stopped-turn line with the cap in the events; a plain turn is never asked', { skip, timeout: 180_000 }, async () => {
+  let stubborn = false;
+  // Always one more call than the turn has made, alternating a note and a todo: left alone, this model never stops.
+  const churn = (body: any) => '[tool notes {"action": "add", "text": "still thinking"}][tool todo {"action": "add", "text": "think more"}]'.repeat(body.messages.length), asked = /Stop calling tools now/;
+  const model = await startModelStub(undefined, (body, text) => asked.test(text) && !stubborn ? { reply: 'The locker code is K7.' } : asked.test(text) || /keep going/.test(text) ? { text: churn(body) } : {});
+  after(() => model.close());
+  const s = setup(3, { engine: 'pi', engineProvider: { baseUrl: model.url, apiKey: 'lab-key' } });
+  s.crew.onboard('Umer');
+  const scout = s.crew.recruit('scout', undefined, 'person').id;
+  const ask = async (text: string) => {
+    const from = model.calls.length, job = (await s.crew.post(scout, text) as { task: number }).task;
+    await until(`job ${job}`, () => !['queued', 'working'].includes(task(s.db, job).state), 90_000);
+    // What this job added to the session, as the model's last request carries it: the tool results that ran, and the asks.
+    const calls = model.calls.slice(from).map((c) => JSON.stringify(c.body.messages)), count = (call: string, what: string) => call.split(what).length - 1, added = (what: string) => count(calls.at(-1)!, what) - count(calls[0], what);
+    return { state: task(s.db, job).state, result: String(task(s.db, job).result), said: String(lastSaid(s.db, scout)), ran: added('"role":"tool"'), asks: added('Stop calling tools now') };
+  };
+
+  const answered = await ask('Find the locker code, keep going');
+  assert.deepEqual([answered.state, answered.said], ['done', 'The locker code is K7.'], 'the churning bot answers in words');
+  assert.equal(answered.asks, 1, 'asked once for its answer');
+  assert.ok(answered.ran >= 20 && answered.ran <= 30, `after twenty tool calls, inside the cap of thirty: ${answered.ran}`);
+  assert.equal(s.db.all("SELECT 1 FROM events WHERE kind = 'run.limit'").length, 0, 'it never reached the cap');
+
+  stubborn = true;
+  const stopped = await ask('Find the gate code, keep going');
+  assert.equal(stopped.state, 'failed');
+  assert.match(stopped.result, /couldn't finish this one\. Try again\.$/, 'a bot that never answers ends on the line the app shows for a stopped turn');
+  assert.doesNotMatch(stopped.result, /maxToolCalls|Stopped:/);
+  assert.equal(stopped.asks, 1);
+  assert.ok(stopped.ran > 30 && stopped.ran <= 40, `the turn ended just past the cap: ${stopped.ran} ran, the calls already under way when the kit's stop landed`);
+  assert.deepEqual(s.db.all("SELECT bot, data FROM events WHERE kind = 'run.limit'").map((e) => [e.bot, JSON.parse(e.data).calls, JSON.parse(e.data).limit]), [[scout, 30, 30]], 'the events say the cap was reached');
+
+  stubborn = false;
+  const plain = await ask('What day is it?');
+  assert.deepEqual([plain.state, plain.said, plain.ran, plain.asks], ['done', `stub ${scout}: done with "What day is it?"`, 0, 0], 'a turn that answers is never asked');
+  s.done();
+});
+
 test('crewd killed with two helpers mid-turn: no Pi is left behind, and both jobs finish after the restart', { skip, timeout: 120_000 }, async () => {
   const model = await startModelStub();
   after(() => model.close());
