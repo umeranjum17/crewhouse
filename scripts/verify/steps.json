@@ -837,7 +837,7 @@
     "result": "The list shows big faces, Chief's amber count and star, Scout's unread dot and The crew's overlapping faces; Scout's chat shows the name chip, soft bubbles and a fanned pile counted 5 images, and a tap lays out all five"
   },
   "calm-design": {
-    "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, the commit before the calm redesign too",
+    "start": "The web app built from the checkout the journey runs in, on the ?demo data; with base_ref, unset for now, the commit before the calm redesign too",
     "steps": [
       "Open Chief's chat on a 390 phone, day and night",
       "Open Home on a 390 phone, day and night",

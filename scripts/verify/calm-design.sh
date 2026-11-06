@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # done-done journey `calm-design`: build the web app of the checkout it runs in, serve it, and capture Chief's chat and Home
-# at 390 and Chief in three panes at 1280, day and night, on the ?demo data (calm-cap.mjs). With base_ref the same drive runs
+# at 390 and Chief in three panes at 1280, day and night, on the ?demo data (calm-cap.mjs). With base_ref, unset for now, the same drive runs
 # at the base commit into before/, where these scripts do not exist yet: CALM_HEAD names the checkout that has them, and its
 # node_modules stands in for the base checkout's missing one (the package files are the same).
 #
