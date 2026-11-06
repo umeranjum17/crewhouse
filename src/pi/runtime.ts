@@ -1,6 +1,6 @@
-// The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi (a dev-only reference until it publishes: node scripts/prepare-pi.mjs, so its name stays a variable). Each bot gets the kit's own process, home, session and extension list. Nothing Pi runs passes Crew.gate yet and Pi has no sandbox, so settings.json leaves it none of Pi's own tools and extensions.json holds only code that reaches nothing past its session.
+// The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi (a dev-only reference until it publishes: node scripts/prepare-pi.mjs, so its name stays a variable). Each bot gets the kit's own process, home, session and extension list. Nothing Pi runs passes Crew.gate yet and Pi has no sandbox, so settings.json leaves it none of Pi's own tools and extensions.json holds only code that reaches nothing past its session, or past the bot's own notes file (notes.ts).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'; import { join } from 'node:path';
-import type { Config } from '../config.ts'; import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts';
+import { botConfig } from '../bots.ts'; import type { Config } from '../config.ts'; import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts';
 
 type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; reason: string; detail?: string };
 type Bot = { on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> }; type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string> }): Bot; close(): Promise<void> };
@@ -32,10 +32,10 @@ export class PiRuntime implements AgentRuntime {
   }
   async signOut() {} async learned() { return []; } async forget() {}
 
-  /** The extensions this bot loads: extensions.json in its own folder, or the default without one. A bot may rewrite its folder, so the file only names, and anything but a reviewed name stops the job with these words. */
-  private extensions({ cwd }: RunSpec) {
-    const file = join(cwd, 'extensions.json'), set = JSON.parse(readFileSync(join(this.cfg.repoDir, 'src', 'pi', 'extensions.json'), 'utf8')) as { folder: string; reviewed: Record<string, string>; default: string[] }, list: unknown = (() => { try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : set.default; } catch { return null; } })(), named = Array.isArray(list) && list.every((name) => Object.hasOwn(set.reviewed, name)) ? [...new Set<string>(list)] : undefined;
-    return named ? { named, paths: named.map((name) => join(this.cfg.repoDir, set.folder, set.reviewed[name]!)) } : `This job did not start: extensions.json in this bot's folder may only list ${Object.keys(set.reviewed).join(', ')}.`;
+  /** The extensions this bot loads: extensions.json in its own folder, or the default without one. A bot may rewrite its folder, so the file only names, and anything but a reviewed name stops the job with these words. The person's memory switch outranks the list. */
+  private extensions({ bot, cwd }: RunSpec) {
+    const file = join(cwd, 'extensions.json'), set = JSON.parse(readFileSync(join(this.cfg.repoDir, 'src', 'pi', 'extensions.json'), 'utf8')) as { reviewed: Record<string, string>; default: string[] }, list: unknown = (() => { try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : set.default; } catch { return null; } })(), named = Array.isArray(list) && list.every((name) => Object.hasOwn(set.reviewed, name)) ? [...new Set<string>(list)].filter((name) => name !== 'notes' || botConfig(this.cfg, bot).memory !== false) : undefined;
+    return named ? { named, paths: named.map((name) => join(this.cfg.repoDir, set.reviewed[name]!)) } : `This job did not start: extensions.json in this bot's folder may only list ${Object.keys(set.reviewed).join(', ')}.`;
   }
   /** The bot's Pi on this session, system prompt and extension list: a running one is kept only while all still hold, as Pi reads them at start (the prompt names the list, so one check covers both). */
   private async botFor(spec: RunSpec, { named, paths }: { named: string[]; paths: string[] }) {
