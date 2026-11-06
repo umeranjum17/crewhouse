@@ -1458,7 +1458,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
 
   private onEvent(botId: string, l: Live, e: RunEvent) {
     if (this.live.get(botId) !== l) return; else l.news = Date.now(); // any word from the engine, even a streamed one, is news
-    if (e.type === 'delegated') this.db.event('run.delegated', botId, { task: l.task, run: e.id, parent: e.parent, root: e.root });
+    if (e.type === 'delegated') this.db.event('run.delegated', botId, { task: l.task, run: e.id, parent: e.parent, root: e.root }); else if (e.type === 'limit') this.db.event('run.limit', botId, { task: l.task, calls: e.toolCalls, limit: e.limit });
     else if (e.type === 'tool' && e.phase === 'end' && e.error && e.name === 'web_search') this.db.event('run.tool', botId, { task: l.task, words: 'The web search did not go through' });
     else if (e.type === 'started' || e.type === 'thinking') this.db.event(e.type === 'started' ? 'run.admitted' : 'run.thinking', botId, { task: l.task });
     else if (e.type === 'text') {

@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const REF = 'c3860d7f40f620e1fe4fcae0618ebe3fd7c982e7', URL = 'https://github.com/umeranjum17/byokit.git';
+const REF = 'ba706dca20a5cd9a3151c4a4fe4f2491c6c76850', URL = 'https://github.com/umeranjum17/byokit.git';
 const dir = join(import.meta.dirname, '..', 'runtime', 'byokit'), built = join(dir, 'packages', 'pi', 'dist', 'index.js');
 const sh = (cmd, ...args) => execFileSync(cmd, args, { cwd: dir, stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8' }).trim();
 const at = () => { try { return sh('git', 'rev-parse', 'HEAD'); } catch { return ''; } };
