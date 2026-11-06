@@ -12,6 +12,7 @@ import { Connections, type AppTool, APPS, GRANTABLE } from './connections.ts';
 import { Composio, GMAIL_CONNECT } from './composio.ts';
 import { PARAMETERS, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
+import { handsOf, type Hands } from '../bin/hands.mjs';
 import type { Server } from 'node:net';
 import { acts, claimOf, COMPUTER_LOOKS, coversOf, effectOf, orderOf, pressOf, toolWords, type Effect } from './policy.ts';
 import { axiEnv, pinnedNote, registry, resolveGrants, toolBin, which } from './tools.ts';
@@ -202,8 +203,8 @@ interface Browser { run: (args: string[], signal?: AbortSignal) => Promise<strin
 
 /** A run's place in the crew: which task, account and session key, and the browser if it has one. */
 interface Live { key: string; task: number; account: string; model?: string; grants: string[]; browser?: Browser; page?: string; snapshot?: string; apps?: Record<string, AppTool>; owners?: Record<string, string>;
-  /** The tools crewd runs for this run: the sandboxed shell, the browser AXI, the person's connected apps'. */
-  shell?: CrewTool; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number; actedFor?: string;
+  /** The tools crewd runs for this run: its hands (shell and browser, here or far), the browser AXI, the person's connected apps'. */
+  hands?: Hands; browserTool?: CrewTool; appTools?: Map<string, CrewTool>; pending?: string; news?: number; actedFor?: string;
   /** Lines the helper typed on this page that no card has shown yet (an unsigned register's claim form). */
   fills?: { label: string; value: string }[];
   /** A filled application form waits on the person's Submit card: its headless page stays up when the run ends. */
@@ -1380,20 +1381,17 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** A run's setup: the bot's folder as its space, its granted tools behind crewd's gate, its own session key. */
   private async open(bot: Row, task: Row, brain: disk.Brain) {
     this.close(bot.id);
-    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), net = this.netOf(bot.id), l = { key: task.session ?? (bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : this.db.get("SELECT session FROM tasks WHERE bot = ? AND session LIKE 'agent:%:h-%:%' ORDER BY id DESC LIMIT 1", bot.id)?.session ?? `agent:m1:crewhouse:${bot.id}`), task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
-    // The bot's shell: bubblewrap, where its space is the only writable part of the disk. A pinned kit tool that fails
-    // says so in the result, with the kit's own words about the copy it pins and the way to a newer one.
-    if (bot.id !== CHIEF && g.tools.includes('files') && sandboxReady()) l.shell = bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, net?.sock, (program) => pinnedNote(this.cfg, program));
+    const space = disk.botDir(this.cfg, bot.id), conf = disk.botConfig(this.cfg, bot.id), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': bot.id }), l = { key: task.session ?? (bot.id === CHIEF ? `agent:m1:crewhouse:${bot.id}:${task.id}` : this.db.get("SELECT session FROM tasks WHERE bot = ? AND session LIKE 'agent:%:h-%:%' ORDER BY id DESC LIMIT 1", bot.id)?.session ?? `agent:m1:crewhouse:${bot.id}`), task: task.id, account: brain.provider, model: brain.model, grants: g.tools } as Live;
     // The person's connected apps (their Notion, their Google…): Chief reaches every one; a helper only the ones its bot.json grants (src/bots.ts). Through the gate either way.
     const apps = await this.connections.tools();
     l.apps = apps.effects; l.owners = apps.owner;
     this.mailFiling ??= new MailSend(this.db, this.connections);
     l.appTools = new Map(apps.tools.filter((t) => bot.id === CHIEF || (conf.apps ?? []).includes(apps.owner[t.name])).map((t) => [t.name, t.name === 'mail' ? mailTool(() => this.connections.token('gmail'), space, this.mailFiling, bot.id) : t])); // mail saves into this run's own files; drafts/labels reuse the guarded MailSend path
-    if (g.tools.includes('computer') && browserBin() && this.cfg.engine !== 'stub' && this.runtime.computer) {
+    if (conf.far === undefined && g.tools.includes('computer') && browserBin() && this.cfg.engine !== 'stub' && this.runtime.computer) {
       const d = await this.desktops.ensure(bot.id, space);
       l.node = await this.runtime.computer(bot.id, { DISPLAY: d.display, XAUTHORITY: d.xauth }).catch((e) => { console.error(`${bot.id}'s computer:`, e); return undefined; });
     }
-    const b = this.browserOf(bot.id);
+    const { browser: b, hands } = this.handsOf(bot.id);
     if (b) {
       if (b.onScreen) await this.desktops.ensure(bot.id, space);
       // ponytail: a crewd that dies leaves a headless browser up until that bot's next task reopens it; an idle timeout when the engine has one.
@@ -1416,19 +1414,19 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           return out;
         });
     }
-    this.live.set(bot.id, l);
+    this.live.set(bot.id, Object.assign(l, { hands }));
     return l;
   }
 
-  /** The bot's own browser AXI: its screen's Chromium when it has a computer, else its own profile, in its own HOME and XDG
-   *  folders (the playwright daemon's state lives there), never the person's. Its runs drive it; crewd does on the person's Submit. */
-  private browserOf(botId: string) {
-    const space = disk.botDir(this.cfg, botId), g = resolveGrants(this.cfg, disk.botConfig(this.cfg, botId).tools ?? [], { 'bot.dir': space, 'bot.id': botId }), axi = g.axi.browser;
-    if (!axi) return undefined;
-    const onScreen = g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub', env = axiEnv(join(this.cfg.stateDir, 'homes', botId), { ...axi.env, PLAYWRIGHT_CLI_SESSION: botId }), run = (args: string[], signal?: AbortSignal) => runAxi(axi.script, args, space, env, signal);
-    // `look` is crewd's own whole read of the page (a long application form runs past the model's cap).
-    return { onScreen, run, look: () => runAxi(axi.script, ['snapshot', '--full'], space, env, undefined, 1 << 20), start: async () => { const cdp = onScreen ? (await this.desktops.ensure(botId, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); } };
+  /** The bot's hands through the one door (bin/hands.mjs): here, its bubblewrap shell and its browser AXI in its own HOME and XDG folders (never the person's); far, the computer its bot.json names. */
+  private handsOf(botId: string) {
+    const space = disk.botDir(this.cfg, botId), conf = disk.botConfig(this.cfg, botId), g = resolveGrants(this.cfg, conf.tools ?? [], { 'bot.dir': space, 'bot.id': botId }), axi = g.axi.browser, env = axiEnv(join(this.cfg.stateDir, 'homes', botId), { ...axi?.env, PLAYWRIGHT_CLI_SESSION: botId });
+    const hands = handsOf(conf.far, join(this.cfg.stateDir, 'far'), { shell: (input, signal) => bashTool(space, [this.cfg.toolsDir], { ...g.env, PATH: toolBin(this.cfg) }, this.netOf(botId)?.sock, (program) => pinnedNote(this.cfg, program)).run(input, signal),
+      browser: (args, signal, cap) => runAxi(axi!.script, args, space, env, signal, cap) }), onScreen = conf.far === undefined && g.tools.includes('computer') && !!browserBin() && this.cfg.engine !== 'stub', run = (args: string[], signal?: AbortSignal) => hands.browser(args, signal);
+    // The browser is its screen's Chromium when it has a computer here, else its own profile; its runs drive it, crewd does on the person's Submit. `look` is crewd's own whole read of the page (a long application form runs past the model's cap).
+    return { hands, browser: axi && { onScreen, run, look: () => hands.browser(['snapshot', '--full'], undefined, 1 << 20), start: async () => { const cdp = onScreen ? (await this.desktops.ensure(botId, space)).cdp : undefined; return run(cdp ? ['attach', '--cdp', cdp] : ['open', '--persistent', '--profile', join(space, 'browser')]); } } };
   }
+  private browserOf(botId: string) { return this.handsOf(botId).browser; }
 
   private close(botId: string) {
     const l = this.live.get(botId);
@@ -1706,7 +1704,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   /** The crew's half of a tool call, after the gate said yes. */
   private async toolCall(run: RunRef, tool: string, rawInput: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
     const l = this.live.get(run.bot), space = disk.botDir(this.cfg, run.bot), [name, input] = this.unwrap(tool, rawInput);
-        if (l?.shell && name === 'bash') return String(await l.shell.run(input, signal));
+        if (l?.hands && name === 'bash' && this.toolAllowed(run.bot, name)) return String(await l.hands.shell(input, signal));
         if (l?.browserTool && name === 'browser') return String(await l.browserTool.run(input, signal));
         if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return fileTool(space, name, input);
         if (name === 'crew_web_fetch' || name === 'crew_web_search') {

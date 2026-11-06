@@ -29,7 +29,7 @@ export interface Template {
 }
 
 /** `allow` holds the person's standing answers ("Always for Reel"), as the gate's keys. */
-type BotConfig = { tools: string[]; apps?: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; screenOffered?: boolean; ideas?: Template['ideas'] };
+type BotConfig = { tools: string[]; far?: string; apps?: string[]; allow?: string[]; signedIn?: string[]; models?: string[]; memory?: boolean; screenOffered?: boolean; ideas?: Template['ideas'] };
 
 export function botConfig(cfg: Config, id: string): BotConfig {
   const p = join(botDir(cfg, id), 'bot.json');
