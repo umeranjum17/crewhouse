@@ -14,7 +14,7 @@ import { join } from 'node:path';
 
 const [base, lab, crewd, out, recall] = process.argv.slice(2);
 const key = readFileSync(join(lab, 'state', 'person.key'), 'utf8').trim(), record = join(out, 'crew.txt');
-const word = { scout: 'mango', scribe: 'papaya' }, colour = { scout: 'teal', scribe: 'amber' }, code = { scout: 'K7-heron', scribe: 'M4-otter' }, other = { scout: 'scribe', scribe: 'scout' };
+const word = { scout: 'mango', scribe: 'papaya' }, colour = { scout: 'teal', scribe: 'amber' }, code = { scout: 'K7-heron', scribe: 'M4-otter' }, other = { scout: 'scribe', scribe: 'scout' }, own = { scout: 'todo', scribe: 'hello' };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms)), say = (line) => appendFileSync(record, `${line}\n`);
 const fail = (why) => { say(`FAILED: ${why}`); console.error(`pi-crew: ${why}`); process.exit(1); };
 const until = async (what, fn, ms = 180_000) => { for (const end = Date.now() + ms; Date.now() < end; await wait(100)) { const v = await fn(); if (v) return v; } fail(`timed out: ${what}`); };
@@ -125,7 +125,7 @@ say('Chief, never asked, has no Pi folder and never had a process.');
 say('\nTools:');
 offers();
 for (const bot of ['scout', 'scribe']) {
-  if (used(bot).some((name) => name !== 'notes')) fail(`${bot} called ${JSON.stringify(used(bot))}, not only its notes`);
+  if (!used(bot).includes('notes') || used(bot).some((name) => name !== 'notes' && name !== own[bot])) fail(`${bot} called ${JSON.stringify(used(bot))}, not its notes and only tools of its own`);
   say(`${bot} called ${used(bot).join(', ')} and they said: ${results(bot).map((m) => m.content.map((c) => c.text).join('')).join(' | ')}`);
   if (!notes(bot).includes(code[bot]) || notes(bot).includes(code[other[bot]])) fail(`${bot}'s notes.md holds ${JSON.stringify(notes(bot))}`);
 }
