@@ -26,6 +26,8 @@ const treeHash = (dir: string) => {
 const readdirSafe = (p: string) => { try { return readdirSync(p); } catch { return null; } };
 /** The tools a model request offered, by name: what the bot could call on that turn, as the model saw it. */
 const names = (call: { body: any }) => (call.body.tools ?? []).map((t: any) => t.function?.name).sort();
+/** The notes a model request showed the bot, from the system prompt, or nothing when it showed none. */
+const savedNotes = (call: { body: any }) => /Your saved notes[^\n]*\n([^]*)$/.exec(call.body.messages.find((m: any) => m.role === 'system')?.content ?? '')?.[1];
 
 test('a bot answers on Pi with only the default extension, can write nothing, and the person\'s own Pi hashes the same', { skip, timeout: 120_000 }, async () => {
   const own = join(person, '.pi', 'agent');
@@ -284,7 +286,7 @@ test('each bot on Pi loads its own list: neither sees the other\'s tools, an emp
   s.done();
 });
 
-test('a bot on Pi keeps its own notes: recalled with no session left, never the other bot\'s, full says so, and the memory switch takes the tool away', { skip, timeout: 180_000 }, async () => {
+test('a bot on Pi is shown its own notes once, as a job starts, and has no read: recalled with no session left, never the other bot\'s, full says so, and the memory switch takes them away', { skip, timeout: 180_000 }, async () => {
   process.env.CREWHOUSE_PI_IDLE_MS = '300';
   after(() => { delete process.env.CREWHOUSE_PI_IDLE_MS; });
   const model = await startModelStub();
@@ -293,49 +295,67 @@ test('a bot on Pi keeps its own notes: recalled with no session left, never the 
   s.crew.onboard('Umer');
   const [scout, scribe] = ['scout', 'scribe'].map((t) => s.crew.recruit(t, undefined, 'person').id);
   const work = (bot: string) => join(s.cfg.stateDir, 'pi', bot, 'work'), file = (bot: string) => join(work(bot), 'notes.md');
-  const ask = async (bot: string, input: object) => {
-    const job = (await s.crew.post(bot, `[tool notes ${JSON.stringify(input)}]`) as { task: number }).task;
+  const notes = (...inputs: object[]) => inputs.map((input) => `[tool notes ${JSON.stringify(input)}]`).join(' ');
+  const ask = async (bot: string, text: string) => {
+    const job = (await s.crew.post(bot, text) as { task: number }).task;
     await until(`${bot}'s job ${job}`, () => !['queued', 'working'].includes(task(s.db, job).state), 60_000);
     assert.equal(task(s.db, job).state, 'done');
     return String(lastSaid(s.db, bot));
   };
+  /** What each model request of the job just asked showed as the bot's notes. */
+  const asking = async (bot: string, text: string) => { const from = model.calls.length, said = await ask(bot, text), calls = model.calls.slice(from); return { said, calls, shown: calls.map(savedNotes) }; };
 
-  assert.match(await ask(scout, { action: 'read' }), /You have no notes yet/);
-  assert.match(await ask(scout, { action: 'add', text: 'The locker  code\nis K7' }), /Saved\. 24 of 8192 bytes used/);
-  await ask(scribe, { action: 'add', text: 'The locker code is M4' });
+  // A first job has nothing to be shown, and what it adds waits for the next job: nothing reads the file again mid-job.
+  const first = await asking(scout, notes({ action: 'add', text: 'The locker  code\nis K7' }));
+  assert.match(first.said, /Saved\. 24 of 8192 bytes used/);
+  assert.deepEqual(first.shown, ['None yet.\n', 'None yet.\n']);
+  await ask(scribe, notes({ action: 'add', text: 'The locker code is M4' }));
   assert.equal(readFileSync(file(scout), 'utf8'), '- The locker code is K7\n', 'one plain line per note');
+
+  // The calls a real model made on one job, read and add and read: every read is refused with no note in it, and each round shows what the job began with.
+  const replay = await asking(scout, notes({ action: 'read' }, { action: 'add', text: 'two' }, { action: 'read' }, { action: 'read' }, { action: 'forget', text: 'two' }));
+  assert.deepEqual(replay.shown, Array(6).fill('- The locker code is K7\n'));
+  const told = replay.calls.at(-1)!.body.messages.filter((m: any) => m.role === 'tool').slice(-5).map((m: any) => JSON.stringify(m.content));
+  for (const i of [0, 2, 3]) { assert.match(told[i], /Validation failed/); assert.doesNotMatch(told[i], /K7/); }
+  assert.equal(readFileSync(file(scout), 'utf8'), '- The locker code is K7\n');
 
   // Both Pis stop and their sessions go, so the file is the only thing left that could carry a note into the next turn.
   await until('both Pis stopped once idle', () => Object.keys(pis()).length === 0, 30_000);
   for (const bot of [scout, scribe]) rmSync(join(work(bot), 'sessions'), { recursive: true });
-  const asked = model.calls.length;
-  const recalled = await ask(scout, { action: 'read' });
-  assert.match(recalled, /The locker code is K7/);
-  assert.doesNotMatch(JSON.stringify(model.calls[asked].body.messages), /K7/, 'the turn began knowing nothing of it');
+  const recalled = await asking(scout, 'What is my locker code?');
+  assert.deepEqual(recalled.shown, ['- The locker code is K7\n'], 'one model call, no tool: the job began knowing it');
+  const words = recalled.calls[0].body.messages.filter((m: any) => m.role !== 'system');
+  assert.doesNotMatch(JSON.stringify(words), /K7/, 'and only the notes carried it');
 
-  // Neither reaches the other's: the tool takes no path, so one aimed at the other folder reads the bot's own notes.
+  // Neither reaches the other's: the tool takes no path, so one aimed at the other folder lands in the bot's own notes.
+  await ask(scout, notes({ action: 'add', text: 'aimed at the other', path: file(scribe) }));
+  assert.equal(readFileSync(file(scribe), 'utf8'), '- The locker code is M4\n');
+  await ask(scout, notes({ action: 'forget', text: 'aimed at the other' }));
   for (const [bot, own, other] of [[scout, /K7/, /M4/], [scribe, /M4/, /K7/]] as const) {
-    const said = await ask(bot, { action: 'read', path: join(work(bot === scout ? scribe : scout), 'notes.md') });
-    assert.match(said, own);
-    assert.doesNotMatch(said, other);
+    const { shown, calls } = await asking(bot, 'Anything new?');
+    assert.match(shown[0]!, own);
+    assert.doesNotMatch(JSON.stringify(calls[0].body.messages), other);
   }
 
   // Full is said, the note is not saved, and forgetting makes room. The last byte counts: a note that fits exactly is kept.
   const line = '- The locker code is M4\n', room = 8192 - Buffer.byteLength(line) - Buffer.byteLength('- last\n');
   writeFileSync(file(scribe), `${line}- ${'x'.repeat(room - 3)}\n`);
-  assert.match(await ask(scribe, { action: 'add', text: 'last' }), /8192 of 8192 bytes used/);
+  assert.match(await ask(scribe, notes({ action: 'add', text: 'last' })), /8192 of 8192 bytes used/);
   const full = readFileSync(file(scribe), 'utf8');
-  assert.match(await ask(scribe, { action: 'add', text: 'one more' }), /Your notes are full: 8192 of 8192 bytes are used and this note needs 11, so it was not saved\. Forget something first\./);
+  assert.match(await ask(scribe, notes({ action: 'add', text: 'one more' })), /Your notes are full: 8192 of 8192 bytes are used and this note needs 11, so it was not saved\. Forget something first\./);
   assert.equal(readFileSync(file(scribe), 'utf8'), full, 'nothing was half written');
-  assert.match(await ask(scribe, { action: 'forget', text: 'nothing has this' }), /nothing was dropped/);
-  assert.match(await ask(scribe, { action: 'forget', text: 'XXX' }), /Dropped 1/);
-  assert.match(await ask(scribe, { action: 'add', text: 'one more' }), /Saved/);
+  assert.match(await ask(scribe, notes({ action: 'forget', text: 'nothing has this' })), /nothing was dropped/);
+  assert.match(await ask(scribe, notes({ action: 'forget', text: 'XXX' })), /Dropped 1/);
+  assert.match(await ask(scribe, notes({ action: 'add', text: 'one more' })), /Saved/);
   assert.equal(readFileSync(file(scribe), 'utf8'), `${line}- last\n- one more\n`);
 
-  // The person's switch outranks the list: no tool, so nothing is read or written, and the notes stay where they are.
+  // The person's switch outranks the list: no tool and nothing shown, and the notes stay where they are.
   patchConfig(s.cfg, scout, { memory: false });
-  assert.match(await ask(scout, { action: 'add', text: 'kept against the switch' }), /notes not found/i);
-  assert.deepEqual(names(model.calls.at(-1)!), ['todo']);
+  const off = await asking(scout, notes({ action: 'add', text: 'kept against the switch' }));
+  assert.match(off.said, /notes not found/i);
+  assert.deepEqual(names(off.calls.at(-1)!), ['todo']);
+  assert.deepEqual(off.shown, [undefined, undefined]);
+  assert.doesNotMatch(JSON.stringify(off.calls.at(-1)!.body.messages), /K7/);
   assert.equal(readFileSync(file(scout), 'utf8'), '- The locker code is K7\n');
   s.done();
 });
@@ -354,6 +374,9 @@ test('crewd killed with two helpers mid-turn: no Pi is left behind, and both job
   await up();
   await api('/api/onboard', { address: 'Umer' });
   const [a, b] = [(await api('/api/recruit', { template: 'scout' })).id, (await api('/api/recruit', { template: 'scribe' })).id];
+  const finished = (bot: string, n: number) => until(`${bot} finishes job ${n}`, async () => (await api(`/api/bots/${bot}`)).tasks.filter((t: any) => t.state === 'done').length >= n, 60_000);
+  await api(`/api/bots/${a}/messages`, { text: '[tool notes {"action": "add", "text": "The gate code is G9"}]' });
+  await finished(a, 1);
   await Promise.all([api(`/api/bots/${a}/messages`, { text: 'ask permission as crash-one' }), api(`/api/bots/${b}/messages`, { text: 'ask permission as crash-two' })]);
   await until('both helpers mid-turn', () => holding('crash-one') && holding('crash-two'), 60_000);
   const pids = Object.values(pis(daemon!.pid)).map((p) => p.pid);
@@ -364,6 +387,9 @@ test('crewd killed with two helpers mid-turn: no Pi is left behind, and both job
   await until('no Pi outlives a killed crewd', () => !pids.some((pid) => existsSync(`/proc/${pid}`)));
   start();
   await up();
-  for (const bot of [a, b]) await until(`${bot} finishes after the restart`, async () => (await api(`/api/bots/${bot}`)).tasks.find((t: any) => t.state === 'done'), 60_000);
+  await Promise.all([finished(a, 2), finished(b, 1)]);
   for (const bot of [a, b]) assert.equal(readdirSync(join(root, 'state', 'pi', bot, 'work', 'sessions')).length, 1, 'the same session carried on');
+  await api(`/api/bots/${a}/messages`, { text: 'What is the gate code?' });
+  await finished(a, 3);
+  assert.equal(savedNotes(model.calls.at(-1)!), '- The gate code is G9\n', 'a note from before the crash is shown on the next job after it');
 });

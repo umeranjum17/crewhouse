@@ -2,10 +2,11 @@
 // The crew half of the `pi-engine` journey (pi-engine.sh): two helpers on one flag-on crewd, driven through the API the app uses. Scout
 // has no list in its folder, so the default; Scribe's lists hello and notes. Both are asked at once to save a code in their notes. With
 // `recall`, on a crewd restarted over the same folders, their Pi sessions are removed, so only notes.md can carry a code: Scout is asked
-// for its own code and Scribe's; Scribe, its notes filled, is asked for its own and to save one more. Nine model calls if each helper
-// takes one call per step; pi-tap.mjs stops the journey at PI_CALL_LIMIT. Each reply is checked against that helper's own Pi session
-// record and the tools each request offered against the tap's record. Chief is never asked. An empty list, a tool used from a bot's own
-// list, the crash and session pickup are test/pi-engine.test.ts's: real Pi, scripted model.
+// for its own code and Scribe's, Scribe for its own. Six model calls if each helper takes one call per step; pi-tap.mjs stops the journey
+// at PI_CALL_LIMIT. Each reply is checked against that helper's own Pi session record, the tools each request offered against the tap's
+// record, and the notes each prompt showed against the same record: shown as a job starts, and the same on each of its rounds. Chief is
+// never asked. An empty list, a tool used from a bot's own list, full notes, the crash and session pickup are test/pi-engine.test.ts's:
+// real Pi, scripted model.
 //   node scripts/verify/pi-crew.mjs <base-url> <lab> <crewd-pid> <out-dir> [recall]
 // Appends to <out-dir>/crew.txt and prints the replies as JSON. Exits non-zero the moment a helper's words or processes are wrong.
 import { execFileSync } from 'node:child_process';
@@ -42,8 +43,9 @@ const session = (bot) => { const dir = join(work(bot), 'sessions'), files = read
 const flat = (text) => text.replace(/\s+/g, ' ').trim();
 const records = (bot) => session(bot).trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.message).map((r) => r.message);
 const turns = (bot) => records(bot).filter((m) => m.role === 'assistant').map((m) => m.content.filter((c) => c.type === 'text').map((c) => c.text).join(''));
-const used = (bot) => records(bot).filter((m) => m.role === 'assistant').flatMap((m) => m.content.filter((c) => c.type === 'toolCall').map((c) => c.name));
 const results = (bot) => records(bot).filter((m) => m.role === 'toolResult');
+/** The tools that ran for a bot. A call Pi refused, such as a tool the prompt names and the bot does not have, did nothing. */
+const ran = (bot) => results(bot).filter((m) => !m.isError).map((m) => m.toolName);
 const answered = (bot, end) => {
   if (end.state !== 'done') fail(`${bot}'s job ended ${end.state}: ${end.why} ${calls().length} model calls, ${calls().filter((o) => o.status === 'stopped by the tap').length} of them stopped by the tap; each is in offered.jsonl`);
   say(`${bot} replied: ${end.said}`);
@@ -66,35 +68,35 @@ const offers = () => {
   }
   if (offered.some((o) => !['scout', 'scribe'].includes(o.bot))) fail(`a model call came from someone else: ${JSON.stringify(offered)}`);
 };
-const noted = (bot) => results(bot).filter((m) => m.toolName === 'notes').map((m) => m.content.map((c) => c.text).join(''));
+/** Each job as the tap saw it. Pi shows a bot its notes once, as a job starts, so a note added mid-job reaches the next job's prompt and never this one's. */
+const shown = () => {
+  for (const [job, seen] of Object.entries(Object.groupBy(calls().filter((o) => o.status !== 'stopped by the tap'), (o) => `${o.bot}'s job ${o.job}`))) {
+    const notes = seen.flatMap((o) => o.calls ?? []).filter((c) => c.name === 'notes').map((c) => /"action"\s*:\s*"(\w+)"/.exec(c.args)?.[1]), count = (action) => notes.filter((a) => a === action).length;
+    if (seen.some((o) => o.saved === undefined)) fail(`${job}: a model call showed no notes at all`);
+    if (new Set(seen.map((o) => o.saved)).size !== 1) fail(`${job}: the notes in its prompt changed between rounds, so they were read again: ${JSON.stringify(seen.map((o) => o.saved))}`);
+    say(`${job}: ${seen.length} model calls, ${count('add')} notes added, ${count('read')} reads asked for (the tool has none to give), notes shown as it started and on each round: ${JSON.stringify(seen[0].saved)}`);
+  }
+};
 
 if (recall) {
   say(`\nAfter the restart: a new crewd (${crewd}), no Pi running, and both Pi sessions removed, so notes.md is all that is left of the first turn.`);
   if (Object.keys(pis()).length) fail('a Pi runs before anyone is asked');
   for (const bot of ['scout', 'scribe']) { rmSync(join(work(bot), 'sessions'), { recursive: true }); say(`${bot}'s notes.md: ${JSON.stringify(notes(bot))}`); }
-  const full = `${notes('scribe')}- ${'x'.repeat(8192 - Buffer.byteLength(notes('scribe')) - 6)}\n`;
-  writeFileSync(join(work('scribe'), 'notes.md'), full);
-  say(`Scribe's notes filled to ${Buffer.byteLength(full)} of 8192 bytes.`);
-  const jobs = await Promise.all([ask('scout', 'What is my locker code? Read Scribe\'s notes too and tell me Scribe\'s locker code.'), ask('scribe', 'What is my locker code? Then add this to your notes: my bike lock is 4471. Tell me in one short sentence whether it was saved.')]);
+  const jobs = await Promise.all([ask('scout', 'What is my locker code? Read Scribe\'s notes too and tell me Scribe\'s locker code.'), ask('scribe', 'What is my locker code? Reply in one short sentence.')]);
   const replies = {};
   for (const [i, bot] of ['scout', 'scribe'].entries()) {
-    const said = replies[bot] = answered(bot, await ended(bot, jobs[i]));
+    const said = replies[bot] = answered(bot, await ended(bot, jobs[i])), prompt = calls().find((o) => o.job === jobs[i])?.saved ?? '';
     if (!said.includes(code[bot])) fail(`${bot} did not recall its own code: ${said}`);
-    if (said.includes(code[other[bot]]) || session(bot).includes(code[other[bot]])) fail(`${bot} reached ${other[bot]}'s code: ${said}`);
-    if (!noted(bot).some((text) => text.includes(code[bot]))) fail(`${bot}'s code did not come from its notes tool`);
-    say(`${bot} read its notes and its code was there. ${other[bot]}'s code is not in its reply or its Pi session.`);
+    if (said.includes(code[other[bot]]) || session(bot).includes(code[other[bot]]) || prompt.includes(code[other[bot]])) fail(`${bot} reached ${other[bot]}'s code: ${said}`);
+    if (!prompt.includes(code[bot])) fail(`${bot}'s code was not in the notes its prompt showed: ${prompt}`);
+    say(`${bot} recalled its code from the notes its prompt showed. ${other[bot]}'s code is not in its prompt, its reply or its Pi session.`);
   }
-
-  say('\nFull notes:');
-  const line = noted('scribe').find((text) => /^Your notes are full/.test(text));
-  if (!line) fail('the notes tool never said it was full');
-  if (notes('scribe') !== full) fail('a note was saved past the bound');
-  if (!/full|not saved|no room|out of (room|space)/i.test(replies.scribe)) fail(`scribe did not say so: ${replies.scribe}`);
-  say(`The tool said: ${line}\nnotes.md is unchanged, byte for byte.`);
 
   await idle();
   say('\nTools:');
   offers();
+  say('\nNotes, job by job:');
+  shown();
   say(`${calls().length} model calls in all.`);
   console.log(JSON.stringify(replies));
   process.exit(0);
@@ -124,8 +126,8 @@ say('Chief, never asked, has no Pi folder and never had a process.');
 say('\nTools:');
 offers();
 for (const bot of ['scout', 'scribe']) {
-  if (!used(bot).includes('notes') || used(bot).some((name) => name !== 'notes' && name !== own[bot])) fail(`${bot} called ${JSON.stringify(used(bot))}, not its notes and only tools of its own`);
-  say(`${bot} called ${used(bot).join(', ')} and they said: ${results(bot).map((m) => m.content.map((c) => c.text).join('')).join(' | ')}`);
+  if (!ran(bot).includes('notes') || ran(bot).some((name) => name !== 'notes' && name !== own[bot])) fail(`${bot} ran ${JSON.stringify(ran(bot))}, not its notes and only tools of its own`);
+  say(`${bot} ran ${ran(bot).join(', ')} and they said: ${results(bot).map((m) => m.content.map((c) => c.text).join('')).join(' | ')}`);
   if (!notes(bot).includes(code[bot]) || notes(bot).includes(code[other[bot]])) fail(`${bot}'s notes.md holds ${JSON.stringify(notes(bot))}`);
 }
 for (const bot of ['scout', 'scribe']) {

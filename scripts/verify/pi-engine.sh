@@ -4,14 +4,14 @@
 # CREWHOUSE_ENGINE=pi, where pi-crew.mjs asks two helpers at once through the API the app uses, each on its own real pinned Pi
 # through @byokit/pi, on a real model (the free MiniMax M3.1 Flash, the key read from the file into crewd's environment and
 # nowhere else). Each saves a code in its own notes, and Chief is never asked; pi-tap.mjs records each model request and its reply.
-# crewd then restarts over the same folders with both Pi sessions gone: each recalls its own code, Scout cannot get Scribe's, and Scribe
-# says when its notes are full. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
+# crewd then restarts over the same folders with both Pi sessions gone: each recalls its own code from the notes its prompt showed, and
+# Scout cannot get Scribe's. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
 # and after. The owner's real folder is never read here, so this says nothing about it: that rests on the kit's own isolation test.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
 #
-# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends nine model calls on that key if each helper takes one
-# call per step, and never more than PI_CALL_LIMIT (12 unless set): past it the tap answers an error itself and the journey fails.
+# Needs node scripts/prepare-pi.mjs, /usr/bin/chromium and ImageMagick. Spends six model calls on that key if each helper takes one
+# call per step, and never more than PI_CALL_LIMIT (20 unless set): past it the tap answers an error itself and the journey fails.
 # PI_ORIGIN points the journey at another OpenAI-compatible provider.
 # Writes crew.txt (what was asked, the replies, the processes, the tools), offered.jsonl (the tap's record), pi-folder.txt (the
 # hashes), same-shots.txt and the step record.
@@ -40,7 +40,7 @@ B="http://127.0.0.1:$PORT"
 MODEL=${PI_MODEL:-MiniMax-M3.1-Flash}
 TAPPORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 : > "$OUT/offered.jsonl"
-"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-12}" &
+"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-20}" &
 TAP=$!
 # crewd on Pi, up and answering, its log in $1. The second boot is the restart: same folders, same key, a new process.
 PERSON=""

@@ -232,7 +232,7 @@ journeys:
   # The Pi flag, off and on: the list and chat with it off, two helpers on their own extension lists and notes and one on none with it on, a restart, a stand-in Pi folder hashed (pi-engine.md).
   pi-engine:
     timeout: 20m
-    spends: 'nine live model calls on the free MiniMax M3.1 Flash if each helper takes one call per step, and never more than PI_CALL_LIMIT (12 unless set), on the key the key file names'
+    spends: 'six live model calls on the free MiniMax M3.1 Flash if each helper takes one call per step, and never more than PI_CALL_LIMIT (20 unless set), on the key the key file names'
     command: 'bash scripts/verify/pi-engine.sh "$DONE_DONE_EVIDENCE_ROOT" "${MINIMAX_KEY_FILE:?the MiniMax key file}"'
   # A bot's whole Pi process behind bubblewrap: the same escape with no wall and with it, the launcher and mounts of the running Pi, a machine with no bubblewrap with the flag on and off. Real Pi, scripted model, nothing spent (pi-engine.md).
   pi-wall:
