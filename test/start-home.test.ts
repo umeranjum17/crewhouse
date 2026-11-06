@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -77,6 +77,28 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
     env: { ...env, CREWHOUSE_RUN_MODE: 'verify', CREWHOUSE_RELAY_PUBLIC: 'http://127.0.0.1:7300' }, encoding: 'utf8', timeout: 30_000 });
   assert.equal(install.status, 1, install.stdout);
   assert.match(install.stderr, /Lab\/test runs cannot install a login service/);
+});
+
+test('a login service outlives one killed process on the Pi flag, and off it each of the three units is what it was', { timeout: 120_000 }, async () => {
+  const root = temp('units'), bin = join(root, 'bin'), home = join(root, 'home'), units = join(home, '.config/systemd/user'), opt = join(root, 'opt');
+  mkdirSync(bin); writeFileSync(join(bin, 'systemctl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 }); // a manager that says yes: nothing here reaches the real one
+  mkdirSync(join(opt, 'node', 'bin'), { recursive: true }); symlinkSync(process.execPath, join(opt, 'node', 'bin', 'node')); symlinkSync(repo, join(opt, 'app')); // the installed layout launch.mjs runs in
+  for (const f of ['launch.mjs', 'trouble.mjs']) copyFileSync(join(repo, 'packaging', f), join(opt, f));
+  const env: NodeJS.ProcessEnv = { PATH: `${bin}:${process.env.PATH}`, HOME: home, LANG: 'C.UTF-8', TMPDIR: root, CREWHOUSE_RUN_MODE: 'product', CREWHOUSE_PORT: '1', CREWHOUSE_RELAY_PUBLIC: 'http://127.0.0.1:7300' };
+  /** The unit a writer leaves; past that the launcher waits for crewd and setup goes on to pair, neither of which this asks. */
+  const written = async (name: string, command: string, args: string[], extra: NodeJS.ProcessEnv) => {
+    const unit = join(units, name); rmSync(unit, { force: true });
+    const writer = spawn(command, args, { cwd: repo, env: { ...env, ...extra }, stdio: 'ignore' }), gone = once(writer, 'exit');
+    for (const end = Date.now() + 30_000; !(existsSync(unit) && readFileSync(unit, 'utf8').includes('WantedBy=')); await new Promise((r) => setTimeout(r, 20))) assert.ok(Date.now() < end, `${command} wrote no ${name}`);
+    writer.kill(); await gone;
+    return readFileSync(unit, 'utf8');
+  };
+  for (const [name, command, ...args] of [['crewhouse.service', join(repo, 'crewhouse'), 'autostart', 'on'], ['crewhouse.service', process.execPath, join(opt, 'launch.mjs'), '--no-open'], ['crewhouse-headless.service', process.execPath, 'scripts/headless.mjs', 'setup']] as string[][]) {
+    const off = await written(name!, command!, args, {}), on = await written(name!, command!, args, { CREWHOUSE_ENGINE: 'pi' });
+    assert.doesNotMatch(off, /OOMPolicy/, name);
+    assert.match(on, /^OOMPolicy=continue$/m, name);
+    assert.equal(on.replace('OOMPolicy=continue\n', '').replace(/^Environment="?CREWHOUSE_ENGINE=pi"?\n/m, ''), off, 'the flag adds that line and its own name, nothing else');
+  }
 });
 
 test('an isolated run removes the run home it created on exit or SIGTERM, never one it inherited', async () => {

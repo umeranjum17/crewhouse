@@ -68,7 +68,7 @@ After=network-online.target
 WorkingDirectory=$(pwd -P)
 ExecStart=$(node -p process.execPath) $(entry src/main.ts)
 Restart=on-failure
-$(env | grep '^CREWHOUSE_' | sed 's/^/Environment=/')
+$(env | grep '^CREWHOUSE_' | sed 's/^/Environment=/'; [ "${CREWHOUSE_ENGINE:-}" = pi ] && echo OOMPolicy=continue)
 
 [Install]
 WantedBy=default.target

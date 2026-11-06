@@ -785,6 +785,19 @@
     ],
     "result": "Every line of the resume is one Umer wrote in Chief's chat; the invented certificate and the line he marked private never appear. Each part says when he told Chief, and the part he changed says Edited by you. The PDF and the Word file the buttons save hold exactly the lines on screen, his edit included. The PDF uses a built-in Latin font, so a non-Latin script would not show. Not a real model."
   },
+  "pi-room": {
+    "start": "The real pinned Pi on a scripted model: first through the kit with no launcher, then behind a real crewd started with CREWHOUSE_ENGINE=pi with three bots, with Pi's read tool on for this proof only, then a real crewd in a real user service",
+    "steps": [
+      "With no room, ask a bot to read an endless file, and let it try the network from inside",
+      "With two bots mid-turn in their own rooms, ask a third to read the same endless file",
+      "Read each room's memory numbers before and after, and ask the two others to finish",
+      "Message the stopped bot again",
+      "From two bots in their rooms, try a port this computer holds, another program, the model direct, the internet and the door's other paths",
+      "In a real user service, kill one process for memory under the manager's default, then under the flag's policy",
+      "Boot on a machine with no systemd-run, flag on, and with the flag off, and ask a helper for something"
+    ],
+    "result": "With no room the read climbed past the ceiling and the bot reached everything on this computer. In its room the bot was stopped at 1000 MB with the plain line \"This job needed more than the 1000 MB of memory a bot may use, so Crewhouse stopped it. The other bots carried on.\", the two others stayed the same processes and answered, and its next message answered in a fresh room. Two bots held the same port, reached nothing but the door, and the door passed only model calls, with the real key the bots never held. The manager's default took the service down with one killed process; the flag's policy kept it up. With no systemd-run the flag-on boot refused in one line and nothing ran; with the flag off the machine worked as before."
+  },
   "pi-wall": {
     "start": "The real pinned Pi on a scripted model: first through the kit with no launcher, then behind a real crewd started with CREWHOUSE_ENGINE=pi, with Pi's write tool on for this proof only; stand-in person files beside each",
     "steps": [

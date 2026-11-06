@@ -89,7 +89,7 @@ async function withWall() {
   const argv = readFileSync(`/proc/${seen.wall}/cmdline`, 'utf8').split('\0').slice(0, -1), own = (pid, ns) => readlinkSync(`/proc/${pid}/ns/${ns}`);
   writeFileSync(join(out, 'launcher.txt'), `The command the kit ran for ${scout}, read from the running process, one argument per line:\n${argv.join('\n')}\n`);
   check(file, readFileSync(`/proc/${seen.wall}/comm`, 'utf8').trim() === 'bwrap' && argv.includes('--disable-userns') && argv.includes('--die-with-parent') && !argv.includes(KEY), 'the launcher is bubblewrap, and the model key is not on its command line');
-  check(file, ['mnt', 'pid', 'user', 'ipc', 'uts', 'cgroup'].every((ns) => own(seen.pi, ns) !== own('self', ns)), 'Pi has its own mount, process, user, ipc, uts and cgroup namespaces');
+  check(file, ['mnt', 'pid', 'user', 'ipc', 'uts', 'cgroup', 'net'].every((ns) => own(seen.pi, ns) !== own('self', ns)), 'Pi has its own mount, process, user, ipc, uts, cgroup and network namespaces');
   const mounts = readFileSync(`/proc/${seen.pi}/mountinfo`, 'utf8').trim().split('\n').map((l) => l.split(' ')).map((f) => ({ at: f[4], mode: f[5].split(',')[0], type: f[f.indexOf('-') + 1] }));
   writeFileSync(join(out, 'mounts.txt'), `What Pi's own process has mounted, from its mount table on the host:\n${mounts.map((m) => `${m.mode} ${m.type} ${m.at}`).join('\n')}\n`);
   const writable = mounts.filter((m) => m.mode === 'rw' && !m.at.startsWith('/dev'));
