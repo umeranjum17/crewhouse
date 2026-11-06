@@ -33,7 +33,7 @@ function service() {
   const out = join(stateDir, 'crewd.log');
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(unit, `[Unit]\nDescription=Crewhouse\nAfter=network-online.target\n\n[Service]\nWorkingDirectory=${app}\n` +
-    `Environment=PATH=${env.PATH}\n${vars}\nExecStart=${node} src/main.ts\nStandardOutput=append:${out}\nStandardError=append:${out}\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n`);
+    `Environment=PATH=${env.PATH}\n${vars}\nExecStart=${node} src/main.ts\nStandardOutput=append:${out}\nStandardError=append:${out}\nRestart=on-failure\n${env.CREWHOUSE_ENGINE === 'pi' ? 'OOMPolicy=continue\n' : ''}\n[Install]\nWantedBy=default.target\n`);
   spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
   return spawnSync('systemctl', ['--user', 'enable', '--now', 'crewhouse.service'], { stdio: 'ignore' }).status === 0;
 }

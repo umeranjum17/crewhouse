@@ -242,6 +242,10 @@ journeys:
   pi-answer:
     timeout: 5m
     command: 'node scripts/verify/pi-answer.mjs "$DONE_DONE_EVIDENCE_ROOT"'
+  # A room per bot on the shared computer: a memory ceiling and a private network, the same read and reach with no room and in one, one bot stopped at its ceiling while two others answer, the door, the service under each OOM policy, a machine with no systemd-run. Real Pi, scripted model, nothing spent (pi-engine.md).
+  pi-room:
+    timeout: 10m
+    command: 'node scripts/verify/pi-room.mjs "$DONE_DONE_EVIDENCE_ROOT"'
   # The pill composer (ch-ui-slice2) on a real stub-engine crewd: empty, typed with a pile of photos, and listening, at 390 and
   # 1280, day and night, then the installed window, the laid-out pile, and heard words waiting for Send. TMPDIR on disk, as bot-crew.
   composer:

@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { request as ask } from 'node:http';
+import { createServer as createSecure, globalAgent } from 'node:https';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -14,6 +16,8 @@ process.env.HOME = person;
 const { lastSaid, setup, task, until } = await import('./lab.ts');
 const { holding, release, startModelStub } = await import('./openclaw-stub.ts');
 const { patchConfig, remember } = await import('../src/bots.ts');
+const { MODEL_URL, openDoor } = await import('../bin/pi-door.mjs');
+const { bus, piBuiltIn, piRoom, piWall } = await import('../bin/sandbox.mjs');
 
 const built = existsSync(join(import.meta.dirname, '..', 'runtime', 'byokit', 'packages', 'pi', 'dist', 'index.js'));
 const skip = !built && !process.env.CI ? 'run node scripts/prepare-pi.mjs first' : false; // CI prepares it, so CI never skips
@@ -130,10 +134,12 @@ test('a machine with no wall boots refusing: Pi never starts, the app says why a
   const model = await startModelStub();
   after(() => model.close());
   const fix = (name: string) => { const dir = temp(`pi-nowall-${name}`); symlinkSync(execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim(), join(dir, 'git')); return dir; };
-  const missing = fix('missing'), refusing = fix('refusing'), old = fix('old');
+  const missing = fix('missing'), refusing = fix('refusing'), old = fix('old'), noManager = fix('no-manager'), noLimit = fix('no-limit');
+  for (const dir of [noManager, noLimit]) { symlinkSync(execFileSync('sh', ['-c', 'command -v bwrap'], { encoding: 'utf8' }).trim(), join(dir, 'bwrap')); writeFileSync(join(dir, 'true'), '#!/bin/sh\n', { mode: 0o755 }); }
+  writeFileSync(join(noLimit, 'systemd-run'), "#!/bin/sh\nprintf 'max\\nmax\\n0\\n'\n", { mode: 0o755 }); // a scope that starts and holds nothing back
   writeFileSync(join(refusing, 'bwrap'), "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n", { mode: 0o755 });
   writeFileSync(join(old, 'bwrap'), "#!/bin/sh\necho 'bwrap: Unknown option --disable-userns' >&2\nexit 1\n", { mode: 0o755 }); // Ubuntu 22.04's: fine for the helpers' shell, no wall for Pi
-  const cases = [{ path: missing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap is not installed\. To fix it: sudo apt install bubblewrap/ }, { path: refusing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap cannot start here \(it said: bwrap: setting up uid map: Permission denied\)\. To fix it: / }, { path: old, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: this bubblewrap is too old \(it said: bwrap: Unknown option --disable-userns\)\. To fix it: update bubblewrap to 0\.8 or later$/ }];
+  const cases = [{ path: missing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap is not installed\. To fix it: sudo apt install bubblewrap/ }, { path: refusing, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: bubblewrap cannot start here \(it said: bwrap: setting up uid map: Permission denied\)\. To fix it: / }, { path: old, line: /^Bots can't start, because Crewhouse can't hold them inside their folders: this bubblewrap is too old \(it said: bwrap: Unknown option --disable-userns\)\. To fix it: update bubblewrap to 0\.8 or later$/ }, { path: noManager, line: /^Bots can't start, because Crewhouse can't give each one its own memory limit: systemd-run is not on this computer\. To fix it: / }, { path: noLimit, line: /^Bots can't start, because Crewhouse can't give each one its own memory limit: this computer starts programs without applying the limit\. To fix it: / }];
   for (const { path, line } of cases) {
     const root = temp(`pi-nowall-${cases.findIndex((c) => c.path === path)}`), port = await new Promise<number>((r) => { const l = createServer().listen(0, '127.0.0.1', () => { const { port } = l.address() as AddressInfo; l.close(() => r(port)); }); });
     const daemon = spawn(process.execPath, [join(import.meta.dirname, '..', 'src', 'main.ts')], { env: { ...process.env, PATH: path, CREWHOUSE_ENGINE: 'pi', CREWHOUSE_ENGINE_BASE_URL: model.url, CREWHOUSE_ENGINE_API_KEY: 'lab-key', CREWHOUSE_PORT: String(port), CREWHOUSE_LINK_PORT: '0', CREWHOUSE_STATE_DIR: join(root, 'state'), CREWHOUSE_CREW_DIR: join(root, 'crew'), CREWHOUSE_TOOLS_DIR: join(root, 'tools') }, stdio: ['ignore', 'ignore', 'ignore'] });
@@ -227,6 +233,101 @@ test('helpers run on Pi side by side: each its own process, memory and session; 
   assert.match(callsOf(a).at(-1)!, /Mango answered/);
   assert.equal(readdirSync(join(work(a), 'sessions')).length, 1, 'one helper, one session, across a stop and a crash');
 
+  await s.crew.stop();
+  await until('no Pi outlives crewd', () => Object.keys(pis()).length === 0);
+  s.done();
+});
+
+/** What code running inside a bot's Pi finds from its room: a Pi extension, the way the plan's escapes ran, as a bot on Pi has no shell. It holds its port for as long as Pi lives. */
+const PROBE = `
+import { connect, createServer } from 'node:net'; import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+const tcp = (at, host = '127.0.0.1') => new Promise((r) => { const c = connect({ port: Number(at), host, timeout: 3000 }); c.on('connect', () => { c.destroy(); r('connected'); }); c.on('error', (e) => r(e.code)); c.on('timeout', () => { c.destroy(); r('timed out'); }); });
+const door = (path, method = 'POST') => fetch('http://127.0.0.1:3128' + path, { method, body: method === 'POST' ? '{}' : undefined }).then((r) => r.status, (e) => e.cause?.code ?? e.message);
+export default () => { setTimeout(async () => {
+  const { HOLD, HOST_PORT, MODEL_PORT } = process.env, held = await new Promise((r) => { createServer().on('error', (e) => r(e.code)).listen(Number(HOLD), '127.0.0.1', () => r('bound')); });
+  writeFileSync('found.json', JSON.stringify({ held, hostPort: await tcp(HOST_PORT), modelDirect: await tcp(MODEL_PORT), outside: await tcp(443, '1.1.1.1'), doorList: await door('/v1/models', 'GET'), doorOther: await door('/v1/embeddings'), doorAbove: await door('/admin'),
+    seen: ['/run/user', '/sys/fs/cgroup', '/proc/self'].filter((p) => existsSync(p)), keyInEnv: Object.values(process.env).some((v) => v.includes('lab-key')), keyOnDisk: readFileSync(process.env.HOME + '/models.json', 'utf8').includes('lab-key') }));
+}, 100); };
+`;
+
+test('a bot on Pi has its own ports and its model is all it can reach: two bots and this computer hold one port at once, and only a model call gets through the door, with a key the bot never held', { skip, timeout: 120_000 }, async () => {
+  const model = await startModelStub();
+  after(() => model.close());
+  const listen = () => new Promise<{ port: number; close(): void }>((r) => { const l = createServer().listen(0, '127.0.0.1', () => r({ port: (l.address() as AddressInfo).port, close: () => l.close() })); });
+  const [mine, spare] = await Promise.all([listen(), listen()]);
+  after(() => { mine.close(); spare.close(); });
+  const repo = join(import.meta.dirname, '..'), state = temp('pi-room'), sock = join(state, 'door.sock'), probe = join(state, 'probe.mjs');
+  writeFileSync(probe, PROBE);
+  const door = await openDoor(sock, { baseUrl: model.url, apiKey: 'lab-key' });
+  after(() => door.close());
+  const { createPiKit } = await import(join(repo, 'runtime', 'byokit', 'packages', 'pi', 'dist', 'index.js')), kit = createPiKit({ stateDir: state });
+  after(() => kit.close());
+  const start = async (id: string) => {
+    const home = join(state, 'pi', id), folder = join(home, 'work'), extensions = [...piBuiltIn(repo), probe];
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(home, 'SYSTEM.md'), `Your id in Crewhouse is ${id}.`);
+    writeFileSync(join(home, 'settings.json'), '{"defaultTools":[]}');
+    writeFileSync(join(home, 'models.json'), JSON.stringify({ providers: { crewhouse: { baseUrl: MODEL_URL, api: 'openai-completions', apiKey: 'added-at-the-door', models: [{ id: 'test' }] } } }));
+    const bot = kit.bot({ id, folder, session: id, extensions, env: { ...bus(), HOLD: String(mine.port), HOST_PORT: String(spare.port), MODEL_PORT: new URL(model.url).port },
+      launch: ({ command, args }: { command: string; args: string[] }) => ({ command: 'systemd-run', args: [...piRoom(`crewhouse-lab-${id}-${process.pid}`), 'bwrap', ...piWall({ folder, home, repo, extensions, door: sock }), command, ...args] }) });
+    const said = await new Promise<string>((resolve, reject) => { const off = bot.on((e: any) => { if (e.type === 'end') { off(); resolve(e.end.text ?? e.end.message); } }); bot.prompt('Hello').catch(reject); });
+    assert.match(said, new RegExp(`stub ${id}: done`), 'a model call goes through the door and comes back');
+    await until(`${id}'s probe`, () => existsSync(join(folder, 'found.json')), 30_000);
+    return JSON.parse(readFileSync(join(folder, 'found.json'), 'utf8'));
+  };
+  for (const found of await Promise.all(['one', 'two'].map(start)))
+    assert.deepEqual(found, { held: 'bound', hostPort: 'ECONNREFUSED', modelDirect: 'ECONNREFUSED', outside: 'ENETUNREACH', doorList: 403, doorOther: 403, doorAbove: 403, seen: [], keyInEnv: false, keyOnDisk: false });
+  assert.deepEqual([...new Set(model.calls.map((c) => `${c.path} ${c.authorization}`))], ['/v1/chat/completions Bearer lab-key'], 'only model calls came through, each with the real key added at the door');
+});
+
+test('the door reaches an https model the same way: the key added, the answer streamed back piece by piece', { timeout: 60_000 }, async () => {
+  const dir = temp('door-tls'), key = join(dir, 'key.pem'), cert = join(dir, 'cert.pem'), sock = join(dir, 'door.sock'), heard: string[] = [];
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-subj', '/CN=model', '-addext', 'subjectAltName=IP:127.0.0.1', '-days', '1'], { stdio: 'ignore' });
+  const was = globalAgent.options.ca; globalAgent.options.ca = readFileSync(cert);
+  const model = createSecure({ key: readFileSync(key), cert: readFileSync(cert) }, (req, res) => { heard.push(`${req.method} ${req.url} ${req.headers.authorization}`); res.write('first '); req.resume(); req.on('end', () => setImmediate(() => res.end('last'))); });
+  await new Promise<void>((r) => model.listen(0, '127.0.0.1', r));
+  const door = await openDoor(sock, { baseUrl: `https://127.0.0.1:${(model.address() as AddressInfo).port}/v1/`, apiKey: 'lab-key' });
+  after(() => { globalAgent.options.ca = was; door.close(); model.close(); });
+  const said = await new Promise<string>((resolve, reject) => { const asked = ask({ socketPath: sock, path: '/v1/chat/completions', method: 'POST', headers: { authorization: 'Bearer added-at-the-door' } }, (res) => { let all = ''; res.on('data', (b) => all += b); res.on('end', () => resolve(all)); }); asked.on('error', reject); asked.end('{}'); });
+  assert.equal(said, 'first last');
+  assert.deepEqual(heard, ['POST /v1/chat/completions Bearer lab-key']);
+});
+
+test('a bot on Pi that reaches its memory ceiling stops alone: its job says so, two others mid-turn answer, and its next message starts a fresh room', { skip, timeout: 180_000 }, async () => {
+  process.env.CREWHOUSE_PI_TOOLS = 'read'; // the proof's own tool: an endless file is a bot asking for more than its room holds
+  after(() => { delete process.env.CREWHOUSE_PI_TOOLS; });
+  const model = await startModelStub();
+  after(() => model.close());
+  const s = setup(3, { engine: 'pi', engineProvider: { baseUrl: model.url, apiKey: 'lab-key' } });
+  s.crew.onboard('Umer');
+  const [hog, a, b] = ['scout', 'scribe', 'reel'].map((t) => s.crew.recruit(t, undefined, 'person').id), work = (bot: string) => join(s.cfg.stateDir, 'pi', bot, 'work');
+  const ask = async (bot: string, text: string): Promise<number> => (await s.crew.post(bot, text) as { task: number }).task;
+  const ended = (t: number) => until(`job ${t} on Pi`, () => !['queued', 'working'].includes(task(s.db, t).state), 120_000);
+  const room = (pid: number) => join('/sys/fs/cgroup', readFileSync(`/proc/${pid}/cgroup`, 'utf8').trim().split(':')[2]);
+
+  const [one, two] = await Promise.all([ask(a, 'ask permission as one'), ask(b, 'ask permission as two')]);
+  await until('both mid-turn', () => holding('one') && holding('two'), 60_000);
+  const kept = pis();
+  assert.notEqual(room(kept[work(a)].pid), room(kept[work(b)].pid), 'each Pi has a room of its own');
+  for (const bot of [a, b]) assert.deepEqual(['memory.max', 'memory.swap.max', 'memory.oom.group'].map((f) => readFileSync(join(room(kept[work(bot)].pid), f), 'utf8').trim()), [String(1000 * 1024 * 1024), '0', '1']);
+
+  const lost = await ask(hog, '[tool read {"path": "/dev/zero"}]');
+  await ended(lost);
+  assert.equal(task(s.db, lost).state, 'failed');
+  assert.equal(task(s.db, lost).result, 'This job needed more than the 1000 MB of memory a bot may use, so Crewhouse stopped it. The other bots carried on.');
+  assert.equal(pis()[work(hog)], undefined, 'nothing of it is left running');
+  for (const bot of [a, b]) {
+    assert.equal(pis()[work(bot)].pid, kept[work(bot)].pid, 'the others were not touched');
+    assert.match(readFileSync(join(room(kept[work(bot)].pid), 'memory.events'), 'utf8'), /^oom_kill 0$/m);
+  }
+  release('one', 'First answered');
+  release('two', 'Second answered');
+  await Promise.all([ended(one), ended(two)]);
+  assert.deepEqual([task(s.db, one).state, task(s.db, two).state], ['done', 'done']);
+  assert.deepEqual([lastSaid(s.db, a), lastSaid(s.db, b)], ['First answered', 'Second answered']);
+  const back = await ask(hog, 'Back again');
+  await ended(back);
+  assert.equal(task(s.db, back).state, 'done', 'the next message gives it a fresh room');
   await s.crew.stop();
   await until('no Pi outlives crewd', () => Object.keys(pis()).length === 0);
   s.done();
@@ -389,7 +490,7 @@ test('a bot on Pi that keeps writing notes is asked for its answer and gives it 
   assert.match(stopped.result, /couldn't finish this one\. Try again\.$/, 'a bot that never answers ends on the line the app shows for a stopped turn');
   assert.doesNotMatch(stopped.result, /maxToolCalls|Stopped:/);
   assert.equal(stopped.asks, 1);
-  assert.ok(stopped.ran > 30 && stopped.ran <= 40, `the turn ended just past the cap: ${stopped.ran} ran, the calls already under way when the kit's stop landed`);
+  assert.ok(stopped.ran >= 30 && stopped.ran <= 40, `the turn ended at the cap or just past it: ${stopped.ran} ran, the calls already under way when the kit's stop landed, if their results reached the model before the stop cut the door's call`);
   assert.deepEqual(s.db.all("SELECT bot, data FROM events WHERE kind = 'run.limit'").map((e) => [e.bot, JSON.parse(e.data).calls, JSON.parse(e.data).limit]), [[scout, 30, 30]], 'the events say the cap was reached');
 
   stubborn = false;

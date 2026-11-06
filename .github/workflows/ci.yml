@@ -90,6 +90,9 @@ jobs:
       # The Pi engine's journey runs on the real pinned Pi: the kit by its committed ref, until it is on npm.
       - if: env.GROUP == 'app'
         run: node scripts/prepare-pi.mjs
+      # A bot on Pi runs in a scope of the login's own manager, or not at all; a runner has no login, so it starts one.
+      - if: env.GROUP == 'app'
+        run: sudo loginctl enable-linger "$USER" && until [ -S "/run/user/$(id -u)/systemd/private" ]; do sleep 0.2; done
       - run: npm test -- --group="$GROUP" # stub runner only: no Herdr, no CLI, no model calls
   check-engine:
     needs: changes
