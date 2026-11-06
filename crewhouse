@@ -155,6 +155,8 @@ case "${1:-}" in
       touch "$STATE/npm-ready"
     fi
     if [ "${2:-}" = --headless ]; then exec node scripts/headless.mjs setup "${@:3}"; fi
+    # A stock Ubuntu refuses the helpers' sandbox (bubblewrap) until one rule of its own is installed: this asks, once, and says what it did.
+    product_run && node bin/sandbox.mjs setup || true
     # Helpers fetch their own tools the first time they need them: setup installs nothing beyond the engine.
     # (A first start leaves the machine report to `doctor`.)
     if [ -z "${CREWHOUSE_STARTING:-}" ]; then

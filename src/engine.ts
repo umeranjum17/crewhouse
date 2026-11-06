@@ -1,6 +1,7 @@
 // crewd's own helpers the agent runtime calls into: the bubblewrap shell (crewd's security boundary), keyless page
 // reads, and pinned AXI runs. No engine protocol here — the tool type is Crewhouse's own.
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { sandbox } from '../bin/sandbox.mjs';
 import { BRIDGE } from './net.ts';
 import { Type } from 'typebox';
 
@@ -48,12 +49,8 @@ export const said = async (t: CrewTool, input: any, signal?: AbortSignal) => {
 };
 
 // ---- the shell: bubblewrap, where the bot's space is the only writable part of the disk ----
-let sandboxOk: boolean | undefined;
-/** Whether bubblewrap works here (it is missing on macOS, and some distros forbid the namespaces it needs). */
-export function sandboxReady() {
-  sandboxOk ??= (() => { try { execFileSync('bwrap', ['--ro-bind', '/', '/', '--unshare-all', 'true'], { stdio: 'ignore', timeout: 5000 }); return true; } catch { return false; } })();
-  return sandboxOk;
-}
+/** Whether bubblewrap works here (it is missing on macOS, and some distros forbid the namespaces it needs): bin/sandbox.mjs, the probe `doctor` and setup share. */
+export const sandboxReady = () => sandbox().ok;
 
 export const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
