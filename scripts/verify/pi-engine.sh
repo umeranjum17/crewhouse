@@ -40,7 +40,7 @@ B="http://127.0.0.1:$PORT"
 MODEL=${PI_MODEL:-MiniMax-M3.1-Flash}
 TAPPORT=$("$NODE" -e 'require("node:net").createServer().listen(0,"127.0.0.1",function(){console.log(this.address().port);this.close()})')
 : > "$OUT/offered.jsonl"
-"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-20}" &
+"$NODE" "$REPO/scripts/verify/pi-tap.mjs" "${PI_ORIGIN:-https://api.minimax.io}" "$TAPPORT" "$OUT/offered.jsonl" "${PI_CALL_LIMIT:-20}" "$LAB/sent.jsonl" &
 TAP=$!
 # crewd on Pi, up and answering, its log in $1. The second boot is the restart: same folders, same key, a new process.
 PERSON=""

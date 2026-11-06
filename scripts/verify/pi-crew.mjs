@@ -72,7 +72,7 @@ const offers = () => {
 /** Separation, on the record: nothing the model was ever sent for one helper, on any call, holds the other's code or word. */
 const apart = () => {
   for (const bot of ['scout', 'scribe']) {
-    const seen = calls().filter((o) => o.bot === bot), held = seen.filter((o) => o.sent.includes(code[other[bot]]) || o.sent.toLowerCase().includes(word[other[bot]]));
+    const seen = readFileSync(join(lab, 'sent.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((o) => o.bot === bot), held = seen.filter((o) => o.sent.includes(code[other[bot]]) || o.sent.toLowerCase().includes(word[other[bot]]));
     if (!seen.length || held.length) fail(`${other[bot]}'s notes reached ${bot}'s prompt on ${held.length} of its ${seen.length} model calls`);
     if (session(bot).includes(code[other[bot]])) fail(`${bot}'s Pi session holds ${other[bot]}'s code`);
     say(`${bot}: none of its ${seen.length} model calls, and nothing in its Pi session, holds ${other[bot]}'s code or word.`);
