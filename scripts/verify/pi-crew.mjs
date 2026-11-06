@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // The crew half of the `pi-engine` journey (pi-engine.sh): two helpers on one flag-on crewd, driven through the API the app uses. Scout
 // has no list in its folder, so the default; Scribe's lists hello and notes. Both are asked at once to save a code in their notes. With
-// `recall`, on a crewd restarted over the same folders, their Pi sessions are removed, so only notes.md can carry a code: Scout is asked
-// for its own code and Scribe's, Scribe for its own. Six model calls if each helper takes one call per step; pi-tap.mjs stops the journey
-// at PI_CALL_LIMIT. Each reply is checked against that helper's own Pi session record, the tools each request offered against the tap's
-// record, and the notes each prompt showed against the same record: shown as a job starts, and the same on each of its rounds. Chief is
+// `recall`, on a crewd restarted over the same folders, their Pi sessions are removed, so only notes.md can carry a code: each is asked for
+// its own. No bot is asked for another's: that is forbidden, so it is checked on the record, never set as a task. Six model calls if each
+// helper takes one call per step; pi-tap.mjs stops the journey at PI_CALL_LIMIT. Each reply is checked against that helper's own Pi session
+// record, the tools each request offered against the tap's record, and the notes each prompt showed against the same record: shown as a
+// job starts, and the same on each of its rounds. Everything sent to the model for one helper must hold nothing of the other's. Chief is
 // never asked. An empty list, a tool used from a bot's own list, full notes, the crash and session pickup are test/pi-engine.test.ts's:
 // real Pi, scripted model.
 //   node scripts/verify/pi-crew.mjs <base-url> <lab> <crewd-pid> <out-dir> [recall]
@@ -68,6 +69,15 @@ const offers = () => {
   }
   if (offered.some((o) => !['scout', 'scribe'].includes(o.bot))) fail(`a model call came from someone else: ${JSON.stringify(offered)}`);
 };
+/** Separation, on the record: nothing the model was ever sent for one helper, on any call, holds the other's code or word. */
+const apart = () => {
+  for (const bot of ['scout', 'scribe']) {
+    const seen = calls().filter((o) => o.bot === bot), held = seen.filter((o) => o.sent.includes(code[other[bot]]) || o.sent.toLowerCase().includes(word[other[bot]]));
+    if (!seen.length || held.length) fail(`${other[bot]}'s notes reached ${bot}'s prompt on ${held.length} of its ${seen.length} model calls`);
+    if (session(bot).includes(code[other[bot]])) fail(`${bot}'s Pi session holds ${other[bot]}'s code`);
+    say(`${bot}: none of its ${seen.length} model calls, and nothing in its Pi session, holds ${other[bot]}'s code or word.`);
+  }
+};
 /** Each job as the tap saw it. Pi shows a bot its notes once, as a job starts, so a note added mid-job reaches the next job's prompt and never this one's. */
 const shown = () => {
   for (const [job, seen] of Object.entries(Object.groupBy(calls().filter((o) => o.status !== 'stopped by the tap'), (o) => `${o.bot}'s job ${o.job}`))) {
@@ -82,17 +92,20 @@ if (recall) {
   say(`\nAfter the restart: a new crewd (${crewd}), no Pi running, and both Pi sessions removed, so notes.md is all that is left of the first turn.`);
   if (Object.keys(pis()).length) fail('a Pi runs before anyone is asked');
   for (const bot of ['scout', 'scribe']) { rmSync(join(work(bot), 'sessions'), { recursive: true }); say(`${bot}'s notes.md: ${JSON.stringify(notes(bot))}`); }
-  const jobs = await Promise.all([ask('scout', 'What is my locker code? Read Scribe\'s notes too and tell me Scribe\'s locker code.'), ask('scribe', 'What is my locker code? Reply in one short sentence.')]);
+  const jobs = await Promise.all(['scout', 'scribe'].map((bot) => ask(bot, 'What is my locker code? Reply in one short sentence.')));
+  const ends = [await ended('scout', jobs[0]), await ended('scribe', jobs[1])];
+  await idle();
+  say('\nSeparate notes:');
+  apart();
+  say('\nRecall:');
   const replies = {};
   for (const [i, bot] of ['scout', 'scribe'].entries()) {
-    const said = replies[bot] = answered(bot, await ended(bot, jobs[i])), prompt = calls().find((o) => o.job === jobs[i])?.saved ?? '';
+    const said = replies[bot] = answered(bot, ends[i]), prompt = calls().find((o) => o.job === jobs[i])?.saved ?? '';
     if (!said.includes(code[bot])) fail(`${bot} did not recall its own code: ${said}`);
-    if (said.includes(code[other[bot]]) || session(bot).includes(code[other[bot]]) || prompt.includes(code[other[bot]])) fail(`${bot} reached ${other[bot]}'s code: ${said}`);
     if (!prompt.includes(code[bot])) fail(`${bot}'s code was not in the notes its prompt showed: ${prompt}`);
-    say(`${bot} recalled its code from the notes its prompt showed. ${other[bot]}'s code is not in its prompt, its reply or its Pi session.`);
+    say(`${bot} recalled its code from the notes its prompt showed.`);
   }
 
-  await idle();
   say('\nTools:');
   offers();
   say('\nNotes, job by job:');

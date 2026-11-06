@@ -5,7 +5,7 @@
 # through @byokit/pi, on a real model (the free MiniMax M3.1 Flash, the key read from the file into crewd's environment and
 # nowhere else). Each saves a code in its own notes, and Chief is never asked; pi-tap.mjs records each model request and its reply.
 # crewd then restarts over the same folders with both Pi sessions gone: each recalls its own code from the notes its prompt showed, and
-# Scout cannot get Scribe's. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
+# nothing sent to the model for one holds the other's. Both chats are captured at 390 and 1280, day and night, and in the installed window. A stand-in person's Pi folder in the lab's HOME, the HOME crewd and Pi both start from, is hashed whole before
 # and after. The owner's real folder is never read here, so this says nothing about it: that rests on the kit's own isolation test.
 #
 #   scripts/verify/pi-engine.sh <out-dir> <minimax-key-file>
