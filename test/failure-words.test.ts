@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { dirname, join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -49,24 +49,26 @@ for (const [name, breakIt, cause, next] of [
   assert.ok(ms < 45_000, `said why in ${ms} ms, not after the two-minute wait`);
 });
 
-// pick 0 (BYOKit) relaxes this check; when that pin lands, this case and KNOWN's first line go together.
-test('a group-writable ~/.local stops start at once, and doctor reports it instead of crashing', { timeout: 60_000 }, async () => {
-  const m = await machine();
-  for (const dir of [join(m.home, '.local'), dirname(m.state)]) chmodSync(dir, 0o775);
+// The sign-in folders must be the person's alone, and a default Ubuntu login's umask (002) makes every new folder group-writable.
+test('doctor reports a group-writable ~/.local in plain words, read-only; the next start closes it to the group and says so', { timeout: 60_000 }, async () => {
+  const m = await machine(), open = [join(m.home, '.local'), dirname(m.state)];
+  for (const dir of open) chmodSync(dir, 0o775);
   const doctor = await m.run('doctor');
   assert.equal(doctor.code, 1, doctor.out);
-  assert.match(doctor.out, /✗ Engine: A folder your sign-ins would sit under/);
-  assert.match(doctor.out, /next: mkdir -p ~\/\.local\/state && chmod g-w ~\/\.local ~\/\.local\/state && crewhouse start/);
+  assert.match(doctor.out, /✗ Engine: The folder your sign-ins would be kept in is not private to you/);
+  assert.match(doctor.out, /next: sudo chown "\$\(id -un\)" .*&& chmod go-w .* && crewhouse start/);
   assert.match(doctor.out, /Tool kit/, 'the rest of the report still runs');
   noTrace(doctor.out);
-  const start = await m.run('start');
-  assert.equal(start.code, 1, start.out);
-  noTrace(start.out);
-  assert.ok(start.ms < 45_000, `said why in ${start.ms} ms`);
-  // The printed line is the fix: typed as it stands, the next doctor no longer finds it. (Starting the real engine after it is scripts/verify/failure-words.sh.)
-  const line = start.out.match(/^Next: (.+) && crewhouse start$/m)?.[1] ?? assert.fail(start.out);
-  assert.equal(spawnSync('sh', ['-c', line], { env: { HOME: m.home, PATH: process.env.PATH } }).status, 0);
-  assert.match((await m.run('doctor')).out, /✓ Engine: OpenClaw/);
+  assert.equal(statSync(dirname(m.state)).mode & 0o777, 0o775, 'doctor only looks');
+  const stub = await machine({ CREWHOUSE_ENGINE: 'stub' });
+  for (const dir of [join(stub.home, '.local'), dirname(stub.state)]) chmodSync(dir, 0o775);
+  const start = await stub.run('start');
+  try {
+    assert.equal(start.code, 0, start.out);
+    assert.match(start.out, new RegExp(`Only you can write to ${dirname(stub.state)} now\\. It was 775; chmod 775 ${dirname(stub.state)} puts it back\\.`));
+    assert.equal(statSync(dirname(stub.state)).mode & 0o777, 0o755);
+    assert.equal((await stub.run('start')).out.includes('Only you can write'), false, 'said once');
+  } finally { await stub.run('stop'); }
 });
 
 test('open on a machine with no browser never prints the private link, and says when Crewhouse is not running', { timeout: 60_000 }, async () => {

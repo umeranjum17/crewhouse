@@ -2,7 +2,7 @@
 // The `crewhouse` command of the two installs that have no checkout: `npm install -g crewhouse`, and install.sh (a
 // download that carries its own Node and engine). Both run the same launcher script, `crewhouse` beside this folder.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +60,18 @@ if (!download && process.env.CREWHOUSE_NPM_HOME !== current) {
   process.exit(run.status ?? 1);
 }
 
+// Sign-ins sit under the state folders, and the kit refuses a folder others can write to, which is what a default Ubuntu login's
+// umask makes of every folder a program creates for the first time. New ones are the person's alone (like install.sh); a
+// group-writable one of theirs is closed to the group and says so. Folders that are someone else's are left to the plain words doctor and start print.
+if (cmd === 'start' || cmd === 'setup') for (const dir of [process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), config.stateDir]) {
+  try {
+    if (!existsSync(dir)) { mkdirSync(dir, { recursive: true, mode: 0o700 }); continue; }
+    const { mode, uid } = statSync(dir);
+    if (uid !== process.getuid?.() || !(mode & 0o022)) continue;
+    chmodSync(dir, mode & 0o7755);
+    console.log(`Only you can write to ${dir} now. It was ${(mode & 0o777).toString(8)}; chmod ${(mode & 0o777).toString(8)} ${dir} puts it back.`);
+  } catch {}
+}
 if (['setup', 'doctor', 'stop', 'status', 'link', 'phones', 'open', 'tools', 'autostart'].includes(cmd)) process.exit(launcher(here, cmd).status ?? 1);
 if (cmd !== 'start') fail(`${USAGE}\n\nUnknown command: ${cmd}`, 2);
 
