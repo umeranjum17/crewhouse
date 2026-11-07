@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 import { host, house, legacyAuth, retired, sealed } from './migrate-house.ts';
 
 test('a preserved sign-in survives the upgrade, a failed import stays recoverable', { timeout: 600_000 }, async () => {

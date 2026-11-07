@@ -1,7 +1,7 @@
 {
   "id": "computer",
   "name": "Computer (desklink)",
-  "provides": "The bot's own desktop: a virtual display with its own Chromium, fenced off from your files. The bot sees it and clicks and types on it through OpenClaw's computer tool, and its browser tool drives the same Chromium. You can watch it and take over from the Screen tab",
+  "provides": "The bot's own desktop: a virtual display with its own Chromium, fenced off from your files. The bot sees it and clicks and types on it through its computer tool, and its browser tool drives the same Chromium. You can watch it and take over from the Screen tab",
   "kind": "desktop",
   "bins": [
     "Xvfb"

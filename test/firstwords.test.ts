@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 // @ts-expect-error: a plain script, no types
 import { measure, report, variants } from '../scripts/measure-firstwords.mjs';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'crewhouse-firstwords-'));
 mkdirSync(join(root, 'crew', 'bots', 'chief'), { recursive: true });

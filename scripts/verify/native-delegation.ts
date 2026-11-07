@@ -12,9 +12,9 @@ Object.assign(process.env, { HOME: join(scratch, 'home'), TMPDIR: join(scratch, 
 for (const key of ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[key];
 let helperId = '', helperName = '';
 const HI = process.env.LAB_HI_REPLY;
-let stub: Awaited<ReturnType<typeof import('../../test/openclaw-stub.ts')['startModelStub']>> | undefined;
+let stub: Awaited<ReturnType<typeof import('../../test/model-stub.ts')['startModelStub']>> | undefined;
 if (mode === '--scripted') {
-  const { startModelStub } = await import('../../test/openclaw-stub.ts');
+  const { startModelStub } = await import('../../test/model-stub.ts');
   stub = await startModelStub(undefined, (body, text) => {
     const system = body.messages.filter((m: any) => m.role === 'system').map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
     // Legwork: a spawned child answers its one item after its tool calls; Chief spawns, then answers when the reports are in.

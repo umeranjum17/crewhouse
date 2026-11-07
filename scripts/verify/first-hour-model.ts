@@ -4,7 +4,7 @@
 // real public postings read from Ashby's public job boards when the lab starts (remote engineering roles).
 //   node scripts/verify/first-hour-model.ts <url-file>     prints nothing; writes the provider's address to <url-file>
 import { writeFileSync } from 'node:fs';
-import { startModelStub } from '../../test/openclaw-stub.ts';
+import { startModelStub } from '../../test/model-stub.ts';
 
 const [urlFile] = process.argv.slice(2);
 if (!urlFile) throw Error('usage: first-hour-model.ts <url-file>');

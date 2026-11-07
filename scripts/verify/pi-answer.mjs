@@ -12,7 +12,7 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSyn
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { startModelStub } from '../../test/openclaw-stub.ts';
+import { startModelStub } from '../../test/model-stub.ts';
 
 const out = process.argv[2], repo = join(import.meta.dirname, '..', '..'), KEY = 'lab-model-key', ASK = 'Stop calling tools now', ANSWER = 'The locker code is K7.';
 if (!out) { console.error('usage: pi-answer.mjs <out-dir>'); process.exit(2); }

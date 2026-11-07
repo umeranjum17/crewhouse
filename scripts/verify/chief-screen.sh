@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Chief does a personal-assistant job on its own screen: one isolated crewd on the real engine (OpenClaw, its own
-# `computer` tool and node host) with the scripted model (test/openclaw-stub.ts), onboarded as Umer. Umer asks Chief to
+# `computer` tool and node host) with the scripted model (test/model-stub.ts), onboarded as Umer. Umer asks Chief to
 # renew a library card on a loopback form; Chief's desktop and node start, and every computer call crosses crewd's
 # gate. Films Chief's display while it works, then checks that a call naming another bot's node is refused.
 #

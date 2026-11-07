@@ -9,8 +9,7 @@
     "self-hosted",
     "local-first",
     "linux",
-    "privacy",
-    "openclaw"
+    "privacy"
   ],
   "homepage": "https://crewhouse.pages.dev",
   "license": "Apache-2.0",

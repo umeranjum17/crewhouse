@@ -1743,7 +1743,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const l = this.live.get(botId);
     if (!l) return false;
     const grants = l.grants ?? [];
-    // OpenClaw's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
+    // The engine's own adopted tools (reads, recall, media on the person's sign-in); unreviewed natives fail closed.
     if (BUILTINS.has(name)) return !this.netOf(botId);
     if (/^crew_(read|write|edit|ls|grep|find)$/.test(name)) return grants.includes('files') && (botId !== CHIEF || name === 'crew_read');
     if (name === 'bash') return botId !== CHIEF && grants.includes('files') && sandboxReady();

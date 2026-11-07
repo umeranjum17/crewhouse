@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { removeOnExit } from '../src/config.ts';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import type { RunSpec, ToolHost } from '../src/runtime.ts';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 
 test('real Gateway tool call crosses fail-closed Crewhouse gate', { timeout: 420_000 }, async () => {
   const state = removeOnExit(mkdtempSync(join(tmpdir(), 'crewhouse-run-')));

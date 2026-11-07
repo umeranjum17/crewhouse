@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
 import { until } from './lab.ts';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 
 test('learned skills: both lanes listed once, Forget unloads the copy in use and keeps its bytes, switching it on brings it back', { timeout: 240_000 }, async () => {
   const state = mkdtempSync(join(tmpdir(), 'crewhouse-learn-lanes-'));

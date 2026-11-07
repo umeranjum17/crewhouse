@@ -14,7 +14,7 @@ import { temp } from './tmp.ts';
 const person = temp('pi-person');
 process.env.HOME = person;
 const { lastSaid, setup, task, until } = await import('./lab.ts');
-const { holding, release, startModelStub } = await import('./openclaw-stub.ts');
+const { holding, release, startModelStub } = await import('./model-stub.ts');
 const { patchConfig, remember } = await import('../src/bots.ts');
 const { MODEL_URL, openDoor } = await import('../bin/pi-door.mjs');
 const { bus, piBuiltIn, piRoom, piWall } = await import('../bin/sandbox.mjs');

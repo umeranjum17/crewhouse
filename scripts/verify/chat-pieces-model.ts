@@ -1,8 +1,8 @@
-// For chat-pieces.sh: the scripted model (test/openclaw-stub.ts) on loopback. What the person says picks the piece; the words Chief
+// For chat-pieces.sh: the scripted model (test/model-stub.ts) on loopback. What the person says picks the piece; the words Chief
 // then says are built from the tool result the engine handed back in that same turn, so a wrong result shows in the thread.
 // Writes `MODEL=<url>` to argv[2]; each result read goes to argv[3], one JSON line each.
 import { appendFileSync, writeFileSync } from 'node:fs';
-import { startModelStub } from '../../test/openclaw-stub.ts';
+import { startModelStub } from '../../test/model-stub.ts';
 
 const [, , env, seen] = process.argv;
 const call = (p: object) => `[tool crew_piece ${JSON.stringify(p)}]`;
