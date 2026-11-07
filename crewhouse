@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: --version | setup | start | stop | status | open [--link] | autostart | update | uninstall | link | phones | doctor | tools | test
+# Crewhouse: --version | setup | start | stop | status | open [--link] | autostart | update | uninstall | link | phones | doctor | triage | tools | test
 set -euo pipefail
 export CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product}
 [ "${1:-}" != test ] || export CREWHOUSE_RUN_MODE=test
@@ -406,6 +406,10 @@ try {
 } catch (e) { console.error(e.message); process.exitCode = 1; }
 NODE
     ;;
+  triage)
+    need_node
+    CREWHOUSE_CMD="$CMD" exec node bin/crewhouse.mjs triage "${@:2}"
+    ;;
   doctor)
     need_node
     # The report runs on the app's own files. With some of them gone it says which, and how to get them back, not a stack trace.
@@ -437,7 +441,7 @@ NODE
     ;;
   *)
     version
-    echo "usage: $CMD --version | setup [--headless [--install-only]] | headless serve|pair|health | start | stop | status | autostart on|off | update | open [--link] | link [new] | phones code|pending|approve|web | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    echo "usage: $CMD --version | setup [--headless [--install-only]] | headless serve|pair|health | start | stop | status | autostart on|off | update | open [--link] | link [new] | phones code|pending|approve|web | uninstall [--all] [--yes] | doctor | triage | tools [install [ids...]] | test"
     exit 2
     ;;
 esac

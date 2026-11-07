@@ -22,3 +22,8 @@ A person installs Crewhouse on a rented Ubuntu server with the one-line install,
 
 1. `git archive HEAD | tar -x -C <clean>`, `npm pack` there, then `bash scripts/verify/setup-fixes.sh <out> fix3 <crewhouse-X.tgz> works`; with `crewhouse@0.1.10` and `fails` it shows the released build dying with `KeystoreError`.
 2. Capture: `setup-fix3-<tgz name>-<expectation>.txt`: a default login (umask 0002) reaches "Crewhouse is running at" with `start-exit=0`; with `~/.local/state` root's, plain words and a `Next: sudo chown` line, then success after the line.
+
+## Fix 4: crewhouse triage
+
+1. `bash scripts/verify/setup-fixes.sh <out> fix4 <dist>/crewhouse-<version>-linux-x64.tar.gz repairs`; with the released tarball and `missing` it shows no triage and the by-hand move failing.
+2. Capture: `setup-fix4-<tarball>-repairs.txt`: the three breaks, triage's Fixed lines and its one question answered `y`, the kept file identical to the damaged one, start running, Chief's folder unchanged, doctor ready.
