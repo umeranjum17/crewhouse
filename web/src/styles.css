@@ -425,7 +425,6 @@ video.media { width: auto; max-width: 100%; max-height: min(70vh, 640px); height
 .call.speaking .call-state i { background: var(--ok); }
 .call-words { grid-column: 1 / -1; margin: 0 0 4px; font: 400 17px/24px var(--ui); color: var(--ink); overflow-wrap: anywhere; }
 .call-words.mute { color: var(--mute); }
-.call-heard { grid-column: 1 / -1; margin: 0 0 4px; font: 400 13px/18px var(--ui); color: var(--mute); }
 .call-voice > summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: 999px; font: 500 13px/18px var(--ui); color: var(--ink2); background: var(--soft); white-space: nowrap; }
 .call-voice > summary::-webkit-details-marker { display: none; }
 .call-menu { position: absolute; right: 8px; bottom: calc(100% + 8px); z-index: 5; width: min(320px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: var(--bg); box-shadow: var(--e2); }
@@ -2246,6 +2245,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .shell.calm .chat .lines .line > .line-by .who { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 .shell.calm .chat .lines .line > .bubble-text:not(.inbox-bubble) { width: fit-content; max-width: min(88%, 620px); box-sizing: border-box; padding: 12px 18px; border-radius: 24px 24px 24px 8px; background: var(--bubble); color: var(--ink);
   font: 400 18px/1.45 var(--ui); border: 0; overflow-wrap: anywhere; text-wrap: pretty; }
+.shell.calm .chat .lines .line.reading > .bubble-text:not(.inbox-bubble) { border-left: 2px solid var(--ok); } /* the line a call reads aloud, over the calm bubble's own border */
 .shell.calm .chat .lines .line.me { display: flex; flex-direction: column; align-items: flex-end; }
 .shell.calm .chat .lines .line.me > .bubble-text { max-width: min(82%, 620px); background: var(--me); color: var(--me-ink); padding: 12px 18px; border-radius: 24px 24px 8px 24px; }
 .shell.calm .chat .lines .line.me + .line.me, .shell.calm .chat .lines .line-wrap:has(.line.me) + .line-wrap:has(.line.me) .line { margin-top: 4px; }

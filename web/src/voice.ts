@@ -1,57 +1,12 @@
-// Speaking to Chief: the browser's own recognizer turns speech into words for the message box. It listens on this
-// device when it can; where it has no on-device recognizer (Android Chrome in a PWA, for one), its online recognizer
-// does instead, and the app says so before it listens (the words are `VOICE_WORDS` in adapter.ts). Nothing is sent
-// by speaking: the words go nowhere until the person taps send.
-// Where the browser can record, the box's mic records instead and this computer's Hex writes it down (`record` below),
-// so the audio goes to the computer the person paired with and to no cloud service.
+// Speaking to Chief: the browser records, the clip goes to the computer the person paired with, and the Hex installed
+// there writes it down (`record` below). No recognizer of the browser's or a cloud service's hears anything. Nothing is
+// sent by speaking: the words go nowhere until the person taps send.
 import { transcribe } from './api.ts';
 
-const Heard = (globalThis as any).SpeechRecognition ?? (globalThis as any).webkitSpeechRecognition;
 const lang = () => navigator.language || 'en-US';
-const want = (local: boolean) => ({ langs: [lang()], processLocally: local });
 
-/** `device`: this browser's own recognizer, on this device; `online`: its online one (its service hears the audio);
- *  `none`: neither can hear here. */
-export type Ears = 'device' | 'online' | 'none';
-
-/** Whether the browser can recognize speech this way, perhaps after fetching its voice pack once. An error from the
- *  check (the browser doesn't know this option) counts as no. A recognizer with no check at all (Safari, so every
- *  iPad and iPhone browser) can't say where it hears, so it counts as the online one. */
-async function offers(local: boolean): Promise<boolean> {
-  if (Heard && !Heard.available) return !local;
-  try { return !!Heard && (await Heard.available(want(local))) !== 'unavailable'; } catch { return false; }
-}
-
-/** The recognizer this browser should listen with: on this device first, else the online one, else none. */
-export async function ears(): Promise<Ears> {
-  return (await offers(true)) ? 'device' : (await offers(false)) ? 'online' : 'none';
-}
-
-/** Listens until the person pauses (or `stop()`), then gives what was heard ('' for nothing) with `route`'s recognizer;
- *  `heard` gets the words so far while they speak. It fails `blocked` when the microphone isn't allowed, `nomic` when
- *  none can be opened, `offline` when the online recognizer can't be reached, `unready` when the voice pack can't be
- *  fetched or there is no recognizer at all. */
-export function hear(route: Ears, heard?: (words: string) => void): { words: Promise<string>; stop: () => void } {
-  let r: any = null, stopped = false;
-  const words = (async () => {
-    if (route === 'none') throw new Error('unready');
-    if (route === 'device' && (await Heard.available(want(true))) !== 'available' && !(await Heard.install(want(true)).catch(() => false))) throw new Error('unready');
-    if (stopped) return '';
-    r = new Heard();
-    Object.assign(r, { lang: lang(), processLocally: route === 'device', interimResults: !!heard, continuous: false });
-    return new Promise<string>((done, fail) => {
-      let said = '';
-      r.onresult = (e: any) => { said = [...e.results].map((x: any) => x[0].transcript).join(' ').trim(); heard?.(said); };
-      r.onerror = (e: any) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') fail(new Error('blocked')); else if (e.error === 'audio-capture') fail(new Error('nomic')); else if (e.error === 'network') fail(new Error('offline')); };
-      r.onend = () => done(said);
-      r.start();
-    });
-  })();
-  return { words, stop: () => { stopped = true; r?.stop(); } };
-}
-
-/** Whether this browser can record at all: a microphone, and a way to keep what it hears. Where it can't, the browser's
- *  own recognizer still hears (`hear`). */
+/** Whether this browser can record at all: a microphone, and a way to keep what it hears. Where it can't, there is no
+ *  mic to offer. */
 export const canRecord = () => !!navigator.mediaDevices?.getUserMedia && !!((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext);
 
 /** A 16-bit mono PCM WAV of what the microphone captured, at its own rate (Hex resamples). */
@@ -71,25 +26,40 @@ const base64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.le
 /** What one clip may hold, so a long note always fits crewd's request limit: 4.5M samples, about 90 s at 48 kHz. */
 const MOST = 4_500_000;
 
+/** What a call counts as speech and as the person having finished: a chunk louder than `LOUD` is speech, `PAUSE` seconds
+ *  of quiet after speech ends it, and `WAIT` seconds without any speech ends it with nothing. */
+const LOUD = 0.02, PAUSE = 1.2, WAIT = 8;
+
 /** Listens by recording, then has this computer's Hex write the clip down (`transcribe`): the audio goes to the computer
- *  the person paired with. A tap on the mic ends the recording, or the clip filling up. Fails the same ways `hear` does,
- *  `far` when the computer can't be reached, and with crewd's own plain words (a `status`) when Hex can't write it down. */
-export function record(): { words: Promise<string>; stop: () => void } {
-  let stop = () => {}, ctx: any;
+ *  the person paired with. A tap on the mic ends the recording, or the clip filling up; with `call`, the person's pause
+ *  ends it instead (`ended` tells the call, which then waits for the words), and a take with no speech gives '' without
+ *  asking Hex. Fails `blocked` when the microphone isn't allowed, `nomic` when none can be opened, `far` when the
+ *  computer can't be reached, and with crewd's own plain words (a `status`) when Hex can't write it down. */
+export function record(call?: { ended: () => void }): { words: Promise<string>; stop: () => void } {
+  let stop = () => {}, ctx: any, spoke = false, quiet = 0;
   const stopped = new Promise<void>((done) => { stop = done; }), chunks: Float32Array[] = [];
   const words = (async () => {
     ctx = new ((globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext)(); // on the tap itself: Safari starts audio only from one
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const tap = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain();
     mute.gain.value = 0; // the tap only listens: the microphone is never played back
-    tap.onaudioprocess = (e: any) => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); if (chunks.length * 4096 >= MOST) stop(); };
+    tap.onaudioprocess = (e: any) => {
+      const c = new Float32Array(e.inputBuffer.getChannelData(0)), s = c.length / ctx.sampleRate;
+      chunks.push(c);
+      if (call) { // the pause that ends a call's turn
+        if (Math.sqrt(c.reduce((a, x) => a + x * x, 0) / c.length) > LOUD) { spoke = true; quiet = 0; } else quiet += s;
+        if (quiet >= (spoke ? PAUSE : WAIT)) stop();
+      }
+      if (chunks.length * 4096 >= MOST) stop();
+    };
     ctx.createMediaStreamSource(stream).connect(tap).connect(mute).connect(ctx.destination);
     void ctx.resume();
     await stopped;
     tap.onaudioprocess = null;
     stream.getTracks().forEach((t) => t.stop());
+    call?.ended();
     const clip = wav(chunks, ctx.sampleRate);
-    return clip.length > 44 ? (await transcribe(base64(clip))).text : '';
+    return clip.length > 44 && (!call || spoke) ? (await transcribe(base64(clip))).text : '';
   })().catch((e: any) => {
     if (/^(NotAllowed|Security)Error$/.test(e?.name ?? '')) throw new Error('blocked');
     if (e instanceof DOMException) throw new Error('nomic');

@@ -8,8 +8,7 @@
 # are scripts/verify/voice-device.js, fed words as text, and every sentence read aloud is logged as text, never played.
 # Proves: the mic listening, the heard words in the box with nothing sent, the call listening, Chief's reply being read
 # (its line marked) and the device's voice and speed, at 390 and 1440, day and night, in the installed app; what crewd
-# received (each said thing once) and what was read aloud; the same mic on a recognizer shaped like Safari's (iPad and
-# iPhone), which hears as the online one; and what this host's own Chromium offers with no stand-in.
+# received (each said thing once) and what was read aloud; and what this host's own Chromium offers with no stand-in.
 # Needs chromium, xvfb-run, ImageMagick. Scratch under ~/.cache/fm-scratch, never /tmp.
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/../.." && pwd); OUT=$(mkdir -p "$1" && cd "$1" && pwd)
@@ -56,7 +55,7 @@ const steps = [
   { name: "app-authority", url: `${B}/#person=${key}`, reload: true, wait: "sessionStorage.getItem(\"crewhouse.person\")?.length === 64", timeout: 30000 },
   // This host`s own Chromium, no stand-in: what it offers in the box (no microphone or voice here).
   { name: "host-as-is", scheme: "light", w: 390, h: 844, dpr: 2, mobile: true, url: `${B}/?r=0#/chief`, wait: "!!document.querySelector(\".chat .dock .send\")", timeout: 20000, settle: 3000,
-    eval: "({ standalone: matchMedia(\"(display-mode: standalone)\").matches, recognizer: typeof (window.SpeechRecognition ?? window.webkitSpeechRecognition), check: typeof (window.SpeechRecognition ?? window.webkitSpeechRecognition)?.available, voices: speechSynthesis.getVoices().length, mic: document.querySelector(\".chat .dock .mic\")?.getAttribute(\"aria-label\") ?? \"no mic\", talk: !!document.querySelector(\".send.talk\") })",
+    eval: "({ standalone: matchMedia(\"(display-mode: standalone)\").matches, record: !!navigator.mediaDevices?.getUserMedia, voices: speechSynthesis.getVoices().length, mic: document.querySelector(\".chat .dock .mic\")?.getAttribute(\"aria-label\") ?? \"no mic\", talk: !!document.querySelector(\".send.talk\") })",
     out: `${OUT}/pwa/voice-host-as-is-day-390.png` },
   { name: "host-mic", grant: ["audioCapture"], click: ".chat .dock .mic", settle: 500, wait: "!!document.querySelector(\".toast\") && !document.querySelector(\".mic.on\")", timeout: 30000,
     eval: "[...document.querySelectorAll(\".toast\")].map((t) => t.textContent)", out: `${OUT}/pwa/voice-host-mic-day-390.png` },
@@ -82,11 +81,6 @@ const steps = [
   { name: "stop", click: ".call-stop", settle: 500, wait: "!document.querySelector(\".call\") && /Call ended/.test(document.body.innerText)", timeout: 10000,
     scheme: "light", w: 390, h: 844, dpr: 2, mobile: true, out: `${OUT}/pwa/voice-call-ended-day-390.png` },
   { name: "read-aloud", eval: "ctl.said" },
-  // A recognizer shaped like Safari`s (every iPad and iPhone browser): no check of where it hears.
-  { name: "safari", inject: "delete window.SpeechRecognition.available; delete window.SpeechRecognition.install;", url: `${B}/?r=2#/chief`, wait: "!!document.querySelector(\".chat .dock .mic:not(.off)\")", timeout: 20000 },
-  { name: "safari-mic", click: ".chat .dock .mic", settle: 300, wait: "!!document.querySelector(\".chat .dock .mic.on\") && /online service/.test(document.body.innerText)", timeout: 10000, out: `${OUT}/pwa/voice-safari-online-day-390.png` },
-  { name: "safari-speak", eval: "ctl.heard(\"Remind me to call the bank at five\", true)" },
-  { name: "safari-heard", wait: `${box}.value === "Remind me to call the bank at five" && !document.querySelector(".mic.on") && document.getAnimations().every((a) => a.playState !== "running")`, timeout: 10000, eval: BOTTOM, out: `${OUT}/pwa/voice-safari-heard-day-390.png` },
 ];
 console.log(JSON.stringify({ profile: `${LAB}/pwa/profile`, home: `${LAB}/pwa/home`, headless: false, xkey: `${SK}/xkey.py`, args: ["--window-size=1400,950", "--force-device-scale-factor=1", "about:blank"], steps }));
 ' "$B" "$KEY" "$LAB" "$OUT" "$REPO/scripts/verify" > "$LAB/pwa-plan.json"

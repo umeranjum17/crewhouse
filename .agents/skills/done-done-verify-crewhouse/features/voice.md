@@ -12,12 +12,12 @@ until Stop.
 
 1. Needs a built web app (`npm run build:web`), chromium, xvfb-run and ImageMagick; no microphone or speaker.
 2. Run `bash scripts/verify/voice.sh <out>` (its own stub-engine lab, the app installed from Settings; the device's ears
-   and voices are `scripts/verify/voice-device.js`, fed words as text, each sentence read aloud logged as text).
+   and voices are `scripts/verify/voice-device.js`: a tone for speech, Hex's words fed as text, each sentence read aloud logged as text).
 3. Capture: `pwa/voice-{mic-listening,heard-in-box,call-listening,call-speaking,call-voice}-{day,night}-{390,1440}.png`,
-   `pwa/voice-call-ended-day-390.png`, `pwa/voice-host-{as-is,mic}-day-390.png`, `pwa/voice-safari-{online,heard}-day-390.png`;
+   `pwa/voice-call-ended-day-390.png`, `pwa/voice-host-{as-is,mic}-day-390.png`;
    `transcript.txt`; the step record `steps.json`.
 4. It proves: nothing is sent by speaking, the line being read is marked, what was read aloud, each said thing reached
-   crewd once, and a Safari-shaped recognizer hears with the online line.
+   crewd once.
 5. The mic on Hex: `done-done run voice-hex` (needs Hex and its speech model on this computer: real local inference, the
    microphone stood in for by Chromium playing `samples/jfk.wav`) and `done-done run voice-hex-missing` (no Hex: the install
    words). Capture: `pwa/voice-hex-{day,night}-{390,1440}.png`; `transcript.txt`.
