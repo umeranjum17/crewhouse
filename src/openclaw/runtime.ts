@@ -56,6 +56,7 @@ const ABOUT: Record<string, string> = {
   mail: "The person's own Gmail: new mail, search, read, save an attachment, draft a reply, label it, as `args`; it cannot send mail.",
   crew_app: "Use one of the person's connected apps' tools: `tool` names it (the run's prompt lists them) and `input` carries its arguments.",
   crew_rule: 'Propose a rule; asks first.', crew_piece: PIECE_ABOUT,
+  crew_mention: 'Ask another helper: {to, text}. Its answer comes to your chat.',
   crew_remember: 'Save person facts: {text}, replaces?, everyone?. Rules need crew_rule.',
   crew_document: 'Write and deliver a document: pass {name: "title", blocks: [...]}. Crewhouse writes the file; do not make it yourself.',
 };

@@ -975,5 +975,15 @@
       "Open the sheet from a link with no mark: the browser route stays first"
     ],
     "result": "A browser that came in over SSH is offered the code first, the browser route names the 1455 forward, a refused code says codes are off and links ChatGPT's security settings, and a browser on the machine itself keeps the browser route first"
+  },
+  "mention-bus": {
+    "start": "a new person on the stub engine with Scout and Scribe hired and nothing asked yet",
+    "steps": [
+      "Ask Scout in its own thread for the board, with Scout's crew_mention naming Scribe",
+      "Read Scribe's thread: the hand-off line and the job under Scout's task",
+      "Read Scout's thread: the ask it sent and Scribe's answer back",
+      "Read the broker crewd supervises: one child on 127.0.0.1 with a token, and a connection without that token refused"
+    ],
+    "result": "Scout's ask read {{asked}}; Scribe answered {{reply}}; the bus without its token was {{refused}}"
   }
 }

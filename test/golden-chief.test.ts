@@ -142,7 +142,8 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // Re-frozen from 2742 for crew_import's auto description (+60 against existing headroom, net +3), then from 2745
   // for crew_unlock's (+59), then to 2856 for crew_case's (+52, ch-notice-followup), then to 2915 for crew_use's auto description (+59, ch-subs-engine), then to 3300 for crew_goal, crew_role and crew_application (ch-jobs-loop-build).
   // Then to 3600 for crew_piece (ch-chat-piece-contract): the one call for a card, form, picker or line needs its kinds and its no-authority line in the model's view.
-  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 3600, 'TOOLS descriptions grew past 3600 chars');
+  // Then to 3700 for crew_mention (the @mention bus): the one call for asking another helper.
+  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 3700, 'TOOLS descriptions grew past 3700 chars');
   for (const tpl of disk.listTemplates(cfg)) {
     if (tpl.hidden) continue;
     crew.recruit(tpl.id, tpl.display, 'person');

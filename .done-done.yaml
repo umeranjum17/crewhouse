@@ -311,3 +311,7 @@ journeys:
   # One call for a card, form, picker or plain line, across the real engine with the scripted model (docs/verification/chat-pieces.md).
   chat-pieces:
     command: 'timeout -k 10 1500 bash scripts/verify/chat-pieces.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # The @mention bus between helpers, no screen: a helper's crew_mention rides the supervised local NATS JetStream server and starts
+  # the other helper's job once, whose answer comes back; the broker is one child on loopback, refused without its token.
+  mention-bus:
+    command: 'timeout -k 10 600 node scripts/verify/mention-bus.mjs --out "$DONE_DONE_EVIDENCE_ROOT"'
