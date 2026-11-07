@@ -2657,7 +2657,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .piece-time:disabled { opacity: .45; cursor: default; }
 .piece-time.on { background: var(--pink); color: var(--paper); border-color: var(--pink); }
 .piece-picked { margin: 0; font: 600 16px/22px var(--ui); }
-.piece-sheet { background: var(--paper); color: var(--pink); padding: 12px 20px 0; gap: 0; max-height: 88dvh; justify-items: stretch; overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+.piece-sheet { background: var(--paper); color: var(--pink); padding: 12px 20px 0; gap: 0; max-height: 88dvh; justify-items: stretch; overflow: hidden; grid-template-rows: auto auto minmax(0, 1fr); } /* three rows: the grabber, the head, the scrolling body */
 .piece-sheet::before { background: var(--pline); }
 .piece-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0 12px; border-bottom: 1px solid var(--pline); }
 .piece-sheet-head h2 { margin: 0; font: 650 22px/28px Archivo, var(--ui); }
@@ -2669,6 +2669,7 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
 .list-att header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 14px; font: 600 16px/22px var(--ui); }
 .list-att header span { flex: none; font-weight: 400; color: var(--pmute); }
 .list-row { display: grid; gap: 2px; padding: 10px 14px; border-top: 1px solid var(--pline); }
+.list-att .list-row { color: var(--pink); } /* the card's own ink: a night thread's light words never land on cream paper */
 .list-row b { font: 650 16px/22px var(--ui); }
 .list-row span { font: 400 16px/22px var(--ui); color: var(--pmute); }
 .list-row .link { justify-self: start; color: var(--pink); text-decoration: underline; min-height: 24px; }
