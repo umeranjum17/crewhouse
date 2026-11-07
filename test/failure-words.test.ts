@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { dirname, join } from 'node:path';
 import { temp } from './tmp.ts';
@@ -141,7 +141,7 @@ test('headless setup with no Tailscale names both ways on', { timeout: 60_000 },
 type Machine = Awaited<ReturnType<typeof machine>>;
 const breaks: [string, (m: Machine) => Promise<() => unknown> | (() => unknown) | void, RegExp, RegExp][] = [
   ['a port another program holds', async (m) => { const s = await listen(Number(m.env.CREWHOUSE_PORT)); return () => s.close(); }, /✗ Port \d+ — Another program is already using port \d+/, /fix: close that program, or pick a free port: CREWHOUSE_PORT=<port> crewhouse start/],
-  ['a corrupt database', (m) => { writeFileSync(join(m.state, 'crew.db'), Buffer.alloc(65536, 7)); }, /✗ Database — .*crew\.db is damaged \(file is not a database\); it has not been changed/, /fix: restore a copy of it from a backup/],
+  ['a corrupt database', (m) => { writeFileSync(join(m.state, 'crew.db'), Buffer.alloc(65536, 7)); }, /✗ Database — .*crew\.db is damaged \(file is not a database\); it has not been changed/, /fix: crewhouse triage moves it aside after you say yes, and keeps it/],
   ['an engine folder that is gone', (m) => { writeFileSync(join(m.state, 'person.key'), 'k'); }, /✗ AI engine folder — .*openclaw is gone, and the AI sign-ins that were in it/, /fix: crewhouse start builds a new one; then sign in again/],
   ['no internet', async (m) => { m.env.CREWHOUSE_ONLINE_URL = `http://127.0.0.1:${await freePort()}`; }, /✗ Internet — this computer cannot reach 127\.0\.0\.1:\d+ \(ECONNREFUSED\)/, /fix: check its network connection/],
 ];
@@ -166,4 +166,64 @@ test('doctor names the app files that are gone, and the line that brings them ba
   assert.equal(run.status, 1, run.stdout + run.stderr);
   assert.match(run.stdout, /✗ Crewhouse's own program files — some are missing \(Cannot find package '[^']+'\), so this install is damaged\n    fix: npm ci/);
   noTrace(run.stdout + run.stderr);
+});
+
+// `crewhouse triage` repairs what stops Crewhouse starting, on Node alone, and keeps to its four rules.
+const KEY_FILE = 'person.key';
+test('triage moves a damaged database aside only after a yes, keeps it whole, and Crewhouse starts again with the crew folders as they were', { timeout: 120_000 }, async () => {
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub' });
+  assert.equal((await m.run('start')).code, 0); await m.run('stop');
+  const key = readFileSync(join(m.state, KEY_FILE), 'utf8').trim(), soul = join(m.home, 'Crewhouse/bots/chief/soul.md'), soulBefore = readFileSync(soul);
+  const junk = Buffer.alloc(65536, 7); rmSync(join(m.state, 'crew.db-wal'), { force: true }); rmSync(join(m.state, 'crew.db-shm'), { force: true }); writeFileSync(join(m.state, 'crew.db'), junk);
+  const unanswered = await m.run('triage');
+  assert.equal(unanswered.code, 1, unanswered.out);
+  assert.match(unanswered.out, /Needs a yes: The database \(crew\.db\) is damaged\. Move it aside and start with a new one\?/);
+  assert.deepEqual(readFileSync(join(m.state, 'crew.db')), junk, 'nothing moves without a yes');
+  const yes = await m.run('triage', '--yes');
+  assert.equal(yes.code, 0, yes.out);
+  const kept = /It is kept at (\S+crew\.db\.damaged-\d+)\./.exec(yes.out)?.[1] ?? assert.fail(yes.out);
+  assert.deepEqual(readFileSync(kept), junk, 'the damaged file is kept whole');
+  assert.equal(existsSync(join(m.state, 'crew.db')), false);
+  for (const out of [unanswered.out, yes.out]) { assert.ok(!out.includes(key), 'no key in any output'); noTrace(out); }
+  const start = await m.run('start');
+  try {
+    assert.equal(start.code, 0, start.out);
+    assert.deepEqual(readFileSync(soul), soulBefore, "Chief's folder is taken back as it was");
+    assert.equal((await m.run('triage')).out.trim().split('\n').at(-1)?.startsWith('Nothing needed repairing'), true, 'a healthy machine needs nothing');
+  } finally { await m.run('stop'); }
+});
+
+test('triage fixes what is its own and touches nothing else: folder permissions, a leftover record, never a process it cannot prove is Crewhouse', { timeout: 60_000 }, async () => {
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub' });
+  chmodSync(dirname(m.state), 0o775);
+  const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  writeFileSync(join(m.state, 'crewd.pid'), String(stranger.pid)); writeFileSync(join(m.state, 'endpoint'), 'http://127.0.0.1:1');
+  writeFileSync(join(m.state, 'crew.db'), 'not a database but not ours to judge here'); chmodSync(join(m.state, 'crew.db'), 0o600);
+  try {
+    const r = await m.run('triage');
+    assert.match(r.out, /Fixed: Only you can write to .* now\. It was 775/);
+    assert.match(r.out, /Fixed: removed the leftover record of a Crewhouse that is no longer running\./);
+    assert.equal(statSync(dirname(m.state)).mode & 0o022, 0);
+    assert.equal(existsSync(join(m.state, 'crewd.pid')), false);
+    assert.equal(stranger.exitCode, null, 'a process that is not Crewhouse is never signalled');
+    assert.doesNotThrow(() => process.kill(stranger.pid!, 0));
+    assert.equal(readFileSync(join(m.state, 'crew.db'), 'utf8').startsWith('not a database'), true, 'asked first, so untouched');
+  } finally { stranger.kill(); }
+});
+
+test('triage asks before keeping Crewhouse running after logout, and says when a machine refuses', { timeout: 60_000 }, async () => {
+  const log = join(temp('triage-linger'), 'loginctl.log');
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub', USER: 'tester' });
+  mkdirSync(dirname(log), { recursive: true });
+  writeFileSync(join(m.env.PATH!, 'loginctl'), `#!/bin/bash\ncase $1 in show-user) echo no ;; enable-linger) echo "$@" >> ${log}; [ ! -e ${log}.refuse ] || exit 1 ;; esac\n`, { mode: 0o755 });
+  mkdirSync(join(m.home, '.config/systemd/user'), { recursive: true }); writeFileSync(join(m.home, '.config/systemd/user/crewhouse.service'), '[Service]\n');
+  const unanswered = await m.run('triage');
+  assert.equal(unanswered.code, 1, unanswered.out); assert.match(unanswered.out, /Needs a yes: Crewhouse starts when you log in but stops when you log out/);
+  assert.equal(existsSync(log), false, 'not turned on without a yes');
+  const yes = await m.run('triage', '--yes');
+  assert.equal(yes.code, 0, yes.out); assert.match(yes.out, /Fixed: Crewhouse keeps running after you log out/);
+  assert.equal(readFileSync(log, 'utf8').trim(), 'enable-linger tester');
+  writeFileSync(`${log}.refuse`, '');
+  const refused = await m.run('triage', '--yes');
+  assert.equal(refused.code, 1, refused.out); assert.match(refused.out, /Ask an administrator to run: sudo loginctl enable-linger tester/);
 });

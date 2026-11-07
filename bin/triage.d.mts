@@ -1,0 +1,1 @@
+export function triage(cfg: { stateDir: string; repoDir: string; engine: string }, options?: { yes?: boolean; cmd?: string; input?: { isTTY?: boolean }; say?: (line: string) => void }): Promise<number>;

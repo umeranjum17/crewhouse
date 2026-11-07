@@ -1038,7 +1038,7 @@ export class Crew {
   }
 
   private addBot(tpl: disk.Template, display: string, id: string, by: string) {
-    disk.createBotFolder(this.cfg, id, tpl, display);
+    if (!existsSync(disk.botDir(this.cfg, id))) disk.createBotFolder(this.cfg, id, tpl, display); // a folder the database lost its row for (triage moved it aside) is taken back as it is
     this.db.run('INSERT INTO bots (id, display, role, template, color, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       id, display, tpl.role, tpl.id, tpl.color, randomBytes(16).toString('hex'), Date.now());
   }
