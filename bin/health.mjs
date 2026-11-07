@@ -12,6 +12,8 @@ const read = (...p) => { try { return readFileSync(join(...p), 'utf8').trim(); }
 
 /** `cfg` is crewd's config; each finding is `{ what, cause, next }` in plain words. */
 export async function health(cfg) {
+  // A lab or test run (isolated, or a scripted engine) has no real install to be missing parts of.
+  const product = process.env.CREWHOUSE_RUN_MODE === 'product' && !process.env.NODE_TEST_CONTEXT && cfg.engine === 'openclaw';
   const found = [], { stateDir } = cfg, db = join(stateDir, 'crew.db'), key = read(stateDir, 'person.key'), base = read(stateDir, 'endpoint');
   // The port: fine when it is Crewhouse itself answering with this install's own key, a finding when anything else holds it.
   if (cfg.port && await listening(cfg.port)) {
@@ -23,9 +25,9 @@ export async function health(cfg) {
     catch (e) { found.push({ what: 'Database', cause: `${db} is damaged (${e.message.replace(/\.$/, '')}); it has not been changed`, next: `restore a copy of it from a backup; with none, report it at https://github.com/umeranjum17/crewhouse/issues` }); }
   }
   // The engine keeps the AI sign-ins in its own folder; one that was set up once and is gone has taken them with it.
-  if (cfg.engine === 'openclaw' && key && !existsSync(join(stateDir, 'openclaw'))) found.push({ what: 'AI engine folder', cause: `${join(stateDir, 'openclaw')} is gone, and the AI sign-ins that were in it`, next: `${process.env.CREWHOUSE_CMD ?? './crewhouse'} start builds a new one; then sign in again under Settings, AI accounts` });
+  if (product && key && !existsSync(join(stateDir, 'openclaw'))) found.push({ what: 'AI engine folder', cause: `${join(stateDir, 'openclaw')} is gone, and the AI sign-ins that were in it`, next: `${process.env.CREWHOUSE_CMD ?? './crewhouse'} start builds a new one; then sign in again under Settings, AI accounts` });
   // CREWHOUSE_ONLINE_URL: where to look ('' skips it); lab and test runs have no network and do not look.
-  const url = process.env.CREWHOUSE_ONLINE_URL ?? (process.env.CREWHOUSE_RUN_MODE === 'product' && cfg.engine !== 'stub' && !process.env.NODE_TEST_CONTEXT ? 'https://github.com' : '');
+  const url = process.env.CREWHOUSE_ONLINE_URL ?? (product ? 'https://github.com' : '');
   if (url) await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(5000) }).catch((e) => found.push({ what: 'Internet', cause: `this computer cannot reach ${new URL(url).host} (${e.cause?.code ?? e.name})`, next: 'check its network connection, then run the check again' }));
   return found;
 }
