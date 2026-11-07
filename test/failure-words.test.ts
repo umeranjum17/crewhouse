@@ -172,8 +172,10 @@ test('doctor names the app files that are gone, and the line that brings them ba
 
 // `crewhouse triage` repairs what stops Crewhouse starting, on Node alone, and keeps to its four rules.
 const KEY_FILE = 'person.key';
+/** A machine whose helpers' shell works, as a fixed one's does: the probe runs `bwrap`, so a stub that passes stands in. */
+const sandboxHere = (m: Awaited<ReturnType<typeof machine>>) => writeFileSync(join(m.env.PATH!, 'bwrap'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
 test('triage moves a damaged database aside only after a yes, keeps it whole, and Crewhouse starts again with the crew folders as they were', { timeout: 120_000 }, async () => {
-  const m = await machine({ CREWHOUSE_ENGINE: 'stub' });
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub' }); sandboxHere(m);
   assert.equal((await m.run('start')).code, 0); await m.run('stop');
   const key = readFileSync(join(m.state, KEY_FILE), 'utf8').trim(), soul = join(m.home, 'Crewhouse/bots/chief/soul.md'), soulBefore = readFileSync(soul);
   const junk = Buffer.alloc(65536, 7); rmSync(join(m.state, 'crew.db-wal'), { force: true }); rmSync(join(m.state, 'crew.db-shm'), { force: true }); writeFileSync(join(m.state, 'crew.db'), junk);
@@ -196,7 +198,7 @@ test('triage moves a damaged database aside only after a yes, keeps it whole, an
 });
 
 test('triage fixes what is its own and touches nothing else: folder permissions, a leftover record, never a process it cannot prove is Crewhouse', { timeout: 60_000 }, async () => {
-  const m = await machine({ CREWHOUSE_ENGINE: 'stub' });
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub' }); sandboxHere(m);
   chmodSync(dirname(m.state), 0o775);
   const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   writeFileSync(join(m.state, 'crewd.pid'), String(stranger.pid)); writeFileSync(join(m.state, 'endpoint'), 'http://127.0.0.1:1');
@@ -215,7 +217,7 @@ test('triage fixes what is its own and touches nothing else: folder permissions,
 
 test('triage asks before keeping Crewhouse running after logout, and says when a machine refuses', { timeout: 60_000 }, async () => {
   const log = join(temp('triage-linger'), 'loginctl.log');
-  const m = await machine({ CREWHOUSE_ENGINE: 'stub', USER: 'tester' });
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub', USER: 'tester' }); sandboxHere(m);
   mkdirSync(dirname(log), { recursive: true });
   writeFileSync(join(m.env.PATH!, 'loginctl'), `#!/bin/bash\ncase $1 in show-user) echo no ;; enable-linger) echo "$@" >> ${log}; [ ! -e ${log}.refuse ] || exit 1 ;; esac\n`, { mode: 0o755 });
   mkdirSync(join(m.home, '.config/systemd/user'), { recursive: true }); writeFileSync(join(m.home, '.config/systemd/user/crewhouse.service'), '[Service]\n');
@@ -228,4 +230,28 @@ test('triage asks before keeping Crewhouse running after logout, and says when a
   writeFileSync(`${log}.refuse`, '');
   const refused = await m.run('triage', '--yes');
   assert.equal(refused.code, 1, refused.out); assert.match(refused.out, /Ask an administrator to run: sudo loginctl enable-linger tester/);
+});
+
+test('triage hands over the four things only the person can do — a held port, an admin step, lost AI sign-in, a full disk — and clears each when it is put right', { timeout: 90_000 }, async () => {
+  const m = await machine(), key = 'key-that-must-not-print';
+  writeFileSync(join(m.state, KEY_FILE), key);
+  const s = await listen(Number(m.env.CREWHOUSE_PORT));
+  m.env.CREWHOUSE_MIN_FREE_MB = '999999999';
+  try {
+    const { code, out } = await m.run('triage');
+    assert.equal(code, 1, out);
+    assert.match(out, /For you, Port \d+: Another program is already using port \d+\.\n  Do this: close that program, or pick a free port/);
+    assert.match(out, /For you, the helpers' shell: bubblewrap is not installed\.\n  Do this: sudo apt install bubblewrap/);
+    assert.match(out, /For you, AI sign-in: .*openclaw is gone, and the AI sign-ins that were in it\.\n  Do this: .* start builds a new one; then sign in again under Settings, AI accounts/);
+    assert.match(out, /For you, disk space: the disk holding .* has \d+ MB free and Crewhouse needs 999999999 MB\.\n  Do this: free some space \(nothing of Crewhouse's is removed for you\)/);
+    assert.match(out, /^4 thing\(s\) are still for you\.$/m);
+    assert.ok(!out.includes(key), 'no key in any output');
+    assert.equal(readFileSync(join(m.state, KEY_FILE), 'utf8'), key, 'a sign-in is never touched or printed');
+    noTrace(out);
+  } finally { s.close(); }
+  // The four put right, on the same machine: nothing is left for the person.
+  sandboxHere(m); mkdirSync(join(m.state, 'openclaw')); delete m.env.CREWHOUSE_MIN_FREE_MB;
+  const after = await m.run('triage');
+  assert.equal(after.code, 0, after.out);
+  assert.match(after.out, /Nothing needed repairing\./);
 });

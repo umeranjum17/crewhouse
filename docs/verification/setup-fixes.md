@@ -12,6 +12,7 @@ bash scripts/verify/setup-fixes.sh <out> fix1 <the released crewhouse-linux-x64.
 bash scripts/verify/setup-fixes.sh <out> fix1 <tarball> alive headless                                      # crewhouse setup --headless
 bash scripts/verify/setup-fixes.sh <out> fix2 <tarball> honest         # fix 2; `ready` on the released build shows the bug
 bash scripts/verify/setup-fixes.sh <out> fix4 <tarball> repairs         # fix 4; `missing` on the released build shows the bug
+bash scripts/verify/setup-fixes.sh <out> fix4 <tarball> hands           # fix 4's four hand-overs, each clearing when it is done
 bash scripts/verify/setup-fixes.sh <out> fix3 <crewhouse-X.tgz> works  # fix 3, a tgz from `npm pack` of a clean export; `fails` with crewhouse@0.1.10 shows the bug
 ```
 
@@ -75,10 +76,12 @@ fresh database wanted to create Chief and found `bots/chief` already on disk ("a
 
 - **Fixes itself**: its own folders' permissions (the shared `bin/private.mjs`, also used by `start`), and the pid/endpoint record of a Crewhouse that is no longer running (the files go; no process is touched, and a pid is only ever treated as Crewhouse's when its folder and command both prove it).
 - **Asks first** (`--yes` answers yes; with no terminal and no `--yes` it only says what it would ask and exits 1): keeping Crewhouse running after logout (linger); moving a damaged database aside. The database is renamed (with its -wal and -shm) to `crew.db.damaged-<time>`, kept whole, never removed; a taken-over Chief folder is adopted as it is (`Crew.addBot`) instead of refused.
-- **Hands over one line** for what it must not do itself (added in the next change).
+- **Hands over one line** for what it must not do itself, each as `For you, <what>: <cause>.` and the `Do this:` line beside it, and nothing is done for the person: a port another program holds (it is that program's to give up, and Crewhouse signals nothing it did not start); the helpers' shell's admin step (bubblewrap, and Ubuntu's AppArmor rule `sandbox.mjs` names, installed with sudo); AI sign-in (the engine's folder that held the sign-ins is gone: `start` builds a new one, then the person signs in again under Settings); a full disk (under `CREWHOUSE_MIN_FREE_MB`, 500 by default, measured on the folder the state lives on).
 - **Never**: deletes data, prints a key, kills what it cannot prove is Crewhouse's own, or loosens a setting that belongs to the whole machine (no sudo, nothing wider than the person's own folders).
 
 `crewhouse doctor` now points a damaged database at `crewhouse triage`.
 
 Pass: on the VM, with the state folder group-writable, a stale pid file and a corrupt database, `crewhouse triage` fixes the first two, asks one question and, on `y` in a real terminal, moves the database aside; the kept file is byte for byte the damaged one, `crewhouse start` runs again, Chief's folder is unchanged and doctor says ready. On the released build there is no `triage`, and moving the database by hand makes start fail.
-Without a VM: `node --test test/failure-words.test.ts` (the three triage cases).
+
+Pass, the hand-overs (`hands`): one break at a time, and `crewhouse triage` after each, on the same fresh VM: a port another program holds, then that program closed; the helpers' shell with no bubblewrap on the image, then the admin step run; the engine's sign-in folder gone, then `start` building a new one; and a real 8 MB filesystem where the state would live. Each gives its one `For you,` line and a `Do this:`, the line is gone once the thing is put right, nothing is left at the end, the person's key is in no output, and no stack trace appears. Nothing paid is signed in again: the sign-in hand-over is proved by `start` clearing it, not by a real account.
+Without a VM: `node --test test/failure-words.test.ts` (the four triage cases).
