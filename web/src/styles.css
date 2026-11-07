@@ -2624,3 +2624,55 @@ a.ai-open { color: inherit; text-decoration: none; min-width: 0; }
   .calm .ld-room > .ld-side { grid-column: 2; grid-row: 1 / 3; min-height: 0; overflow-y: auto; padding: 16px 24px 24px; border-left: 1px solid var(--hair); background: var(--pane); }
   .ld-top { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-bottom: 8px; font: 600 17px/22px var(--ui); }
 }
+
+/* Helper pieces beyond the card: stacked buttons, a day grid, a long read in a sheet, and a list. Ink on cream paper by day and by night. */
+.piece-ask, .piece-sheet, .list-att { --paper: #FBF6E6; --pink: #1E1B16; --pmute: #4A453A; --pline: #CFC6AE; --psoft: #E4DCC6; --pamber: #A86420; }
+[data-theme='night'] .piece-ask, [data-theme='night'] .piece-sheet, [data-theme='night'] .list-att { --paper: #EFE8D6; }
+.shell.calm .chat .lines .card.ask.piece-ask .piece-text { margin: 0; font: 400 16px/24px var(--ui); color: var(--pmute); }
+.shell.calm .chat .lines .card.ask.piece-ask .piece-buttons { display: grid; gap: 10px; }
+.shell.calm .chat .lines .card.ask.piece-ask .piece-buttons .btn { width: 100%; min-height: 48px; justify-content: center; text-align: center; overflow-wrap: anywhere; }
+.shell.calm .chat .lines .card.ask.piece-ask .btn.quiet { border-color: transparent; color: var(--pmute); }
+.piece-from { margin: 0; font: 400 16px/22px var(--ui); color: var(--pmute); }
+.piece-from b { color: var(--pink); font-weight: 600; }
+.piece-note { margin: 0; font: 400 16px/22px var(--ui); color: var(--pmute); }
+.piece-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--pline); border-radius: 16px; background: transparent; color: var(--pink); font: inherit; text-align: left; cursor: pointer; }
+.piece-row .grow { min-width: 0; display: grid; }
+.piece-row .grow b { font: 600 16px/22px var(--ui); }
+.piece-row .grow span { font: 400 16px/22px var(--ui); color: var(--pmute); }
+.piece-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--pline); border-radius: 12px; }
+.piece-date { display: grid; gap: 10px; }
+.piece-month { display: flex; align-items: center; gap: 8px; }
+.piece-month b { flex: 1; font: 600 16px/22px var(--ui); }
+.piece-nav { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--pline); border-radius: 50%; background: transparent; color: var(--pink); cursor: pointer; }
+.piece-nav:disabled { opacity: .4; cursor: default; }
+.piece-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.piece-dow { text-align: center; font: 600 16px/28px var(--ui); color: var(--pmute); }
+.piece-day { justify-self: center; width: 100%; max-width: 44px; min-height: 44px; aspect-ratio: 1; border: 1.5px solid transparent; border-radius: 50%; background: transparent; color: var(--pink); font: 400 16px/1 var(--ui); cursor: pointer; }
+.piece-day:disabled { color: var(--pmute); opacity: .45; cursor: default; }
+.piece-day.today { border-color: var(--pink); }
+.piece-day.on { background: var(--pink); color: var(--paper); border-color: var(--pink); }
+.piece-label { font: 600 16px/22px var(--ui); }
+.piece-times { display: flex; flex-wrap: wrap; gap: 8px; }
+.piece-time { min-height: 44px; padding: 0 16px; border: 1px solid var(--pline); border-radius: 999px; background: transparent; color: var(--pink); font: 400 16px/1 var(--ui); cursor: pointer; }
+.piece-time:disabled { opacity: .45; cursor: default; }
+.piece-time.on { background: var(--pink); color: var(--paper); border-color: var(--pink); }
+.piece-picked { margin: 0; font: 600 16px/22px var(--ui); }
+.piece-sheet { background: var(--paper); color: var(--pink); padding: 12px 20px 0; gap: 0; max-height: 88dvh; justify-items: stretch; overflow: hidden; grid-template-rows: auto auto minmax(0, 1fr); } /* three rows: the grabber, the head, the scrolling body */
+.piece-sheet::before { background: var(--pline); }
+.piece-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0 12px; border-bottom: 1px solid var(--pline); }
+.piece-sheet-head h2 { margin: 0; font: 650 22px/28px Archivo, var(--ui); }
+.piece-sheet-body { overflow: auto; padding: 14px 0 max(24px, env(safe-area-inset-bottom)); display: grid; gap: 12px; align-content: start; }
+.piece-sheet-body p { margin: 0; font: 400 16px/26px var(--ui); }
+.piece-sheet-body h3 { margin: 6px 0 -4px; font: 650 16px/24px var(--ui); }
+@media (min-width: 900px) { .piece-sheet { width: min(560px, 100%); max-height: min(80dvh, 720px); border-radius: 20px; padding: 16px 24px 0; } }
+.list-att { display: block; width: min(100%, 520px); margin-top: 8px; border: 1px solid var(--pline); border-radius: 16px; background: var(--paper); color: var(--pink); overflow: hidden; }
+.list-att header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 14px; font: 600 16px/22px var(--ui); }
+.list-att header span { flex: none; font-weight: 400; color: var(--pmute); }
+.list-row { display: grid; gap: 2px; padding: 10px 14px; border-top: 1px solid var(--pline); }
+.list-att .list-row { color: var(--pink); } /* the card's own ink: a night thread's light words never land on cream paper */
+.list-row b { font: 650 16px/22px var(--ui); }
+.list-row span { font: 400 16px/22px var(--ui); color: var(--pmute); }
+.list-row .link { justify-self: start; color: var(--pink); text-decoration: underline; min-height: 24px; }
+.list-att footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--pline); font: 400 16px/22px var(--ui); color: var(--pmute); }
+.list-att footer b { color: var(--pink); font-weight: 600; }
+.list-att footer .link { color: var(--pink); text-decoration: underline; }

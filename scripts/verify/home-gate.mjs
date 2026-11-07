@@ -4,6 +4,7 @@
 //   node scripts/verify/home-gate.mjs <repo> <url-with-#hash> <out-dir> <slug> [then-js]
 // Writes <slug>-<390|1280>-<day|night>.png (GATE_PWA=1: 390 only, in standalone display mode) and <slug>-gate.json; exits 1 when any gate fails.
 // GATE_WIDTHS=360,390,445 takes those widths instead (844 tall below 900 wide, 832 at a computer's width).
+// GATE_KEYBOARD=1 (with GATE_PWA) shrinks the installed window to what is left above an open phone keyboard (460 tall).
 // GATE_SCOPE=<selector> gates the text under it instead of main and .page (a file panel sits outside both).
 // GATE_INIT=<js file> runs before the app boots on every load (scripts/verify/voice-device.js: a device with voices that logs what it says);
 // with it, <slug>-said-<width>-<theme>.json holds that log (window.ctl.said) after the then-js.
@@ -45,7 +46,7 @@ try {
   if (process.env.GATE_INIT) await send('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(process.env.GATE_INIT, 'utf8') });
   const gate = {}; let bad = false;
   const [base, hash] = url.split('#');
-  for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_WIDTHS ? process.env.GATE_WIDTHS.split(',').map((x) => [+x, +x < 900 ? 844 : 832]) : process.env.GATE_PWA ? [[390, 844]] : [[390, 844], [1280, 832]])) {
+  for (const theme of ['day', 'night']) for (const [w, h] of (process.env.GATE_WIDTHS ? process.env.GATE_WIDTHS.split(',').map((x) => [+x, +x < 900 ? 844 : 832]) : process.env.GATE_PWA ? [[390, process.env.GATE_KEYBOARD ? 460 : 844]] : [[390, 844], [1280, 832]])) {
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: w < 900 });
     if (process.env.GATE_PWA) await send('Emulation.setEmulatedMedia', { features: [{ name: 'display-mode', value: 'standalone' }] }); // the installed app's window mode
     await send('Page.navigate', { url: `${base}${base.includes('?') ? '&' : '?'}${theme}&r=${Date.now()}#${hash ?? '/'}` });

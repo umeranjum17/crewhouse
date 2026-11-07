@@ -143,7 +143,10 @@ test('the live system prompt stays brief, answers first, and honors a chosen add
   // for crew_unlock's (+59), then to 2856 for crew_case's (+52, ch-notice-followup), then to 2915 for crew_use's auto description (+59, ch-subs-engine), then to 3300 for crew_goal, crew_role and crew_application (ch-jobs-loop-build).
   // Then to 3600 for crew_piece (ch-chat-piece-contract): the one call for a card, form, picker or line needs its kinds and its no-authority line in the model's view.
   // Then to 3700 for crew_mention (the @mention bus): the one call for asking another helper.
-  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 3700, 'TOOLS descriptions grew past 3700 chars');
+  // Then to 3785 for the rest of the chat piece kinds (ch-chat-components): one call now carries stacked buttons, a date
+  // with times, a page sheet named by `page` and a list, beside the card, form, picker and line. The text was cut from
+  // 710 to 487 chars first, and 3785 is the merged tree's own measurement, not a round number.
+  assert.ok(TOOLS.reduce((n, t) => n + t.description.length, 0) <= 3785, 'TOOLS descriptions grew past 3785 chars');
   for (const tpl of disk.listTemplates(cfg)) {
     if (tpl.hidden) continue;
     crew.recruit(tpl.id, tpl.display, 'person');

@@ -105,11 +105,17 @@ const fail = (message: string, status = 400) => Object.assign(new Error(message)
 const UNLOCK = 'import sys,pypdfium2 as p,pypdfium2.raw as r\ntry: d=p.PdfDocument(sys.argv[1],password=sys.stdin.read())\nexcept p.PdfiumError as e: sys.exit(3 if "password" in str(e).lower() else 4)\nd.save(sys.argv[2],flags=r.FPDF_REMOVE_SECURITY)', unlockPy = (toolsDir: string) => join(toolsDir, 'documents', 'venv', 'bin', 'python'), unlockedAs = (f: string) => { const n = encodeURIComponent(f); return join('files', 'unlocked', n.length > 200 ? `${sha(f).slice(0, 32)}.pdf` : n); }, unlockedCurrent = (space: string, f: string) => { try { return statSync(join(space, unlockedAs(f))).mtimeMs >= statSync(join(space, f)).mtimeMs; } catch { return false; } }, lockedTitle = (n: number) => n > 1 ? `${n} files are locked` : 'A file is locked';
 export const receipt = (d: Row, p?: Row) => ({ channel: d.channel, to: d.to, subject: d.subject, why: d.why, body: short(String(p?.body ?? '').replace(/\s+/g, ' '), 400), edited: d.edited === true, sha: d.sha, path: d.path }); // a receipt: what was answered and where it went, in the words on the card
 /** Person's words, trimmed to `n`: every name and address goes through here, or the card has nothing to show. */
-/** A piece's answer as the bot reads it, and the words its receipt says. A form's values are checked here, never taken on the app's word. */
-const pieceResult = (p: Row, picked: Row | undefined, said: any) => {
+/** A piece's answer as the bot reads it, and the words its receipt says. A form's values and a date are checked here, never taken on the app's word. */
+const pieceResult = (p: Row, picked: Row | undefined, said: Row) => {
   if (picked) return { result: { answered: true, picked: { id: picked.id, label: picked.label } }, words: picked.label };
+  if (p.kind === 'date') {
+    const t = new Date(), day = String(said.day ?? ''), time = String(said.time ?? ''), at = new Date(`${day}T12:00:00Z`), now = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    if (!/^\d{4}-\d\d-\d\d$/.test(day) || isNaN(+at) || at.toISOString().slice(0, 10) !== day || day < now) throw fail('pick a day from today on');
+    if (p.times?.length ? !p.times.includes(time) : time) throw fail('pick one of the times on the card');
+    return { result: { answered: true, day, ...(time ? { time } : {}) }, words: `${at.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${time ? ` at ${time}` : ''}` };
+  }
   if (p.kind !== 'form') return { result: { answered: true }, words: p.yes };
-  const values = Object.fromEntries(p.fields.map((f: Row) => [f.id, f.tick ? !!said?.[f.id] : clean(said?.[f.id], 500)]));
+  const values = Object.fromEntries(p.fields.map((f: Row) => [f.id, f.tick ? !!said.fields?.[f.id] : clean(said.fields?.[f.id], 500)]));
   for (const f of p.fields) if (!f.tick && (values[f.id] ? f.options && !f.options.includes(values[f.id]) : !f.optional)) throw fail(`fill in ${f.label}`);
   return { result: { answered: true, values }, words: clean(p.fields.filter((f: Row) => f.tick || values[f.id]).map((f: Row) => `${f.label}: ${f.tick ? (values[f.id] ? 'yes' : 'no') : values[f.id]}`).join(', '), 240) };
 };
@@ -490,7 +496,6 @@ export class Crew {
     const task = this.db.get("SELECT * FROM tasks WHERE bot = ? AND state IN ('working', 'needs_you') ORDER BY id LIMIT 1", b.id), desk = this.desktops.info(b.id);
     return { id: b.id, display: b.display, role: b.role, template: b.template, color: b.color, state: b.state, created_at: b.created_at,
       controls: this.held.has(b.id) ? 'person' : 'bot', desktop: desk && { watching: desk.watching, control: desk.control }, computer: disk.canUse(this.cfg, b.id, 'computer'), can: disk.botTools(this.cfg, b.id).filter((t) => t.granted && t.ready).map((t) => t.id), signedIn: disk.botConfig(this.cfg, b.id).signedIn ?? [], apps: (disk.botConfig(this.cfg, b.id).apps ?? []).filter((a) => GRANTABLE.includes(a)).map((a) => ({ id: a, name: this.connections.apps[a].name })),
-      // The active task carries its delivered files for the office desk: own output first, handed-over inputs marked.
       live: !this.live.get(b.id) ? 'off' : this.busy.has(b.id) ? 'working' : 'idle', task: task ? { ...this.task(task), files: this.taskFiles(task.id).map((d) => ({ path: d.path, note: d.note ?? '', at: d.at, ...(d.photo ? { photo: true } : {}), ...(this.isInput(d) ? { input: true } : {}) })) } : null, ...this.progress(b.id, task),
       queued: this.db.get("SELECT COUNT(*) AS n FROM tasks WHERE bot = ? AND state = 'queued'", b.id)!.n,
       pausedUntil: this.db.get("SELECT MIN(wake_at) AS w FROM tasks WHERE bot = ? AND state = 'paused'", b.id)!.w, ai: disk.pickedModels(this.cfg)[b.id]?.[0] ?? null };
@@ -537,7 +542,6 @@ export class Crew {
       ideas: this.ideas(),
       room: (() => { const r = this.room(); return { last: r.lines.at(-1) ?? null, busy: r.busy }; })(),
       asks: this.db.all("SELECT * FROM asks WHERE state = 'open' OR (kind = 'mail' AND state = 'uncertain') ORDER BY id").map((a) => this.askView(a)),
-      // Recently answered cards, so the thread keeps a receipt of what was agreed to (ch-ux-approval-receipts).
       answered: this.db.all("SELECT * FROM asks WHERE state = 'answered' AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 40").map((a) => this.askView(a)),
       events: this.db.events(0, 80),
       /** The person's resting AI accounts, only while a job waits on them (pause(); docs/ui-contract.md). */
@@ -712,7 +716,6 @@ export class Crew {
   /** Chief offers routines for approval; `adopt` creates them, and helpers can offer check-ins too. */
   private offerRoutine(p: Parameters<Crew['planRoutine']>[0]) {
     const plan = this.planRoutine(p);
-    // A reminder: two lines, in the person's own words, with the one moment it is for.
     if (plan.at) return this.propose(CHIEF, `Reminder: “${plan.name}”, ${firstRun(plan.at)}`, {
       routine: { bot: plan.bot.id, once: 1, schedule: String(p.schedule ?? '').trim(), task: p.task, name: p.name },
       preview: { head: 'A reminder', body: `At ${firstRun(plan.at)}\n${plan.name}` },
@@ -752,7 +755,6 @@ export class Crew {
   /** Run now and report from crewd's durable fire/skip record. */
   async runRoutine(id: number) {
     const r = this.routine(id), seq = this.db.get('SELECT COALESCE(MAX(seq), 0) AS seq FROM events')!.seq;
-    // A reminder speaks in the person's own words, never through a helper's turn.
     if (r.kind === 'remind') { if (!r.next_at) throw Object.assign(new Error(`“${r.name}” already went off.`), { status: 409 }); this.remind(r, 'now'); }
     else {
       const out = this.fire(r, 'now');
@@ -860,7 +862,6 @@ export class Crew {
   /** Fire one routine. A branch that finishes on its own promise returns it, so a manual run answers from the record. */
   private fire(r: Row, why: 'schedule' | 'late' | 'now' | 'file' | 'wake' | 'event', note?: string, origin = why === 'now' ? 'routine.now' : 'routine'): void | Promise<unknown> {
     const now = Date.now();
-    // With Calendar connected, crewd reads today's events itself first; the digest still costs no AI.
     if (r.kind === 'digest') return this.connections.connected('calendar')
       ? this.connections.today().catch(() => null).then((day) => this.sendDigest(r, why, now, day ?? undefined))
       : this.sendDigest(r, why, now);
@@ -1086,9 +1087,9 @@ export class Crew {
     return { [was ? 'updated' : 'imported']: { id, name: pre.display }, source: pre.plan.link, routines: pre.plan.routines, needs: pre.plan.needs, note: pre.plan.note };
   }
 
-  say(bot: string, author: string, text: string, taskId: number | null = null) {
+  say(bot: string, author: string, text: string, taskId: number | null = null, ui?: object) {
     if (author === 'bot') text = cleanReply(text);
-    const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at) VALUES (?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now()).lastInsertRowid);
+    const id = Number(this.db.run('INSERT INTO messages (bot, author, text, task_id, at, ui) VALUES (?, ?, ?, ?, ?, ?)', bot, author, text, taskId, Date.now(), ui ? JSON.stringify(ui) : null).lastInsertRowid);
     this.db.event('message', bot, { id, author, text: text.slice(0, 280) });
     return id;
   }
@@ -1138,7 +1139,6 @@ export class Crew {
 
   requestChief(text: string, said?: string) {
     if (!text.trim()) throw Object.assign(new Error('empty message'), { status: 400 });
-    // The thread shows the person's own words (`said`), never crewd's instruction to the model.
     return this.addTask(CHIEF, text.trim(), 'person', undefined, said?.trim() ? said.trim() : text.trim());
   }
 
@@ -1261,13 +1261,11 @@ export class Crew {
 
   private prompt(task: Row) {
     const who = task.origin === 'person' ? this.called() : task.origin === CHIEF ? 'Chief' : this.bot(task.origin)?.display ?? task.origin, r = task.routine && this.db.get('SELECT name, quiet FROM routines WHERE id = ?', task.routine), routine = r?.name;
-    // A quiet check-in only speaks up when something needs the person.
     const quiet = r?.quiet ? `\n\n[Crewhouse] This is a check-in. If nothing needs ${who}, reply exactly ${ALL_CLEAR} and nothing else.` : '';
     // The debrief: the bot proposes what to keep; crewd caps it, commits it and offers Undo.
     const debrief = disk.botConfig(this.cfg, task.bot).memory === false ? '' : `\n\n[Crewhouse] When you finish: if this task showed you a lasting preference of ${who} (not how to address them; Crewhouse keeps that), ` +
       'call crew_remember with `text` set to one short line (and `replaces` naming an old note to correct one). Set `everyone` when every helper should know it ' +
       '(diet, units, where they live); leave it out for how they like your own work. Standing instructions belong on Chief\'s crew_rule confirmation card, never in memory. Otherwise save nothing.';
-    // What the person already chose on drafts, in plain words, so the next job never asks twice.
     const decided = this.db.all("SELECT kind, data FROM events WHERE kind IN ('draft.approved', 'draft.rejected') ORDER BY seq DESC LIMIT 3")
       .map((e) => { const d = JSON.parse(String(e.data)) as Row; return `${d.to} — ${e.kind === 'draft.rejected' ? 'they said no' : d.edited ? 'approved after they changed it' : 'approved as written'}`; }), decisions = decided.length ? `\n[Crewhouse] What ${who} already decided on drafts: ${decided.join('; ')}.` : '';
     if (task.bot !== CHIEF) return `${this.memory(task.bot)}[Crewhouse task #${task.id} from ${routine ? `the routine “${routine}”, set up by ${this.called()}` : who}]${decisions}\n${task.body}${quiet}${debrief}`;
@@ -1681,7 +1679,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
             this.refusedNet(run.bot, name);
             return { allow: false, reason: 'This helper can read only the places on its list. Use its checked web tool.' };
           }
-          // crew_app carries connected app tools and granted command tools; the policy still checks each call.
           const ok = tool === 'crew_app' ? (this.live.get(run.bot)?.appTools?.has(name) ?? false) || Object.hasOwn(this.seen(run.bot, this.live.get(run.bot)!.grants).run, name)
             : this.toolAllowed(run.bot, name), owner = this.live.get(run.bot)?.owners?.[name];
           if (!ok) return { allow: false, reason: owner ? `${this.connections.apps[owner].name} isn't part of this job, so you can't use it. Tell the person that.` : 'This run does not have that tool.' };
@@ -1705,7 +1702,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         const failed = !ok || text.startsWith('error:'), [name, input] = this.unwrap(tool, rawInput), l = this.live.get(run.bot), actedFor = l?.actedFor; if (l) l.actedFor = undefined;
         // crewd's own record of what the run did: the drawer and the validator read this, never the engine's word.
         this.db.event('run.call', run.bot, { task: run.task, tool: name, input: JSON.stringify(rawInput).slice(0, 1000), ok: !failed, head: text.split('\n')[0].slice(0, 160) });
-        // The trail's step, written once the call is over: a call that failed never claims the work was done.
         const words = toolWords(name, input, !failed), note = failed && name === 'bash' ? pinnedNote(this.cfg, String(input.command ?? '').trim().split(/\s+/)[0] ?? '') : ''; if (failed && actedFor === name && run.task) this.db.run('UPDATE tasks SET acted = NULL WHERE id = ?', run.task); // a call that came back failed changed nothing
         if (words) this.db.event('run.tool', run.bot, { task: run.task, words: note ? `${words}. ${note}` : words });
         return text;
@@ -1731,7 +1727,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
         }
         const app = l?.appTools?.get(name);
         if (app && (name === 'calendar' || name === 'mail' || tool === 'crew_app')) return said(app, input, signal);
-        // Command-line tools that need the person's own sign-in: fixed argv on this computer, outside the sandbox.
         const runTool = registry(this.cfg, l?.grants ?? []).find((t) => t.run && (l?.grants ?? []).includes(t.id) && t.id.replace(/-/g, '_') === name);
         if (runTool) return await new Promise<string>((resolve) => {
           execFile(which(this.cfg, runTool.bins[0]) ?? runTool.bins[0], ((input.args as string[]) ?? []).map(String),
@@ -1927,7 +1922,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   private async ask(botId: string, task: Row | undefined, e: Extract<Effect, { words: string }>, checkout?: { shop: string; total: number | null; basket: boolean }): Promise<string | null> {
-    // The same call asked again (the bot resumed after a restart) takes over the card already shown.
     const same = this.db.all("SELECT id,task_id,title,detail FROM asks WHERE bot = ? AND kind = 'permission' AND state = 'open' AND title = ?", botId, e.words).find((a) => !this.holds.has(a.id) && (!e.mail || permissionIdentity(botId, task?.id, e.words, e) === permissionIdentity(botId, a.task_id, a.title, JSON.parse(a.detail)))), askId = same ? same.id : this.openAsk(botId, task, e.words, { effect: e.kind, key: e.key, ...(e.cost !== undefined ? { cost: e.cost } : {}), ...(e.preview ? { preview: e.preview } : {}), ...(checkout ? { checkout } : {}), ...(e.press ? { press: true } : {}), ...(e.fill ? { fill: true } : {}), ...(e.mail ? { mail: e.mail } : {}) });
     if (same && task) this.setTask(task, 'needs_you');
     return this.hold(botId, task, askId);
@@ -1959,7 +1953,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   }
 
   /** Allow once, for this task, or always for the bot; or not now — with a reminder tomorrow when asked. Spending is never more than once. */
-  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string; fill?: boolean; fields?: unknown; keep?: boolean }, key?: string) {
+  async answer(askId: number, body: { answer?: string; scope?: string; schedule?: string; change?: string; text?: string; remind?: boolean; passwords?: unknown; style?: string; pick?: string; rule?: string; fill?: boolean; fields?: unknown; day?: string; time?: string; keep?: boolean }, key?: string) {
     const ask = this.db.get("SELECT * FROM asks WHERE id = ? AND state = 'open'", askId);
     if (!ask && key && this.db.get('SELECT 1 FROM settings WHERE key = ?', `link.key.${key}`)) return;
     if (!ask) throw fail('that question is already settled', 409);
@@ -1989,9 +1983,9 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (ask.kind === 'propose' && body.answer === 'allow' && body.fill && detail.draft?.role) this.draftRole(detail.draft.role, 'fill', String(detail.preview?.body ?? ''));
     if (ask.kind === 'propose' && body.answer === 'allow') this.adopt(ask.bot, detail);
     const sent = ask.kind !== 'propose' || body.answer !== 'allow' ? '' : detail.form ? await this.submitForm(ask.bot, detail.form, body.fields) : body.fill && detail.draft?.role ? 'filling in the form' : '';
-    const picks = ask.kind === 'style' || ask.kind === 'video' || detail.piece?.kind === 'picker', picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
+    const picks = ask.kind === 'style' || ask.kind === 'video' || ['picker', 'buttons'].includes(detail.piece?.kind), picked = picks && body.answer === 'allow' ? (detail.pick?.styles ?? detail.pick?.choices ?? []).find((s: { id: string }) => s.id === String(body.style ?? body.pick ?? '')) : undefined;
     if (picks && body.answer === 'allow' && !picked) throw fail(`pick one of the ${ask.kind === 'style' ? 'styles' : 'choices'} on the card`);
-    const said = ask.kind === 'piece' && body.answer === 'allow' ? pieceResult(detail.piece, picked, body.fields) : undefined;
+    const said = ask.kind === 'piece' && body.answer === 'allow' ? pieceResult(detail.piece, picked, body) : undefined;
     const rule = ask.kind === 'unlock' && body.answer === 'allow' && (body.rule === 'keep' || body.rule === 'job') ? String(body.rule) : '';
     if (rule) this.setFileRule(detail.bot, rule);
     const opened = ask.kind === 'unlock' && body.answer === 'allow' ? await this.unlock(ask, detail, body.passwords, rule || this.fileRule(detail.bot)) : '';
@@ -2018,7 +2012,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
       return;
     }
     if (ask.kind === 'connect' && task && body.answer === 'allow' && this.live.get(task.bot)?.task === task.id) {
-      // Connected: the app's tools arrive with a fresh session; the task's own bot resumes here even when Chief asked.
       this.close(task.bot);
       this.handoffs.set(task.id, `${this.connections.apps[detail.app]?.name ?? 'The app'} is connected now`);
       this.connected.add(task.id);
@@ -2220,7 +2213,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           const soul = was ? undefined : `# ${name}\n\n${String(p.personality ?? '').replace(/\r/g, '').trim().replace(/^# .*\n+/, '') || `You are ${name}. Friendly, careful and brief.`}`;
           if (soul && soul.length > disk.SOUL_CAP) throw fail(`say who it is in a few lines, under ${disk.SOUL_CAP} characters`);
           const plain = will_do.length || wont_do.length || first_step ? [`${was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.`}`, ...will_do.map((w) => `Will do: ${w}`), ...wont_do.map((w) => `Won't do: ${w}`), ...(first_step ? [`First step for you: ${first_step}`] : []), ...(first_job ? [`First job: ${short(first_job, 120)}`] : [])].join('\n') : [was ? `${name} now ${role.replace(/^./, (x) => x.toLowerCase())}.` : `${role}.\nCan look things up. Asks you before sending or spending.`, first_job ? `First job: ${short(first_job, 120)}` : ''].filter(Boolean).join('\n');
-          // The card is the hire in a glance (role, will/won't, first step, first job); the five-part job goes to its file unshown.
           return this.propose(CHIEF, was ? `Give ${name} this job?` : `Bring ${name} onto the crew?`, { create: { bot: was?.id, name, role, job, soul, first: first_job, will_do, wont_do, first_step, first_job, apps: grant },
             preview: { head: name, body: [plain, grant?.length ? `Can use: ${grant.map((a) => this.connections.apps[a].name).join(', ')}` : ''].filter(Boolean).join('\n') } });
         }),
@@ -2286,7 +2278,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const off = hireOff(c.wont_do ?? []);
     if (off.size) disk.setGrants(this.cfg, id, [...new Set(disk.botConfig(this.cfg, id).tools ?? [])].filter((t) => t !== 'crew' && !off.has(t)));
     if (c.soul) disk.writeSoul(this.cfg, id, c.soul, 'Who it is, as Chief suggested and the person agreed');
-    // The first job is Chief's hand-on, so its result comes back here in Chief's chat.
     this.say(CHIEF, 'bot', `${c.bot ? `From now on, ${c.name} ${c.role?.replace(/^./, (x) => x.toLowerCase())}.` : `${c.name} has joined the crew.`}${c.first?.trim() ? ` ${c.name} is starting on it now; I'll bring the result back here.` : ''}`, null);
     if (c.first?.trim()) this.addTask(id, c.first.trim(), CHIEF, undefined);
   }
@@ -2471,7 +2462,6 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     const a = this.connections.apps[app], granted = botId === CHIEF || (disk.botConfig(this.cfg, botId).apps ?? []).includes(app);
     if (!a || !granted) throw fail(a ? `${a.name} isn't part of this job, so you can't connect it. Tell the person that.` : `no app called ${app}`);
     if (this.connections.connected(app)) return { connected: true, note: `${a.name} is already connected; its tools arrive with your next task.` };
-    // Google is Chief's to ask: the person talks only to Chief about it, never to the helper that needs it.
     const owner = a.google ? CHIEF : botId;
     if (!this.db.get("SELECT 1 FROM asks WHERE bot = ? AND kind = 'connect' AND state = 'open' AND json_extract(detail, '$.app') = ?", owner, app))
       this.openAsk(owner, this.activeTask(botId), `Connect ${a.name}`, { app, words: `Let ${this.bot(botId)!.display} use your ${a.name}` }, 'connect');
@@ -2627,11 +2617,19 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
   private async piece(botId: string, p: Row) {
     const task = this.activeTask(botId), kind = String(p.kind), title = needText(p.title || p.text, 200, 'give the piece a title'), text = p.title ? clean(p.text, 1000) : '';
     const rows = (list: unknown, n: number) => (Array.isArray(list) ? list : []).slice(0, n).map((r) => ({ ...r, id: clean(r?.id, 40), label: clean(r?.label, 120), ...(Array.isArray(r?.options) && r.options.length ? { options: r.options.slice(0, 12).map((o: unknown) => clean(o, 80)) } : {}) })).filter((r) => r.id && r.label);
-    if (!['card', 'form', 'picker'].includes(kind)) { this.say(botId, 'bot', [title, text].filter(Boolean).join('\n'), task?.id ?? null); return { ok: true, shown: 'line' }; }
-    const fields = kind === 'form' ? rows(p.fields, 8) : [], choices = kind === 'picker' ? rows(p.choices, 6) : [];
-    if (kind === 'form' ? !fields.length : kind === 'picker' && choices.length < 2) throw new Error(kind === 'form' ? 'a form needs fields, each with an id and a label' : 'a picker needs at least two choices, each with an id and a label');
+    if (kind === 'list') {
+      const items = (Array.isArray(p.rows) ? p.rows : []).slice(0, 12).map((r) => ({ title: clean(r?.title, 120), sub: clean(r?.sub, 160), ...(/^https:\/\/[^\s/]+\S*$/.test(String(r?.link)) ? { link: String(r.link).slice(0, 500) } : {}) })).filter((r) => r.title);
+      if (!items.length) throw new Error('a list needs rows, each with a title');
+      this.say(botId, 'bot', text || title, task?.id ?? null, { list: { title, rows: items } });
+      return { ok: true, shown: 'list' };
+    }
+    if (!['card', 'form', 'picker', 'buttons', 'date', 'sheet'].includes(kind)) { this.say(botId, 'bot', [title, text].filter(Boolean).join('\n'), task?.id ?? null); return { ok: true, shown: 'line' }; }
+    const pick = kind === 'picker' || kind === 'buttons', fields = kind === 'form' ? rows(p.fields, 8) : [], choices = pick ? rows(p.choices, kind === 'picker' ? 6 : 4) : [];
+    const times = kind === 'date' ? (Array.isArray(p.times) ? p.times : []).map((t) => clean(t, 5)).filter((t) => /^\d{1,2}:\d\d$/.test(t)).slice(0, 6) : [], body = kind === 'sheet' ? String(p.body ?? '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*\n\s*/g, '\n\n').trim().slice(0, 8000) : '';
+    if (kind === 'sheet' && !body) throw new Error('a sheet needs its text in `body`');
+    if (kind === 'form' ? !fields.length : pick && choices.length < 2) throw new Error(kind === 'form' ? 'a form needs fields, each with an id and a label' : `a ${kind} needs at least two choices, each with an id and a label`);
     const id = this.db.get("SELECT id FROM asks WHERE kind = 'piece' AND task_id IS ? AND title = ? ORDER BY id DESC", task?.id ?? null, title)?.id
-      ?? this.openAsk(CHIEF, task, title, { bot: botId, piece: { kind, text, yes: clean(p.yes, 40) || { card: 'Yes', form: 'Send', picker: 'Choose' }[kind], fields }, ...(choices.length ? { pick: { choices } } : {}) }, 'piece');
+      ?? this.openAsk(CHIEF, task, title, { bot: botId, piece: { kind, text, yes: clean(p.yes, 40) || { card: 'Yes', form: 'Send', picker: 'Choose', date: 'Send', sheet: 'Got it', buttons: '' }[kind], fields, ...(times.length ? { times } : {}), ...(body ? { body, page: clean(p.page, 60) } : {}) }, ...(choices.length ? { pick: { choices } } : {}) }, 'piece');
     const now = await this.answered(botId, task, id), d = JSON.parse(now.detail);
     return now.state === 'open' ? { asked: true, note: 'The person has the card in Chief’s chat. End your turn with one short line; you are resumed when they answer, then call crew_piece again unchanged.' } : d.result ?? { answered: false, note: 'The person said not now. Carry on without it, or end with one short line.' };
   }

@@ -24,6 +24,8 @@ export type Card = {
   video?: { from: string; choices: { id: string; label: string; size: string }[]; go?: string };
   /** A bot's crew_piece: a card, form or picker on the action card's paper, its answer going back to the same turn. */
   piece?: boolean;
+  /** The piece's own face when it is more than a card: stacked buttons, a day (and time) grid, or a long read in a pop-up sheet. */
+  pieceUi?: PieceUi;
   /** The one plain rule for the copies an unlock leaves, picked on the same card: how long they stay in the folder. */
   keep?: { line: string; rule: string; options: { label: string; rule: string }[] };
   /** A helper's sign-in ask: the site, its own icon, and whose screen the person signs in on. */
@@ -58,6 +60,14 @@ export type Card = {
    *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
   form?: FormView;
 };
+export type PieceUi = { kind: 'buttons'; options: { id: string; label: string }[] } | { kind: 'date'; times: string[] } | { kind: 'sheet'; parts: { head?: string; text?: string }[]; minutes: number; page?: string };
+/** A helper's list in the chat: not a question, so it waits for nothing. */
+export type ListView = { title: string; rows: { title: string; sub: string; link?: string; host?: string }[]; more: number };
+const listView = (raw: unknown): ListView | undefined => {
+  let u: Json | undefined; try { u = (typeof raw === 'string' ? JSON.parse(raw) : raw as Json)?.list; } catch { return undefined; }
+  const rows = (Array.isArray(u?.rows) ? u.rows : []).map((r: Json) => { const link = safeLink(String(r.link ?? '')); return { title: plain(String(r.title ?? '')), sub: plain(String(r.sub ?? '')), ...(link ? { link, host: new URL(link).hostname.replace(/^www\./, '') } : {}) }; }).filter((r: { title: string }) => r.title);
+  return rows.length ? { title: plain(String(u!.title ?? '')), rows, more: rows.length > 5 ? rows.length : 0 } : undefined;
+};
 export type FormView = { site: string; page: string; url: string; filled: { label: string; value: string }[]; fields: { key: string; label: string; kind: 'text' | 'pick' | 'tick' | 'file'; options?: string[]; yours: boolean; optional?: boolean }[]; note?: string };
 /** A piece's form holds its Send until every line it needs has an answer; crewd checks the same again. */
 export const formOpen = (c: { piece?: boolean; form?: FormView }, said: Json) => !!c.piece && !!c.form?.fields.some((f) => f.kind !== 'tick' && !f.optional && !String(said[f.key] ?? '').trim());
@@ -87,7 +97,7 @@ export type DeckSlide = { title: string; lines: string[] };
 export type DeckView = { name: string; slides: DeckSlide[] };
 export type Step = { at: number; text: string; now?: boolean; asked?: boolean; seq: number; undo?: boolean; forget?: string };
 /** `unsure`: crewd's line for a job that acted but couldn't confirm it worked, shown apart from the helper's own words. */
-export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean; event?: boolean;
+export type Line = { id: number; from: 'me' | 'them' | 'chief' | 'note'; text: string; files: FileView[]; choices: string[]; at?: number; unsure?: boolean; recap?: boolean; event?: boolean; list?: ListView;
   /** A tray notice's helper (Chief's thread): the small face beside "Tracer finished … · it's in your tray". */
   by?: string;
   /** A helper speaking in Chief's thread (its finished job or its question, in its own words): its face and name lead. */
@@ -1017,9 +1027,13 @@ export function card(a: Json, state: Json): Card {
     const one = { ...base, helper: 'chief', by: d.bot ?? a.bot, piece: true, status: 'Waiting for you', head: plain(a.title), words: plain(a.title) };
     const lines = text ? { lines: [text] } : {};
     if (p.kind === 'card') return { ...one, kind: 'ok', ...lines, choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
+    if (p.kind === 'date') return { ...one, kind: 'pick', ...lines, pieceUi: { kind: 'date', times: p.times ?? [] }, choices: [{ label: yes, body: { answer: 'allow' }, primary: true }, no] };
+    if (p.kind === 'sheet' && p.body) return { ...one, kind: 'ok', ...lines, pieceUi: { kind: 'sheet', minutes: Math.max(1, Math.round(String(p.body).split(/\s+/).length / 200)), ...(p.page ? { page: plain(String(p.page)) } : {}), parts: String(p.body).split('\n\n').map((t) => /^#{1,3} /.test(t) ? { head: plain(t.replace(/^#+\s+/, '')) } : { text: plain(t) }) }, choices: [{ label: yes, body: { answer: 'allow' }, primary: true }, no] };
     if (p.kind === 'form') return { ...one, kind: 'ok', form: { site: '', page: text, url: '', filled: [], fields: (p.fields ?? []).map((f: Json) => ({ key: String(f.id), label: plain(f.label), kind: f.tick ? 'tick' : f.options ? 'pick' : 'text', options: f.options, yours: false, optional: !!f.optional })) },
       choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
     const options = (d.pick?.choices ?? []).map((c: Json) => ({ id: String(c.id), label: plain(c.label), size: plain(c.note ?? '') }));
+    if (p.kind === 'buttons' && options.length) return { ...one, kind: 'pick', ...lines, pieceUi: { kind: 'buttons', options: options.map(({ id, label }: { id: string; label: string }) => ({ id, label })) },
+      choices: [...options.map((c: { id: string; label: string }) => ({ label: c.label, body: { answer: 'allow', pick: c.id } })), no] };
     if (p.kind === 'picker' && options.length) return { ...one, kind: 'pick', words: text, video: { from: '', choices: options, go: yes },
       choices: [...options.map((c: { id: string; label: string }, i: number) => ({ label: c.label, body: { answer: 'allow', pick: c.id }, ...(i === 0 ? { primary: true } : {}) })), no] };
     return { ...one, kind: 'ok', ...lines, choices: [{ ...no, label: 'OK' }] };
@@ -1809,7 +1823,7 @@ export function lines(page: Json, bot: string, state: Json = {}): Line[] {
       files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: [] };
     const inbox = m.author === 'bot' && watched.has(Number(m.task_id)) ? inboxOf(chatWords(text)) : undefined;
     return { id: m.id, from: m.author === 'person' ? 'me' : 'them', ...(bot !== 'chief' && m.helper ? { helper: String(m.helper) } : {}), ...(inbox ? { inbox } : {}),
-      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
+      recap: m.recap === true, text: m.author === 'person' ? (pics.length && BARE_UPLOAD.test(text) ? '' : text.split('\n').map((l) => noTools(l)).join('\n')) : chatWords(text), files: [...pics, ...(m.files ?? []).map((f: Json) => fileView(f.bot, f.path))], choices: (m.choices ?? []).map(plain), ...(m.ui ? { list: listView(m.ui) } : {}), at: m.at ? at(m.at) : undefined, unsure: m.author === 'bot' && /^Not sure it worked:|^[^.]{1,40} isn't sure “/.test(text), ...(retry ? { retry } : {}) };
   }).map((l: Line) => ({ ...l, files: l.files.filter((f) => !gone.has(f.url)), ...(bot === 'chief' && l.from === 'them' ? rolesIn(state, l.text) : {}) })).filter((l: Line) => l.text || l.files.length);
 }
 /** Pictures a helper hands over one after another are one pile, not a line each: only crewd's bare delivery lines fold
