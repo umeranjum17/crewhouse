@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { startModelStub } from '../../test/openclaw-stub.ts';
+import { startModelStub } from '../../test/model-stub.ts';
 
 const out = process.argv[2], repo = join(import.meta.dirname, '..', '..'), KEY = 'lab-model-key', LINE = "That's outside my folder, so I can't open it.";
 if (!out) { console.error('usage: pi-wall.mjs <out-dir>'); process.exit(2); }

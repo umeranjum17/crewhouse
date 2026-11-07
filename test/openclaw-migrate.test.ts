@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 import { faked } from './kit-fake.ts';
 import { host, house, legacyAuth, retired, sealed } from './migrate-house.ts';
 

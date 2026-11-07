@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { createServer, type AddressInfo } from 'node:net';
 import { temp } from './tmp.ts';
 import { until } from './lab.ts';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 
 test('a saved personality reaches Chief\'s next turn, helpers keep their own, and Put back restores it', { timeout: 280_000 }, async () => {
   const root = temp('crewhouse-soul'), stub = await startModelStub();

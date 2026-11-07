@@ -13,7 +13,7 @@ import WebSocket from 'ws';
 import { removeOnExit } from '../src/config.ts';
 import { browserBin, Desktops, missing } from '../src/desktop.ts';
 import { OpenClawRuntime } from '../src/openclaw/runtime.ts';
-import { startModelStub } from './openclaw-stub.ts';
+import { startModelStub } from './model-stub.ts';
 
 const skip = (missing().some((m) => m.startsWith('Xvfb')) && 'Xvfb is not installed') || (!browserBin() && 'no Chromium here');
 

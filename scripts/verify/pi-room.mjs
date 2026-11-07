@@ -9,7 +9,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { holding, release, startModelStub } from '../../test/openclaw-stub.ts';
+import { holding, release, startModelStub } from '../../test/model-stub.ts';
 import { MODEL_URL, openDoor } from '../../bin/pi-door.mjs';
 import { bus, CEILING_MB, piBuiltIn, piRoom, piWall } from '../../bin/sandbox.mjs';
 

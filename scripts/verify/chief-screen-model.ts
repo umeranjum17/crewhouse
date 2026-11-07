@@ -1,9 +1,9 @@
-// For chief-screen.sh: the scripted model (test/openclaw-stub.ts) and the library's renewal form, both on loopback.
+// For chief-screen.sh: the scripted model (test/model-stub.ts) and the library's renewal form, both on loopback.
 // Writes `MODEL=<url>` (unless argv[4] is `real`) and `SITE=<url>` to the file named by argv[2]; the form's saved line goes to argv[3].
 import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { startModelStub } from '../../test/openclaw-stub.ts';
+import { startModelStub } from '../../test/model-stub.ts';
 
 const [, , env, saved, real] = process.argv, model = real ? undefined : await startModelStub();
 const site = createServer((q, r) => {
