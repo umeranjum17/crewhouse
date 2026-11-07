@@ -97,7 +97,7 @@ These are the launcher's commands in a checkout, typed `./crewhouse`; the instal
 | `./crewhouse headless serve\|pair\|health` | Runs the headless host, prints a fresh unused first-phone code, or checks readiness |
 | `./crewhouse update` | Pulls, installs and restarts Crewhouse. Running work carries on. It refuses if the folder has local changes. |
 | `./crewhouse doctor` | Says whether Crewhouse can run, and what optional parts are missing, each with its fix |
-| `./crewhouse open` | Reopens Crewhouse in your browser |
+| `./crewhouse open [--link]` | Reopens Crewhouse in your browser. On a computer with no screen (reached over SSH, or no display) it prints the `ssh` step for your own computer instead; `--link` prints the private link, with a warning, to open there |
 | `./crewhouse tools [install [ids...]]` | Lists or installs the helpers' tool kit |
 | `./crewhouse autostart on\|off` | Turns starting at login on or off |
 | `./crewhouse link [new]` | Prints the one link that adds a phone: open it on a phone with Tailscale on and the app opens and asks to join (the page offers the app first if it is not installed). It does not run out; `new` replaces it |

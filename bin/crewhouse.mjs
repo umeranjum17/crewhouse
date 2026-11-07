@@ -19,6 +19,7 @@ const USAGE = `Crewhouse ${version}
   crewhouse start     starts Crewhouse in the background, opens it in your browser and prints a phone pairing code
   crewhouse stop      stops it
   crewhouse status    says whether it is running, and where
+  crewhouse open      opens it in your browser (--link prints the private link, for a computer with no screen)
   crewhouse link      prints the link that adds a phone
   crewhouse update    installs the newest version and restarts Crewhouse if it was running
   crewhouse doctor    says whether it can run, and how to add what is missing`;
@@ -123,6 +124,7 @@ const offer = await pair.json();
 const { qrText } = await import('@byokit/ui-core/link');
 console.log(`Crewhouse is running at ${base}/ (open it any time with crewhouse open).`);
 console.log(`Phone pairing code: ${offer.typed}\n${qrText(offer.qr)}`);
+launcher(here, 'tunnel'); // on a computer with no screen: the step for the person's own computer
 
 // Stop, install the newest version the way this one was installed, and start again if it was running.
 async function update() {

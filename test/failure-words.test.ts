@@ -71,23 +71,57 @@ test('doctor reports a group-writable ~/.local in plain words, read-only; the ne
   } finally { await stub.run('stop'); }
 });
 
-test('open on a machine with no browser never prints the private link, and says when Crewhouse is not running', { timeout: 60_000 }, async () => {
-  const m = await machine({ CREWHOUSE_ENGINE: 'stub' });
+test('on a machine with no screen, start and open print the ssh step; only open --link prints the private link, with its warning', { timeout: 60_000 }, async () => {
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub', CREWHOUSE_CALLBACK_PORT: '1455', SSH_CONNECTION: '203.0.113.9 50000 192.0.2.7 22' });
+  const key = () => readFileSync(join(m.state, 'person.key'), 'utf8');
   const off = await m.run('open');
   assert.equal(off.code, 1, off.out);
   assert.match(off.out, /Crewhouse is not running\. Start it with crewhouse start\./);
   const up = await m.run('start');
   assert.equal(up.code, 0, up.out);
   try {
-    const { code, out } = await m.run('open');
-    assert.equal(code, 0, out);
-    assert.match(out, /Open http:\/\/127\.0\.0\.1:\d+\/ in your browser\./);
-    assert.ok(!out.includes(readFileSync(join(m.state, 'person.key'), 'utf8')), 'the private key is not in the words');
-    assert.doesNotMatch(out, /#person=/);
-    noTrace(out);
+    const port = Number(m.env.CREWHOUSE_PORT), far = port + 10000;
+    const forward = (l: number, r: number) => `-L 127.0.0.1:${l}:127.0.0.1:${r}`;
+    const stop = 'ssh -N -o ExitOnForwardFailure=yes';
+    const said = (out: string) => {
+      assert.match(out, new RegExp(`${stop} ${forward(port, port)} ${forward(1455, 1455)} \\S+@192\\.0\\.2\\.7\\n`), 'the line, with explicit loopback binds');
+      assert.match(out, new RegExp(`${stop} ${forward(far, port)} ${forward(1455, 1455)} \\S+@192`), 'the fallback line for a taken ' + port);
+      assert.match(out, new RegExp(`${stop} ${forward(port, port)} \\S+@192\\.0\\.2\\.7\\n?$`, 'm'), 'the line without 1455');
+      assert.match(out, /If it says so for 1455, your own computer already uses 1455, usually a ChatGPT sign-in left open/);
+      assert.match(out, /crewhouse open --link/);
+      assert.ok(!out.includes(key()), 'the private key is not in the words');
+      assert.doesNotMatch(out, /#person=/);
+      noTrace(out);
+    };
+    said(up.out);
+    const open = await m.run('open');
+    assert.equal(open.code, 0, open.out);
+    said(open.out);
+    const link = await m.run('open', '--link');
+    assert.equal(link.code, 0, link.out);
+    assert.match(link.out, /Keep this link private\./);
+    assert.ok(link.out.includes(`http://127.0.0.1:${port}/#person=${key()}`), 'the link, once');
+    assert.ok(link.out.indexOf('Keep this link private') < link.out.indexOf('#person='), 'the warning comes first');
+    const bad = await m.run('open', '--nope');
+    assert.equal(bad.code, 2, bad.out);
   } finally {
     const stop = await m.run('stop');
     assert.match(stop.out, /Crewhouse stopped/);
+    await until('the port to free', async () => { const s = await listen(Number(m.env.CREWHOUSE_PORT)).catch(() => null); s?.close(); return !!s; });
+  }
+});
+
+test('on a machine with a screen but no browser program, open still names the address and never the private link', { timeout: 60_000 }, async () => {
+  const m = await machine({ CREWHOUSE_ENGINE: 'stub', DISPLAY: ':0' });
+  assert.equal((await m.run('start')).code, 0);
+  try {
+    const { code, out } = await m.run('open');
+    assert.equal(code, 0, out);
+    assert.match(out, /Open http:\/\/127\.0\.0\.1:\d+\/ in your browser\./);
+    assert.doesNotMatch(out, /#person=|ssh -N/);
+    assert.ok(!out.includes(readFileSync(join(m.state, 'person.key'), 'utf8')));
+  } finally {
+    await m.run('stop');
     await until('the port to free', async () => { const s = await listen(Number(m.env.CREWHOUSE_PORT)).catch(() => null); s?.close(); return !!s; });
   }
 });

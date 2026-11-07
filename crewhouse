@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crewhouse: --version | setup | start | stop | status | open | autostart | update | uninstall | link | phones | doctor | tools | test
+# Crewhouse: --version | setup | start | stop | status | open [--link] | autostart | update | uninstall | link | phones | doctor | tools | test
 set -euo pipefail
 export CREWHOUSE_RUN_MODE=${CREWHOUSE_RUN_MODE:-product}
 [ "${1:-}" != test ] || export CREWHOUSE_RUN_MODE=test
@@ -148,6 +148,34 @@ open_url() {
   elif command -v open >/dev/null; then (open "$1" >/dev/null 2>&1 &)
   else echo "Open ${1%%#*} in your browser."; fi
 }
+# No screen here: reached over SSH, or Linux with neither display. Codex's headless check, without CI (a CI job is no one's server).
+# Only this launcher asks, in the person's own session: crewd's environment (a login service, boot under linger) cannot tell.
+headless() { [ -n "${SSH_CONNECTION:-}${SSH_CLIENT:-}${SSH_TTY:-}" ] || { [ -e /proc/self ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; }; }
+# The step for the person's own computer. Explicit 127.0.0.1 binds and ExitOnForwardFailure make a taken port stop ssh, not land on
+# the laptop's own app over IPv6; a taken 1455 (ChatGPT's sign-in comes back there) stops the whole line, so a second line leaves it out.
+tunnel_help() {
+  local port=$1 cb=${CREWHOUSE_CALLBACK_PORT:-1455} who host far=$(($1 + 10000))
+  who=$(id -un 2>/dev/null || echo you)
+  if [ -n "${SSH_CONNECTION:-}" ]; then read -r _ _ host _ <<<"$SSH_CONNECTION"; else host=$(hostname 2>/dev/null || true); fi
+  local at="$who@${host:-this-server}" ssh="ssh -N -o ExitOnForwardFailure=yes"
+  echo "Crewhouse is running here at http://127.0.0.1:$port/, and this computer has no screen. To use it from your own computer:"
+  echo
+  echo "1. On your own computer, run this and leave it running:"
+  echo "   $ssh -L 127.0.0.1:$port:127.0.0.1:$port -L 127.0.0.1:$cb:127.0.0.1:$cb $at"
+  echo "2. Here, run  $CMD open --link  and open the private link it prints in your own computer's browser."
+  echo
+  echo "If ssh says \"Could not request local forwarding\" for $port, your own computer already uses that port. Run this line instead,"
+  echo "and change $port to $far in the link:"
+  echo "   $ssh -L 127.0.0.1:$far:127.0.0.1:$port -L 127.0.0.1:$cb:127.0.0.1:$cb $at"
+  echo "If it says so for $cb, your own computer already uses $cb, usually a ChatGPT sign-in left open. Close it, or run this line instead and sign in with a code:"
+  echo "   $ssh -L 127.0.0.1:$port:127.0.0.1:$port $at"
+}
+port_of() { local p=${1#http://127.0.0.1:}; echo "${p%%/*}"; }
+# Where the person meets Crewhouse: a browser here, or the tunnel step when there is no screen. $2 is said only when a browser opened.
+reach() {
+  if headless; then tunnel_help "$(port_of "$1")"
+  else open_url "$1"; [ -z "${2:-}" ] || echo "$2"; fi
+}
 
 case "${1:-}" in
   --version|-v|version) version ;;
@@ -199,8 +227,7 @@ case "${1:-}" in
     export CREWHOUSE_FIRST_USE_TOOLS=1
     if pid=$(crewd_pid); then
       url=$(app_url) || { echo "Crewhouse is running (pid $pid) but not answering yet; try $CMD open in a moment." >&2; exit 1; }
-      open_url "$url"
-      echo "Crewhouse is already running; opened ${url%%#*} in your browser."
+      reach "$url" "Crewhouse is already running; opened ${url%%#*} in your browser."
       exit 0
     fi
     node "$(entry src/main.ts)" & crewd=$!
@@ -216,8 +243,7 @@ case "${1:-}" in
     if [ -z "$url" ]; then
       echo "Crewhouse is taking a while to answer. It keeps starting in this terminal; open it with $CMD open once it does."
     else
-      open_url "$url"
-      echo "Crewhouse is up at ${url%%#*}."
+      reach "$url" "Crewhouse is up at ${url%%#*}."
     fi
     wait "$crewd"
     ;;
@@ -306,7 +332,21 @@ case "${1:-}" in
     need_node
     # The address carries the private capability: it goes to the browser, and never into any words printed here.
     url=$(app_url) || { echo "Crewhouse is not running. Start it with $CMD start." >&2; exit 1; }
-    open_url "$url"
+    case "${2:-}" in
+      --link)
+        # The one place a server prints the key: only when asked, with the warning where it can be read before the link.
+        echo "Keep this link private. It opens Crewhouse with full access, and anyone who sees it (this terminal's scrollback, a screen share, a pasted log) can use it." >&2
+        echo "$url" ;;
+      "") reach "$url" ;;
+      *) echo "usage: $CMD open [--link]" >&2; exit 2 ;;
+    esac
+    ;;
+  tunnel)
+    # Said by the installed `start` after its own lines: nothing on a computer with a screen.
+    need_node
+    headless || exit 0
+    url=$(app_url) || exit 1
+    tunnel_help "$(port_of "$url")"
     ;;
   phones|link)
     # Local HTTP client; reads the same config and private capability as the launcher.
@@ -397,7 +437,7 @@ NODE
     ;;
   *)
     version
-    echo "usage: $CMD --version | setup [--headless [--install-only]] | headless serve|pair|health | start | stop | status | autostart on|off | update | open | link [new] | phones code|pending|approve|web | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
+    echo "usage: $CMD --version | setup [--headless [--install-only]] | headless serve|pair|health | start | stop | status | autostart on|off | update | open [--link] | link [new] | phones code|pending|approve|web | uninstall [--all] [--yes] | doctor | tools [install [ids...]] | test"
     exit 2
     ;;
 esac
