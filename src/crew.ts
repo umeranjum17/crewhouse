@@ -2629,7 +2629,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     if (kind === 'sheet' && !body) throw new Error('a sheet needs its text in `body`');
     if (kind === 'form' ? !fields.length : pick && choices.length < 2) throw new Error(kind === 'form' ? 'a form needs fields, each with an id and a label' : `a ${kind} needs at least two choices, each with an id and a label`);
     const id = this.db.get("SELECT id FROM asks WHERE kind = 'piece' AND task_id IS ? AND title = ? ORDER BY id DESC", task?.id ?? null, title)?.id
-      ?? this.openAsk(CHIEF, task, title, { bot: botId, piece: { kind, text, yes: clean(p.yes, 40) || { card: 'Yes', form: 'Send', picker: 'Choose', date: 'Send', sheet: 'Got it', buttons: '' }[kind], fields, ...(times.length ? { times } : {}), ...(body ? { body } : {}) }, ...(choices.length ? { pick: { choices } } : {}) }, 'piece');
+      ?? this.openAsk(CHIEF, task, title, { bot: botId, piece: { kind, text, yes: clean(p.yes, 40) || { card: 'Yes', form: 'Send', picker: 'Choose', date: 'Send', sheet: 'Got it', buttons: '' }[kind], fields, ...(times.length ? { times } : {}), ...(body ? { body, page: clean(p.page, 60) } : {}) }, ...(choices.length ? { pick: { choices } } : {}) }, 'piece');
     const now = await this.answered(botId, task, id), d = JSON.parse(now.detail);
     return now.state === 'open' ? { asked: true, note: 'The person has the card in Chief’s chat. End your turn with one short line; you are resumed when they answer, then call crew_piece again unchanged.' } : d.result ?? { answered: false, note: 'The person said not now. Carry on without it, or end with one short line.' };
   }

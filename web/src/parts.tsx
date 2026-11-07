@@ -1291,7 +1291,7 @@ function PieceCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
       {ui.kind === 'buttons' && <div className="piece-buttons">{c.choices.filter((x) => x.body.pick).map((x, i) => <button key={x.body.pick} className={`btn${i === 0 ? ' go' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}</div>}
       {ui.kind === 'sheet' && <>
         <button type="button" className="piece-row" aria-haspopup="dialog" onClick={() => setRead(true)}><span className="piece-ic" aria-hidden><Icon name="file" size={20} /></span>
-          <span className="grow"><b className="clamp2">{c.head}</b><span>Opens a page</span></span><Icon name="next" size={18} /></button>
+          <span className="grow"><b className="clamp2">{ui.page ?? c.head}</b><span>Opens a page</span></span><Icon name="next" size={18} /></button>
         {read && createPortal(<PieceSheet c={c} name={name} onClose={() => setRead(false)} />, document.body)}</>}
       {ui.kind === 'date' && <div className="piece-date">
         <div className="piece-month"><b>{MONTH(month)}</b>
@@ -1311,7 +1311,7 @@ function PieceCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
       {failed}
       <div className="btns">
         {ui.kind !== 'buttons' && <button className="btn go" disabled={ui.kind === 'date' && (!day || (times.length > 0 && !time))} onClick={ui.kind === 'date' ? go : () => act(yes.body)}>{yes.label}</button>}
-        {deny && (ui.kind === 'buttons' ? <button className="btn quiet" onClick={() => act(deny.body)}>{deny.label}</button> : <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>)}
+        {deny && ui.kind !== 'buttons' && <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>}
       </div>
       <p className="piece-from">from <b>{name}</b></p>
     </div>
@@ -1323,10 +1323,10 @@ function PieceSheet({ c, name, onClose }: { c: Card; name: string; onClose: () =
   const box = useRef<HTMLDivElement>(null), ui = c.pieceUi as Extract<NonNullable<Card['pieceUi']>, { kind: 'sheet' }>;
   useDialogOwn(box, onClose);
   return <div className="scrim" onClick={onClose}>
-    <div ref={box} className="sheet piece-sheet" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
-      <div className="piece-sheet-head"><div className="grow"><h2 className="clamp2">{c.head}</h2><span className="piece-from">from <b>{name}</b></span></div>
+    <div ref={box} className="sheet piece-sheet" role="dialog" aria-modal aria-label={ui.page ?? c.head} onClick={(e) => e.stopPropagation()}>
+      <div className="piece-sheet-head"><div className="grow"><h2 className="clamp2">{ui.page ?? c.head}</h2><span className="piece-from">from <b>{name}</b></span></div>
         <button type="button" className="piece-nav" aria-label="Close" onClick={onClose}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
-      <div className="piece-sheet-body"><p className="piece-note">About {ui.minutes} minute read</p>{ui.parts.map((p, i) => p.head ? <h3 key={i}>{p.head}</h3> : <p key={i}>{p.text}</p>)}</div>
+      <div className="piece-sheet-body"><p className="piece-note">About a {ui.minutes} minute read</p>{ui.parts.map((p, i) => p.head ? <h3 key={i}>{p.head}</h3> : <p key={i}>{p.text}</p>)}</div>
     </div>
   </div>;
 }

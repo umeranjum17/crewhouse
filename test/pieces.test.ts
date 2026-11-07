@@ -41,7 +41,7 @@ test('a card, a form and a picker each hand their answer back to the same turn, 
 const DAY = (n: number) => { const t = new Date(); t.setDate(t.getDate() + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
 const BUTTONS = { kind: 'buttons', title: 'When should the reminder go?', choices: [{ id: 'tom', label: 'Tomorrow at 9' }, { id: 'fri', label: 'Friday at 9' }] };
 const DATE = { kind: 'date', title: 'Which day?', times: ['9:00', '10:30'] };
-const SHEET = { kind: 'sheet', title: 'Read the refund policy', text: 'About two minutes.', body: '## Returns\n\nWithin 30 days of delivery.' };
+const SHEET = { kind: 'sheet', page: 'Refund policy', title: 'Read the refund policy?', text: 'About two minutes.', body: '## Returns\n\nWithin 30 days of delivery.' };
 const LIST = { kind: 'list', title: 'Flights', text: 'These five leave first.', rows: [{ title: 'BA117', sub: 'Gate B32', link: 'https://www.ba.com/x' }, { title: 'EK202', link: 'http://insecure.example' }, { title: '' }] };
 
 test('buttons, a date and a sheet answer the same turn; a list is said in the chat and asks nothing', async () => {
@@ -63,7 +63,7 @@ test('buttons, a date and a sheet answer the same turn; a list is said in the ch
   await assert.rejects(crew.answer(date, { answer: 'allow', day: DAY(3) }), /pick one of the times/);
   await crew.answer(date, { answer: 'allow', day: DAY(3), time: '10:30' });
   const sheet = await open(db, SHEET.title), c = A.cards(crew.snapshot()).find((x) => x.id === sheet)!;
-  assert.deepEqual(c.pieceUi, { kind: 'sheet', minutes: 1, parts: [{ head: 'Returns' }, { text: 'Within 30 days of delivery.' }] });
+  assert.deepEqual(c.pieceUi, { kind: 'sheet', minutes: 1, page: 'Refund policy', parts: [{ head: 'Returns' }, { text: 'Within 30 days of delivery.' }] }, 'the sheet opens a page named in its own words, not the question');
   await crew.answer(sheet, { answer: 'allow' });
   await until('the job to finish', () => task(db, id).state === 'done');
   assert.deepEqual(said(crew, db, id).trim().split('\n').map((l: string) => JSON.parse(l.replace('crew_piece: ', ''))), [
@@ -71,7 +71,7 @@ test('buttons, a date and a sheet answer the same turn; a list is said in the ch
     { answered: true, picked: { id: 'fri', label: 'Friday at 9' } },
     { answered: true, day: DAY(3), time: '10:30' },
     { answered: true }]);
-  assert.deepEqual(A.answeredReceipts(crew.snapshot()).map((r) => r.line.split(' · ')[0]), ['Picked: Friday at 9', `Picked: ${new Date(`${DAY(3)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} at 10:30`, 'Got it: Read the refund policy']);
+  assert.deepEqual(A.answeredReceipts(crew.snapshot()).map((r) => r.line.split(' · ')[0]), ['Picked: Friday at 9', `Picked: ${new Date(`${DAY(3)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} at 10:30`, 'Got it: Read the refund policy?']);
   done();
 });
 

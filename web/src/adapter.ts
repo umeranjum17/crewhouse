@@ -60,7 +60,7 @@ export type Card = {
    *  questions left blank for the person (theirs alone first), and why it can't be sent from here when it can't. */
   form?: FormView;
 };
-export type PieceUi = { kind: 'buttons'; options: { id: string; label: string }[] } | { kind: 'date'; times: string[] } | { kind: 'sheet'; parts: { head?: string; text?: string }[]; minutes: number };
+export type PieceUi = { kind: 'buttons'; options: { id: string; label: string }[] } | { kind: 'date'; times: string[] } | { kind: 'sheet'; parts: { head?: string; text?: string }[]; minutes: number; page?: string };
 /** A helper's list in the chat: not a question, so it waits for nothing. */
 export type ListView = { title: string; rows: { title: string; sub: string; link?: string; host?: string }[]; more: number };
 const listView = (raw: unknown): ListView | undefined => {
@@ -1028,7 +1028,7 @@ export function card(a: Json, state: Json): Card {
     const lines = text ? { lines: [text] } : {};
     if (p.kind === 'card') return { ...one, kind: 'ok', ...lines, choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
     if (p.kind === 'date') return { ...one, kind: 'pick', ...lines, pieceUi: { kind: 'date', times: p.times ?? [] }, choices: [{ label: yes, body: { answer: 'allow' }, primary: true }, no] };
-    if (p.kind === 'sheet' && p.body) return { ...one, kind: 'ok', ...lines, pieceUi: { kind: 'sheet', minutes: Math.max(1, Math.round(String(p.body).split(/\s+/).length / 200)), parts: String(p.body).split('\n\n').map((t) => /^#{1,3} /.test(t) ? { head: plain(t.replace(/^#+\s+/, '')) } : { text: plain(t) }) }, choices: [{ label: yes, body: { answer: 'allow' }, primary: true }, no] };
+    if (p.kind === 'sheet' && p.body) return { ...one, kind: 'ok', ...lines, pieceUi: { kind: 'sheet', minutes: Math.max(1, Math.round(String(p.body).split(/\s+/).length / 200)), ...(p.page ? { page: plain(String(p.page)) } : {}), parts: String(p.body).split('\n\n').map((t) => /^#{1,3} /.test(t) ? { head: plain(t.replace(/^#+\s+/, '')) } : { text: plain(t) }) }, choices: [{ label: yes, body: { answer: 'allow' }, primary: true }, no] };
     if (p.kind === 'form') return { ...one, kind: 'ok', form: { site: '', page: text, url: '', filled: [], fields: (p.fields ?? []).map((f: Json) => ({ key: String(f.id), label: plain(f.label), kind: f.tick ? 'tick' : f.options ? 'pick' : 'text', options: f.options, yours: false, optional: !!f.optional })) },
       choices: [{ label: yes, body: { answer: 'allow', scope: 'once' }, primary: true }, no] };
     const options = (d.pick?.choices ?? []).map((c: Json) => ({ id: String(c.id), label: plain(c.label), size: plain(c.note ?? '') }));
