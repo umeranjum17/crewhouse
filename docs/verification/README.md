@@ -44,7 +44,7 @@ negative/security legs remain required; generic smoke is not their replacement.
 | phone-only-minimax | `done-done run phone-only-minimax` with `SERIAL`, `PHONE_APK` and `PHONE_OTHER` (a folder for every state besides the model pick) set (an emulator and the release APK; [phone-only-minimax.md](phone-only-minimax.md)) |
 | cli-install | `bash scripts/verify/cli-install.sh <out> npm` and `… download <tarball>` — the `crewhouse` command from a clean state: start, status, link, doctor, stop ([recipe](cli-install.md)) |
 | ubuntu-sandbox | `bash scripts/verify/ubuntu-sandbox.sh <out> <dist>/crewhouse_<version>_amd64.deb` — a stock Ubuntu 24.04 VM: the probe and doctor before and after the `.deb` / `crewhouse setup` install Ubuntu's AppArmor rule for bubblewrap ([recipe](ubuntu-sandbox.md)) |
-| setup-fixes | `bash scripts/verify/setup-fixes.sh <out> fix1 <tarball> alive\|dead [headless]` — the setup fixes on a fresh Ubuntu 24.04 VM with a real logout and reboot ([recipe](setup-fixes.md)) |
+| setup-fixes | `bash scripts/verify/setup-fixes.sh <out> fix1 <tarball> alive\|dead [headless]` or `fix2 <tarball> honest\|ready` — the setup fixes on a fresh Ubuntu 24.04 VM with a real logout and reboot ([recipe](setup-fixes.md)) |
 | versions | `done-done run versions`, with `SERIAL` and `APK` for the phone ([versions.md](versions.md)) |
 | binary-inspect | `done-done run binary-inspect` — Byte looks inside a binary in its own folder: the note holds the inspector's own words, and a file from outside that folder is refused |
 | skill-eval | `done-done run skill-eval` — the paired skill eval on the stub engine: the same prompts with and without a bundled skill, every run's document checked, the raw runs in a JSONL file and the two arms diffed on one page |

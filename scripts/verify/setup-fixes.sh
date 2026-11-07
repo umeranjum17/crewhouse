@@ -12,11 +12,17 @@
 #   UBUNTU_IMG=<noble-server-cloudimg-amd64.img>   default: downloaded once into $SETUP_FIXES_SCRATCH
 #   QEMU_IMAGE=<docker image with qemu-system-x86 and genisoimage>   default byk-cloud-qemu:1
 #
+#   scripts/verify/setup-fixes.sh <out-dir> fix2 <crewhouse-linux-x64.tar.gz> ready|honest
+#     installed and started, then one break at a time (a port another program holds, a corrupt database, the app's files gone,
+#     the engine folder gone, no internet) with `crewhouse doctor` asked after each. `honest` (the fix) passes only when every
+#     break gives exit 1, a ✗ line and a fix line, no stack trace, and the unbroken machine is ready; `ready` (the released
+#     build) passes only when doctor calls the broken machine ready, and crashes on the missing files.
+#
 # Writes <out-dir>/setup-<fix>-<label>.txt (every command's words, stamped) and steps.json for done-done; exit 0 only when the run met its expectation.
 set -uo pipefail
 [ $# -ge 4 ] || { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); FIX=$2; TB=$(realpath "$3"); EXPECT=$4
-[ "$FIX" = fix1 ] && { [ "$EXPECT" = dead ] || [ "$EXPECT" = alive ]; } || { echo "setup-fixes: usage: <out> fix1 <tarball> dead|alive" >&2; exit 2; }
+{ [ "$FIX" = fix1 ] && { [ "$EXPECT" = dead ] || [ "$EXPECT" = alive ]; }; } || { [ "$FIX" = fix2 ] && { [ "$EXPECT" = ready ] || [ "$EXPECT" = honest ]; }; } || { echo "setup-fixes: usage: <out> fix1 <tarball> dead|alive [headless] | fix2 <tarball> ready|honest" >&2; exit 2; }
 SCR=${SETUP_FIXES_SCRATCH:-$HOME/.cache/fm-scratch/setup-fixes}; mkdir -p "$SCR"
 IMG=${UBUNTU_IMG:-$SCR/noble.img}
 [ -f "$IMG" ] || curl -fsSL -o "$IMG" https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img || { echo "setup-fixes: cannot fetch the Ubuntu 24.04 image" >&2; exit 1; }
@@ -26,7 +32,7 @@ QI=${QEMU_IMAGE:-byk-cloud-qemu:1}
 trap 'docker rm -f "$NAME" >/dev/null 2>&1; rm -rf -- "$W"' EXIT
 ssh-keygen -q -t ed25519 -N '' -f "$W/key"; PUB=$(cat "$W/key.pub")
 mkdir -p "$W/seed"
-printf '#cloud-config\nusers:\n  - name: ops\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash\n    ssh_authorized_keys: ["%s"]\n  - name: brk\n    shell: /bin/bash\n    ssh_authorized_keys: ["%s"]\nssh_pwauth: false\n' "$PUB" "$PUB" > "$W/seed/user-data"
+printf '#cloud-config\nusers:\n  - name: ops\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash\n    ssh_authorized_keys: ["%s"]\n  - name: brk\n    shell: /bin/bash\n    ssh_authorized_keys: ["%s"]\nssh_pwauth: false\nmanage_etc_hosts: true\n' "$PUB" "$PUB" > "$W/seed/user-data"
 printf 'instance-id: sf-%s\nlocal-hostname: plan-vm\n' "$$" > "$W/seed/meta-data"
 U=$(id -u):$(id -g)
 docker run --rm --user "$U" -v "$W":/w -v "$IMG":/img/base.img:ro "$QI" sh -c 'cd /w && genisoimage -quiet -output seed.iso -volid cidata -joliet -rock seed/user-data seed/meta-data && qemu-img create -q -f qcow2 -F qcow2 -b /img/base.img disk.qcow2 20G' || exit 1
@@ -79,32 +85,60 @@ T="$OUT/setup-$FIX-$LABEL${5:+-$5}.txt"
 {
   echo "== fresh machine: $(vm ops 'lsb_release -ds; uname -r; systemctl --version | head -1' | tr '\n' ' ')"
   vm ops "sudo useradd -m -s /bin/bash $ACC && sudo install -d -m 700 -o $ACC -g $ACC /home/$ACC/.ssh && sudo cp /home/brk/.ssh/authorized_keys /home/$ACC/.ssh/ && sudo chown $ACC:$ACC /home/$ACC/.ssh/authorized_keys"
-  scp "${SCPO[@]}" "$TB" "ops@127.0.0.1:/var/tmp/crewhouse.tar.gz" && tar -xzOf "$TB" crewhouse/app/install.sh | vm ops 'cat > /var/tmp/install.sh; chmod 644 /var/tmp/*'
+  scp "${SCPO[@]}" "$TB" "ops@127.0.0.1:/var/tmp/crewhouse.tar.gz" && tar -xzOf "$TB" crewhouse/app/install.sh | vm ops 'cat > /var/tmp/install.sh; chmod 644 /var/tmp/install.sh /var/tmp/crewhouse.tar.gz'
   probe() { vm ops "echo \"port 7711 answers \$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 127.0.0.1:7711)\"; echo \"linger: \$(loginctl show-user $ACC -P Linger 2>&1 | head -1)\"; echo \"sessions of $ACC: \$(loginctl list-sessions --no-legend | awk '\$3==\"$ACC\"' | wc -l)\""; }
-  if [ "$MODE" = headless ]; then
-    echo "== the install line from $LABEL (no terminal on its output, so it only installs), then crewhouse setup --headless (login $ACC, a stock Ubuntu login with no sudo)"
-    term $ACC 400 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh | cat; CREWHOUSE_RELAY_PUBLIC=http://127.0.0.1:7300 ~/.local/bin/crewhouse setup --headless"
+    if [ "$FIX" = fix2 ]; then
+    S='$HOME/.local/state/crewhouse'; R='$HOME/.local/share/crewhouse/release'
+    echo "== the install line from $LABEL (its output is not a terminal, so it only installs), then the first start (login $ACC, no sudo)"
+    vm ops "sudo loginctl enable-linger $ACC  # lab only, so Crewhouse outlives the separate logins below; the fix under test is not this"
+    term $ACC 600 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh | cat; ~/.local/bin/crewhouse start < /dev/null | cat"
+    doc() { echo "-- $1"; vm $ACC 'export PATH=$HOME/.local/bin:$PATH; crewhouse doctor > /var/tmp/doctor.$$ 2>&1; c=$?; { grep -A1 "^✗" /var/tmp/doctor.$$; grep -E "Crewhouse is ready|stop Crewhouse|Error|^ +at " /var/tmp/doctor.$$; } | cut -c1-230; echo "doctor-exit=$c"; rm -f /var/tmp/doctor.$$'; }
+    run() { vm $ACC "export PATH=\$HOME/.local/bin:\$PATH; S=$S R=$R; $1"; }
+    doc "healthy, Crewhouse running"
+    run 'crewhouse stop | tail -1'; doc "healthy, Crewhouse stopped"
+    run 'python3 -m http.server 7711 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > /var/tmp/held; sleep 1'; doc "port 7711 held by another program"; run 'kill $(cat /var/tmp/held); sleep 1'
+    run 'cp -a $S/crew.db /var/tmp/crew.db.keep; rm -f $S/crew.db-wal $S/crew.db-shm; head -c 65536 /dev/urandom > $S/crew.db'; doc "database corrupted"; run 'cp -a /var/tmp/crew.db.keep $S/crew.db'
+    run 'mv $R/app/node_modules $R/app/node_modules.aside'; doc "app files gone (node_modules)"; run 'mv $R/app/node_modules.aside $R/app/node_modules'
+    run 'mv $S/openclaw $S/openclaw.aside'; doc "AI engine folder gone"; run 'mv $S/openclaw.aside $S/openclaw'
+    vm ops 'sudo iptables -I OUTPUT -p tcp --dport 443 -j REJECT; sudo iptables -I OUTPUT -p udp --dport 53 -j REJECT'; doc "no internet"
+    vm ops 'sudo iptables -D OUTPUT -p tcp --dport 443 -j REJECT; sudo iptables -D OUTPUT -p udp --dport 53 -j REJECT'
+    doc "healthy again"
   else
-    echo "== the install line from $LABEL, Enter at the question (login $ACC, a stock Ubuntu login with no sudo)"
-    term $ACC 400 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh" 'Start Crewhouse by itself=>ENTER'
+  if [ "$MODE" = headless ]; then
+      echo "== the install line from $LABEL (no terminal on its output, so it only installs), then crewhouse setup --headless (login $ACC, a stock Ubuntu login with no sudo)"
+      term $ACC 400 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh | cat; CREWHOUSE_RELAY_PUBLIC=http://127.0.0.1:7300 ~/.local/bin/crewhouse setup --headless"
+    else
+      echo "== the install line from $LABEL, Enter at the question (login $ACC, a stock Ubuntu login with no sudo)"
+      term $ACC 400 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh" 'Start Crewhouse by itself=>ENTER'
+    fi
+    echo "== 5 s after the logout"; sleep 5; probe
+    echo "== 60 s after the logout"; sleep 55; probe
+    echo "== sudo reboot"; vm ops 'sudo reboot' >/dev/null 2>&1; sleep 25; up
+    echo "== after the reboot, nobody of $ACC logged in (up to 120 s for the service)"
+    for _ in $(seq 24); do [ "$(vm ops "curl -s -o /dev/null -w '%{http_code}' --max-time 3 127.0.0.1:7711")" = 200 ] && break; sleep 5; done
+    probe
   fi
-  echo "== 5 s after the logout"; sleep 5; probe
-  echo "== 60 s after the logout"; sleep 55; probe
-  echo "== sudo reboot"; vm ops 'sudo reboot' >/dev/null 2>&1; sleep 25; up
-  echo "== after the reboot, nobody of $ACC logged in (up to 120 s for the service)"
-  for _ in $(seq 24); do [ "$(vm ops "curl -s -o /dev/null -w '%{http_code}' --max-time 3 127.0.0.1:7711")" = 200 ] && break; sleep 5; done
-  probe
 } 2>&1 | tee "$T"
-if [ "$EXPECT" = alive ]; then
+part() { sed -n "/^-- $1/,/^-- \|^setup-fixes/p" "$T"; }
+if [ "$FIX" = fix2 ]; then
+  ok=0
+  for c in "healthy, Crewhouse running" "healthy, Crewhouse stopped" "healthy again"; do part "$c" | grep -q 'Crewhouse is ready' && part "$c" | grep -q 'doctor-exit=0' || ok=1; done
+  for c in "port 7711" "database corrupted" "app files gone" "AI engine folder gone" "no internet"; do
+    if [ "$EXPECT" = honest ]; then part "$c" | grep -q '✗' && part "$c" | grep -q '    fix:' && part "$c" | grep -q 'doctor-exit=1' && ! part "$c" | grep -Eq 'Crewhouse is ready|^ +at |ERR_MODULE'; else
+      { [ "$c" = "app files gone" ] && part "$c" | grep -q 'ERR_MODULE_NOT_FOUND'; } || { [ "$c" != "app files gone" ] && part "$c" | grep -q 'Crewhouse is ready'; }; fi || ok=1
+  done
+elif [ "$EXPECT" = alive ]; then
   [ "$(grep -c '^port 7711 answers 200' "$T")" = 3 ] && grep -q 'linger: yes' "$T" && grep -q 'Crewhouse keeps running after you log out' "$T"; ok=$?
 else
   grep -A1 '^== 60 s after' "$T" | tail -1 | grep -q 'answers 000' && grep -q '^linger: no\|not logged in or lingering' "$T"; ok=$?
 fi
 node -e '
-const [, out, label, expect] = process.argv;
-require("node:fs").writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: label },
-  start: "a fresh stock Ubuntu 24.04 cloud image, a default login without sudo, nothing of Crewhouse installed",
-  steps: ["Run the one-line install from " + label + " and press Enter at the question about starting Crewhouse at login", "Log out, wait 60 seconds, ask port 7711 from the admin account", "sudo reboot, wait for the machine, ask port 7711 again with nobody logged in"],
-  result: expect === "alive" ? "Crewhouse answers 200 after logout and after a reboot" : "Crewhouse is gone 60 seconds after logout (the released build)" }, null, 1));
-' "$OUT" "$LABEL" "$EXPECT"
+const [, out, label, fix, expect] = process.argv, fs = require("node:fs");
+const plans = {
+  fix1: { steps: ["Run the one-line install from " + label + " and press Enter at the question about starting Crewhouse at login", "Log out, wait 60 seconds, ask port 7711 from the admin account", "sudo reboot, wait for the machine, ask port 7711 again with nobody logged in"],
+    result: expect === "alive" ? "Crewhouse answers 200 after logout and after a reboot" : "Crewhouse is gone 60 seconds after logout (the released build)" },
+  fix2: { steps: ["Install " + label + " and start it, then run crewhouse doctor on the healthy machine", "Break one thing at a time: a port another program holds, a corrupt database, the app files gone, the engine folder gone, no internet", "Run crewhouse doctor after each break"],
+    result: expect === "honest" ? "Doctor exits 1 with a cause and one fix line for each break, never ready, never a stack trace; the healthy machine is ready" : "Doctor calls each broken machine ready, and crashes on the missing app files (the released build)" } };
+fs.writeFileSync(out + "/steps.json", JSON.stringify({ target: { version: label }, start: "a fresh stock Ubuntu 24.04 cloud image, a default login without sudo, nothing of Crewhouse installed", ...plans[fix] }, null, 1));
+' "$OUT" "$LABEL" "$FIX" "$EXPECT"
 [ "$ok" = 0 ] && echo "setup-fixes: $FIX $EXPECT met" || { echo "setup-fixes: $FIX $EXPECT NOT met; see $T" >&2; exit 1; }

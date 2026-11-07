@@ -368,7 +368,17 @@ NODE
     ;;
   doctor)
     need_node
-    exec node "$(entry src/doctor.ts)"
+    # The report runs on the app's own files. With some of them gone it says which, and how to get them back, not a stack trace.
+    out=$(node "$(entry src/doctor.ts)" 2>&1) && code=0 || code=$?
+    if ! grep -Eq "ERR_MODULE_NOT_FOUND|Cannot find (package|module)" <<<"$out"; then printf '%s\n' "$out"; exit "$code"; fi
+    if [ -x ../node/bin/node ]; then fix="curl -fsSL https://raw.githubusercontent.com/umeranjum17/crewhouse/main/install.sh | sh"
+    elif [ "${CREWHOUSE_PACKAGED:-}" = 1 ]; then fix="rm -rf \"$(cd ../.. && pwd)\" && $CMD start"
+    else fix="npm ci"; fi
+    echo "Needed to run:"
+    echo "✗ Crewhouse's own program files — some are missing ($(grep -m1 -Eo "Cannot find (package|module) '[^']+'" <<<"$out")), so this install is damaged"
+    echo "    fix: $fix"
+    echo; echo "1 thing(s) stop Crewhouse running: fix the ✗ above."
+    exit 1
     ;;
   tools)
     need_node
