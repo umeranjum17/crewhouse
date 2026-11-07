@@ -72,7 +72,7 @@ if [ "$MODE" = released ]; then
 else
   check "start printed the ssh line with explicit 127.0.0.1 binds and ExitOnForwardFailure=yes" 'printf "%s" "$OUTSTART" | grep -q "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:7711:127.0.0.1:7711 -L 127.0.0.1:1455:127.0.0.1:1455 me@192.168.77.1"'
   check "open printed it too, and neither printed the private key" 'printf "%s" "$OPEN" | grep -q ExitOnForwardFailure && ! printf "%s\n%s" "$OUTSTART" "$OPEN" | grep -qF "$KEY"'
-  check "open --link: the warning, then the link" 'grep -q "Keep this link private" "$W/link.err" && [ "$LINK" = "http://127.0.0.1:7711/#person=$KEY" ]'
+  check "open --link: the warning, then the link, marked as coming in over SSH" 'grep -q "Keep this link private" "$W/link.err" && [ "$LINK" = "http://127.0.0.1:7711/#person=$KEY&remote=1" ]'
   PRINTED=$(printf '%s\n' "$OPEN" | grep -E '^   ssh -N' | sed 's/^ *//'); LINE1=$(sed -n 1p <<<"$PRINTED"); LINE2=$(sed -n 2p <<<"$PRINTED"); LINE3=$(sed -n 3p <<<"$PRINTED")
   tunnel() { LP_ me "timeout 25 $1 >/dev/null 2>&1 &"; sleep 4; }     # the printed line as it stands; it ends by itself
   hold() { LP_ me "timeout 22 python3 -m http.server $1 --bind 127.0.0.1 >/dev/null 2>&1 &"; sleep 1; }   # the laptop's own program on a port

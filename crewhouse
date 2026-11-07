@@ -336,7 +336,8 @@ case "${1:-}" in
       --link)
         # The one place a server prints the key: only when asked, with the warning where it can be read before the link.
         echo "Keep this link private. It opens Crewhouse with full access, and anyone who sees it (this terminal's scrollback, a screen share, a pasted log) can use it." >&2
-        echo "$url" ;;
+        # A browser that came in over SSH carries the mark: its sign-in card leads with the code. A screen on this machine never gets it.
+        if headless; then echo "$url&remote=1"; else echo "$url"; fi ;;
       "") reach "$url" ;;
       *) echo "usage: $CMD open [--link]" >&2; exit 2 ;;
     esac

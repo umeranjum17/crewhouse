@@ -3,8 +3,10 @@ export type Json = any;
 
 
 // The private launcher hands authority through a fragment, never an HTTP URL or response.
-const launched = typeof location !== 'undefined' && /^#person=([a-f0-9]{64})$/.exec(location.hash)?.[1];
-if (launched) { sessionStorage.setItem('crewhouse.person', launched); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
+const hit = typeof location !== 'undefined' ? /^#person=([a-f0-9]{64})(&remote=1)?$/.exec(location.hash) : null, launched = hit?.[1];
+if (launched) { sessionStorage.setItem('crewhouse.person', launched); hit![2] ? sessionStorage.setItem('crewhouse.remote', '1') : sessionStorage.removeItem('crewhouse.remote'); history.replaceState(null, '', `${location.pathname}${location.search}#/`); }
+/** This browser came in over SSH (the launcher marked its link): sign-in leads with a code, since the sign-in page's return trip needs a forward. */
+const remote = () => { try { return sessionStorage.getItem('crewhouse.remote') === '1'; } catch { return false; } };
 const person = () => typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('crewhouse.person') ?? '' : '';
 
 /** Is crewd serving this page itself? It answers loopback only (src/server.ts's guard), so a loopback origin, or the
@@ -171,6 +173,7 @@ export const api = {
   /** Owner only: the most helpers may spend in a month, in dollars. */
   moneyCap: (cap: number) => call('PUT', '/api/house/money', { cap }),
   signInCancel: (account: string) => call('POST', `/api/accounts/1/${account}/cancel`),
+  remote: () => remote(),
   signOut: (account: string) => call('POST', `/api/accounts/1/${account}/logout`),
   /** One account's live catalog `{models: [{id, name}], picked}`; a pick leads the whole crew from the next turn, or only `bot`. */
   models: (account: string) => call('GET', `/api/accounts/1/${account}/model`),

@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { failure } from '@byokit/accounts';
 import type { SignInStep } from '../src/runtime.ts';
 
 const free = () => new Promise<number>((r) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address() as { port: number }; s.close(() => r(port)); }); });
@@ -126,5 +127,15 @@ test('sign-in: the person cancels, the wizard session is cancelled with it and t
     for (const until = Date.now() + 5_000; !f.fake.calls.some((c) => c.method === 'wizard.cancel') && Date.now() < until;) await new Promise((r) => setTimeout(r, 20));
     assert.equal(f.fake.calls.filter((c) => c.method === 'wizard.cancel').length, 1);
     assert.ok(!steps.some((s) => s.error), 'a cancel is the person\'s own doing, not an error on the card');
+  } finally { await f.done(); }
+});
+
+test('sign-in: a code the account refuses is told apart, so the card can say codes are off and link the setting', async () => {
+  const f = faked({}, { 'wizard.next': () => ({ done: true, status: 'error', error: 'Device code login is not enabled for this account. Enable device code authorization for Codex in ChatGPT Security Settings.' }) });
+  try {
+    await f.started;
+    const end = await ending((on) => f.runtime.signIn('chatgpt', 'code', on));
+    assert.equal(failure(end.error ?? ''), 'deviceCodeOff', end.error);
+    assert.ok(!f.fake.calls.some((c) => c.method === 'wizard.next' && (c.params as any)?.answer), 'nothing was answered on the account\'s behalf');
   } finally { await f.done(); }
 });

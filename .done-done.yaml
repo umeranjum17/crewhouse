@@ -291,6 +291,10 @@ journeys:
   setup-fix4:
     timeout: 40m
     command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix4 "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" missing && bash $S "$O" fix4 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" repairs'
+  # The sign-in sheet for a browser that came in over SSH (docs/verification/own-server.md): a link marked remote leads with the code, the
+  # browser route names the 1455 forward, a refused code says codes are off, an unmarked link keeps the browser first. Needs a browser session.
+  signin-remote:
+    command: 'bash scripts/verify/signin-remote.sh "$DONE_DONE_EVIDENCE_ROOT"'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:
