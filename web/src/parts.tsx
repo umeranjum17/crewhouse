@@ -10,7 +10,7 @@ import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
 import { MARKS } from './logos.ts';
 import { ICONS, type IconName } from './icons.ts';
-import { DRAFT_EDITED, formOpen, RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, phoneOnly, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
+import { DRAFT_EDITED, formOpen, RULE_SHOULD, RULE_WHEN, VOICE_WORDS, clock, deckFile, deck as deckView, docLinks, document as docView, fileSize, fileSource, fileTarget, fileView, flowed, mdPlain, pageWords, phoneOnly, resumeFrom, sentFile, slideWords, timeOf, workbook, type Card, type ListView, type RuleView, type CampaignOutcome, type Chart, type DeckView, type DocPart, type DocView, type FileView, type FormView, type ResumePart, type Helper, type Inbox, type Sheet, type Step, type Workbook } from './adapter.ts';
 
 /** Markdown inline runs, from the shared safe tokens (web/src/chat-md.ts): no raw HTML, http(s) links only. */
 const mdInline = (tokens: any[]): ReactNode => tokens.map((t, i) => t.type === 'strong' ? <strong key={i}>{mdInline(t.tokens)}</strong>
@@ -1273,7 +1273,76 @@ function VideoCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; o
   );
 }
 
+const MONTH = (d: Date) => d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), ymd = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+/** A helper's piece with its own face on the paper card: stacked buttons (one tap answers), a month to pick a day (and a time) from,
+ *  or a long read that opens in a pop-up sheet. Every answer goes back to the helper's same turn; "Not now" is always there. */
+function PieceCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  const ui = c.pieceUi!, { act, failed } = useAct(c, onDone), yes = c.choices.find((x) => x.body.answer === 'allow' && !x.body.pick) ?? c.choices[0], deny = c.choices.find((x) => x.body.answer === 'deny');
+  const now = new Date(), today = ymd(now.getFullYear(), now.getMonth(), now.getDate()), [month, setMonth] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
+  const [day, setDay] = useState(''), [time, setTime] = useState(''), [read, setRead] = useState(false), name = c.by && c.by !== 'chief' ? who?.name ?? c.by : 'Chief';
+  const lead = month.getDay(), days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate(), times = ui.kind === 'date' ? ui.times : [];
+  const picked = day ? new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + (time ? ` at ${time}` : '') : '';
+  const go = () => act({ answer: 'allow', day, ...(time ? { time } : {}) });
+  return (
+    <div className="card ask stack-ask chief-ask draft-ask piece-ask" id={id} aria-label={c.head} style={{ '--ask-colour': art.colourOf('chief') } as CSSProperties}>
+      <AskHead c={c} who={who} />
+      <p className="ask-words">{c.head}</p>
+      {c.lines?.[0] && <p className="piece-text">{c.lines[0]}</p>}
+      {ui.kind === 'buttons' && <div className="piece-buttons">{c.choices.filter((x) => x.body.pick).map((x, i) => <button key={x.body.pick} className={`btn${i === 0 ? ' go' : ''}`} onClick={() => act(x.body)}>{x.label}</button>)}</div>}
+      {ui.kind === 'sheet' && <>
+        <button type="button" className="piece-row" aria-haspopup="dialog" onClick={() => setRead(true)}><span className="piece-ic" aria-hidden><Icon name="file" size={20} /></span>
+          <span className="grow"><b className="clamp2">{c.head}</b><span>Opens a page</span></span><Icon name="next" size={18} /></button>
+        {read && createPortal(<PieceSheet c={c} name={name} onClose={() => setRead(false)} />, document.body)}</>}
+      {ui.kind === 'date' && <div className="piece-date">
+        <div className="piece-month"><b>{MONTH(month)}</b>
+          <button type="button" className="piece-nav" aria-label="Earlier month" disabled={month.getFullYear() === now.getFullYear() && month.getMonth() === now.getMonth()} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><Icon name="back" size={18} /></button>
+          <button type="button" className="piece-nav" aria-label="Later month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><Icon name="next" size={18} /></button></div>
+        <div className="piece-grid" role="grid" aria-label={MONTH(month)}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} className="piece-dow" aria-hidden>{d}</span>)}
+          {Array.from({ length: lead }, (_, i) => <span key={`b${i}`} />)}
+          {Array.from({ length: days }, (_, i) => { const v = ymd(month.getFullYear(), month.getMonth(), i + 1);
+            return <button key={v} type="button" className={`piece-day${v === today ? ' today' : ''}${v === day ? ' on' : ''}`} disabled={v < today} aria-pressed={v === day} aria-label={new Date(`${v}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} onClick={() => { setDay(v); setTime(''); }}>{i + 1}</button>; })}
+        </div>
+        <p className="piece-note">Pick a day from today on. Earlier days are greyed out.</p>
+        {times.length > 0 && <><b className="piece-label">Time</b><div className="piece-times" role="group" aria-label="Time">{times.map((t) => <button key={t} type="button" className={`piece-time${t === time ? ' on' : ''}`} disabled={!day} aria-pressed={t === time} onClick={() => setTime(t)}>{t}</button>)}</div>
+          {!day && <p className="piece-note">Times open once you pick a day.</p>}</>}
+        {picked && <p className="piece-picked" aria-live="polite">{picked}</p>}
+      </div>}
+      {failed}
+      <div className="btns">
+        {ui.kind !== 'buttons' && <button className="btn go" disabled={ui.kind === 'date' && (!day || (times.length > 0 && !time))} onClick={ui.kind === 'date' ? go : () => act(yes.body)}>{yes.label}</button>}
+        {deny && (ui.kind === 'buttons' ? <button className="btn quiet" onClick={() => act(deny.body)}>{deny.label}</button> : <button className="btn" onClick={() => act(deny.body)}>{deny.label}</button>)}
+      </div>
+      <p className="piece-from">from <b>{name}</b></p>
+    </div>
+  );
+}
+
+/** The long read a helper put behind a row: a bottom sheet on a phone, a centred 560 px panel on a desk, closed by its button or Escape. */
+function PieceSheet({ c, name, onClose }: { c: Card; name: string; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null), ui = c.pieceUi as Extract<NonNullable<Card['pieceUi']>, { kind: 'sheet' }>;
+  useDialogOwn(box, onClose);
+  return <div className="scrim" onClick={onClose}>
+    <div ref={box} className="sheet piece-sheet" role="dialog" aria-modal aria-label={c.head} onClick={(e) => e.stopPropagation()}>
+      <div className="piece-sheet-head"><div className="grow"><h2 className="clamp2">{c.head}</h2><span className="piece-from">from <b>{name}</b></span></div>
+        <button type="button" className="piece-nav" aria-label="Close" onClick={onClose}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+      <div className="piece-sheet-body"><p className="piece-note">About {ui.minutes} minute read</p>{ui.parts.map((p, i) => p.head ? <h3 key={i}>{p.head}</h3> : <p key={i}>{p.text}</p>)}</div>
+    </div>
+  </div>;
+}
+
+/** A helper's list in the thread: compact rows under its words, each a title, a quiet line and a link that shows its host. It asks nothing. */
+export function ListCard({ list, name }: { list: ListView; name: string }) {
+  const [all, setAll] = useState(false), rows = all ? list.rows : list.rows.slice(0, 5);
+  return <section className="list-att" aria-label={list.title}>
+    <header><b className="clamp2">{list.title}</b><span>{list.rows.length === 1 ? '1 result' : `${list.rows.length} results`}</span></header>
+    {rows.map((r, i) => <div key={i} className="list-row"><b className="clamp2">{r.title}</b>{r.sub && <span className="clamp2">{r.sub}</span>}{r.link && <a className="link" href={r.link} target="_blank" rel="noreferrer noopener">{r.host}</a>}</div>)}
+    <footer><span>from <b>{name}</b></span>{list.more > 0 && !all && <button type="button" className="link" onClick={() => setAll(true)}>Show all {list.more}</button>}</footer>
+  </section>;
+}
+
 export function AskCard({ c, who, onDone, id }: { c: Card; who: Helper | undefined; onDone: () => void; id?: string }) {
+  if (c.pieceUi) return <PieceCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.video) return <VideoCard c={c} id={id} who={who} onDone={onDone} />;
   if (c.kind === 'signin') return <SignInCard c={c} id={id} onDone={onDone} />;
   if (c.kind === 'unlock') return <UnlockCard c={c} id={id} onDone={onDone} />;

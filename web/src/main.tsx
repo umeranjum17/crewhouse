@@ -8,7 +8,7 @@ import * as A from './adapter.ts';
 import { APP_DOWNLOAD_URL, appDownload } from './download.ts';
 import * as art from './art.ts';
 type Helper = ReturnType<typeof A.crew>[number];
-import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, ImageStack, Media, ChatText, PalArt, Pill, PracticeVoice, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
+import { AiMark, answer, AskCard, AnsweredCard, RuleBox, AskSheet, InboxAlert, InboxDown, CampaignReceipt, attempt, Celebrate, setAway, setFaceMoods, ChiefArt, Composer, Face, Icon, ImageStack, Media, ChatText, ListCard, PalArt, Pill, PracticeVoice, Splash, Steps, Toasts, toast, PreviewCard, PreviewPanel, KEPT, tint, peekShared, dropShared, type Pick as Picked } from './parts.tsx';
 import { keepDraft } from './draft.ts';
 import type { IconName } from './icons.ts';
 import { Screen, ScreenPeek, SiteSignIn } from './screen.tsx';
@@ -721,6 +721,7 @@ function Chat({ id, m, state, tick, refresh, accounts, offline, hero, rail }: Ct
           const content = <>{l.inbox ? <div className="bubble-text inbox-bubble"><InboxAlert inbox={l.inbox} at={l.at} answer={l.id === last?.id && l.inbox.ask ? answerBox : undefined} /></div>
             : l.mailDown ? <div className="bubble-text inbox-bubble"><InboxDown cause={l.mailDown} /></div>
             : l.text && <div className="bubble-text"><ChatText text={l.detail ? l.text.replace(/^From Chief: /, '') : l.roles ? A.besideRoles(l) : l.text} latest={l.id === newestAnswer} /></div>}
+            {l.list && <ListCard list={l.list} name={name} />}
             {l.roles?.map((r) => <RoleCard key={r.id} r={r} refresh={refresh} />)}
             {pics.length > 1 && <ImageStack files={pics} />}
             {l.files.filter((f) => pics.length < 2 || f.kind !== 'image').map((f) => <Media key={f.url} f={f} big forget who={id === 'chief' ? makerOf(state, A.fileSource(f.url)?.bot ?? '') : undefined} />)}</>;

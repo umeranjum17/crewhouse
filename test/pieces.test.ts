@@ -38,6 +38,43 @@ test('a card, a form and a picker each hand their answer back to the same turn, 
   done();
 });
 
+const DAY = (n: number) => { const t = new Date(); t.setDate(t.getDate() + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+const BUTTONS = { kind: 'buttons', title: 'When should the reminder go?', choices: [{ id: 'tom', label: 'Tomorrow at 9' }, { id: 'fri', label: 'Friday at 9' }] };
+const DATE = { kind: 'date', title: 'Which day?', times: ['9:00', '10:30'] };
+const SHEET = { kind: 'sheet', title: 'Read the refund policy', text: 'About two minutes.', body: '## Returns\n\nWithin 30 days of delivery.' };
+const LIST = { kind: 'list', title: 'Flights', text: 'These five leave first.', rows: [{ title: 'BA117', sub: 'Gate B32', link: 'https://www.ba.com/x' }, { title: 'EK202', link: 'http://insecure.example' }, { title: '' }] };
+
+test('buttons, a date and a sheet answer the same turn; a list is said in the chat and asks nothing', async () => {
+  const { db, crew, done } = setup();
+  crew.onboard('Umer');
+  const id = (crew as any).addTask('chief', [LIST, BUTTONS, DATE, SHEET].map(call).join(' '), 'person').task;
+  const buttons = await open(db, BUTTONS.title);
+  assert.equal(db.get("SELECT count(*) AS n FROM asks WHERE kind = 'piece' AND title = 'Flights'")?.n, 0, 'a list waits for nothing');
+  const row: any = db.get("SELECT text, ui FROM messages WHERE bot = 'chief' AND author = 'bot' AND ui IS NOT NULL");
+  assert.equal(row.text, 'These five leave first.');
+  assert.deepEqual(JSON.parse(row.ui).list.rows, [{ title: 'BA117', sub: 'Gate B32', link: 'https://www.ba.com/x' }, { title: 'EK202', sub: '' }], 'a link that is not https is dropped, a row with no title too');
+  const line = A.lines(crew.botPage('chief'), 'chief', crew.snapshot()).find((l) => l.list)!, shown = line.list!;
+  assert.deepEqual(shown.rows.map((r) => r.host ?? ''), ['ba.com', ''], 'a link shows its host');
+  await assert.rejects(crew.answer(buttons, { answer: 'allow', pick: 'sat' }), /pick one of the choices/);
+  await crew.answer(buttons, { answer: 'allow', pick: 'fri' });
+  const date = await open(db, DATE.title);
+  await assert.rejects(crew.answer(date, { answer: 'allow', day: DAY(-1), time: '9:00' }), /pick a day from today on/);
+  await assert.rejects(crew.answer(date, { answer: 'allow', day: '2026-02-30', time: '9:00' }), /pick a day from today on/);
+  await assert.rejects(crew.answer(date, { answer: 'allow', day: DAY(3) }), /pick one of the times/);
+  await crew.answer(date, { answer: 'allow', day: DAY(3), time: '10:30' });
+  const sheet = await open(db, SHEET.title), c = A.cards(crew.snapshot()).find((x) => x.id === sheet)!;
+  assert.deepEqual(c.pieceUi, { kind: 'sheet', minutes: 1, parts: [{ head: 'Returns' }, { text: 'Within 30 days of delivery.' }] });
+  await crew.answer(sheet, { answer: 'allow' });
+  await until('the job to finish', () => task(db, id).state === 'done');
+  assert.deepEqual(said(crew, db, id).trim().split('\n').map((l: string) => JSON.parse(l.replace('crew_piece: ', ''))), [
+    { ok: true, shown: 'list' },
+    { answered: true, picked: { id: 'fri', label: 'Friday at 9' } },
+    { answered: true, day: DAY(3), time: '10:30' },
+    { answered: true }]);
+  assert.deepEqual(A.answeredReceipts(crew.snapshot()).map((r) => r.line.split(' · ')[0]), ['Picked: Friday at 9', `Picked: ${new Date(`${DAY(3)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} at 10:30`, 'Got it: Read the refund policy']);
+  done();
+});
+
 test('a line is said with nothing to answer, and so is a kind crewd does not know', async () => {
   const { db, crew, done } = setup();
   crew.onboard('Umer');
