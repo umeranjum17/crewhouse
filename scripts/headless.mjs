@@ -1,6 +1,7 @@
 // Headless Linux host; the kit may own the unit (setup --headless --install-only, then this runner).
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { isIPv4 } from 'node:net';
 import { OWNER_KEY_FILE, PHONE_KEY_FILE, RECEIPT_FILE } from '@byokit/cloud';
@@ -101,6 +102,11 @@ async function setup() {
   writeFileSync(join(dir, 'crewhouse-headless.service'), `[Unit]\nDescription=Crewhouse headless host and private relay\nAfter=network-online.target${publicRelay ? '' : ' tailscaled.service'}\n[Service]\nWorkingDirectory=${repo.replaceAll('%', '%%')}\nExecStart=${quote(process.execPath)} ${quote(join(repo, 'scripts/headless.mjs'))} serve\nRestart=on-failure\nKillMode=mixed\nTimeoutStopSec=30\nUMask=0077\n${process.env.CREWHOUSE_ENGINE === 'pi' ? 'OOMPolicy=continue\n' : ''}${env}\n[Install]\nWantedBy=${root ? 'multi-user.target' : 'default.target'}\n`, { mode: 0o600 });
   execFileSync('systemctl', [...scope, 'daemon-reload'], { stdio: 'inherit' });
   execFileSync('systemctl', [...scope, 'enable', '--now', 'crewhouse-headless.service'], { stdio: 'inherit' });
+  const lingers = () => { try { return execFileSync('loginctl', ['show-user', userInfo().username, '-P', 'Linger'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() === 'yes'; } catch { return false; } };
+  if (!root && !lingers()) { // a login service stops at the last logout unless the account lingers
+    try { execFileSync('loginctl', ['enable-linger'], { stdio: 'ignore' }); console.log('Crewhouse keeps running after you log out, and after a restart.'); }
+    catch { console.log(`Crewhouse stops when you log out. To keep it running, ask an administrator to run: sudo loginctl enable-linger ${userInfo().username}`); }
+  }
   await pair(); // secrets go to the calling terminal, never the unit's journal
 }
 try {
