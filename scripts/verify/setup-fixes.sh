@@ -23,17 +23,20 @@
 #     with exit 0, and when a state folder that is someone else's gives plain words (no stack trace, one next line) and the
 #     line it names brings Crewhouse up; `fails` (the released build) passes when the start dies with the keystore's raw error.
 #
-#   scripts/verify/setup-fixes.sh <out-dir> fix4 <crewhouse-linux-x64.tar.gz> missing|repairs
+#   scripts/verify/setup-fixes.sh <out-dir> fix4 <crewhouse-linux-x64.tar.gz> missing|repairs|hands
 #     installed and started, stopped; then the state folder group-writable, a stale pid file, and a corrupt database. `repairs` (the fix):
 #     `crewhouse triage` answers the one question (y) in a real terminal, the damaged file is kept byte for byte, Crewhouse starts again
 #     with Chief's folder unchanged, doctor says ready. `missing` (the released build): there is no triage, and moving the database
 #     aside by hand makes start fail with "a bot folder already exists".
+#     `hands`: one break at a time of what only the person can put right (a port another program holds, the sandbox's admin step, the
+#     AI sign-ins folder gone, a full disk), `crewhouse triage` after each, then the thing put right and triage again: one `For you,` line
+#     and its `Do this:`, and nothing left once it is done.
 #
 # Writes <out-dir>/setup-<fix>-<label>.txt (every command's words, stamped) and steps.json for done-done; exit 0 only when the run met its expectation.
 set -uo pipefail
 [ $# -ge 4 ] || { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 OUT=$(mkdir -p "$1" && cd "$1" && pwd -P); FIX=$2; if [ -f "$3" ]; then TB=$(realpath "$3"); else TB=$3; fi; EXPECT=$4
-{ [ "$FIX" = fix1 ] && { [ "$EXPECT" = dead ] || [ "$EXPECT" = alive ]; }; } || { [ "$FIX" = fix2 ] && { [ "$EXPECT" = ready ] || [ "$EXPECT" = honest ]; }; } || { [ "$FIX" = fix3 ] && { [ "$EXPECT" = fails ] || [ "$EXPECT" = works ]; }; } || { [ "$FIX" = fix4 ] && { [ "$EXPECT" = missing ] || [ "$EXPECT" = repairs ]; }; } || { echo "setup-fixes: usage: <out> fix1 <tarball> dead|alive [headless] | fix2 <tarball> ready|honest | fix3 <crewhouse-X.tgz | npm spec> fails|works | fix4 <tarball> missing|repairs" >&2; exit 2; }
+{ [ "$FIX" = fix1 ] && { [ "$EXPECT" = dead ] || [ "$EXPECT" = alive ]; }; } || { [ "$FIX" = fix2 ] && { [ "$EXPECT" = ready ] || [ "$EXPECT" = honest ]; }; } || { [ "$FIX" = fix3 ] && { [ "$EXPECT" = fails ] || [ "$EXPECT" = works ]; }; } || { [ "$FIX" = fix4 ] && { [ "$EXPECT" = missing ] || [ "$EXPECT" = repairs ] || [ "$EXPECT" = hands ]; }; } || { echo "setup-fixes: usage: <out> fix1 <tarball> dead|alive [headless] | fix2 <tarball> ready|honest | fix3 <crewhouse-X.tgz | npm spec> fails|works | fix4 <tarball> missing|repairs|hands" >&2; exit 2; }
 SCR=${SETUP_FIXES_SCRATCH:-$HOME/.cache/fm-scratch/setup-fixes}; mkdir -p "$SCR"
 IMG=${UBUNTU_IMG:-$SCR/noble.img}
 [ -f "$IMG" ] || curl -fsSL -o "$IMG" https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img || { echo "setup-fixes: cannot fetch the Ubuntu 24.04 image" >&2; exit 1; }
@@ -104,8 +107,34 @@ T="$OUT/setup-$FIX-$LABEL${5:+-$5}-$EXPECT.txt"
     vm ops "sudo loginctl enable-linger $ACC  # lab only, so Crewhouse outlives the separate logins below"
     term $ACC 600 "CREWHOUSE_TARBALL=/var/tmp/crewhouse.tar.gz sh /var/tmp/install.sh | cat; ~/.local/bin/crewhouse start < /dev/null | cat; ~/.local/bin/crewhouse stop"
     run() { vm $ACC "export PATH=\$HOME/.local/bin:\$PATH; S=$S; $1"; }
+    tri() { vm $ACC "export PATH=\$HOME/.local/bin:\$PATH; crewhouse triage > /var/tmp/tri 2>&1; c=\$?; cat /var/tmp/tri; echo triage-exit=\$c"; }
+    if [ "$EXPECT" != hands ]; then
     run 'sha256sum ~/Crewhouse/bots/chief/soul.md | cut -d" " -f1 > /var/tmp/soul.sha; rm -f $S/crew.db-wal $S/crew.db-shm; head -c 65536 /dev/urandom > $S/crew.db; sha256sum $S/crew.db | cut -d" " -f1 > /var/tmp/junk.sha; chmod 775 ~/.local/state; echo 99999 > $S/crewd.pid; echo "broken: database is random bytes, ~/.local/state mode $(stat -c %a ~/.local/state), crewd.pid names pid 99999"'
-    if [ "$EXPECT" = repairs ]; then
+    fi
+    if [ "$EXPECT" = hands ]; then
+      run 'cat $S/person.key > /var/tmp/key.txt; echo "the key is $(wc -c < /var/tmp/key.txt) bytes, kept for the check that no output prints it"'
+      echo "-- hands: a port another program holds"
+      run 'python3 -m http.server 7711 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > /var/tmp/held; sleep 2'; tri
+      run 'kill $(cat /var/tmp/held); sleep 1'
+      echo "-- hands: the port free again"; tri
+      echo "-- hands: the helpers' shell, before its admin step"
+      tri
+      echo "-- the admin step (run by the admin login here; triage handed over the one line)"
+      vm ops 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap apparmor-profiles >/dev/null 2>&1; [ -f /etc/apparmor.d/bwrap-userns-restrict ] || sudo install -m 644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict; sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict 2>&1 | tail -1'
+      echo "-- hands: after the admin step"; tri
+      echo "-- hands: the AI sign-ins folder gone"
+      run 'mv $S/openclaw /var/tmp/openclaw.keep; ls -d $S/openclaw 2>&1 | tail -1'; tri
+      echo "-- the line triage names: start builds a new one (nothing paid is signed in again here)"
+      term $ACC 300 'export PATH=$HOME/.local/bin:$PATH; crewhouse start < /dev/null; echo start-exit=$?'
+      run 'crewhouse start < /dev/null >/dev/null 2>&1; true'; echo "-- hands: after start built a new folder"; tri
+      run 'crewhouse stop | tail -1'
+      echo "-- hands: a full disk (a real 8 MB filesystem where the state would live)"
+      vm ops "sudo install -d -o $ACC -g $ACC -m 700 /var/tmp/tiny && sudo mount -t tmpfs -o size=8M tmpfs /var/tmp/tiny && df -h /var/tmp/tiny | tail -1"
+      vm $ACC 'export PATH=$HOME/.local/bin:$PATH; CREWHOUSE_STATE_DIR=/var/tmp/tiny crewhouse triage > /var/tmp/tri 2>&1; c=$?; cat /var/tmp/tri; echo triage-exit=$c'
+      vm ops 'sudo umount /var/tmp/tiny && sudo rmdir /var/tmp/tiny'
+      echo "-- hands: all four put right"
+      tri
+    elif [ "$EXPECT" = repairs ]; then
       echo "-- triage, answering y in a real terminal"
       term $ACC 120 'export PATH=$HOME/.local/bin:$PATH; crewhouse triage; echo triage-exit=$?' 'y/N=>y'
       echo "-- what is left"
@@ -173,6 +202,18 @@ T="$OUT/setup-$FIX-$LABEL${5:+-$5}-$EXPECT.txt"
 part() { sed -n "/^-- $1/,/^-- \|^setup-fixes/p" "$T"; }
 if [ "$FIX" = fix4 ]; then
   if [ "$EXPECT" = missing ]; then grep -q 'Unknown command: triage' "$T" && grep -q 'triage-exit=2' "$T" && grep -q 'a bot folder already exists at' "$T"; ok=$?
+  elif [ "$EXPECT" = hands ]; then
+    ok=0; hands() { part "hands: $1"; }
+    # Each break: its own `For you,` line and the `Do this:` beside it; then, once that thing is put right, the line is gone.
+    for c in 'a port another program holds|For you, Port 7711: Another program is already using port 7711' "the helpers' shell, before its admin step|For you, the helpers' shell: " 'the AI sign-ins folder gone|For you, AI sign-in: /home/.*openclaw is gone, and the AI sign-ins that were in it' 'a full disk|For you, disk space: the disk holding /var/tmp/tiny has '; do
+      hands "${c%%|*}" | grep -q -- "${c#*|}" && hands "${c%%|*}" | grep -q 'Do this:' || ok=1
+    done
+    hands 'the port free again' | grep -q 'For you, Port' && ok=1
+    hands 'after the admin step' | grep -q -- "For you, the helpers' shell" && ok=1
+    hands 'after start built a new folder' | grep -q 'For you, AI sign-in' && ok=1
+    hands 'all four put right' | grep -q 'triage-exit=0' && ! hands 'all four put right' | grep -q 'For you,' || ok=1
+    ! grep -qF "$(vm $ACC cat /var/tmp/key.txt)" "$T" || ok=1
+    ! grep -Eq '^ +at .+[:(]|Node\.js v[0-9]' "$T" || ok=1
   else
     grep -q 'Needs a yes\|Move it aside and start with a new one' "$T" && grep -q 'triage-exit=0' "$T" && grep -q 'kept file identical to the damaged one: yes' "$T" && grep -q 'Chief folder unchanged: yes' "$T" \
       && grep -q 'Fixed: Only you can write to' "$T" && grep -q 'Fixed: removed the leftover record' "$T" && grep -q 'Fixed: moved the damaged database aside' "$T" && grep -q '^port 7711 answers 200' "$T" \
@@ -202,7 +243,8 @@ const [, out, label, fix, expect] = process.argv, fs = require("node:fs");
 const plans = {
   fix1: { steps: ["Run the one-line install from " + label + " and press Enter at the question about starting Crewhouse at login", "Log out, wait 60 seconds, ask port 7711 from the admin account", "sudo reboot, wait for the machine, ask port 7711 again with nobody logged in"],
     result: expect === "alive" ? "Crewhouse answers 200 after logout and after a reboot" : "Crewhouse is gone 60 seconds after logout (the released build)" },
-  fix4: { steps: ["Install " + label + ", start it, stop it, then break three things: a damaged database, ~/.local/state group-writable, a stale pid file", "Run crewhouse triage and answer y to the one question", "Start again: the old database file is kept whole, Chief\u0027s folder is as it was, doctor is ready"],
+  fix4: expect === "hands" ? { steps: ["Install " + label + " and start it, then break one thing at a time: a port another program holds, the helpers\u0027 shell without its admin step, the AI sign-ins folder gone, and a full 8 MB filesystem where the state would live", "Run crewhouse triage after each break, then put that one thing right", "Run crewhouse triage again: its line is gone, and on the whole machine nothing is left for the person"],
+    result: "each of the four things only the person can do is handed over as one line with its Do this, and each clears when it is done" } : { steps: ["Install " + label + ", start it, stop it, then break three things: a damaged database, ~/.local/state group-writable, a stale pid file", "Run crewhouse triage and answer y to the one question", "Start again: the old database file is kept whole, Chief\u0027s folder is as it was, doctor is ready"],
     result: expect === "repairs" ? "triage fixes its own folder and leftover file, asks before moving the database, keeps it whole, and Crewhouse starts again" : "the released build has no triage, and moving the database by hand makes start fail" },
   fix3: { steps: ["On a stock login with no Node: install Node 24 with nvm, npm install -g crewhouse, crewhouse start", "Make ~/.local/state belong to root and start again as another stock login", "Hand the folder back with the line Crewhouse printed and start again"],
     result: expect === "works" ? "A default Ubuntu login reaches a running Crewhouse with no hand steps; a folder that is someone else\u0027s gives plain words and one next line, and that line works" : "The released build dies with the keystore\u0027s raw KeystoreError and never starts" },

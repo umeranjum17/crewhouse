@@ -295,6 +295,11 @@ journeys:
   # browser route names the 1455 forward, a refused code says codes are off, an unmarked link keeps the browser first. Needs a browser session.
   signin-remote:
     command: 'bash scripts/verify/signin-remote.sh "$DONE_DONE_EVIDENCE_ROOT"'
+  # Fix 4's four hand-overs, on the same VM: a port another program holds, the helpers' shell's admin step, the engine's sign-in
+  # folder gone and a full disk, each as one `For you,` line and its `Do this:`, and each gone once that thing is put right.
+  setup-fix4-hands:
+    timeout: 40m
+    command: 'S=scripts/verify/setup-fixes.sh; bash $S "$DONE_DONE_EVIDENCE_ROOT" fix4 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" hands'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:

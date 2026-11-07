@@ -2,16 +2,17 @@
 // Four rules, in this order of trust:
 //   fixes itself   its own folder permissions and files that name a Crewhouse that is no longer running
 //   asks first     keeping Crewhouse running after logout; moving a damaged database aside
-//   hands over     one line for what it must not do itself (added with the hand-overs)
+//   hands over     one line for what it must not do itself: a port another program holds, an administrator's step, signing in to AI again, a full disk
 //   never          deletes data (a database is moved, never removed), prints a key, kills what it cannot prove is Crewhouse's own,
 //                  or loosens a setting that belongs to the whole machine (no sudo, nothing wider than the person's own folders)
-import { existsSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, renameSync, rmSync, statfsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { databaseProblem } from './health.mjs';
+import { databaseProblem, engineFolderProblem, portProblem } from './health.mjs';
 import { keepPrivate } from './private.mjs';
+import { sandbox } from './sandbox.mjs';
 
 /** Whether `pid` is this install's own crewd: its folder and its command, both. Anything else is never touched. */
 const ours = (cfg, pid) => {
@@ -24,6 +25,8 @@ export async function triage(cfg, { yes = false, cmd = 'crewhouse', input = proc
   const { stateDir } = cfg;
   let fixed = 0, left = 0;
   const rl = !yes && input.isTTY ? createInterface({ input, output: process.stdout }) : null;
+  /** What only the person can do: said once, in one line, and counted as still theirs. Nothing is run for them. */
+  const handOver = (what, cause, next) => { say(`For you, ${what}: ${cause}.\n  ${next}`); left++; };
   const ask = async (question, why) => {
     if (yes) return true;
     if (!rl) { say(`Needs a yes: ${question}\n  ${why}\n  Run ${cmd} triage in a terminal to answer, or add --yes.`); left++; return false; }
@@ -58,7 +61,21 @@ export async function triage(cfg, { yes = false, cmd = 'crewhouse', input = proc
       if (spawnSync('loginctl', ['enable-linger', user]).status === 0) { say('Fixed: Crewhouse keeps running after you log out, and after a restart.'); fixed++; }
       else { say(`This computer did not allow it. Ask an administrator to run: sudo loginctl enable-linger ${user}`); left++; }
     }
+
+    // Hands over: a port that another program holds is that program's to give up; Crewhouse signals nothing it did not start.
+    const held = running ? null : await portProblem(cfg);
+    if (held) handOver(held.what, held.cause, `Do this: ${held.next}`);
+    // Hands over: an administrator's step (the helpers' sandbox needs a package, and on Ubuntu a rule, installed with sudo).
+    const wall = sandbox();
+    if (!wall.ok) handOver("the helpers' shell", wall.cause, `Do this: ${wall.next}`);
+    // Hands over: the AI sign-ins live in the engine's own folder; one that is gone has taken them, and only the person can sign in again.
+    const lost = engineFolderProblem(cfg);
+    if (lost) handOver('AI sign-in', lost.cause, `Do this: ${lost.next}`);
+    // Hands over: a full disk, which only the person can free; nothing of Crewhouse's is removed to make room.
+    let mb = null; try { const free = statfsSync(existsSync(stateDir) ? stateDir : join(stateDir, '..')); mb = Math.floor(free.bavail * free.bsize / 1048576); } catch { /* no folder there yet: nothing to measure, and start makes it */ }
+    const need = Number(process.env.CREWHOUSE_MIN_FREE_MB || 500);
+    if (mb !== null && mb < need) handOver('disk space', `the disk holding ${stateDir} has ${mb} MB free and Crewhouse needs ${need} MB`, `Do this: free some space (nothing of Crewhouse's is removed for you), then run ${cmd} start`);
   } finally { rl?.close(); }
-  say(left ? `${left} thing(s) still need you.` : fixed ? `Done: ${fixed} thing(s) repaired. ${cmd} doctor says whether Crewhouse can run now.` : `Nothing needed repairing. ${cmd} doctor says whether Crewhouse can run.`);
+  say(left ? `${left} thing(s) are still for you.` : fixed ? `Done: ${fixed} thing(s) repaired. ${cmd} doctor says whether Crewhouse can run now.` : `Nothing needed repairing. ${cmd} doctor says whether Crewhouse can run.`);
   return left ? 1 : 0;
 }
