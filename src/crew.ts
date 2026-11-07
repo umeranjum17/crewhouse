@@ -10,6 +10,7 @@ import { Desktops, browserBin, missing as desktopMissing, probeEngine, type Watc
 import { Accounts, PROVIDERS, clock } from './accounts.ts';
 import { Connections, type AppTool, APPS, GRANTABLE } from './connections.ts';
 import { Composio, GMAIL_CONNECT } from './composio.ts';
+import { Bus } from './bus.ts';
 import { PARAMETERS, PIECE_ABOUT, HELPER_ROUTINE, CHIEF_ROUTINE, bashTool, readPage, runAxi, runSandboxed, q, sandboxReady, said, tool, webTools, type CrewTool } from './engine.ts';
 import { allowed, proxy } from './net.ts';
 import { handsOf, type Hands } from '../bin/hands.mjs';
@@ -224,6 +225,7 @@ export class Crew {
   private live = new Map<string, Live>();
   /** Tasks to pick up in their own session: after a restart, or on the next AI account after a limit. */
   private handoffs = new Map<number, string>();
+  private bus: Bus;
   /** Tasks resuming because the person just connected an app they asked for. */
   private connected = new Set<number>();
   private holds = new Map<number, (answer: string) => void>();
@@ -279,6 +281,7 @@ export class Crew {
     this.runtime = pickRuntime(cfg);
     this.accounts = new Accounts(this.runtime);
     this.composio = new Composio(this.runtime, db);
+    this.bus = new Bus(cfg, db, { say: (b, a, t, k) => this.say(b, a, t, k), name: (b) => this.bot(b)?.display, start: (r) => this.startMention(r) });
     // A scripted/custom model provider stands in for the person's own ChatGPT, exactly as the stub model always did.
     if (cfg.engineProvider) this.accounts.ready.set('chatgpt', true);
     this.runtime.onEngine = () => this.db.live('system.engine', '', {}); // each install or start phase, live for Hello's getting-ready screen
@@ -312,7 +315,7 @@ export class Crew {
     if (!this.person().onboarded && !this.db.get('SELECT 1 FROM messages WHERE bot = ?', CHIEF)) this.say(CHIEF, 'bot', chiefGreeting(), null);
     this.timer = setInterval(() => this.tick(), 1500);
     probeEngine();
-    this.recover();
+    this.recover(); this.bus.retry();
     // A cold boot replays the sleep line: the last tick survived in settings, so a gap still names the
     // missed routines once and starts wake chores, on this computer or a cloud one.
     const last = Number(this.db.get("SELECT value FROM settings WHERE key = 'crew.lastTick'")?.value ?? 0);
@@ -412,7 +415,7 @@ export class Crew {
     for (const n of this.nets.values()) n.close();
     this.accounts.stop();
     const w = jobs.goal(this.db)?.will, form = w ? this.browserOf(w) : undefined; // a filled form's kept headless page goes with crewd
-    return Promise.all([this.runtime.stop(), this.desktops.stopAll(), this.connections.stop(), form && !form.onScreen && form.run(['close'])]);
+    return Promise.all([this.bus.stop(), this.runtime.stop(), this.desktops.stopAll(), this.connections.stop(), form && !form.onScreen && form.run(['close'])]);
   }
 
   person(): Row {
@@ -1140,7 +1143,7 @@ export class Crew {
   }
 
   /** `said` is what the thread shows, when it isn't the whole body. */
-  private addTask(bot: string, body: string, origin: string, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; title?: string; key?: string } = {}) {
+  private addTask(bot: string, body: string, origin: string, routine?: Row, said = body, pics: Photo[] = [], link: { parent?: number; root?: number; room?: boolean; title?: string; key?: string; bus?: number } = {}) {
     const title = routine?.name ? short(routine.name, 80) : link.title ? taskTitle(link.title) : taskTitle(body);
     let shown = '';
     // A replayed phone request answers with its first result (the claim below lands in the same transaction as the task).
@@ -1149,6 +1152,7 @@ export class Crew {
       const now = Date.now(), r = this.db.run('INSERT INTO tasks (bot, title, body, origin, state, created_at, updated_at, routine) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         bot, title, body, origin, 'queued', now, now, routine?.id ?? null), id = Number(r.lastInsertRowid), parent = link.parent ? this.db.get('SELECT root, room FROM tasks WHERE id = ?', link.parent) : undefined;
       this.db.run('UPDATE tasks SET parent = ?, root = ?, room = ? WHERE id = ?', link.parent ?? null, link.root ?? parent?.root ?? id, Number(link.room ?? !!parent?.room), id);
+      if (link.bus && !this.db.run("UPDATE bus SET state = 'taken', task = ? WHERE id = ? AND state = 'open'", id, link.bus).changes) throw new Error('taken'); // a repeated delivery finds its mention taken and starts nothing
       // Uploads are kept in the helper's files — photos where they were, documents in its inbox for the documents tool — under crewd's own `<task>-<n>.<ext>` names, and shown in the chat by that path.
       const kept = pics.map((p, i) => {
         const photo = p.photo !== false, rel = `files/${photo ? 'photos' : 'inbox'}/${id}-${i + 1}.${p.ext}`;
@@ -1172,6 +1176,18 @@ export class Crew {
     return { task: id, shown };
   }
 
+  private startMention(r: Row) {
+    const from = this.bot(r.from_bot)?.display ?? r.from_bot;
+    try { this.addTask(r.to_bot, `${from} (a teammate) asks: ${r.text}\nYour answer goes back to ${from} when you finish.`, r.from_bot, undefined, `From @${from}: ${r.text}`, [], { parent: r.sender_task, bus: r.id }); } catch (e) { if ((e as Error).message !== 'taken') throw e; }
+  }
+
+  /** crew_mention: the sender's job and its chain come from the call, never from the model. */
+  private mention(botId: string, p: any) {
+    const task = this.activeTask(botId); if (!task) throw new Error('Mention a helper from inside a job.');
+    const to = String(p.to ?? '').toLowerCase().replace(/^@/, ''), bot = this.bots().find((b) => b.id === to || b.display.toLowerCase() === to);
+    return this.bus.mention(botId, task, bot?.id ?? to, String(p.text ?? ''));
+  }
+
   private setTask(task: Row, state: string, result?: string) {
     if (state === 'done' || state === 'failed' || state === 'unsure') {
       this.taskGrants.delete(task.id);
@@ -1183,6 +1199,7 @@ export class Crew {
     this.db.event(`task.${state}`, task.bot, { task: task.id, title: task.title, ...(result ? { result: result.slice(0, 280) } : {}) });
     if (state === 'failed' && result) this.failedLine(task, result);
     if (state === 'unsure') this.failedLine(task, result!, true);
+    this.bus.reply(task, state, result);
     if (['done', 'failed', 'unsure'].includes(state)) { this.wrap(task.root ?? task.id); this.settleCheck(task, state, result); }
   }
 
@@ -2075,6 +2092,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
           copyFileSync(from, String(p.to));
           this.db.event('task.progress', botId, { task: task(), text: `Put a copy of ${basename(from)} in your ${basename(dirname(String(p.to)))} folder` });
         }),
+      tool('crew_mention', 'Ask another helper for something, by its id (crew_roster lists them): `to`, and `text` with everything it needs. It works on it as its own job and its answer comes back to your chat. Do not wait for it; carry on or end your turn.', (p) => this.mention(botId, p)),
       tool('crew_remember', 'Save a lasting preference of the person (one short line). `replaces`: words of an old note this corrects. ' +
         '`everyone`: true for something every helper should know about them; otherwise it goes in your own notes.',
         (p) => {
@@ -2719,7 +2737,7 @@ return `${this.memory(task.bot)}[Crewhouse] Crew: ${crew}. Standing instructions
     try {
       const now = Date.now();
       if (this.lastTick && now - this.lastTick > SLEPT_MS) this.slept(this.lastTick, now);
-      this.lastTick = now;
+      this.lastTick = now; this.bus.retry();
       this.db.run("INSERT INTO settings (key, value) VALUES ('crew.lastTick', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", String(now));
       this.schedule();
       const working = !!this.db.get("SELECT 1 FROM tasks WHERE state = 'working' LIMIT 1");

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS asks (
 CREATE TABLE IF NOT EXISTS routines (
   id INTEGER PRIMARY KEY, bot TEXT NOT NULL, name TEXT, schedule TEXT NOT NULL, body TEXT, brain TEXT, member INTEGER DEFAULT 1,
   kind TEXT DEFAULT 'task', state TEXT DEFAULT 'on', next_at INTEGER, last_at INTEGER, last_task INTEGER, created_at INTEGER);
+CREATE TABLE IF NOT EXISTS bus (id INTEGER PRIMARY KEY, from_bot TEXT, to_bot TEXT, sender_task INTEGER, chain INTEGER, hops INTEGER, text TEXT, state TEXT, task INTEGER, at INTEGER);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, name TEXT, pk TEXT UNIQUE, role TEXT, member INTEGER DEFAULT 1, created_at INTEGER, last_seen INTEGER);
 -- What the crew used of the person's AI each day (weighted tokens), for their share. Never shown as a number.

@@ -7,6 +7,7 @@ export interface Config {
   stateDir: string;
   crewDir: string;
   toolsDir: string;
+  natsBin: string;
   engineDir: string;
   host: string;
   port: number;
@@ -46,6 +47,7 @@ export function loadConfig(): Config {
   const xdgState = process.env.XDG_STATE_HOME?.trim() || join(home, '.local', 'state'), xdgData = process.env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), repoDir = appDir, own = join(repoDir, 'runtime', 'openclaw'), cfg: Config = {
     stateDir: envPath('CREWHOUSE_STATE_DIR', join(xdgState, 'crewhouse')),
     crewDir: envPath('CREWHOUSE_CREW_DIR', join(home, 'Crewhouse')),
+    natsBin: process.env.CREWHOUSE_NATS_BIN?.trim() ?? '',
     toolsDir: envPath('CREWHOUSE_TOOLS_DIR', join(xdgData, 'crewhouse', 'tools')),
     engineDir: envPath('CREWHOUSE_ENGINE_DIR', product && (existsSync(join(repoDir, '.git')) || existsSync(own) || existsSync(own + '.sets')) ? own : join(xdgData, 'crewhouse', 'engine')),
     host: process.env.CREWHOUSE_HOST?.trim() || '127.0.0.1',

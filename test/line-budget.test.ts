@@ -117,7 +117,12 @@ import { join } from 'node:path';
 // Raised 8279 -> 8313 for the chat piece contract (ch-chat-piece-contract, +34 net with the inline draft card under it, Juggernaut decision B): the crew_piece
 // tool, its answer shape, its hold and its place in the ask lists. The paired trim lane filed by the lead repays it, behaviour unchanged.
 // Trimmed 8313 -> 8279 for ch-src-trim-piece-budget: 34 comment lines that only restated the code, repaying the piece contract's raise exactly; src measures 8277.
-const BUDGET = 8279;
+// Raised 8279 -> 8516 for the NATS @mention bus (crewhouse-bus-nats-dapr, owner exception: Main approved up to +350 for this bus across two slices; src measures 8514):
+// src/bus.ts (the gate, the outbox/inbox row, the NATS publish and reader) and its hooks in crew.ts, then the broker itself in src/nats.ts
+// when the captain's 7 Nov route change put the supervisor in Crewhouse instead of a kit (pinned hash-checked server, one child on loopback, explicit acks).
+// Slice 2 (the durable link reader) is not in this change. No trim is paired: the owner ruled on 7 Nov 2026 (decision 8911) that the bus keeps its raise
+// without repayment, because the trim lane showed that no honest lines could be removed from src/.
+const BUDGET = 8516;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');
