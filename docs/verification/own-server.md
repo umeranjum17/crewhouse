@@ -30,5 +30,19 @@ forwarding" and the 17711 line reaches Chief, with its program on 1455 the same 
 the key is in no server log. `released` passes when the build before prints only "Open http://127.0.0.1:7711/ in your browser."
 Writes `own-server-<mode>.txt` (the private key never appears) and `steps.json`.
 
-Not covered here: the browser approved by two words (C2), the sign-in card leading with the code for such a browser (C3), and
-a phone's route to a server (C6). Without a VM: `node --test test/failure-words.test.ts`.
+## Sign-in from such a browser (C3)
+
+`crewhouse open --link` on a computer with no screen adds `&remote=1` to the link (`web/src/api.ts` keeps it for that browser
+session only; crewd's own environment is never asked). For a browser with the mark the ChatGPT sheet starts the code route first
+and offers the browser route second; the browser route names the exact forward it needs
+(`-L 127.0.0.1:1455:127.0.0.1:1455`, the sign-in page comes back to port 1455). When the account has device codes turned off
+the engine's refusal (`failure() === 'deviceCodeOff'`, the kit's own class) is shown as "ChatGPT has codes turned off", with a link to
+ChatGPT's security settings, Try again and the browser route. A browser with no mark, a screen on the machine itself, keeps the
+browser route first, as before.
+
+`CHROME_DEVTOOLS_AXI_SESSION=<task-name> bash scripts/verify/signin-remote.sh <out>` captures the four sheets (demo data, one stub
+lab to serve the app) day and night at 1440 and 390. Without a browser: `node scripts/test.mjs test/openclaw-wizard.test.ts` (a code the
+account refuses is the kit's `deviceCodeOff`) and `node --test test/failure-words.test.ts` (the mark on `--link`, never on a screen).
+
+Not covered here: a real device code through a real ssh session (asked first, one code, the retained test home), the browser
+approved by two words (C2), and a phone's route to a server (C6). Without a VM: `node --test test/failure-words.test.ts`.

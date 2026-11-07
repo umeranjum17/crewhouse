@@ -25,7 +25,7 @@ const now = Date.now();
 // The local day's start, as the app counts "done today": jobs meant to be done today never slip into yesterday after midnight.
 const today = new Date(now).setHours(0, 0, 0, 0);
 const min = 60_000;
-const signin = ['signin', 'hello', 'first', 'work', 'longthread'].includes(variant);
+const signin = ['signin', 'codesoff', 'hello', 'first', 'work', 'longthread'].includes(variant);
 const firstRun = ['first', 'answer', 'plan', 'work'].includes(variant);
 const fresh = variant === 'fresh' || variant === 'hello' || variant === 'named';
 // Google setup: what crewd's ideas[] says a job waits on (docs/ui-contract.md).
@@ -586,7 +586,8 @@ const accounts = AIS.map((ai) => ({ account: ai.key, name: ai.name,
   restingUntil: ai.key === 'chatgpt' && variant === 'resting' ? now + 95 * min : 0,
   notIncluded: ai.key === 'chatgpt' && variant === 'plan',
   work: ai.key === 'chatgpt' && variant === 'work' ? 'umer@mail.example' : false,
-  signIn: ai.key === 'chatgpt' && variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' } : null }));
+  signIn: ai.key !== 'chatgpt' ? null : variant === 'signin' ? { state: 'waiting', via: 'browser', url: 'https://auth.openai.com/oauth/authorize' }
+    : variant === 'codesoff' ? { state: 'failed', via: 'code', error: 'Device code login is not enabled for this account. Enable device code authorization in ChatGPT Security Settings.' } : null }));
 
 // ?demo=handoff: Reel finishes while you watch. 4 s after the page opens the snapshot changes and the two events
 // crewd would send land through the live path, so the room's hand-off, the tray and the feed all move as they would.

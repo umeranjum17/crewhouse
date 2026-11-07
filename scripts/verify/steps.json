@@ -965,5 +965,15 @@
       "Change Tracer's email, tap Review one email, then double tap Send on the card that follows"
     ],
     "result": "A draft waits in an editable box with Copy and Discard and says Waiting for you, turns to Draft once changed, ends Copied, you send it or Discarded and never Sent; on the computer Tracer's email says to approve on the paired phone; in the paired installed app Review then Send puts exactly one message with the person's words in emulate's mailbox and leaves a Sent receipt"
+  },
+  "signin-remote": {
+    "start": "A private stub-engine crewd serving the app; the sign-in sheet for ChatGPT opened on demo data from a link marked as coming in over SSH, and from one with no mark",
+    "steps": [
+      "Open the sign-in sheet from a link marked remote: it leads with the code",
+      "Open the browser route from the same link: it names the exact 1455 forward",
+      "Open the sheet for an account with codes turned off: it says so and links the setting",
+      "Open the sheet from a link with no mark: the browser route stays first"
+    ],
+    "result": "A browser that came in over SSH is offered the code first, the browser route names the 1455 forward, a refused code says codes are off and links ChatGPT's security settings, and a browser on the machine itself keeps the browser route first"
   }
 }

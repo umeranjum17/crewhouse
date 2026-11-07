@@ -102,12 +102,13 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose, onSignedIn
   const [cat, setCat] = useState<Json>(null);
   const choose = (id: string) => { setPicking(true); toast('Connecting'); void api.signInWorkspace(ai.key, id).catch((e: any) => toast(e.status === 400 ? e.message : 'That didn’t work. Please try again.')).finally(() => setPicking(false)); };
   const tab = useTab(first);
+  const far = ai.key === 'chatgpt' && api.remote(); // a browser that came in over SSH: ChatGPT's page comes back to this computer's port 1455, not the person's own
   const start = (body: { fresh?: boolean; via?: 'code' | 'key' } = {}) => { setCancelled(false); void (async () => {
-    if (body.via === 'code') await api.signInCancel(ai.key);
+    if (body.via === 'code' || far) await api.signInCancel(ai.key);
     await api.signIn(ai.key, body);
   })().catch(() => {}); };
   const again = (body: { fresh?: boolean } = {}) => { if (!keyed) tab.fresh(); start(keyed ? { via: 'key' } : body); };
-  useEffect(() => { if (!pinned) start(keyed ? { via: 'key' } : {}); }, []);
+  useEffect(() => { if (!pinned) start(keyed ? { via: 'key' } : far ? { via: 'code' } : {}); }, []);
   const live: Phase = offline ? 'offline' : cancelled ? 'cancelled' : g.state === 'ready' ? (g.work && !keepWork ? 'work' : 'done')
     : g.key ? 'key' : g.signing ? 'code' : g.page ? 'waiting' : g.busy ? 'busy' : g.declined ? 'cancelled' : g.expired ? 'expired' : g.failed ? 'failed' : 'opening';
   const phase = pinned ?? live;
@@ -156,6 +157,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose, onSignedIn
         <p className="mute">{ai.key === 'chatgpt' ? <>Pick your account, then tap <b>Continue</b>.</> : <>Follow {name}'s instructions on its page.</>} Come back here after; this moves on by itself.</p>
         {!tab.open() && <a className="btn go big" href={g.page || '#'} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         <Pill tone="wait" live>Waiting for {name}…</Pill>
+        {far && <p className="mute small">{name}'s page comes back to port 1455 on your own computer. The ssh line must include <code>-L 127.0.0.1:1455:127.0.0.1:1455</code>, and nothing else there may use 1455.</p>}
         {ai.key === 'chatgpt' && <button className="link" onClick={() => start({ via: 'code' })}>Having trouble? Use a code instead</button>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
@@ -165,6 +167,7 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose, onSignedIn
         <button className="code" onClick={() => navigator.clipboard?.writeText(code).then(() => toast('Code copied'), () => {})} aria-label={`Code ${code.split('').join(' ')}. Tap to copy.`}>{code}<span>Tap to copy</span></button>
         {page && <a className="btn go big" href={page} target="_blank" rel="noreferrer">Open {name} ↗</a>}
         {ai.key === 'chatgpt' && <a className="link" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>}
+        {far && <button className="link" onClick={() => start({})}>Sign in with the browser instead</button>}
         <button className="link" onClick={cancel}>Cancel</button>
       </>}
       {phase === 'done' && <><h2>You're signed in!</h2><p>The crew thinks with your own {name} now. Your password stayed with {name}.</p>
@@ -183,7 +186,10 @@ export function SignIn({ ai = A.AIS[0], tab: first, onReady, onClose, onSignedIn
       {phase === 'failed' && g.cliLogin && (() => { const w = A.cliLoginWords(g.cliLogin, name); return <><h2>{w.head}</h2><p className="mute">{w.body}</p>
         {w.cmd && <div className="fr-cmds"><code className="fr-cmd chat-code">{w.cmd}</code></div>}
         <button className="btn go big" onClick={() => again()}>{w.action}</button>{notNow}</>; })()}
-      {phase === 'failed' && !g.cliLogin && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
+      {phase === 'failed' && g.codesOff && <><h2>{name} has codes turned off</h2><p className="mute">Turn on device code sign-in in {name}'s security settings, then try again. Or sign in with the browser instead.</p>
+        <a className="btn go big" href="https://chatgpt.com/#settings/Security" target="_blank" rel="noreferrer">Open {name} settings</a>
+        <button className="link" onClick={() => again()}>Try again</button><button className="link" onClick={() => start({})}>Sign in with the browser instead</button>{notNow}</>}
+      {phase === 'failed' && !g.cliLogin && !g.codesOff && <><h2>That didn't go through</h2><p className="mute">{g.recovery || <>{name} didn't finish the sign-in. No harm done; let's try once more.</>}</p>
         <button className="btn go big" onClick={() => again()}>Try again</button>{notNow}</>}
       {phase === 'offline' && <OfflineWords onClose={onClose} />}
     </Sheet>

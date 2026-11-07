@@ -100,7 +100,7 @@ test('on a machine with no screen, start and open print the ssh step; only open 
     const link = await m.run('open', '--link');
     assert.equal(link.code, 0, link.out);
     assert.match(link.out, /Keep this link private\./);
-    assert.ok(link.out.includes(`http://127.0.0.1:${port}/#person=${key()}`), 'the link, once');
+    assert.ok(link.out.includes(`http://127.0.0.1:${port}/#person=${key()}&remote=1`), 'the link, once, marked as coming in over SSH');
     assert.ok(link.out.indexOf('Keep this link private') < link.out.indexOf('#person='), 'the warning comes first');
     const bad = await m.run('open', '--nope');
     assert.equal(bad.code, 2, bad.out);
@@ -120,6 +120,8 @@ test('on a machine with a screen but no browser program, open still names the ad
     assert.match(out, /Open http:\/\/127\.0\.0\.1:\d+\/ in your browser\./);
     assert.doesNotMatch(out, /#person=|ssh -N/);
     assert.ok(!out.includes(readFileSync(join(m.state, 'person.key'), 'utf8')));
+    const link = await m.run('open', '--link');
+    assert.ok(link.out.includes(`#person=${readFileSync(join(m.state, 'person.key'), 'utf8')}\n`) && !link.out.includes('remote=1'), 'a screen on this machine never gets the mark');
   } finally {
     await m.run('stop');
     await until('the port to free', async () => { const s = await listen(Number(m.env.CREWHOUSE_PORT)).catch(() => null); s?.close(); return !!s; });

@@ -2,7 +2,7 @@
 // so the engine underneath can change (docs/ui-contract.md) without the screens changing. Crewhouse's own
 // status lines read in plain words (no commands, paths, model names, percentages or raw prompts);
 // a chat answer reads as written. test/ui.test.ts holds this.
-import { PROVIDERS as ROUTES, route as kitRoute } from '@byokit/accounts';
+import { PROVIDERS as ROUTES, failure, route as kitRoute } from '@byokit/accounts';
 import { phaseOf } from '@byokit/ui-core/phase';
 import type { Json } from './api.ts';
 import { safeLink } from './chat-md.ts';
@@ -2123,7 +2123,7 @@ export const AI_ROUTES = `Each one uses a plan you already pay for, except ${AIS
 export function account(accounts: Json[] | null, key = 'chatgpt') {
   const a = accounts?.find((x) => x.account === key);
   const [provider, ...rest] = key.split('.');
-  const none = { found: false, cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '', provider, label: rest.join('.'), plan: '', email: '' };
+  const none = { found: false, cliLogin: null as null | { signIn: boolean }, recovery: '', signing: null, key: null as null | { error: string }, pick: null as null | { id: string; name: string }[], page: '', expired: false, failed: false, codesOff: false, declined: false, busy: false, resting: '', notIncluded: false, signedOut: false, work: '', provider, label: rest.join('.'), plan: '', email: '' };
   if (!a) return { state: 'checking' as const, ...none };
   const s = a.signIn;
   const phase = phaseOf({ signIn: s });
@@ -2140,7 +2140,7 @@ export function account(accounts: Json[] | null, key = 'chatgpt') {
   // 'unavailable' was the CLI missing; the engine now ships inside Crewhouse, so there is always something to sign in to.
   return { state: a.signedIn && !waiting ? 'ready' as const : 'signed-out' as const as 'ready' | 'signed-out' | 'unavailable',
     cliLogin: s?.state === 'failed' && s.cliLogin ? { signIn: !!s.cliLogin.signIn } : null,
-    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy,
+    recovery: s?.why === 'locked' ? plain(s.error) : '', signing, key: pasting, pick, page: waiting && !s?.code ? s?.url ?? '' : '', expired, declined, busy, failed: s?.state === 'failed' && !expired && !declined && !busy, codesOff: s?.state === 'failed' && s.via === 'code' && failure(String(s.error ?? '')) === 'deviceCodeOff',
     resting: a.restingUntil > 0 ? `Resting until ${clock(a.restingUntil)}` : '', notIncluded: !!a.notIncluded, signedOut: !!a.signedOut,
     work: a.work ? (typeof a.work === 'string' ? a.work : 'a work account') : '',
     found: !!a.found, provider: String(a.provider ?? a.name ?? none.provider), label: a.label ? String(a.label) : none.label, plan: a.plan ? String(a.plan) : '', email: a.email ? String(a.email) : '' };
