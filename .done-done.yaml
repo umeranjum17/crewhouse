@@ -265,6 +265,12 @@ journeys:
   ubuntu-sandbox:
     timeout: 40m
     command: 'bash scripts/verify/ubuntu-sandbox.sh "$DONE_DONE_EVIDENCE_ROOT" "${UBUNTU_SANDBOX_DEB:?the .deb from scripts/package.mjs}"'
+  # The setup fixes on a fresh stock Ubuntu 24.04 VM (docs/verification/setup-fixes.md): fix 1, the released build dying at logout,
+  # then this build's headless setup and its one-line install living through logout and a reboot. SETUP_TARBALL is the cloud download
+  # from scripts/package.mjs; SETUP_RELEASE_TARBALL the released crewhouse-linux-x64.tar.gz. The last run's steps.json is the sealed one.
+  setup-fix1:
+    timeout: 40m
+    command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix1 "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" dead && bash $S "$O" fix1 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" alive headless && bash $S "$O" fix1 "$SETUP_TARBALL" alive'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:

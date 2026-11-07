@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { temp } from './tmp.ts';
 
 const repo = join(import.meta.dirname, '..');
@@ -82,6 +82,7 @@ test('unmasked starts get private homes; owner paths and symlink aliases fail be
 test('a login service outlives one killed process on the Pi flag, and off it each of the three units is what it was', { timeout: 120_000 }, async () => {
   const root = temp('units'), bin = join(root, 'bin'), home = join(root, 'home'), units = join(home, '.config/systemd/user'), opt = join(root, 'opt');
   mkdirSync(bin); writeFileSync(join(bin, 'systemctl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 }); // a manager that says yes: nothing here reaches the real one
+  writeFileSync(join(bin, 'loginctl'), '#!/bin/sh\nexit 1\n', { mode: 0o755 }); // and a login manager that says no: the real one would turn linger on for whoever runs the tests
   mkdirSync(join(opt, 'node', 'bin'), { recursive: true }); symlinkSync(process.execPath, join(opt, 'node', 'bin', 'node')); symlinkSync(repo, join(opt, 'app')); // the installed layout launch.mjs runs in
   for (const f of ['launch.mjs', 'trouble.mjs']) copyFileSync(join(repo, 'packaging', f), join(opt, f));
   const env: NodeJS.ProcessEnv = { PATH: `${bin}:${process.env.PATH}`, HOME: home, LANG: 'C.UTF-8', TMPDIR: root, CREWHOUSE_RUN_MODE: 'product', CREWHOUSE_PORT: '1', CREWHOUSE_RELAY_PUBLIC: 'http://127.0.0.1:7300' };
@@ -99,6 +100,26 @@ test('a login service outlives one killed process on the Pi flag, and off it eac
     assert.match(on, /^OOMPolicy=continue$/m, name);
     assert.equal(on.replace('OOMPolicy=continue\n', '').replace(/^Environment="?CREWHOUSE_ENGINE=pi"?\n/m, ''), off, 'the flag adds that line and its own name, nothing else');
   }
+});
+
+test('a yes to starting at login also keeps Crewhouse running after logout, says so, and asks for nothing when it already does', () => {
+  const root = temp('linger'), bin = join(root, 'bin'), home = join(root, 'home'), log = join(root, 'loginctl.log');
+  mkdirSync(bin); mkdirSync(home);
+  writeFileSync(join(bin, 'systemctl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  // A login manager with one switch: `show-user` answers the file's word, `enable-linger` is logged and (unless told to fail) flips it.
+  writeFileSync(join(bin, 'loginctl'), `#!/bin/sh\ncase $1 in show-user) cat ${root}/linger 2>/dev/null || echo no ;; enable-linger) echo "$@" >> ${log}; [ -e ${root}/refuse ] && exit 1; echo yes > ${root}/linger ;; esac\n`, { mode: 0o755 });
+  const env: NodeJS.ProcessEnv = { PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, HOME: home, LANG: 'C.UTF-8', TMPDIR: root, CREWHOUSE_RUN_MODE: 'product', CREWHOUSE_PORT: '1' };
+  const on = () => spawnSync(join(repo, 'crewhouse'), ['autostart', 'on'], { env, encoding: 'utf8', timeout: 30_000 });
+  const first = on();
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /Crewhouse keeps running after you log out/);
+  assert.equal(readFileSync(log, 'utf8').trim(), `enable-linger ${userInfo().username}`);
+  assert.doesNotMatch(on().stdout, /after you log out/, 'already on: nothing more to say');
+  assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, 1, 'already on: not turned on twice');
+  rmSync(join(root, 'linger')); writeFileSync(join(root, 'refuse'), '');
+  const refused = on();
+  assert.equal(refused.status, 0, 'a machine that refuses linger still starts Crewhouse at login');
+  assert.match(refused.stdout, new RegExp(`Crewhouse stops when you log out.*sudo loginctl enable-linger ${userInfo().username}`));
 });
 
 test('an isolated run removes the run home it created on exit or SIGTERM, never one it inherited', async () => {
