@@ -72,7 +72,7 @@ echo "next login: $AGAIN"
 grep -qE 'is running \(pid [0-9]+\)' <<<"$AGAIN" || bad 'the next login should find crewhouse, running'
 # doctor exits 1 over optional parts today (pick 5): here the engine must be fine and it must not crash.
 SAID=$(~/.local/bin/crewhouse doctor 2>&1); grep -E 'Engine: |problem' <<<"$SAID"; says '✓ Engine: '
-SAID=$(~/.local/bin/crewhouse open 2>&1); RC=$?; echo "open: [exit $RC] ${SAID%%#person=*}"; says 'in your browser'
+SAID=$(~/.local/bin/crewhouse open 2>&1); RC=$?; echo "open: [exit $RC] ${SAID%%#person=*}"; says 'ExitOnForwardFailure=yes'
 grep -q '#person=' <<<"$SAID" && bad 'open printed the private link'
 ~/.local/bin/crewhouse stop
 [ "$FAILED" = 0 ] && echo "install-line ($WHO): the line ended in the running app in $ELAPSED s"

@@ -43,7 +43,7 @@ NEXT=$(sed -n 's/^Next: //p' <<<"$SAID")
 step 0 'Crewhouse is running at http://127.0.0.1:[0-9]+/' 60000 sh -c "$NEXT"
 
 step 0 'is running \(pid [0-9]+\)' 5000 crewhouse status
-step 0 'in your browser' 5000 crewhouse open   # no browser here: the address, never the private link
+step 0 'ExitOnForwardFailure=yes' 5000 crewhouse open   # no screen here: the ssh line for your own computer, never the private link
 step 0 'Crewhouse stopped' 10000 crewhouse stop
 step 1 'is not running\. Start it with crewhouse start' 5000 crewhouse open
 

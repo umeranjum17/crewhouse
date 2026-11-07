@@ -280,6 +280,12 @@ journeys:
   setup-fix3:
     timeout: 60m
     command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix3 crewhouse@0.1.10 fails && bash $S "$O" fix3 "${SETUP_NPM_TGZ:?the tgz from npm pack of a clean export}" works'
+  # A person's own headless server (docs/verification/own-server.md): the released build saying only "open a browser", then this build's
+  # printed ssh lines followed by a second Ubuntu 24.04 VM, clean and with its own 7711 and 1455 taken. SETUP_TARBALL is the cloud
+  # download from scripts/package.mjs; SETUP_RELEASE_TARBALL the released crewhouse-linux-x64.tar.gz. The last run's steps.json is the sealed one.
+  own-server:
+    timeout: 40m
+    command: 'S=scripts/verify/own-server.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" released && bash $S "$O" "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" printed'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:
