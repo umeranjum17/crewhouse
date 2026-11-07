@@ -15,8 +15,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 // Speaking to Chief: the phone's on-device recognizer (Android 12 and later) turns speech into words for the message
-// box. Without its voice pack the phone's own speech service hears instead (it may use the network, as the keyboard's
-// mic does). The words go nowhere until the person taps send.
+// box. Without its voice pack there is no mic: the phone's network speech service never hears this. The words go nowhere
+// until the person taps send.
 class CrewhouseVoiceModule : Module() {
   private var ear: SpeechRecognizer? = null
 
@@ -27,34 +27,35 @@ class CrewhouseVoiceModule : Module() {
 
     AsyncFunction("canHear") {
       val context = appContext.reactContext ?: return@AsyncFunction false
-      onDevice(context) || SpeechRecognizer.isRecognitionAvailable(context)
+      onDevice(context)
     }
 
     // Listens until the person pauses (or stop), then resolves what was heard: "" for nothing. Fails `blocked` without the
-    // microphone, `unready` when neither the on-device pack nor the phone's speech service can hear the language.
+    // microphone, `unready` when the on-device pack can't hear the language.
     AsyncFunction("hear") { promise: Promise ->
       val context = appContext.reactContext
       if (context == null) return@AsyncFunction promise.resolve("")
       ear?.destroy()
-      listen(context, tries(context), promise)
+      val tags = tries()
+      if (!onDevice(context) || tags.isEmpty()) return@AsyncFunction promise.reject(CodedException("unready", "unready", null))
+      listen(context, tags, promise)
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("stop") { ear?.stopListening() }.runOnQueue(Queues.MAIN)
   }
 
-  // What to try, in order: each recognizer (on-device, then the system one) in the phone's own language, then in en-US
-  // when that language is English: a phone set to en-AE has no pack for it, and the speech service fails before it listens.
-  private fun tries(context: Context): List<Pair<Boolean, String>> {
+  // What to try, in order: the phone's own language, then en-US when that language is English: a phone set to en-AE has no
+  // pack for it, and the recognizer fails before it listens.
+  private fun tries(): List<String> {
     val mine = Locale.getDefault()
-    val tags = listOf(mine.toLanguageTag()) + if (mine.language == "en" && mine.toLanguageTag() != "en-US") listOf("en-US") else emptyList()
-    return listOf(true, false).filter { !it || onDevice(context) }.flatMap { local -> tags.map { local to it } }
+    return listOf(mine.toLanguageTag()) + if (mine.language == "en" && mine.toLanguageTag() != "en-US") listOf("en-US") else emptyList()
   }
 
-  // One listen with the first of `left`; a failure to hear (no pack) moves on to the next. Hearing nothing in a language
-  // (the service takes en-AE and returns no words) is tried once more in the next language, `again` being that one step.
-  private fun listen(context: Context, left: List<Pair<Boolean, String>>, promise: Promise, again: Boolean = true) {
-    val (local, tag) = left.first()
-    val r = if (local) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
+  // One listen in the first of `left`; a failure to hear (no pack) moves on to the next. Hearing nothing in a language
+  // is tried once more in the next language, `again` being that one step.
+  private fun listen(context: Context, left: List<String>, promise: Promise, again: Boolean = true) {
+    val tag = left.first()
+    val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
     ear = r
     var settled = false
     fun end(words: String?, error: Int? = null) {
@@ -66,7 +67,7 @@ class CrewhouseVoiceModule : Module() {
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> promise.reject(CodedException("blocked", "blocked", null))
         // Nothing was said: "didn't catch that" is right. Any other failure is the phone not being set up to hear.
         null, SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-          val next = left.drop(1).dropWhile { it.second == tag }
+          val next = left.drop(1).dropWhile { it == tag }
           if (words.isNullOrEmpty() && again && next.isNotEmpty()) listen(context, next, promise, false) else promise.resolve(words.orEmpty())
         }
         else ->

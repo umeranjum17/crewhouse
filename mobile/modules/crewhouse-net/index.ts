@@ -12,8 +12,8 @@ export const stayOn = () => net?.stayOn() ?? false;
 export const linkWords = (words: string) => net?.linkWords(words);
 export const onNetwork = (fn: () => void) => { const s = net?.addListener('network', fn); return () => s?.remove(); };
 
-// Speaking to Chief through @byokit/dictation, on this phone's own recognizer (Android 12+ with its pack installed), else the system speech service (elsewhere
-// no mic is shown): CrewhouseVoice is the system engine the kit asks its app to inject, on the phone only.
+// Speaking to Chief through @byokit/dictation, on this phone's own recognizer (Android 12+ with its pack installed; elsewhere no mic is shown, and the network
+// speech service never hears): CrewhouseVoice is the system engine the kit asks its app to inject, on the phone only.
 // Migration debt: the kit ships no Android binding yet, so CrewhouseVoiceModule.kt stays until it does.
 const voice = requireOptionalNativeModule<{ canHear(): Promise<boolean>; hear(): Promise<string>; stop(): Promise<void> }>('CrewhouseVoice');
 let can = false, ended = () => {}, stopAsked = false;
@@ -37,7 +37,7 @@ export async function hear(): Promise<string> {
   stopAsked = false;
   await now?.finish().catch(() => {});
   if (!(await canHear()) || stopAsked) return '';
-  const h = now = dictation.listen({ onDeviceOnly: false });
+  const h = now = dictation.listen({ onDeviceOnly: true });
   const done = new Promise<void>((r) => { ended = r; }); // set before the kit calls start, a microtask later
   try { await done; return (await h.finish()).text; } finally { if (now === h) now = null; }
 }

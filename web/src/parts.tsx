@@ -4,7 +4,7 @@ import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useS
 import { api, paired, trouble, type Json } from './api.ts';
 import { draftOf, keepDraft, sent } from './draft.ts';
 import { SHARE_CACHE, SHARE_KEEP, sharedKey } from './share-in.ts';
-import { canRecord, ears, hear, record, speak, voices, type Ears } from './voice.ts';
+import { canRecord, record, speak, voices } from './voice.ts';
 import { cycle, type Focused } from './dialog.ts';
 import { chatTokens, safeLink } from './chat-md.ts';
 import * as art from './art.ts';
@@ -636,30 +636,27 @@ export function Steps({ steps, max = 6, onUndo, onForget, trail }: { steps: Step
   );
 }
 
-const heardWrong = (e: any) => (e?.status && e.status !== 404 ? e.message : ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", offline: "The browser's online service couldn't hear you. Check the connection, or type instead.", far: "Can't reach your computer to write this down. Check the connection, or type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.");
+const heardWrong = (e: any) => (e?.status && e.status !== 404 ? e.message : ({ blocked: 'Allow the microphone for this page, then try again.', nomic: "I can't hear a microphone on this computer. Type instead.", far: "Can't reach your computer to write this down. Check the connection, or type instead." } as Record<string, string>)[e?.message] ?? "Speaking isn't ready on this computer. Type instead.");
 /** What went wrong with the mic; words that end in a command to run stay long enough to read, and copy the command. */
 const sayHeardWrong = (e: any) => { const m = heardWrong(e), run = /, run: (.+)$/.exec(m)?.[1]; toast(m, run ? { label: 'Copy', run: () => void navigator.clipboard?.writeText(run) } : undefined); };
 
-/** The voice note: a mic in the box. Where this browser can record, the clip goes to the paired computer and
- *  Hex writes it down there (nothing to a cloud service); where it can't, the browser's own recognizer hears instead
- *  (said first). Where neither can hear, the mic says why. What was said lands in the box after what is already there,
- *  for the person to read and send; nothing is sent by speaking. `on` while it listens (the empty box says so). */
+/** The voice note: a mic in the box. The browser records, the clip goes to the paired computer and Hex writes it down
+ *  there (nothing to a cloud service). Where the browser can't record, the mic says why. What was said lands in the box
+ *  after what is already there, for the person to read and send; nothing is sent by speaking. `on` while it listens (the
+ *  empty box says so). */
 let micOpen = false, cutPractice: (() => void) | null = null;
 function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: string) => void) {
-  const [route, setRoute] = useState<Ears | 'computer' | null>(null);
   const [ear, setEar] = useState<{ stop: () => void } | null>(null);
   const [writing, setWriting] = useState(false); // the mic is off and the computer is writing the clip down
   const [secs, setSecs] = useState(0); // how long this clip has run
   const now = useRef(text);
   now.current = text;
-  useEffect(() => { if (on) void (canRecord() ? Promise.resolve('computer' as const) : ears()).then(setRoute); }, [on]);
   useEffect(() => () => ear?.stop(), [ear]); // leaving the box turns the mic off
   const live = !!ear && !writing;
   useEffect(() => { setSecs(0); if (!live) return; const tick = setInterval(() => setSecs((n) => n + 1), 1000); return () => clearInterval(tick); }, [live]);
-  if (!route) return { mic: null, wave: null, on: false, writing: false };
+  if (!on) return { mic: null, wave: null, on: false, writing: false };
   const start = () => {
-    if (route === 'online') toast(VOICE_WORDS.online);
-    const h = route === 'computer' ? record() : hear(route);
+    const h = record();
     micOpen = true; cutPractice?.(); // the interviewer never talks over the person
     setEar(h);
     setListen(chat, true);
@@ -667,10 +664,10 @@ function useVoice(chat: string | undefined, on: boolean, text: string, put: (t: 
       sayHeardWrong)
       .finally(() => { micOpen = false; setEar(null); setWriting(false); setListen(chat, false); });
   };
-  const off = route === 'none';
+  const off = !canRecord();
   return { on: !!ear, writing, wave: live && <span className="c-wave" role="timer"><i /><i /><i /><i /><i /><b>{Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</b></span>,
     mic: <button type="button" className={`mic${ear ? ' on' : ''}${off ? ' off' : ''}`} aria-label={ear ? 'Stop listening' : off ? VOICE_WORDS.none : chat === 'chief' ? 'Speak to Chief' : 'Speak your answer'} aria-pressed={!!ear}
-    onClick={() => { if (off) toast(VOICE_WORDS.none); else if (!ear) start(); else { ear.stop(); setWriting(route === 'computer'); } }}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    onClick={() => { if (off) toast(VOICE_WORDS.none); else if (!ear) start(); else { ear.stop(); setWriting(true); } }}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg></button> };
 }
 
@@ -686,7 +683,7 @@ const spoken = (t: string) => t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(
 /** Talking with Chief: listen, send the words once the person stops, read his reply aloud, then listen again. It never
  *  listens while it reads, so it can't hear itself; Stop ends it at any point, and every word stays in the chat. */
 function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean>) {
-  const [route, setRoute] = useState<Ears>('none');
+  const [can, setCan] = useState(false);
   const [known, setKnown] = useState(false);
   const [now, setNow] = useState<Now | null>(null);
   const lines = useRef(talk?.lines ?? []);
@@ -694,7 +691,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
   const arrived = useRef(() => {});
   const run = useRef<{ stopped: boolean; cut: () => void } | null>(null);
   useEffect(() => arrived.current(), [talk?.lines]);
-  useEffect(() => { if (talk) void Promise.all([ears(), voices()]).then(([r, v]) => { setRoute(v.length > 0 ? r : 'none'); setKnown(true); }); }, [!!talk]);
+  useEffect(() => { if (talk) void voices().then((v) => { setCan(v.length > 0 && canRecord()); setKnown(true); }); }, [!!talk]);
   const stop = () => { if (!run.current) return; run.current.stopped = true; run.current.cut(); arrived.current(); };
   useEffect(() => stop, []); // leaving the chat ends the call
   const show = (n: Omit<Now, 'name'>) => { setNow({ ...n, name: talk?.name ?? 'Chief' }); if (talk?.chat === 'chief') setListen('chief', n.phase === 'listening'); };
@@ -713,7 +710,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
           continue;
         }
         show({ phase: 'listening', words: '' });
-        const h = hear(route, (w) => show({ phase: 'listening', words: w }));
+        const h = record({ ended: () => show({ phase: 'thinking', words: 'Writing it down…' }) });
         r.cut = h.stop;
         const said = await h.words;
         if (r.stopped) break;
@@ -726,7 +723,7 @@ function useCall(talk: Talk | undefined, send: (said: string) => Promise<boolean
     } catch (e) { end = heardWrong(e); }
     run.current = null; mark(0); setNow(null); if (talk?.chat === 'chief') setListen('chief', false); toast(end);
   };
-  return { can: route !== 'none' && !!talk, known, route, now, start, stop };
+  return { can: can && !!talk, known, now, start, stop };
 }
 
 /** This device's voice and speed, kept on the device: the same menu in a call and on the practice screen. */
@@ -743,12 +740,11 @@ function VoicePick({ children }: { children?: ReactNode }) {
 }
 
 /** The call in the box's place: what's happening, the words being heard or read, this device's voice and speed, Stop. */
-function CallPanel({ now, hears, stop }: { now: Now; hears: Ears; stop: () => void }) {
+function CallPanel({ now, stop }: { now: Now; stop: () => void }) {
   return <div className={`call ${now.phase}`} role="group" aria-label={`Call with ${now.name}`}>
     <span className="call-state" aria-live="polite"><i aria-hidden />{{ listening: 'Listening', thinking: `${now.name} is thinking`, speaking: `${now.name} is speaking` }[now.phase]}</span>
-    <VoicePick>{hears === 'device' && <p>{VOICE_WORDS.device}</p>}</VoicePick>
+    <VoicePick><p>{VOICE_WORDS.computer}</p></VoicePick>
     <button type="button" className="call-stop" onClick={stop}><i className="mic-stop" />Stop</button>
-    {hears === 'online' && <p className="call-heard">{VOICE_WORDS.online}</p>}
     {(now.words || now.phase === 'listening') && <p className={`call-words${now.words ? '' : ' mute'}`}>{now.words || 'Go ahead, I’m listening.'}</p>}
   </div>;
 }
@@ -923,7 +919,7 @@ export function Composer({ placeholder, onSend, chat, attach, talk, stop, practi
   const why = !call.can ? VOICE_WORDS.call : voice.on ? VOICE_WORDS.micOn : '';
   const headCall = talk && slot && call.known && createPortal(<button type="button" className={`ph-btn ph-go${call.now ? ' on' : why ? ' off' : ''}`} aria-disabled={!call.now && !!why} aria-pressed={!!call.now} aria-label={call.now ? `End the call with ${talk.name}` : why || `Call ${talk.name}`} title={why || undefined}
     onClick={() => { if (call.now) call.stop(); else if (why) toast(why); else void call.start(); }}>{WAVE}</button>, slot);
-  if (call.now) return <>{headCall}<CallPanel now={call.now} hears={call.route} stop={call.stop} /></>;
+  if (call.now) return <>{headCall}<CallPanel now={call.now} stop={call.stop} /></>;
   const choose = (list: FileList | null) => { void pickFiles(list).then((ps) => { if (ps.length) { setFailed(false); setPicked((p) => [...p, ...ps].slice(0, 4)); } }); };
   return (
     <>{headCall}<form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>

@@ -6,10 +6,6 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-  <!-- Speaking to Chief (CrewhouseVoiceModule.kt) asks whether the phone has a speech service to fall back on. -->
-  <queries>
-    <intent><action android:name="android.speech.RecognitionService" /></intent>
-  </queries>
   <application>
     <!-- "Ask Crewhouse" on text picked in any app: the words go to the share screen, where the person picks who gets them. -->
     <activity
