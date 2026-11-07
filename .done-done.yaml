@@ -271,6 +271,10 @@ journeys:
   setup-fix1:
     timeout: 40m
     command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix1 "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" dead && bash $S "$O" fix1 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" alive headless && bash $S "$O" fix1 "$SETUP_TARBALL" alive'
+  # Fix 2, an honest doctor, on the same VM: the released build calling five broken machines ready, then this build refusing each.
+  setup-fix2:
+    timeout: 40m
+    command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix2 "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" ready && bash $S "$O" fix2 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" honest'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:
