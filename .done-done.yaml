@@ -275,6 +275,11 @@ journeys:
   setup-fix2:
     timeout: 40m
     command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix2 "${SETUP_RELEASE_TARBALL:?the released crewhouse-linux-x64.tar.gz}" ready && bash $S "$O" fix2 "${SETUP_TARBALL:?the cloud download from scripts/package.mjs}" honest'
+  # Fix 3, the npm install on a default Ubuntu login: the released 0.1.10 dying with the keystore's raw error, then this build (a tgz
+  # from npm pack of a clean export) reaching a running Crewhouse, and plain words for a state folder that is someone else's.
+  setup-fix3:
+    timeout: 60m
+    command: 'S=scripts/verify/setup-fixes.sh; O="$DONE_DONE_EVIDENCE_ROOT"; bash $S "$O" fix3 crewhouse@0.1.10 fails && bash $S "$O" fix3 "${SETUP_NPM_TGZ:?the tgz from npm pack of a clean export}" works'
   # The live desktop panel (ch-ui-slice3): a real bot desktop streamed into the panel at 390 and 1280, day and night, then the
   # states that must never read as live. TMPDIR on disk and short, as bot-crew; Chromium's socket sits under it.
   live-desktop:

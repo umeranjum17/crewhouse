@@ -11,10 +11,11 @@ bash scripts/verify/setup-fixes.sh <out> fix1 <dist>/crewhouse-<version>-linux-x
 bash scripts/verify/setup-fixes.sh <out> fix1 <the released crewhouse-linux-x64.tar.gz> dead              # the bug, same machine
 bash scripts/verify/setup-fixes.sh <out> fix1 <tarball> alive headless                                      # crewhouse setup --headless
 bash scripts/verify/setup-fixes.sh <out> fix2 <tarball> honest         # fix 2; `ready` on the released build shows the bug
+bash scripts/verify/setup-fixes.sh <out> fix3 <crewhouse-X.tgz> works  # fix 3, a tgz from `npm pack` of a clean export; `fails` with crewhouse@0.1.10 shows the bug
 ```
 
 Needs /dev/kvm, Docker and a qemu image (`QEMU_IMAGE`, default `byk-cloud-qemu:1`); about 4 minutes a run. Each run writes
-`setup-<fix>-<tarball name>[-headless].txt`, the stamped words of every command, and exits 0 only when it met its expectation.
+`setup-<fix>-<tarball name>[-headless]-<expectation>.txt`, the stamped words of every command, and exits 0 only when it met its expectation.
 
 ## Fix 1: keep running after logout
 
@@ -43,4 +44,24 @@ The engine-folder check only fires after a first run (`person.key` exists) so a 
 Pass: `setup-fixes.sh <out> fix2 <tarball> honest` makes each break on the VM, one at a time, and asks doctor after each:
 exit 1, a `✗` line, a `fix:` line, no "ready" and no stack trace; healthy before and after is ready (exit 0). On the
 released 0.1.10 (`ready`), doctor calls the other four ready and crashes on the missing files.
+Without a VM: `node --test test/failure-words.test.ts`.
+
+## Fix 3: the npm install on a default Ubuntu login
+
+`npm install -g crewhouse` then `crewhouse start` died on a stock Ubuntu login with a raw `KeystoreError` stack: the login's
+umask (002) makes every folder a program creates group-writable, our start created `~/.local` that way, and the sign-in
+store refuses a folder others can write to. Retrying failed the same way.
+
+`bin/crewhouse.mjs` now makes the state folders the person's alone before `start` or `setup` runs (new ones mode 700, like
+`install.sh`); a group-writable one of theirs loses the group's write bit and the command says so ("Only you can write to X
+now. It was 775; chmod 775 X puts it back."). `doctor` stays read-only. A folder that is someone else's cannot be fixed by
+the person's own login, so `scripts/prepare-engine.mjs` prints plain words and one next line (a `sudo chown` of the state
+folder) instead of the kit's stack trace.
+
+Pass: on the VM, a default login installs Node 24 with nvm, `npm install -g <tgz>` and `crewhouse start`: running, exit 0, port
+7711 answers 200, with no hand steps. Then `~/.local/state` is made root's: the start says "The AI engine could not be installed:
+The folder your sign-ins would be kept in is not private to you ..." with `Next: sudo chown ...` and no stack trace, and after
+that line is run the start succeeds. The released 0.1.10 (`fails`) dies with `KeystoreError`.
+Build the tgz from a clean export, never the working copy: `git archive HEAD | tar -x -C <dir>` then `npm pack` there (the
+working copy's ignored `dist/` leftovers would ship, 700 MB).
 Without a VM: `node --test test/failure-words.test.ts`.
