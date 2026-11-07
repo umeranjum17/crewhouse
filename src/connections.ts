@@ -39,10 +39,10 @@ export function connectError(name: string, error: unknown) {
   return `${name} couldn't open its saved sign-in. Unlock your password storage, then try again.`;
 }
 
-/** README's sealed adapter: the durable store receives ciphertext only, with each name authenticated inside it. */
-function deviceStore(cfg: Config): Keystore {
-  const dir = join(cfg.stateDir, 'people', '1', 'app-signins'), seal = osKeyringSeal({ service: 'crewhouse-connect', dualWrap: true }), file = (name: string) => {
-    if (!/^(google-client|x-key|byokit\.connect\.[A-Za-z0-9_-]{43})$/.test(name)) throw new Error('Invalid sign-in name.');
+/** README's sealed adapter: the durable store receives ciphertext only, with each name authenticated inside it. `ok` names what may be stored. */
+export function sealedStore(dir: string, service: string, ok: RegExp): Keystore {
+  const seal = osKeyringSeal({ service, dualWrap: true }), file = (name: string) => {
+    if (!ok.test(name)) throw new Error('Invalid sign-in name.');
     return join(dir, name);
   }, ciphertextStore: Keystore = {
     async get(name) { return existsSync(file(name)) ? readFileSync(file(name), 'utf8') : null; },
@@ -61,6 +61,7 @@ function deviceStore(cfg: Config): Keystore {
     delete: name => ciphertextStore.delete(name),
   };
 }
+const deviceStore = (cfg: Config) => sealedStore(join(cfg.stateDir, 'people', '1', 'app-signins'), 'crewhouse-connect', /^(google-client|x-key|byokit\.connect\.[A-Za-z0-9_-]{43})$/);
 
 type Attempt = { app: string; flow: SignIn; view: Connecting; ends: number; finishing?: boolean };
 export class Connections {

@@ -122,7 +122,11 @@ import { join } from 'node:path';
 // when the captain's 7 Nov route change put the supervisor in Crewhouse instead of a kit (pinned hash-checked server, one child on loopback, explicit acks).
 // Slice 2 (the durable link reader) is not in this change. No trim is paired: the owner ruled on 7 Nov 2026 (decision 8911) that the bus keeps its raise
 // without repayment, because the trim lane showed that no honest lines could be removed from src/.
-const BUDGET = 8516;
+// Raised 8516 -> 8571 for a person's sign-in on Pi (ch-pi-signin-job, +55 net, owner exception requested in the PR on the captain's order of Telegram 927,
+// "build the Pi sign-in and job answer yourself, then delete OpenClaw fully"): src/pi/signin.ts (the pasted-key check, the sealed save, the account's models), the
+// per-account door and key choice in src/pi/runtime.ts, and the sealed store lifted out of src/connections.ts so Pi shares it. No trim is paired: the OpenClaw
+// adapter's deletion lane (S4, ~1,100 lines of src) is what repays it.
+const BUDGET = 8571;
 
 test('src stays within its line budget', () => {
   const root = join(import.meta.dirname, '..', 'src');

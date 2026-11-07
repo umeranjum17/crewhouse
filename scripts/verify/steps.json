@@ -989,5 +989,18 @@
       "Read the broker crewd supervises: one child on 127.0.0.1 with a token, and a connection without that token refused"
     ],
     "result": "Scout's ask read {{asked}}; Scribe answered {{reply}}; the bus without its token was {{refused}}"
+  },
+  "pi-signin": {
+    "start": "A real crewd started with CREWHOUSE_ENGINE=pi on the real pinned Pi, with no AI account signed in; the provider is {{provider}}",
+    "steps": [
+      "Ask Chief \"Good morning\"; with no AI account the job waits",
+      "Open the MiniMax key sheet and paste a wrong key",
+      "Paste the right key",
+      "Watch the waiting job start by itself and Chief answer in the chat",
+      "Look for the key on disk and hash a stand-in ~/.pi before and after",
+      "Stop crewd and start it again over the same folders, then ask Chief \"Good afternoon\"",
+      "Sign out of MiniMax"
+    ],
+    "result": "The job waited with nothing sent to any model. The wrong key was refused on the card in plain words (\"That key didn't work\") and nothing was signed in; the right key signed MiniMax in, the waiting job started by itself and Chief answered in the chat through Pi. The key was on no disk in the clear and sat sealed in crewd's own store, and the stand-in ~/.pi hashed the same. After crewd restarted MiniMax was still signed in and a second job answered with no new sign-in. Signing out showed MiniMax signed out and removed the sealed key."
   }
 }

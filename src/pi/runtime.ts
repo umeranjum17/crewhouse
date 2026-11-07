@@ -1,6 +1,6 @@
 // The Pi engine behind CREWHOUSE_ENGINE=pi, the one file that reaches @byokit/pi (a dev-only reference until it publishes: node scripts/prepare-pi.mjs, so its name stays a variable). Each bot gets the kit's own process, home, session and extension list, and that process runs in its own room, a memory ceiling and a wall with a private network (bin/sandbox.mjs), or not at all; its one way out is the model door (bin/pi-door.mjs). Nothing Pi runs passes Crew.gate yet, so settings.json leaves it none of Pi's own tools, but for the ones CREWHOUSE_PI_TOOLS names in a proof, and extensions.json holds only code that reaches nothing past its session, or past the bot's own notes file (notes.ts).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'; import { join } from 'node:path'; import { MODEL_URL, openDoor } from '../../bin/pi-door.mjs'; import { bus, CEILING_MB, piBuiltIn, piRoom, piWall, roomFull, wallDown } from '../../bin/sandbox.mjs';
-import { botConfig } from '../bots.ts'; import type { Config } from '../config.ts'; import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts';
+import { botConfig } from '../bots.ts'; import type { Config } from '../config.ts'; import { refParts } from '../runtime.ts'; import type { AccountRow, AgentRuntime, RunEnd, RunEvent, RunSpec, SignInStep } from '../runtime.ts'; import { defaultModel, keyed, keyedAccounts, PiKeys } from './signin.ts';
 
 type PiEvent = RunEvent | { type: 'end'; end: { ok: true; text: string } | { ok: false; aborted: true } | { ok: false; message: string } } | { type: 'stopped'; reason: string; detail?: string };
 type Bot = { readonly pid: number | undefined; on(hear: (event: PiEvent) => void): () => void; prompt(text: string): Promise<void>; steer(text: string): Promise<void>; abort(): Promise<void>; stop(): Promise<void> }; type Launch = { command: string; args: readonly string[] }; type Kit = { bot(spec: { id: string; folder: string; session: string; extensions: string[]; env: Record<string, string>; launch: (pi: Launch) => Launch }): Bot; close(): Promise<void> };
@@ -9,9 +9,9 @@ const KIT = '@byokit/pi', ACCOUNT = 'chatgpt', FULL = `This job needed more than
 
 export class PiRuntime implements AgentRuntime {
   readonly identity = { name: 'Pi', version: '1.5.0' }; // the kit refuses any other Pi
-  private cfg: Config; private kit?: Promise<Kit>; private door?: Promise<{ close(): void }>; private failed?: { words: string; detail: string };
-  private open = new Map<string, { bot: Bot; session: string; system: string; room: { unit?: string } }>(); private runs = new Map<string, Bot>(); onEngine?: () => void;
-  constructor(cfg: Config) { this.cfg = cfg; }
+  private cfg: Config; private kit?: Promise<Kit>; private doors = new Map<string, Promise<{ close(): void }>>(); private failed?: { words: string; detail: string }; private keys: PiKeys;
+  private open = new Map<string, { bot: Bot; session: string; system: string; model: string; room: { unit?: string } }>(); private runs = new Map<string, Bot>(); onEngine?: () => void;
+  constructor(cfg: Config) { this.cfg = cfg; this.keys = new PiKeys(cfg); }
 
   private load(): Promise<Kit> { return this.kit ??= import(KIT).then((kit) => kit.createPiKit({ stateDir: this.cfg.stateDir, idleMs: Number(process.env.CREWHOUSE_PI_IDLE_MS) || undefined, maxToolCalls: CALLS })); } // once, by whichever comes first: a job recovered at boot can reach run() before crewd reaches start()
   async start() {
@@ -20,17 +20,24 @@ export class PiRuntime implements AgentRuntime {
     catch (e) { delete this.kit; this.failed = { words: wallDown() || 'Pi is not set up on this computer. Run node scripts/prepare-pi.mjs, then try again.', detail: (e as Error).message }; throw e; }
     finally { this.onEngine?.(); }
   }
-  async stop() { await this.kit?.then((kit) => kit.close(), () => {}); await this.door?.then((door) => door.close(), () => {}); }
+  async stop() { await this.kit?.then((kit) => kit.close(), () => {}); await Promise.all([...this.doors.values()].map((door) => door.then((d) => d.close(), () => {}))); }
   engine() { return this.failed ? { phase: 'failed', ...this.failed } : { phase: 'ready', words: '' }; }
 
-  async accounts(): Promise<AccountRow[]> { return this.cfg.engineProvider ? [{ id: ACCOUNT, provider: ACCOUNT, state: 'ready' }] : []; }
-  async signedIn(account: string) { return account === ACCOUNT && !!this.cfg.engineProvider; }
-  async models(account: string) { return await this.signedIn(account) ? [{ id: MODEL(), name: MODEL(), dflt: true }] : []; }
-  signIn(_account: string, _via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void) {
-    on({ waiting: false, error: 'Pi has no sign-in yet. Start Crewhouse with CREWHOUSE_ENGINE_BASE_URL and CREWHOUSE_ENGINE_API_KEY.' });
-    return { paste() {}, cancel() {} };
+  /** Every account Pi can run: the stand-in provider a lab or env sets (ChatGPT's place), and each key the person has signed in. */
+  async accounts(): Promise<AccountRow[]> {
+    const rows: AccountRow[] = this.cfg.engineProvider ? [{ id: ACCOUNT, provider: ACCOUNT, state: 'ready' }] : [];
+    for (const id of keyedAccounts()) if (await this.keys.provider(id)) rows.push({ id, provider: id, state: 'ready' });
+    return rows;
   }
-  async signOut() {} async learned() { return []; } async forget() {}
+  async signedIn(account: string) { return keyed(account) ? !!await this.keys.provider(account) : account === ACCOUNT && !!this.cfg.engineProvider; }
+  async models(account: string) { return keyed(account) ? this.keys.models(account) : await this.signedIn(account) ? [{ id: MODEL(), name: MODEL(), dflt: true }] : []; }
+  signIn(account: string, via: 'browser' | 'code' | 'key', on: (step: SignInStep) => void) {
+    if (!keyed(account) || via !== 'key') { on({ waiting: false, error: keyed(account) ? 'Pi signs in to this account with a key.' : `Pi signs in with a key for ${keyedAccounts().join(' or ')}. Signing in to ${account} is not on Pi yet.` }); return { paste() {}, cancel() {} }; }
+    let gone = false;
+    queueMicrotask(() => gone || on({ waiting: true })); // the card asks for the key
+    return { paste: async (text: string) => { const words = await this.keys.save(account, text); if (!gone) on(words ? { waiting: true, error: words } : { waiting: false, done: true }); }, cancel() { gone = true; } };
+  }
+  async signOut(account: string) { await this.keys.drop(account); } async learned() { return []; } async forget() {}
 
   /** The extensions this bot loads: extensions.json in its own folder, or the default without one. A bot may rewrite its folder, so the file only names, and anything but a reviewed name stops the job with these words. The person's memory switch outranks the list. */
   private extensions({ bot, cwd }: RunSpec) {
@@ -39,18 +46,18 @@ export class PiRuntime implements AgentRuntime {
   }
   /** The bot's Pi on this session, system prompt and extension list: a running one is kept only while all still hold, as Pi reads them at start (the prompt names the list, so one check covers both). */
   private async botFor(spec: RunSpec, { named, paths }: { named: string[]; paths: string[] }) {
-    const session = spec.key.replace(/[^A-Za-z0-9._-]+/g, '-'), was = this.open.get(spec.bot), provider = this.cfg.engineProvider, system = spec.system + talk(named); // the prompt names tools Pi leaves out, and a model told of a tool writes its call into the reply
-    if (was?.session === session && was.system === system) return was.bot;
-    if (!provider) throw new Error('Pi is not ready: its model provider is missing.');
+    const session = spec.key.replace(/[^A-Za-z0-9._-]+/g, '-'), was = this.open.get(spec.bot), account = refParts(spec.account)[0], signed = keyed(account), provider = signed ? await this.keys.provider(account) : this.cfg.engineProvider, system = spec.system + talk(named), model = spec.model ?? (signed ? defaultModel(account) : undefined) ?? MODEL(); // the prompt names tools Pi leaves out, and a model told of a tool writes its call into the reply
+    if (was?.session === session && was.system === system && was.model === `${account}/${model}`) return was.bot; // Pi reads its account's model once, at start
+    if (!provider) throw new Error(signed ? 'This AI account is signed out. Sign in to it again.' : 'Pi is not ready: its model provider is missing.');
     const kit = await this.load();
     await was?.bot.stop();
     const home = join(this.cfg.stateDir, 'pi', spec.bot), folder = join(home, 'work'); // the kit's Pi home: the person's own Pi is never used
-    mkdirSync(folder, { recursive: true, mode: 0o700 }); const door = join(this.cfg.stateDir, 'pi', 'door.sock'); await (this.door ??= openDoor(door, provider));
+    mkdirSync(folder, { recursive: true, mode: 0o700 }); const door = join(this.cfg.stateDir, 'pi', signed ? `${account}.sock` : 'door.sock'); if (!this.doors.has(door)) this.doors.set(door, openDoor(door, signed ? this.keys.door(account) : provider)); await this.doors.get(door);
     writeFileSync(join(home, 'SYSTEM.md'), system);
     writeFileSync(join(home, 'settings.json'), JSON.stringify({ defaultTools: process.env.CREWHOUSE_PI_TOOLS?.split(',') ?? [] }));
-    writeFileSync(join(home, 'models.json'), JSON.stringify({ providers: { crewhouse: { baseUrl: MODEL_URL, api: 'openai-completions', apiKey: 'added-at-the-door', models: [{ id: MODEL() }] } } }));
+    writeFileSync(join(home, 'models.json'), JSON.stringify({ providers: { crewhouse: { baseUrl: MODEL_URL, api: 'openai-completions', apiKey: 'added-at-the-door', models: [{ id: model }] } } }));
     const repo = this.cfg.repoDir, extensions = [...paths, ...piBuiltIn(repo)], room: { unit?: string } = {}, bot = kit.bot({ id: spec.bot, folder, session, extensions, env: bus(), launch: ({ command, args }) => ({ command: 'systemd-run', args: [...piRoom(room.unit = `crewhouse-bot-${spec.bot}-${Date.now()}`), 'bwrap', ...piWall({ folder, home, repo, extensions, door }), command, ...args] }) });
-    this.open.set(spec.bot, { bot, session, system, room });
+    this.open.set(spec.bot, { bot, session, system, model: `${account}/${model}`, room });
     return bot;
   }
 

@@ -3,8 +3,8 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { request as ask } from 'node:http';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer as createHttp, request as ask } from 'node:http';
 import { createServer as createSecure, globalAgent } from 'node:https';
 import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -68,6 +68,56 @@ test('a bot answers on Pi with only the default extension, can write nothing, an
   assert.equal(readdirSync(home, { recursive: true, encoding: 'utf8' }).some((f) => { const p = join(home, f); return !readdirSafe(p) && readFileSync(p, 'utf8').includes('lab-key-never-on-disk'); }), false, 'the key stays off the disk');
   s.done();
   assert.equal(treeHash(join(person, '.pi')), before, "the person's own Pi folder is byte for byte the same");
+});
+
+test('a person signs in on Pi with a pasted key and a bot answers on it: a wrong key is refused in plain words, the right one is sealed off Pi\'s disk, a waiting job starts, signing out stops the door', { skip, timeout: 120_000 }, async () => {
+  const own = join(person, '.pi'), before = existsSync(own) ? treeHash(own) : '';
+  const model = await startModelStub(), good = 'sk-lab-good-key-9f3a';
+  // The provider refuses every key but one, as a real one does, and passes the rest on to the scripted model.
+  const provider = createHttp((req, res) => {
+    if (req.headers.authorization !== `Bearer ${good}`) { res.writeHead(401, { 'content-type': 'application/json' }); req.resume(); return void res.end('{"error":{"message":"Invalid API key"}}'); }
+    const up = ask(new URL(req.url!, model.url), { method: req.method, headers: req.headers }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); });
+    req.pipe(up);
+  });
+  await new Promise<void>((r) => provider.listen(0, '127.0.0.1', r));
+  process.env.CREWHOUSE_PI_ROUTE_BASE = `http://127.0.0.1:${(provider.address() as AddressInfo).port}/v1`;
+  after(() => { delete process.env.CREWHOUSE_PI_ROUTE_BASE; provider.close(); model.close(); });
+  const s = setup(3, { engine: 'pi' });
+  s.crew.onboard('Umer');
+  const waiting = s.crew.requestChief('Good morning').task;
+  await until('the job waits for a sign-in', () => task(s.db, waiting).state === 'paused');
+  assert.equal(model.calls.length, 0, 'nothing is asked of any model before the person signs in');
+
+  const card = await s.crew.accounts.login('minimax', 'key');
+  assert.equal(card?.state, 'waiting'); assert.equal(card?.via, 'key');
+  await s.crew.accounts.paste('minimax', 'sk-lab-wrong');
+  assert.equal(s.crew.accounts.view('minimax')?.state, 'waiting', 'a refused key leaves the card open');
+  assert.match(String(s.crew.accounts.view('minimax')?.error), /That key didn't work/);
+  assert.equal(await s.crew.accounts.signedIn('minimax'), false);
+  await s.crew.accounts.paste('minimax', ` ${good}\n`);
+  assert.equal(s.crew.accounts.view('minimax')?.state, 'done');
+  assert.equal(await s.crew.accounts.signedIn('minimax'), true);
+  assert.deepEqual((await s.crew.runtime.models('minimax')).filter((m) => m.dflt).map((m) => m.id), ['MiniMax-M3.1-Flash'], 'the account comes with its default model');
+
+  await until('the waiting job answers on the new account', () => !['queued', 'working', 'paused'].includes(task(s.db, waiting).state), 90_000);
+  assert.equal(task(s.db, waiting).state, 'done');
+  assert.match(lastSaid(s.db, 'chief'), /stub chief: done with "The person says: Good morning"/);
+  const call = model.calls.at(-1)!;
+  assert.equal(call.authorization, `Bearer ${good}`, 'the door added the saved key');
+  assert.equal(call.path, '/v1/chat/completions'); assert.equal(call.body.model, 'MiniMax-M3.1-Flash');
+
+  const files = readdirSync(s.cfg.stateDir, { recursive: true, encoding: 'utf8' }).map((f) => join(s.cfg.stateDir, f)).filter((p) => lstatSync(p).isFile());
+  assert.equal(files.some((p) => readFileSync(p).includes(good)), false, 'the key is on no disk in the clear: not Pi\'s home, not the bot\'s folder, not the sealed store');
+  assert.ok(files.some((p) => p.includes(join('pi', 'signins', 'pi-key-minimax'))), 'it is sealed in crewd\'s own store');
+
+  await s.crew.accounts.logout('minimax');
+  assert.equal(await s.crew.runtime.signedIn('minimax'), false);
+  const door = join(s.cfg.stateDir, 'pi', 'minimax.sock'), said = model.calls.length;
+  const status = await new Promise<number>((resolve, reject) => { const asked = ask({ socketPath: door, path: '/v1/chat/completions', method: 'POST' }, (res) => { res.resume(); resolve(res.statusCode ?? 0); }); asked.on('error', reject); asked.end('{}'); });
+  assert.equal(status, 401, 'a bot still running on a signed-out account reaches nothing');
+  assert.equal(model.calls.length, said);
+  s.done();
+  if (before) assert.equal(treeHash(own), before, "the person's own Pi folder is byte for byte the same");
 });
 
 /** The Pis this process runs, by the folder each works in: Pi renames itself, so its command line says nothing, and it sits behind bubblewrap, so it is a descendant and not a child. */

@@ -20,11 +20,13 @@ export default () => {
 
 const say = (res, status, message) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message } })); };
 
-/** crewd's half, on `sock`: resolves once it listens, because the wall mounts the socket file at each start. */
-export function openDoor(sock, { baseUrl, apiKey }) {
-  const to = new URL(`${baseUrl.replace(/\/+$/, '')}/chat/completions`), send = to.protocol === 'https:' ? secure : plain;
+/** crewd's half, on `sock`: resolves once it listens, because the wall mounts the socket file at each start. `provider` is read on every request when it is a function, so a key the person pastes again, or signs out, applies to a bot already running (no provider: signed out). */
+export function openDoor(sock, provider) {
   const server = listener((req, res) => {
     if (req.method !== 'POST' || req.url !== ASK) return say(res, 403, 'Crewhouse: a bot can only reach its model from here.');
+    const now = typeof provider === 'function' ? provider() : provider;
+    if (!now) return say(res, 401, 'Crewhouse: this AI account is signed out.');
+    const { baseUrl, apiKey } = now, to = new URL(`${baseUrl.replace(/\/+$/, '')}/chat/completions`), send = to.protocol === 'https:' ? secure : plain;
     const { host: _host, authorization: _key, connection: _kept, ...headers } = req.headers;
     const up = send(to, { method: 'POST', headers: { ...headers, authorization: `Bearer ${apiKey}` } }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); });
     up.on('error', (e) => { if (!res.headersSent) say(res, 502, `Crewhouse could not reach the model: ${e.message}`); else res.destroy(); });

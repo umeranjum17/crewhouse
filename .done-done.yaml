@@ -242,6 +242,15 @@ journeys:
   pi-answer:
     timeout: 5m
     command: 'node scripts/verify/pi-answer.mjs "$DONE_DONE_EVIDENCE_ROOT"'
+  # A person signs in on Pi with a pasted key and a waiting job answers: a wrong key is refused on the sheet in plain words, the right key signs in, the job starts by itself, the key sits sealed off every Pi disk, a restart keeps the sign-in and a second job answers, signing out removes it. Real crewd, real Pi, the journey's own provider in front of the scripted model, nothing spent (pi-engine.md).
+  pi-signin:
+    timeout: 10m
+    command: 'PI_SIGNIN_SHOTS=on node scripts/verify/pi-signin.mjs "$DONE_DONE_EVIDENCE_ROOT"'
+  # The same journey on the real MiniMax, so Chief's thread holds a real answer: four more shots (pi-engine.md).
+  pi-signin-real:
+    timeout: 15m
+    spends: 'about ten tiny live calls on the free MiniMax M3.1 Flash: the key checks (two refused, two accepted on the sheet and one on the API), two Chief jobs, on the key the key file names'
+    command: 'PI_SIGNIN_SHOTS=on node scripts/verify/pi-signin.mjs "$DONE_DONE_EVIDENCE_ROOT" "${MINIMAX_KEY_FILE:?the MiniMax key file}"'
   # A room per bot on the shared computer: a memory ceiling and a private network, the same read and reach with no room and in one, one bot stopped at its ceiling while two others answer, the door, the service under each OOM policy, a machine with no systemd-run. Real Pi, scripted model, nothing spent (pi-engine.md).
   pi-room:
     timeout: 10m
